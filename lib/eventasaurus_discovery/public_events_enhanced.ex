@@ -36,6 +36,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     base_query = from(pe in PublicEvent)
 
     base_query
+    |> filter_past_events(opts[:show_past])
     |> filter_by_categories(opts[:categories])
     |> filter_by_date_range(opts[:start_date], opts[:end_date])
     |> filter_by_price_range(opts[:min_price], opts[:max_price])
@@ -59,22 +60,24 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     search_query = String.trim(search_term)
 
     from(pe in PublicEvent,
-      where: fragment(
-        "? @@ websearch_to_tsquery('english', ?)",
-        pe.search_vector,
-        ^search_query
-      ) or
-      fragment(
-        "? ILIKE ?",
-        pe.title,
-        ^"%#{search_query}%"
-      ),
-      order_by: [
-        desc: fragment(
-          "ts_rank(?, websearch_to_tsquery('english', ?))",
+      where:
+        fragment(
+          "? @@ websearch_to_tsquery('english', ?)",
           pe.search_vector,
           ^search_query
-        )
+        ) or
+          fragment(
+            "? ILIKE ?",
+            pe.title,
+            ^"%#{search_query}%"
+          ),
+      order_by: [
+        desc:
+          fragment(
+            "ts_rank(?, websearch_to_tsquery('english', ?))",
+            pe.search_vector,
+            ^search_query
+          )
       ],
       limit: ^limit,
       offset: ^offset
@@ -96,8 +99,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           else
             "en"
           end
-        _ -> "en"
+
+        _ ->
+          "en"
       end
+
     limit = min(opts[:limit] || @default_limit, @max_limit)
     offset = opts[:offset] || 0
 
@@ -138,9 +144,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     # Convert to maps with proper string keys
     Enum.map(result.rows, fn row ->
-      m = result.columns
-      |> Enum.zip(row)
-      |> Enum.into(%{})
+      m =
+        result.columns
+        |> Enum.zip(row)
+        |> Enum.into(%{})
 
       m
       |> Map.update("starts_at", nil, &parse_datetime/1)
@@ -150,8 +157,27 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   ## Filter Functions
 
+  # If show_past is true, don't filter
+  defp filter_past_events(query, true), do: query
+
+  defp filter_past_events(query, _) do
+    # By default, exclude past events
+    # An event is considered active/upcoming if:
+    # - It has an end date that hasn't passed yet, OR
+    # - It has no end date and started recently (within 24 hours)
+    current_time = DateTime.utc_now()
+    twenty_four_hours_ago = DateTime.add(current_time, -24, :hour)
+
+    from(pe in query,
+      where:
+        (not is_nil(pe.ends_at) and pe.ends_at > ^current_time) or
+          (is_nil(pe.ends_at) and pe.starts_at > ^twenty_four_hours_ago)
+    )
+  end
+
   defp filter_by_categories(query, nil), do: query
   defp filter_by_categories(query, []), do: query
+
   defp filter_by_categories(query, category_ids) when is_list(category_ids) do
     from(pe in query,
       join: pec in "public_event_categories",
@@ -161,12 +187,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   defp filter_by_date_range(query, nil, nil), do: query
+
   defp filter_by_date_range(query, start_date, nil) do
     from(pe in query, where: pe.starts_at >= ^start_date)
   end
+
   defp filter_by_date_range(query, nil, end_date) do
     from(pe in query, where: pe.starts_at <= ^end_date)
   end
+
   defp filter_by_date_range(query, start_date, end_date) do
     from(pe in query,
       where: pe.starts_at >= ^start_date and pe.starts_at <= ^end_date
@@ -174,29 +203,33 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   defp filter_by_price_range(query, nil, nil), do: query
+
   defp filter_by_price_range(query, min_price, nil) do
     from(pe in query,
       where:
         not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
-        (pe.min_price >= ^min_price or pe.max_price >= ^min_price)
+          (pe.min_price >= ^min_price or pe.max_price >= ^min_price)
     )
   end
+
   defp filter_by_price_range(query, nil, max_price) do
     from(pe in query,
       where:
         not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
-        (pe.min_price <= ^max_price or pe.max_price <= ^max_price)
+          (pe.min_price <= ^max_price or pe.max_price <= ^max_price)
     )
   end
+
   defp filter_by_price_range(query, min_price, max_price) do
     from(pe in query,
       where:
         not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
-        (pe.max_price >= ^min_price and pe.min_price <= ^max_price)
+          (pe.max_price >= ^min_price and pe.min_price <= ^max_price)
     )
   end
 
   defp filter_by_location(query, nil, nil, nil), do: query
+
   defp filter_by_location(query, city_id, country_id, venue_ids) do
     query
     |> filter_by_city(city_id)
@@ -205,24 +238,26 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   defp filter_by_city(query, nil), do: query
+
   defp filter_by_city(query, city_id) do
-    from(pe in query,
-      join: v in Venue, on: pe.venue_id == v.id,
-      where: v.city_id == ^city_id
-    )
+    from(pe in query, join: v in Venue, on: pe.venue_id == v.id, where: v.city_id == ^city_id)
   end
 
   defp filter_by_country(query, nil), do: query
+
   defp filter_by_country(query, country_id) do
     from(pe in query,
-      join: v in Venue, on: pe.venue_id == v.id,
-      join: c in City, on: v.city_id == c.id,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      join: c in City,
+      on: v.city_id == c.id,
       where: c.country_id == ^country_id
     )
   end
 
   defp filter_by_venues(query, nil), do: query
   defp filter_by_venues(query, []), do: query
+
   defp filter_by_venues(query, venue_ids) when is_list(venue_ids) do
     from(pe in query, where: pe.venue_id in ^venue_ids)
   end
@@ -231,16 +266,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp apply_search(query, nil), do: query
   defp apply_search(query, ""), do: query
+
   defp apply_search(query, search_term) do
     search_query = String.trim(search_term)
+
     from(pe in query,
-      where: fragment(
-        "? @@ websearch_to_tsquery('english', ?) OR ? ILIKE ?",
-        pe.search_vector,
-        ^search_query,
-        pe.title,
-        ^"%#{search_query}%"
-      )
+      where:
+        fragment(
+          "? @@ websearch_to_tsquery('english', ?) OR ? ILIKE ?",
+          pe.search_vector,
+          ^search_query,
+          pe.title,
+          ^"%#{search_query}%"
+        )
     )
   end
 
@@ -249,24 +287,30 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   defp apply_sorting(query, nil, nil), do: apply_sorting(query, :starts_at, :asc)
   defp apply_sorting(query, nil, order), do: apply_sorting(query, :starts_at, order || :asc)
   defp apply_sorting(query, field, nil), do: apply_sorting(query, field, :asc)
+
   defp apply_sorting(query, :starts_at, order) when order in [:asc, :desc] do
     from(pe in query, order_by: [{^order, pe.starts_at}])
   end
+
   defp apply_sorting(query, :price, order) when order in [:asc, :desc] do
     from(pe in query, order_by: [{^order, pe.min_price}])
   end
+
   defp apply_sorting(query, :title, order) when order in [:asc, :desc] do
     from(pe in query, order_by: [{^order, pe.title}])
   end
+
   defp apply_sorting(query, :relevance, _order) do
     # Relevance sorting only makes sense with search
     query
   end
+
   defp apply_sorting(query, _field, _order), do: apply_sorting(query, :starts_at, :asc)
 
   ## Pagination
 
   defp paginate(query, nil, nil), do: paginate(query, 1, @default_limit)
+
   defp paginate(query, page, page_size) do
     page = max(page || 1, 1)
     page_size = min(page_size || @default_limit, @max_limit)
@@ -300,72 +344,96 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp get_localized_title(event, language) do
     case event.title_translations do
-      nil -> event.title
+      nil ->
+        event.title
+
       translations when is_map(translations) ->
         translations[language] || translations["en"] || event.title
-      _ -> event.title
+
+      _ ->
+        event.title
     end
   end
 
   defp get_localized_description(event, language) do
     # Sort sources by priority and take the first one's description
     # Fix: Sort by newest last_seen_at first (negative timestamp)
-    sorted_sources = event.sources
-    |> Enum.sort_by(fn source ->
-      priority = case source.metadata do
-        %{"priority" => p} when is_integer(p) -> p
-        %{"priority" => p} when is_binary(p) ->
-          case Integer.parse(p) do
-            {num, _} -> num
-            _ -> 10
+    sorted_sources =
+      event.sources
+      |> Enum.sort_by(fn source ->
+        priority =
+          case source.metadata do
+            %{"priority" => p} when is_integer(p) ->
+              p
+
+            %{"priority" => p} when is_binary(p) ->
+              case Integer.parse(p) do
+                {num, _} -> num
+                _ -> 10
+              end
+
+            _ ->
+              10
           end
-        _ -> 10
-      end
 
-      # Newer timestamps first (negative for descending sort)
-      ts = case source.last_seen_at do
-        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-        _ -> 9_223_372_036_854_775_807
-      end
+        # Newer timestamps first (negative for descending sort)
+        ts =
+          case source.last_seen_at do
+            %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+            _ -> 9_223_372_036_854_775_807
+          end
 
-      {priority, ts}
-    end)
+        {priority, ts}
+      end)
 
     case sorted_sources do
       [source | _] ->
         case source.description_translations do
-          nil -> nil
+          nil ->
+            nil
+
           translations when is_map(translations) ->
             translations[language] || translations["en"] || nil
-          _ -> nil
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   defp get_cover_image_url(event) do
     # Sort sources by priority and try to get the first available image
     # Fix: Sort by newest last_seen_at first (negative timestamp)
-    sorted_sources = event.sources
-    |> Enum.sort_by(fn source ->
-      priority = case source.metadata do
-        %{"priority" => p} when is_integer(p) -> p
-        %{"priority" => p} when is_binary(p) ->
-          case Integer.parse(p) do
-            {num, _} -> num
-            _ -> 10
+    sorted_sources =
+      event.sources
+      |> Enum.sort_by(fn source ->
+        priority =
+          case source.metadata do
+            %{"priority" => p} when is_integer(p) ->
+              p
+
+            %{"priority" => p} when is_binary(p) ->
+              case Integer.parse(p) do
+                {num, _} -> num
+                _ -> 10
+              end
+
+            _ ->
+              10
           end
-        _ -> 10
-      end
 
-      # Newer timestamps first (negative for descending sort)
-      ts = case source.last_seen_at do
-        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-        _ -> 9_223_372_036_854_775_807
-      end
+        # Newer timestamps first (negative for descending sort)
+        ts =
+          case source.last_seen_at do
+            %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+            _ -> 9_223_372_036_854_775_807
+          end
 
-      {priority, ts}
-    end)
+        {priority, ts}
+      end)
 
     # Try to extract image from sources
     Enum.find_value(sorted_sources, fn source ->
@@ -380,6 +448,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   defp extract_image_from_metadata(nil), do: nil
+
   defp extract_image_from_metadata(metadata) do
     cond do
       # Ticketmaster stores images in an array
@@ -399,12 +468,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   defp parse_datetime(nil), do: nil
+
   defp parse_datetime(datetime) when is_binary(datetime) do
     case DateTime.from_iso8601(datetime) do
       {:ok, dt, _} -> dt
       _ -> nil
     end
   end
+
   defp parse_datetime(datetime), do: datetime
 
   @doc """
@@ -414,6 +485,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     base_query = from(pe in PublicEvent, select: count(pe.id))
 
     base_query
+    |> filter_past_events(opts[:show_past])
     |> filter_by_categories(opts[:categories])
     |> filter_by_date_range(opts[:start_date], opts[:end_date])
     |> filter_by_price_range(opts[:min_price], opts[:max_price])
@@ -437,8 +509,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp get_category_counts(base_filters) do
     from(pe in PublicEvent,
-      join: pec in "public_event_categories", on: pec.event_id == pe.id,
-      join: c in Category, on: c.id == pec.category_id,
+      join: pec in "public_event_categories",
+      on: pec.event_id == pe.id,
+      join: c in Category,
+      on: c.id == pec.category_id,
       where: pe.starts_at > ^DateTime.utc_now(),
       group_by: [c.id, c.name],
       select: {c.id, c.name, count(pe.id)}
@@ -452,8 +526,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp get_city_counts(base_filters) do
     from(pe in PublicEvent,
-      join: v in Venue, on: pe.venue_id == v.id,
-      join: c in City, on: v.city_id == c.id,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      join: c in City,
+      on: v.city_id == c.id,
       where: pe.starts_at > ^DateTime.utc_now(),
       group_by: [c.id, c.name],
       select: {c.id, c.name, count(pe.id)}
@@ -472,27 +548,29 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       {:under_25, 0.01, 25},
       {:under_50, 25.01, 50},
       {:under_100, 50.01, 100},
-      {:over_100, 100.01, 999999}
+      {:over_100, 100.01, 999_999}
     ]
 
     Enum.map(ranges, fn {label, min, max} ->
-      query = from(pe in PublicEvent,
-        where: pe.starts_at > ^DateTime.utc_now()
-      )
+      query =
+        from(pe in PublicEvent,
+          where: pe.starts_at > ^DateTime.utc_now()
+        )
 
-      count = if min == 0 and max == 0 do
-        from(pe in query,
-          where: is_nil(pe.min_price) or pe.min_price == 0,
-          select: count(pe.id)
-        )
-      else
-        from(pe in query,
-          where: pe.min_price >= ^min and pe.min_price <= ^max,
-          select: count(pe.id)
-        )
-      end
-      |> apply_base_filters(base_filters)
-      |> Repo.one()
+      count =
+        if min == 0 and max == 0 do
+          from(pe in query,
+            where: is_nil(pe.min_price) or pe.min_price == 0,
+            select: count(pe.id)
+          )
+        else
+          from(pe in query,
+            where: pe.min_price >= ^min and pe.min_price <= ^max,
+            select: count(pe.id)
+          )
+        end
+        |> apply_base_filters(base_filters)
+        |> Repo.one()
 
       %{label: label, min: min, max: max, count: count}
     end)
@@ -510,12 +588,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       {:this_month, now, month_end}
     ]
     |> Enum.map(fn {label, start_date, end_date} ->
-      count = from(pe in PublicEvent,
-        where: pe.starts_at >= ^start_date and pe.starts_at <= ^end_date,
-        select: count(pe.id)
-      )
-      |> apply_base_filters(base_filters)
-      |> Repo.one()
+      count =
+        from(pe in PublicEvent,
+          where: pe.starts_at >= ^start_date and pe.starts_at <= ^end_date,
+          select: count(pe.id)
+        )
+        |> apply_base_filters(base_filters)
+        |> Repo.one()
 
       %{label: label, count: count}
     end)

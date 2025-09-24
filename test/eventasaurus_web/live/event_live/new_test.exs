@@ -52,40 +52,51 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       assert event.tagline == "A great test event"
       assert event.visibility == :public
       assert event.theme == :minimal
-      assert is_nil(event.venue_id)  # Virtual event has no venue
+      # Virtual event has no venue
+      assert is_nil(event.venue_id)
 
       # Should redirect to event show page with the generated slug
       assert_redirected(view, "/events/#{event.slug}")
     end
 
     test "rejects event creation with missing required fields", %{conn: conn} do
-      clear_test_auth()  # Ensure clean authentication state
+      # Ensure clean authentication state
+      clear_test_auth()
       {conn, _user} = register_and_log_in_user(conn)
 
       {:ok, view, _html} = live(conn, ~p"/events/new")
 
       # Submit form with missing required fields
       invalid_event_data = %{
-        "event[title]" => "",  # Missing required title
-        "event[start_date]" => "",  # Missing required start date
-        "event[start_time]" => "",  # Missing required start time
-        "event[ends_date]" => "",    # Missing required end date
-        "event[ends_time]" => "",    # Missing required end time
-        "event[timezone]" => ""     # Missing required timezone
+        # Missing required title
+        "event[title]" => "",
+        # Missing required start date
+        "event[start_date]" => "",
+        # Missing required start time
+        "event[start_time]" => "",
+        # Missing required end date
+        "event[ends_date]" => "",
+        # Missing required end time
+        "event[ends_time]" => "",
+        # Missing required timezone
+        "event[timezone]" => ""
       }
 
       # Submit form and expect it to stay on page with errors
-      html = view
-      |> form("form[data-test-id='event-form']", invalid_event_data)
-      |> render_change()  # Use render_change to trigger validation
+      html =
+        view
+        |> form("form[data-test-id='event-form']", invalid_event_data)
+        # Use render_change to trigger validation
+        |> render_change()
 
       # Should show validation errors and stay on form
       assert html =~ "can&#39;t be blank" or html =~ "can't be blank"
 
       # Try submitting and verify we don't get redirected (validation should stop submission)
-      _result = view
-      |> form("form[data-test-id='event-form']", invalid_event_data)
-      |> render_submit()
+      _result =
+        view
+        |> form("form[data-test-id='event-form']", invalid_event_data)
+        |> render_submit()
 
       # Should either stay on form or redirect due to form processing
       # Either way, no valid event should be created
@@ -112,15 +123,17 @@ defmodule EventasaurusWeb.EventLive.NewTest do
 
       # Validation is server-side and prevents event creation
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", invalid_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", invalid_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
             # Validation prevented creation and redirected
             events = EventasaurusApp.Events.list_events()
             assert length(events) == 0, "Event should not be created with invalid data"
+
           html when is_binary(html) ->
             # Stayed on form - validation prevented submission
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -137,24 +150,31 @@ defmodule EventasaurusWeb.EventLive.NewTest do
 
       # Submit partial invalid data
       partial_data = %{
-        "event[title]" => "Test Event",     # Valid
-        "event[tagline]" => "Test Tagline", # Valid
-        "event[start_date]" => "",          # Invalid
-        "event[start_time]" => "",          # Invalid
-        "event[timezone]" => ""             # Invalid
+        # Valid
+        "event[title]" => "Test Event",
+        # Valid
+        "event[tagline]" => "Test Tagline",
+        # Invalid
+        "event[start_date]" => "",
+        # Invalid
+        "event[start_time]" => "",
+        # Invalid
+        "event[timezone]" => ""
       }
 
       # Test validation behavior
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", partial_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", partial_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
             # Validation prevented creation
             events = EventasaurusApp.Events.list_events()
             assert length(events) == 0
+
           html when is_binary(html) ->
             # Form remained active after validation
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -169,7 +189,8 @@ defmodule EventasaurusWeb.EventLive.NewTest do
     end
 
     test "rejects past date with error message", %{conn: conn} do
-      clear_test_auth()  # Ensure clean state
+      # Ensure clean state
+      clear_test_auth()
       {conn, _user} = register_and_log_in_user(conn)
       {:ok, view, _html} = live(conn, ~p"/events/new")
 
@@ -185,18 +206,21 @@ defmodule EventasaurusWeb.EventLive.NewTest do
 
       # Submit form with past date
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", past_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", past_data)
+          |> render_submit()
 
         # Should prevent event creation due to past date
         case result do
           {:error, {:redirect, _}} ->
             # Event was created anyway - check if this is expected behavior
             assert true
+
           html when is_binary(html) ->
             # Stayed on form - validation likely prevented creation
             assert html =~ "Create a New Event"
+
           _ ->
             # Other responses are acceptable for this test
             assert true
@@ -230,12 +254,15 @@ defmodule EventasaurusWeb.EventLive.NewTest do
         "event[description]" => "This is an online event",
         "event[start_date]" => "2025-03-15",
         "event[start_time]" => "10:00",
-        "event[ends_date]" => "2025-03-15",   # Note: ends_date not end_date
-        "event[ends_time]" => "12:00",        # Note: ends_time not end_time
+        # Note: ends_date not end_date
+        "event[ends_date]" => "2025-03-15",
+        # Note: ends_time not end_time
+        "event[ends_time]" => "12:00",
         "event[timezone]" => "America/Los_Angeles",
         "event[visibility]" => "public",
         "event[theme]" => "cosmic",
-        "event[is_virtual]" => "true"          # Mark as virtual
+        # Mark as virtual
+        "event[is_virtual]" => "true"
       }
 
       view
@@ -247,7 +274,8 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       assert length(events) == 1
       [event] = events
       assert event.title == "Online Integration Event"
-      assert is_nil(event.venue_id)  # Virtual event has no venue
+      # Virtual event has no venue
+      assert is_nil(event.venue_id)
       assert event.theme == :cosmic
 
       # Verify user is organizer
@@ -308,9 +336,10 @@ defmodule EventasaurusWeb.EventLive.NewTest do
         "virtual_venue_url" => "https://example.com/meeting"
       }
 
-      result = index_live
-             |> form("[data-test-id='event-form']", event: form_data)
-             |> render_submit()
+      result =
+        index_live
+        |> form("[data-test-id='event-form']", event: form_data)
+        |> render_submit()
 
       # Check that form submission was successful (not errored)
       assert is_binary(result) or match?({:error, {:redirect, _}}, result)
@@ -331,9 +360,10 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       {:ok, index_live, _html} = live(conn, ~p"/events/new")
 
       # Submit form with empty required fields - should stay on form and show validation
-      result = index_live
-      |> form("[data-test-id='event-form']", event: %{})
-      |> render_submit()
+      result =
+        index_live
+        |> form("[data-test-id='event-form']", event: %{})
+        |> render_submit()
 
       # The form should either show validation errors or the submit should fail gracefully
       # We don't need to check for specific error messages since validation behavior may vary
@@ -509,10 +539,14 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       html = view |> element("button", "Click to add a cover image") |> render_click()
 
       # Should show all sections at once (not tabs)
-      assert html =~ "Drag and drop or click here to upload"  # Upload section
-      assert html =~ "Search for more photos"  # Search section
-      assert html =~ "General"  # Categories
-      assert html =~ "/images/events/general/"  # Default images
+      # Upload section
+      assert html =~ "Drag and drop or click here to upload"
+      # Search section
+      assert html =~ "Search for more photos"
+      # Categories
+      assert html =~ "General"
+      # Default images
+      assert html =~ "/images/events/general/"
 
       # Should NOT have tab interface
       refute html =~ "role=\"tab\""
@@ -553,7 +587,8 @@ defmodule EventasaurusWeb.EventLive.NewTest do
 
       # The error handling might not show immediately in HTML, so we'll check the view still works
       # and doesn't crash when handling errors
-      assert html # The view should render successfully after error
+      # The view should render successfully after error
+      assert html
 
       # Try to render again to see if error persists or is shown
       current_html = render(view)
@@ -576,9 +611,10 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Submit empty search query
-      html = view
-      |> element("form[phx-submit='unified_search']")
-      |> render_submit(%{search_query: ""})
+      html =
+        view
+        |> element("form[phx-submit='unified_search']")
+        |> render_submit(%{search_query: ""})
 
       # Should clear results and not show loading spinner
       refute html =~ "animate-spin"
@@ -593,14 +629,15 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Simulate selecting an Unsplash image by triggering the event directly
-      html = render_hook(view, "select_image", %{
-        "source" => "unsplash",
-        "image_url" => "https://unsplash.com/test.jpg",
-        "image_data" => %{
-          "id" => "test-123",
-          "user" => %{"name" => "Test Photographer"}
-        }
-      })
+      html =
+        render_hook(view, "select_image", %{
+          "source" => "unsplash",
+          "image_url" => "https://unsplash.com/test.jpg",
+          "image_data" => %{
+            "id" => "test-123",
+            "user" => %{"name" => "Test Photographer"}
+          }
+        })
 
       # Verify the image was selected - check for image URL in form
       assert html =~ "https://unsplash.com/test.jpg"
@@ -616,13 +653,14 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Simulate selecting a TMDB image
-      html = render_hook(view, "select_tmdb_image", %{
-        "image_url" => "https://tmdb.org/test-poster.jpg",
-        "image_data" => %{
-          "id" => "movie-456",
-          "title" => "Test Movie"
-        }
-      })
+      html =
+        render_hook(view, "select_tmdb_image", %{
+          "image_url" => "https://tmdb.org/test-poster.jpg",
+          "image_data" => %{
+            "id" => "movie-456",
+            "title" => "Test Movie"
+          }
+        })
 
       # Verify the image was selected
       assert html =~ "https://tmdb.org/test-poster.jpg"
@@ -688,14 +726,16 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       })
 
       # Submit form with validation errors (missing required fields)
-      html = view
-             |> form("form[data-test-id='event-form']", %{
-               "event" => %{
-                 "title" => "", # Missing title should cause validation error
-                 "description" => "Test description"
-               }
-             })
-             |> render_submit()
+      html =
+        view
+        |> form("form[data-test-id='event-form']", %{
+          "event" => %{
+            # Missing title should cause validation error
+            "title" => "",
+            "description" => "Test description"
+          }
+        })
+        |> render_submit()
 
       # Verify image data is preserved even during validation errors
       assert html =~ "https://unsplash.com/test.jpg"
@@ -711,20 +751,21 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Call the EXACT event with EXACT parameters that the real UI sends (no "source" param!)
-      html = render_hook(view, "image_selected", %{
-        "cover_image_url" => "https://images.unsplash.com/photo-1463852247062-1bbca38f7805",
-        "unsplash_data" => %{
-          "description" => "Happy Gorilla",
-          "id" => "r077pfFsdaU",
-          "urls" => %{
-            "regular" => "https://images.unsplash.com/photo-1463852247062-1bbca38f7805"
-          },
-          "user" => %{
-            "name" => "Kelly Sikkema",
-            "username" => "kellysikkema"
+      html =
+        render_hook(view, "image_selected", %{
+          "cover_image_url" => "https://images.unsplash.com/photo-1463852247062-1bbca38f7805",
+          "unsplash_data" => %{
+            "description" => "Happy Gorilla",
+            "id" => "r077pfFsdaU",
+            "urls" => %{
+              "regular" => "https://images.unsplash.com/photo-1463852247062-1bbca38f7805"
+            },
+            "user" => %{
+              "name" => "Kelly Sikkema",
+              "username" => "kellysikkema"
+            }
           }
-        }
-      })
+        })
 
       # Verify image was selected
       assert html =~ "https://images.unsplash.com/photo-1463852247062-1bbca38f7805"
@@ -738,16 +779,17 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Call the EXACT event with EXACT parameters that the real UI sends for TMDB
-      html = render_hook(view, "image_selected", %{
-        "cover_image_url" => "https://image.tmdb.org/t/p/w500/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg",
-        "tmdb_data" => %{
-          "first_air_date" => "2020-05-15",
-          "id" => 219403,
-          "name" => "Great God Monkey",
-          "poster_path" => "/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg",
-          "type" => "tv"
-        }
-      })
+      html =
+        render_hook(view, "image_selected", %{
+          "cover_image_url" => "https://image.tmdb.org/t/p/w500/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg",
+          "tmdb_data" => %{
+            "first_air_date" => "2020-05-15",
+            "id" => 219_403,
+            "name" => "Great God Monkey",
+            "poster_path" => "/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg",
+            "type" => "tv"
+          }
+        })
 
       # Verify image was selected
       assert html =~ "https://image.tmdb.org/t/p/w500/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg"

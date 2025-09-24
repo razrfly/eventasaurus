@@ -11,7 +11,8 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   require Logger
 
-  @collision_window_seconds 14400  # 4 hours
+  # 4 hours
+  @collision_window_seconds 14400
 
   @doc """
   Find an existing event that matches the given criteria.
@@ -37,78 +38,84 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
       Logger.warning("find_similar_event: invalid starts_at; skipping collision check")
       nil
     else
+      # Calculate time window for collision detection
+      start_window = NaiveDateTime.add(starts_at, -@collision_window_seconds, :second)
+      end_window = NaiveDateTime.add(starts_at, @collision_window_seconds, :second)
 
-    # Calculate time window for collision detection
-    start_window = NaiveDateTime.add(starts_at, -@collision_window_seconds, :second)
-    end_window = NaiveDateTime.add(starts_at, @collision_window_seconds, :second)
+      Logger.info("""
+      🕐 Checking for similar events:
+      Title: #{title || "N/A"}
+      Time window: #{start_window} to #{end_window}
+      Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
+      """)
 
-    Logger.info("""
-    🕐 Checking for similar events:
-    Title: #{title || "N/A"}
-    Time window: #{start_window} to #{end_window}
-    Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
-    """)
+      # Venue + time is our strongest signal for collision detection
+      if venue do
+        # First check time window
+        time_match_query =
+          from(pe in PublicEvent,
+            where:
+              pe.venue_id == ^venue.id and
+                pe.starts_at >= ^start_window and
+                pe.starts_at <= ^end_window,
+            limit: 1
+          )
 
-    # Venue + time is our strongest signal for collision detection
-    if venue do
-      # First check time window
-      time_match_query = from(pe in PublicEvent,
-        where: pe.venue_id == ^venue.id and
-               pe.starts_at >= ^start_window and
-               pe.starts_at <= ^end_window,
-        limit: 1
-      )
+        time_match = Repo.one(time_match_query)
 
-      time_match = Repo.one(time_match_query)
+        # Also check fuzzy title matching at the same venue
+        fuzzy_match =
+          if is_nil(time_match) && title do
+            from(pe in PublicEvent,
+              where: pe.venue_id == ^venue.id,
+              where: fragment("similarity(?, ?) > ?", pe.title, ^title, 0.85),
+              order_by: [desc: fragment("similarity(?, ?)", pe.title, ^title)],
+              limit: 1
+            )
+            |> Repo.one()
+          else
+            nil
+          end
 
-      # Also check fuzzy title matching at the same venue
-      fuzzy_match = if is_nil(time_match) && title do
-        from(pe in PublicEvent,
-          where: pe.venue_id == ^venue.id,
-          where: fragment("similarity(?, ?) > ?", pe.title, ^title, 0.85),
-          order_by: [desc: fragment("similarity(?, ?)", pe.title, ^title)],
-          limit: 1
-        )
-        |> Repo.one()
+        # Return whichever match we found
+        case {time_match, fuzzy_match} do
+          {nil, nil} ->
+            Logger.info("❌ No similar events found in time window or by title")
+            nil
+
+          {found_event, _} when not is_nil(found_event) ->
+            # Log when we find a potential match
+            Logger.info("""
+            🔍 Found potential collision by time:
+            Existing event ##{found_event.id}: #{found_event.title}
+            Starts at: #{found_event.starts_at}
+            Venue ID: #{venue.id}
+            Time difference: #{calculate_time_difference(starts_at, found_event.starts_at)} hours
+            """)
+
+            found_event
+
+          {_, found_event} when not is_nil(found_event) ->
+            # Log fuzzy match
+            Logger.info("""
+            🔍 Found potential collision by title similarity:
+            Existing event ##{found_event.id}: #{found_event.title}
+            Starts at: #{found_event.starts_at}
+            Venue ID: #{venue.id}
+            Title similarity: High (>85%)
+            """)
+
+            found_event
+        end
       else
+        Logger.info("⚠️ No venue provided, cannot reliably check for collisions")
+        # Without venue, we can't reliably match
+        # TODO: Future enhancement - check performers + date as fallback
         nil
       end
-
-      # Return whichever match we found
-      case {time_match, fuzzy_match} do
-        {nil, nil} ->
-          Logger.info("❌ No similar events found in time window or by title")
-          nil
-
-        {found_event, _} when not is_nil(found_event) ->
-          # Log when we find a potential match
-          Logger.info("""
-          🔍 Found potential collision by time:
-          Existing event ##{found_event.id}: #{found_event.title}
-          Starts at: #{found_event.starts_at}
-          Venue ID: #{venue.id}
-          Time difference: #{calculate_time_difference(starts_at, found_event.starts_at)} hours
-          """)
-          found_event
-
-        {_, found_event} when not is_nil(found_event) ->
-          # Log fuzzy match
-          Logger.info("""
-          🔍 Found potential collision by title similarity:
-          Existing event ##{found_event.id}: #{found_event.title}
-          Starts at: #{found_event.starts_at}
-          Venue ID: #{venue.id}
-          Title similarity: High (>85%)
-          """)
-          found_event
-      end
-    else
-      Logger.info("⚠️ No venue provided, cannot reliably check for collisions")
-      # Without venue, we can't reliably match
-      # TODO: Future enhancement - check performers + date as fallback
-      nil
     end
-    end  # End of unless starts_at
+
+    # End of unless starts_at
   end
 
   @doc """
@@ -117,8 +124,11 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
   """
   def find_similar_event_from_data(event_data) when is_map(event_data) do
     venue = event_data[:venue] || event_data["venue"]
-    starts_at = event_data[:starts_at] || event_data["starts_at"] ||
-                event_data[:start_at] || event_data["start_at"]
+
+    starts_at =
+      event_data[:starts_at] || event_data["starts_at"] ||
+        event_data[:start_at] || event_data["start_at"]
+
     title = event_data[:title] || event_data["title"]
 
     if venue && starts_at do
@@ -159,15 +169,19 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
     dt1 = to_naive(datetime1)
     dt2 = to_naive(datetime2)
     diff_seconds = NaiveDateTime.diff(dt1, dt2, :second) |> abs()
-    Float.round(diff_seconds / 3600, 1)  # Convert to hours with 1 decimal
+    # Convert to hours with 1 decimal
+    Float.round(diff_seconds / 3600, 1)
   end
 
   defp to_naive(nil), do: nil
   defp to_naive(%NaiveDateTime{} = dt), do: dt
   defp to_naive(%DateTime{} = dt), do: DateTime.to_naive(dt)
+
   defp to_naive(dt) when is_binary(dt) do
     case DateTime.from_iso8601(dt) do
-      {:ok, datetime, _} -> DateTime.to_naive(datetime)
+      {:ok, datetime, _} ->
+        DateTime.to_naive(datetime)
+
       _ ->
         case NaiveDateTime.from_iso8601(dt) do
           {:ok, naive} -> naive

@@ -12,7 +12,8 @@ Logger.info("Testing with source: #{source.name} (ID: #{source.id})")
 test_event_data = %{
   title: "Test Concert",
   url: "https://karnet.krakowculture.pl/60674-test",
-  starts_at: DateTime.add(DateTime.utc_now(), 30 * 86400, :second),  # 30 days from now
+  # 30 days from now
+  starts_at: DateTime.add(DateTime.utc_now(), 30 * 86400, :second),
   ends_at: nil,
   venue_data: %{
     name: "Kraków City Center",

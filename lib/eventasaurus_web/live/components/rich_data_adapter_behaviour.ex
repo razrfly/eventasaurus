@@ -61,23 +61,33 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterBehaviour do
   """
 
   @type content_type :: :movie | :tv | :venue | :restaurant | :activity | :book | :music | :custom
-  @type section_name :: :hero | :overview | :details | :cast | :media | :reviews | :photos | :tracks | :related | :people
+  @type section_name ::
+          :hero
+          | :overview
+          | :details
+          | :cast
+          | :media
+          | :reviews
+          | :photos
+          | :tracks
+          | :related
+          | :people
 
   @type standardized_data :: %{
-    id: String.t(),
-    type: content_type(),
-    title: String.t(),
-    description: String.t() | nil,
-    primary_image: map() | nil,
-    secondary_image: map() | nil,
-    rating: map() | nil,
-    year: integer() | nil,
-    status: String.t() | nil,
-    categories: [String.t()],
-    tags: [String.t()],
-    external_urls: map(),
-    sections: map()
-  }
+          id: String.t(),
+          type: content_type(),
+          title: String.t(),
+          description: String.t() | nil,
+          primary_image: map() | nil,
+          secondary_image: map() | nil,
+          rating: map() | nil,
+          year: integer() | nil,
+          status: String.t() | nil,
+          categories: [String.t()],
+          tags: [String.t()],
+          external_urls: map(),
+          sections: map()
+        }
 
   @doc """
   Adapts raw external data into the standardized format.
@@ -110,9 +120,9 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterBehaviour do
   Includes default sections to show, compact mode behavior, etc.
   """
   @callback display_config() :: %{
-    default_sections: [section_name()],
-    compact_sections: [section_name()],
-    required_fields: [atom()],
-    optional_fields: [atom()]
-  }
+              default_sections: [section_name()],
+              compact_sections: [section_name()],
+              required_fields: [atom()],
+              optional_fields: [atom()]
+            }
 end

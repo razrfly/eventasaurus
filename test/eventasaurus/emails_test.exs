@@ -5,22 +5,25 @@ defmodule Eventasaurus.EmailsTest do
   alias EventasaurusApp.{Events, Accounts}
 
   describe "guest_invitation_email/5" do
-        test "creates a properly formatted email with basic event data" do
+    test "creates a properly formatted email with basic event data" do
       organizer = user_fixture(%{name: "Alice Organizer", email: "alice@example.com"})
-      event = simple_event_struct(%{
-        title: "Test Event",
-        description: "A test event description",
-        start_at: ~U[2024-12-25 15:00:00Z],
-        slug: "test-event"
-      })
 
-      email = Emails.guest_invitation_email(
-        "guest@example.com",
-        "John Guest",
-        event,
-        "Looking forward to seeing you there!",
-        organizer
-      )
+      event =
+        simple_event_struct(%{
+          title: "Test Event",
+          description: "A test event description",
+          start_at: ~U[2024-12-25 15:00:00Z],
+          slug: "test-event"
+        })
+
+      email =
+        Emails.guest_invitation_email(
+          "guest@example.com",
+          "John Guest",
+          event,
+          "Looking forward to seeing you there!",
+          organizer
+        )
 
       # Test email structure
       assert email.subject == "You're invited to Test Event"
@@ -51,20 +54,25 @@ defmodule Eventasaurus.EmailsTest do
 
     test "handles minimal event data gracefully" do
       organizer = user_fixture(%{username: "organizer", email: "org@example.com"})
-      event = simple_event_struct(%{
-        title: "Simple Event",
-        description: nil,
-        start_at: nil,
-        slug: "simple-event"
-      })
 
-      email = Emails.guest_invitation_email(
-        "guest@example.com",
-        nil,  # No guest name
-        event,
-        nil,  # No invitation message
-        organizer
-      )
+      event =
+        simple_event_struct(%{
+          title: "Simple Event",
+          description: nil,
+          start_at: nil,
+          slug: "simple-event"
+        })
+
+      email =
+        Emails.guest_invitation_email(
+          "guest@example.com",
+          # No guest name
+          nil,
+          event,
+          # No invitation message
+          nil,
+          organizer
+        )
 
       # Should still work with minimal data
       assert email.subject == "You're invited to Simple Event"
@@ -74,9 +82,12 @@ defmodule Eventasaurus.EmailsTest do
       # Should handle missing data gracefully
       html_body = email.html_body
       assert html_body =~ "Simple Event"
-      assert html_body =~ "Test User"  # Should use user's name
-      assert html_body =~ "Hi there,"  # Should default when guest name is nil
-      assert html_body =~ "Date TBD"  # Should handle nil start_at
+      # Should use user's name
+      assert html_body =~ "Test User"
+      # Should default when guest name is nil
+      assert html_body =~ "Hi there,"
+      # Should handle nil start_at
+      assert html_body =~ "Date TBD"
 
       text_body = email.text_body
       assert text_body =~ "Simple Event"
@@ -87,19 +98,22 @@ defmodule Eventasaurus.EmailsTest do
 
     test "handles non-ticketed events correctly" do
       organizer = user_fixture()
-      event = simple_event_struct(%{
-        title: "Free Event",
-        is_ticketed: false,
-        slug: "free-event"
-      })
 
-      email = Emails.guest_invitation_email(
-        "guest@example.com",
-        "Guest Name",
-        event,
-        "",
-        organizer
-      )
+      event =
+        simple_event_struct(%{
+          title: "Free Event",
+          is_ticketed: false,
+          slug: "free-event"
+        })
+
+      email =
+        Emails.guest_invitation_email(
+          "guest@example.com",
+          "Guest Name",
+          event,
+          "",
+          organizer
+        )
 
       # Price section should not appear for non-ticketed events
       refute email.html_body =~ "Price"
@@ -112,18 +126,19 @@ defmodule Eventasaurus.EmailsTest do
       organizer = user_fixture(%{name: "Test Organizer", email: "organizer@example.com"})
       event = simple_event_struct(%{title: "Email Test Event", slug: "email-test-event"})
 
-      assert {:ok, _response} = Emails.send_guest_invitation(
-        "recipient@example.com",
-        "Recipient Name",
-        event,
-        "Test invitation message",
-        organizer
-      )
+      assert {:ok, _response} =
+               Emails.send_guest_invitation(
+                 "recipient@example.com",
+                 "Recipient Name",
+                 event,
+                 "Test invitation message",
+                 organizer
+               )
 
       # Verify email was sent using Swoosh test assertions
       assert_email_sent(fn email ->
         email.subject == "You're invited to Email Test Event" and
-        email.to == [{"Recipient Name", "recipient@example.com"}]
+          email.to == [{"Recipient Name", "recipient@example.com"}]
       end)
     end
   end
@@ -131,19 +146,22 @@ defmodule Eventasaurus.EmailsTest do
   describe "security" do
     test "escapes HTML in user-provided content to prevent XSS" do
       organizer = user_fixture(%{name: "<script>alert('xss')</script>"})
-      event = simple_event_struct(%{
-        title: "Event <script>alert('xss')</script>",
-        description: "<img src=x onerror=alert('xss')>",
-        slug: "test-event"
-      })
 
-      email = Emails.guest_invitation_email(
-        "guest@example.com",
-        "<b>Bold Guest</b>",
-        event,
-        "<script>alert('message')</script>",
-        organizer
-      )
+      event =
+        simple_event_struct(%{
+          title: "Event <script>alert('xss')</script>",
+          description: "<img src=x onerror=alert('xss')>",
+          slug: "test-event"
+        })
+
+      email =
+        Emails.guest_invitation_email(
+          "guest@example.com",
+          "<b>Bold Guest</b>",
+          event,
+          "<script>alert('message')</script>",
+          organizer
+        )
 
       # HTML should be escaped
       assert email.html_body =~ "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"

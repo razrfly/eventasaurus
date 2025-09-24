@@ -18,7 +18,8 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
       primary_image: get_primary_image(raw_data),
       secondary_image: get_secondary_image(raw_data),
       rating: get_rating_info(raw_data),
-      year: nil,  # Places don't have years
+      # Places don't have years
+      year: nil,
       status: get_status(raw_data),
       categories: get_categories(raw_data),
       tags: get_tags(raw_data),
@@ -38,9 +39,11 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
     # Check if this looks like Google Places data
     has_place_id = Map.has_key?(raw_data, "place_id") || Map.has_key?(raw_data, "id")
     has_places_fields = Map.has_key?(raw_data, "rating") || Map.has_key?(raw_data, "vicinity")
-    has_location_data = Map.has_key?(raw_data, "geometry") || Map.has_key?(raw_data, "formatted_address")
 
-        has_place_id && has_places_fields && has_location_data
+    has_location_data =
+      Map.has_key?(raw_data, "geometry") || Map.has_key?(raw_data, "formatted_address")
+
+    has_place_id && has_places_fields && has_location_data
   end
 
   @impl true
@@ -66,9 +69,14 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
     types = raw_data["types"] || []
 
     cond do
-      "restaurant" in types || "food" in types || "meal_takeaway" in types -> :restaurant
-      "lodging" in types || "tourist_attraction" in types || "amusement_park" in types -> :activity
-      true -> :venue
+      "restaurant" in types || "food" in types || "meal_takeaway" in types ->
+        :restaurant
+
+      "lodging" in types || "tourist_attraction" in types || "amusement_park" in types ->
+        :activity
+
+      true ->
+        :venue
     end
   end
 
@@ -80,28 +88,31 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
     parts = []
 
     # Add rating if available
-    parts = if raw_data["rating"] do
-      rating_text = "Rating: #{format_rating(raw_data["rating"])}★"
-      [rating_text | parts]
-    else
-      parts
-    end
+    parts =
+      if raw_data["rating"] do
+        rating_text = "Rating: #{format_rating(raw_data["rating"])}★"
+        [rating_text | parts]
+      else
+        parts
+      end
 
     # Add categories
-    parts = if get_categories(raw_data) != [] do
-      categories_text = get_categories(raw_data) |> Enum.join(", ")
-      [categories_text | parts]
-    else
-      parts
-    end
+    parts =
+      if get_categories(raw_data) != [] do
+        categories_text = get_categories(raw_data) |> Enum.join(", ")
+        [categories_text | parts]
+      else
+        parts
+      end
 
     # Add location
-    parts = if raw_data["vicinity"] || raw_data["formatted_address"] do
-      location = raw_data["vicinity"] || raw_data["formatted_address"]
-      [location | parts]
-    else
-      parts
-    end
+    parts =
+      if raw_data["vicinity"] || raw_data["formatted_address"] do
+        location = raw_data["vicinity"] || raw_data["formatted_address"]
+        [location | parts]
+      else
+        parts
+      end
 
     case parts do
       [] -> nil
@@ -119,7 +130,9 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
           alt: get_title(raw_data),
           type: :photo
         }
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -133,7 +146,9 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
           alt: "#{get_title(raw_data)} photo",
           type: :photo
         }
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -149,6 +164,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
           count: count,
           display: "#{format_rating(rating)}/5"
         }
+
       {rating, _} when is_number(rating) ->
         %{
           value: rating,
@@ -156,16 +172,26 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
           count: 0,
           display: "#{format_rating(rating)}/5"
         }
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   defp get_status(raw_data) do
     case raw_data["business_status"] do
-      "OPERATIONAL" -> "open"
-      "CLOSED_TEMPORARILY" -> "temporarily_closed"
-      "CLOSED_PERMANENTLY" -> "permanently_closed"
-      status when is_binary(status) -> String.downcase(status)
+      "OPERATIONAL" ->
+        "open"
+
+      "CLOSED_TEMPORARILY" ->
+        "temporarily_closed"
+
+      "CLOSED_PERMANENTLY" ->
+        "permanently_closed"
+
+      status when is_binary(status) ->
+        String.downcase(status)
+
       _ ->
         # Fallback to opening hours
         if raw_data["opening_hours"] do
@@ -182,7 +208,8 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
     types = raw_data["types"] || []
 
     types
-    |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))  # Filter generic types
+    # Filter generic types
+    |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))
     |> Enum.map(&humanize_type/1)
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
@@ -194,10 +221,15 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
     # Add tags based on various criteria
     tags = if (raw_data["rating"] || 0) >= 4.5, do: ["Highly Rated" | tags], else: tags
     tags = if (raw_data["user_ratings_total"] || 0) >= 1000, do: ["Popular" | tags], else: tags
-    tags = if raw_data["price_level"] && raw_data["price_level"] == 4, do: ["Premium" | tags], else: tags
+
+    tags =
+      if raw_data["price_level"] && raw_data["price_level"] == 4,
+        do: ["Premium" | tags],
+        else: tags
 
     # Check if permanently closed
-    tags = if raw_data["business_status"] == "CLOSED_PERMANENTLY", do: ["Closed" | tags], else: tags
+    tags =
+      if raw_data["business_status"] == "CLOSED_PERMANENTLY", do: ["Closed" | tags], else: tags
 
     tags
   end
@@ -277,101 +309,284 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, [{:decimals, 1}])
   end
+
   defp format_rating(_), do: "N/A"
 
   defp humanize_type(type) when is_binary(type) do
     case type do
-      "amusement_park" -> "Amusement Park"
-      "art_gallery" -> "Art Gallery"
-      "bakery" -> "Bakery"
-      "bank" -> "Bank"
-      "bar" -> "Bar"
-      "beauty_salon" -> "Beauty Salon"
-      "book_store" -> "Book Store"
-      "bowling_alley" -> "Bowling Alley"
-      "bus_station" -> "Bus Station"
-      "cafe" -> "Cafe"
-      "campground" -> "Campground"
-      "car_dealer" -> "Car Dealer"
-      "car_rental" -> "Car Rental"
-      "car_repair" -> "Car Repair"
-      "car_wash" -> "Car Wash"
-      "casino" -> "Casino"
-      "cemetery" -> "Cemetery"
-      "church" -> "Church"
-      "city_hall" -> "City Hall"
-      "clothing_store" -> "Clothing Store"
-      "convenience_store" -> "Convenience Store"
-      "courthouse" -> "Courthouse"
-      "dentist" -> "Dentist"
-      "department_store" -> "Department Store"
-      "doctor" -> "Doctor"
-      "drugstore" -> "Drugstore"
-      "electrician" -> "Electrician"
-      "electronics_store" -> "Electronics Store"
-      "embassy" -> "Embassy"
-      "fire_station" -> "Fire Station"
-      "florist" -> "Florist"
-      "funeral_home" -> "Funeral Home"
-      "furniture_store" -> "Furniture Store"
-      "gas_station" -> "Gas Station"
-      "gym" -> "Gym"
-      "hair_care" -> "Hair Care"
-      "hardware_store" -> "Hardware Store"
-      "hindu_temple" -> "Hindu Temple"
-      "home_goods_store" -> "Home Goods Store"
-      "hospital" -> "Hospital"
-      "insurance_agency" -> "Insurance Agency"
-      "jewelry_store" -> "Jewelry Store"
-      "laundry" -> "Laundry"
-      "lawyer" -> "Lawyer"
-      "library" -> "Library"
-      "light_rail_station" -> "Light Rail Station"
-      "liquor_store" -> "Liquor Store"
-      "local_government_office" -> "Government Office"
-      "locksmith" -> "Locksmith"
-      "lodging" -> "Lodging"
-      "meal_delivery" -> "Meal Delivery"
-      "meal_takeaway" -> "Takeaway"
-      "mosque" -> "Mosque"
-      "movie_rental" -> "Movie Rental"
-      "movie_theater" -> "Movie Theater"
-      "moving_company" -> "Moving Company"
-      "museum" -> "Museum"
-      "night_club" -> "Night Club"
-      "painter" -> "Painter"
-      "park" -> "Park"
-      "parking" -> "Parking"
-      "pet_store" -> "Pet Store"
-      "pharmacy" -> "Pharmacy"
-      "physiotherapist" -> "Physiotherapist"
-      "plumber" -> "Plumber"
-      "police" -> "Police"
-      "post_office" -> "Post Office"
-      "primary_school" -> "Primary School"
-      "real_estate_agency" -> "Real Estate Agency"
-      "restaurant" -> "Restaurant"
-      "roofing_contractor" -> "Roofing Contractor"
-      "rv_park" -> "RV Park"
-      "school" -> "School"
-      "secondary_school" -> "Secondary School"
-      "shoe_store" -> "Shoe Store"
-      "shopping_mall" -> "Shopping Mall"
-      "spa" -> "Spa"
-      "stadium" -> "Stadium"
-      "storage" -> "Storage"
-      "store" -> "Store"
-      "subway_station" -> "Subway Station"
-      "supermarket" -> "Supermarket"
-      "synagogue" -> "Synagogue"
-      "taxi_stand" -> "Taxi Stand"
-      "tourist_attraction" -> "Tourist Attraction"
-      "train_station" -> "Train Station"
-      "transit_station" -> "Transit Station"
-      "travel_agency" -> "Travel Agency"
-      "university" -> "University"
-      "veterinary_care" -> "Veterinary Care"
-      "zoo" -> "Zoo"
+      "amusement_park" ->
+        "Amusement Park"
+
+      "art_gallery" ->
+        "Art Gallery"
+
+      "bakery" ->
+        "Bakery"
+
+      "bank" ->
+        "Bank"
+
+      "bar" ->
+        "Bar"
+
+      "beauty_salon" ->
+        "Beauty Salon"
+
+      "book_store" ->
+        "Book Store"
+
+      "bowling_alley" ->
+        "Bowling Alley"
+
+      "bus_station" ->
+        "Bus Station"
+
+      "cafe" ->
+        "Cafe"
+
+      "campground" ->
+        "Campground"
+
+      "car_dealer" ->
+        "Car Dealer"
+
+      "car_rental" ->
+        "Car Rental"
+
+      "car_repair" ->
+        "Car Repair"
+
+      "car_wash" ->
+        "Car Wash"
+
+      "casino" ->
+        "Casino"
+
+      "cemetery" ->
+        "Cemetery"
+
+      "church" ->
+        "Church"
+
+      "city_hall" ->
+        "City Hall"
+
+      "clothing_store" ->
+        "Clothing Store"
+
+      "convenience_store" ->
+        "Convenience Store"
+
+      "courthouse" ->
+        "Courthouse"
+
+      "dentist" ->
+        "Dentist"
+
+      "department_store" ->
+        "Department Store"
+
+      "doctor" ->
+        "Doctor"
+
+      "drugstore" ->
+        "Drugstore"
+
+      "electrician" ->
+        "Electrician"
+
+      "electronics_store" ->
+        "Electronics Store"
+
+      "embassy" ->
+        "Embassy"
+
+      "fire_station" ->
+        "Fire Station"
+
+      "florist" ->
+        "Florist"
+
+      "funeral_home" ->
+        "Funeral Home"
+
+      "furniture_store" ->
+        "Furniture Store"
+
+      "gas_station" ->
+        "Gas Station"
+
+      "gym" ->
+        "Gym"
+
+      "hair_care" ->
+        "Hair Care"
+
+      "hardware_store" ->
+        "Hardware Store"
+
+      "hindu_temple" ->
+        "Hindu Temple"
+
+      "home_goods_store" ->
+        "Home Goods Store"
+
+      "hospital" ->
+        "Hospital"
+
+      "insurance_agency" ->
+        "Insurance Agency"
+
+      "jewelry_store" ->
+        "Jewelry Store"
+
+      "laundry" ->
+        "Laundry"
+
+      "lawyer" ->
+        "Lawyer"
+
+      "library" ->
+        "Library"
+
+      "light_rail_station" ->
+        "Light Rail Station"
+
+      "liquor_store" ->
+        "Liquor Store"
+
+      "local_government_office" ->
+        "Government Office"
+
+      "locksmith" ->
+        "Locksmith"
+
+      "lodging" ->
+        "Lodging"
+
+      "meal_delivery" ->
+        "Meal Delivery"
+
+      "meal_takeaway" ->
+        "Takeaway"
+
+      "mosque" ->
+        "Mosque"
+
+      "movie_rental" ->
+        "Movie Rental"
+
+      "movie_theater" ->
+        "Movie Theater"
+
+      "moving_company" ->
+        "Moving Company"
+
+      "museum" ->
+        "Museum"
+
+      "night_club" ->
+        "Night Club"
+
+      "painter" ->
+        "Painter"
+
+      "park" ->
+        "Park"
+
+      "parking" ->
+        "Parking"
+
+      "pet_store" ->
+        "Pet Store"
+
+      "pharmacy" ->
+        "Pharmacy"
+
+      "physiotherapist" ->
+        "Physiotherapist"
+
+      "plumber" ->
+        "Plumber"
+
+      "police" ->
+        "Police"
+
+      "post_office" ->
+        "Post Office"
+
+      "primary_school" ->
+        "Primary School"
+
+      "real_estate_agency" ->
+        "Real Estate Agency"
+
+      "restaurant" ->
+        "Restaurant"
+
+      "roofing_contractor" ->
+        "Roofing Contractor"
+
+      "rv_park" ->
+        "RV Park"
+
+      "school" ->
+        "School"
+
+      "secondary_school" ->
+        "Secondary School"
+
+      "shoe_store" ->
+        "Shoe Store"
+
+      "shopping_mall" ->
+        "Shopping Mall"
+
+      "spa" ->
+        "Spa"
+
+      "stadium" ->
+        "Stadium"
+
+      "storage" ->
+        "Storage"
+
+      "store" ->
+        "Store"
+
+      "subway_station" ->
+        "Subway Station"
+
+      "supermarket" ->
+        "Supermarket"
+
+      "synagogue" ->
+        "Synagogue"
+
+      "taxi_stand" ->
+        "Taxi Stand"
+
+      "tourist_attraction" ->
+        "Tourist Attraction"
+
+      "train_station" ->
+        "Train Station"
+
+      "transit_station" ->
+        "Transit Station"
+
+      "travel_agency" ->
+        "Travel Agency"
+
+      "university" ->
+        "University"
+
+      "veterinary_care" ->
+        "Veterinary Care"
+
+      "zoo" ->
+        "Zoo"
+
       _ ->
         type
         |> String.replace("_", " ")
@@ -380,6 +595,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
         |> Enum.join(" ")
     end
   end
+
   defp humanize_type(_), do: nil
 
   defp build_photo_url(photo) when is_map(photo) do
@@ -393,6 +609,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.GooglePlacesDataAdapter do
         "&key=#{System.get_env("GOOGLE_MAPS_API_KEY")}"
     end
   end
+
   defp build_photo_url(_), do: nil
 
   defp build_google_maps_url(raw_data) do

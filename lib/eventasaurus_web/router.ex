@@ -34,7 +34,7 @@ defmodule EventasaurusWeb.Router do
   # Production Oban Web UI with authentication
   if Mix.env() == :prod do
     import Oban.Web.Router
-    
+
     pipeline :oban_admin do
       plug :accepts, ["html"]
       plug :fetch_session
@@ -52,7 +52,7 @@ defmodule EventasaurusWeb.Router do
       plug :require_authenticated_user
       plug EventasaurusWeb.Plugs.ObanAuthPlug
     end
-    
+
     scope "/admin" do
       pipe_through :oban_admin
 
@@ -79,6 +79,7 @@ defmodule EventasaurusWeb.Router do
     if Mix.env() == :dev do
       plug EventasaurusWeb.Dev.DevAuthPlug
     end
+
     plug :fetch_auth_user
     plug :assign_user_struct
     plug EventasaurusWeb.Plugs.LanguagePlug
@@ -87,9 +88,11 @@ defmodule EventasaurusWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug :fetch_session
+
     if Mix.env() == :dev do
       plug EventasaurusWeb.Dev.DevAuthPlug
     end
+
     plug :fetch_auth_user
     plug :assign_user_struct
   end
@@ -108,7 +111,8 @@ defmodule EventasaurusWeb.Router do
   pipeline :secure_user_api do
     plug :accepts, ["json"]
     plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
-    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000  # 60 requests per minute
+    # 60 requests per minute
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000
     plug :fetch_session
     plug :fetch_live_flash
     plug :protect_from_forgery
@@ -150,7 +154,8 @@ defmodule EventasaurusWeb.Router do
   pipeline :secure_api do
     plug :accepts, ["json"]
     plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
-    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000  # 60 requests per minute
+    # 60 requests per minute
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000
     plug :fetch_session
     plug :fetch_auth_user
     plug :assign_user_struct
@@ -159,7 +164,8 @@ defmodule EventasaurusWeb.Router do
   # Health check pipeline with rate limiting to prevent abuse
   pipeline :health_check do
     plug :accepts, ["json"]
-    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 10, window: 60_000  # 10 requests per minute
+    # 10 requests per minute
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 10, window: 60_000
   end
 
   # Pipeline for redirect if authenticated (but allows password recovery)
@@ -197,13 +203,14 @@ defmodule EventasaurusWeb.Router do
   if Mix.env() == :dev do
     scope "/dev", EventasaurusWeb do
       pipe_through :browser
-      
+
       post "/quick-login", Dev.DevAuthController, :quick_login
     end
   end
 
   # LiveView session for authenticated routes
-  live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+  live_session :authenticated,
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
@@ -236,7 +243,8 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Protected LiveView routes that require authentication
-  live_session :authenticated_orders, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+  live_session :authenticated_orders,
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
@@ -261,7 +269,8 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Protected event management LiveView (require authentication)
-  live_session :event_management, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+  live_session :event_management,
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
     scope "/events", EventasaurusWeb do
       pipe_through :browser
 
@@ -340,7 +349,7 @@ defmodule EventasaurusWeb.Router do
   # Event signup routes that should redirect authenticated users
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :redirect_if_authenticated]
-    
+
     get "/signup", PageController, :redirect_to_invite_only
     get "/signup/:event_id", PageController, :redirect_to_auth_register_with_event
   end
@@ -353,7 +362,7 @@ defmodule EventasaurusWeb.Router do
       # Username-based profile routes (new plural form)
       get "/users/:username", ProfileController, :show
       get "/u/:username", ProfileController, :redirect_short
-      
+
       # Backward compatibility redirects for old /user/ URLs
       get "/user/:username", ProfileController, :redirect_legacy
     end
@@ -398,7 +407,8 @@ defmodule EventasaurusWeb.Router do
     pipe_through :image
 
     # Cache-busting social card generation (by slug with hash)
-    get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug, as: :social_card_cached
+    get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
+      as: :social_card_cached
   end
 
   # Other scopes may use custom stacks.
@@ -455,7 +465,8 @@ defmodule EventasaurusWeb.Router do
     plug :accepts, ["json"]
     plug EventasaurusWeb.Plugs.RawBodyPlug
     plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: false
-    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 1000, window: 60_000  # Higher limit for webhooks
+    # Higher limit for webhooks
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 1000, window: 60_000
   end
 
   # Stripe webhook routes (no authentication required, but with security measures)

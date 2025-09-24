@@ -13,7 +13,8 @@ defmodule EventasaurusApp.EventStateMachine do
   require Logger
 
   @cache_table :event_phase_cache
-  @cache_ttl_seconds 300  # 5 minutes TTL
+  # 5 minutes TTL
+  @cache_ttl_seconds 300
 
   @doc """
   Starts the ETS cache table for computed phases.
@@ -40,7 +41,9 @@ defmodule EventasaurusApp.EventStateMachine do
   """
   def clear_cache do
     case :ets.whereis(@cache_table) do
-      :undefined -> :ok
+      :undefined ->
+        :ok
+
       _tid ->
         :ets.delete_all_objects(@cache_table)
         Logger.debug("EventStateMachine: Phase cache cleared")
@@ -112,10 +115,12 @@ defmodule EventasaurusApp.EventStateMachine do
       false
   """
   def status_matches?(attrs) when is_map(attrs) do
-    current_status = case get_status(attrs) do
-      s when is_binary(s) -> String.to_existing_atom(s)
-      s -> s
-    end
+    current_status =
+      case get_status(attrs) do
+        s when is_binary(s) -> String.to_existing_atom(s)
+        s -> s
+      end
+
     inferred_status = infer_status(attrs)
     current_status == inferred_status
   end
@@ -198,13 +203,17 @@ defmodule EventasaurusApp.EventStateMachine do
   Uses ETS cache with TTL to optimize repeated phase computations
   for the same event.
   """
-  def computed_phase_with_cache(%EventasaurusApp.Events.Event{} = event, %DateTime{} = current_time) do
+  def computed_phase_with_cache(
+        %EventasaurusApp.Events.Event{} = event,
+        %DateTime{} = current_time
+      ) do
     cache_key = build_cache_key(event, current_time)
 
     case get_from_cache(cache_key) do
       {:hit, phase} ->
         Logger.debug("EventStateMachine: Cache hit for event #{event.id}")
         phase
+
       :miss ->
         phase = computed_phase_uncached(event, current_time)
         put_in_cache(cache_key, phase)
@@ -219,40 +228,50 @@ defmodule EventasaurusApp.EventStateMachine do
   def computed_phase_uncached(%EventasaurusApp.Events.Event{} = event, %DateTime{} = current_time) do
     cond do
       # Canceled events are always in canceled phase
-      event.status == :canceled -> :canceled
+      event.status == :canceled ->
+        :canceled
 
       # Events that have ended
-      event.ends_at && DateTime.compare(current_time, event.ends_at) == :gt -> :ended
+      event.ends_at && DateTime.compare(current_time, event.ends_at) == :gt ->
+        :ended
 
       # Polling deadline has passed but event is not yet confirmed
       event.status == :polling &&
-      event.polling_deadline &&
-      DateTime.compare(current_time, event.polling_deadline) == :gt -> :awaiting_confirmation
+        event.polling_deadline &&
+          DateTime.compare(current_time, event.polling_deadline) == :gt ->
+        :awaiting_confirmation
 
       # Confirmed events with ticketing enabled
-      event.status == :confirmed && is_ticketed?(event) -> :ticketing
+      event.status == :confirmed && is_ticketed?(event) ->
+        :ticketing
 
       # Confirmed events without ticketing
-      event.status == :confirmed -> :open
+      event.status == :confirmed ->
+        :open
 
       # Threshold events where threshold has been met
-      event.status == :threshold && threshold_met?(event) -> :prepaid_confirmed
+      event.status == :threshold && threshold_met?(event) ->
+        :prepaid_confirmed
 
       # Currently polling for interest
-      event.status == :polling -> :polling
+      event.status == :polling ->
+        :polling
 
       # Threshold state (awaiting enough participants)
-      event.status == :threshold -> :awaiting_confirmation
+      event.status == :threshold ->
+        :awaiting_confirmation
 
       # Draft events are in planning phase
-      event.status == :draft -> :planning
+      event.status == :draft ->
+        :planning
 
       # Default phase for other states
-      true -> :planning
+      true ->
+        :planning
     end
   end
 
-    @doc """
+  @doc """
   Computes the current phase of an event at a specific point in time.
 
   This version allows for testing with specific timestamps and bypasses cache.
@@ -309,7 +328,7 @@ defmodule EventasaurusApp.EventStateMachine do
     is_ticketed == true
   end
 
-    @doc """
+  @doc """
   Gets the current attendee count for an event.
 
   Counts confirmed ticket holders for the event.
@@ -320,13 +339,15 @@ defmodule EventasaurusApp.EventStateMachine do
     import Ecto.Query
 
     from(p in EventParticipant,
-      where: p.event_id == ^event.id and
-             p.role == :ticket_holder and
-             p.status == :confirmed_with_order,
+      where:
+        p.event_id == ^event.id and
+          p.role == :ticket_holder and
+          p.status == :confirmed_with_order,
       select: count(p.id)
     )
     |> Repo.one()
-    |> Kernel.||(0)  # Return 0 if no participants found
+    # Return 0 if no participants found
+    |> Kernel.||(0)
   end
 
   @doc """
@@ -344,7 +365,8 @@ defmodule EventasaurusApp.EventStateMachine do
       select: sum(o.total_cents)
     )
     |> Repo.one()
-    |> Kernel.||(0)  # Return 0 if no orders found
+    # Return 0 if no orders found
+    |> Kernel.||(0)
   end
 
   @doc """
@@ -366,7 +388,16 @@ defmodule EventasaurusApp.EventStateMachine do
   Returns all possible phases an event can be in.
   """
   def all_phases do
-    [:planning, :polling, :awaiting_confirmation, :prepaid_confirmed, :ticketing, :open, :ended, :canceled]
+    [
+      :planning,
+      :polling,
+      :awaiting_confirmation,
+      :prepaid_confirmed,
+      :ticketing,
+      :open,
+      :ended,
+      :canceled
+    ]
   end
 
   @doc """
@@ -406,6 +437,7 @@ defmodule EventasaurusApp.EventStateMachine do
       :undefined ->
         init_cache()
         :miss
+
       _tid ->
         case :ets.lookup(@cache_table, cache_key) do
           [{^cache_key, phase, timestamp}] ->
@@ -415,7 +447,9 @@ defmodule EventasaurusApp.EventStateMachine do
               :ets.delete(@cache_table, cache_key)
               :miss
             end
-          [] -> :miss
+
+          [] ->
+            :miss
         end
     end
   end
@@ -425,6 +459,7 @@ defmodule EventasaurusApp.EventStateMachine do
       :undefined ->
         init_cache()
         put_in_cache(cache_key, phase)
+
       _tid ->
         timestamp = System.os_time(:second)
         :ets.insert(@cache_table, {cache_key, phase, timestamp})
@@ -434,6 +469,6 @@ defmodule EventasaurusApp.EventStateMachine do
 
   defp cache_entry_valid?(timestamp) do
     current_time = System.os_time(:second)
-    (current_time - timestamp) < @cache_ttl_seconds
+    current_time - timestamp < @cache_ttl_seconds
   end
 end

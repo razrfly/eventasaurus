@@ -36,8 +36,10 @@ defmodule Mix.Tasks.Ecto.Reset.Dev do
       Mix.raise("This task should only be run in development environment!")
     end
 
-    IO.puts(IO.ANSI.format([:bright, :yellow, "\n⚠️  This will DROP your development database!", :reset]))
-    
+    IO.puts(
+      IO.ANSI.format([:bright, :yellow, "\n⚠️  This will DROP your development database!", :reset])
+    )
+
     if Mix.shell().yes?("Are you sure you want to continue?") do
       IO.puts("\n🔄 Resetting development database...\n")
 
@@ -56,7 +58,13 @@ defmodule Mix.Tasks.Ecto.Reset.Dev do
       # Run the dev seeder with passed arguments
       Mix.Task.run("seed.dev", args)
 
-      IO.puts(IO.ANSI.format([:green, "\n✅ Development database reset and seeded successfully!", :reset]))
+      IO.puts(
+        IO.ANSI.format([
+          :green,
+          "\n✅ Development database reset and seeded successfully!",
+          :reset
+        ])
+      )
     else
       IO.puts(IO.ANSI.format([:yellow, "\n❌ Database reset cancelled.", :reset]))
     end

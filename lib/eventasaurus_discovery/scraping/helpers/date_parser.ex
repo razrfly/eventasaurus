@@ -21,68 +21,111 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
     # Timex will try each format until one succeeds
     formats = [
       # ISO 8601 formats
-      "{ISO:Extended}",                           # 2024-12-25T10:30:00Z
-      "{ISO:Extended:Z}",                         # 2024-12-25T10:30:00+00:00
-      "{YYYY}-{0M}-{0D}T{h24}:{m}:{s}",          # 2024-12-25T10:30:00
-      "{YYYY}-{0M}-{0D} {h24}:{m}:{s}",          # 2024-12-25 10:30:00
-      "{YYYY}-{0M}-{0D}",                        # 2024-12-25
+      # 2024-12-25T10:30:00Z
+      "{ISO:Extended}",
+      # 2024-12-25T10:30:00+00:00
+      "{ISO:Extended:Z}",
+      # 2024-12-25T10:30:00
+      "{YYYY}-{0M}-{0D}T{h24}:{m}:{s}",
+      # 2024-12-25 10:30:00
+      "{YYYY}-{0M}-{0D} {h24}:{m}:{s}",
+      # 2024-12-25
+      "{YYYY}-{0M}-{0D}",
 
       # American formats
-      "{M}/{D}/{YYYY} {h12}:{m} {AM}",           # 12/25/2024 10:30 AM
-      "{M}/{D}/{YYYY} {h24}:{m}",                # 12/25/2024 22:30
-      "{M}/{D}/{YYYY}",                           # 12/25/2024
-      "{0M}/{0D}/{YYYY}",                         # 01/25/2024
+      # 12/25/2024 10:30 AM
+      "{M}/{D}/{YYYY} {h12}:{m} {AM}",
+      # 12/25/2024 22:30
+      "{M}/{D}/{YYYY} {h24}:{m}",
+      # 12/25/2024
+      "{M}/{D}/{YYYY}",
+      # 01/25/2024
+      "{0M}/{0D}/{YYYY}",
 
       # European formats
-      "{D}.{M}.{YYYY} {h24}:{m}",                # 25.12.2024 22:30
-      "{D}.{M}.{YYYY}",                           # 25.12.2024
-      "{0D}.{0M}.{YYYY}",                         # 01.12.2024
-      "{D}-{M}-{YYYY}",                           # 25-12-2024
+      # 25.12.2024 22:30
+      "{D}.{M}.{YYYY} {h24}:{m}",
+      # 25.12.2024
+      "{D}.{M}.{YYYY}",
+      # 01.12.2024
+      "{0D}.{0M}.{YYYY}",
+      # 25-12-2024
+      "{D}-{M}-{YYYY}",
 
       # RFC formats
-      "{RFC1123}",                                # Mon, 25 Dec 2024 10:30:00 GMT
-      "{RFC3339}",                                # 2024-12-25T10:30:00+00:00
-      "{RFC822}",                                 # Mon, 25 Dec 24 10:30:00 +0000
+      # Mon, 25 Dec 2024 10:30:00 GMT
+      "{RFC1123}",
+      # 2024-12-25T10:30:00+00:00
+      "{RFC3339}",
+      # Mon, 25 Dec 24 10:30:00 +0000
+      "{RFC822}",
 
       # Natural month names
-      "{Mfull} {D}, {YYYY} {h12}:{m} {AM}",      # December 25, 2024 10:30 AM
-      "{Mfull} {D}, {YYYY}",                     # December 25, 2024
-      "{D} {Mfull} {YYYY}",                      # 25 December 2024
-      "{Mshort} {D}, {YYYY}",                    # Dec 25, 2024
-      "{D} {Mshort} {YYYY}",                     # 25 Dec 2024
+      # December 25, 2024 10:30 AM
+      "{Mfull} {D}, {YYYY} {h12}:{m} {AM}",
+      # December 25, 2024
+      "{Mfull} {D}, {YYYY}",
+      # 25 December 2024
+      "{D} {Mfull} {YYYY}",
+      # Dec 25, 2024
+      "{Mshort} {D}, {YYYY}",
+      # 25 Dec 2024
+      "{D} {Mshort} {YYYY}",
 
       # Time with seconds
-      "{YYYY}-{0M}-{0D} {h24}:{m}:{s}",          # 2024-12-25 10:30:45
-      "{M}/{D}/{YYYY} {h12}:{m}:{s} {AM}",       # 12/25/2024 10:30:45 AM
+      # 2024-12-25 10:30:45
+      "{YYYY}-{0M}-{0D} {h24}:{m}:{s}",
+      # 12/25/2024 10:30:45 AM
+      "{M}/{D}/{YYYY} {h12}:{m}:{s} {AM}",
 
       # Compact formats
-      "{YYYY}{0M}{0D}",                          # 20241225
-      "{YYYY}{0M}{0D}T{h24}{m}{s}"               # 20241225T103045
+      # 20241225
+      "{YYYY}{0M}{0D}",
+      # 20241225T103045
+      "{YYYY}{0M}{0D}T{h24}{m}{s}"
     ]
 
     # Also try strftime formats as a fallback
     strftime_formats = [
-      "%Y-%m-%dT%H:%M:%S%z",                     # 2024-12-25T10:30:00+0000
-      "%Y-%m-%dT%H:%M:%SZ",                      # 2024-12-25T10:30:00Z
-      "%Y-%m-%dT%H:%M:%S",                       # 2024-12-25T10:30:00
-      "%Y-%m-%d %H:%M:%S",                       # 2024-12-25 10:30:00
-      "%Y-%m-%d",                                # 2024-12-25
-      "%m/%d/%Y %I:%M %p",                       # 12/25/2024 10:30 AM
-      "%m/%d/%Y %H:%M",                          # 12/25/2024 22:30
-      "%m/%d/%Y",                                # 12/25/2024
-      "%d.%m.%Y %H:%M",                          # 25.12.2024 22:30
-      "%d.%m.%Y",                                # 25.12.2024
-      "%B %d, %Y %I:%M %p",                      # December 25, 2024 10:30 AM
-      "%B %d, %Y",                               # December 25, 2024
-      "%d %B %Y",                                # 25 December 2024
-      "%b %d, %Y",                               # Dec 25, 2024
-      "%d %b %Y",                                # 25 Dec 2024
-      "%a %b %d %H:%M:%S %z %Y"                 # Mon Dec 25 10:30:00 +0000 2024 (Twitter format)
+      # 2024-12-25T10:30:00+0000
+      "%Y-%m-%dT%H:%M:%S%z",
+      # 2024-12-25T10:30:00Z
+      "%Y-%m-%dT%H:%M:%SZ",
+      # 2024-12-25T10:30:00
+      "%Y-%m-%dT%H:%M:%S",
+      # 2024-12-25 10:30:00
+      "%Y-%m-%d %H:%M:%S",
+      # 2024-12-25
+      "%Y-%m-%d",
+      # 12/25/2024 10:30 AM
+      "%m/%d/%Y %I:%M %p",
+      # 12/25/2024 22:30
+      "%m/%d/%Y %H:%M",
+      # 12/25/2024
+      "%m/%d/%Y",
+      # 25.12.2024 22:30
+      "%d.%m.%Y %H:%M",
+      # 25.12.2024
+      "%d.%m.%Y",
+      # December 25, 2024 10:30 AM
+      "%B %d, %Y %I:%M %p",
+      # December 25, 2024
+      "%B %d, %Y",
+      # 25 December 2024
+      "%d %B %Y",
+      # Dec 25, 2024
+      "%b %d, %Y",
+      # 25 Dec 2024
+      "%d %b %Y",
+      # Mon Dec 25 10:30:00 +0000 2024 (Twitter format)
+      "%a %b %d %H:%M:%S %z %Y"
     ]
 
     # Try Unix timestamp if string is numeric
     case try_unix_timestamp(string) do
-      {:ok, datetime} -> datetime
+      {:ok, datetime} ->
+        datetime
+
       _ ->
         # Try Timex default formats
         case try_formats(string, formats, :default) do
@@ -95,11 +138,17 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
                   nil ->
                     Logger.warning("Could not parse datetime: #{string}")
                     nil
-                  datetime -> datetime
+
+                  datetime ->
+                    datetime
                 end
-              datetime -> datetime
+
+              datetime ->
+                datetime
             end
-          datetime -> datetime
+
+          datetime ->
+            datetime
         end
     end
   end
@@ -117,6 +166,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
       %DateTime{} = dt ->
         # Reset to midnight UTC
         %{dt | hour: 0, minute: 0, second: 0, microsecond: {0, 0}}
+
       nil ->
         nil
     end
@@ -137,16 +187,20 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
     ]
 
     # Parse just the time component
-    result = Enum.find_value(time_formats, fn format ->
-      # Create a dummy date string with the time
-      dummy_date = "2000-01-01 #{time_string}"
-      case Timex.parse(dummy_date, "{YYYY}-{0M}-{0D} #{format}") do
-        {:ok, dt} ->
-          # Apply the parsed time to the given date
-          %{date | hour: dt.hour, minute: dt.minute, second: dt.second}
-        _ -> nil
-      end
-    end)
+    result =
+      Enum.find_value(time_formats, fn format ->
+        # Create a dummy date string with the time
+        dummy_date = "2000-01-01 #{time_string}"
+
+        case Timex.parse(dummy_date, "{YYYY}-{0M}-{0D} #{format}") do
+          {:ok, dt} ->
+            # Apply the parsed time to the given date
+            %{date | hour: dt.hour, minute: dt.minute, second: dt.second}
+
+          _ ->
+            nil
+        end
+      end)
 
     result || date
   end
@@ -162,6 +216,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
               {:ok, datetime} -> to_utc(datetime)
               _ -> nil
             end
+
           :strftime ->
             case Timex.parse(string, format, :strftime) do
               {:ok, datetime} -> to_utc(datetime)
@@ -182,7 +237,8 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
         # Timestamps in milliseconds are > 1_000_000_000_000
         unix_seconds =
           if abs(timestamp) >= 1_000_000_000_000 do
-            div(timestamp, 1000)  # Convert milliseconds to seconds
+            # Convert milliseconds to seconds
+            div(timestamp, 1000)
           else
             timestamp
           end
@@ -191,6 +247,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
           {:ok, datetime} -> {:ok, datetime}
           _ -> {:error, :invalid_timestamp}
         end
+
       _ ->
         {:error, :not_numeric}
     end
@@ -224,9 +281,10 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
     # Extract time if present
     time_pattern = ~r/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i
 
-    base_date = Timex.today()
-                |> Timex.shift(days: days_offset)
-                |> Timex.to_datetime("Etc/UTC")
+    base_date =
+      Timex.today()
+      |> Timex.shift(days: days_offset)
+      |> Timex.to_datetime("Etc/UTC")
 
     case Regex.run(time_pattern, String.downcase(string)) do
       [_, hour_str, minute_str, am_pm] ->
@@ -234,11 +292,12 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
         minute = if minute_str && minute_str != "", do: String.to_integer(minute_str), else: 0
 
         # Adjust for AM/PM
-        hour = case am_pm do
-          "pm" when hour < 12 -> hour + 12
-          "am" when hour == 12 -> 0
-          _ -> hour
-        end
+        hour =
+          case am_pm do
+            "pm" when hour < 12 -> hour + 12
+            "am" when hour == 12 -> 0
+            _ -> hour
+          end
 
         %{base_date | hour: hour, minute: minute, second: 0}
 
@@ -253,6 +312,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
     case Regex.run(weekday_pattern, String.downcase(string)) do
       [_, weekday_name] ->
         target_weekday = weekday_to_number(weekday_name)
+
         if target_weekday do
           today = Timex.today()
           current_weekday = Timex.weekday(today)
@@ -265,6 +325,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
         else
           nil
         end
+
       _ ->
         nil
     end
@@ -276,6 +337,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
     case Regex.run(weekday_pattern, String.downcase(string)) do
       [_, weekday_name] ->
         target_weekday = weekday_to_number(weekday_name)
+
         if target_weekday do
           today = Timex.today()
           current_weekday = Timex.weekday(today)
@@ -288,6 +350,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
         else
           nil
         end
+
       _ ->
         nil
     end
@@ -308,7 +371,8 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
 
   defp to_utc(%DateTime{} = datetime) do
     case Timex.Timezone.convert(datetime, "Etc/UTC") do
-      {:error, _} -> datetime  # Already UTC or can't convert
+      # Already UTC or can't convert
+      {:error, _} -> datetime
       converted -> converted
     end
   end

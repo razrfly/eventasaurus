@@ -212,49 +212,62 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
   end
 
   defp get_movie_title(nil), do: nil
+
   defp get_movie_title(rich_data) do
     rich_data["title"] || rich_data["name"]
   end
 
   defp get_tagline(nil), do: nil
+
   defp get_tagline(rich_data) do
     get_in(rich_data, ["metadata", "tagline"])
   end
 
   defp get_release_year(nil), do: nil
+
   defp get_release_year(rich_data) do
-    date = get_in(rich_data, ["metadata", "release_date"]) || get_in(rich_data, ["metadata", "first_air_date"])
+    date =
+      get_in(rich_data, ["metadata", "release_date"]) ||
+        get_in(rich_data, ["metadata", "first_air_date"])
+
     case date do
       date when is_binary(date) ->
         case String.slice(date, 0, 4) do
           year when byte_size(year) == 4 -> year
           _ -> nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   defp get_rating(nil), do: nil
+
   defp get_rating(rich_data) do
     get_in(rich_data, ["metadata", "vote_average"])
   end
 
   defp get_runtime(nil), do: nil
+
   defp get_runtime(rich_data) do
     get_in(rich_data, ["metadata", "runtime"])
   end
 
   defp get_genres(nil), do: []
+
   defp get_genres(rich_data) do
     get_in(rich_data, ["metadata", "genres"]) || []
   end
 
   defp get_overview(nil), do: nil
+
   defp get_overview(rich_data) do
     rich_data["description"] || get_in(rich_data, ["metadata", "overview"])
   end
 
   defp has_backdrop?(nil), do: false
+
   defp has_backdrop?(rich_data) do
     backdrops = get_in(rich_data, ["media", "images", "backdrops"])
     is_list(backdrops) && length(backdrops) > 0
@@ -266,13 +279,18 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
         case first_backdrop["file_path"] do
           path when is_binary(path) and path != "" ->
             RichDataDisplayComponent.tmdb_image_url(path, "w1280")
-          _ -> nil
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   defp has_poster?(nil), do: false
+
   defp has_poster?(rich_data) do
     posters = get_in(rich_data, ["media", "images", "posters"])
     is_list(posters) && length(posters) > 0
@@ -284,21 +302,28 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
         case first_poster["file_path"] do
           path when is_binary(path) and path != "" ->
             RichDataDisplayComponent.tmdb_image_url(path, "w342")
-          _ -> nil
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   # Helper functions for formatting
 
   defp format_rating(nil), do: nil
+
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, [{:decimals, 1}])
   end
+
   defp format_rating(_), do: nil
 
   defp format_runtime(nil), do: nil
+
   defp format_runtime(runtime) when is_integer(runtime) do
     hours = div(runtime, 60)
     minutes = rem(runtime, 60)
@@ -310,16 +335,20 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
       true -> nil
     end
   end
+
   defp format_runtime(_), do: nil
 
   defp format_event_date(event) do
     case event.start_at do
       %DateTime{} = dt ->
         timezone = event.timezone || "UTC"
+
         dt
         |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
         |> Calendar.strftime("%A, %B %d, %Y")
-      _ -> "TBD"
+
+      _ ->
+        "TBD"
     end
   end
 
@@ -327,26 +356,33 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
     case event.start_at do
       %DateTime{} = dt ->
         timezone = event.timezone || "UTC"
-        start_time = dt
-        |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
-        |> Calendar.strftime("%I:%M %p")
-        |> String.replace(~r/^0(\d)/, "\\1")
 
-        end_time = case event.ends_at do
-          %DateTime{} = end_dt ->
-            end_dt
-            |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
-            |> Calendar.strftime("%I:%M %p")
-            |> String.replace(~r/^0(\d)/, "\\1")
-          _ -> nil
-        end
+        start_time =
+          dt
+          |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
+          |> Calendar.strftime("%I:%M %p")
+          |> String.replace(~r/^0(\d)/, "\\1")
+
+        end_time =
+          case event.ends_at do
+            %DateTime{} = end_dt ->
+              end_dt
+              |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
+              |> Calendar.strftime("%I:%M %p")
+              |> String.replace(~r/^0(\d)/, "\\1")
+
+            _ ->
+              nil
+          end
 
         if end_time do
           "#{start_time} - #{end_time} #{timezone}"
         else
           "#{start_time} #{timezone}"
         end
-      _ -> "Time TBD"
+
+      _ ->
+        "Time TBD"
     end
   end
 

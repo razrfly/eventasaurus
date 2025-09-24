@@ -27,10 +27,11 @@ defmodule EventasaurusWeb.FeatureCase do
         user = insert(:user)
 
         # Visit login page and authenticate
-        updated_session = session
-        |> visit("/auth/login")
-        |> fill_in(text_field("Email"), with: user.email)
-        |> click(button("Log In"))
+        updated_session =
+          session
+          |> visit("/auth/login")
+          |> fill_in(text_field("Email"), with: user.email)
+          |> click(button("Log In"))
 
         {updated_session, user}
       end

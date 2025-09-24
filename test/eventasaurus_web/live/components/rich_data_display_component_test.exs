@@ -18,8 +18,12 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponentTest do
 
     test "builds correct URL for different sizes" do
       path = "/abc123.jpg"
-      assert "https://image.tmdb.org/t/p/w300/abc123.jpg" == RichDataDisplayComponent.tmdb_image_url(path, "w300")
-      assert "https://image.tmdb.org/t/p/original/abc123.jpg" == RichDataDisplayComponent.tmdb_image_url(path, "original")
+
+      assert "https://image.tmdb.org/t/p/w300/abc123.jpg" ==
+               RichDataDisplayComponent.tmdb_image_url(path, "w300")
+
+      assert "https://image.tmdb.org/t/p/original/abc123.jpg" ==
+               RichDataDisplayComponent.tmdb_image_url(path, "original")
     end
 
     test "defaults to w500 size when size not provided" do
@@ -34,14 +38,22 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponentTest do
     end
 
     test "works with different valid file extensions" do
-      assert "https://image.tmdb.org/t/p/w500/test.png" == RichDataDisplayComponent.tmdb_image_url("/test.png", "w500")
-      assert "https://image.tmdb.org/t/p/w500/test.webp" == RichDataDisplayComponent.tmdb_image_url("/test.webp", "w500")
-      assert "https://image.tmdb.org/t/p/w500/test.jpeg" == RichDataDisplayComponent.tmdb_image_url("/test.jpeg", "w500")
+      assert "https://image.tmdb.org/t/p/w500/test.png" ==
+               RichDataDisplayComponent.tmdb_image_url("/test.png", "w500")
+
+      assert "https://image.tmdb.org/t/p/w500/test.webp" ==
+               RichDataDisplayComponent.tmdb_image_url("/test.webp", "w500")
+
+      assert "https://image.tmdb.org/t/p/w500/test.jpeg" ==
+               RichDataDisplayComponent.tmdb_image_url("/test.jpeg", "w500")
     end
 
     test "handles paths with valid special characters" do
-      assert "https://image.tmdb.org/t/p/w500/test_123-abc.jpg" == RichDataDisplayComponent.tmdb_image_url("/test_123-abc.jpg", "w500")
-      assert "https://image.tmdb.org/t/p/w500/test.name.jpg" == RichDataDisplayComponent.tmdb_image_url("/test.name.jpg", "w500")
+      assert "https://image.tmdb.org/t/p/w500/test_123-abc.jpg" ==
+               RichDataDisplayComponent.tmdb_image_url("/test_123-abc.jpg", "w500")
+
+      assert "https://image.tmdb.org/t/p/w500/test.name.jpg" ==
+               RichDataDisplayComponent.tmdb_image_url("/test.name.jpg", "w500")
     end
 
     test "returns nil for non-string arguments" do

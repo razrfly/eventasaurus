@@ -30,17 +30,19 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
       assert poll.event_id == event.id
 
       # Add options
-      {:ok, option1} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Yes - Pizza sounds great!",
-        suggested_by_id: user.id
-      })
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Yes - Pizza sounds great!",
+          suggested_by_id: user.id
+        })
 
-      {:ok, option2} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "No - Something else",
-        suggested_by_id: user.id
-      })
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "No - Something else",
+          suggested_by_id: user.id
+        })
 
       assert option1.poll_id == poll.id
       assert option2.poll_id == poll.id
@@ -70,26 +72,29 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
 
     test "approval voting workflow", %{user: user, event: event} do
       # Create approval poll
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        created_by_id: user.id,
-        title: "Pick activities",
-        voting_system: "approval",
-        poll_type: "time"
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          created_by_id: user.id,
+          title: "Pick activities",
+          voting_system: "approval",
+          poll_type: "time"
+        })
 
       # Add options
-      {:ok, hiking} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Hiking",
-        suggested_by_id: user.id
-      })
+      {:ok, hiking} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Hiking",
+          suggested_by_id: user.id
+        })
 
-      {:ok, bowling} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Bowling",
-        suggested_by_id: user.id
-      })
+      {:ok, bowling} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Bowling",
+          suggested_by_id: user.id
+        })
 
       {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
 
@@ -108,23 +113,27 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
     end
 
     test "ranked choice voting workflow", %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        created_by_id: user.id,
-        title: "Movie ranking",
-        voting_system: "ranked",
-        poll_type: "movie"
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          created_by_id: user.id,
+          title: "Movie ranking",
+          voting_system: "ranked",
+          poll_type: "movie"
+        })
 
       # Add movie options
-      movies = for title <- ["Matrix", "Inception", "Interstellar"] do
-        {:ok, option} = Events.create_poll_option(%{
-          poll_id: poll.id,
-          title: title,
-          suggested_by_id: user.id
-        })
-        option
-      end
+      movies =
+        for title <- ["Matrix", "Inception", "Interstellar"] do
+          {:ok, option} =
+            Events.create_poll_option(%{
+              poll_id: poll.id,
+              title: title,
+              suggested_by_id: user.id
+            })
+
+          option
+        end
 
       {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
 
@@ -146,19 +155,21 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
     end
 
     test "star rating workflow", %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        created_by_id: user.id,
-        title: "Restaurant ratings",
-        voting_system: "star",
-        poll_type: "restaurant"
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          created_by_id: user.id,
+          title: "Restaurant ratings",
+          voting_system: "star",
+          poll_type: "restaurant"
+        })
 
-      {:ok, restaurant} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Tony's Italian",
-        suggested_by_id: user.id
-      })
+      {:ok, restaurant} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Tony's Italian",
+          suggested_by_id: user.id
+        })
 
       {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
 
@@ -175,22 +186,25 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
       analytics = Events.get_poll_analytics(voting_poll)
       restaurant_stats = hd(analytics.vote_counts)
       assert restaurant_stats.total_votes == 2
-      assert restaurant_stats.average_score == 4.5  # (4 + 5) / 2
+      # (4 + 5) / 2
+      assert restaurant_stats.average_score == 4.5
     end
 
     test "poll finalization", %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        created_by_id: user.id,
-        title: "Final decision",
-        voting_system: "binary"
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          created_by_id: user.id,
+          title: "Final decision",
+          voting_system: "binary"
+        })
 
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Chosen option",
-        suggested_by_id: user.id
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Chosen option",
+          suggested_by_id: user.id
+        })
 
       {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
 
@@ -203,18 +217,20 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
     end
 
     test "vote management functions", %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        created_by_id: user.id,
-        title: "Test poll",
-        voting_system: "approval"
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          created_by_id: user.id,
+          title: "Test poll",
+          voting_system: "approval"
+        })
 
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Test option",
-        suggested_by_id: user.id
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Test option",
+          suggested_by_id: user.id
+        })
 
       {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
 

@@ -26,10 +26,11 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
   def run(args) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} = OptionParser.parse(args,
-      switches: [source: :string, limit: :integer, dry_run: :boolean],
-      aliases: [s: :source, l: :limit, d: :dry_run]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        switches: [source: :string, limit: :integer, dry_run: :boolean],
+        aliases: [s: :source, l: :limit, d: :dry_run]
+      )
 
     source_filter = opts[:source]
     limit = opts[:limit]
@@ -42,23 +43,29 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
     IO.puts("")
 
     # Get events to process
-    events_query = from e in PublicEvent,
-      join: pes in PublicEventSource, on: pes.event_id == e.id,
-      join: s in assoc(pes, :source),
-      select: {e, s.slug, e.metadata}
+    events_query =
+      from(e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        join: s in assoc(pes, :source),
+        select: {e, s.slug, e.metadata}
+      )
 
-    events_query = if source_filter do
-      from [e, pes, s] in events_query,
-        where: s.slug == ^source_filter
-    else
-      events_query
-    end
+    events_query =
+      if source_filter do
+        from([e, pes, s] in events_query,
+          where: s.slug == ^source_filter
+        )
+      else
+        events_query
+      end
 
-    events_query = if limit do
-      from q in events_query, limit: ^limit
-    else
-      events_query
-    end
+    events_query =
+      if limit do
+        from(q in events_query, limit: ^limit)
+      else
+        events_query
+      end
 
     events = Repo.all(events_query)
     total = length(events)
@@ -75,17 +82,18 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
     }
 
     # Process each event
-    stats = Enum.reduce(events, stats, fn {event, source, metadata}, acc ->
-      if rem(acc.processed, 100) == 0 and acc.processed > 0 do
-        IO.puts("Progress: #{acc.processed}/#{total} events processed...")
-      end
+    stats =
+      Enum.reduce(events, stats, fn {event, source, metadata}, acc ->
+        if rem(acc.processed, 100) == 0 and acc.processed > 0 do
+          IO.puts("Progress: #{acc.processed}/#{total} events processed...")
+        end
 
-      result = process_event(event, source, metadata, dry_run)
+        result = process_event(event, source, metadata, dry_run)
 
-      acc
-      |> Map.update!(:processed, &(&1 + 1))
-      |> update_stats(result, source)
-    end)
+        acc
+        |> Map.update!(:processed, &(&1 + 1))
+        |> update_stats(result, source)
+      end)
 
     # Print results
     print_results(stats, dry_run)
@@ -93,21 +101,27 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
 
   defp process_event(event, source, metadata, dry_run) do
     # Extract categories using the extraction logic
-    categories = case source do
-      "ticketmaster" ->
-        CategoryExtractor.extract_ticketmaster_categories(metadata || %{})
-      "bandsintown" ->
-        CategoryExtractor.extract_bandsintown_categories(metadata || %{})
-      "karnet" ->
-        # For Karnet, include title in the data for secondary extraction
-        karnet_data = Map.merge(metadata || %{}, %{
-          "title" => event.title,
-          "description" => event.description
-        })
-        CategoryExtractor.extract_karnet_categories(karnet_data)
-      _ ->
-        []
-    end
+    categories =
+      case source do
+        "ticketmaster" ->
+          CategoryExtractor.extract_ticketmaster_categories(metadata || %{})
+
+        "bandsintown" ->
+          CategoryExtractor.extract_bandsintown_categories(metadata || %{})
+
+        "karnet" ->
+          # For Karnet, include title in the data for secondary extraction
+          karnet_data =
+            Map.merge(metadata || %{}, %{
+              "title" => event.title,
+              "description" => event.description
+            })
+
+          CategoryExtractor.extract_karnet_categories(karnet_data)
+
+        _ ->
+          []
+      end
 
     category_count = length(categories)
 
@@ -117,8 +131,9 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
       else
         # Delete existing category assignments
         Repo.delete_all(
-          from pec in PublicEventCategory,
-          where: pec.event_id == ^event.id
+          from(pec in PublicEventCategory,
+            where: pec.event_id == ^event.id
+          )
         )
 
         # Insert new category assignments
@@ -148,22 +163,25 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
   defp update_stats(stats, result, source) do
     {status, category_count} = result
 
-    stats = case status do
-      :updated ->
-        stats
-        |> Map.update!(:updated, &(&1 + 1))
-        |> then(fn s ->
-          if category_count > 1 do
-            Map.update!(s, :multi_category, &(&1 + 1))
-          else
-            s
-          end
-        end)
-      :error ->
-        Map.update!(stats, :errors, &(&1 + 1))
-      _ ->
-        stats
-    end
+    stats =
+      case status do
+        :updated ->
+          stats
+          |> Map.update!(:updated, &(&1 + 1))
+          |> then(fn s ->
+            if category_count > 1 do
+              Map.update!(s, :multi_category, &(&1 + 1))
+            else
+              s
+            end
+          end)
+
+        :error ->
+          Map.update!(stats, :errors, &(&1 + 1))
+
+        _ ->
+          stats
+      end
 
     # Update source-specific stats
     Map.update!(stats, :by_source, fn sources ->
@@ -193,32 +211,42 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
     IO.puts("   Errors: #{stats.errors}")
 
     IO.puts("\n📈 By Source:")
+
     Enum.each(stats.by_source, fn {source, source_stats} ->
       _coverage = Float.round(source_stats.total / 1 * 100, 1)
-      multi_pct = if source_stats.total > 0 do
-        Float.round(source_stats.multi / source_stats.total * 100, 1)
-      else
-        0.0
-      end
 
-      IO.puts("   #{String.pad_trailing(source, 15)} Total: #{source_stats.total}, Multi: #{source_stats.multi} (#{multi_pct}%)")
+      multi_pct =
+        if source_stats.total > 0 do
+          Float.round(source_stats.multi / source_stats.total * 100, 1)
+        else
+          0.0
+        end
+
+      IO.puts(
+        "   #{String.pad_trailing(source, 15)} Total: #{source_stats.total}, Multi: #{source_stats.multi} (#{multi_pct}%)"
+      )
     end)
 
     IO.puts("\n✅ Grade Estimates:")
+
     Enum.each(stats.by_source, fn {source, source_stats} ->
-      avg_categories = if source_stats.total > 0 do
-        if source_stats.multi > 0 do
-          # Estimate average (assuming multi-category events have 2+ categories)
-          Float.round(1.0 + (source_stats.multi / source_stats.total), 2)
+      avg_categories =
+        if source_stats.total > 0 do
+          if source_stats.multi > 0 do
+            # Estimate average (assuming multi-category events have 2+ categories)
+            Float.round(1.0 + source_stats.multi / source_stats.total, 2)
+          else
+            1.0
+          end
         else
-          1.0
+          0.0
         end
-      else
-        0.0
-      end
 
       grade = calculate_grade(100.0, avg_categories)
-      IO.puts("   #{String.pad_trailing(source, 15)} Coverage: 100%, Avg Categories: #{avg_categories} → Grade: #{grade}")
+
+      IO.puts(
+        "   #{String.pad_trailing(source, 15)} Coverage: 100%, Avg Categories: #{avg_categories} → Grade: #{grade}"
+      )
     end)
 
     if dry_run do

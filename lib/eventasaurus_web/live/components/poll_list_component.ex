@@ -197,9 +197,11 @@ defmodule EventasaurusWeb.PollListComponent do
     case safe_string_to_integer(poll_id) do
       {:ok, poll_id} ->
         poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+
         if poll do
           send(self(), {:view_poll, poll})
         end
+
       {:error, _} ->
         send(self(), {:show_error, "Invalid poll ID"})
     end
@@ -212,9 +214,11 @@ defmodule EventasaurusWeb.PollListComponent do
     case safe_string_to_integer(poll_id) do
       {:ok, poll_id} ->
         poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+
         if poll && poll.created_by_id == socket.assigns.user.id do
           send(self(), {:edit_poll, poll})
         end
+
       {:error, _} ->
         send(self(), {:show_error, "Invalid poll ID"})
     end
@@ -227,9 +231,11 @@ defmodule EventasaurusWeb.PollListComponent do
     case safe_string_to_integer(poll_id) do
       {:ok, poll_id} ->
         poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+
         if poll && poll.created_by_id == socket.assigns.user.id do
           send(self(), {:delete_poll, poll})
         end
+
       {:error, _} ->
         send(self(), {:show_error, "Invalid poll ID"})
     end
@@ -250,13 +256,18 @@ defmodule EventasaurusWeb.PollListComponent do
               {:noreply, socket}
 
             {:error, changeset} ->
-              errors = changeset.errors |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end) |> Enum.join(", ")
+              errors =
+                changeset.errors
+                |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end)
+                |> Enum.join(", ")
+
               send(self(), {:show_error, "Failed to transition poll: #{errors}"})
               {:noreply, socket}
           end
         else
           {:noreply, socket}
         end
+
       {:error, _} ->
         send(self(), {:show_error, "Invalid poll ID"})
         {:noreply, socket}
@@ -269,11 +280,12 @@ defmodule EventasaurusWeb.PollListComponent do
     user = socket.assigns[:user]
     event = socket.assigns[:event]
 
-    can_create_polls = if user && event do
-      Events.can_create_poll?(user, event)
-    else
-      false
-    end
+    can_create_polls =
+      if user && event do
+        Events.can_create_poll?(user, event)
+      else
+        false
+      end
 
     socket
     |> assign(:can_create_polls, can_create_polls)
@@ -338,10 +350,8 @@ defmodule EventasaurusWeb.PollListComponent do
     cond do
       # If poll has a vote_count field (virtual or computed)
       Map.has_key?(poll, :vote_count) -> poll.vote_count || 0
-
       # If poll_votes association is loaded, count them
       is_list(Map.get(poll, :poll_votes)) -> length(poll.poll_votes)
-
       # Otherwise return 0 (association not loaded)
       true -> 0
     end

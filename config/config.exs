@@ -16,8 +16,7 @@ config :eventasaurus,
   ecto_repos: [EventasaurusApp.Repo]
 
 # Configure EventasaurusApp Repo with PostGIS types
-config :eventasaurus, EventasaurusApp.Repo,
-  types: EventasaurusApp.PostgresTypes
+config :eventasaurus, EventasaurusApp.Repo, types: EventasaurusApp.PostgresTypes
 
 # Configures the endpoint
 config :eventasaurus, EventasaurusWeb.Endpoint,
@@ -83,8 +82,10 @@ config :hammer,
   backend: {
     Hammer.Backend.ETS,
     [
-      expiry_ms: 60_000 * 60 * 4,  # 4 hours
-      cleanup_interval_ms: 60_000 * 10  # 10 minutes
+      # 4 hours
+      expiry_ms: 60_000 * 60 * 4,
+      # 10 minutes
+      cleanup_interval_ms: 60_000 * 10
     ]
   }
 
@@ -93,17 +94,23 @@ config :eventasaurus, Oban,
   repo: EventasaurusApp.Repo,
   queues: [
     # Email queue with limited concurrency for Resend API rate limiting
-    emails: 2,  # Max 2 concurrent jobs to respect Resend's 2/second limit
+    # Max 2 concurrent jobs to respect Resend's 2/second limit
+    emails: 2,
     # Scraper queue for event data ingestion
-    scraper: 5,  # Limited concurrency for rate-limited external APIs
+    # Limited concurrency for rate-limited external APIs
+    scraper: 5,
     # Scraper detail queue for individual event processing
-    scraper_detail: 3,  # Limited concurrency for event detail scraping
+    # Limited concurrency for event detail scraping
+    scraper_detail: 3,
     # Discovery queue for unified sync jobs
-    discovery: 3,  # Limited concurrency for discovery source sync
+    # Limited concurrency for discovery source sync
+    discovery: 3,
     # Discovery sync queue for admin dashboard operations
-    discovery_sync: 2,  # Limited concurrency for admin-triggered syncs
+    # Limited concurrency for admin-triggered syncs
+    discovery_sync: 2,
     # Google API queue for places lookups
-    google_lookup: 1,  # Single concurrency to respect Google's rate limits
+    # Single concurrency to respect Google's rate limits
+    google_lookup: 1,
     # Default queue for other background jobs
     default: 10
   ],
@@ -119,7 +126,8 @@ config :eventasaurus, Oban,
 # Avatar configuration
 config :eventasaurus, :avatars,
   provider: :dicebear,
-  style: "dylan",  # Can be changed to: adventurer, avataaars, bottts, croodles, fun-emoji, etc.
+  # Can be changed to: adventurer, avataaars, bottts, croodles, fun-emoji, etc.
+  style: "dylan",
   base_url: "https://api.dicebear.com/9.x",
   format: "svg",
   default_options: %{

@@ -8,15 +8,15 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       conn = get(conn, ~p"/api/username/availability/testuser123")
 
       assert json_response(conn, 200) == %{
-        "available" => true,
-        "valid" => true,
-        "username" => "testuser123",
-        "errors" => [],
-        "suggestions" => []
-      }
+               "available" => true,
+               "valid" => true,
+               "username" => "testuser123",
+               "errors" => [],
+               "suggestions" => []
+             }
     end
 
-        test "returns unavailable for existing username", %{conn: conn} do
+    test "returns unavailable for existing username", %{conn: conn} do
       # Create a user first
       _user = user_fixture(%{username: "existinguser"})
 
@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       assert length(response["suggestions"]) > 0
     end
 
-        test "returns unavailable for reserved username", %{conn: conn} do
+    test "returns unavailable for reserved username", %{conn: conn} do
       conn = get(conn, ~p"/api/username/availability/admin")
 
       response = json_response(conn, 200)
@@ -41,19 +41,23 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       assert length(response["suggestions"]) > 0
     end
 
-            test "returns invalid for username that's too short", %{conn: conn} do
+    test "returns invalid for username that's too short", %{conn: conn} do
       conn = get(conn, ~p"/api/username/availability/ab")
 
       response = json_response(conn, 200)
       assert response["available"] == false
       assert response["valid"] == false
       assert response["username"] == "ab"
-      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response["errors"]
+
+      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response[
+               "errors"
+             ]
+
       # No suggestions for invalid format
       assert response["suggestions"] == []
     end
 
-        test "returns invalid for username that's too long", %{conn: conn} do
+    test "returns invalid for username that's too long", %{conn: conn} do
       long_username = String.duplicate("a", 31)
       conn = get(conn, ~p"/api/username/availability/#{long_username}")
 
@@ -61,17 +65,23 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       assert response["available"] == false
       assert response["valid"] == false
       assert response["username"] == long_username
-      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response["errors"]
+
+      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response[
+               "errors"
+             ]
     end
 
-        test "returns invalid for username with invalid characters", %{conn: conn} do
+    test "returns invalid for username with invalid characters", %{conn: conn} do
       conn = get(conn, ~p"/api/username/availability/test@user")
 
       response = json_response(conn, 200)
       assert response["available"] == false
       assert response["valid"] == false
       assert response["username"] == "test@user"
-      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response["errors"]
+
+      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response[
+               "errors"
+             ]
     end
 
     test "returns invalid for empty username", %{conn: conn} do
@@ -83,7 +93,7 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       assert "Username cannot be empty" in response["errors"]
     end
 
-        test "handles case-insensitive username conflicts", %{conn: conn} do
+    test "handles case-insensitive username conflicts", %{conn: conn} do
       # Create a user with lowercase username
       _user = user_fixture(%{username: "testuser"})
 
@@ -97,7 +107,7 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       assert "This username is already taken" in response["errors"]
     end
 
-        test "generates suggestions when username is taken", %{conn: conn} do
+    test "generates suggestions when username is taken", %{conn: conn} do
       # Create a user first
       _user = user_fixture(%{username: "popular"})
 
@@ -129,7 +139,7 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       refute "support" in suggestions
     end
 
-        test "respects URL encoding in username parameter", %{conn: conn} do
+    test "respects URL encoding in username parameter", %{conn: conn} do
       # Test with a username that contains characters that need URL encoding
       encoded_username = URI.encode("test user")
       conn = get(conn, "/api/username/availability/#{encoded_username}")
@@ -137,7 +147,10 @@ defmodule EventasaurusWeb.UsernameControllerTest do
       response = json_response(conn, 200)
       assert response["username"] == "test user"
       assert response["valid"] == false
-      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response["errors"]
+
+      assert "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens" in response[
+               "errors"
+             ]
     end
   end
 

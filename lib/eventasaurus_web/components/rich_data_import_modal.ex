@@ -8,8 +8,6 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
 
   use EventasaurusWeb, :live_component
 
-
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -199,7 +197,10 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
   def update(assigns, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("RichDataImportModal update called with assigns: #{inspect(Map.keys(assigns))}")
+
+      Logger.debug(
+        "RichDataImportModal update called with assigns: #{inspect(Map.keys(assigns))}"
+      )
     end
 
     {:ok,
@@ -244,7 +245,10 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
   def handle_event("import_result", %{"id" => id, "provider" => provider, "type" => type}, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("RichDataImportModal import_result called with id: #{id}, provider: #{provider}, type: #{type}")
+
+      Logger.debug(
+        "RichDataImportModal import_result called with id: #{id}, provider: #{provider}, type: #{type}"
+      )
     end
 
     # Send message to parent to trigger import
@@ -257,10 +261,17 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
   end
 
   @impl true
-  def handle_event("preview_result", %{"id" => id, "provider" => provider, "type" => type}, socket) do
+  def handle_event(
+        "preview_result",
+        %{"id" => id, "provider" => provider, "type" => type},
+        socket
+      ) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("RichDataImportModal handle_event preview_result called with id: #{id}, provider: #{provider}, type: #{type}")
+
+      Logger.debug(
+        "RichDataImportModal handle_event preview_result called with id: #{id}, provider: #{provider}, type: #{type}"
+      )
     end
 
     # Send message to parent to get preview data
@@ -289,8 +300,7 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
        socket
        |> assign(:preview_data, nil)
        |> assign(:search_results, [])
-       |> assign(:search_query, "")
-      }
+       |> assign(:search_query, "")}
     else
       {:noreply, socket}
     end
@@ -325,9 +335,10 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
   defp extract_year_from_metadata(%{release_date: date}) when is_binary(date) and date != "" do
     String.slice(date, 0, 4)
   end
+
   defp extract_year_from_metadata(%{first_air_date: date}) when is_binary(date) and date != "" do
     String.slice(date, 0, 4)
   end
-  defp extract_year_from_metadata(_), do: nil
 
+  defp extract_year_from_metadata(_), do: nil
 end

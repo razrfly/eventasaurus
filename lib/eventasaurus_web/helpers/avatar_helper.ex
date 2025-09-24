@@ -52,7 +52,7 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
 
   def avatar_img(_, _), do: ""
 
-    @doc """
+  @doc """
   Renders an avatar URL for use in other contexts.
 
   Accepts options as either a keyword list or map.
@@ -153,12 +153,13 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
     base_class = Keyword.get(base_options, :class, "")
     user_class = Keyword.get(user_options, :class, "")
 
-    combined_class = case {base_class, user_class} do
-      {"", ""} -> ""
-      {base, ""} -> base
-      {"", user} -> user
-      {base, user} -> "#{base} #{user}"
-    end
+    combined_class =
+      case {base_class, user_class} do
+        {"", ""} -> ""
+        {base, ""} -> base
+        {"", user} -> user
+        {base, user} -> "#{base} #{user}"
+      end
 
     base_options
     |> Keyword.merge(user_options)
@@ -169,9 +170,10 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
   defp split_options(options) do
     avatar_keys = [:size, :backgroundColor, :backgroundBorderRadius, :radius, :scale]
 
-    {avatar_opts, img_opts} = Enum.split_with(options, fn {key, _} ->
-      key in avatar_keys
-    end)
+    {avatar_opts, img_opts} =
+      Enum.split_with(options, fn {key, _} ->
+        key in avatar_keys
+      end)
 
     {img_opts, Map.new(avatar_opts)}
   end

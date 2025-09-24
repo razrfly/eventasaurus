@@ -4,13 +4,12 @@ defmodule EventasaurusWeb.CalendarExport do
   Generates ICS files and calendar-specific URLs for various platforms.
   """
 
-
   @doc """
   Generates an ICS file content for an event
   """
   def generate_ics(event, venue \\ nil, event_url)
   def generate_ics(%{start_at: nil}, _venue, _event_url), do: {:error, :missing_start_at}
-  
+
   def generate_ics(event = %{start_at: %DateTime{}}, venue, event_url) do
     lines = [
       "BEGIN:VCALENDAR",
@@ -41,14 +40,19 @@ defmodule EventasaurusWeb.CalendarExport do
   """
   def google_calendar_url(event, venue \\ nil, event_url)
   def google_calendar_url(%{start_at: nil}, _venue, _event_url), do: {:error, :missing_start_at}
-  
+
   def google_calendar_url(event = %{start_at: %DateTime{}}, venue, event_url) do
     base_url = "https://calendar.google.com/calendar/render"
-    
+
     # Format dates for Google Calendar (YYYYMMDDTHHmmssZ format)
     start_date = format_google_datetime(event.start_at, event.timezone)
-    end_date = format_google_datetime(event.ends_at || add_default_duration(event.start_at), event.timezone)
-    
+
+    end_date =
+      format_google_datetime(
+        event.ends_at || add_default_duration(event.start_at),
+        event.timezone
+      )
+
     params = %{
       "action" => "TEMPLATE",
       "text" => event.title,
@@ -57,7 +61,7 @@ defmodule EventasaurusWeb.CalendarExport do
       "location" => format_location(event, venue),
       "sprop" => "website:#{event_url}"
     }
-    
+
     "#{base_url}?#{URI.encode_query(params)}"
   end
 
@@ -66,14 +70,19 @@ defmodule EventasaurusWeb.CalendarExport do
   """
   def outlook_calendar_url(event, venue \\ nil, event_url)
   def outlook_calendar_url(%{start_at: nil}, _venue, _event_url), do: {:error, :missing_start_at}
-  
+
   def outlook_calendar_url(event = %{start_at: %DateTime{}}, venue, event_url) do
     base_url = "https://outlook.live.com/calendar/0/deeplink/compose"
-    
+
     # Format dates for Outlook (ISO 8601 format)
     start_date = format_outlook_datetime(event.start_at, event.timezone)
-    end_date = format_outlook_datetime(event.ends_at || add_default_duration(event.start_at), event.timezone)
-    
+
+    end_date =
+      format_outlook_datetime(
+        event.ends_at || add_default_duration(event.start_at),
+        event.timezone
+      )
+
     params = %{
       "subject" => event.title,
       "startdt" => start_date,
@@ -83,7 +92,7 @@ defmodule EventasaurusWeb.CalendarExport do
       "path" => "/calendar/action/compose",
       "rru" => "addevent"
     }
-    
+
     "#{base_url}?#{URI.encode_query(params)}"
   end
 
@@ -95,7 +104,8 @@ defmodule EventasaurusWeb.CalendarExport do
     dt =
       case DateTime.shift_zone(datetime, "Etc/UTC", Tzdata.TimeZoneDatabase) do
         {:ok, utc_dt} -> utc_dt
-        _ -> datetime  # Fallback to original if shift fails
+        # Fallback to original if shift fails
+        _ -> datetime
       end
 
     Calendar.strftime(dt, "%Y%m%dT%H%M%SZ")
@@ -126,10 +136,10 @@ defmodule EventasaurusWeb.CalendarExport do
   defp format_description(event, event_url) do
     description = event.description || ""
     tagline = if event.tagline, do: "#{event.tagline}\n\n", else: ""
-    
+
     """
     #{tagline}#{description}
-    
+
     Event Details: #{event_url}
     """
     |> String.trim()
@@ -141,14 +151,15 @@ defmodule EventasaurusWeb.CalendarExport do
         "Online Event: #{event.virtual_venue_url}"
 
       venue && venue.name ->
-        address_parts = [
-          venue.name,
-          venue.address,
-          EventasaurusApp.Venues.Venue.city_name(venue),
-          EventasaurusApp.Venues.Venue.country_name(venue)
-        ]
-        |> Enum.filter(&(&1 && &1 != ""))
-        |> Enum.join(", ")
+        address_parts =
+          [
+            venue.name,
+            venue.address,
+            EventasaurusApp.Venues.Venue.city_name(venue),
+            EventasaurusApp.Venues.Venue.country_name(venue)
+          ]
+          |> Enum.filter(&(&1 && &1 != ""))
+          |> Enum.join(", ")
 
         address_parts
 

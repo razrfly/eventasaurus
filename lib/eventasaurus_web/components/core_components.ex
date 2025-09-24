@@ -334,7 +334,8 @@ defmodule EventasaurusWeb.CoreComponents do
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
 
   attr :rest, :global,
-    include: ~w(accept autocomplete capture cols dirname disabled form list max maxlength min minlength
+    include:
+      ~w(accept autocomplete capture cols dirname disabled form list max maxlength min minlength
                 multiple pattern placeholder readonly required rows size step)
 
   slot :inner_block
@@ -476,7 +477,10 @@ defmodule EventasaurusWeb.CoreComponents do
   attr :required, :boolean, default: false, doc: "whether the field is required"
   attr :class, :string, default: "", doc: "additional CSS classes for the container"
   attr :reasoning, :string, default: "", doc: "explanation for why this default was chosen"
-  attr :hide_ticketless, :boolean, default: false, doc: "whether to hide the ticketless option (when tickets exist)"
+
+  attr :hide_ticketless, :boolean,
+    default: false,
+    doc: "whether to hide the ticketless option (when tickets exist)"
 
   def taxation_type_selector(assigns) do
     ~H"""
@@ -849,20 +853,29 @@ defmodule EventasaurusWeb.CoreComponents do
     emoji_size = Map.get(size_map, assigns.class, "text-3xl")
 
     # Determine text color based on theme or explicit text_color
-    text_color = cond do
-      assigns.text_color -> assigns.text_color
-      assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) -> "text-white"
-      true -> "text-gray-900 dark:text-white"
-    end
+    text_color =
+      cond do
+        assigns.text_color -> assigns.text_color
+        assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) -> "text-white"
+        true -> "text-gray-900 dark:text-white"
+      end
 
     # Choose dinosaur emoji based on theme
-    dinosaur_emoji = if assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) do
-      "🦕"  # Sauropod for dark themes (cosmic)
-    else
-      "🦖"  # T-Rex for light themes
-    end
+    dinosaur_emoji =
+      if assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) do
+        # Sauropod for dark themes (cosmic)
+        "🦕"
+      else
+        # T-Rex for light themes
+        "🦖"
+      end
 
-    assigns = assign(assigns, emoji_size: emoji_size, computed_text_color: text_color, dinosaur_emoji: dinosaur_emoji)
+    assigns =
+      assign(assigns,
+        emoji_size: emoji_size,
+        computed_text_color: text_color,
+        dinosaur_emoji: dinosaur_emoji
+      )
 
     ~H"""
     <a href={@href} class="flex items-center space-x-2 group">
@@ -911,11 +924,12 @@ defmodule EventasaurusWeb.CoreComponents do
   attr :rest, :global
 
   def currency_select(assigns) do
-    grouped_options = if assigns[:use_stripe_data] do
-      CurrencyHelpers.grouped_currencies_from_stripe()
-    else
-      CurrencyHelpers.supported_currencies()
-    end
+    grouped_options =
+      if assigns[:use_stripe_data] do
+        CurrencyHelpers.grouped_currencies_from_stripe()
+      else
+        CurrencyHelpers.supported_currencies()
+      end
 
     assigns = assign(assigns, grouped_options: grouped_options)
 

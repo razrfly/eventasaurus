@@ -27,7 +27,11 @@ defmodule EventasaurusWeb.Services.SearchServiceTest do
 
     test "handles network errors gracefully" do
       # Test with a query that might cause network issues
-      result = SearchService.unified_search("nonexistent_search_term_that_should_fail_gracefully", page: 1, per_page: 5)
+      result =
+        SearchService.unified_search("nonexistent_search_term_that_should_fail_gracefully",
+          page: 1,
+          per_page: 5
+        )
 
       # Should still return the expected structure
       assert is_map(result)

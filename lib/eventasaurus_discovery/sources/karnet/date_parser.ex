@@ -13,18 +13,30 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
 
   # Polish month names mapping
   @polish_months %{
-    "stycznia" => 1,      "styczeń" => 1,
-    "lutego" => 2,        "luty" => 2,
-    "marca" => 3,         "marzec" => 3,
-    "kwietnia" => 4,      "kwiecień" => 4,
-    "maja" => 5,          "maj" => 5,
-    "czerwca" => 6,       "czerwiec" => 6,
-    "lipca" => 7,         "lipiec" => 7,
-    "sierpnia" => 8,      "sierpień" => 8,
-    "września" => 9,      "wrzesień" => 9,
-    "października" => 10, "październik" => 10,
-    "listopada" => 11,    "listopad" => 11,
-    "grudnia" => 12,      "grudzień" => 12
+    "stycznia" => 1,
+    "styczeń" => 1,
+    "lutego" => 2,
+    "luty" => 2,
+    "marca" => 3,
+    "marzec" => 3,
+    "kwietnia" => 4,
+    "kwiecień" => 4,
+    "maja" => 5,
+    "maj" => 5,
+    "czerwca" => 6,
+    "czerwiec" => 6,
+    "lipca" => 7,
+    "lipiec" => 7,
+    "sierpnia" => 8,
+    "sierpień" => 8,
+    "września" => 9,
+    "wrzesień" => 9,
+    "października" => 10,
+    "październik" => 10,
+    "listopada" => 11,
+    "listopad" => 11,
+    "grudnia" => 12,
+    "grudzień" => 12
   }
 
   # Polish day names (for reference)
@@ -80,8 +92,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
   defp clean_date_string(date_string) do
     date_string
     |> String.trim()
-    |> String.replace(~r/\s+/, " ")  # Normalize whitespace
-    |> String.replace(",", ", ")  # Normalize comma spacing
+    # Normalize whitespace
+    |> String.replace(~r/\s+/, " ")
+    # Normalize comma spacing
+    |> String.replace(",", ", ")
   end
 
   defp parse_date_range(date_string) do
@@ -101,7 +115,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
 
   defp parse_date_range_with_time(date_string) do
     # Handle formats like "04.09.2025, 18:00 - 25.09.2025"
-    case Regex.run(~r/(\d{1,2}\.\d{1,2}\.\d{4}),?\s*(\d{1,2}:\d{2})?\s*-\s*(\d{1,2}\.\d{1,2}\.\d{4})/, date_string) do
+    case Regex.run(
+           ~r/(\d{1,2}\.\d{1,2}\.\d{4}),?\s*(\d{1,2}:\d{2})?\s*-\s*(\d{1,2}\.\d{1,2}\.\d{4})/,
+           date_string
+         ) do
       [_, start_date, time, end_date] ->
         with {:ok, start_dt} <- parse_single_date(start_date <> " " <> (time || "00:00")),
              {:ok, end_dt} <- parse_single_date(end_date) do
@@ -128,30 +145,38 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
         clean_end = clean_polish_date(end_str)
 
         # Parse each part separately
-        start_result = cond do
-          String.match?(clean_start, ~r/\d+\s+\w+\s+\d{4}/u) ->
-            parse_polish_date(clean_start)
-          String.match?(clean_start, ~r/\d{1,2}\.\d{1,2}\.\d{4}/) ->
-            parse_standard_date(clean_start)
-          true ->
-            {:error, :unknown_format}
-        end
+        start_result =
+          cond do
+            String.match?(clean_start, ~r/\d+\s+\w+\s+\d{4}/u) ->
+              parse_polish_date(clean_start)
 
-        end_result = cond do
-          String.match?(clean_end, ~r/\d+\s+\w+\s+\d{4}/u) ->
-            parse_polish_date(clean_end)
-          String.match?(clean_end, ~r/\d{1,2}\.\d{1,2}\.\d{4}/) ->
-            parse_standard_date(clean_end)
-          true ->
-            {:error, :unknown_format}
-        end
+            String.match?(clean_start, ~r/\d{1,2}\.\d{1,2}\.\d{4}/) ->
+              parse_standard_date(clean_start)
+
+            true ->
+              {:error, :unknown_format}
+          end
+
+        end_result =
+          cond do
+            String.match?(clean_end, ~r/\d+\s+\w+\s+\d{4}/u) ->
+              parse_polish_date(clean_end)
+
+            String.match?(clean_end, ~r/\d{1,2}\.\d{1,2}\.\d{4}/) ->
+              parse_standard_date(clean_end)
+
+            true ->
+              {:error, :unknown_format}
+          end
 
         case {start_result, end_result} do
           {{:ok, {start_dt, _}}, {:ok, {end_dt, _}}} ->
             {:ok, {start_dt, end_dt}}
+
           {{:ok, {start_dt, _}}, _} ->
             # If we can't parse the end date, use start date + 1 day as fallback
             {:ok, {start_dt, DateTime.add(start_dt, 86400, :second)}}
+
           _ ->
             {:error, :invalid_range}
         end
@@ -164,13 +189,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
   defp clean_polish_date(date_str) do
     # Remove Polish day names to make parsing easier
     date_str
-    |> String.replace(~r/^(poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela),?\s*/iu, "")
+    |> String.replace(
+      ~r/^(poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela),?\s*/iu,
+      ""
+    )
     |> String.trim()
   end
 
   defp parse_polish_date(date_string) do
     # Parse "czwartek, 4 września 2025, 18:00"
-    case Regex.run(~r/(\d{1,2})\s+([a-ząćęłńóśźż]+)\s+(\d{4})(?:,?\s*(\d{1,2}:\d{2}))?/iu, date_string) do
+    case Regex.run(
+           ~r/(\d{1,2})\s+([a-ząćęłńóśźż]+)\s+(\d{4})(?:,?\s*(\d{1,2}:\d{2}))?/iu,
+           date_string
+         ) do
       [_, day, month_name, year] ->
         parse_polish_date_parts(day, month_name, year, nil)
 
@@ -189,15 +220,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
       day = String.to_integer(day_str)
       year = String.to_integer(year_str)
 
-      {hour, minute} = if time_str do
-        parse_time(time_str)
-      else
-        {0, 0}
-      end
+      {hour, minute} =
+        if time_str do
+          parse_time(time_str)
+        else
+          {0, 0}
+        end
 
       case DateTime.new(Date.new!(year, month, day), Time.new!(hour, minute, 0)) do
         {:ok, datetime} ->
-          {:ok, {datetime, datetime}}  # Single date, not a range
+          # Single date, not a range
+          {:ok, {datetime, datetime}}
 
         {:error, reason} ->
           {:error, reason}
@@ -266,11 +299,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
     month = String.to_integer(month_str)
     day = String.to_integer(day_str)
 
-    {hour, minute} = if time_str do
-      parse_time(time_str)
-    else
-      {0, 0}
-    end
+    {hour, minute} =
+      if time_str do
+        parse_time(time_str)
+      else
+        {0, 0}
+      end
 
     case DateTime.new(Date.new!(year, month, day), Time.new!(hour, minute, 0)) do
       {:ok, datetime} ->

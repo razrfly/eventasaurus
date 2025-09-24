@@ -2,7 +2,7 @@ defmodule EventasaurusApp.Events.Delete do
   @moduledoc """
   Unified deletion context for events, handling both hard and soft deletion
   with proper permissions, business logic, and audit logging.
-  
+
   This module provides a single entry point for event deletion, automatically
   determining whether to perform a hard or soft deletion based on event criteria.
   """
@@ -12,11 +12,12 @@ defmodule EventasaurusApp.Events.Delete do
   alias EventasaurusApp.Accounts.User
   require Logger
 
-  @type deletion_result :: {:ok, :hard_deleted} | {:ok, :soft_deleted} | {:error, atom() | String.t()}
+  @type deletion_result ::
+          {:ok, :hard_deleted} | {:ok, :soft_deleted} | {:error, atom() | String.t()}
 
   @doc """
   Deletes an event using the appropriate method (hard or soft delete).
-  
+
   ## Parameters
     - event_id: ID of the event to delete
     - user_id: ID of the user performing the deletion
@@ -28,20 +29,20 @@ defmodule EventasaurusApp.Events.Delete do
     - {:error, reason} - Deletion failed
     
   ## Examples
-  
+
       iex> Delete.delete_event(123, 456, "Event cancelled")
       {:ok, :soft_deleted}
       
       iex> Delete.delete_event(999, 456, "Not found")
       {:error, :event_not_found}
   """
-  @spec delete_event(integer() | String.t(), integer() | String.t(), String.t()) :: deletion_result()
+  @spec delete_event(integer() | String.t(), integer() | String.t(), String.t()) ::
+          deletion_result()
   def delete_event(event_id, user_id, reason) when is_binary(reason) do
     with {:ok, event} <- get_event_safely(event_id),
          {:ok, user} <- get_user_safely(user_id),
          :ok <- check_permission(event, user),
          result <- perform_deletion(event, user, reason) do
-      
       # Log the successful deletion
       log_deletion_attempt(event, user, reason, result)
       result
@@ -59,7 +60,7 @@ defmodule EventasaurusApp.Events.Delete do
 
   @doc """
   Determines the appropriate deletion method for an event.
-  
+
   Returns :hard if the event is eligible for hard deletion, :soft otherwise.
   """
   @spec deletion_method(Event.t(), User.t()) :: :hard | :soft
@@ -108,7 +109,7 @@ defmodule EventasaurusApp.Events.Delete do
     case deletion_method(event, user) do
       :hard ->
         perform_hard_deletion(event, user, reason)
-      
+
       :soft ->
         perform_soft_deletion(event, user, reason)
     end
@@ -122,8 +123,9 @@ defmodule EventasaurusApp.Events.Delete do
           user_id: user.id,
           reason: reason
         })
+
         {:ok, :hard_deleted}
-      
+
       {:error, error_reason} ->
         # If hard delete fails, fall back to soft delete
         Logger.warning("Hard delete failed, falling back to soft delete", %{
@@ -131,6 +133,7 @@ defmodule EventasaurusApp.Events.Delete do
           user_id: user.id,
           error: error_reason
         })
+
         perform_soft_deletion(event, user, reason)
     end
   end
@@ -143,14 +146,16 @@ defmodule EventasaurusApp.Events.Delete do
           user_id: user.id,
           reason: reason
         })
+
         {:ok, :soft_deleted}
-      
+
       {:error, error_reason} ->
         Logger.error("Soft delete failed", %{
           event_id: event.id,
           user_id: user.id,
           error: error_reason
         })
+
         {:error, error_reason}
     end
   end
@@ -158,15 +163,17 @@ defmodule EventasaurusApp.Events.Delete do
   # Audit logging functions
 
   defp log_deletion_attempt(event_or_id, user_or_id, reason, result) do
-    event_id = case event_or_id do
-      %Event{id: id} -> id
-      id when is_integer(id) or is_binary(id) -> id
-    end
+    event_id =
+      case event_or_id do
+        %Event{id: id} -> id
+        id when is_integer(id) or is_binary(id) -> id
+      end
 
-    user_id = case user_or_id do
-      %User{id: id} -> id
-      id when is_integer(id) or is_binary(id) -> id
-    end
+    user_id =
+      case user_or_id do
+        %User{id: id} -> id
+        id when is_integer(id) or is_binary(id) -> id
+      end
 
     log_entry = %{
       event_id: event_id,
@@ -179,7 +186,7 @@ defmodule EventasaurusApp.Events.Delete do
     case result do
       {:ok, _} ->
         Logger.info("Event deletion attempt successful", log_entry)
-      
+
       {:error, _} ->
         Logger.error("Event deletion attempt failed", log_entry)
     end

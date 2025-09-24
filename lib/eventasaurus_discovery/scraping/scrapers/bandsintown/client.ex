@@ -13,7 +13,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
 
   @base_url "https://www.bandsintown.com"
   @default_headers [
-    {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+    {"User-Agent",
+     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
     {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
     {"Accept-Language", "en-US,en;q=0.5"},
     {"Accept-Encoding", "gzip"},
@@ -44,11 +45,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
   Can use simple HTTP client as these pages are usually server-rendered.
   """
   def fetch_event_page(event_path, opts \\ []) do
-    url = if String.starts_with?(event_path, "http") do
-      event_path
-    else
-      "#{@base_url}#{event_path}"
-    end
+    url =
+      if String.starts_with?(event_path, "http") do
+        event_path
+      else
+        "#{@base_url}#{event_path}"
+      end
 
     Logger.info("🎵 Fetching event page: #{url}")
     fetch_with_httpoison(url, opts)
@@ -95,6 +97,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
               decompressed when is_binary(decompressed) ->
                 Logger.debug("📦 Decompressed gzipped response")
                 decompressed
+
               _ ->
                 Logger.debug("📦 Failed to decompress, using original body")
                 body
@@ -132,7 +135,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     cond do
       String.contains?(html, "View all") -> true
       String.contains?(html, "Load more") -> true
-      String.contains?(html, "__NEXT_DATA__") -> true  # Next.js app
+      # Next.js app
+      String.contains?(html, "__NEXT_DATA__") -> true
       String.contains?(html, "React") -> true
       true -> false
     end
@@ -149,10 +153,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     - opts: Additional options
   """
   def fetch_next_events_page(latitude, longitude, page \\ 2, opts \\ []) do
-    url = "#{@base_url}/all-dates/fetch-next/upcomingEvents?page=#{page}&longitude=#{longitude}&latitude=#{latitude}"
+    url =
+      "#{@base_url}/all-dates/fetch-next/upcomingEvents?page=#{page}&longitude=#{longitude}&latitude=#{latitude}"
 
     headers = [
-      {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+      {"User-Agent",
+       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
       {"Accept", "application/json, text/javascript, */*; q=0.01"},
       {"Accept-Language", "en-US,en;q=0.5"},
       {"Accept-Encoding", "gzip"},
@@ -171,7 +177,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
 
     case HTTPoison.get(url, headers, options) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body, headers: response_headers}} ->
-
         # Check if response is gzipped and decompress if needed
         body =
           if is_gzipped?(response_headers) do
@@ -179,6 +184,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
               decompressed when is_binary(decompressed) ->
                 Logger.debug("📦 Decompressed gzipped response")
                 decompressed
+
               _ ->
                 Logger.debug("📦 Failed to decompress, using original body")
                 body
@@ -191,6 +197,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
         case Jason.decode(body) do
           {:ok, json_data} ->
             {:ok, json_data}
+
           {:error, _} ->
             # If not JSON, might be HTML
             {:ok, body}
@@ -225,7 +232,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     {:ok, all_events}
   end
 
-  defp fetch_additional_pages(latitude, longitude, acc_events, current_page, max_pages, opts) when current_page <= max_pages do
+  defp fetch_additional_pages(latitude, longitude, acc_events, current_page, max_pages, opts)
+       when current_page <= max_pages do
     # Rate limit between requests
     rate_limit(2000)
 
@@ -235,7 +243,14 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
         new_events = extract_events_from_json_response(json_data)
 
         if length(new_events) > 0 do
-          fetch_additional_pages(latitude, longitude, acc_events ++ new_events, current_page + 1, max_pages, opts)
+          fetch_additional_pages(
+            latitude,
+            longitude,
+            acc_events ++ new_events,
+            current_page + 1,
+            max_pages,
+            opts
+          )
         else
           acc_events
         end
@@ -263,14 +278,19 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     case json_data do
       %{"events" => events} when is_list(events) ->
         Enum.map(events, &transform_api_event/1)
+
       %{"data" => %{"events" => events}} when is_list(events) ->
         Enum.map(events, &transform_api_event/1)
+
       %{"html" => html} when is_binary(html) ->
         # If it returns HTML, we need to parse it
-        case EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor.extract_events_from_html_fragment(html) do
+        case EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor.extract_events_from_html_fragment(
+               html
+             ) do
           {:ok, events} -> events
           _ -> []
         end
+
       _ ->
         Logger.warning("⚠️ Unknown JSON response structure: #{inspect(Map.keys(json_data))}")
         []
@@ -279,14 +299,17 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
 
   defp transform_api_event(event) do
     # Extract event ID from URL if not directly available
-    external_id = case Map.get(event, "eventUrl", "") do
-      url when is_binary(url) ->
-        case Regex.run(~r/\/e\/(\d+)/, url) do
-          [_, id] -> id
-          _ -> ""
-        end
-      _ -> ""
-    end
+    external_id =
+      case Map.get(event, "eventUrl", "") do
+        url when is_binary(url) ->
+          case Regex.run(~r/\/e\/(\d+)/, url) do
+            [_, id] -> id
+            _ -> ""
+          end
+
+        _ ->
+          ""
+      end
 
     %{
       url: Map.get(event, "eventUrl", ""),
@@ -298,7 +321,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
       external_id: external_id
     }
   end
-
 
   @doc """
   Rate limit helper - ensures we don't make requests too quickly.

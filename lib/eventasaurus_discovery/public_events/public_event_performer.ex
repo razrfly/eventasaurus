@@ -3,10 +3,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventPerformer do
   import Ecto.Changeset
 
   schema "public_event_performers" do
-    field :metadata, :map, default: %{}
+    field(:metadata, :map, default: %{})
 
-    belongs_to :event, EventasaurusDiscovery.PublicEvents.PublicEvent
-    belongs_to :performer, EventasaurusDiscovery.Performers.Performer
+    belongs_to(:event, EventasaurusDiscovery.PublicEvents.PublicEvent)
+    belongs_to(:performer, EventasaurusDiscovery.Performers.Performer)
 
     timestamps()
   end

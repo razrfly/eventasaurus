@@ -45,6 +45,7 @@ defmodule EventasaurusApp.TicketingTest do
 
     test "create_ticket/2 with valid data creates a ticket", %{event: event} do
       now = DateTime.utc_now()
+
       valid_attrs = %{
         title: "General Admission",
         description: "Standard entry ticket",
@@ -72,7 +73,7 @@ defmodule EventasaurusApp.TicketingTest do
 
       assert {:ok, %Ticket{} = updated_ticket} = Ticketing.update_ticket(ticket, update_attrs)
       assert updated_ticket.title == "VIP Access"
-              assert updated_ticket.base_price_cents == 5000
+      assert updated_ticket.base_price_cents == 5000
     end
 
     test "update_ticket/2 with invalid data returns error changeset", %{event: event} do
@@ -103,23 +104,26 @@ defmodule EventasaurusApp.TicketingTest do
       now = DateTime.utc_now()
 
       # Available ticket (on sale now, ends in future)
-      available_ticket = insert(:ticket,
-        event: event,
-        quantity: 10,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :hour)
-      )
+      available_ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 10,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :hour)
+        )
 
       # Sold out ticket
-      sold_out_ticket = insert(:ticket,
-        event: event,
-        quantity: 2,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :hour)
-      )
+      sold_out_ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 2,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :hour)
+        )
 
       # Create orders that consume all sold_out_ticket quantity
       user = insert(:user)
+
       insert(:confirmed_order,
         user: user,
         event: event,
@@ -128,20 +132,22 @@ defmodule EventasaurusApp.TicketingTest do
       )
 
       # Not yet on sale ticket
-      future_ticket = insert(:ticket,
-        event: event,
-        quantity: 10,
-        starts_at: DateTime.add(now, 1, :hour),
-        ends_at: DateTime.add(now, 2, :hour)
-      )
+      future_ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 10,
+          starts_at: DateTime.add(now, 1, :hour),
+          ends_at: DateTime.add(now, 2, :hour)
+        )
 
       # Sale ended ticket
-      past_ticket = insert(:ticket,
-        event: event,
-        quantity: 10,
-        starts_at: DateTime.add(now, -2, :hour),
-        ends_at: DateTime.add(now, -1, :hour)
-      )
+      past_ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 10,
+          starts_at: DateTime.add(now, -2, :hour),
+          ends_at: DateTime.add(now, -1, :hour)
+        )
 
       %{
         event: event,
@@ -176,7 +182,10 @@ defmodule EventasaurusApp.TicketingTest do
       assert Ticketing.ticket_available?(ticket, 11) == false
     end
 
-    test "available_quantity/1 returns correct available count", %{available_ticket: ticket, sold_out_ticket: sold_out_ticket} do
+    test "available_quantity/1 returns correct available count", %{
+      available_ticket: ticket,
+      sold_out_ticket: sold_out_ticket
+    } do
       assert Ticketing.available_quantity(ticket) == 10
       assert Ticketing.available_quantity(sold_out_ticket) == 0
     end
@@ -190,22 +199,28 @@ defmodule EventasaurusApp.TicketingTest do
     end
   end
 
-    describe "orders" do
+  describe "orders" do
     setup do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        base_price_cents: 2500,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          base_price_cents: 2500,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
 
       %{event: event, user: user, ticket: ticket}
     end
 
-    test "list_orders_for_user/1 returns all orders for a user", %{user: user, event: event, ticket: ticket} do
+    test "list_orders_for_user/1 returns all orders for a user", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       order1 = insert(:order, user: user, event: event, ticket: ticket)
       order2 = insert(:order, user: user, event: event, ticket: ticket)
       other_user = insert(:user)
@@ -218,7 +233,11 @@ defmodule EventasaurusApp.TicketingTest do
       assert Enum.any?(orders, &(&1.id == order2.id))
     end
 
-    test "list_orders_for_event/1 returns all orders for an event", %{user: user, event: event, ticket: ticket} do
+    test "list_orders_for_event/1 returns all orders for an event", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       order1 = insert(:order, user: user, event: event, ticket: ticket)
       order2 = insert(:order, user: user, event: event, ticket: ticket)
       other_event = insert(:event, is_ticketed: true)
@@ -232,7 +251,11 @@ defmodule EventasaurusApp.TicketingTest do
       assert Enum.any?(orders, &(&1.id == order2.id))
     end
 
-    test "get_order!/1 returns the order with given id", %{user: user, event: event, ticket: ticket} do
+    test "get_order!/1 returns the order with given id", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       order = insert(:order, user: user, event: event, ticket: ticket)
       assert Ticketing.get_order!(order.id).id == order.id
     end
@@ -241,7 +264,11 @@ defmodule EventasaurusApp.TicketingTest do
       assert_raise Ecto.NoResultsError, fn -> Ticketing.get_order!(0) end
     end
 
-    test "get_order_with_associations!/1 returns order with preloaded associations", %{user: user, event: event, ticket: ticket} do
+    test "get_order_with_associations!/1 returns order with preloaded associations", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       order = insert(:order, user: user, event: event, ticket: ticket)
       result = Ticketing.get_order_with_associations!(order.id)
 
@@ -251,7 +278,11 @@ defmodule EventasaurusApp.TicketingTest do
       assert result.ticket.id == ticket.id
     end
 
-    test "get_user_order!/2 returns order for specific user", %{user: user, event: event, ticket: ticket} do
+    test "get_user_order!/2 returns order for specific user", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       order = insert(:order, user: user, event: event, ticket: ticket)
       result = Ticketing.get_user_order!(user.id, order.id)
 
@@ -259,7 +290,11 @@ defmodule EventasaurusApp.TicketingTest do
       assert result.user_id == user.id
     end
 
-    test "get_user_order!/2 raises if order belongs to different user", %{user: user, event: event, ticket: ticket} do
+    test "get_user_order!/2 raises if order belongs to different user", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       other_user = insert(:user)
       order = insert(:order, user: other_user, event: event, ticket: ticket)
 
@@ -276,14 +311,20 @@ defmodule EventasaurusApp.TicketingTest do
       assert order.event_id == ticket.event_id
       assert order.ticket_id == ticket.id
       assert order.quantity == 2
-      assert order.subtotal_cents == 5000  # 2500 * 2
-      assert order.tax_cents == 500        # 10% of subtotal
-      assert order.total_cents == 5500     # subtotal + tax
+      # 2500 * 2
+      assert order.subtotal_cents == 5000
+      # 10% of subtotal
+      assert order.tax_cents == 500
+      # subtotal + tax
+      assert order.total_cents == 5500
       assert order.currency == "usd"
       assert order.status == "pending"
     end
 
-    test "create_order/3 with default quantity creates single ticket order", %{user: user, ticket: ticket} do
+    test "create_order/3 with default quantity creates single ticket order", %{
+      user: user,
+      ticket: ticket
+    } do
       assert {:ok, %Order{} = order} = Ticketing.create_order(user, ticket)
       assert order.quantity == 1
       assert order.subtotal_cents == 2500
@@ -296,12 +337,17 @@ defmodule EventasaurusApp.TicketingTest do
       sold_out_ticket = insert(:ticket, event: event, quantity: 1)
       insert(:confirmed_order, user: user, event: event, ticket: sold_out_ticket, quantity: 1)
 
-      assert {:error, :ticket_unavailable} = Ticketing.create_order(user, sold_out_ticket, %{quantity: 1})
+      assert {:error, :ticket_unavailable} =
+               Ticketing.create_order(user, sold_out_ticket, %{quantity: 1})
     end
 
-    test "create_order/3 fails when requesting more tickets than available", %{user: user, ticket: ticket} do
+    test "create_order/3 fails when requesting more tickets than available", %{
+      user: user,
+      ticket: ticket
+    } do
       # Ticket has default quantity of 100, request more
-      assert {:error, :ticket_unavailable} = Ticketing.create_order(user, ticket, %{quantity: 101})
+      assert {:error, :ticket_unavailable} =
+               Ticketing.create_order(user, ticket, %{quantity: 101})
     end
 
     test "change_order/1 returns an order changeset", %{user: user, event: event, ticket: ticket} do
@@ -310,21 +356,27 @@ defmodule EventasaurusApp.TicketingTest do
     end
   end
 
-    describe "order status management" do
+  describe "order status management" do
     setup do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
 
       %{event: event, user: user, ticket: ticket}
     end
 
-    test "confirm_order/2 updates order status and creates event participant", %{user: user, event: event, ticket: ticket} do
+    test "confirm_order/2 updates order status and creates event participant", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       order = insert(:order, user: user, event: event, ticket: ticket, status: "pending")
       payment_reference = "pi_test_payment_intent"
 
@@ -341,16 +393,21 @@ defmodule EventasaurusApp.TicketingTest do
       assert participant.source == "ticket_purchase"
     end
 
-    test "confirm_order/2 upgrades existing event participant", %{user: user, event: event, ticket: ticket} do
+    test "confirm_order/2 upgrades existing event participant", %{
+      user: user,
+      event: event,
+      ticket: ticket
+    } do
       # Create an existing participant with different status
-      {:ok, existing_participant} = EventasaurusApp.Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        role: :invitee,
-        status: :pending,
-        source: "manual_invite",
-        metadata: %{invited_by: "admin"}
-      })
+      {:ok, existing_participant} =
+        EventasaurusApp.Events.create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
+          role: :invitee,
+          status: :pending,
+          source: "manual_invite",
+          metadata: %{invited_by: "admin"}
+        })
 
       order = insert(:order, user: user, event: event, ticket: ticket, status: "pending")
       payment_reference = "pi_test_payment_intent"
@@ -361,14 +418,20 @@ defmodule EventasaurusApp.TicketingTest do
       # Check that existing participant was upgraded, not duplicated
       participant = EventasaurusApp.Events.get_event_participant_by_event_and_user(event, user)
       assert participant != nil
-      assert participant.id == existing_participant.id  # Same record
-      assert participant.role == :ticket_holder  # Upgraded role
-      assert participant.status == :confirmed_with_order  # Upgraded status
-      assert participant.source == "manual_invite"  # Original source preserved
+      # Same record
+      assert participant.id == existing_participant.id
+      # Upgraded role
+      assert participant.role == :ticket_holder
+      # Upgraded status
+      assert participant.status == :confirmed_with_order
+      # Original source preserved
+      assert participant.source == "manual_invite"
 
       # Metadata should be merged
-      assert participant.metadata["invited_by"] == "admin"  # Original metadata preserved
-      assert participant.metadata["order_id"] == confirmed_order.id  # New metadata added
+      # Original metadata preserved
+      assert participant.metadata["invited_by"] == "admin"
+      # New metadata added
+      assert participant.metadata["order_id"] == confirmed_order.id
 
       # Ensure no duplicate participants were created
       participants = EventasaurusApp.Events.list_event_participants_for_event(event)
@@ -408,49 +471,60 @@ defmodule EventasaurusApp.TicketingTest do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        base_price_cents: 1000,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          base_price_cents: 1000,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
 
       {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 1})
 
       assert order.subtotal_cents == 1000
-      assert order.tax_cents == 100      # 10% tax
-      assert order.total_cents == 1100   # subtotal + tax
+      # 10% tax
+      assert order.tax_cents == 100
+      # subtotal + tax
+      assert order.total_cents == 1100
     end
 
     test "calculates correct pricing for multiple tickets" do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        base_price_cents: 1500,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          base_price_cents: 1500,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
 
       {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 3})
 
-      assert order.subtotal_cents == 4500  # 1500 * 3
-      assert order.tax_cents == 450        # 10% tax
-      assert order.total_cents == 4950     # subtotal + tax
+      # 1500 * 3
+      assert order.subtotal_cents == 4500
+      # 10% tax
+      assert order.tax_cents == 450
+      # subtotal + tax
+      assert order.total_cents == 4950
     end
 
     test "handles currency from ticket" do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        base_price_cents: 2000,
-        currency: "eur",
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          base_price_cents: 2000,
+          currency: "eur",
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
 
       {:ok, order} = Ticketing.create_order(user, ticket)
 
@@ -466,40 +540,51 @@ defmodule EventasaurusApp.TicketingTest do
       # 667 cents * 3 = 2001 cents, but tax on 2001 is round(200.1) = 200
       # So total = 2001 + 200 = 2201 cents
       # Original bug: round(2201/3) = 734, but 734*3 = 2202 (1 cent over)
-      ticket = insert(:ticket,
-        event: event,
-        base_price_cents: 667,  # This will create rounding edge case
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+      ticket =
+        insert(:ticket,
+          event: event,
+          # This will create rounding edge case
+          base_price_cents: 667,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
 
       {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 3})
 
       # Verify the order totals
-      assert order.subtotal_cents == 2001  # 667 * 3
-      assert order.tax_cents == 200        # round(2001 * 0.10)
-      assert order.total_cents == 2201     # 2001 + 200
+      # 667 * 3
+      assert order.subtotal_cents == 2001
+      # round(2001 * 0.10)
+      assert order.tax_cents == 200
+      # 2001 + 200
+      assert order.total_cents == 2201
 
       # Test the line item creation (accessing private function via module test)
       # This simulates what create_line_item_for_order does internally
 
       # Calculate unit amount using our fixed logic
-      base_unit_amount = div(order.total_cents, order.quantity)  # div(2201, 3) = 733
-      remainder = rem(order.total_cents, order.quantity)         # rem(2201, 3) = 2
+      # div(2201, 3) = 733
+      base_unit_amount = div(order.total_cents, order.quantity)
+      # rem(2201, 3) = 2
+      remainder = rem(order.total_cents, order.quantity)
 
-      unit_amount = if remainder == 0 do
-        base_unit_amount
-      else
-        base_unit_amount + 1  # 733 + 1 = 734
-      end
+      unit_amount =
+        if remainder == 0 do
+          base_unit_amount
+        else
+          # 733 + 1 = 734
+          base_unit_amount + 1
+        end
 
       # Verify our fix prevents undercharging
-      stripe_total = unit_amount * order.quantity  # 734 * 3 = 2202
+      # 734 * 3 = 2202
+      stripe_total = unit_amount * order.quantity
 
       # The customer should be charged the same or slightly more than order total,
       # never less (which was the original bug)
       assert stripe_total >= order.total_cents
-      assert stripe_total - order.total_cents <= order.quantity  # At most 1 cent per item over
+      # At most 1 cent per item over
+      assert stripe_total - order.total_cents <= order.quantity
 
       # In this specific case, we expect 1 cent overage
       assert stripe_total == 2202
@@ -513,14 +598,16 @@ defmodule EventasaurusApp.TicketingTest do
       event = insert(:event, is_ticketed: true)
       Ticketing.subscribe()
 
-             now = DateTime.utc_now()
-       {:ok, ticket} = Ticketing.create_ticket(event, %{
-         title: "Test Ticket",
-         base_price_cents: 1000,
-         quantity: 10,
-         starts_at: DateTime.add(now, 1, :hour),
-         ends_at: DateTime.add(now, 1, :day)
-       })
+      now = DateTime.utc_now()
+
+      {:ok, ticket} =
+        Ticketing.create_ticket(event, %{
+          title: "Test Ticket",
+          base_price_cents: 1000,
+          quantity: 10,
+          starts_at: DateTime.add(now, 1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        })
 
       assert_receive {:ticket_update, %{ticket: ^ticket, action: :created}}
     end
@@ -530,11 +617,14 @@ defmodule EventasaurusApp.TicketingTest do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
+
       Ticketing.subscribe()
 
       {:ok, order} = Ticketing.create_order(user, ticket)
@@ -547,11 +637,14 @@ defmodule EventasaurusApp.TicketingTest do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :day)
+        )
+
       order = insert(:order, user: user, event: event, ticket: ticket, status: "pending")
       Ticketing.subscribe()
 
@@ -567,12 +660,14 @@ defmodule EventasaurusApp.TicketingTest do
       user = insert(:user)
       event = insert(:event, is_ticketed: true)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        quantity: 10,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :hour)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 10,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :hour)
+        )
 
       # Subscribe to updates - use the correct PubSub name
       Ticketing.subscribe()
@@ -590,12 +685,14 @@ defmodule EventasaurusApp.TicketingTest do
       user = insert(:user)
       event = insert(:event, is_ticketed: true)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        quantity: 10,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :hour)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 10,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :hour)
+        )
 
       # Create an order first
       {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 2})
@@ -616,12 +713,14 @@ defmodule EventasaurusApp.TicketingTest do
       user = insert(:user)
       event = insert(:event, is_ticketed: true)
       now = DateTime.utc_now()
-      ticket = insert(:ticket,
-        event: event,
-        quantity: 10,
-        starts_at: DateTime.add(now, -1, :hour),
-        ends_at: DateTime.add(now, 1, :hour)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 10,
+          starts_at: DateTime.add(now, -1, :hour),
+          ends_at: DateTime.add(now, 1, :hour)
+        )
 
       # Create an order first
       {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 2})

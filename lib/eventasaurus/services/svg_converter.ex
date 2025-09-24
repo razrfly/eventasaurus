@@ -45,13 +45,18 @@ defmodule Eventasaurus.Services.SvgConverter do
 
     # Write SVG content to temporary file
     with :ok <- File.write(svg_path, svg_content),
-         {_, 0} <- System.cmd("rsvg-convert", [
-           "-o", png_path,
-           "--width", "800",
-           "--height", "419",
-           "--format", "png",
-           svg_path
-         ]) do
+         {_, 0} <-
+           System.cmd("rsvg-convert", [
+             "-o",
+             png_path,
+             "--width",
+             "800",
+             "--height",
+             "419",
+             "--format",
+             "png",
+             svg_path
+           ]) do
       # Clean up SVG file and temporary images after successful conversion
       File.rm(svg_path)
       cleanup_files(temp_image_files)
@@ -89,14 +94,18 @@ defmodule Eventasaurus.Services.SvgConverter do
   def cleanup_temp_file(png_path) do
     # Schedule file deletion with a small delay to ensure it's not deleted while being served
     Task.start(fn ->
-      Process.sleep(5000)  # 5 second delay
+      # 5 second delay
+      Process.sleep(5000)
+
       case File.rm(png_path) do
         :ok ->
           Logger.debug("Cleaned up temporary file: #{png_path}")
+
         {:error, reason} ->
           Logger.warning("Failed to cleanup temporary file #{png_path}: #{inspect(reason)}")
       end
     end)
+
     :ok
   end
 
@@ -171,8 +180,13 @@ defmodule Eventasaurus.Services.SvgConverter do
   defp cleanup_files(file_paths) do
     Enum.each(file_paths, fn path ->
       case File.rm(path) do
-        :ok -> :ok
-        {:error, :enoent} -> :ok  # File doesn't exist, that's fine
+        :ok ->
+          :ok
+
+        # File doesn't exist, that's fine
+        {:error, :enoent} ->
+          :ok
+
         {:error, reason} ->
           Logger.warning("Failed to cleanup file #{path}: #{inspect(reason)}")
       end

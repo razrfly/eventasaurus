@@ -186,6 +186,7 @@ defmodule EventasaurusWeb.OrdersController do
       _ -> default
     end
   end
+
   defp safe_parse_integer(value, _default) when is_integer(value), do: value
   defp safe_parse_integer(_, default), do: default
 
@@ -216,7 +217,9 @@ defmodule EventasaurusWeb.OrdersController do
         else
           {:error, :cannot_cancel}
         end
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -227,7 +230,7 @@ defmodule EventasaurusWeb.OrdersController do
       total_cents: order.total_cents,
       application_fee_amount: order.application_fee_amount,
       stripe_session_id: order.stripe_session_id,
-            ticket: %{
+      ticket: %{
         id: order.ticket.id,
         title: order.ticket.title,
         price_cents: order.ticket.base_price_cents

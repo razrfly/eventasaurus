@@ -60,8 +60,10 @@ defmodule EventasaurusWeb.Services.MovieConfig do
   """
   def get_timeout_config do
     [
-      timeout: 30_000,      # 30 seconds for connection timeout
-      recv_timeout: 30_000  # 30 seconds for response timeout
+      # 30 seconds for connection timeout
+      timeout: 30_000,
+      # 30 seconds for response timeout
+      recv_timeout: 30_000
     ]
   end
 
@@ -71,7 +73,8 @@ defmodule EventasaurusWeb.Services.MovieConfig do
   """
   def get_rate_limit_config do
     %{
-      max_requests_per_second: 40,  # Below TMDB's 50 req/s limit
+      # Below TMDB's 50 req/s limit
+      max_requests_per_second: 40,
       window_seconds: 1
     }
   end
@@ -82,7 +85,8 @@ defmodule EventasaurusWeb.Services.MovieConfig do
   """
   def get_cache_config do
     %{
-      ttl_milliseconds: :timer.hours(6),  # 6 hours
+      # 6 hours
+      ttl_milliseconds: :timer.hours(6),
       table_name: :tmdb_cache
     }
   end
@@ -93,6 +97,7 @@ defmodule EventasaurusWeb.Services.MovieConfig do
   def build_image_url(path, size \\ "w500")
   def build_image_url(nil, _size), do: nil
   def build_image_url("", _size), do: nil
+
   def build_image_url(path, size) when is_binary(path) and is_binary(size) do
     # Validate that path starts with "/" and contains only safe characters
     if String.match?(path, ~r{^/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$}i) do
@@ -102,17 +107,19 @@ defmodule EventasaurusWeb.Services.MovieConfig do
       nil
     end
   end
+
   def build_image_url(_, _), do: nil
 
   @doc """
   Builds a full TMDB API URL from an endpoint path.
   """
   def build_api_url(endpoint_path) when is_binary(endpoint_path) do
-    normalized_path = if String.starts_with?(endpoint_path, "/") do
-      endpoint_path
-    else
-      "/#{endpoint_path}"
-    end
+    normalized_path =
+      if String.starts_with?(endpoint_path, "/") do
+        endpoint_path
+      else
+        "/#{endpoint_path}"
+      end
 
     "#{get_api_base_url()}#{normalized_path}"
   end
@@ -131,12 +138,18 @@ defmodule EventasaurusWeb.Services.MovieConfig do
     case get_api_key() do
       {:ok, key} ->
         masked_key = String.slice(key, 0, 8) <> "***"
-        Logger.info("TMDB Configuration: API key present (#{masked_key}), base URL: #{get_api_base_url()}")
+
+        Logger.info(
+          "TMDB Configuration: API key present (#{masked_key}), base URL: #{get_api_base_url()}"
+        )
+
       {:error, reason} ->
         Logger.error("TMDB Configuration: #{reason}")
     end
 
-    Logger.info("TMDB Configuration: Rate limit #{get_rate_limit_config().max_requests_per_second} req/s, cache TTL #{div(get_cache_config().ttl_milliseconds, 60_000)} minutes")
+    Logger.info(
+      "TMDB Configuration: Rate limit #{get_rate_limit_config().max_requests_per_second} req/s, cache TTL #{div(get_cache_config().ttl_milliseconds, 60_000)} minutes"
+    )
 
     :ok
   end

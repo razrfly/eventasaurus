@@ -62,23 +62,29 @@ defmodule EventasaurusApp.Events.VoteValidator do
   end
 
   # Vote Parameters Validation
-  defp validate_vote_params("binary", %{vote_value: value}) 
-       when value in ["yes", "maybe", "no"], do: :ok
+  defp validate_vote_params("binary", %{vote_value: value})
+       when value in ["yes", "maybe", "no"],
+       do: :ok
+
   defp validate_vote_params("binary", _), do: {:error, "Invalid binary vote value"}
 
-  defp validate_vote_params("approval", %{vote_value: value}) 
-       when value in ["yes", "no"], do: :ok
+  defp validate_vote_params("approval", %{vote_value: value})
+       when value in ["yes", "no"],
+       do: :ok
+
   defp validate_vote_params("approval", _), do: {:error, "Invalid approval vote value"}
 
   defp validate_vote_params("star", %{vote_numeric: rating}) do
     case Decimal.cast(rating) do
       {:ok, decimal} ->
         rating_float = Decimal.to_float(decimal)
+
         if rating_float >= 1.0 and rating_float <= 5.0 do
           :ok
         else
           {:error, "Star rating must be between 1 and 5"}
         end
+
       _ ->
         {:error, "Invalid star rating format"}
     end
@@ -109,8 +115,9 @@ defmodule EventasaurusApp.Events.VoteValidator do
   defp validate_approval_limits(%Poll{} = poll, %User{} = user) do
     # For approval voting, check if user has too many selections
     existing_votes = get_user_votes_count(poll, user)
-    max_selections = 999 # Default max selections
-    
+    # Default max selections
+    max_selections = 999
+
     if existing_votes >= max_selections do
       {:error, "Maximum selections exceeded"}
     else
@@ -121,7 +128,7 @@ defmodule EventasaurusApp.Events.VoteValidator do
   defp validate_ranked_limits(%Poll{} = poll, %User{} = user) do
     # For ranked voting, each option should have unique rank
     existing_ranks = get_user_ranks(poll, user)
-    
+
     if length(existing_ranks) != length(Enum.uniq(existing_ranks)) do
       {:error, "Duplicate ranks not allowed"}
     else
@@ -132,6 +139,7 @@ defmodule EventasaurusApp.Events.VoteValidator do
   # Multiple Vote System Validation
   defp validate_voting_system_supports_multiple("approval"), do: :ok
   defp validate_voting_system_supports_multiple("ranked"), do: :ok
+
   defp validate_voting_system_supports_multiple(system) do
     {:error, "Voting system #{system} does not support multiple votes"}
   end
@@ -188,21 +196,27 @@ defmodule EventasaurusApp.Events.VoteValidator do
   # Helper Functions
   defp get_user_votes_count(%Poll{} = poll, %User{} = user) do
     # Query actual vote count for this user in this poll
-    query = from v in PollVote,
-      join: po in PollOption, on: v.poll_option_id == po.id,
-      where: po.poll_id == ^poll.id and v.voter_id == ^user.id,
-      select: count(v.id)
-    
+    query =
+      from(v in PollVote,
+        join: po in PollOption,
+        on: v.poll_option_id == po.id,
+        where: po.poll_id == ^poll.id and v.voter_id == ^user.id,
+        select: count(v.id)
+      )
+
     Repo.one(query) || 0
   end
 
   defp get_user_ranks(%Poll{} = poll, %User{} = user) do
     # Query actual ranks for this user in this poll
-    query = from v in PollVote,
-      join: po in PollOption, on: v.poll_option_id == po.id,
-      where: po.poll_id == ^poll.id and v.voter_id == ^user.id and not is_nil(v.vote_rank),
-      select: v.vote_rank
-    
+    query =
+      from(v in PollVote,
+        join: po in PollOption,
+        on: v.poll_option_id == po.id,
+        where: po.poll_id == ^poll.id and v.voter_id == ^user.id and not is_nil(v.vote_rank),
+        select: v.vote_rank
+      )
+
     Repo.all(query)
   end
 end

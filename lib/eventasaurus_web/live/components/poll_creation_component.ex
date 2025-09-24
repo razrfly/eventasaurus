@@ -102,7 +102,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
             if venue.venue_type in ["venue", "city", "region"] && venue.latitude &&
                  venue.longitude do
               # Use venue name (or address if no name) as the search location display
-              search_location_display = venue.name || venue.address || EventasaurusApp.Venues.Venue.city_name(venue)
+              search_location_display =
+                venue.name || venue.address || EventasaurusApp.Venues.Venue.city_name(venue)
 
               settings_with_location
               |> Map.put("search_location", search_location_display)
@@ -678,16 +679,17 @@ defmodule EventasaurusWeb.PollCreationComponent do
     # Get existing changeset parameters and merge with city data
     current_params = socket.assigns.changeset.params || %{}
     current_settings = get_in(current_params, ["settings"]) || %{}
-    
+
     # Update settings with selected city data
-    updated_settings = Map.merge(current_settings, %{
-      "search_location" => city_data["name"],
-      "search_location_data" => city_data
-    })
-    
+    updated_settings =
+      Map.merge(current_settings, %{
+        "search_location" => city_data["name"],
+        "search_location_data" => city_data
+      })
+
     # Create new poll_params with updated settings
     poll_params = Map.merge(current_params, %{"settings" => updated_settings})
-    
+
     changeset = create_changeset(socket, poll_params)
     {:noreply, assign(socket, :changeset, changeset)}
   end
@@ -1011,7 +1013,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
       search_location = get_search_location(changeset, nil)
 
       event.venue && search_location &&
-        (search_location == EventasaurusApp.Venues.Venue.city_name(event.venue) || search_location == event.venue.name)
+        (search_location == EventasaurusApp.Venues.Venue.city_name(event.venue) ||
+           search_location == event.venue.name)
     end
   end
 

@@ -14,10 +14,13 @@ defmodule EventasaurusWeb.Services.UnsplashService do
     cond do
       is_nil(query) or query == "" ->
         {:error, "Search query cannot be empty"}
+
       page < 1 ->
         {:error, "Page must be a positive integer"}
+
       per_page < 1 or per_page > 30 ->
         {:error, "Per_page must be between 1 and 30"}
+
       true ->
         case get("/search/photos", %{query: query, page: page, per_page: per_page}) do
           {:ok, %{"results" => results}} ->
@@ -26,7 +29,8 @@ defmodule EventasaurusWeb.Services.UnsplashService do
               |> Enum.map(fn photo ->
                 %{
                   id: photo["id"],
-                  description: photo["description"] || photo["alt_description"] || "Unsplash photo",
+                  description:
+                    photo["description"] || photo["alt_description"] || "Unsplash photo",
                   urls: %{
                     raw: photo["urls"]["raw"],
                     full: photo["urls"]["full"],
@@ -60,7 +64,8 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   """
   @impl EventasaurusWeb.Services.UnsplashServiceBehaviour
   def track_download(download_location) do
-    if is_binary(download_location) and String.starts_with?(download_location, "https://api.unsplash.com/photos/") do
+    if is_binary(download_location) and
+         String.starts_with?(download_location, "https://api.unsplash.com/photos/") do
       case get(download_location, %{}) do
         {:ok, _response} -> :ok
         {:error, reason} -> {:error, reason}
@@ -80,7 +85,8 @@ defmodule EventasaurusWeb.Services.UnsplashService do
         {"Authorization", "Client-ID #{key}"},
         {"Accept-Version", "v1"}
       ]
-      case HTTPoison.get(url, headers, [timeout: 10_000, recv_timeout: 10_000]) do
+
+      case HTTPoison.get(url, headers, timeout: 10_000, recv_timeout: 10_000) do
         {:ok, %HTTPoison.Response{status_code: code, body: body}} when code in 200..299 ->
           {:ok, Jason.decode!(body)}
 

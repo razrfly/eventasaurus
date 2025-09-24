@@ -15,13 +15,14 @@ defmodule EventasaurusWeb.Utils.TimeUtils do
   @doc """
   Format time for display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
   """
-    def format_time_display(hour, minute) do
-    {display_hour, period} = cond do
-      hour == 0 -> {12, "AM"}
-      hour < 12 -> {hour, "AM"}
-      hour == 12 -> {12, "PM"}
-      true -> {hour - 12, "PM"}
-    end
+  def format_time_display(hour, minute) do
+    {display_hour, period} =
+      cond do
+        hour == 0 -> {12, "AM"}
+        hour < 12 -> {hour, "AM"}
+        hour == 12 -> {12, "PM"}
+        true -> {hour - 12, "PM"}
+      end
 
     "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
   end
@@ -39,7 +40,9 @@ defmodule EventasaurusWeb.Utils.TimeUtils do
         else
           _ -> {:error, :invalid_format}
         end
-      _ -> {:error, :invalid_format}
+
+      _ ->
+        {:error, :invalid_format}
     end
   end
 
@@ -49,7 +52,9 @@ defmodule EventasaurusWeb.Utils.TimeUtils do
   """
   def parse_time_for_sort(time_str) do
     case parse_time_string(time_str) do
-      {:ok, {hour, minute}} -> hour * 60 + minute
+      {:ok, {hour, minute}} ->
+        hour * 60 + minute
+
       {:error, _} ->
         Logger.warning("Invalid time format for sorting: #{time_str}")
         0

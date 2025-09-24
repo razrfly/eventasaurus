@@ -1,18 +1,18 @@
 defmodule EventasaurusWeb.RichDataSearchComponent do
   @moduledoc """
   A reusable LiveView component for searching and selecting rich data from external APIs.
-  
+
   This component provides a unified interface for searching content from various providers
   (TMDB for movies, Google Places for locations, etc.) and can be used in different contexts
   like poll options, activity creation, and event metadata.
-  
+
   ## Features
   - Provider-agnostic search interface
   - Configurable search behavior and display
   - Loading states and error handling
   - Customizable result rendering
   - Callback-based selection handling
-  
+
   ## Attributes
   - id: Component ID (required)
   - provider: Provider atom (:tmdb, :google_places, etc.) (required)
@@ -22,7 +22,7 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
   - show_search: Whether to show the search interface
   - result_limit: Maximum number of results to display
   - class: Additional CSS classes
-  
+
   ## Usage
       <.live_component
         module={EventasaurusWeb.RichDataSearchComponent}
@@ -34,10 +34,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
         result_limit={10}
       />
   """
-  
+
   use EventasaurusWeb, :live_component
   alias EventasaurusWeb.Services.RichDataManager
-  
+
   @impl true
   def mount(socket) do
     {:ok,
@@ -48,7 +48,7 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
      |> assign(:selected_item, nil)
      |> assign(:show_results, false)}
   end
-  
+
   @impl true
   def update(assigns, socket) do
     {:ok,
@@ -60,7 +60,7 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
      |> assign_new(:result_limit, fn -> 10 end)
      |> assign_new(:class, fn -> "" end)}
   end
-  
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -133,9 +133,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   defp render_result_item(assigns, %{type: :movie} = result) do
     assigns = assign(assigns, :result, result)
+
     ~H"""
     <div class="flex items-start space-x-3">
       <%= if @result.image_url do %>
@@ -175,9 +176,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   defp render_result_item(assigns, %{type: :tv} = result) do
     assigns = assign(assigns, :result, result)
+
     ~H"""
     <div class="flex items-start space-x-3">
       <%= if @result.image_url do %>
@@ -217,9 +219,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   defp render_result_item(assigns, %{type: :place} = result) do
     assigns = assign(assigns, :result, result)
+
     ~H"""
     <div class="flex items-start space-x-3">
       <div class="flex-shrink-0">
@@ -264,10 +267,11 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   defp render_result_item(assigns, result) do
     # Generic fallback for other content types
     assigns = assign(assigns, :result, result)
+
     ~H"""
     <div class="py-2">
       <p class="text-sm font-medium text-gray-900"><%= @result.title %></p>
@@ -277,9 +281,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   defp render_selected_item(assigns, %{type: :movie} = item) do
     assigns = assign(assigns, :item, item)
+
     ~H"""
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -304,10 +309,11 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   defp render_selected_item(assigns, item) do
     # Generic selected item display
     assigns = assign(assigns, :item, item)
+
     ~H"""
     <div class="flex items-center justify-between">
       <span class="text-sm font-medium text-gray-900">Selected: <%= @item.title %></span>
@@ -322,50 +328,62 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
-  
+
   @impl true
   def handle_event("search", %{"value" => query}, socket) do
     require Logger
-    Logger.error("RichDataSearchComponent: search event called with query='#{query}', content_type=#{socket.assigns.content_type}")
-    
+
+    Logger.error(
+      "RichDataSearchComponent: search event called with query='#{query}', content_type=#{socket.assigns.content_type}"
+    )
+
     if String.length(String.trim(query)) >= 2 do
       Logger.error("RichDataSearchComponent: triggering search for query='#{query}'")
       socket = assign(socket, :search_loading, true)
-      
+
       # Configure search based on provider
       search_options = %{
         providers: [socket.assigns.provider],
         limit: socket.assigns.result_limit,
         content_type: socket.assigns.content_type
       }
-      
+
       Logger.error("RichDataSearchComponent: search_options=#{inspect(search_options)}")
-      
+
       case RichDataManager.search(query, search_options) do
         {:ok, results_by_provider} ->
-          Logger.error("RichDataSearchComponent: search succeeded, results_by_provider=#{inspect(results_by_provider)}")
-          
+          Logger.error(
+            "RichDataSearchComponent: search succeeded, results_by_provider=#{inspect(results_by_provider)}"
+          )
+
           # Extract results for the specific provider
-          results = case Map.get(results_by_provider, socket.assigns.provider) do
-            {:ok, results} when is_list(results) -> results
-            {:ok, result} -> [result]
-            _ -> []
-          end
-          
-          Logger.error("Search results for content_type #{socket.assigns.content_type}: #{length(results)} results")
+          results =
+            case Map.get(results_by_provider, socket.assigns.provider) do
+              {:ok, results} when is_list(results) -> results
+              {:ok, result} -> [result]
+              _ -> []
+            end
+
+          Logger.error(
+            "Search results for content_type #{socket.assigns.content_type}: #{length(results)} results"
+          )
+
           if length(results) > 0 do
-            Logger.error("First result: type=#{List.first(results).type}, id=#{List.first(results).id}, title='#{List.first(results).title}'")
+            Logger.error(
+              "First result: type=#{List.first(results).type}, id=#{List.first(results).id}, title='#{List.first(results).title}'"
+            )
           end
-          
+
           {:noreply,
            socket
            |> assign(:search_query, query)
            |> assign(:search_results, Enum.take(results, socket.assigns.result_limit))
            |> assign(:search_loading, false)
            |> assign(:show_results, true)}
-           
+
         {:error, reason} ->
           Logger.error("RichDataSearchComponent: search failed with reason: #{inspect(reason)}")
+
           {:noreply,
            socket
            |> assign(:search_query, query)
@@ -374,7 +392,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
            |> assign(:show_results, true)}
       end
     else
-      Logger.error("RichDataSearchComponent: query too short (#{String.length(String.trim(query))} chars), not searching")
+      Logger.error(
+        "RichDataSearchComponent: query too short (#{String.length(String.trim(query))} chars), not searching"
+      )
+
       {:noreply,
        socket
        |> assign(:search_query, query)
@@ -382,59 +403,76 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
        |> assign(:show_results, false)}
     end
   end
-  
+
   @impl true
   def handle_event("select_item", %{"item-id" => item_id}, socket) do
     require Logger
-    Logger.error("RichDataSearchComponent: select_item ACTUALLY CALLED with item_id=#{item_id}, content_type=#{socket.assigns.content_type}")
-    Logger.debug("RichDataSearchComponent: select_item called with item_id=#{item_id}, content_type=#{socket.assigns.content_type}")
-    
+
+    Logger.error(
+      "RichDataSearchComponent: select_item ACTUALLY CALLED with item_id=#{item_id}, content_type=#{socket.assigns.content_type}"
+    )
+
+    Logger.debug(
+      "RichDataSearchComponent: select_item called with item_id=#{item_id}, content_type=#{socket.assigns.content_type}"
+    )
+
     # Find the selected item in search results
-    selected = Enum.find(socket.assigns.search_results, fn item ->
-      to_string(item.id) == item_id
-    end)
-    
+    selected =
+      Enum.find(socket.assigns.search_results, fn item ->
+        to_string(item.id) == item_id
+      end)
+
     if selected do
-      Logger.debug("RichDataSearchComponent: Found selected item: #{selected.title} (type: #{selected.type})")
-      
+      Logger.debug(
+        "RichDataSearchComponent: Found selected item: #{selected.title} (type: #{selected.type})"
+      )
+
       # Get detailed data if provider supports it
       case get_detailed_data(socket.assigns.provider, selected, socket.assigns.content_type) do
         {:ok, detailed_item} ->
           # Send event to parent based on content type
-          event_name = case socket.assigns.content_type do
-            :movie -> "movie_selected"
-            :tv -> "tv_show_selected"
-            :place -> "place_selected"
-            _ -> "item_selected"
-          end
-          
-          Logger.debug("RichDataSearchComponent: Sending event #{event_name} with detailed item: #{detailed_item.title}")
-          
+          event_name =
+            case socket.assigns.content_type do
+              :movie -> "movie_selected"
+              :tv -> "tv_show_selected"
+              :place -> "place_selected"
+              _ -> "item_selected"
+            end
+
+          Logger.debug(
+            "RichDataSearchComponent: Sending event #{event_name} with detailed item: #{detailed_item.title}"
+          )
+
           # Send message to parent LiveView
           send(self(), {__MODULE__, :selection_made, event_name, detailed_item})
-          
+
           {:noreply,
            socket
            |> assign(:selected_item, detailed_item)
            |> assign(:show_results, false)
            |> assign(:search_query, "")}
-           
+
         {:error, reason} ->
-          Logger.debug("RichDataSearchComponent: Failed to get detailed data: #{inspect reason}, falling back to search result")
-          
+          Logger.debug(
+            "RichDataSearchComponent: Failed to get detailed data: #{inspect(reason)}, falling back to search result"
+          )
+
           # Fall back to using the search result data
-          event_name = case socket.assigns.content_type do
-            :movie -> "movie_selected"
-            :tv -> "tv_show_selected"
-            :place -> "place_selected"
-            _ -> "item_selected"
-          end
-          
-          Logger.debug("RichDataSearchComponent: Sending fallback event #{event_name} with search result: #{selected.title}")
-          
+          event_name =
+            case socket.assigns.content_type do
+              :movie -> "movie_selected"
+              :tv -> "tv_show_selected"
+              :place -> "place_selected"
+              _ -> "item_selected"
+            end
+
+          Logger.debug(
+            "RichDataSearchComponent: Sending fallback event #{event_name} with search result: #{selected.title}"
+          )
+
           # Send message to parent LiveView
           send(self(), {__MODULE__, :selection_made, event_name, selected})
-          
+
           {:noreply,
            socket
            |> assign(:selected_item, selected)
@@ -445,7 +483,7 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
       {:noreply, socket}
     end
   end
-  
+
   @impl true
   def handle_event("clear_selection", _params, socket) do
     {:noreply,
@@ -454,28 +492,28 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
      |> assign(:search_query, "")
      |> assign(:search_results, [])}
   end
-  
+
   defp get_detailed_data(:tmdb, item, :movie) do
     RichDataManager.get_cached_details(:tmdb, item.id, :movie)
   end
-  
+
   defp get_detailed_data(:tmdb, item, :tv) do
     RichDataManager.get_cached_details(:tmdb, item.id, :tv)
   end
-  
+
   defp get_detailed_data(:google_places, item, :place) do
     RichDataManager.get_cached_details(:google_places, item.id, :place)
   end
-  
+
   defp get_detailed_data(_provider, item, _type) do
     # For providers that don't support detailed data, return the item as-is
     {:ok, item}
   end
-  
+
   defp default_placeholder(:tmdb), do: "Search for movies..."
   defp default_placeholder(:google_places), do: "Search for places..."
   defp default_placeholder(_), do: "Search..."
-  
+
   defp default_content_type(:tmdb), do: :movie
   defp default_content_type(:google_places), do: :place
   defp default_content_type(_), do: :generic

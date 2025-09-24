@@ -4,10 +4,10 @@ defmodule EventasaurusApp.Events.EventDateOption do
   alias EventasaurusApp.Events.{EventDatePoll, EventDateVote}
 
   schema "event_date_options" do
-    field :date, :date
+    field(:date, :date)
 
-    belongs_to :event_date_poll, EventDatePoll
-    has_many :votes, EventDateVote
+    belongs_to(:event_date_poll, EventDatePoll)
+    has_many(:votes, EventDateVote)
 
     timestamps()
   end
@@ -19,7 +19,9 @@ defmodule EventasaurusApp.Events.EventDateOption do
     |> validate_required([:date, :event_date_poll_id])
     |> validate_date_not_in_past()
     |> foreign_key_constraint(:event_date_poll_id)
-    |> unique_constraint([:event_date_poll_id, :date], message: "date already exists for this poll")
+    |> unique_constraint([:event_date_poll_id, :date],
+      message: "date already exists for this poll"
+    )
   end
 
   @doc """
@@ -67,7 +69,9 @@ defmodule EventasaurusApp.Events.EventDateOption do
 
   defp validate_date_not_in_past(changeset) do
     case get_field(changeset, :date) do
-      nil -> changeset
+      nil ->
+        changeset
+
       date ->
         if Date.compare(date, Date.utc_today()) != :lt do
           changeset

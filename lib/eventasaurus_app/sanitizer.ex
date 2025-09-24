@@ -1,7 +1,7 @@
 defmodule EventasaurusApp.Sanitizer do
   @moduledoc """
   Input sanitization and validation utilities for the polling system.
-  
+
   Provides functions to sanitize user inputs, validate data formats,
   and prevent injection attacks.
   """
@@ -12,7 +12,8 @@ defmodule EventasaurusApp.Sanitizer do
   def sanitize_poll_text(text) when is_binary(text) do
     text
     |> String.trim()
-    |> String.slice(0, 500)  # Limit length
+    # Limit length
+    |> String.slice(0, 500)
     |> sanitize_html()
   end
 
@@ -25,7 +26,8 @@ defmodule EventasaurusApp.Sanitizer do
   def sanitize_option_title(title) when is_binary(title) do
     title
     |> String.trim()
-    |> String.slice(0, 200)  # Limit length
+    # Limit length
+    |> String.slice(0, 200)
     |> sanitize_html()
   end
 
@@ -73,7 +75,8 @@ defmodule EventasaurusApp.Sanitizer do
   def sanitize_search_input(input) when is_binary(input) do
     input
     |> String.trim()
-    |> String.slice(0, 100)  # Limit search length
+    # Limit search length
+    |> String.slice(0, 100)
     |> remove_special_chars()
   end
 
@@ -85,7 +88,7 @@ defmodule EventasaurusApp.Sanitizer do
   """
   def sanitize_email(email) when is_binary(email) do
     email = String.trim(email) |> String.downcase()
-    
+
     if valid_email?(email) do
       email
     else
@@ -101,7 +104,7 @@ defmodule EventasaurusApp.Sanitizer do
   """
   def sanitize_url(url) when is_binary(url) do
     url = String.trim(url)
-    
+
     if valid_url?(url) do
       url
     else
@@ -123,6 +126,7 @@ defmodule EventasaurusApp.Sanitizer do
           max != nil and int > max -> {:error, "Value too large"}
           true -> int
         end
+
       _ ->
         {:error, "Invalid integer format"}
     end
@@ -154,6 +158,7 @@ defmodule EventasaurusApp.Sanitizer do
 
   defp sanitize_metadata_value(value) when is_number(value), do: value
   defp sanitize_metadata_value(value) when is_boolean(value), do: value
+
   defp sanitize_metadata_value(value) when is_list(value) do
     Enum.map(value, &sanitize_metadata_value/1)
   end

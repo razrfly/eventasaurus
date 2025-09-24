@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.Services.ImageManifest do
   """
   def get_categories do
     base_path = Path.join(Application.app_dir(:eventasaurus), @images_base_path)
-    
+
     case File.ls(base_path) do
       {:ok, entries} ->
         entries
@@ -27,8 +27,9 @@ defmodule EventasaurusWeb.Services.ImageManifest do
           }
         end)
         |> Enum.sort_by(& &1.display_name)
-      
-      {:error, _} -> []
+
+      {:error, _} ->
+        []
     end
   end
 
@@ -37,7 +38,7 @@ defmodule EventasaurusWeb.Services.ImageManifest do
   """
   def get_manifest do
     categories = get_categories()
-    
+
     Map.new(categories, fn %{name: category} ->
       {category, get_images_for_category(category)}
     end)
@@ -50,12 +51,13 @@ defmodule EventasaurusWeb.Services.ImageManifest do
   def get_images_for_category(category) when is_binary(category) do
     base_path = Path.join(Application.app_dir(:eventasaurus), @images_base_path)
     category_path = Path.join(base_path, category)
-    
+
     case File.ls(category_path) do
       {:ok, files} ->
         files
         |> Enum.filter(&valid_image_file?/1)
-        |> Enum.reject(&fingerprinted_file?/1)  # Always filter out fingerprinted files
+        # Always filter out fingerprinted files
+        |> Enum.reject(&fingerprinted_file?/1)
         |> Enum.map(fn filename ->
           %{
             filename: filename,
@@ -65,8 +67,9 @@ defmodule EventasaurusWeb.Services.ImageManifest do
           }
         end)
         |> Enum.sort_by(& &1.filename)
-      
-      {:error, _} -> []
+
+      {:error, _} ->
+        []
     end
   end
 
@@ -76,7 +79,7 @@ defmodule EventasaurusWeb.Services.ImageManifest do
   Get a random image from all categories.
   """
   def get_random_image do
-    all_images = 
+    all_images =
       get_manifest()
       |> Map.values()
       |> List.flatten()

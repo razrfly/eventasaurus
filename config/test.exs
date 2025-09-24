@@ -16,6 +16,7 @@ config :eventasaurus, EventasaurusWeb.Endpoint,
 # Configure the database for testing
 # Increase pool size to handle parallel tests efficiently
 pool_size = max(20, System.schedulers_online() * 4)
+
 config :eventasaurus, EventasaurusApp.Repo,
   username: "postgres",
   password: "postgres",
@@ -27,7 +28,8 @@ config :eventasaurus, EventasaurusApp.Repo,
   # Reduce connection timeouts for faster test execution
   timeout: 15_000,
   pool_timeout: 5_000,
-  ownership_timeout: 60_000  # Longer for complex tests
+  # Longer for complex tests
+  ownership_timeout: 60_000
 
 # In test we don't send emails
 config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Test
@@ -57,7 +59,8 @@ config :eventasaurus, :stripe_module, EventasaurusApp.StripeMock
 # Test Supabase configuration with local demo values
 config :eventasaurus, :supabase,
   url: "http://127.0.0.1:54321",
-  api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+  api_key:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
   database_url: "ecto://postgres:postgres@127.0.0.1:54322/postgres_test",
   auth: %{
     site_url: "http://localhost:4002",

@@ -163,7 +163,7 @@ defmodule EventasaurusWeb.Components.GroupedCurrencySelect do
         currencies
         |> Enum.filter(fn {code, display_name} ->
           String.contains?(String.downcase(code), search_lower) or
-          String.contains?(String.downcase(display_name), search_lower)
+            String.contains?(String.downcase(display_name), search_lower)
         end)
 
       {region, filtered_currencies}

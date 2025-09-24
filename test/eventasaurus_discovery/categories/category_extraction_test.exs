@@ -170,13 +170,14 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractionTest do
   describe "Event integration" do
     test "assigns categories to public event from Ticketmaster" do
       # Create a test event
-      {:ok, event} = %PublicEvent{}
-      |> PublicEvent.changeset(%{
-        title: "Test Concert",
-        slug: "test-concert",
-        starts_at: DateTime.utc_now()
-      })
-      |> Repo.insert()
+      {:ok, event} =
+        %PublicEvent{}
+        |> PublicEvent.changeset(%{
+          title: "Test Concert",
+          slug: "test-concert",
+          starts_at: DateTime.utc_now()
+        })
+        |> Repo.insert()
 
       # Ticketmaster data
       tm_data = %{
@@ -188,11 +189,12 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractionTest do
         ]
       }
 
-      {:ok, categories} = CategoryExtractor.assign_categories_to_event(
-        event.id,
-        "ticketmaster",
-        tm_data
-      )
+      {:ok, categories} =
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "ticketmaster",
+          tm_data
+        )
 
       assert length(categories) > 0
 
@@ -206,24 +208,26 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractionTest do
 
     test "assigns categories to public event from Karnet" do
       # Create a test event
-      {:ok, event} = %PublicEvent{}
-      |> PublicEvent.changeset(%{
-        title: "Festiwal Muzyczny",
-        slug: "festiwal-muzyczny",
-        starts_at: DateTime.utc_now()
-      })
-      |> Repo.insert()
+      {:ok, event} =
+        %PublicEvent{}
+        |> PublicEvent.changeset(%{
+          title: "Festiwal Muzyczny",
+          slug: "festiwal-muzyczny",
+          starts_at: DateTime.utc_now()
+        })
+        |> Repo.insert()
 
       # Karnet data
       karnet_data = %{
         "category" => "festiwale"
       }
 
-      {:ok, categories} = CategoryExtractor.assign_categories_to_event(
-        event.id,
-        "karnet",
-        karnet_data
-      )
+      {:ok, categories} =
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "karnet",
+          karnet_data
+        )
 
       assert length(categories) > 0
 
@@ -237,13 +241,14 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractionTest do
 
     test "handles multiple categories with priority" do
       # Create a test event
-      {:ok, event} = %PublicEvent{}
-      |> PublicEvent.changeset(%{
-        title: "Rock Festival",
-        slug: "rock-festival",
-        starts_at: DateTime.utc_now()
-      })
-      |> Repo.insert()
+      {:ok, event} =
+        %PublicEvent{}
+        |> PublicEvent.changeset(%{
+          title: "Rock Festival",
+          slug: "rock-festival",
+          starts_at: DateTime.utc_now()
+        })
+        |> Repo.insert()
 
       # Complex Ticketmaster data with festival subGenre
       tm_data = %{
@@ -256,18 +261,21 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractionTest do
         ]
       }
 
-      {:ok, categories} = CategoryExtractor.assign_categories_to_event(
-        event.id,
-        "ticketmaster",
-        tm_data
-      )
+      {:ok, categories} =
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "ticketmaster",
+          tm_data
+        )
 
       # Should have multiple categories
       # We need to query the join table directly
-      public_event_categories = Repo.all(
-        from pec in EventasaurusDiscovery.Categories.PublicEventCategory,
-        where: pec.event_id == ^event.id
-      )
+      public_event_categories =
+        Repo.all(
+          from(pec in EventasaurusDiscovery.Categories.PublicEventCategory,
+            where: pec.event_id == ^event.id
+          )
+        )
 
       # Check primary category
       primary = Enum.find(public_event_categories, & &1.is_primary)

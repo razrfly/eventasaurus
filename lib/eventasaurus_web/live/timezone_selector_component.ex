@@ -41,8 +41,6 @@ defmodule EventasaurusWeb.TimezoneSelectorComponent do
     {:noreply, assign(socket, :show_dropdown, !socket.assigns.show_dropdown)}
   end
 
-
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -141,49 +139,54 @@ defmodule EventasaurusWeb.TimezoneSelectorComponent do
 
   defp get_grouped_timezones do
     [
-      {"Americas", [
-        "America/New_York",
-        "America/Chicago",
-        "America/Denver",
-        "America/Los_Angeles",
-        "America/Toronto",
-        "America/Vancouver",
-        "America/Mexico_City",
-        "America/Sao_Paulo",
-        "America/Argentina/Buenos_Aires"
-      ]},
-      {"Europe", [
-        "Europe/London",
-        "Europe/Paris",
-        "Europe/Berlin",
-        "Europe/Rome",
-        "Europe/Madrid",
-        "Europe/Amsterdam",
-        "Europe/Stockholm",
-        "Europe/Moscow"
-      ]},
-      {"Asia", [
-        "Asia/Tokyo",
-        "Asia/Seoul",
-        "Asia/Shanghai",
-        "Asia/Hong_Kong",
-        "Asia/Singapore",
-        "Asia/Mumbai",
-        "Asia/Dubai",
-        "Asia/Bangkok"
-      ]},
-      {"Pacific", [
-        "Pacific/Auckland",
-        "Australia/Sydney",
-        "Australia/Melbourne",
-        "Pacific/Honolulu",
-        "Pacific/Fiji"
-      ]},
-      {"Other", [
-        "UTC",
-        "Africa/Cairo",
-        "Africa/Johannesburg"
-      ]}
+      {"Americas",
+       [
+         "America/New_York",
+         "America/Chicago",
+         "America/Denver",
+         "America/Los_Angeles",
+         "America/Toronto",
+         "America/Vancouver",
+         "America/Mexico_City",
+         "America/Sao_Paulo",
+         "America/Argentina/Buenos_Aires"
+       ]},
+      {"Europe",
+       [
+         "Europe/London",
+         "Europe/Paris",
+         "Europe/Berlin",
+         "Europe/Rome",
+         "Europe/Madrid",
+         "Europe/Amsterdam",
+         "Europe/Stockholm",
+         "Europe/Moscow"
+       ]},
+      {"Asia",
+       [
+         "Asia/Tokyo",
+         "Asia/Seoul",
+         "Asia/Shanghai",
+         "Asia/Hong_Kong",
+         "Asia/Singapore",
+         "Asia/Mumbai",
+         "Asia/Dubai",
+         "Asia/Bangkok"
+       ]},
+      {"Pacific",
+       [
+         "Pacific/Auckland",
+         "Australia/Sydney",
+         "Australia/Melbourne",
+         "Pacific/Honolulu",
+         "Pacific/Fiji"
+       ]},
+      {"Other",
+       [
+         "UTC",
+         "Africa/Cairo",
+         "Africa/Johannesburg"
+       ]}
     ]
   end
 
@@ -194,10 +197,12 @@ defmodule EventasaurusWeb.TimezoneSelectorComponent do
 
     get_grouped_timezones()
     |> Enum.map(fn {region, timezones} ->
-      filtered = Enum.filter(timezones, fn tz ->
-        String.contains?(String.downcase(tz), query_lower) or
-        String.contains?(String.downcase(format_timezone_display(tz)), query_lower)
-      end)
+      filtered =
+        Enum.filter(timezones, fn tz ->
+          String.contains?(String.downcase(tz), query_lower) or
+            String.contains?(String.downcase(format_timezone_display(tz)), query_lower)
+        end)
+
       {region, filtered}
     end)
   end

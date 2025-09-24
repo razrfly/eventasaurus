@@ -28,7 +28,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     with {:ok, normalized} <- normalize_event_data(event_data),
          {:ok, venue} <- process_venue(normalized),
          {:ok, event, action} <- find_or_create_event(normalized, venue, source_id),
-         {:ok, _source} <- maybe_update_event_source(event, source_id, source_priority, normalized, action),
+         {:ok, _source} <-
+           maybe_update_event_source(event, source_id, source_priority, normalized, action),
          {:ok, _performers} <- process_performers(event, normalized),
          {:ok, _categories} <- process_categories(event, normalized, source_id) do
       {:ok, Repo.preload(event, [:venue, :performers, :categories])}
@@ -44,6 +45,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       :consolidated ->
         # Don't update source for consolidated events
         {:ok, :skipped}
+
       _ ->
         update_event_source(event, source_id, source_priority, normalized)
     end
@@ -67,7 +69,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       external_id: data[:external_id] || data["external_id"],
       title: Normalizer.normalize_text(data[:title] || data["title"]),
       title_translations: data[:title_translations] || data["title_translations"],
-      description_translations: data[:description_translations] || data["description_translations"],
+      description_translations:
+        data[:description_translations] || data["description_translations"],
       start_at: parse_datetime(data[:start_at] || data["start_at"]),
       ends_at: parse_datetime(data[:ends_at] || data["ends_at"]),
       venue_data: data[:venue_data] || data["venue_data"],
@@ -97,6 +100,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp parse_datetime(nil), do: nil
   defp parse_datetime(%DateTime{} = dt), do: dt
+
   defp parse_datetime(string) when is_binary(string) do
     case DateTime.from_iso8601(string) do
       {:ok, dt, _} -> dt
@@ -105,6 +109,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp process_venue(%{venue_data: nil}), do: {:ok, nil}
+
   defp process_venue(%{venue_data: venue_data}) do
     VenueProcessor.process_venue(venue_data)
   end
@@ -132,14 +137,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # No existing event and no recurring parent - check for collision then create new
       {nil, nil} ->
         Logger.info("📝 No existing event or recurring parent, checking for similar events...")
+
         case find_similar_event(data.title, data.start_at, venue) do
           nil ->
             Logger.info("✨ Creating new event")
             result = create_event(data, venue, slug)
+
             case result do
               {:ok, event} -> {:ok, event, :created}
               error -> error
             end
+
           existing ->
             Logger.info("🔗 Found similar event ##{existing.id} at same time, linking to it")
             {:ok, existing, :linked}
@@ -147,9 +155,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       # Existing event but found a recurring parent - need to consolidate
       {existing, parent} when existing != nil and parent != nil and existing.id != parent.id ->
-        Logger.info("🔄 Found recurring parent ##{parent.id} for existing event ##{existing.id}, consolidating...")
+        Logger.info(
+          "🔄 Found recurring parent ##{parent.id} for existing event ##{existing.id}, consolidating..."
+        )
+
         enriched_data = Map.put(data, :source_id, source_id)
         result = consolidate_into_parent(existing, parent, enriched_data)
+
         case result do
           {:ok, event} -> {:ok, event, :consolidated}
           error -> error
@@ -158,6 +170,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Existing event IS the recurring parent - just add occurrence
       {existing, parent} when existing != nil and parent != nil and existing.id == parent.id ->
         Logger.info("📅 Event ##{existing.id} is already the recurring parent, adding occurrence")
+
         case add_occurrence_to_event(existing, data) do
           {:ok, updated} -> {:ok, updated, :updated}
           error -> error
@@ -167,6 +180,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       {nil, parent} when parent != nil ->
         Logger.info("📅 Found recurring parent ##{parent.id}, adding occurrence")
         enriched_data = Map.put(data, :source_id, source_id)
+
         with {:ok, updated} <- add_occurrence_to_event(parent, enriched_data),
              {:ok, _source} <- create_occurrence_source_record(parent, enriched_data) do
           {:ok, updated, :consolidated}
@@ -178,6 +192,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       {existing, nil} when existing != nil ->
         Logger.info("📌 Found existing event ##{existing.id} from same source, updating")
         result = maybe_update_event(existing, data, venue)
+
         case result do
           {:ok, event} -> {:ok, event, :updated}
           error -> error
@@ -185,12 +200,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-
   defp find_similar_event(title, start_at, venue) do
     # Delegate to shared CollisionDetector service
     CollisionDetector.find_similar_event(venue, start_at, title)
   end
-
 
   defp create_event(data, venue, slug) do
     city_id = if venue, do: venue.city_id, else: nil
@@ -201,7 +214,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       slug: slug,
       venue_id: if(venue, do: venue.id, else: nil),
       city_id: city_id,
-      starts_at: data.start_at,  # Note: normalized data uses start_at, schema uses starts_at
+      # Note: normalized data uses start_at, schema uses starts_at
+      starts_at: data.start_at,
       ends_at: data.ends_at,
       # Remove external_id and metadata from public_events
       # These will be stored only in public_event_sources
@@ -223,11 +237,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     }
 
     # Add source_id if available
-    date_entry = if data[:source_id] || Map.get(data, :source_id) do
-      Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
-    else
-      date_entry
-    end
+    date_entry =
+      if data[:source_id] || Map.get(data, :source_id) do
+        Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
+      else
+        date_entry
+      end
 
     %{
       "type" => "explicit",
@@ -241,33 +256,40 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Only update if we have better data
     # Note: description is now stored in public_event_sources, not public_events
 
-    updates = if is_nil(event.venue_id) && venue do
-      [{:venue_id, venue.id}, {:city_id, venue.city_id} | updates]
-    else
-      updates
-    end
+    updates =
+      if is_nil(event.venue_id) && venue do
+        [{:venue_id, venue.id}, {:city_id, venue.city_id} | updates]
+      else
+        updates
+      end
 
-    updates = if is_nil(event.ends_at) && data.ends_at do
-      [{:ends_at, data.ends_at} | updates]
-    else
-      updates
-    end
+    updates =
+      if is_nil(event.ends_at) && data.ends_at do
+        [{:ends_at, data.ends_at} | updates]
+      else
+        updates
+      end
 
-    updates = if is_nil(event.category_id) && data.category_id do
-      [{:category_id, data.category_id} | updates]
-    else
-      updates
-    end
+    updates =
+      if is_nil(event.category_id) && data.category_id do
+        [{:category_id, data.category_id} | updates]
+      else
+        updates
+      end
 
     # Update title_translations if provided and different from current
-    updates = if data.title_translations && data.title_translations != event.title_translations do
-      merged =
-        (event.title_translations || %{})
-        |> Map.merge(data.title_translations, fn _k, old, new -> if new in [nil, ""], do: old, else: new end)
-      [{:title_translations, merged} | updates]
-    else
-      updates
-    end
+    updates =
+      if data.title_translations && data.title_translations != event.title_translations do
+        merged =
+          (event.title_translations || %{})
+          |> Map.merge(data.title_translations, fn _k, old, new ->
+            if new in [nil, ""], do: old, else: new
+          end)
+
+        [{:title_translations, merged} | updates]
+      else
+        updates
+      end
 
     # Note: metadata is now stored only in public_event_sources, not in public_events
 
@@ -282,13 +304,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp update_event_source(event, source_id, priority, data) do
     # Find or create the event source record
-    event_source = Repo.get_by(PublicEventSource,
-      event_id: event.id,
-      source_id: source_id
-    ) || %PublicEventSource{}
+    event_source =
+      Repo.get_by(PublicEventSource,
+        event_id: event.id,
+        source_id: source_id
+      ) || %PublicEventSource{}
 
     # Store priority in metadata if provided
     base = data.metadata || %{}
+
     metadata =
       case priority do
         nil -> base
@@ -312,36 +336,44 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp process_performers(_event, %{performer_names: []}), do: {:ok, []}
+
   defp process_performers(event, %{performer_names: names}) do
-    performers = Enum.map(names, fn name ->
-      find_or_create_performer(name)
-    end)
+    performers =
+      Enum.map(names, fn name ->
+        find_or_create_performer(name)
+      end)
 
     # Clear existing associations
     from(pep in PublicEventPerformer, where: pep.event_id == ^event.id)
     |> Repo.delete_all()
 
     # Create new associations
-    associations = Enum.with_index(performers, 1) |> Enum.map(fn {performer, index} ->
-      changeset = %PublicEventPerformer{}
-      |> PublicEventPerformer.changeset(%{
-        event_id: event.id,
-        performer_id: performer.id,
-        metadata: %{
-          "billing_order" => index,
-          "is_headliner" => index == 1
-        }
-      })
+    associations =
+      Enum.with_index(performers, 1)
+      |> Enum.map(fn {performer, index} ->
+        changeset =
+          %PublicEventPerformer{}
+          |> PublicEventPerformer.changeset(%{
+            event_id: event.id,
+            performer_id: performer.id,
+            metadata: %{
+              "billing_order" => index,
+              "is_headliner" => index == 1
+            }
+          })
 
-      # Handle potential conflicts gracefully
-      case Repo.insert(changeset) do
-        {:ok, association} -> association
-        {:error, _changeset} ->
-          # If it already exists, just return nil - we'll filter these out
-          nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)  # Remove any failed insertions
+        # Handle potential conflicts gracefully
+        case Repo.insert(changeset) do
+          {:ok, association} ->
+            association
+
+          {:error, _changeset} ->
+            # If it already exists, just return nil - we'll filter these out
+            nil
+        end
+      end)
+      # Remove any failed insertions
+      |> Enum.reject(&is_nil/1)
 
     {:ok, associations}
   end
@@ -359,21 +391,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp create_performer(name) do
-    changeset = %Performer{}
-    |> Performer.changeset(%{
-      name: name
-    })
+    changeset =
+      %Performer{}
+      |> Performer.changeset(%{
+        name: name
+      })
 
     # Handle race condition where performer might be created between check and insert
     case Repo.insert(changeset, on_conflict: :nothing, conflict_target: :slug) do
       {:ok, %Performer{id: id} = performer} when not is_nil(id) ->
         # Successfully inserted new performer
         performer
+
       {:ok, _} ->
         # Conflict occurred (on_conflict: :nothing) - fetch the existing performer
         # Use Slug library to generate the same slug as the changeset
         slug = Slug.slugify(name)
         Repo.get_by!(Performer, slug: slug)
+
       {:error, changeset} ->
         # Actual validation error - let it bubble up
         raise "Failed to create performer: #{inspect(changeset.errors)}"
@@ -383,74 +418,82 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp process_categories(event, data, source_id) do
     # Determine source name from source_id
     # FIXED: Corrected source ID mapping based on actual database IDs
-    source_name = case source_id do
-      1 -> "bandsintown"   # ID 1 is Bandsintown (was wrongly "ticketmaster")
-      2 -> "ticketmaster"  # ID 2 is Ticketmaster (was wrongly "karnet")
-      3 -> "stubhub"       # ID 3 is StubHub (not currently used)
-      4 -> "karnet"        # ID 4 is Karnet (was wrongly ID 2)
-      _ -> "unknown"
-    end
+    source_name =
+      case source_id do
+        # ID 1 is Bandsintown (was wrongly "ticketmaster")
+        1 -> "bandsintown"
+        # ID 2 is Ticketmaster (was wrongly "karnet")
+        2 -> "ticketmaster"
+        # ID 3 is StubHub (not currently used)
+        3 -> "stubhub"
+        # ID 4 is Karnet (was wrongly ID 2)
+        4 -> "karnet"
+        _ -> "unknown"
+      end
 
     # Extract and assign categories based on source
-    result = cond do
-      # Ticketmaster event with raw data
-      data.raw_event_data && source_name == "ticketmaster" ->
-        CategoryExtractor.assign_categories_to_event(
-          event.id,
-          "ticketmaster",
-          data.raw_event_data
-        )
+    result =
+      cond do
+        # Ticketmaster event with raw data
+        data.raw_event_data && source_name == "ticketmaster" ->
+          CategoryExtractor.assign_categories_to_event(
+            event.id,
+            "ticketmaster",
+            data.raw_event_data
+          )
 
-      # Bandsintown event with raw data (all are concerts/music events)
-      data.raw_event_data && source_name == "bandsintown" ->
-        CategoryExtractor.assign_categories_to_event(
-          event.id,
-          "bandsintown",
-          data.raw_event_data
-        )
+        # Bandsintown event with raw data (all are concerts/music events)
+        data.raw_event_data && source_name == "bandsintown" ->
+          CategoryExtractor.assign_categories_to_event(
+            event.id,
+            "bandsintown",
+            data.raw_event_data
+          )
 
-      # Karnet event with raw data
-      data.raw_event_data && source_name == "karnet" ->
-        CategoryExtractor.assign_categories_to_event(
-          event.id,
-          "karnet",
-          data.raw_event_data
-        )
+        # Karnet event with raw data
+        data.raw_event_data && source_name == "karnet" ->
+          CategoryExtractor.assign_categories_to_event(
+            event.id,
+            "karnet",
+            data.raw_event_data
+          )
 
-      # Karnet event with category (backward compatibility)
-      data.category && source_name == "karnet" ->
-        CategoryExtractor.assign_categories_to_event(
-          event.id,
-          "karnet",
-          %{category: data.category, url: data.source_url}
-        )
+        # Karnet event with category (backward compatibility)
+        data.category && source_name == "karnet" ->
+          CategoryExtractor.assign_categories_to_event(
+            event.id,
+            "karnet",
+            %{category: data.category, url: data.source_url}
+          )
 
-      # Fallback to old category_id if present (backward compatibility)
-      data.category_id ->
-        # For backward compatibility, assign the old category as primary
-        EventasaurusDiscovery.Categories.assign_categories_to_event(
-          event.id,
-          [data.category_id],
-          primary_id: data.category_id,
-          source: "migration"
-        )
+        # Fallback to old category_id if present (backward compatibility)
+        data.category_id ->
+          # For backward compatibility, assign the old category as primary
+          EventasaurusDiscovery.Categories.assign_categories_to_event(
+            event.id,
+            [data.category_id],
+            primary_id: data.category_id,
+            source: "migration"
+          )
 
-      true ->
-        # No category data available - use CategoryExtractor fallback to "Other"
-        CategoryExtractor.assign_categories_to_event(
-          event.id,
-          source_name,
-          %{}
-        )
-    end
+        true ->
+          # No category data available - use CategoryExtractor fallback to "Other"
+          CategoryExtractor.assign_categories_to_event(
+            event.id,
+            source_name,
+            %{}
+          )
+      end
 
     case result do
       {:ok, categories} ->
         Logger.info("Assigned #{length(categories)} categories to event ##{event.id}")
         {:ok, categories}
+
       {:error, reason} ->
         Logger.warning("Failed to assign categories: #{inspect(reason)}")
-        {:ok, []}  # Don't fail the whole event processing
+        # Don't fail the whole event processing
+        {:ok, []}
     end
   end
 
@@ -472,9 +515,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       # Ticketmaster stores images in metadata.ticketmaster_data.images array
       case get_in(metadata, ["ticketmaster_data", "images"]) ||
-           get_in(metadata, [:ticketmaster_data, :images]) do
-        [%{"url" => url} | _] -> url
-        [%{url: url} | _] -> url
+             get_in(metadata, [:ticketmaster_data, :images]) do
+        [%{"url" => url} | _] ->
+          url
+
+        [%{url: url} | _] ->
+          url
+
         _ ->
           # Final fallback: check if metadata has image_url directly
           metadata["image_url"] || metadata[:image_url]
@@ -488,9 +535,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp normalize_for_matching(title) do
     title
     |> String.downcase()
-    |> remove_date_patterns()        # NEW: Remove date patterns
-    |> remove_episode_markers()      # NEW: Remove episode/series markers
-    |> remove_time_patterns()        # NEW: Remove time patterns
+    # NEW: Remove date patterns
+    |> remove_date_patterns()
+    # NEW: Remove episode/series markers
+    |> remove_episode_markers()
+    # NEW: Remove time patterns
+    |> remove_time_patterns()
     |> remove_marketing_suffixes()
     |> normalize_punctuation()
     |> remove_venue_suffix()
@@ -609,30 +659,35 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       similarity_threshold = calculate_similarity_threshold(title, venue)
 
       # Step 1: Get all events at the same venue
-      same_venue_query = from(e in PublicEvent,
-        where: e.venue_id == ^venue.id,
-        order_by: [asc: e.starts_at]
-      )
+      same_venue_query =
+        from(e in PublicEvent,
+          where: e.venue_id == ^venue.id,
+          order_by: [asc: e.starts_at]
+        )
 
       same_venue_matches = Repo.all(same_venue_query)
 
       # Step 2: Find similar venues and get events there too (for cross-venue matching)
-      similar_venue_ids = from(v in EventasaurusApp.Venues.Venue,
-        where: v.city_id == ^venue.city_id,
-        where: v.id != ^venue.id,
-        where: fragment("similarity(?, ?) > ?", v.name, ^venue.name, 0.7),
-        select: v.id
-      ) |> Repo.all()
+      similar_venue_ids =
+        from(v in EventasaurusApp.Venues.Venue,
+          where: v.city_id == ^venue.city_id,
+          where: v.id != ^venue.id,
+          where: fragment("similarity(?, ?) > ?", v.name, ^venue.name, 0.7),
+          select: v.id
+        )
+        |> Repo.all()
 
-      similar_venue_matches = if length(similar_venue_ids) > 0 do
-        from(e in PublicEvent,
-          where: e.venue_id in ^similar_venue_ids,
-          where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
-          order_by: [asc: e.starts_at]
-        ) |> Repo.all()
-      else
-        []
-      end
+      similar_venue_matches =
+        if length(similar_venue_ids) > 0 do
+          from(e in PublicEvent,
+            where: e.venue_id in ^similar_venue_ids,
+            where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
+            order_by: [asc: e.starts_at]
+          )
+          |> Repo.all()
+        else
+          []
+        end
 
       # Combine all potential matches
       all_potential_matches = same_venue_matches ++ similar_venue_matches
@@ -640,22 +695,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Find the best match using fuzzy matching
       # We want to find the BEST parent (earliest date with highest score)
       # Don't exclude events from same source - we WANT to consolidate siblings
-      best_match = all_potential_matches
+      best_match =
+        all_potential_matches
         |> Enum.uniq_by(& &1.id)
         |> Enum.map(fn event ->
           # Check if this exact event is the one being processed
           # Only skip if it's the exact same event (same external_id AND source)
-          is_exact_same = if external_id && source_id do
-            from(s in PublicEventSource,
-              where: s.event_id == ^event.id,
-              where: s.external_id == ^external_id,
-              where: s.source_id == ^source_id,
-              select: count(s.id)
-            )
-            |> Repo.one() > 0
-          else
-            false
-          end
+          is_exact_same =
+            if external_id && source_id do
+              from(s in PublicEventSource,
+                where: s.event_id == ^event.id,
+                where: s.external_id == ^external_id,
+                where: s.source_id == ^source_id,
+                select: count(s.id)
+              )
+              |> Repo.one() > 0
+            else
+              false
+            end
 
           # Calculate match score with multiple strategies
           normalized_event_title = normalize_for_matching(event.title)
@@ -672,14 +729,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           venue_bonus = if event.venue_id == venue.id, do: 0.05, else: 0.0
 
           # Bonus for series patterns
-          series_bonus = if is_series_event?(title) && is_series_event?(event.title), do: 0.05, else: 0.0
+          series_bonus =
+            if is_series_event?(title) && is_series_event?(event.title), do: 0.05, else: 0.0
 
           final_score = base_score + venue_bonus + series_bonus
 
           # We want high score matches, but not the exact same event instance
           # Allow same-source siblings to match (different external_id)
           if is_exact_same do
-            {event, 0.0}  # Skip only if it's the EXACT same event instance
+            # Skip only if it's the EXACT same event instance
+            {event, 0.0}
           else
             {event, final_score}
           end
@@ -693,8 +752,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       case best_match do
         {event, score} ->
-          Logger.info("🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)}, threshold: #{similarity_threshold})")
+          Logger.info(
+            "🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)}, threshold: #{similarity_threshold})"
+          )
+
           event
+
         nil ->
           nil
       end
@@ -709,9 +772,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     title
     |> String.downcase()
     # Remove all series indicators to get the base event name
-    |> String.replace(~r/\s*(#\d+|episode\s+\d+|ep\.\s*\d+|part\s+[ivx\d]+|vol\.?\s*\d+|week\s+\d+|day\s+\d+|session\s+\d+).*$/i, "")
+    |> String.replace(
+      ~r/\s*(#\d+|episode\s+\d+|ep\.\s*\d+|part\s+[ivx\d]+|vol\.?\s*\d+|week\s+\d+|day\s+\d+|session\s+\d+).*$/i,
+      ""
+    )
     # Remove dates
-    |> String.replace(~r/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i, "")
+    |> String.replace(
+      ~r/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i,
+      ""
+    )
     |> String.replace(~r/\b\d{1,2}[\/-]\d{1,2}([\/-]\d{2,4})?\b/, "")
     # Remove time patterns
     |> String.replace(~r/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i, "")
@@ -724,13 +793,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     cond do
       # Series events with episode/part numbers get lower threshold
       is_series_event?(title) -> 0.70
-
       # Recurring events (weekly, monthly, etc.) get lower threshold
       is_recurring_event?(title) -> 0.75
-
       # Events at same venue get slightly lower threshold
       venue != nil -> 0.80
-
       # Default threshold
       true -> 0.85
     end
@@ -739,7 +805,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   # NEW: Check if title indicates a series event
   defp is_series_event?(title) do
     # Check for series patterns but exclude simple week day names
-    String.match?(title, ~r/(episode|ep\.|part|vol\.|volume|chapter|session|week\s+\d+|day\s+\d+|#\d+|\d+(st|nd|rd|th)\s+(edition|show|night))/i)
+    String.match?(
+      title,
+      ~r/(episode|ep\.|part|vol\.|volume|chapter|session|week\s+\d+|day\s+\d+|#\d+|\d+(st|nd|rd|th)\s+(edition|show|night))/i
+    )
   end
 
   # NEW: Check if title indicates a recurring event
@@ -775,34 +844,39 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     }
 
     # Add external_id if present
-    new_date = if new_occurrence.external_id do
-      Map.put(new_date, "external_id", new_occurrence.external_id)
-    else
-      new_date
-    end
+    new_date =
+      if new_occurrence.external_id do
+        Map.put(new_date, "external_id", new_occurrence.external_id)
+      else
+        new_date
+      end
 
     # Add source_id if present - this will help with more reliable source lookup
-    new_date = if new_occurrence[:source_id] || new_occurrence["source_id"] do
-      Map.put(new_date, "source_id", new_occurrence[:source_id] || new_occurrence["source_id"])
-    else
-      new_date
-    end
+    new_date =
+      if new_occurrence[:source_id] || new_occurrence["source_id"] do
+        Map.put(new_date, "source_id", new_occurrence[:source_id] || new_occurrence["source_id"])
+      else
+        new_date
+      end
 
     # Update occurrences
-    updated_occurrences = update_in(
-      current_occurrences,
-      ["dates"],
-      fn dates ->
-        # Check if this date/time already exists
-        if Enum.any?(dates, fn d ->
-          d["date"] == new_date["date"] && d["time"] == new_date["time"]
-        end) do
-          dates  # Don't add duplicate
-        else
-          dates ++ [new_date]  # Add new occurrence
+    updated_occurrences =
+      update_in(
+        current_occurrences,
+        ["dates"],
+        fn dates ->
+          # Check if this date/time already exists
+          if Enum.any?(dates, fn d ->
+               d["date"] == new_date["date"] && d["time"] == new_date["time"]
+             end) do
+            # Don't add duplicate
+            dates
+          else
+            # Add new occurrence
+            dates ++ [new_date]
+          end
         end
-      end
-    )
+      )
 
     # Update the event with new occurrences and adjust end date
     new_end_date = latest_date([parent_event.ends_at, new_occurrence.start_at])
@@ -827,14 +901,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     |> DateTime.to_date()
     |> Date.to_string()
   end
+
   defp format_date_only(_), do: nil
 
   defp format_time_only(%DateTime{} = dt) do
     dt
     |> DateTime.to_time()
     |> Time.to_string()
-    |> String.slice(0..4)  # HH:MM format
+    # HH:MM format
+    |> String.slice(0..4)
   end
+
   defp format_time_only(_), do: nil
 
   defp latest_date(dates) do
@@ -852,7 +929,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       external_id: occurrence_data.external_id,
       source_url: occurrence_data[:source_url] || occurrence_data["source_url"],
       image_url: occurrence_data[:image_url] || occurrence_data["image_url"],
-      description_translations: occurrence_data[:description_translations] || occurrence_data["description_translations"],
+      description_translations:
+        occurrence_data[:description_translations] || occurrence_data["description_translations"],
       metadata: %{
         "occurrence" => true,
         "merged_at" => DateTime.utc_now(),
@@ -864,7 +942,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     %PublicEventSource{}
     |> PublicEventSource.changeset(source_attrs)
     |> Repo.insert(
-      on_conflict: {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url]},
+      on_conflict:
+        {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url]},
       conflict_target: [:event_id, :source_id]
     )
   end

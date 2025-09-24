@@ -69,7 +69,7 @@ defmodule Eventasaurus.MixProject do
 
       # Test data factories
       {:ex_machina, "~> 2.7.0", only: [:dev, :test]},
-      
+
       # Fake data generation for development seeds
       {:faker, "~> 0.18", only: [:dev, :test]},
 
@@ -96,7 +96,7 @@ defmodule Eventasaurus.MixProject do
       {:oban, "~> 2.17"},
       {:oban_web, "~> 2.11"},
 
-            # Enhanced polling system dependencies
+      # Enhanced polling system dependencies
       # Caching for API responses and poll results
       {:cachex, "~> 4.1"},
 
@@ -109,13 +109,13 @@ defmodule Eventasaurus.MixProject do
       # Error tracking and performance monitoring
       {:sentry, git: "https://github.com/getsentry/sentry-elixir.git", branch: "master"},
       {:hackney, "~> 1.8"},
-      
+
       # Override nimble_ownership version for Sentry compatibility
       {:nimble_ownership, "~> 1.0", override: true},
 
       # Soft delete functionality for preserving data
       {:ecto_soft_delete, "~> 2.1"},
-      
+
       # HTML helpers for text truncation and more
       {:phoenix_html_simplified_helpers, "~> 2.1.0"},
 

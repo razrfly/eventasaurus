@@ -14,7 +14,10 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   def update(assigns, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("MovieHeroComponent update called with rich_data: #{inspect(assigns[:rich_data])}")
+
+      Logger.debug(
+        "MovieHeroComponent update called with rich_data: #{inspect(assigns[:rich_data])}"
+      )
     end
 
     {:ok,
@@ -205,21 +208,26 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
               year: date.year,
               formatted: Calendar.strftime(date, "%B %d, %Y")
             }
+
           _ ->
             %{}
         end
+
       _ ->
         %{}
     end
   end
 
   defp format_rating(nil), do: nil
+
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, [{:decimals, 1}])
   end
+
   defp format_rating(_), do: nil
 
   defp format_runtime(nil), do: nil
+
   defp format_runtime(runtime) when is_integer(runtime) and runtime > 0 do
     hours = div(runtime, 60)
     minutes = rem(runtime, 60)
@@ -230,5 +238,6 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
       {hr, min} -> "#{hr}h #{min}m"
     end
   end
+
   defp format_runtime(_), do: nil
 end

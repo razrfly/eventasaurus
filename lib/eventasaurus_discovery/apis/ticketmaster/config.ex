@@ -6,7 +6,8 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Config do
   @base_url "https://app.ticketmaster.com/discovery/v2"
   @default_radius 50
   @default_page_size 100
-  @rate_limit 5  # requests per second
+  # requests per second
+  @rate_limit 5
   @timeout 10_000
   @max_retries 3
 
@@ -14,7 +15,8 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Config do
     %{
       name: "Ticketmaster Discovery API",
       slug: "ticketmaster",
-      priority: 100,  # Highest priority - authoritative source
+      # Highest priority - authoritative source
+      priority: 100,
       base_url: @base_url,
       api_key: api_key(),
       api_secret: api_secret(),

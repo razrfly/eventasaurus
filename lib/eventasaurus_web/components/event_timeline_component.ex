@@ -1,21 +1,21 @@
 defmodule EventasaurusWeb.EventTimelineComponent do
   use EventasaurusWeb, :html
-  
+
   alias EventasaurusWeb.Components.Events.{
     TimelineFilters,
-    TimelineContainer, 
+    TimelineContainer,
     TimelineEmptyState
   }
 
   @doc """
   Renders a reusable event timeline component that displays events in a rich timeline format.
-  
+
   Supports two contexts:
   - `:user_dashboard` - Shows user's events with role badges, filters, and management actions
   - `:group_events` - Shows group events with simplified display and group-specific actions
-  
+
   ## Examples
-  
+
       <.event_timeline 
         events={@events}
         current_user={@user}
@@ -43,7 +43,12 @@ defmodule EventasaurusWeb.EventTimelineComponent do
       />
   """
   attr :events, :list, required: true, doc: "List of event structs to display"
-  attr :context, :atom, required: true, values: [:user_dashboard, :group_events], doc: "Usage context"
+
+  attr :context, :atom,
+    required: true,
+    values: [:user_dashboard, :group_events],
+    doc: "Usage context"
+
   attr :loading, :boolean, default: false, doc: "Loading state"
   attr :filters, :map, default: %{}, doc: "Current filter states"
   attr :filter_counts, :map, default: %{}, doc: "Filter option counts for badges"
@@ -132,5 +137,4 @@ defmodule EventasaurusWeb.EventTimelineComponent do
     </div>
     """
   end
-
 end

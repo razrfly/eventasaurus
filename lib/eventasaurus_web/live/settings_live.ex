@@ -72,6 +72,7 @@ defmodule EventasaurusWeb.SettingsLive do
     case socket.assigns[:username_check_task] do
       {%Task{ref: task_ref}, username, component_id} when task_ref == ref ->
         UsernameHelper.handle_username_check_complete(socket, username, component_id)
+
       _ ->
         {:noreply, socket}
     end
@@ -81,6 +82,7 @@ defmodule EventasaurusWeb.SettingsLive do
     case socket.assigns[:username_check_task] do
       {%Task{ref: ^ref}, username, component_id} ->
         UsernameHelper.handle_username_check_result(socket, result, username, component_id)
+
       _ ->
         {:noreply, socket}
     end

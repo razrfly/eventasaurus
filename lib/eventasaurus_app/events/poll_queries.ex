@@ -153,7 +153,9 @@ defmodule EventasaurusApp.Events.PollQueries do
           {:ok, date} -> date
           _ -> ~D[2099-12-31]
         end
-      _ -> ~D[2099-12-31]
+
+      _ ->
+        ~D[2099-12-31]
     end
   end
 

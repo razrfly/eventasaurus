@@ -4,7 +4,7 @@ defmodule EventasaurusApp.Events.RestoreBasicTest do
   alias EventasaurusApp.Events.Restore
   alias EventasaurusApp.Events.{Event, SoftDelete}
   alias EventasaurusApp.Repo
-  
+
   import Ecto.Query
 
   describe "Restore module compilation and basic functionality" do
@@ -15,13 +15,13 @@ defmodule EventasaurusApp.Events.RestoreBasicTest do
 
     test "get_restoration_stats/0 returns expected structure" do
       stats = Restore.get_restoration_stats()
-      
+
       assert is_map(stats)
       assert Map.has_key?(stats, :total_restored)
       assert Map.has_key?(stats, :restored_in_period)
       assert Map.has_key?(stats, :period_days)
       assert Map.has_key?(stats, :cutoff_date)
-      
+
       # Test default values
       assert stats.period_days == 30
       assert stats.total_restored == 0
@@ -30,7 +30,7 @@ defmodule EventasaurusApp.Events.RestoreBasicTest do
 
     test "get_restoration_stats/1 respects custom options" do
       stats = Restore.get_restoration_stats(days_back: 7)
-      
+
       assert stats.period_days == 7
       assert is_struct(stats.cutoff_date, DateTime)
     end

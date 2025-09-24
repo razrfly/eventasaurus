@@ -53,11 +53,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       nil ->
         # No GPS match, try broader search (100m) then fall back to name-based
         broader_match = find_venue_by_coordinates(lat, lng, city_id, 100)
+
         if broader_match do
           # Check name similarity for broader GPS match
           similarity = calculate_similarity(broader_match.name, name)
+
           if similarity > 0.5 do
-            Logger.info("🏛️📍 Found venue by GPS (100m): '#{broader_match.name}' for '#{name}' (similarity: #{similarity})")
+            Logger.info(
+              "🏛️📍 Found venue by GPS (100m): '#{broader_match.name}' for '#{name}' (similarity: #{similarity})"
+            )
+
             broader_match
           else
             # GPS match but names too different, fall back to name search
@@ -71,12 +76,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       venue ->
         # Found within 50 meters - verify with very relaxed name similarity (20%)
         similarity = calculate_similarity(venue.name, name)
+
         if similarity > 0.2 do
-          Logger.info("🏛️📍 Found venue by GPS (50m): '#{venue.name}' for '#{name}' (GPS match, similarity: #{similarity})")
+          Logger.info(
+            "🏛️📍 Found venue by GPS (50m): '#{venue.name}' for '#{name}' (GPS match, similarity: #{similarity})"
+          )
+
           venue
         else
           # GPS matches but names are completely different - log warning but accept it
-          Logger.warning("🏛️⚠️ GPS match but very low name similarity: '#{venue.name}' vs '#{name}' (similarity: #{similarity})")
+          Logger.warning(
+            "🏛️⚠️ GPS match but very low name similarity: '#{venue.name}' vs '#{name}' (similarity: #{similarity})"
+          )
+
           # Still return the GPS match as venues at same coordinates are likely the same
           venue
         end
@@ -87,8 +99,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id} = attrs)
       when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
     # Try coordinates (within 50 meters preferred, 100 meters fallback)
-    venue = find_venue_by_coordinates(lat, lng, city_id, 50) ||
-            find_venue_by_coordinates(lat, lng, city_id, 100)
+    venue =
+      find_venue_by_coordinates(lat, lng, city_id, 50) ||
+        find_venue_by_coordinates(lat, lng, city_id, 100)
 
     # If no coordinate match, try by name if available
     if is_nil(venue) and Map.has_key?(attrs, :name) do
@@ -100,24 +113,29 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   def find_existing_venue(%{name: name, city_id: city_id}) do
     # First try exact match
-    exact_match = from(v in Venue,
-      where: v.name == ^name and v.city_id == ^city_id,
-      limit: 1
-    )
-    |> Repo.one()
-
-    # If no exact match, try fuzzy match
-    if is_nil(exact_match) do
-      fuzzy_match = from(v in Venue,
-        where: v.city_id == ^city_id,
-        where: fragment("similarity(?, ?) > ?", v.name, ^name, 0.7),
-        order_by: [desc: fragment("similarity(?, ?)", v.name, ^name)],
+    exact_match =
+      from(v in Venue,
+        where: v.name == ^name and v.city_id == ^city_id,
         limit: 1
       )
       |> Repo.one()
 
+    # If no exact match, try fuzzy match
+    if is_nil(exact_match) do
+      fuzzy_match =
+        from(v in Venue,
+          where: v.city_id == ^city_id,
+          where: fragment("similarity(?, ?) > ?", v.name, ^name, 0.7),
+          order_by: [desc: fragment("similarity(?, ?)", v.name, ^name)],
+          limit: 1
+        )
+        |> Repo.one()
+
       if fuzzy_match do
-        Logger.info("🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{name}' (similarity: #{calculate_similarity(fuzzy_match.name, name)})")
+        Logger.info(
+          "🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{name}' (similarity: #{calculate_similarity(fuzzy_match.name, name)})"
+        )
+
         fuzzy_match
       else
         nil
@@ -136,15 +154,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp find_venue_by_coordinates(lat, lng, city_id, radius_meters) do
     # Convert to float if needed
-    lat_float = case lat do
-      %Decimal{} -> Decimal.to_float(lat)
-      val -> val
-    end
+    lat_float =
+      case lat do
+        %Decimal{} -> Decimal.to_float(lat)
+        val -> val
+      end
 
-    lng_float = case lng do
-      %Decimal{} -> Decimal.to_float(lng)
-      val -> val
-    end
+    lng_float =
+      case lng do
+        %Decimal{} -> Decimal.to_float(lng)
+        val -> val
+      end
 
     # Simple distance calculation using degrees
     # At latitude ~50° (Kraków), 1 degree ≈ 111km, so 100m ≈ 0.0009 degrees
@@ -157,11 +177,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     max_lng = lng_float + lng_delta
 
     from(v in Venue,
-      where: v.city_id == ^city_id and
-             fragment("CAST(? AS float8) >= ?", v.latitude, ^min_lat) and
-             fragment("CAST(? AS float8) <= ?", v.latitude, ^max_lat) and
-             fragment("CAST(? AS float8) >= ?", v.longitude, ^min_lng) and
-             fragment("CAST(? AS float8) <= ?", v.longitude, ^max_lng),
+      where:
+        v.city_id == ^city_id and
+          fragment("CAST(? AS float8) >= ?", v.latitude, ^min_lat) and
+          fragment("CAST(? AS float8) <= ?", v.latitude, ^max_lat) and
+          fragment("CAST(? AS float8) >= ?", v.longitude, ^min_lng) and
+          fragment("CAST(? AS float8) <= ?", v.longitude, ^max_lng),
       limit: 1
     )
     |> Repo.one()
@@ -189,6 +210,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp parse_coordinate(nil), do: nil
   defp parse_coordinate(coord) when is_float(coord), do: coord
   defp parse_coordinate(coord) when is_integer(coord), do: coord / 1.0
+
   defp parse_coordinate(coord) when is_binary(coord) do
     case Float.parse(coord) do
       {value, _} -> value
@@ -197,22 +219,26 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp ensure_city(%{city_name: nil}), do: {:error, "City is required"}
+
   defp ensure_city(%{city_name: city_name, country_name: country_name} = data) do
     country = find_or_create_country(country_name)
 
     # First try to find by exact name match
-    city = from(c in City,
-      where: c.name == ^city_name and c.country_id == ^country.id,
-      limit: 1
-    )
-    |> Repo.one()
+    city =
+      from(c in City,
+        where: c.name == ^city_name and c.country_id == ^country.id,
+        limit: 1
+      )
+      |> Repo.one()
 
     # If not found, try to find by slug to handle variations (e.g., Kraków vs Krakow)
-    city = city || from(c in City,
-      where: c.slug == ^Normalizer.create_slug(city_name) and c.country_id == ^country.id,
-      limit: 1
-    )
-    |> Repo.one()
+    city =
+      city ||
+        from(c in City,
+          where: c.slug == ^Normalizer.create_slug(city_name) and c.country_id == ^country.id,
+          limit: 1
+        )
+        |> Repo.one()
 
     # If still not found, create it
     city = city || create_city(city_name, country, data)
@@ -248,31 +274,37 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       nil ->
         Logger.warning("Unknown country: #{country_name}, using XX")
         "XX"
+
       country ->
         country.alpha2
     end
   end
+
   defp derive_country_code(_), do: "XX"
 
   defp find_country_by_name(name) when is_binary(name) do
     input = String.trim(name)
 
     # Try as country code first
-    country = if String.length(input) <= 3 do
-      Countries.get(String.upcase(input))
-    end
+    country =
+      if String.length(input) <= 3 do
+        Countries.get(String.upcase(input))
+      end
 
     # Try by exact name
-    country = country || case Countries.filter_by(:name, input) do
-      [c | _] -> c
-      _ -> nil
-    end
+    country =
+      country ||
+        case Countries.filter_by(:name, input) do
+          [c | _] -> c
+          _ -> nil
+        end
 
     # Try by unofficial names
-    country || case Countries.filter_by(:unofficial_names, input) do
-      [c | _] -> c
-      _ -> nil
-    end
+    country ||
+      case Countries.filter_by(:unofficial_names, input) do
+        [c | _] -> c
+        _ -> nil
+      end
   end
 
   defp create_city(name, country, data) do
@@ -287,14 +319,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     case %City{} |> City.changeset(attrs) |> Repo.insert() do
       {:ok, city} ->
         city
+
       {:error, changeset} ->
         # If insert fails (e.g., unique constraint), try to find the existing city
         # This handles race conditions and edge cases with slug generation
         Logger.warning("Failed to create city #{name}: #{inspect(changeset.errors)}")
 
         from(c in City,
-          where: c.country_id == ^country.id and
-                 (c.name == ^name or c.slug == ^attrs.slug),
+          where:
+            c.country_id == ^country.id and
+              (c.name == ^name or c.slug == ^attrs.slug),
           limit: 1
         )
         |> Repo.one()
@@ -303,6 +337,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             # If we still can't find it, something is wrong
             Logger.error("Cannot create or find city #{name} in country #{country.name}")
             nil
+
           city ->
             city
         end
@@ -346,7 +381,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             {lat, lng}
 
           {:error, reason} ->
-            Logger.error("🗺️❌ Failed to geocode venue '#{data.name}': #{inspect(reason)} - Venue creation will fail due to missing GPS coordinates")
+            Logger.error(
+              "🗺️❌ Failed to geocode venue '#{data.name}': #{inspect(reason)} - Venue creation will fail due to missing GPS coordinates"
+            )
+
             {nil, nil}
         end
       else
@@ -379,7 +417,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
         # If it's specifically a GPS coordinate error, provide clear message for Oban
         if has_coordinate_errors?(changeset) do
-          {:error, "GPS coordinates required but unavailable for venue '#{data.name}' in #{city.name}. Geocoding failed or returned no results."}
+          {:error,
+           "GPS coordinates required but unavailable for venue '#{data.name}' in #{city.name}. Geocoding failed or returned no results."}
         else
           {:error, "Failed to create venue: #{errors}"}
         end
@@ -389,42 +428,51 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp maybe_update_venue(venue, data) do
     updates = []
 
-    updates = if is_nil(venue.place_id) && data.place_id do
-      [{:place_id, data.place_id} | updates]
-    else
-      updates
-    end
+    updates =
+      if is_nil(venue.place_id) && data.place_id do
+        [{:place_id, data.place_id} | updates]
+      else
+        updates
+      end
 
     # Check if we need to geocode or use provided coordinates
-    updates = if is_nil(venue.latitude) || is_nil(venue.longitude) do
-      if data.latitude && data.longitude do
-        # Use provided coordinates
-        [{:latitude, data.latitude}, {:longitude, data.longitude} | updates]
-      else
-        # Try to geocode if we don't have coordinates from either source
-        geocoding_data = %{
-          name: venue.name,
-          address: venue.address || data.address,
-          city_name: venue.city,
-          state: venue.state || data.state,
-          country_name: venue.country || data.country_name
-        }
+    updates =
+      if is_nil(venue.latitude) || is_nil(venue.longitude) do
+        if data.latitude && data.longitude do
+          # Use provided coordinates
+          [{:latitude, data.latitude}, {:longitude, data.longitude} | updates]
+        else
+          # Try to geocode if we don't have coordinates from either source
+          geocoding_data = %{
+            name: venue.name,
+            address: venue.address || data.address,
+            city_name: venue.city,
+            state: venue.state || data.state,
+            country_name: venue.country || data.country_name
+          }
 
-        case VenueGeocoder.geocode_venue(geocoding_data) do
-          {:ok, %{latitude: lat, longitude: lng}} ->
-            Logger.info("🗺️ Successfully geocoded existing venue '#{venue.name}' using Google Maps fallback")
-            [{:latitude, lat}, {:longitude, lng} | updates]
+          case VenueGeocoder.geocode_venue(geocoding_data) do
+            {:ok, %{latitude: lat, longitude: lng}} ->
+              Logger.info(
+                "🗺️ Successfully geocoded existing venue '#{venue.name}' using Google Maps fallback"
+              )
 
-          {:error, reason} ->
-            Logger.error("🗺️❌ Cannot update venue '#{venue.name}' without GPS coordinates: #{inspect(reason)}")
-            # Return error immediately if we can't get coordinates
-            # This will prevent the venue from being updated without required coordinates
-            {:error, "GPS coordinates required but unavailable for venue '#{venue.name}'. Geocoding failed: #{inspect(reason)}"}
+              [{:latitude, lat}, {:longitude, lng} | updates]
+
+            {:error, reason} ->
+              Logger.error(
+                "🗺️❌ Cannot update venue '#{venue.name}' without GPS coordinates: #{inspect(reason)}"
+              )
+
+              # Return error immediately if we can't get coordinates
+              # This will prevent the venue from being updated without required coordinates
+              {:error,
+               "GPS coordinates required but unavailable for venue '#{venue.name}'. Geocoding failed: #{inspect(reason)}"}
+          end
         end
+      else
+        updates
       end
-    else
-      updates
-    end
 
     # Only proceed with updates if we didn't encounter an error above
     case updates do
@@ -432,11 +480,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         error
 
       _ ->
-        updates = if is_nil(venue.address) && data.address do
-          [{:address, data.address} | updates]
-        else
-          updates
-        end
+        updates =
+          if is_nil(venue.address) && data.address do
+            [{:address, data.address} | updates]
+          else
+            updates
+          end
 
         if Enum.any?(updates) do
           case Venue.changeset(venue, Map.new(updates)) |> Repo.update() do
@@ -469,6 +518,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp has_coordinate_errors?(changeset) do
     errors = changeset.errors
+
     Enum.any?(errors, fn {field, _} ->
       field in [:latitude, :longitude]
     end)

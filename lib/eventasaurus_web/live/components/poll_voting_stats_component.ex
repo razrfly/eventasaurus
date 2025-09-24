@@ -13,13 +13,14 @@ defmodule EventasaurusWeb.PollVotingStatsComponent do
     # Get the voting statistics
     voting_stats = Events.get_poll_voting_stats(poll)
 
-    socket = socket
-    |> assign(:poll, poll)
-    |> assign(:voting_stats, voting_stats)
-    |> assign_new(:show_vote_counts, fn -> true end)
-    |> assign_new(:show_percentages, fn -> true end)
-    |> assign_new(:show_progress_bars, fn -> true end)
-    |> assign_new(:compact_mode, fn -> false end)
+    socket =
+      socket
+      |> assign(:poll, poll)
+      |> assign(:voting_stats, voting_stats)
+      |> assign_new(:show_vote_counts, fn -> true end)
+      |> assign_new(:show_percentages, fn -> true end)
+      |> assign_new(:show_progress_bars, fn -> true end)
+      |> assign_new(:compact_mode, fn -> false end)
 
     {:ok, socket}
   end
