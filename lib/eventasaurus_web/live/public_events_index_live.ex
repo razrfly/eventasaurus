@@ -37,10 +37,14 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   @impl true
   def handle_event("search", %{"search" => search_term}, socket) do
     filters = Map.put(socket.assigns.filters, :search, search_term)
-    socket = socket
+
+    socket =
+      socket
       |> assign(:filters, filters)
       |> fetch_events()
-      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)}))
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
+      )
 
     {:noreply, socket}
   end
@@ -59,15 +63,19 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       sort_by: parse_sort(filter_params["sort_by"]),
       sort_order: :asc,
       city_id: nil,
-      search: current_filters.search,  # Keep existing search
-      page: 1,  # Reset to page 1 when filters change
+      # Keep existing search
+      search: current_filters.search,
+      # Reset to page 1 when filters change
+      page: 1,
       page_size: current_filters.page_size
     }
 
     socket =
       socket
       |> assign(:filters, new_filters)
-      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, new_filters)}))
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, new_filters)})
+      )
 
     {:noreply, socket}
   end
@@ -80,7 +88,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       socket
       |> assign(:filters, filters)
       |> fetch_events()
-      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)}))
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
+      )
 
     {:noreply, socket}
   end
@@ -97,7 +107,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       socket
       |> assign(:filters, filters)
       |> fetch_events()
-      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)}))
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
+      )
 
     {:noreply, socket}
   end
@@ -109,7 +121,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     socket =
       socket
       |> assign(:filters, cleared_filters)
-      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, cleared_filters)}))
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, cleared_filters)})
+      )
 
     {:noreply, socket}
   end
@@ -132,7 +146,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     socket =
       socket
       |> assign(:filters, updated_filters)
-      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, updated_filters)}))
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, updated_filters)})
+      )
 
     {:noreply, socket}
   end
@@ -142,10 +158,11 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     language = socket.assigns.language
 
     # Ensure sort_order is included
-    query_filters = Map.merge(filters, %{
-      language: language,
-      sort_order: filters[:sort_order] || :asc
-    })
+    query_filters =
+      Map.merge(filters, %{
+        language: language,
+        sort_order: filters[:sort_order] || :asc
+      })
 
     events = PublicEventsEnhanced.list_events(query_filters)
 
@@ -173,19 +190,22 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   defp apply_params_to_filters(socket, params) do
     # Handle both singular category (slug from route) and plural categories (IDs from query)
-    category_ids = case params do
-      %{"category" => slug} when is_binary(slug) and slug != "" ->
-        # Single category slug from route like /activities/category/concerts
-        case Categories.get_category_by_slug(slug) do
-          nil -> []
-          category -> [category.id]
-        end
-      %{"categories" => ids} ->
-        # Multiple category IDs from query params
-        parse_id_list(ids)
-      _ ->
-        []
-    end
+    category_ids =
+      case params do
+        %{"category" => slug} when is_binary(slug) and slug != "" ->
+          # Single category slug from route like /activities/category/concerts
+          case Categories.get_category_by_slug(slug) do
+            nil -> []
+            category -> [category.id]
+          end
+
+        %{"categories" => ids} ->
+          # Multiple category IDs from query params
+          parse_id_list(ids)
+
+        _ ->
+          []
+      end
 
     filters = %{
       search: params["search"],
@@ -196,7 +216,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       max_price: parse_decimal(params["max_price"]),
       city_id: parse_integer(params["city"]),
       sort_by: parse_sort(params["sort"]),
-      sort_order: :asc,  # Add default sort order
+      # Add default sort order
+      sort_order: :asc,
       page: parse_integer(params["page"]) || 1,
       page_size: 21
     }
@@ -235,21 +256,27 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   defp parse_id_list(nil), do: []
   defp parse_id_list(""), do: []
+
   defp parse_id_list(ids) when is_list(ids) do
     ids
     |> Enum.map(fn id ->
       case id do
-        id when is_integer(id) -> id
+        id when is_integer(id) ->
+          id
+
         id when is_binary(id) ->
           case Integer.parse(id) do
             {num, _} -> num
             _ -> nil
           end
-        _ -> nil
+
+        _ ->
+          nil
       end
     end)
     |> Enum.reject(&is_nil/1)
   end
+
   defp parse_id_list(ids) when is_binary(ids) do
     ids
     |> String.split(",")
@@ -264,6 +291,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   defp parse_integer(nil), do: nil
   defp parse_integer(""), do: nil
+
   defp parse_integer(val) when is_binary(val) do
     case Integer.parse(val) do
       {num, _} -> num
@@ -273,6 +301,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   defp parse_decimal(nil), do: nil
   defp parse_decimal(""), do: nil
+
   defp parse_decimal(val) when is_binary(val) do
     case Decimal.parse(val) do
       {dec, _} when is_struct(dec, Decimal) -> dec
@@ -282,6 +311,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   defp parse_date(nil), do: nil
   defp parse_date(""), do: nil
+
   defp parse_date(date_str) when is_binary(date_str) do
     case Date.from_iso8601(date_str) do
       {:ok, date} -> DateTime.new!(date, ~T[00:00:00])
@@ -300,26 +330,40 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     params = build_filter_params(filters)
 
     case socket.assigns[:live_action] do
-      :search -> ~p"/activities/search?#{params}"
+      :search ->
+        ~p"/activities/search?#{params}"
+
       :category ->
         case socket.assigns[:category] do
           nil -> ~p"/activities?#{params}"
           category -> ~p"/activities/category/#{category}?#{params}"
         end
-      _ -> ~p"/activities?#{params}"
+
+      _ ->
+        ~p"/activities?#{params}"
     end
   end
 
   defp build_filter_params(filters) do
     filters
-    |> Map.take([:search, :categories, :start_date, :end_date,
-                 :min_price, :max_price, :city_id, :sort_by, :page])
+    |> Map.take([
+      :search,
+      :categories,
+      :start_date,
+      :end_date,
+      :min_price,
+      :max_price,
+      :city_id,
+      :sort_by,
+      :page
+    ])
     |> Enum.reject(fn
       {_k, nil} -> true
       {_k, []} -> true
       {_k, ""} -> true
       {:page, 1} -> true
-      {:sort_by, :starts_at} -> true  # Don't include default sort
+      # Don't include default sort
+      {:sort_by, :starts_at} -> true
       _ -> false
     end)
     |> Enum.map(fn
@@ -626,10 +670,12 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
             <% end %>
           </div>
 
-          <div class="mt-1 flex items-center text-sm text-gray-600">
-            <Heroicons.map_pin class="w-4 h-4 mr-1" />
-            <%= @event.venue.name %>
-          </div>
+          <%= if @event.venue do %>
+            <div class="mt-1 flex items-center text-sm text-gray-600">
+              <Heroicons.map_pin class="w-4 h-4 mr-1" />
+              <%= @event.venue.name %>
+            </div>
+          <% end %>
 
           <%= if @event.min_price || @event.max_price do %>
             <div class="mt-2">
@@ -845,11 +891,13 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   defp format_datetime(nil), do: "TBD"
+
   defp format_datetime(datetime) do
     Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
   end
 
   defp format_date(nil), do: nil
+
   defp format_date(datetime) do
     Date.to_iso8601(DateTime.to_date(datetime))
   end
@@ -858,12 +906,16 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     cond do
       event.min_price && event.max_price && event.min_price == event.max_price ->
         "$#{event.min_price}"
+
       event.min_price && event.max_price ->
         "$#{event.min_price} - $#{event.max_price}"
+
       event.min_price ->
         "From $#{event.min_price}"
+
       event.max_price ->
         "Up to $#{event.max_price}"
+
       true ->
         "Free"
     end

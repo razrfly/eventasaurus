@@ -3,28 +3,28 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
   Reusable component for displaying group images (avatars and cover images)
   with graceful fallback to placeholders when images are missing.
   """
-  
+
   use Phoenix.LiveComponent
   import EventasaurusWeb.CoreComponents
-  
+
   @doc """
   Renders a group avatar image with fallback placeholder.
-  
+
   ## Attributes
-  
+
   * `group` - Group struct with avatar_url field
   * `size` - Size class (e.g., "w-12 h-12", "w-16 h-16")
   * `class` - Additional CSS classes
   * `alt` - Alt text for accessibility (defaults to group name)
-  
+
   ## Examples
-  
+
       <.live_component module={GroupImageComponent} id="avatar" type="avatar" 
                        group={@group} size="w-12 h-12" />
   """
   def render(%{type: "avatar"} = assigns) do
     assigns = assign_defaults(assigns)
-    
+
     ~H"""
     <div class={["inline-block relative", @size, @class]}>
       <%= if @group.avatar_url do %>
@@ -48,10 +48,10 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     </div>
     """
   end
-  
+
   def render(%{type: "cover"} = assigns) do
     assigns = assign_defaults(assigns)
-    
+
     ~H"""
     <div class={["relative bg-gray-200 dark:bg-gray-700 overflow-hidden", @aspect_ratio, @class]}>
       <%= if @group.cover_image_url do %>
@@ -75,15 +75,15 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     </div>
     """
   end
-  
+
   def render(%{type: "full"} = assigns) do
-    assigns = 
+    assigns =
       assigns
       |> assign_defaults()
       |> assign_new(:show_avatar, fn -> true end)
       |> assign_new(:avatar_size, fn -> "w-16 h-16" end)
       |> assign_new(:cover_aspect_ratio, fn -> "aspect-w-16 aspect-h-9" end)
-    
+
     ~H"""
     <div class={["relative", @class]}>
       <!-- Cover Image -->
@@ -113,7 +113,7 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     </div>
     """
   end
-  
+
   # Default render for other types
   def render(assigns) do
     ~H"""
@@ -122,11 +122,11 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     </div>
     """
   end
-  
+
   defp assign_defaults(assigns) do
     assigns
     |> assign_new(:class, fn -> "" end)
-    |> assign_new(:alt, fn -> assigns[:group] && assigns.group.name || "Group image" end)
+    |> assign_new(:alt, fn -> (assigns[:group] && assigns.group.name) || "Group image" end)
     |> assign_new(:size, fn -> "w-12 h-12" end)
     |> assign_new(:aspect_ratio, fn -> "aspect-w-16 aspect-h-9" end)
   end

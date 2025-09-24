@@ -70,26 +70,30 @@ defmodule Mix.Tasks.Test.TimexParsing do
 
     Logger.info("Testing various date formats:\n")
 
-    results = Enum.map(test_dates, fn {input, description} ->
-      result = DateParser.parse_datetime(input)
+    results =
+      Enum.map(test_dates, fn {input, description} ->
+        result = DateParser.parse_datetime(input)
 
-      {status, success} = case result do
-        %DateTime{} ->
-          {"✅", true}
-        nil when input in [nil, "", "invalid-date", "not a date"] ->
-          {"✅ (expected nil)", true}
-        _ ->
-          {"❌", false}
-      end
+        {status, success} =
+          case result do
+            %DateTime{} ->
+              {"✅", true}
 
-      formatted_input = inspect(input) |> String.pad_trailing(40)
-      formatted_desc = String.pad_trailing(description, 30)
-      formatted_result = inspect(result) |> String.slice(0, 50)
+            nil when input in [nil, "", "invalid-date", "not a date"] ->
+              {"✅ (expected nil)", true}
 
-      Logger.info("#{status} #{formatted_input} | #{formatted_desc} | #{formatted_result}")
+            _ ->
+              {"❌", false}
+          end
 
-      success
-    end)
+        formatted_input = inspect(input) |> String.pad_trailing(40)
+        formatted_desc = String.pad_trailing(description, 30)
+        formatted_result = inspect(result) |> String.slice(0, 50)
+
+        Logger.info("#{status} #{formatted_input} | #{formatted_desc} | #{formatted_result}")
+
+        success
+      end)
 
     success_count = Enum.count(results, & &1)
     failure_count = length(results) - success_count

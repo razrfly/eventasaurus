@@ -35,17 +35,19 @@ defmodule EventasaurusApp.Ticketing do
   """
   def list_tickets_for_event(event_id, opts \\ []) do
     include_deleted = Keyword.get(opts, :include_deleted, false)
-    
-    query = Ticket
-    |> where([t], t.event_id == ^event_id)
-    |> order_by([t], t.inserted_at)
-    
-    query = if include_deleted do
-      query
-    else
-      where(query, [t], is_nil(t.deleted_at))
-    end
-    
+
+    query =
+      Ticket
+      |> where([t], t.event_id == ^event_id)
+      |> order_by([t], t.inserted_at)
+
+    query =
+      if include_deleted do
+        query
+      else
+        where(query, [t], is_nil(t.deleted_at))
+      end
+
     Repo.all(query)
   end
 
@@ -103,6 +105,7 @@ defmodule EventasaurusApp.Ticketing do
           {:ok, ticket} ->
             maybe_broadcast_ticket_update(ticket, :created)
             {:ok, ticket}
+
           error ->
             error
         end
@@ -113,6 +116,7 @@ defmodule EventasaurusApp.Ticketing do
           %Ticket{}
           |> Ticket.changeset(Map.put(attrs, :event_id, event.id))
           |> Ecto.Changeset.add_error(:event_id, reason)
+
         {:error, changeset}
     end
   end
@@ -137,6 +141,7 @@ defmodule EventasaurusApp.Ticketing do
       {:ok, updated_ticket} ->
         maybe_broadcast_ticket_update(updated_ticket, :updated)
         {:ok, updated_ticket}
+
       error ->
         error
     end
@@ -160,6 +165,7 @@ defmodule EventasaurusApp.Ticketing do
       {:ok, deleted_ticket} ->
         maybe_broadcast_ticket_update(deleted_ticket, :deleted)
         {:ok, deleted_ticket}
+
       error ->
         error
     end
@@ -229,9 +235,10 @@ defmodule EventasaurusApp.Ticketing do
 
     Order
     |> where([o], o.ticket_id == ^ticket_id)
-    |> where([o],
+    |> where(
+      [o],
       o.status == "confirmed" or
-      (o.status == "pending" and o.inserted_at > ^one_hour_ago)
+        (o.status == "pending" and o.inserted_at > ^one_hour_ago)
     )
     |> select([o], sum(o.quantity))
     |> Repo.one()
@@ -274,18 +281,20 @@ defmodule EventasaurusApp.Ticketing do
   """
   def list_orders_for_event(event_id, opts \\ []) do
     include_deleted = Keyword.get(opts, :include_deleted, false)
-    
-    query = Order
-    |> where([o], o.event_id == ^event_id)
-    |> order_by([o], desc: o.inserted_at)
-    |> preload([:user, :ticket])
-    
-    query = if include_deleted do
-      query
-    else
-      where(query, [o], is_nil(o.deleted_at))
-    end
-    
+
+    query =
+      Order
+      |> where([o], o.event_id == ^event_id)
+      |> order_by([o], desc: o.inserted_at)
+      |> preload([:user, :ticket])
+
+    query =
+      if include_deleted do
+        query
+      else
+        where(query, [o], is_nil(o.deleted_at))
+      end
+
     Repo.all(query)
   end
 
@@ -451,26 +460,29 @@ defmodule EventasaurusApp.Ticketing do
 
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
-      # Lock the ticket row to prevent concurrent modifications
-      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+           # Lock the ticket row to prevent concurrent modifications
+           locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
-      with :ok <- validate_ticket_availability(locked_ticket, quantity),
-           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
-           {:ok, order} <- insert_order(user, locked_ticket, quantity, pricing, attrs) do
-        # Return both order and ticket for post-commit broadcasting
-        {order, locked_ticket}
-      else
-        {:error, reason} -> Repo.rollback(reason)
-        error -> Repo.rollback(error)
-      end
-    end) do
+           with :ok <- validate_ticket_availability(locked_ticket, quantity),
+                :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
+                {:ok, pricing} <-
+                  calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
+                {:ok, order} <- insert_order(user, locked_ticket, quantity, pricing, attrs) do
+             # Return both order and ticket for post-commit broadcasting
+             {order, locked_ticket}
+           else
+             {:error, reason} -> Repo.rollback(reason)
+             error -> Repo.rollback(error)
+           end
+         end) do
       {:ok, {order, ticket}} ->
         # Broadcast after transaction commits to ensure data visibility
         maybe_broadcast_order_update(order, :created)
         maybe_broadcast_ticket_update(ticket, :order_created)
         {:ok, order}
-      {:error, error} -> {:error, error}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -496,39 +508,50 @@ defmodule EventasaurusApp.Ticketing do
 
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
-      # Lock the ticket row to prevent concurrent modifications
-      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+           # Lock the ticket row to prevent concurrent modifications
+           locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
-      # Load event to check taxation type
-      event = Repo.get!(Event, locked_ticket.event_id)
+           # Load event to check taxation type
+           event = Repo.get!(Event, locked_ticket.event_id)
 
-      with :ok <- validate_payment_processing_allowed(event),
-           :ok <- validate_ticket_availability(locked_ticket, quantity),
-           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
-           {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
-           {:ok, order} <- insert_order_with_stripe_connect(user, locked_ticket, quantity, pricing, connect_account, attrs),
-           {:ok, payment_intent} <- create_stripe_payment_intent(order, connect_account) do
+           with :ok <- validate_payment_processing_allowed(event),
+                :ok <- validate_ticket_availability(locked_ticket, quantity),
+                :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
+                {:ok, pricing} <-
+                  calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
+                {:ok, connect_account} <-
+                  get_event_organizer_stripe_account(locked_ticket.event_id),
+                {:ok, order} <-
+                  insert_order_with_stripe_connect(
+                    user,
+                    locked_ticket,
+                    quantity,
+                    pricing,
+                    connect_account,
+                    attrs
+                  ),
+                {:ok, payment_intent} <- create_stripe_payment_intent(order, connect_account) do
+             # Update order with payment intent ID
+             {:ok, updated_order} =
+               order
+               |> Order.changeset(%{stripe_session_id: payment_intent["id"]})
+               |> Repo.update()
 
-        # Update order with payment intent ID
-        {:ok, updated_order} =
-          order
-          |> Order.changeset(%{stripe_session_id: payment_intent["id"]})
-          |> Repo.update()
-
-        # Return order, ticket, and payment intent for post-commit broadcasting
-        {updated_order, locked_ticket, payment_intent}
-      else
-        {:error, reason} -> Repo.rollback(reason)
-        error -> Repo.rollback(error)
-      end
-    end) do
+             # Return order, ticket, and payment intent for post-commit broadcasting
+             {updated_order, locked_ticket, payment_intent}
+           else
+             {:error, reason} -> Repo.rollback(reason)
+             error -> Repo.rollback(error)
+           end
+         end) do
       {:ok, {order, ticket, payment_intent}} ->
         # Broadcast after transaction commits to ensure data visibility
         maybe_broadcast_order_update(order, :created)
         maybe_broadcast_ticket_update(ticket, :order_created)
         {:ok, %{order: order, payment_intent: payment_intent}}
-      {:error, error} -> {:error, error}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -562,7 +585,11 @@ defmodule EventasaurusApp.Ticketing do
           {:ok, updated_order}
 
         {:error, changeset} ->
-          Logger.error("Failed to confirm order", order_id: order.id, errors: inspect(changeset.errors))
+          Logger.error("Failed to confirm order",
+            order_id: order.id,
+            errors: inspect(changeset.errors)
+          )
+
           {:error, changeset}
       end
     end
@@ -590,6 +617,7 @@ defmodule EventasaurusApp.Ticketing do
           maybe_broadcast_order_update(canceled_order, :canceled)
           maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_canceled)
           {:ok, canceled_order}
+
         error ->
           error
       end
@@ -619,6 +647,7 @@ defmodule EventasaurusApp.Ticketing do
         maybe_broadcast_order_update(failed_order, :failed)
         maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_failed)
         {:ok, failed_order}
+
       error ->
         error
     end
@@ -642,6 +671,7 @@ defmodule EventasaurusApp.Ticketing do
         {:ok, refunded_order} ->
           maybe_broadcast_order_update(refunded_order, :refunded)
           {:ok, refunded_order}
+
         error ->
           error
       end
@@ -752,11 +782,12 @@ defmodule EventasaurusApp.Ticketing do
       }
 
       # Add payment reference if it's not a free ticket
-      attrs = if payment_reference != "free_ticket" do
-        Map.put(attrs, :payment_reference, payment_reference)
-      else
-        attrs
-      end
+      attrs =
+        if payment_reference != "free_ticket" do
+          Map.put(attrs, :payment_reference, payment_reference)
+        else
+          attrs
+        end
 
       {:ok, confirmed_order} =
         order
@@ -784,6 +815,7 @@ defmodule EventasaurusApp.Ticketing do
           payment_intent_id: order.payment_reference,
           status: status
         )
+
         {:ok, order}
 
       {:error, reason} ->
@@ -792,7 +824,9 @@ defmodule EventasaurusApp.Ticketing do
           payment_intent_id: order.payment_reference,
           reason: inspect(reason)
         )
-        {:ok, order}  # Don't fail the order, just keep it pending
+
+        # Don't fail the order, just keep it pending
+        {:ok, order}
     end
   end
 
@@ -815,14 +849,20 @@ defmodule EventasaurusApp.Ticketing do
         }
 
         # If we have a payment_intent from the session, store it
-        updated_attrs = case Map.get(session, "payment_intent") do
-          nil -> updated_attrs
-          payment_intent_id when is_binary(payment_intent_id) ->
-            Map.put(updated_attrs, :payment_reference, payment_intent_id)
-          %{"id" => payment_intent_id} ->
-            Map.put(updated_attrs, :payment_reference, payment_intent_id)
-          _ -> updated_attrs
-        end
+        updated_attrs =
+          case Map.get(session, "payment_intent") do
+            nil ->
+              updated_attrs
+
+            payment_intent_id when is_binary(payment_intent_id) ->
+              Map.put(updated_attrs, :payment_reference, payment_intent_id)
+
+            %{"id" => payment_intent_id} ->
+              Map.put(updated_attrs, :payment_reference, payment_intent_id)
+
+            _ ->
+              updated_attrs
+          end
 
         case order
              |> Order.changeset(updated_attrs)
@@ -845,6 +885,7 @@ defmodule EventasaurusApp.Ticketing do
               order_id: order.id,
               errors: inspect(changeset.errors)
             )
+
             {:error, changeset}
         end
 
@@ -854,6 +895,7 @@ defmodule EventasaurusApp.Ticketing do
           session_id: order.stripe_session_id,
           payment_status: status
         )
+
         {:ok, order}
 
       {:error, reason} ->
@@ -862,7 +904,9 @@ defmodule EventasaurusApp.Ticketing do
           session_id: order.stripe_session_id,
           reason: inspect(reason)
         )
-        {:ok, order}  # Don't fail the order, just keep it pending
+
+        # Don't fail the order, just keep it pending
+        {:ok, order}
     end
   end
 
@@ -878,13 +922,14 @@ defmodule EventasaurusApp.Ticketing do
     # In a more complex system, you might have a specific organizer field
     # Query for the first organizer directly via EventUser join table
     # This is more efficient and handles the case where there might be no organizer role
-    organizer_query = from(u in EventasaurusApp.Accounts.User,
-      join: eu in EventasaurusApp.Events.EventUser,
-      on: u.id == eu.user_id,
-      where: eu.event_id == ^event.id,
-      limit: 1,
-      select: u
-    )
+    organizer_query =
+      from(u in EventasaurusApp.Accounts.User,
+        join: eu in EventasaurusApp.Events.EventUser,
+        on: u.id == eu.user_id,
+        where: eu.event_id == ^event.id,
+        limit: 1,
+        select: u
+      )
 
     case Repo.one(organizer_query) do
       %EventasaurusApp.Accounts.User{} = organizer ->
@@ -892,29 +937,38 @@ defmodule EventasaurusApp.Ticketing do
           nil -> {:error, :no_stripe_account}
           connect_account -> {:ok, connect_account}
         end
+
       nil ->
         {:error, :no_organizer}
     end
   end
 
-  defp insert_order_with_stripe_connect(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
+  defp insert_order_with_stripe_connect(
+         %User{} = user,
+         %Ticket{} = ticket,
+         quantity,
+         pricing,
+         connect_account,
+         attrs
+       ) do
     # Calculate platform fee (5% of base amount before tax)
     application_fee_amount = calculate_application_fee(pricing.subtotal_cents)
 
-    order_attrs = Map.merge(attrs, %{
-      user_id: user.id,
-      event_id: ticket.event_id,
-      ticket_id: ticket.id,
-      quantity: quantity,
-      subtotal_cents: pricing.subtotal_cents,
-      tax_cents: pricing.tax_cents,
-      total_cents: pricing.total_cents,
-      currency: pricing.currency,
-      status: "pending",
-      stripe_connect_account_id: connect_account.id,
-      application_fee_amount: application_fee_amount,
-      pricing_snapshot: pricing.pricing_snapshot
-    })
+    order_attrs =
+      Map.merge(attrs, %{
+        user_id: user.id,
+        event_id: ticket.event_id,
+        ticket_id: ticket.id,
+        quantity: quantity,
+        subtotal_cents: pricing.subtotal_cents,
+        tax_cents: pricing.tax_cents,
+        total_cents: pricing.total_cents,
+        currency: pricing.currency,
+        status: "pending",
+        stripe_connect_account_id: connect_account.id,
+        application_fee_amount: application_fee_amount,
+        pricing_snapshot: pricing.pricing_snapshot
+      })
 
     %Order{}
     |> Order.changeset(order_attrs)
@@ -969,43 +1023,54 @@ defmodule EventasaurusApp.Ticketing do
 
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
-      # Lock the ticket row to prevent concurrent modifications
-      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+           # Lock the ticket row to prevent concurrent modifications
+           locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
-      # Load event to check taxation type
-      event = Repo.get!(Event, locked_ticket.event_id)
+           # Load event to check taxation type
+           event = Repo.get!(Event, locked_ticket.event_id)
 
-      with :ok <- validate_payment_processing_allowed(event),
-           :ok <- validate_ticket_availability(locked_ticket, quantity),
-           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
-           {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
-           {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, quantity, pricing, connect_account, attrs),
-           {:ok, checkout_session} <- create_stripe_checkout_session(order, locked_ticket, connect_account) do
+           with :ok <- validate_payment_processing_allowed(event),
+                :ok <- validate_ticket_availability(locked_ticket, quantity),
+                :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
+                {:ok, pricing} <-
+                  calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
+                {:ok, connect_account} <-
+                  get_event_organizer_stripe_account(locked_ticket.event_id),
+                {:ok, order} <-
+                  insert_order_with_checkout_session(
+                    user,
+                    locked_ticket,
+                    quantity,
+                    pricing,
+                    connect_account,
+                    attrs
+                  ),
+                {:ok, checkout_session} <-
+                  create_stripe_checkout_session(order, locked_ticket, connect_account) do
+             # Update order with checkout session ID
+             {:ok, updated_order} =
+               order
+               |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+               |> Repo.update()
 
-        # Update order with checkout session ID
-        {:ok, updated_order} =
-          order
-          |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
-          |> Repo.update()
+             maybe_broadcast_order_update(updated_order, :created)
 
-        maybe_broadcast_order_update(updated_order, :created)
-
-        {:ok, %{
-          order: updated_order,
-          checkout_url: checkout_session["url"],
-          session_id: checkout_session["id"]
-        }}
-      else
-        error ->
-          # Force transaction rollback by calling Repo.rollback
-          case error do
-            {:error, reason} -> Repo.rollback(reason)
-            atom when is_atom(atom) -> Repo.rollback(atom)
-            other -> Repo.rollback(other)
-          end
-      end
-    end) do
+             {:ok,
+              %{
+                order: updated_order,
+                checkout_url: checkout_session["url"],
+                session_id: checkout_session["id"]
+              }}
+           else
+             error ->
+               # Force transaction rollback by calling Repo.rollback
+               case error do
+                 {:error, reason} -> Repo.rollback(reason)
+                 atom when is_atom(atom) -> Repo.rollback(atom)
+                 other -> Repo.rollback(other)
+               end
+           end
+         end) do
       {:ok, {:ok, result}} -> {:ok, result}
       {:error, reason} -> {:error, reason}
     end
@@ -1028,7 +1093,8 @@ defmodule EventasaurusApp.Ticketing do
       {:ok, %{orders: [order1, order2], checkout_url: url, session_id: session_id}}
 
   """
-  def create_multi_ticket_checkout_session(%User{} = user, order_items) when is_list(order_items) and length(order_items) > 0 do
+  def create_multi_ticket_checkout_session(%User{} = user, order_items)
+      when is_list(order_items) and length(order_items) > 0 do
     require Logger
 
     Logger.info("Creating multi-ticket checkout session", %{
@@ -1038,57 +1104,65 @@ defmodule EventasaurusApp.Ticketing do
 
     # Use transaction to ensure atomicity for all tickets
     case Repo.transaction(fn ->
-      # First, validate all tickets and get connect account
-      # All tickets must be from the same event for a single checkout session
-      event_ids = order_items |> Enum.map(& &1.ticket.event_id) |> Enum.uniq()
+           # First, validate all tickets and get connect account
+           # All tickets must be from the same event for a single checkout session
+           event_ids = order_items |> Enum.map(& &1.ticket.event_id) |> Enum.uniq()
 
-      if length(event_ids) > 1 do
-        Repo.rollback(:multiple_events_not_supported)
-      else
-        event_id = hd(event_ids)
+           if length(event_ids) > 1 do
+             Repo.rollback(:multiple_events_not_supported)
+           else
+             event_id = hd(event_ids)
 
-        # Load event to check taxation type
-        event = Repo.get!(Event, event_id)
+             # Load event to check taxation type
+             event = Repo.get!(Event, event_id)
 
-        with :ok <- validate_payment_processing_allowed(event),
-             {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
-             {:ok, {orders, total_amount, line_items}} <- create_orders_and_line_items(user, order_items, connect_account),
-             {:ok, checkout_session} <- create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id) do
+             with :ok <- validate_payment_processing_allowed(event),
+                  {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
+                  {:ok, {orders, total_amount, line_items}} <-
+                    create_orders_and_line_items(user, order_items, connect_account),
+                  {:ok, checkout_session} <-
+                    create_multi_line_stripe_checkout_session(
+                      orders,
+                      line_items,
+                      connect_account,
+                      event_id
+                    ) do
+               # Update all orders with checkout session ID
+               updated_orders =
+                 Enum.map(orders, fn order ->
+                   {:ok, updated_order} =
+                     order
+                     |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+                     |> Repo.update()
 
-          # Update all orders with checkout session ID
-          updated_orders = Enum.map(orders, fn order ->
-            {:ok, updated_order} =
-              order
-              |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
-              |> Repo.update()
+                   maybe_broadcast_order_update(updated_order, :created)
+                   updated_order
+                 end)
 
-            maybe_broadcast_order_update(updated_order, :created)
-            updated_order
-          end)
+               Logger.info("Successfully created multi-ticket checkout session", %{
+                 user_id: user.id,
+                 session_id: checkout_session["id"],
+                 total_amount: total_amount,
+                 order_count: length(updated_orders)
+               })
 
-          Logger.info("Successfully created multi-ticket checkout session", %{
-            user_id: user.id,
-            session_id: checkout_session["id"],
-            total_amount: total_amount,
-            order_count: length(updated_orders)
-          })
-
-          {:ok, %{
-            orders: updated_orders,
-            checkout_url: checkout_session["url"],
-            session_id: checkout_session["id"]
-          }}
-        else
-          error ->
-            # Force transaction rollback by calling Repo.rollback
-            case error do
-              {:error, reason} -> Repo.rollback(reason)
-              atom when is_atom(atom) -> Repo.rollback(atom)
-              other -> Repo.rollback(other)
-            end
-        end
-      end
-    end) do
+               {:ok,
+                %{
+                  orders: updated_orders,
+                  checkout_url: checkout_session["url"],
+                  session_id: checkout_session["id"]
+                }}
+             else
+               error ->
+                 # Force transaction rollback by calling Repo.rollback
+                 case error do
+                   {:error, reason} -> Repo.rollback(reason)
+                   atom when is_atom(atom) -> Repo.rollback(atom)
+                   other -> Repo.rollback(other)
+                 end
+             end
+           end
+         end) do
       {:ok, {:ok, result}} -> {:ok, result}
       {:error, reason} -> {:error, reason}
     end
@@ -1124,7 +1198,8 @@ defmodule EventasaurusApp.Ticketing do
            {:ok, user} <- find_or_create_guest_user(email, name),
            {:ok, order} <- create_guest_order(user, ticket, attrs, name, email),
            {:ok, session} <- create_checkout_session_for_order(order, ticket) do
-        {:ok, %{order: order, checkout_url: session["url"], session_id: session["id"], user: user}}
+        {:ok,
+         %{order: order, checkout_url: session["url"], session_id: session["id"], user: user}}
       else
         error -> handle_transaction_error(error)
       end
@@ -1152,7 +1227,8 @@ defmodule EventasaurusApp.Ticketing do
       {:ok, %{orders: [order1, order2], checkout_url: "https://checkout.stripe.com/...", session_id: "cs_...", user: %User{}}}
 
   """
-  def create_guest_multi_ticket_checkout_session(name, email, order_items) when is_list(order_items) and length(order_items) > 0 do
+  def create_guest_multi_ticket_checkout_session(name, email, order_items)
+      when is_list(order_items) and length(order_items) > 0 do
     alias EventasaurusApp.Auth.SupabaseSync
     alias EventasaurusApp.Accounts
     alias EventasaurusApp.Events
@@ -1166,138 +1242,194 @@ defmodule EventasaurusApp.Ticketing do
 
     # Use transaction to ensure atomicity
     case Repo.transaction(fn ->
-      # Validate all tickets are from the same event
-      event_ids = order_items |> Enum.map(& &1.ticket.event_id) |> Enum.uniq()
+           # Validate all tickets are from the same event
+           event_ids = order_items |> Enum.map(& &1.ticket.event_id) |> Enum.uniq()
 
-      if length(event_ids) > 1 do
-        Repo.rollback(:multiple_events_not_supported)
-      else
-        event_id = hd(event_ids)
+           if length(event_ids) > 1 do
+             Repo.rollback(:multiple_events_not_supported)
+           else
+             event_id = hd(event_ids)
 
-        # Check if user exists in our local database first
-        existing_user = Accounts.get_user_by_email(email)
+             # Check if user exists in our local database first
+             existing_user = Accounts.get_user_by_email(email)
 
-        user = case existing_user do
-          nil ->
-            # User doesn't exist locally, check Supabase and create if needed
-            Logger.info("User not found locally, attempting Supabase user creation/lookup")
-            case Events.create_or_find_supabase_user(email, name) do
-              {:ok, supabase_user} ->
-                Logger.info("Successfully created/found user in Supabase")
-                # Sync with local database
-                case SupabaseSync.sync_user(supabase_user) do
-                  {:ok, user} ->
-                    Logger.info("Successfully synced user to local database", %{user_id: user.id})
-                    user
-                  {:error, reason} ->
-                    Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
-                    Repo.rollback(reason)
-                end
-              {:error, :user_confirmation_required} ->
-                # User was created via OTP but email confirmation is required
-                Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
-                # Create user with temporary supabase_id - will be updated when they confirm email
-                temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
-                case Accounts.create_user(%{
-                  email: email,
-                  name: name,
-                  supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
-                }) do
-                  {:ok, user} ->
-                    Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
-                    user
-                  {:error, reason} ->
-                    Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
-                    Repo.rollback(reason)
-                end
-              {:error, :invalid_user_data} ->
-                Logger.error("Invalid user data from Supabase after OTP creation")
-                Repo.rollback(:invalid_user_data)
-              {:error, reason} ->
-                Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
-                Repo.rollback(reason)
-            end
+             user =
+               case existing_user do
+                 nil ->
+                   # User doesn't exist locally, check Supabase and create if needed
+                   Logger.info("User not found locally, attempting Supabase user creation/lookup")
 
-          user ->
-            # User exists locally
-            Logger.debug("Using existing local user", %{user_id: user.id})
-            user
-        end
+                   case Events.create_or_find_supabase_user(email, name) do
+                     {:ok, supabase_user} ->
+                       Logger.info("Successfully created/found user in Supabase")
+                       # Sync with local database
+                       case SupabaseSync.sync_user(supabase_user) do
+                         {:ok, user} ->
+                           Logger.info("Successfully synced user to local database", %{
+                             user_id: user.id
+                           })
 
-        # Now create the multi-ticket checkout session
-        # Load event to check taxation type
-        event = Repo.get!(Event, event_id)
+                           user
 
-        with :ok <- validate_payment_processing_allowed(event),
-             {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
-             {:ok, {orders, total_amount, line_items}} <- create_guest_orders_and_line_items(user, order_items, connect_account, name, email),
-             {:ok, checkout_session} <- create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id, customer_email: email) do
+                         {:error, reason} ->
+                           Logger.error("Failed to sync user to local database", %{
+                             reason: inspect(reason)
+                           })
 
-          # Update all orders with checkout session ID
-          updated_orders = Enum.map(orders, fn order ->
-            {:ok, updated_order} =
-              order
-              |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
-              |> Repo.update()
+                           Repo.rollback(reason)
+                       end
 
-            maybe_broadcast_order_update(updated_order, :created)
-            updated_order
-          end)
+                     {:error, :user_confirmation_required} ->
+                       # User was created via OTP but email confirmation is required
+                       Logger.info(
+                         "User created via OTP but email confirmation required, creating temporary local user record"
+                       )
 
-          Logger.info("Successfully created guest multi-ticket checkout session", %{
-            user_id: user.id,
-            session_id: checkout_session["id"],
-            total_amount: total_amount,
-            order_count: length(updated_orders)
-          })
+                       # Create user with temporary supabase_id - will be updated when they confirm email
+                       temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
 
-          {:ok, %{
-            orders: updated_orders,
-            checkout_url: checkout_session["url"],
-            session_id: checkout_session["id"],
-            user: user
-          }}
-        else
-          error ->
-            # Force transaction rollback by calling Repo.rollback
-            case error do
-              {:error, reason} -> Repo.rollback(reason)
-              atom when is_atom(atom) -> Repo.rollback(atom)
-              other -> Repo.rollback(other)
-            end
-        end
-      end
-    end) do
+                       case Accounts.create_user(%{
+                              email: email,
+                              name: name,
+                              # Temporary ID - will be updated when user confirms email
+                              supabase_id: temp_supabase_id
+                            }) do
+                         {:ok, user} ->
+                           Logger.info("Successfully created temporary local user", %{
+                             user_id: user.id,
+                             temp_supabase_id: temp_supabase_id
+                           })
+
+                           user
+
+                         {:error, reason} ->
+                           Logger.error("Failed to create temporary local user", %{
+                             reason: inspect(reason)
+                           })
+
+                           Repo.rollback(reason)
+                       end
+
+                     {:error, :invalid_user_data} ->
+                       Logger.error("Invalid user data from Supabase after OTP creation")
+                       Repo.rollback(:invalid_user_data)
+
+                     {:error, reason} ->
+                       Logger.error("Failed to create/find user in Supabase", %{
+                         reason: inspect(reason)
+                       })
+
+                       Repo.rollback(reason)
+                   end
+
+                 user ->
+                   # User exists locally
+                   Logger.debug("Using existing local user", %{user_id: user.id})
+                   user
+               end
+
+             # Now create the multi-ticket checkout session
+             # Load event to check taxation type
+             event = Repo.get!(Event, event_id)
+
+             with :ok <- validate_payment_processing_allowed(event),
+                  {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
+                  {:ok, {orders, total_amount, line_items}} <-
+                    create_guest_orders_and_line_items(
+                      user,
+                      order_items,
+                      connect_account,
+                      name,
+                      email
+                    ),
+                  {:ok, checkout_session} <-
+                    create_multi_line_stripe_checkout_session(
+                      orders,
+                      line_items,
+                      connect_account,
+                      event_id,
+                      customer_email: email
+                    ) do
+               # Update all orders with checkout session ID
+               updated_orders =
+                 Enum.map(orders, fn order ->
+                   {:ok, updated_order} =
+                     order
+                     |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+                     |> Repo.update()
+
+                   maybe_broadcast_order_update(updated_order, :created)
+                   updated_order
+                 end)
+
+               Logger.info("Successfully created guest multi-ticket checkout session", %{
+                 user_id: user.id,
+                 session_id: checkout_session["id"],
+                 total_amount: total_amount,
+                 order_count: length(updated_orders)
+               })
+
+               {:ok,
+                %{
+                  orders: updated_orders,
+                  checkout_url: checkout_session["url"],
+                  session_id: checkout_session["id"],
+                  user: user
+                }}
+             else
+               error ->
+                 # Force transaction rollback by calling Repo.rollback
+                 case error do
+                   {:error, reason} -> Repo.rollback(reason)
+                   atom when is_atom(atom) -> Repo.rollback(atom)
+                   other -> Repo.rollback(other)
+                 end
+             end
+           end
+         end) do
       {:ok, {:ok, result}} -> {:ok, result}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp insert_order_with_checkout_session(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
+  defp insert_order_with_checkout_session(
+         %User{} = user,
+         %Ticket{} = ticket,
+         quantity,
+         pricing,
+         connect_account,
+         attrs
+       ) do
     # Calculate application fee based on the base amount (before tax)
     application_fee_amount = calculate_application_fee(pricing.subtotal_cents)
 
-    order_attrs = Map.merge(attrs, %{
-      user_id: user.id,
-      event_id: ticket.event_id,
-      ticket_id: ticket.id,
-      quantity: quantity,
-      subtotal_cents: pricing.subtotal_cents,
-      tax_cents: pricing.tax_cents,
-      total_cents: pricing.total_cents,
-      currency: pricing.currency,
-      status: "pending",
-      pricing_snapshot: pricing.pricing_snapshot,
-      stripe_connect_account_id: connect_account.id,
-      application_fee_amount: application_fee_amount
-    })
+    order_attrs =
+      Map.merge(attrs, %{
+        user_id: user.id,
+        event_id: ticket.event_id,
+        ticket_id: ticket.id,
+        quantity: quantity,
+        subtotal_cents: pricing.subtotal_cents,
+        tax_cents: pricing.tax_cents,
+        total_cents: pricing.total_cents,
+        currency: pricing.currency,
+        status: "pending",
+        pricing_snapshot: pricing.pricing_snapshot,
+        stripe_connect_account_id: connect_account.id,
+        application_fee_amount: application_fee_amount
+      })
 
     %Order{}
     |> Order.changeset(order_attrs)
     |> Repo.insert()
   end
 
-  defp create_stripe_checkout_session(%Order{} = order, %Ticket{} = ticket, connect_account, opts \\ []) do
+  defp create_stripe_checkout_session(
+         %Order{} = order,
+         %Ticket{} = ticket,
+         connect_account,
+         opts \\ []
+       ) do
     # Get pricing details from snapshot
     pricing_snapshot = order.pricing_snapshot || %{}
     pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
@@ -1360,7 +1492,10 @@ defmodule EventasaurusApp.Ticketing do
   defp get_base_url do
     # Get base URL from application config or environment
     case Application.get_env(:eventasaurus_app, EventasaurusAppWeb.Endpoint)[:url] do
-      nil -> "http://localhost:4000"  # Development fallback
+      # Development fallback
+      nil ->
+        "http://localhost:4000"
+
       url_config ->
         scheme = if url_config[:scheme] == "https", do: "https", else: "http"
         host = url_config[:host] || "localhost"
@@ -1390,8 +1525,10 @@ defmodule EventasaurusApp.Ticketing do
         else
           {:error, :price_below_minimum}
         end
+
       {"flexible", nil} ->
         {:error, :custom_price_required}
+
       {_other_model, _} ->
         :ok
     end
@@ -1399,10 +1536,11 @@ defmodule EventasaurusApp.Ticketing do
 
   defp calculate_order_pricing(%Ticket{} = ticket, quantity, custom_price_cents, tip_cents) do
     # Determine effective price per ticket
-    price_per_ticket = case ticket.pricing_model do
-      "flexible" when is_integer(custom_price_cents) -> custom_price_cents
-      _ -> ticket.base_price_cents
-    end
+    price_per_ticket =
+      case ticket.pricing_model do
+        "flexible" when is_integer(custom_price_cents) -> custom_price_cents
+        _ -> ticket.base_price_cents
+      end
 
     # Calculate base amounts (no tax - let Stripe handle tax calculation)
     base_subtotal_cents = price_per_ticket * quantity
@@ -1413,28 +1551,31 @@ defmodule EventasaurusApp.Ticketing do
     # Store the subtotal as the total since tax will be calculated by Stripe
     total_cents = subtotal_cents
 
-    {:ok, %{
-      subtotal_cents: subtotal_cents,
-      tax_cents: 0, # Tax will be calculated by Stripe
-      total_cents: total_cents,
-      currency: ticket.currency,
-      pricing_snapshot: Order.create_pricing_snapshot(ticket, custom_price_cents, tip_cents)
-    }}
+    {:ok,
+     %{
+       subtotal_cents: subtotal_cents,
+       # Tax will be calculated by Stripe
+       tax_cents: 0,
+       total_cents: total_cents,
+       currency: ticket.currency,
+       pricing_snapshot: Order.create_pricing_snapshot(ticket, custom_price_cents, tip_cents)
+     }}
   end
 
   defp insert_order(%User{} = user, %Ticket{} = ticket, quantity, pricing, attrs) do
-    order_attrs = Map.merge(attrs, %{
-      user_id: user.id,
-      event_id: ticket.event_id,
-      ticket_id: ticket.id,
-      quantity: quantity,
-      subtotal_cents: pricing.subtotal_cents,
-      tax_cents: pricing.tax_cents,
-      total_cents: pricing.total_cents,
-      currency: pricing.currency,
-      status: "pending",
-      pricing_snapshot: pricing.pricing_snapshot
-    })
+    order_attrs =
+      Map.merge(attrs, %{
+        user_id: user.id,
+        event_id: ticket.event_id,
+        ticket_id: ticket.id,
+        quantity: quantity,
+        subtotal_cents: pricing.subtotal_cents,
+        tax_cents: pricing.tax_cents,
+        total_cents: pricing.total_cents,
+        currency: pricing.currency,
+        status: "pending",
+        pricing_snapshot: pricing.pricing_snapshot
+      })
 
     %Order{}
     |> Order.changeset(order_attrs)
@@ -1477,9 +1618,10 @@ defmodule EventasaurusApp.Ticketing do
     end
   end
 
-    # Validates whether ticketing functionality is allowed for an event
+  # Validates whether ticketing functionality is allowed for an event
   defp validate_ticketing_allowed(%Event{taxation_type: "ticketless"}) do
-    {:error, "Tickets cannot be created for ticketless events. Change the event's taxation type to 'Ticketed Event' or 'Contribution Collection' to enable ticketing."}
+    {:error,
+     "Tickets cannot be created for ticketless events. Change the event's taxation type to 'Ticketed Event' or 'Contribution Collection' to enable ticketing."}
   end
 
   defp validate_ticketing_allowed(%Event{}), do: :ok
@@ -1509,7 +1651,7 @@ defmodule EventasaurusApp.Ticketing do
 
   defp find_or_create_guest_user(email, name) do
     alias EventasaurusApp.Services.UserRegistrationService
-    
+
     # Delegate to the unified registration service
     UserRegistrationService.find_or_create_user(email, name)
   end
@@ -1520,9 +1662,18 @@ defmodule EventasaurusApp.Ticketing do
     tip_cents = Map.get(attrs, :tip_cents, 0)
 
     # Proceed with order creation using the standard flow
-    with {:ok, pricing} <- calculate_order_pricing(ticket, quantity, custom_price_cents, tip_cents),
+    with {:ok, pricing} <-
+           calculate_order_pricing(ticket, quantity, custom_price_cents, tip_cents),
          {:ok, connect_account} <- get_event_organizer_stripe_account(ticket.event_id),
-         {:ok, order} <- insert_order_with_checkout_session(user, ticket, quantity, pricing, connect_account, Map.put(attrs, :guest_metadata, %{name: name, email: email})) do
+         {:ok, order} <-
+           insert_order_with_checkout_session(
+             user,
+             ticket,
+             quantity,
+             pricing,
+             connect_account,
+             Map.put(attrs, :guest_metadata, %{name: name, email: email})
+           ) do
       {:ok, order}
     end
   end
@@ -1534,11 +1685,13 @@ defmodule EventasaurusApp.Ticketing do
 
     # Prepare customer options if we have guest data
     customer_opts = []
-    customer_opts = if guest_email, do: [{:customer_email, guest_email} | customer_opts], else: customer_opts
+
+    customer_opts =
+      if guest_email, do: [{:customer_email, guest_email} | customer_opts], else: customer_opts
 
     with {:ok, connect_account} <- get_event_organizer_stripe_account(ticket.event_id),
-         {:ok, checkout_session} <- create_stripe_checkout_session(order, ticket, connect_account, customer_opts) do
-
+         {:ok, checkout_session} <-
+           create_stripe_checkout_session(order, ticket, connect_account, customer_opts) do
       # Update order with checkout session ID
       {:ok, updated_order} =
         order
@@ -1570,26 +1723,46 @@ defmodule EventasaurusApp.Ticketing do
 
   defp create_orders_and_line_items(user, order_items, connect_account) do
     # Process each ticket type and create orders + line items
-    case Enum.reduce_while(order_items, {:ok, {[], 0, []}}, fn order_item, {:ok, {orders_acc, total_acc, line_items_acc}} ->
-      # Lock the ticket row to prevent concurrent modifications
-      locked_ticket = Repo.get!(Ticket, order_item.ticket.id, lock: "FOR UPDATE")
+    case Enum.reduce_while(order_items, {:ok, {[], 0, []}}, fn order_item,
+                                                               {:ok,
+                                                                {orders_acc, total_acc,
+                                                                 line_items_acc}} ->
+           # Lock the ticket row to prevent concurrent modifications
+           locked_ticket = Repo.get!(Ticket, order_item.ticket.id, lock: "FOR UPDATE")
 
-      with :ok <- validate_ticket_availability(locked_ticket, order_item.quantity),
-           :ok <- validate_flexible_pricing(locked_ticket, order_item[:custom_price_cents]),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, order_item.quantity, order_item[:custom_price_cents], order_item[:tip_cents] || 0),
-           {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, order_item.quantity, pricing, connect_account, %{}) do
+           with :ok <- validate_ticket_availability(locked_ticket, order_item.quantity),
+                :ok <- validate_flexible_pricing(locked_ticket, order_item[:custom_price_cents]),
+                {:ok, pricing} <-
+                  calculate_order_pricing(
+                    locked_ticket,
+                    order_item.quantity,
+                    order_item[:custom_price_cents],
+                    order_item[:tip_cents] || 0
+                  ),
+                {:ok, order} <-
+                  insert_order_with_checkout_session(
+                    user,
+                    locked_ticket,
+                    order_item.quantity,
+                    pricing,
+                    connect_account,
+                    %{}
+                  ) do
+             # Create line item for Stripe
+             line_item = create_line_item_for_order(order, locked_ticket)
 
-        # Create line item for Stripe
-        line_item = create_line_item_for_order(order, locked_ticket)
-
-        {:cont, {:ok, {[order | orders_acc], total_acc + order.total_cents, [line_item | line_items_acc]}}}
-      else
-        error -> {:halt, error}
-      end
-    end) do
+             {:cont,
+              {:ok,
+               {[order | orders_acc], total_acc + order.total_cents, [line_item | line_items_acc]}}}
+           else
+             error -> {:halt, error}
+           end
+         end) do
       {:ok, {orders, total_amount, line_items}} ->
         {:ok, {Enum.reverse(orders), total_amount, Enum.reverse(line_items)}}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -1601,34 +1774,39 @@ defmodule EventasaurusApp.Ticketing do
 
     # Use subtotal (base amount before tax) for unit amount calculation
     # Let Stripe handle tax calculation automatically
-    unit_amount = case order.quantity do
-      0 ->
-        Logger.error("Order quantity is zero for order #{order.id}")
-        0
-      quantity ->
-        # Use subtotal which is the base amount before tax
-        # Stripe will add tax automatically during checkout
-        div(order.subtotal_cents, quantity)
-    end
+    unit_amount =
+      case order.quantity do
+        0 ->
+          Logger.error("Order quantity is zero for order #{order.id}")
+          0
 
-    # Enhanced product description with event details
-    product_description = if event.description && String.trim(event.description) != "" do
-      # Include event date if available  
-      date_info = if event.start_at do
-        # Convert to event timezone for display
-        timezone = event.timezone || "UTC"
-        shifted_datetime = DateTimeHelper.utc_to_timezone(event.start_at, timezone)
-        formatted_date = Calendar.strftime(shifted_datetime, "%B %d, %Y at %I:%M %p %Z")
-        "Event Date: #{formatted_date}\n\n"
-      else
-        ""
+        quantity ->
+          # Use subtotal which is the base amount before tax
+          # Stripe will add tax automatically during checkout
+          div(order.subtotal_cents, quantity)
       end
 
-      event_desc = String.slice(event.description, 0, 500) # Stripe has limits on description length
-      "#{date_info}#{event_desc}"
-    else
-      "#{event.title} - #{ticket.title}"
-    end
+    # Enhanced product description with event details
+    product_description =
+      if event.description && String.trim(event.description) != "" do
+        # Include event date if available  
+        date_info =
+          if event.start_at do
+            # Convert to event timezone for display
+            timezone = event.timezone || "UTC"
+            shifted_datetime = DateTimeHelper.utc_to_timezone(event.start_at, timezone)
+            formatted_date = Calendar.strftime(shifted_datetime, "%B %d, %Y at %I:%M %p %Z")
+            "Event Date: #{formatted_date}\n\n"
+          else
+            ""
+          end
+
+        # Stripe has limits on description length
+        event_desc = String.slice(event.description, 0, 500)
+        "#{date_info}#{event_desc}"
+      else
+        "#{event.title} - #{ticket.title}"
+      end
 
     # Build base product data
     product_data = %{
@@ -1637,13 +1815,14 @@ defmodule EventasaurusApp.Ticketing do
     }
 
     # Add event image if available
-    product_data = if event.cover_image_url do
-      # Get full image URL for Stripe
-      full_image_url = get_full_image_url(event.cover_image_url)
-      Map.put(product_data, :images, [full_image_url])
-    else
-      product_data
-    end
+    product_data =
+      if event.cover_image_url do
+        # Get full image URL for Stripe
+        full_image_url = get_full_image_url(event.cover_image_url)
+        Map.put(product_data, :images, [full_image_url])
+      else
+        product_data
+      end
 
     %{
       price_data: %{
@@ -1666,25 +1845,34 @@ defmodule EventasaurusApp.Ticketing do
       %URI{scheme: scheme} when scheme in ["http", "https"] ->
         # Already a full URL
         image_url
+
       %URI{path: "/" <> _rest} ->
         # Absolute path, prepend base URL
         "#{get_base_url()}#{image_url}"
+
       _ ->
         # Relative path, prepend base URL with /
         "#{get_base_url()}/#{image_url}"
     end
   end
 
-  defp create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id, opts \\ []) do
+  defp create_multi_line_stripe_checkout_session(
+         orders,
+         line_items,
+         connect_account,
+         event_id,
+         opts \\ []
+       ) do
     # Get event for cancel URL and tax configuration
     event = Repo.get!(Event, event_id)
 
     # Calculate total application fee from base amounts (before tax)
-    total_application_fee = Enum.reduce(orders, 0, fn order, acc ->
-      acc + calculate_application_fee(order.subtotal_cents)
-    end)
+    total_application_fee =
+      Enum.reduce(orders, 0, fn order, acc ->
+        acc + calculate_application_fee(order.subtotal_cents)
+      end)
 
-        # Use the first order's ID for the session metadata and success URL
+    # Use the first order's ID for the session metadata and success URL
     primary_order = hd(orders)
 
     # Get user information for pre-filling Stripe checkout
@@ -1699,7 +1887,10 @@ defmodule EventasaurusApp.Ticketing do
 
     # Build URLs
     base_url = get_base_url()
-    success_url = "#{base_url}/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true"
+
+    success_url =
+      "#{base_url}/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true"
+
     cancel_url = "#{base_url}/#{event.slug}"
 
     metadata = %{
@@ -1729,26 +1920,46 @@ defmodule EventasaurusApp.Ticketing do
 
   defp create_guest_orders_and_line_items(user, order_items, connect_account, name, email) do
     # Process each ticket type and create orders + line items for guest checkout
-    case Enum.reduce_while(order_items, {:ok, {[], 0, []}}, fn order_item, {:ok, {orders_acc, total_acc, line_items_acc}} ->
-      # Lock the ticket row to prevent concurrent modifications
-      locked_ticket = Repo.get!(Ticket, order_item.ticket.id, lock: "FOR UPDATE")
+    case Enum.reduce_while(order_items, {:ok, {[], 0, []}}, fn order_item,
+                                                               {:ok,
+                                                                {orders_acc, total_acc,
+                                                                 line_items_acc}} ->
+           # Lock the ticket row to prevent concurrent modifications
+           locked_ticket = Repo.get!(Ticket, order_item.ticket.id, lock: "FOR UPDATE")
 
-      with :ok <- validate_ticket_availability(locked_ticket, order_item.quantity),
-           :ok <- validate_flexible_pricing(locked_ticket, order_item[:custom_price_cents]),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, order_item.quantity, order_item[:custom_price_cents], order_item[:tip_cents] || 0),
-           {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, order_item.quantity, pricing, connect_account, %{guest_metadata: %{name: name, email: email}}) do
+           with :ok <- validate_ticket_availability(locked_ticket, order_item.quantity),
+                :ok <- validate_flexible_pricing(locked_ticket, order_item[:custom_price_cents]),
+                {:ok, pricing} <-
+                  calculate_order_pricing(
+                    locked_ticket,
+                    order_item.quantity,
+                    order_item[:custom_price_cents],
+                    order_item[:tip_cents] || 0
+                  ),
+                {:ok, order} <-
+                  insert_order_with_checkout_session(
+                    user,
+                    locked_ticket,
+                    order_item.quantity,
+                    pricing,
+                    connect_account,
+                    %{guest_metadata: %{name: name, email: email}}
+                  ) do
+             # Create line item for Stripe
+             line_item = create_line_item_for_order(order, locked_ticket)
 
-        # Create line item for Stripe
-        line_item = create_line_item_for_order(order, locked_ticket)
-
-        {:cont, {:ok, {[order | orders_acc], total_acc + order.total_cents, [line_item | line_items_acc]}}}
-      else
-        error -> {:halt, error}
-      end
-    end) do
+             {:cont,
+              {:ok,
+               {[order | orders_acc], total_acc + order.total_cents, [line_item | line_items_acc]}}}
+           else
+             error -> {:halt, error}
+           end
+         end) do
       {:ok, {orders, total_amount, line_items}} ->
         {:ok, {Enum.reverse(orders), total_amount, Enum.reverse(line_items)}}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -1806,5 +2017,4 @@ defmodule EventasaurusApp.Ticketing do
   defp calculate_application_fee(base_amount_cents, fee_percentage \\ 0.05) do
     round(base_amount_cents * fee_percentage)
   end
-
 end

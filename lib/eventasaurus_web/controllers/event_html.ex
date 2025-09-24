@@ -8,43 +8,52 @@ defmodule EventasaurusWeb.EventHTML do
 
   # Helper function to format datetime with timezone conversion
   def format_datetime(dt, timezone \\ nil)
+
   def format_datetime(%DateTime{} = dt, timezone) do
-    converted_dt = if timezone do
-      EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
-    else
-      dt
-    end
+    converted_dt =
+      if timezone do
+        EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
+      else
+        dt
+      end
 
     Calendar.strftime(converted_dt, "%A, %B %d · %I:%M %p")
     |> String.replace(" 0", " ")
   end
+
   def format_datetime(_, _), do: "Date not set"
 
   # Helper function to format time only
   def format_time(dt, timezone \\ nil)
+
   def format_time(%DateTime{} = dt, timezone) do
-    converted_dt = if timezone do
-      EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
-    else
-      dt
-    end
+    converted_dt =
+      if timezone do
+        EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
+      else
+        dt
+      end
 
     Calendar.strftime(converted_dt, "%I:%M %p")
     |> String.replace(" 0", " ")
   end
+
   def format_time(_, _), do: ""
 
   # Helper function to format date only
   def format_date(dt, timezone \\ nil)
+
   def format_date(%DateTime{} = dt, timezone) do
-    converted_dt = if timezone do
-      EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
-    else
-      dt
-    end
+    converted_dt =
+      if timezone do
+        EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
+      else
+        dt
+      end
 
     Calendar.strftime(converted_dt, "%A, %B %d")
   end
+
   def format_date(_, _), do: ""
 
   def format_event_datetime(event) do

@@ -17,7 +17,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Source do
 
   def enabled?, do: Application.get_env(:eventasaurus_discovery, :karnet_enabled, true)
 
-  def priority, do: 30  # Lower priority than Ticketmaster (10) and BandsInTown (20)
+  # Lower priority than Ticketmaster (10) and BandsInTown (20)
+  def priority, do: 30
 
   def config do
     %{
@@ -27,27 +28,28 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Source do
       timeout: 30_000,
       retry_attempts: 2,
       retry_delay_ms: 5_000,
-      
+
       # Localized settings
       city: "Kraków",
       country: "Poland",
       timezone: "Europe/Warsaw",
       locale: "pl_PL",
-      
+
       # Job configuration
       sync_job: SyncJob,
       detail_job: EventDetailJob,
-      
+
       # Queue settings
       sync_queue: :scraper_index,
       detail_queue: :scraper_detail,
-      
+
       # Features
       supports_api: false,
       supports_pagination: true,
       supports_date_filtering: false,
       supports_venue_details: true,
-      supports_performer_details: false,  # Limited performer info
+      # Limited performer info
+      supports_performer_details: false,
       supports_ticket_info: true
     }
   end
@@ -81,8 +83,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Source do
     case HTTPoison.head(Config.base_url(), Config.headers(), timeout: 10_000) do
       {:ok, %{status_code: status}} when status in 200..399 ->
         :ok
+
       {:ok, %{status_code: status}} ->
         {:error, "Karnet website returned status #{status}"}
+
       {:error, reason} ->
         {:error, "Cannot reach Karnet website: #{inspect(reason)}"}
     end
@@ -90,11 +94,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Source do
 
   defp validate_job_modules do
     modules = [SyncJob, EventDetailJob]
-    
-    missing = Enum.filter(modules, fn module ->
-      not Code.ensure_loaded?(module)
-    end)
-    
+
+    missing =
+      Enum.filter(modules, fn module ->
+        not Code.ensure_loaded?(module)
+      end)
+
     if Enum.empty?(missing) do
       :ok
     else

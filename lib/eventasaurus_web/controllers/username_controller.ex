@@ -33,7 +33,9 @@ defmodule EventasaurusWeb.UsernameController do
           available: false,
           valid: false,
           username: username,
-          errors: ["Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens"],
+          errors: [
+            "Username must be 3-30 characters and contain only letters, numbers, underscores, and hyphens"
+          ],
           suggestions: []
         })
 
@@ -107,9 +109,31 @@ defmodule EventasaurusWeb.UsernameController do
 
       {:error, _} ->
         # Fallback list if file is not found
-        ["admin", "administrator", "root", "system", "support", "help", "api", "www",
-         "about", "contact", "privacy", "terms", "login", "logout", "signup", "register",
-         "dashboard", "events", "orders", "tickets", "checkout", "profile", "settings"]
+        [
+          "admin",
+          "administrator",
+          "root",
+          "system",
+          "support",
+          "help",
+          "api",
+          "www",
+          "about",
+          "contact",
+          "privacy",
+          "terms",
+          "login",
+          "logout",
+          "signup",
+          "register",
+          "dashboard",
+          "events",
+          "orders",
+          "tickets",
+          "checkout",
+          "profile",
+          "settings"
+        ]
     end
   end
 
@@ -130,6 +154,7 @@ defmodule EventasaurusWeb.UsernameController do
     |> Enum.reject(fn suggestion ->
       reserved_username?(suggestion) or username_taken?(suggestion)
     end)
-    |> Enum.take(3)  # Return up to 3 suggestions
+    # Return up to 3 suggestions
+    |> Enum.take(3)
   end
 end

@@ -21,16 +21,25 @@ defmodule EventasaurusApp.StripeMock do
   end
 
   def create_checkout_session(%{} = _params) do
-    {:ok, %{
-      "id" => "cs_test_mock_session",
-      "url" => "https://checkout.stripe.com/pay/cs_test_mock_session"
-    }}
+    {:ok,
+     %{
+       "id" => "cs_test_mock_session",
+       "url" => "https://checkout.stripe.com/pay/cs_test_mock_session"
+     }}
   end
 
-  def create_payment_intent(_amount_cents, _currency, _connect_account, _application_fee_amount, _metadata, _event \\ nil) do
-    {:ok, %{
-      "id" => "pi_test_mock_intent",
-      "client_secret" => "pi_test_mock_intent_secret_test"
-    }}
+  def create_payment_intent(
+        _amount_cents,
+        _currency,
+        _connect_account,
+        _application_fee_amount,
+        _metadata,
+        _event \\ nil
+      ) do
+    {:ok,
+     %{
+       "id" => "pi_test_mock_intent",
+       "client_secret" => "pi_test_mock_intent_secret_test"
+     }}
   end
 end

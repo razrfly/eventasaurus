@@ -17,7 +17,8 @@ defmodule EventasaurusWeb.Helpers.TicketCrypto do
   def get_ticket_secret_key do
     # Use Phoenix secret key base as entropy source for ticket signatures
     # Use get_in/2 to safely handle nil endpoint config
-    secret_base = get_in(Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, []), [:secret_key_base])
+    secret_base =
+      get_in(Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, []), [:secret_key_base])
 
     # Add nil check with fallback
     if secret_base do

@@ -8,7 +8,6 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
 
   use EventasaurusWeb, :live_component
 
-
   @impl true
   def update(assigns, socket) do
     {:ok,
@@ -190,79 +189,97 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
     # Support both standardized format (new) and old format (for backward compatibility)
 
     # Extract address from standardized format or fallback to old format
-    address = case rich_data do
-      %{sections: %{details: %{formatted_address: address}}} -> address
-      %{"metadata" => %{"address" => address}} -> address
-      _ -> nil
-    end
+    address =
+      case rich_data do
+        %{sections: %{details: %{formatted_address: address}}} -> address
+        %{"metadata" => %{"address" => address}} -> address
+        _ -> nil
+      end
 
     # Extract phone from standardized format or fallback to old format
-    phone = case rich_data do
-      %{sections: %{details: %{phone: phone}}} -> phone
-      %{"metadata" => %{"formatted_phone_number" => phone}} -> phone
-      _ -> nil
-    end
+    phone =
+      case rich_data do
+        %{sections: %{details: %{phone: phone}}} -> phone
+        %{"metadata" => %{"formatted_phone_number" => phone}} -> phone
+        _ -> nil
+      end
 
     # Extract website from standardized format or fallback to old format
-    website = case rich_data do
-      %{external_urls: %{official: website}} -> website
-      %{sections: %{details: %{website: website}}} -> website
-      %{"external_urls" => %{"website" => website}} -> website
-      _ -> nil
-    end
+    website =
+      case rich_data do
+        %{external_urls: %{official: website}} -> website
+        %{sections: %{details: %{website: website}}} -> website
+        %{"external_urls" => %{"website" => website}} -> website
+        _ -> nil
+      end
 
     # Extract Google Maps URL from standardized format or fallback to old format
-    google_maps_url = case rich_data do
-      %{external_urls: %{maps: maps_url}} -> maps_url
-      %{"external_urls" => %{"google_maps" => maps_url}} -> maps_url
-      _ -> nil
-    end
+    google_maps_url =
+      case rich_data do
+        %{external_urls: %{maps: maps_url}} -> maps_url
+        %{"external_urls" => %{"google_maps" => maps_url}} -> maps_url
+        _ -> nil
+      end
 
     # Extract rating from standardized format or fallback to old format
-    rating = case rich_data do
-      %{rating: %{value: value}} -> value
-      %{"metadata" => %{"rating" => rating}} -> rating
-      _ -> nil
-    end
+    rating =
+      case rich_data do
+        %{rating: %{value: value}} -> value
+        %{"metadata" => %{"rating" => rating}} -> rating
+        _ -> nil
+      end
 
     # Extract user ratings total from standardized format or fallback to old format
-    user_ratings_total = case rich_data do
-      %{rating: %{count: count}} -> count
-      %{"metadata" => %{"user_ratings_total" => total}} -> total
-      _ -> nil
-    end
+    user_ratings_total =
+      case rich_data do
+        %{rating: %{count: count}} -> count
+        %{"metadata" => %{"user_ratings_total" => total}} -> total
+        _ -> nil
+      end
 
     # Extract price level description from standardized format or fallback to old format
-    price_level_description = case rich_data do
-      %{sections: %{hero: %{price_level: level}}} when is_integer(level) -> format_price_level_description(level)
-      %{"additional_data" => %{"price_level_description" => desc}} -> desc
-      _ -> nil
-    end
+    price_level_description =
+      case rich_data do
+        %{sections: %{hero: %{price_level: level}}} when is_integer(level) ->
+          format_price_level_description(level)
+
+        %{"additional_data" => %{"price_level_description" => desc}} ->
+          desc
+
+        _ ->
+          nil
+      end
 
     # Extract business status from standardized format or fallback to old format
-    business_status = case rich_data do
-      %{status: "open"} -> "OPERATIONAL"
-      %{status: "closed"} -> "CLOSED_TEMPORARILY"
-      %{sections: %{hero: %{status: status}}} -> status
-      %{"metadata" => %{"business_status" => status}} -> status
-      _ -> nil
-    end
+    business_status =
+      case rich_data do
+        %{status: "open"} -> "OPERATIONAL"
+        %{status: "closed"} -> "CLOSED_TEMPORARILY"
+        %{sections: %{hero: %{status: status}}} -> status
+        %{"metadata" => %{"business_status" => status}} -> status
+        _ -> nil
+      end
 
     # Extract types from standardized format or fallback to old format
-    types = case rich_data do
-      %{categories: categories} when is_list(categories) -> categories
-      %{"metadata" => %{"types" => types}} when is_list(types) -> types
-      _ -> []
-    end
+    types =
+      case rich_data do
+        %{categories: categories} when is_list(categories) -> categories
+        %{"metadata" => %{"types" => types}} when is_list(types) -> types
+        _ -> []
+      end
 
     # Extract opening hours from standardized format or fallback to old format
-    {is_open_now, opening_hours_text} = case rich_data do
-      %{sections: %{details: %{opening_hours: %{"open_now" => open_now} = hours}}} ->
-        {open_now, Map.get(hours, "weekday_text", [])}
-      %{"additional_data" => %{"opening_hours" => hours}} ->
-        {Map.get(hours, "open_now"), Map.get(hours, "weekday_text", [])}
-      _ -> {nil, []}
-    end
+    {is_open_now, opening_hours_text} =
+      case rich_data do
+        %{sections: %{details: %{opening_hours: %{"open_now" => open_now} = hours}}} ->
+          {open_now, Map.get(hours, "weekday_text", [])}
+
+        %{"additional_data" => %{"opening_hours" => hours}} ->
+          {Map.get(hours, "open_now"), Map.get(hours, "weekday_text", [])}
+
+        _ ->
+          {nil, []}
+      end
 
     socket
     |> assign(:address, address)
@@ -292,7 +309,8 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
   end
 
   defp has_opening_hours?(assigns) do
-    assigns[:is_open_now] != nil || (assigns[:opening_hours_text] && length(assigns[:opening_hours_text]) > 0)
+    assigns[:is_open_now] != nil ||
+      (assigns[:opening_hours_text] && length(assigns[:opening_hours_text]) > 0)
   end
 
   defp has_rating_info?(assigns) do
@@ -301,10 +319,8 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
 
   defp has_business_info?(assigns) do
     (assigns[:business_status] && assigns[:business_status] != "OPERATIONAL") ||
-    (assigns[:types] && length(assigns[:types]) > 0)
+      (assigns[:types] && length(assigns[:types]) > 0)
   end
-
-
 
   defp format_ratings_count(count) when is_integer(count) do
     cond do
@@ -314,6 +330,7 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
       true -> ""
     end
   end
+
   defp format_ratings_count(_), do: ""
 
   defp format_price_level_description(nil), do: nil
@@ -333,7 +350,6 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
     |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))
     |> Enum.take(6)
   end
+
   defp filter_relevant_types(_), do: []
-
-
 end

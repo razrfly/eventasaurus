@@ -16,11 +16,13 @@ defmodule EventasaurusApp.Stripe do
     Behaviour for Stripe API operations to enable mocking in tests.
     """
 
-    @callback verify_webhook_signature(binary(), binary(), binary()) :: {:ok, map()} | {:error, term()}
+    @callback verify_webhook_signature(binary(), binary(), binary()) ::
+                {:ok, map()} | {:error, term()}
     @callback get_payment_intent(binary(), binary() | nil) :: {:ok, map()} | {:error, term()}
     @callback get_checkout_session(binary()) :: {:ok, map()} | {:error, term()}
     @callback create_checkout_session(map()) :: {:ok, map()} | {:error, term()}
-    @callback create_payment_intent(integer(), binary(), map(), integer(), map(), map() | nil) :: {:ok, map()} | {:error, term()}
+    @callback create_payment_intent(integer(), binary(), map(), integer(), map(), map() | nil) ::
+                {:ok, map()} | {:error, term()}
   end
 
   @doc """
@@ -63,6 +65,7 @@ defmodule EventasaurusApp.Stripe do
       _account -> true
     end
   end
+
   def user_has_stripe_account?(_), do: false
 
   @doc """
@@ -82,13 +85,14 @@ defmodule EventasaurusApp.Stripe do
     client_id = get_stripe_client_id()
     redirect_uri = get_redirect_uri()
 
-    query_params = URI.encode_query(%{
-      "response_type" => "code",
-      "client_id" => client_id,
-      "scope" => "read_write",
-      "redirect_uri" => redirect_uri,
-      "state" => to_string(user_id)
-    })
+    query_params =
+      URI.encode_query(%{
+        "response_type" => "code",
+        "client_id" => client_id,
+        "scope" => "read_write",
+        "redirect_uri" => redirect_uri,
+        "state" => to_string(user_id)
+      })
 
     "https://connect.stripe.com/oauth/authorize?" <> query_params
   end
@@ -106,11 +110,12 @@ defmodule EventasaurusApp.Stripe do
       {"Content-Type", "application/x-www-form-urlencoded"}
     ]
 
-    body = URI.encode_query(%{
-      "grant_type" => "authorization_code",
-      "code" => code,
-      "client_secret" => secret_key
-    })
+    body =
+      URI.encode_query(%{
+        "grant_type" => "authorization_code",
+        "code" => code,
+        "client_secret" => secret_key
+      })
 
     case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
@@ -120,6 +125,7 @@ defmodule EventasaurusApp.Stripe do
               stripe_user_id: response_data["stripe_user_id"],
               livemode: response_data["livemode"]
             )
+
             {:ok, response_data}
 
           {:error, decode_error} ->
@@ -127,6 +133,7 @@ defmodule EventasaurusApp.Stripe do
               error: inspect(decode_error),
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Invalid response format from Stripe"}
         end
 
@@ -138,6 +145,7 @@ defmodule EventasaurusApp.Stripe do
               error: error_data["error"],
               error_description: error_data["error_description"]
             )
+
             {:error, error_data}
 
           {:error, _} ->
@@ -145,6 +153,7 @@ defmodule EventasaurusApp.Stripe do
               status_code: status_code,
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
 
@@ -168,7 +177,14 @@ defmodule EventasaurusApp.Stripe do
   - "contribution_collection": Tax-exempt contribution handling
   - "ticketless": No tax processing (free events)
   """
-  def create_payment_intent(amount_cents, currency, connect_account, application_fee_amount, metadata \\ %{}, event \\ nil) do
+  def create_payment_intent(
+        amount_cents,
+        currency,
+        connect_account,
+        application_fee_amount,
+        metadata \\ %{},
+        event \\ nil
+      ) do
     Logger.info("Creating Payment Intent for Stripe Connect account",
       amount_cents: amount_cents,
       currency: currency,
@@ -186,11 +202,15 @@ defmodule EventasaurusApp.Stripe do
     ]
 
     # Build metadata with order information
-    full_metadata = Map.merge(%{
-      "platform" => "eventasaurus",
-      "connect_account_id" => to_string(connect_account.id),
-      "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
-    }, metadata)
+    full_metadata =
+      Map.merge(
+        %{
+          "platform" => "eventasaurus",
+          "connect_account_id" => to_string(connect_account.id),
+          "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
+        },
+        metadata
+      )
 
     # Base body parameters
     body_params = %{
@@ -203,11 +223,12 @@ defmodule EventasaurusApp.Stripe do
     }
 
     # Add tax configuration based on event taxation type
-    body_params = if event do
-      add_tax_configuration(body_params, event)
-    else
-      body_params
-    end
+    body_params =
+      if event do
+        add_tax_configuration(body_params, event)
+      else
+        body_params
+      end
 
     # Add metadata to body params
     body_params_with_metadata =
@@ -227,6 +248,7 @@ defmodule EventasaurusApp.Stripe do
               amount: payment_intent["amount"],
               application_fee_amount: payment_intent["application_fee_amount"]
             )
+
             {:ok, payment_intent}
 
           {:error, decode_error} ->
@@ -234,6 +256,7 @@ defmodule EventasaurusApp.Stripe do
               error: inspect(decode_error),
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Invalid response format from Stripe"}
         end
 
@@ -245,6 +268,7 @@ defmodule EventasaurusApp.Stripe do
               error_type: error_data["error"]["type"],
               error_message: error_data["error"]["message"]
             )
+
             {:error, error_data["error"]["message"] || "Payment Intent creation failed"}
 
           {:error, _} ->
@@ -252,6 +276,7 @@ defmodule EventasaurusApp.Stripe do
               status_code: status_code,
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
 
@@ -276,7 +301,7 @@ defmodule EventasaurusApp.Stripe do
   - Automatic tax configuration based on event taxation type
   """
   def create_checkout_session(params) when is_map(params) do
-                # Extract required parameters with defaults
+    # Extract required parameters with defaults
     amount_cents = Map.fetch!(params, :amount_cents)
     currency = Map.fetch!(params, :currency)
     connect_account = Map.fetch!(params, :connect_account)
@@ -314,35 +339,44 @@ defmodule EventasaurusApp.Stripe do
     ]
 
     # Build metadata with order and pricing information
-    full_metadata = Map.merge(%{
-      "platform" => "eventasaurus",
-      "connect_account_id" => to_string(connect_account.id),
-      "pricing_model" => pricing_model,
-      "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
-    }, metadata)
+    full_metadata =
+      Map.merge(
+        %{
+          "platform" => "eventasaurus",
+          "connect_account_id" => to_string(connect_account.id),
+          "pricing_model" => pricing_model,
+          "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
+        },
+        metadata
+      )
 
     # Enhanced product information with event details
     product_name = Map.get(params, :ticket_name, "Event Ticket")
-    product_description = if event do
-      # Use event description if available, fallback to ticket description
-      event_desc = if event.description && String.trim(event.description) != "" do
-        String.slice(event.description, 0, 500) # Stripe has limits on description length
+
+    product_description =
+      if event do
+        # Use event description if available, fallback to ticket description
+        event_desc =
+          if event.description && String.trim(event.description) != "" do
+            # Stripe has limits on description length
+            String.slice(event.description, 0, 500)
+          else
+            Map.get(params, :ticket_description, "")
+          end
+
+        # Include event date if available
+        date_info =
+          if event.start_at do
+            formatted_date = Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p")
+            "Event Date: #{formatted_date}\n\n"
+          else
+            ""
+          end
+
+        "#{date_info}#{event_desc}"
       else
         Map.get(params, :ticket_description, "")
       end
-
-      # Include event date if available
-      date_info = if event.start_at do
-        formatted_date = Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p")
-        "Event Date: #{formatted_date}\n\n"
-      else
-        ""
-      end
-
-      "#{date_info}#{event_desc}"
-    else
-      Map.get(params, :ticket_description, "")
-    end
 
     # Base line item configuration
     line_item = %{
@@ -353,32 +387,38 @@ defmodule EventasaurusApp.Stripe do
     }
 
     # Add event image if available
-    line_item = if event && event.cover_image_url do
-      Map.put(line_item, "price_data[product_data][images][0]", get_full_image_url(event.cover_image_url))
-    else
-      line_item
-    end
+    line_item =
+      if event && event.cover_image_url do
+        Map.put(
+          line_item,
+          "price_data[product_data][images][0]",
+          get_full_image_url(event.cover_image_url)
+        )
+      else
+        line_item
+      end
 
     # Configure pricing based on model - use base amount without tax
-    line_item = case pricing_model do
-      "flexible" ->
-        # For flexible pricing, set minimum and allow adjustment
-        line_item
-        |> Map.put("price_data[unit_amount]", amount_cents)
-        |> Map.put("adjustable_quantity[enabled]", "false")
+    line_item =
+      case pricing_model do
+        "flexible" ->
+          # For flexible pricing, set minimum and allow adjustment
+          line_item
+          |> Map.put("price_data[unit_amount]", amount_cents)
+          |> Map.put("adjustable_quantity[enabled]", "false")
 
-      "fixed" ->
-        # Traditional fixed pricing
-        line_item
-        |> Map.put("price_data[unit_amount]", amount_cents)
-        |> Map.put("adjustable_quantity[enabled]", "false")
+        "fixed" ->
+          # Traditional fixed pricing
+          line_item
+          |> Map.put("price_data[unit_amount]", amount_cents)
+          |> Map.put("adjustable_quantity[enabled]", "false")
 
-      _ ->
-        # Default to fixed pricing
-        line_item
-        |> Map.put("price_data[unit_amount]", amount_cents)
-        |> Map.put("adjustable_quantity[enabled]", "false")
-    end
+        _ ->
+          # Default to fixed pricing
+          line_item
+          |> Map.put("price_data[unit_amount]", amount_cents)
+          |> Map.put("adjustable_quantity[enabled]", "false")
+      end
 
     # Calculate expiry time (30 minutes from now = 1800 seconds)
     expires_at = DateTime.utc_now() |> DateTime.add(30 * 60, :second) |> DateTime.to_unix()
@@ -397,32 +437,41 @@ defmodule EventasaurusApp.Stripe do
 
       # Line items
       "line_items[0][price_data][currency]" => line_item["price_data[currency]"],
-      "line_items[0][price_data][product_data][name]" => line_item["price_data[product_data][name]"],
-      "line_items[0][price_data][product_data][description]" => line_item["price_data[product_data][description]"],
+      "line_items[0][price_data][product_data][name]" =>
+        line_item["price_data[product_data][name]"],
+      "line_items[0][price_data][product_data][description]" =>
+        line_item["price_data[product_data][description]"],
       "line_items[0][price_data][unit_amount]" => line_item["price_data[unit_amount]"],
       "line_items[0][quantity]" => line_item["quantity"]
     }
 
     # Add product image if available
-    body_params = if Map.has_key?(line_item, "price_data[product_data][images][0]") do
-      Map.put(body_params, "line_items[0][price_data][product_data][images][0]", line_item["price_data[product_data][images][0]"])
-    else
-      body_params
-    end
+    body_params =
+      if Map.has_key?(line_item, "price_data[product_data][images][0]") do
+        Map.put(
+          body_params,
+          "line_items[0][price_data][product_data][images][0]",
+          line_item["price_data[product_data][images][0]"]
+        )
+      else
+        body_params
+      end
 
     # Add tax configuration based on event taxation type
-    body_params = if event do
-      add_tax_configuration(body_params, event)
-    else
-      body_params
-    end
+    body_params =
+      if event do
+        add_tax_configuration(body_params, event)
+      else
+        body_params
+      end
 
     # Add customer information for pre-filling if available
-    body_params = if customer_email do
-      Map.put(body_params, "customer_email", customer_email)
-    else
-      body_params
-    end
+    body_params =
+      if customer_email do
+        Map.put(body_params, "customer_email", customer_email)
+      else
+        body_params
+      end
 
     # Add metadata to body params
     body_params_with_metadata =
@@ -442,6 +491,7 @@ defmodule EventasaurusApp.Stripe do
               url: checkout_session["url"],
               expires_at: checkout_session["expires_at"]
             )
+
             {:ok, checkout_session}
 
           {:error, decode_error} ->
@@ -449,6 +499,7 @@ defmodule EventasaurusApp.Stripe do
               error: inspect(decode_error),
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Invalid response format from Stripe"}
         end
 
@@ -460,6 +511,7 @@ defmodule EventasaurusApp.Stripe do
               error_type: error_data["error"]["type"],
               error_message: error_data["error"]["message"]
             )
+
             {:error, error_data["error"]["message"] || "Checkout Session creation failed"}
 
           {:error, _} ->
@@ -467,6 +519,7 @@ defmodule EventasaurusApp.Stripe do
               status_code: status_code,
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
 
@@ -523,11 +576,15 @@ defmodule EventasaurusApp.Stripe do
     ]
 
     # Build metadata with order and pricing information
-    full_metadata = Map.merge(%{
-      "platform" => "eventasaurus",
-      "connect_account_id" => to_string(connect_account.id),
-      "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
-    }, metadata)
+    full_metadata =
+      Map.merge(
+        %{
+          "platform" => "eventasaurus",
+          "connect_account_id" => to_string(connect_account.id),
+          "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
+        },
+        metadata
+      )
 
     # Calculate expiry time (30 minutes from now = 1800 seconds)
     expires_at = DateTime.utc_now() |> DateTime.add(30 * 60, :second) |> DateTime.to_unix()
@@ -546,18 +603,20 @@ defmodule EventasaurusApp.Stripe do
     }
 
     # Add tax configuration based on event taxation type
-    body_params = if event do
-      add_tax_configuration(body_params, event)
-    else
-      body_params
-    end
+    body_params =
+      if event do
+        add_tax_configuration(body_params, event)
+      else
+        body_params
+      end
 
     # Add customer information for pre-filling if available
-    body_params = if customer_email do
-      Map.put(body_params, "customer_email", customer_email)
-    else
-      body_params
-    end
+    body_params =
+      if customer_email do
+        Map.put(body_params, "customer_email", customer_email)
+      else
+        body_params
+      end
 
     # Add line items to body params with automatic tax behavior
     body_params_with_line_items =
@@ -566,9 +625,18 @@ defmodule EventasaurusApp.Stripe do
       |> Enum.reduce(body_params, fn {line_item, index}, acc ->
         acc
         |> Map.put("line_items[#{index}][price_data][currency]", line_item.price_data.currency)
-        |> Map.put("line_items[#{index}][price_data][product_data][name]", line_item.price_data.product_data.name)
-        |> Map.put("line_items[#{index}][price_data][product_data][description]", line_item.price_data.product_data.description)
-        |> Map.put("line_items[#{index}][price_data][unit_amount]", line_item.price_data.unit_amount)
+        |> Map.put(
+          "line_items[#{index}][price_data][product_data][name]",
+          line_item.price_data.product_data.name
+        )
+        |> Map.put(
+          "line_items[#{index}][price_data][product_data][description]",
+          line_item.price_data.product_data.description
+        )
+        |> Map.put(
+          "line_items[#{index}][price_data][unit_amount]",
+          line_item.price_data.unit_amount
+        )
         |> Map.put("line_items[#{index}][quantity]", line_item.quantity)
       end)
 
@@ -589,9 +657,14 @@ defmodule EventasaurusApp.Stripe do
               session_id: session_data["id"],
               url: session_data["url"]
             )
+
             {:ok, session_data}
+
           {:error, decode_error} ->
-            Logger.error("Failed to decode Stripe checkout session response", error: inspect(decode_error))
+            Logger.error("Failed to decode Stripe checkout session response",
+              error: inspect(decode_error)
+            )
+
             {:error, "Failed to decode Stripe response"}
         end
 
@@ -606,22 +679,31 @@ defmodule EventasaurusApp.Stripe do
               error_param: error_data["error"]["param"],
               full_error: error_data["error"]
             )
-            {:error, error_data["error"]["message"] || "Multi-line checkout session creation failed"}
+
+            {:error,
+             error_data["error"]["message"] || "Multi-line checkout session creation failed"}
 
           {:error, _} ->
             Logger.error("Stripe Multi-Line Checkout Session error with invalid JSON",
               status_code: status_code,
               error_body: redact_secrets(error_body)
             )
+
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
 
       {:error, %HTTPoison.Error{reason: reason}} ->
-        Logger.error("HTTP error during Stripe checkout session creation", reason: inspect(reason))
+        Logger.error("HTTP error during Stripe checkout session creation",
+          reason: inspect(reason)
+        )
+
         {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
 
       {:error, error} ->
-        Logger.error("Unexpected error during Stripe checkout session creation", error: inspect(error))
+        Logger.error("Unexpected error during Stripe checkout session creation",
+          error: inspect(error)
+        )
+
         {:error, "Unexpected error during checkout session creation"}
     end
   end
@@ -640,12 +722,15 @@ defmodule EventasaurusApp.Stripe do
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
         case Jason.decode(response_body) do
-          {:ok, checkout_session} -> {:ok, checkout_session}
+          {:ok, checkout_session} ->
+            {:ok, checkout_session}
+
           {:error, decode_error} ->
             Logger.error("Failed to decode Checkout Session response",
               error: inspect(decode_error),
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Invalid response format from Stripe"}
         end
 
@@ -657,6 +742,7 @@ defmodule EventasaurusApp.Stripe do
               error_type: error_data["error"]["type"],
               error_message: error_data["error"]["message"]
             )
+
             {:error, error_data["error"]["message"] || "Checkout Session retrieval failed"}
 
           {:error, _} ->
@@ -685,11 +771,12 @@ defmodule EventasaurusApp.Stripe do
     ]
 
     # Add Stripe-Account header if this is for a connected account
-    headers = if connect_account do
-      [{"Stripe-Account", connect_account.stripe_user_id} | headers]
-    else
-      headers
-    end
+    headers =
+      if connect_account do
+        [{"Stripe-Account", connect_account.stripe_user_id} | headers]
+      else
+        headers
+      end
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
@@ -702,6 +789,7 @@ defmodule EventasaurusApp.Stripe do
               error: inspect(decode_error),
               response_body: redact_secrets(response_body)
             )
+
             {:error, "Invalid response format from Stripe"}
         end
 
@@ -713,6 +801,7 @@ defmodule EventasaurusApp.Stripe do
               error_type: error_data["error"]["type"],
               error_message: error_data["error"]["message"]
             )
+
             {:error, error_data["error"]["message"] || "Payment Intent retrieval failed"}
 
           {:error, _} ->
@@ -740,8 +829,9 @@ defmodule EventasaurusApp.Stripe do
         signed_payload = "#{timestamp}.#{raw_body}"
 
         # Compute the expected signature
-        expected_signature = :crypto.mac(:hmac, :sha256, webhook_secret, signed_payload)
-        |> Base.encode16(case: :lower)
+        expected_signature =
+          :crypto.mac(:hmac, :sha256, webhook_secret, signed_payload)
+          |> Base.encode16(case: :lower)
 
         # Compare signatures
         if secure_compare(signature, expected_signature) do
@@ -791,11 +881,13 @@ defmodule EventasaurusApp.Stripe do
   defp secure_compare(a, b) when byte_size(a) == byte_size(b) do
     secure_compare(a, b, 0) == 0
   end
+
   defp secure_compare(_, _), do: false
 
   defp secure_compare(<<a, rest_a::binary>>, <<b, rest_b::binary>>, acc) do
     secure_compare(rest_a, rest_b, bor(acc, bxor(a, b)))
   end
+
   defp secure_compare(<<>>, <<>>, acc), do: acc
 
   defp redact_secrets(raw_response) when is_binary(raw_response) do
@@ -880,9 +972,11 @@ defmodule EventasaurusApp.Stripe do
       %URI{scheme: scheme} when scheme in ["http", "https"] ->
         # Already a full URL
         image_url
+
       %URI{path: "/" <> _rest} ->
         # Absolute path, prepend base URL
         "#{get_base_url()}#{image_url}"
+
       _ ->
         # Relative path, prepend base URL with /
         "#{get_base_url()}/#{image_url}"

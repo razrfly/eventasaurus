@@ -18,8 +18,10 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
   end
 
   def call(conn, opts) do
-    limit = Keyword.get(opts, :limit, 100)  # requests per window
-    window = Keyword.get(opts, :window, 60_000)  # window in milliseconds (1 minute)
+    # requests per window
+    limit = Keyword.get(opts, :limit, 100)
+    # window in milliseconds (1 minute)
+    window = Keyword.get(opts, :window, 60_000)
 
     # Ensure table exists as a fallback
     ensure_table_exists()

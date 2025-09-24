@@ -49,7 +49,6 @@ defmodule EventasaurusWeb.StripeConnectController do
          stripe_user_id <- oauth_response["stripe_user_id"],
          true <- is_binary(stripe_user_id) and String.length(stripe_user_id) > 0,
          {:ok, connect_account} <- Stripe.create_connect_account(user, stripe_user_id) do
-
       Logger.info("Successfully connected Stripe account",
         user_id: user_id,
         stripe_user_id: stripe_user_id,
@@ -57,53 +56,64 @@ defmodule EventasaurusWeb.StripeConnectController do
       )
 
       conn
-      |> put_flash(:info, "Successfully connected your Stripe account! You can now receive payments.")
+      |> put_flash(
+        :info,
+        "Successfully connected your Stripe account! You can now receive payments."
+      )
       |> redirect(to: ~p"/settings/payments")
-
     else
       :error ->
         Logger.error("Invalid user ID in state parameter", user_id_string: user_id_string)
+
         conn
         |> put_flash(:error, "Invalid callback parameters.")
         |> redirect(to: ~p"/settings/payments")
 
       nil ->
         Logger.error("User not found for Stripe Connect callback", user_id_string: user_id_string)
+
         conn
         |> put_flash(:error, "User not found. Please try connecting again.")
         |> redirect(to: ~p"/settings/payments")
 
       {:error, %{"error" => error_type, "error_description" => description}} ->
         Logger.error("Stripe OAuth error", error_type: error_type, description: description)
+
         conn
         |> put_flash(:error, "Stripe connection failed: #{description}")
         |> redirect(to: ~p"/settings/payments")
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-          Enum.reduce(opts, msg, fn {key, value}, acc ->
-            String.replace(acc, "%{#{key}}", to_string(value))
+        errors =
+          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+            Enum.reduce(opts, msg, fn {key, value}, acc ->
+              String.replace(acc, "%{#{key}}", to_string(value))
+            end)
           end)
-        end)
+
         Logger.error("Database error creating Stripe Connect account", errors: errors)
+
         conn
         |> put_flash(:error, "Failed to save your Stripe connection. Please try again.")
         |> redirect(to: ~p"/settings/payments")
 
       {:error, reason} when is_binary(reason) ->
         Logger.error("Stripe Connect callback error", reason: reason)
+
         conn
         |> put_flash(:error, "Connection failed: #{reason}")
         |> redirect(to: ~p"/settings/payments")
 
       false ->
         Logger.error("Invalid stripe_user_id received from Stripe OAuth response")
+
         conn
         |> put_flash(:error, "Invalid response from Stripe. Please try again.")
         |> redirect(to: ~p"/settings/payments")
 
       error ->
         Logger.error("Unexpected error in Stripe Connect callback", error: inspect(error))
+
         conn
         |> put_flash(:error, "Something went wrong connecting your Stripe account.")
         |> redirect(to: ~p"/settings/payments")
@@ -193,8 +203,10 @@ defmodule EventasaurusWeb.StripeConnectController do
   # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%User{} = user), do: {:ok, user}
+
   defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
     Accounts.find_or_create_from_supabase(supabase_user)
   end
+
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 end

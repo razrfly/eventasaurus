@@ -34,8 +34,10 @@ defmodule EventasaurusWeb.CategoryHelpers do
     case primary_category(event) do
       %Category{} = category ->
         Category.get_name(category, locale)
+
       nil ->
         ""
+
       _ ->
         ""
     end
@@ -50,6 +52,7 @@ defmodule EventasaurusWeb.CategoryHelpers do
         categories
         |> Enum.map(fn cat -> Category.get_name(cat, locale) end)
         |> Enum.join(", ")
+
       _ ->
         ""
     end
@@ -69,14 +72,16 @@ defmodule EventasaurusWeb.CategoryHelpers do
           icon = Map.get(category, :icon, "tag")
           is_primary = is_primary_category?(event, category)
 
-          badge_class = if is_primary do
-            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-2 ring-offset-1"
-          else
-            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-          end
+          badge_class =
+            if is_primary do
+              "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-2 ring-offset-1"
+            else
+              "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+            end
 
           {name, color, icon, badge_class}
         end)
+
       _ ->
         []
     end
@@ -106,6 +111,7 @@ defmodule EventasaurusWeb.CategoryHelpers do
     case Map.get(event, :categories) do
       categories when is_list(categories) ->
         Enum.map(categories, & &1.slug)
+
       _ ->
         []
     end
@@ -120,6 +126,7 @@ defmodule EventasaurusWeb.CategoryHelpers do
     case Map.get(event, :categories) do
       [first | _rest] ->
         first.id == category.id
+
       _ ->
         false
     end

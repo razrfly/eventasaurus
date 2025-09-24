@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Services.RichDataManager
   alias EventasaurusWeb.Utils.PollPhaseUtils
-  
+
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
   import Phoenix.HTML.SimplifiedHelpers.Truncate
@@ -86,18 +86,18 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
         %{options: []}
       end
 
-      {:ok,
-       socket
-       |> assign(assigns)
-       |> assign(:music_poll, music_poll)
-       |> assign(:music_options, music_options)
-       |> assign(:user_votes, user_votes)
-       |> assign(:temp_votes, temp_votes)
-       |> assign(:poll_stats, poll_stats)
-       |> assign(:showing_add_form, false)
-       |> assign(:search_query, "")
-       |> assign(:search_results, [])
-       |> assign(:adding_track, false)}
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:music_poll, music_poll)
+     |> assign(:music_options, music_options)
+     |> assign(:user_votes, user_votes)
+     |> assign(:temp_votes, temp_votes)
+     |> assign(:poll_stats, poll_stats)
+     |> assign(:showing_add_form, false)
+     |> assign(:search_query, "")
+     |> assign(:search_results, [])
+     |> assign(:adding_track, false)}
   end
 
   # ============================================================================
@@ -362,7 +362,8 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
       end
     else
       _ ->
-        {:noreply, put_flash(socket, :error, "You are not authorized to remove this music track.")}
+        {:noreply,
+         put_flash(socket, :error, "You are not authorized to remove this music track.")}
     end
   end
 
@@ -389,7 +390,7 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
     Logger.debug("=== SEARCH MUSIC TRACKS EVENT ===")
     Logger.debug("Query: #{inspect(query)}")
     Logger.debug("Current user: #{inspect(socket.assigns.current_user.id)}")
-    
+
     if socket.assigns.current_user do
       if String.length(query) >= 2 do
         Logger.debug("Query length >= 2, performing search...")
@@ -413,7 +414,7 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
             Logger.debug("=== SEARCH RESULTS ASSIGNED ===")
             Logger.debug("Track results count: #{length(track_results)}")
             Logger.debug("First result: #{inspect(List.first(track_results))}")
-            
+
             {:noreply,
              socket
              |> assign(:search_query, query)
@@ -457,7 +458,7 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
             # Simple string comparison since both track.id and track_id are strings
             track.id == track_id
           end)
-        
+
         if track_data do
           # Set adding_track to true to prevent multiple requests
           socket = assign(socket, :adding_track, true)
@@ -537,7 +538,7 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
   def handle_event("toggle_vote", %{"option-id" => option_id}, socket) do
     option_id = String.to_integer(option_id)
     current_user = socket.assigns.current_user
-    
+
     if current_user do
       # Send vote event to parent
       send(self(), {:vote_toggled, option_id, current_user.id})
@@ -546,16 +547,17 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
       # Handle temporary vote for anonymous users
       temp_votes = socket.assigns.temp_votes
       current_temp_vote = Map.get(temp_votes, option_id)
-      
-      updated_temp_votes = if current_temp_vote do
-        Map.delete(temp_votes, option_id)
-      else
-        Map.put(temp_votes, option_id, true)
-      end
-      
+
+      updated_temp_votes =
+        if current_temp_vote do
+          Map.delete(temp_votes, option_id)
+        else
+          Map.put(temp_votes, option_id, true)
+        end
+
       # Send temp vote to parent for persistence
       send(self(), {:temp_vote_changed, socket.assigns.music_poll.id, updated_temp_votes})
-      
+
       {:noreply, assign(socket, :temp_votes, updated_temp_votes)}
     end
   end

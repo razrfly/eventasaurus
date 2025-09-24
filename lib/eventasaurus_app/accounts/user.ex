@@ -3,39 +3,45 @@ defmodule EventasaurusApp.Accounts.User do
   import Ecto.Changeset
 
   schema "users" do
-    field :email, :string
-    field :name, :string
-    field :supabase_id, :string
+    field(:email, :string)
+    field(:name, :string)
+    field(:supabase_id, :string)
 
     # Profile fields
-    field :username, :string
-    field :bio, :string
-    field :website_url, :string
-    field :profile_public, :boolean, default: true
+    field(:username, :string)
+    field(:bio, :string)
+    field(:website_url, :string)
+    field(:profile_public, :boolean, default: true)
 
     # Social media handles
-    field :instagram_handle, :string
-    field :x_handle, :string
-    field :youtube_handle, :string
-    field :tiktok_handle, :string
-    field :linkedin_handle, :string
+    field(:instagram_handle, :string)
+    field(:x_handle, :string)
+    field(:youtube_handle, :string)
+    field(:tiktok_handle, :string)
+    field(:linkedin_handle, :string)
 
     # User preferences
-    field :default_currency, :string, default: "USD"
-    field :timezone, :string
+    field(:default_currency, :string, default: "USD")
+    field(:timezone, :string)
 
     # Referral tracking
-    field :referral_event_id, :id
-    belongs_to :referral_event, EventasaurusApp.Events.Event, define_field: false, foreign_key: :referral_event_id
+    field(:referral_event_id, :id)
 
-    many_to_many :events, EventasaurusApp.Events.Event,
+    belongs_to(:referral_event, EventasaurusApp.Events.Event,
+      define_field: false,
+      foreign_key: :referral_event_id
+    )
+
+    many_to_many(:events, EventasaurusApp.Events.Event,
       join_through: EventasaurusApp.Events.EventUser
+    )
 
-    many_to_many :groups, EventasaurusApp.Groups.Group,
+    many_to_many(:groups, EventasaurusApp.Groups.Group,
       join_through: EventasaurusApp.Groups.GroupUser
+    )
 
-    has_many :poll_votes, EventasaurusApp.Events.PollVote, foreign_key: :voter_id
-    has_many :orders, EventasaurusApp.Events.Order
+    has_many(:poll_votes, EventasaurusApp.Events.PollVote, foreign_key: :voter_id)
+    has_many(:orders, EventasaurusApp.Events.Order)
 
     timestamps()
   end
@@ -47,9 +53,21 @@ defmodule EventasaurusApp.Accounts.User do
   def changeset(user, attrs) do
     user
     |> cast(attrs, [
-      :email, :name, :supabase_id, :username, :bio, :website_url, :profile_public,
-      :instagram_handle, :x_handle, :youtube_handle, :tiktok_handle, :linkedin_handle,
-      :default_currency, :timezone, :referral_event_id
+      :email,
+      :name,
+      :supabase_id,
+      :username,
+      :bio,
+      :website_url,
+      :profile_public,
+      :instagram_handle,
+      :x_handle,
+      :youtube_handle,
+      :tiktok_handle,
+      :linkedin_handle,
+      :default_currency,
+      :timezone,
+      :referral_event_id
     ])
     |> validate_required([:email, :name, :supabase_id])
     |> normalize_email()
@@ -71,9 +89,18 @@ defmodule EventasaurusApp.Accounts.User do
   def profile_changeset(user, attrs) do
     user
     |> cast(attrs, [
-      :name, :username, :bio, :website_url, :profile_public,
-      :instagram_handle, :x_handle, :youtube_handle, :tiktok_handle, :linkedin_handle,
-      :default_currency, :timezone
+      :name,
+      :username,
+      :bio,
+      :website_url,
+      :profile_public,
+      :instagram_handle,
+      :x_handle,
+      :youtube_handle,
+      :tiktok_handle,
+      :linkedin_handle,
+      :default_currency,
+      :timezone
     ])
     |> validate_required([:name])
     |> validate_username()
@@ -88,18 +115,22 @@ defmodule EventasaurusApp.Accounts.User do
 
   defp normalize_email(changeset) do
     case get_change(changeset, :email) do
-      nil -> 
+      nil ->
         changeset
+
       email when is_binary(email) ->
         # Use the existing sanitize_email function which trims and downcases
         case EventasaurusApp.Sanitizer.sanitize_email(email) do
           {:error, reason} ->
             add_error(changeset, :email, "has invalid format: #{to_string(reason)}")
+
           nil ->
             add_error(changeset, :email, "cannot be blank")
+
           normalized_email when is_binary(normalized_email) ->
             put_change(changeset, :email, normalized_email)
         end
+
       _ ->
         add_error(changeset, :email, "must be a string")
     end
@@ -108,13 +139,17 @@ defmodule EventasaurusApp.Accounts.User do
   defp validate_username(changeset) do
     changeset
     |> validate_format(:username, @username_regex,
-         message: "must be 3-30 characters and contain only letters, numbers, underscores, and hyphens")
+      message:
+        "must be 3-30 characters and contain only letters, numbers, underscores, and hyphens"
+    )
     |> validate_not_reserved_username()
   end
 
   defp validate_not_reserved_username(changeset) do
     case get_change(changeset, :username) do
-      nil -> changeset
+      nil ->
+        changeset
+
       username ->
         if reserved_username?(username) do
           add_error(changeset, :username, "is reserved and cannot be used")
@@ -131,13 +166,21 @@ defmodule EventasaurusApp.Accounts.User do
 
   defp validate_website_url(changeset) do
     case get_change(changeset, :website_url) do
-      nil -> changeset
-      "" -> changeset
+      nil ->
+        changeset
+
+      "" ->
+        changeset
+
       url ->
         if String.match?(url, @url_regex) do
           changeset
         else
-          add_error(changeset, :website_url, "must be a valid URL starting with http:// or https://")
+          add_error(
+            changeset,
+            :website_url,
+            "must be a valid URL starting with http:// or https://"
+          )
         end
     end
   end
@@ -158,8 +201,12 @@ defmodule EventasaurusApp.Accounts.User do
 
   defp normalize_social_handle(changeset, field) do
     case get_change(changeset, field) do
-      nil -> changeset
-      "" -> changeset
+      nil ->
+        changeset
+
+      "" ->
+        changeset
+
       handle ->
         # Remove @ symbol if present
         normalized = String.replace(handle, ~r/^@/, "")
@@ -167,7 +214,7 @@ defmodule EventasaurusApp.Accounts.User do
     end
   end
 
-    defp validate_currency(changeset) do
+  defp validate_currency(changeset) do
     # Get comprehensive list of valid currency codes from CurrencyHelpers
     valid_currencies = EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes()
 
@@ -176,7 +223,8 @@ defmodule EventasaurusApp.Accounts.User do
 
     changeset
     |> validate_inclusion(:default_currency, all_valid_currencies,
-         message: "must be a valid currency code")
+      message: "must be a valid currency code"
+    )
   end
 
   # Reserved username checking
@@ -200,9 +248,31 @@ defmodule EventasaurusApp.Accounts.User do
 
       {:error, _} ->
         # Fallback list if file is not found
-        ["admin", "administrator", "root", "system", "support", "help", "api", "www",
-         "about", "contact", "privacy", "terms", "login", "logout", "signup", "register",
-         "dashboard", "events", "orders", "tickets", "checkout", "profile", "settings"]
+        [
+          "admin",
+          "administrator",
+          "root",
+          "system",
+          "support",
+          "help",
+          "api",
+          "www",
+          "about",
+          "contact",
+          "privacy",
+          "terms",
+          "login",
+          "logout",
+          "signup",
+          "register",
+          "dashboard",
+          "events",
+          "orders",
+          "tickets",
+          "checkout",
+          "profile",
+          "settings"
+        ]
     end
   end
 
@@ -241,6 +311,7 @@ defmodule EventasaurusApp.Accounts.User do
   def display_name(%__MODULE__{username: username, name: _name}) when is_binary(username) do
     username
   end
+
   def display_name(%__MODULE__{name: name}) do
     name
   end
@@ -251,6 +322,7 @@ defmodule EventasaurusApp.Accounts.User do
   def profile_url(%__MODULE__{username: username}) when is_binary(username) do
     "/users/#{username}"
   end
+
   def profile_url(%__MODULE__{id: id}) do
     "/users/user-#{id}"
   end
@@ -261,6 +333,7 @@ defmodule EventasaurusApp.Accounts.User do
   def short_profile_url(%__MODULE__{username: username}) when is_binary(username) do
     "/u/#{username}"
   end
+
   def short_profile_url(%__MODULE__{id: id}) do
     "/u/#{id}"
   end
@@ -271,6 +344,7 @@ defmodule EventasaurusApp.Accounts.User do
   def username_slug(%__MODULE__{username: username}) when is_binary(username) do
     username
   end
+
   def username_slug(%__MODULE__{id: id}) do
     "user-#{id}"
   end
@@ -294,6 +368,7 @@ defmodule EventasaurusApp.Accounts.User do
   def profile_handle(%__MODULE__{username: username}) when is_binary(username) do
     "@#{username}"
   end
+
   def profile_handle(%__MODULE__{id: id}) do
     "@user-#{id}"
   end

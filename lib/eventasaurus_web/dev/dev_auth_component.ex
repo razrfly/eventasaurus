@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
   Only renders in development mode.
   """
   attr :users, :map, default: %{}
-  
+
   def quick_login_section(assigns) do
     if DevAuth.enabled?() do
       ~H"""

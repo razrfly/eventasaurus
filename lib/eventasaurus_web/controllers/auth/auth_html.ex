@@ -1,6 +1,6 @@
 defmodule EventasaurusWeb.Auth.AuthHTML do
   use EventasaurusWeb, :html
-  
+
   # Import dev components - the component itself checks if dev mode
   import EventasaurusWeb.Dev.DevAuthComponent
 

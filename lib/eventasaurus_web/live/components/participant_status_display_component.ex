@@ -123,7 +123,11 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
   # Private function components
 
   defp status_section(assigns) do
-    assigns = assigns |> assign_new(:show_counts, fn -> true end) |> assign_new(:show_status_labels, fn -> true end)
+    assigns =
+      assigns
+      |> assign_new(:show_counts, fn -> true end)
+      |> assign_new(:show_status_labels, fn -> true end)
+
     ~H"""
     <div class="status-section flex items-center space-x-3">
       <div class="status-info">
@@ -252,23 +256,27 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
     participants = socket.assigns.participants || []
 
     # Filter out declined and cancelled participants for public display
-    public_participants = participants
-    |> Enum.filter(&(&1.user && &1.user.name)) # Only include participants with valid user data
-    |> Enum.filter(&(&1.status not in [:declined, :cancelled]))
+    public_participants =
+      participants
+      # Only include participants with valid user data
+      |> Enum.filter(&(&1.user && &1.user.name))
+      |> Enum.filter(&(&1.status not in [:declined, :cancelled]))
 
     # Group participants by status (for expanded view)
-    groups = public_participants
-    |> Enum.group_by(&(&1.status))
-    |> Enum.map(fn {status, participants} ->
-      {status, %{participants: participants, count: length(participants)}}
-    end)
-    |> Enum.sort_by(fn {status, _group} -> status_priority(status) end)
+    groups =
+      public_participants
+      |> Enum.group_by(& &1.status)
+      |> Enum.map(fn {status, participants} ->
+        {status, %{participants: participants, count: length(participants)}}
+      end)
+      |> Enum.sort_by(fn {status, _group} -> status_priority(status) end)
 
     # Prioritize going/confirmed first, then interested, then pending for avatar display
-    display_participants = public_participants
-    |> Enum.sort_by(fn participant ->
-      {status_priority(participant.status), participant.id}
-    end)
+    display_participants =
+      public_participants
+      |> Enum.sort_by(fn participant ->
+        {status_priority(participant.status), participant.id}
+      end)
 
     total_attendees = length(public_participants)
     has_breakdown = length(groups) > 1
@@ -319,7 +327,6 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
   defp get_layout_classes(:horizontal), do: "flex items-center"
   defp get_layout_classes(:vertical), do: "flex flex-col space-y-4"
   defp get_layout_classes(:stacked), do: "space-y-6"
-
 
   defp get_participant_name(participant) do
     case participant.user do

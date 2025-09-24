@@ -7,17 +7,17 @@ defmodule EventasaurusDiscovery.Sources.SourceConfig do
   """
 
   @type config :: %{
-    name: String.t(),
-    slug: String.t(),
-    priority: integer(),
-    rate_limit: integer(),
-    timeout: integer(),
-    max_retries: integer(),
-    queue: atom(),
-    base_url: String.t() | nil,
-    api_key: String.t() | nil,
-    api_secret: String.t() | nil
-  }
+          name: String.t(),
+          slug: String.t(),
+          priority: integer(),
+          rate_limit: integer(),
+          timeout: integer(),
+          max_retries: integer(),
+          queue: atom(),
+          base_url: String.t() | nil,
+          api_key: String.t() | nil,
+          api_secret: String.t() | nil
+        }
 
   @doc """
   Returns the source configuration
@@ -32,8 +32,10 @@ defmodule EventasaurusDiscovery.Sources.SourceConfig do
       name: nil,
       slug: nil,
       priority: 50,
-      rate_limit: 5,        # requests per second
-      timeout: 10_000,      # 10 seconds
+      # requests per second
+      rate_limit: 5,
+      # 10 seconds
+      timeout: 10_000,
       max_retries: 3,
       queue: :discovery,
       base_url: nil,

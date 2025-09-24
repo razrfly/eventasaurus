@@ -11,18 +11,20 @@ if event && user do
   IO.puts("Testing participant creation...")
   IO.puts("Event: #{event.title} (ID: #{event.id})")
   IO.puts("User: #{user.name} (ID: #{user.id})")
-  
-  result = Events.create_event_participant(%{
-    event_id: event.id,
-    user_id: user.id,
-    status: :accepted,
-    role: :ticket_holder
-  })
-  
+
+  result =
+    Events.create_event_participant(%{
+      event_id: event.id,
+      user_id: user.id,
+      status: :accepted,
+      role: :ticket_holder
+    })
+
   case result do
     {:ok, participant} ->
       IO.puts("✅ Participant created successfully!")
       IO.puts("Participant ID: #{participant.id}")
+
     {:error, changeset} ->
       IO.puts("❌ Failed to create participant:")
       IO.inspect(changeset.errors)

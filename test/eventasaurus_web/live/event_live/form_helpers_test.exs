@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
     test "maps confirmed date, confirmed venue, free event correctly" do
       params = %{
         "date_certainty" => "confirmed",
-        "venue_certainty" => "confirmed", 
+        "venue_certainty" => "confirmed",
         "participation_type" => "free"
       }
 

@@ -49,7 +49,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   import EventasaurusWeb.ClearVotesButton
   import Phoenix.HTML.SimplifiedHelpers.Truncate
 
-
   @impl true
   def mount(socket) do
     {:ok,
@@ -66,98 +65,113 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     # Determine if we're in anonymous mode
     anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
     temp_votes = assigns[:temp_votes] || %{}
-    
+
     # Ensure poll options are preloaded with suggested_by
-    poll = if assigns.poll do
-      # Batch preload suggested_by association for options that don't have it loaded
-      options_with_suggested_by = case assigns.poll.poll_options do
-        [] -> 
-          []
-        options ->
-          # Check if any options need preloading
-          needs_preload = Enum.any?(options, fn option ->
-            match?(%Ecto.Association.NotLoaded{}, option.suggested_by)
-          end)
-          
-          if needs_preload do
-            # Get all option IDs and batch load them with suggested_by preloaded
-            option_ids = Enum.map(options, & &1.id)
-            preloaded_options = Events.list_poll_options_by_ids(option_ids, [:suggested_by])
-            
-            # Create a map for quick lookup
-            preloaded_map = Map.new(preloaded_options, fn option -> {option.id, option} end)
-            
-            # Return options with preloaded data, filtering out any that were deleted
-            options
-            |> Enum.filter(fn option -> Map.has_key?(preloaded_map, option.id) end)
-            |> Enum.map(fn option -> Map.get(preloaded_map, option.id, option) end)
-          else
-            # All options already have suggested_by loaded
-            options
+    poll =
+      if assigns.poll do
+        # Batch preload suggested_by association for options that don't have it loaded
+        options_with_suggested_by =
+          case assigns.poll.poll_options do
+            [] ->
+              []
+
+            options ->
+              # Check if any options need preloading
+              needs_preload =
+                Enum.any?(options, fn option ->
+                  match?(%Ecto.Association.NotLoaded{}, option.suggested_by)
+                end)
+
+              if needs_preload do
+                # Get all option IDs and batch load them with suggested_by preloaded
+                option_ids = Enum.map(options, & &1.id)
+                preloaded_options = Events.list_poll_options_by_ids(option_ids, [:suggested_by])
+
+                # Create a map for quick lookup
+                preloaded_map = Map.new(preloaded_options, fn option -> {option.id, option} end)
+
+                # Return options with preloaded data, filtering out any that were deleted
+                options
+                |> Enum.filter(fn option -> Map.has_key?(preloaded_map, option.id) end)
+                |> Enum.map(fn option -> Map.get(preloaded_map, option.id, option) end)
+              else
+                # All options already have suggested_by loaded
+                options
+              end
           end
+
+        %{assigns.poll | poll_options: options_with_suggested_by}
+      else
+        assigns.poll
       end
-      %{assigns.poll | poll_options: options_with_suggested_by}
-    else
-      assigns.poll
-    end
 
     # Initialize vote state based on user votes or temp votes
-    vote_state = if anonymous_mode do
-      initialize_anonymous_vote_state(poll, temp_votes)
-    else
-      initialize_vote_state(poll, assigns.user_votes)
-    end
+    vote_state =
+      if anonymous_mode do
+        initialize_anonymous_vote_state(poll, temp_votes)
+      else
+        initialize_vote_state(poll, assigns.user_votes)
+      end
 
     # For ranked voting, initialize ordered options
-    ranked_options = case poll && poll.voting_system do
-      "ranked" ->
-        if anonymous_mode do
-          initialize_anonymous_ranked_options(poll.poll_options, temp_votes)
-        else
-          initialize_ranked_options(poll.poll_options, assigns.user_votes)
-        end
-      _ -> []
-    end
+    ranked_options =
+      case poll && poll.voting_system do
+        "ranked" ->
+          if anonymous_mode do
+            initialize_anonymous_ranked_options(poll.poll_options, temp_votes)
+          else
+            initialize_ranked_options(poll.poll_options, assigns.user_votes)
+          end
+
+        _ ->
+          []
+      end
 
     # Load poll statistics for embedded display
-    poll_stats = if poll do
-      try do
-        Events.get_poll_voting_stats(poll)
-      rescue
-        error in [ArgumentError, RuntimeError] ->
-          require Logger
-          Logger.error("Failed to load poll stats: #{inspect(error)}")
-          %{options: [], total_unique_voters: 0}
+    poll_stats =
+      if poll do
+        try do
+          Events.get_poll_voting_stats(poll)
+        rescue
+          error in [ArgumentError, RuntimeError] ->
+            require Logger
+            Logger.error("Failed to load poll stats: #{inspect(error)}")
+            %{options: [], total_unique_voters: 0}
+        end
+      else
+        %{options: [], total_unique_voters: 0}
       end
-    else
-      %{options: [], total_unique_voters: 0}
-    end
 
     # Ensure anonymous ID is assigned before we use it
-    socket_with_anon_id = if anonymous_mode do
-      Eventasaurus.Services.AnonymousIdService.assign_anonymous_id(socket)
-    else
-      socket
-    end
-    
+    socket_with_anon_id =
+      if anonymous_mode do
+        Eventasaurus.Services.AnonymousIdService.assign_anonymous_id(socket)
+      else
+        socket
+      end
+
     # Subscribe to poll statistics updates for real-time updates
     if connected?(socket_with_anon_id) && poll do
       Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
-      
+
       # Track poll view analytics (only on initial mount, not on updates)
       if !socket_with_anon_id.assigns[:poll_view_tracked] do
         user_id = if anonymous_mode, do: nil, else: assigns[:user] && assigns.user.id
-        
+
         # Get consistent anonymous ID for this session
-        user_identifier = Eventasaurus.Services.AnonymousIdService.get_user_identifier(user_id, socket_with_anon_id)
-        
+        user_identifier =
+          Eventasaurus.Services.AnonymousIdService.get_user_identifier(
+            user_id,
+            socket_with_anon_id
+          )
+
         metadata = %{
           event_id: poll.event_id,
           poll_type: poll.voting_system,
           poll_phase: poll.phase,
           is_anonymous: anonymous_mode
         }
-        
+
         Eventasaurus.Services.PollAnalyticsService.track_poll_viewed(
           user_identifier,
           to_string(poll.id),
@@ -183,7 +197,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def render(assigns) do
     # Default show_header to true if not provided
     assigns = assign_new(assigns, :show_header, fn -> true end)
-    
+
     ~H"""
     <div class={if @show_header, do: "bg-white shadow rounded-lg", else: ""}>
       <!-- Header (optional) -->
@@ -1136,6 +1150,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         else
           handle_authenticated_binary_vote(socket, option_id, vote)
         end
+
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
@@ -1158,6 +1173,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             else
               handle_authenticated_approval_vote(socket, option_id)
             end
+
           {:error, _} ->
             send(self(), {:show_error, "Invalid option ID"})
             {:noreply, socket}
@@ -1190,6 +1206,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         else
           handle_authenticated_clear_star_vote(socket, option_id)
         end
+
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
@@ -1211,19 +1228,29 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
         if socket.assigns.anonymous_mode do
           # Update temp votes for anonymous users
-          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          temp_votes =
+            update_temp_votes_for_ranked(
+              socket.assigns.temp_votes,
+              new_ranked_options,
+              socket.assigns.poll.voting_system
+            )
+
           send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
 
           {:noreply,
            socket
            |> assign(:ranked_options, new_ranked_options)
            |> assign(:temp_votes, temp_votes)
-           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+           |> assign(
+             :vote_state,
+             initialize_anonymous_vote_state(socket.assigns.poll, temp_votes)
+           )}
         else
           # Submit for authenticated users
           submit_ranked_votes(socket, new_ranked_options)
           {:noreply, assign(socket, :ranked_options, new_ranked_options)}
         end
+
       {:error, _} ->
         {:noreply, socket}
     end
@@ -1237,19 +1264,29 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
         if socket.assigns.anonymous_mode do
           # Update temp votes for anonymous users
-          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          temp_votes =
+            update_temp_votes_for_ranked(
+              socket.assigns.temp_votes,
+              new_ranked_options,
+              socket.assigns.poll.voting_system
+            )
+
           send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
 
           {:noreply,
            socket
            |> assign(:ranked_options, new_ranked_options)
            |> assign(:temp_votes, temp_votes)
-           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+           |> assign(
+             :vote_state,
+             initialize_anonymous_vote_state(socket.assigns.poll, temp_votes)
+           )}
         else
           # Submit for authenticated users
           submit_ranked_votes(socket, new_ranked_options)
           {:noreply, assign(socket, :ranked_options, new_ranked_options)}
         end
+
       {:error, _} ->
         {:noreply, socket}
     end
@@ -1269,14 +1306,23 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
           if socket.assigns.anonymous_mode do
             # Update temp votes for anonymous users
-            temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+            temp_votes =
+              update_temp_votes_for_ranked(
+                socket.assigns.temp_votes,
+                new_ranked_options,
+                socket.assigns.poll.voting_system
+              )
+
             send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
 
             {:noreply,
              socket
              |> assign(:ranked_options, new_ranked_options)
              |> assign(:temp_votes, temp_votes)
-             |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+             |> assign(
+               :vote_state,
+               initialize_anonymous_vote_state(socket.assigns.poll, temp_votes)
+             )}
           else
             # Submit for authenticated users
             submit_ranked_votes(socket, new_ranked_options)
@@ -1285,6 +1331,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         else
           {:noreply, socket}
         end
+
       {:error, _} ->
         {:noreply, socket}
     end
@@ -1298,19 +1345,29 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
         if socket.assigns.anonymous_mode do
           # Update temp votes for anonymous users
-          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          temp_votes =
+            update_temp_votes_for_ranked(
+              socket.assigns.temp_votes,
+              new_ranked_options,
+              socket.assigns.poll.voting_system
+            )
+
           send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
 
           {:noreply,
            socket
            |> assign(:ranked_options, new_ranked_options)
            |> assign(:temp_votes, temp_votes)
-           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+           |> assign(
+             :vote_state,
+             initialize_anonymous_vote_state(socket.assigns.poll, temp_votes)
+           )}
         else
           # Submit for authenticated users
           submit_ranked_votes(socket, new_ranked_options)
           {:noreply, assign(socket, :ranked_options, new_ranked_options)}
         end
+
       {:error, _} ->
         {:noreply, socket}
     end
@@ -1319,16 +1376,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   @impl true
   def handle_event("delete_option", %{"option-id" => option_id}, socket) do
     with {option_id_int, _} <- Integer.parse(option_id),
-         option when not is_nil(option) <- Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id_int)),
+         option when not is_nil(option) <-
+           Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id_int)),
          true <- Events.can_delete_option_based_on_poll_settings?(option, socket.assigns.user) do
-      
       case Events.delete_poll_option(option) do
         {:ok, _} ->
           # Send message to parent to reload poll
           send(self(), {:poll_stats_updated, socket.assigns.poll.id, %{}})
-          
+
           {:noreply, socket}
-          
+
         {:error, _} ->
           send(self(), {:show_error, "Failed to remove option"})
           {:noreply, socket}
@@ -1358,6 +1415,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
       {:ok, _} = clear_all_user_votes(socket)
       send(self(), {:votes_cleared})
+
       {:noreply,
        socket
        |> assign(:loading, false)
@@ -1392,17 +1450,19 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     current_vote = socket.assigns.vote_state[option_id]
     new_vote = if current_vote == "approved", do: nil, else: "approved"
 
-    new_vote_state = if new_vote do
-      Map.put(socket.assigns.vote_state, option_id, new_vote)
-    else
-      Map.delete(socket.assigns.vote_state, option_id)
-    end
+    new_vote_state =
+      if new_vote do
+        Map.put(socket.assigns.vote_state, option_id, new_vote)
+      else
+        Map.delete(socket.assigns.vote_state, option_id)
+      end
 
-    new_temp_votes = if new_vote do
-      Map.put(socket.assigns.temp_votes, option_id, "selected")
-    else
-      Map.delete(socket.assigns.temp_votes, option_id)
-    end
+    new_temp_votes =
+      if new_vote do
+        Map.put(socket.assigns.temp_votes, option_id, "selected")
+      else
+        Map.delete(socket.assigns.temp_votes, option_id)
+      end
 
     send(self(), {:temp_votes_updated, socket.assigns.poll.id, new_temp_votes})
 
@@ -1465,11 +1525,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
     case submit_approval_vote(socket, option_id, new_vote) do
       {:ok, _} ->
-        new_vote_state = if new_vote do
-          Map.put(socket.assigns.vote_state, option_id, new_vote)
-        else
-          Map.delete(socket.assigns.vote_state, option_id)
-        end
+        new_vote_state =
+          if new_vote do
+            Map.put(socket.assigns.vote_state, option_id, new_vote)
+          else
+            Map.delete(socket.assigns.vote_state, option_id)
+          end
 
         send(self(), {:vote_cast, option_id, new_vote})
 
@@ -1495,7 +1556,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       {:ok, _vote} ->
         new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
         send(self(), {:vote_cast, option_id, rating})
-
 
         {:noreply,
          socket
@@ -1530,21 +1590,29 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp initialize_anonymous_vote_state(poll, temp_votes) do
     case poll.voting_system do
-      "binary" -> temp_votes
+      "binary" ->
+        temp_votes
+
       "approval" ->
         for {option_id, _} <- temp_votes, into: %{} do
           {option_id, "approved"}
         end
-      "star" -> temp_votes
+
+      "star" ->
+        temp_votes
+
       "ranked" ->
         case temp_votes do
           %{poll_type: :ranked, votes: votes} when is_list(votes) ->
             for %{option_id: option_id, rank: rank} <- votes, into: %{} do
               {option_id, rank}
             end
+
           %{poll_type: :ranked, votes: votes} when is_map(votes) ->
             votes
-          _ -> %{}
+
+          _ ->
+            %{}
         end
     end
   end
@@ -1569,7 +1637,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         end)
         |> Enum.reject(&is_nil/1)
 
-      _ -> []
+      _ ->
+        []
     end
   end
 
@@ -1577,28 +1646,35 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     case temp_votes do
       %{poll_type: :ranked, votes: votes} when is_list(votes) ->
         length(votes) > 0
+
       %{poll_type: :ranked, votes: votes} when is_map(votes) ->
         map_size(votes) > 0
+
       votes when is_map(votes) ->
         map_size(votes) > 0
-      _ -> false
+
+      _ ->
+        false
     end
   end
 
   defp update_temp_votes_for_ranked(temp_votes, ranked_options, voting_system) do
     case voting_system do
       "ranked" ->
-        ranked_votes = ranked_options
-        |> Enum.with_index(1)
-        |> Enum.map(fn {option, rank} ->
-          %{option_id: option.id, rank: rank}
-        end)
+        ranked_votes =
+          ranked_options
+          |> Enum.with_index(1)
+          |> Enum.map(fn {option, rank} ->
+            %{option_id: option.id, rank: rank}
+          end)
 
         %{
           poll_type: :ranked,
           votes: ranked_votes
         }
-      _ -> temp_votes
+
+      _ ->
+        temp_votes
     end
   end
 
@@ -1640,14 +1716,19 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp submit_binary_vote(socket, option_id, vote_value) do
     case find_poll_option(socket, option_id) do
-      nil -> {:error, :option_not_found}
-      option -> Events.cast_binary_vote(socket.assigns.poll, option, socket.assigns.user, vote_value)
+      nil ->
+        {:error, :option_not_found}
+
+      option ->
+        Events.cast_binary_vote(socket.assigns.poll, option, socket.assigns.user, vote_value)
     end
   end
 
   defp submit_approval_vote(socket, option_id, vote_value) do
     case find_poll_option(socket, option_id) do
-      nil -> {:error, :option_not_found}
+      nil ->
+        {:error, :option_not_found}
+
       option ->
         if vote_value do
           Events.cast_approval_vote(socket.assigns.poll, option, socket.assigns.user, true)
@@ -1669,17 +1750,20 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp submit_ranked_votes(socket, ranked_options) do
     # Prepare ranked options with their ranks
-    ranked_options_with_ranks = ranked_options
-    |> Enum.with_index(1)
-    |> Enum.map(fn {option, rank} -> {option.id, rank} end)
+    ranked_options_with_ranks =
+      ranked_options
+      |> Enum.with_index(1)
+      |> Enum.map(fn {option, rank} -> {option.id, rank} end)
 
     Events.cast_ranked_votes(socket.assigns.poll, ranked_options_with_ranks, socket.assigns.user)
   end
 
   defp clear_vote(socket, option_id) do
     case find_poll_option(socket, option_id) do
-      nil -> {:ok, nil}
-      option -> 
+      nil ->
+        {:ok, nil}
+
+      option ->
         case Events.get_user_poll_vote(option, socket.assigns.user) do
           nil -> {:ok, nil}
           existing_vote -> Events.delete_poll_vote(existing_vote)
@@ -1688,11 +1772,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   defp find_poll_option(socket_or_assigns, option_id) do
-    poll_options = case socket_or_assigns do
-      %Phoenix.LiveView.Socket{assigns: %{poll: %{poll_options: options}}} -> options
-      %{poll: %{poll_options: options}} -> options
-      _ -> []
-    end
+    poll_options =
+      case socket_or_assigns do
+        %Phoenix.LiveView.Socket{assigns: %{poll: %{poll_options: options}}} -> options
+        %{poll: %{poll_options: options}} -> options
+        _ -> []
+      end
 
     Enum.find(poll_options, &(&1.id == option_id))
   end
@@ -1708,8 +1793,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp move_option_up(ranked_options, option_id) do
     case Enum.find_index(ranked_options, &(&1.id == option_id)) do
-      0 -> ranked_options  # Already at top
-      nil -> ranked_options  # Option not found
+      # Already at top
+      0 ->
+        ranked_options
+
+      # Option not found
+      nil ->
+        ranked_options
+
       index ->
         ranked_options
         |> List.pop_at(index)
@@ -1720,8 +1811,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp move_option_down(ranked_options, option_id) do
     case Enum.find_index(ranked_options, &(&1.id == option_id)) do
-      nil -> ranked_options  # Option not found
-      index when index == length(ranked_options) - 1 -> ranked_options  # Already at bottom
+      # Option not found
+      nil ->
+        ranked_options
+
+      # Already at bottom
+      index when index == length(ranked_options) - 1 ->
+        ranked_options
+
       index ->
         ranked_options
         |> List.pop_at(index)
@@ -1734,7 +1831,9 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp can_add_more_rankings?(ranked_options, max_rankings) when is_integer(max_rankings) do
     length(ranked_options) < max_rankings
   end
-  defp can_add_more_rankings?(_, nil), do: true  # No limit for non-ranked polls
+
+  # No limit for non-ranked polls
+  defp can_add_more_rankings?(_, nil), do: true
 
   # UI Helper Functions
 
@@ -1757,14 +1856,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   defp binary_button_class(current_vote, vote_type, anonymous_mode) do
-    base_classes = "inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+    base_classes =
+      "inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
 
     if current_vote == vote_type do
-      active_classes = case vote_type do
-        "yes" -> " border-green-500 text-green-700 bg-green-50"
-        "no" -> " border-red-500 text-red-700 bg-red-50"
-        "maybe" -> " border-yellow-500 text-yellow-700 bg-yellow-50"
-      end
+      active_classes =
+        case vote_type do
+          "yes" -> " border-green-500 text-green-700 bg-green-50"
+          "no" -> " border-red-500 text-red-700 bg-red-50"
+          "maybe" -> " border-yellow-500 text-yellow-700 bg-yellow-50"
+        end
 
       # Add subtle indicator for anonymous mode
       if anonymous_mode do
@@ -1820,8 +1921,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp has_time_slots?(option) do
     case option.metadata do
-      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) and length(time_slots) > 0 ->
+      %{"time_enabled" => true, "time_slots" => time_slots}
+      when is_list(time_slots) and length(time_slots) > 0 ->
         true
+
       _ ->
         false
     end
@@ -1831,6 +1934,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     case option.metadata do
       %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) ->
         time_slots
+
       _ ->
         []
     end
@@ -1843,6 +1947,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         start_display = TimeUtils.format_time_12hour(start_time)
         end_display = TimeUtils.format_time_12hour(end_time)
         "#{start_display} - #{end_display}"
+
       _ ->
         "Invalid time slot"
     end
@@ -1875,22 +1980,24 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   # Helper functions for deletion time display
   defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
+
   defp get_deletion_time_remaining(inserted_at) do
     elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
     # Use < 300 to match original time-based deletion boundary condition (≤ 300)
     # When elapsed_seconds = 300, remaining = 0, so button disappears at same time as countdown
-    max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
+    # 300 seconds = 5 minutes
+    max(0, 300 - elapsed_seconds)
   end
 
   defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
+
   defp format_deletion_time_remaining(seconds) do
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
-    
+
     cond do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
     end
   end
-
 end

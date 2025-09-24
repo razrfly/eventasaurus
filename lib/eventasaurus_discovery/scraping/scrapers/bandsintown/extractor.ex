@@ -42,10 +42,10 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
          {start, _} = start_pos,
          start_idx = start + byte_size("window.__data="),
          # Find the end by looking for </script> tag
-         end_pos when end_pos != :nomatch <- :binary.match(html, "</script>", [{:scope, {start_idx, byte_size(html) - start_idx}}]),
+         end_pos when end_pos != :nomatch <-
+           :binary.match(html, "</script>", [{:scope, {start_idx, byte_size(html) - start_idx}}]),
          {end_idx, _} = end_pos,
          json_str = binary_part(html, start_idx, end_idx - start_idx) do
-
       try do
         case Jason.decode(json_str) do
           {:ok, data} ->
@@ -85,7 +85,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
   defp transform_json_ld_event(event) do
     %{
       url: Map.get(event, "url", ""),
-      artist_name: get_in(event, ["performer", "name"]) || get_in(event, ["organizer", "name"]) || "",
+      artist_name:
+        get_in(event, ["performer", "name"]) || get_in(event, ["organizer", "name"]) || "",
       venue_name: get_in(event, ["location", "name"]) || "",
       date: Map.get(event, "startDate", ""),
       description: Map.get(event, "description", ""),
@@ -104,13 +105,14 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
       "[data-event-id]"
     ]
 
-    events = Enum.flat_map(selectors, fn selector ->
-      document
-      |> Floki.find(selector)
-      |> Enum.map(&parse_event_card/1)
-      |> Enum.reject(&is_nil/1)
-    end)
-    |> Enum.uniq_by(& &1[:url])
+    events =
+      Enum.flat_map(selectors, fn selector ->
+        document
+        |> Floki.find(selector)
+        |> Enum.map(&parse_event_card/1)
+        |> Enum.reject(&is_nil/1)
+      end)
+      |> Enum.uniq_by(& &1[:url])
 
     events
   end
@@ -236,7 +238,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
             {"datetime", dt} -> dt
             _ -> nil
           end)
-        _ -> nil
+
+        _ ->
+          nil
       end
     end)
   end
@@ -278,12 +282,15 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
           {"src", src} -> src
           _ -> nil
         end)
+
       {"meta", attrs, _} ->
         Enum.find_value(attrs, fn
           {"content", content} -> content
           _ -> nil
         end)
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -306,7 +313,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
           {"content", content} -> content
           _ -> nil
         end)
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 

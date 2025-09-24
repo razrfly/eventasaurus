@@ -158,11 +158,12 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
   end
 
   defp filter_button_label(filter_type, count) do
-    base_label = case filter_type do
-      :upcoming -> "Show upcoming events"
-      :past -> "Show past events"
-      :archived -> "Show archived events"
-    end
+    base_label =
+      case filter_type do
+        :upcoming -> "Show upcoming events"
+        :past -> "Show past events"
+        :archived -> "Show archived events"
+      end
 
     if count && count > 0 do
       "#{base_label} (#{count} available)"

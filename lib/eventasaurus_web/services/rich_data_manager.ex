@@ -135,7 +135,11 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   - `{:error, reason}`: Failed to get details
   """
   def get_details(provider_id, content_id, content_type, options \\ %{}) do
-    GenServer.call(__MODULE__, {:get_details, provider_id, content_id, content_type, options}, 30_000)
+    GenServer.call(
+      __MODULE__,
+      {:get_details, provider_id, content_id, content_type, options},
+      30_000
+    )
   end
 
   @doc """
@@ -156,7 +160,11 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   - `{:error, reason}`: Failed to get details
   """
   def get_cached_details(provider_id, content_id, content_type, options \\ %{}) do
-    GenServer.call(__MODULE__, {:get_cached_details, provider_id, content_id, content_type, options}, 30_000)
+    GenServer.call(
+      __MODULE__,
+      {:get_cached_details, provider_id, content_id, content_type, options},
+      30_000
+    )
   end
 
   @doc """
@@ -196,11 +204,12 @@ defmodule EventasaurusWeb.Services.RichDataManager do
 
     Logger.info("RichDataManager started with #{length(@default_providers)} default providers")
 
-    {:ok, %{
-      providers: %{},
-      last_health_check: DateTime.utc_now(),
-      health_status: %{}
-    }}
+    {:ok,
+     %{
+       providers: %{},
+       last_health_check: DateTime.utc_now(),
+       health_status: %{}
+     }}
   end
 
   @impl true
@@ -234,9 +243,12 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   @impl true
   def handle_call(:list_providers, _from, state) do
     providers = :ets.tab2list(@registry_table)
-    results = Enum.map(providers, fn {provider_id, provider_module} ->
-      {provider_id, provider_module, get_provider_status(provider_module)}
-    end)
+
+    results =
+      Enum.map(providers, fn {provider_id, provider_module} ->
+        {provider_id, provider_module, get_provider_status(provider_module)}
+      end)
+
     {:reply, results, state}
   end
 
@@ -246,19 +258,22 @@ defmodule EventasaurusWeb.Services.RichDataManager do
     timeout = Map.get(options, :timeout, 30_000)
 
     # Search across providers in parallel
-    search_tasks = Enum.map(providers, fn {provider_id, provider_module} ->
-      Task.async(fn ->
-        case provider_module.search(query, options) do
-          {:ok, results} ->
-            {provider_id, {:ok, results}}
-          {:error, reason} ->
-            {provider_id, {:error, reason}}
-        end
+    search_tasks =
+      Enum.map(providers, fn {provider_id, provider_module} ->
+        Task.async(fn ->
+          case provider_module.search(query, options) do
+            {:ok, results} ->
+              {provider_id, {:ok, results}}
+
+            {:error, reason} ->
+              {provider_id, {:error, reason}}
+          end
+        end)
       end)
-    end)
 
     # Collect results
-    results = search_tasks
+    results =
+      search_tasks
       |> Task.await_many(timeout)
       |> Enum.into(%{})
 
@@ -278,7 +293,11 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   end
 
   @impl true
-  def handle_call({:get_cached_details, provider_id, content_id, content_type, options}, _from, state) do
+  def handle_call(
+        {:get_cached_details, provider_id, content_id, content_type, options},
+        _from,
+        state
+      ) do
     case get_provider(provider_id) do
       {:ok, provider_module} ->
         result = provider_module.get_cached_details(content_id, content_type, options)
@@ -293,10 +312,11 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   def handle_call(:validate_providers, _from, state) do
     providers = :ets.tab2list(@registry_table)
 
-    results = Enum.map(providers, fn {provider_id, provider_module} ->
-      validation_result = provider_module.validate_config()
-      {provider_id, validation_result}
-    end)
+    results =
+      Enum.map(providers, fn {provider_id, provider_module} ->
+        validation_result = provider_module.validate_config()
+        {provider_id, validation_result}
+      end)
 
     {:reply, {:ok, results}, state}
   end
@@ -305,10 +325,11 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   def handle_call(:health_check, _from, state) do
     providers = :ets.tab2list(@registry_table)
 
-    health_status = Enum.into(providers, %{}, fn {provider_id, provider_module} ->
-      status = get_provider_status(provider_module)
-      {provider_id, status}
-    end)
+    health_status =
+      Enum.into(providers, %{}, fn {provider_id, provider_module} ->
+        status = get_provider_status(provider_module)
+        {provider_id, status}
+      end)
 
     overall_status = %{
       total_providers: length(providers),
@@ -334,7 +355,10 @@ defmodule EventasaurusWeb.Services.RichDataManager do
       # Store in registry
       :ets.insert(@registry_table, {provider_id, provider_module})
 
-      Logger.debug("Registered provider: #{provider_name} (#{provider_id}) - supports #{inspect(supported_types)}")
+      Logger.debug(
+        "Registered provider: #{provider_name} (#{provider_id}) - supports #{inspect(supported_types)}"
+      )
+
       :ok
     rescue
       e ->
@@ -346,6 +370,7 @@ defmodule EventasaurusWeb.Services.RichDataManager do
     case :ets.lookup(@registry_table, provider_id) do
       [{^provider_id, provider_module}] ->
         {:ok, provider_module}
+
       [] ->
         {:error, "Provider not found: #{provider_id}"}
     end
@@ -359,8 +384,10 @@ defmodule EventasaurusWeb.Services.RichDataManager do
     case requested_providers do
       :all ->
         all_providers
+
       provider_ids when is_list(provider_ids) ->
         Enum.filter(all_providers, fn {provider_id, _} -> provider_id in provider_ids end)
+
       _ ->
         all_providers
     end

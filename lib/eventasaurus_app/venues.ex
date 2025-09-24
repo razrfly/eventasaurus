@@ -94,11 +94,13 @@ defmodule EventasaurusApp.Venues do
   # Private helper functions for query filtering
 
   defp venue_type_filter(query, nil), do: query
+
   defp venue_type_filter(query, type) when is_binary(type) do
     from(v in query, where: v.venue_type == ^type)
   end
 
   defp venue_name_filter(query, nil), do: query
+
   defp venue_name_filter(query, name) when is_binary(name) do
     from(v in query, where: ilike(v.name, ^"%#{name}%"))
   end
@@ -110,5 +112,6 @@ defmodule EventasaurusApp.Venues do
   def find_venue_by_address(address) when is_binary(address) do
     Repo.get_by(Venue, address: address)
   end
+
   def find_venue_by_address(_), do: nil
 end

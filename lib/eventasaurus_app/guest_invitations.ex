@@ -16,21 +16,33 @@ defmodule EventasaurusApp.GuestInvitations do
     %{
       frequency_weight: 0.6,
       recency_weight: 0.4,
-      affinity_weight: 0.0,     # Future feature
-      social_weight: 0.0,       # Future feature
+      # Future feature
+      affinity_weight: 0.0,
+      # Future feature
+      social_weight: 0.0,
       frequency_thresholds: %{
-        excellent: 10,   # 1.0 score
-        good: 5,         # 0.8 score
-        moderate: 3,     # 0.6 score
-        some: 2,         # 0.4 score
-        minimal: 1       # 0.2 score
+        # 1.0 score
+        excellent: 10,
+        # 0.8 score
+        good: 5,
+        # 0.6 score
+        moderate: 3,
+        # 0.4 score
+        some: 2,
+        # 0.2 score
+        minimal: 1
       },
       recency_thresholds: %{
-        very_recent: 30,    # 1.0 score (within 30 days)
-        recent: 90,         # 0.8 score (within 3 months)
-        moderate: 180,      # 0.6 score (within 6 months)
-        some: 365,          # 0.4 score (within 1 year)
-        old: 730            # 0.2 score (within 2 years)
+        # 1.0 score (within 30 days)
+        very_recent: 30,
+        # 0.8 score (within 3 months)
+        recent: 90,
+        # 0.6 score (within 6 months)
+        moderate: 180,
+        # 0.4 score (within 1 year)
+        some: 365,
+        # 0.2 score (within 2 years)
+        old: 730
         # older than 2 years gets 0.1 score
       }
     }
@@ -59,10 +71,11 @@ defmodule EventasaurusApp.GuestInvitations do
     affinity_score = 0.0
     social_score = 0.0
 
-    total_score = (frequency_score * config.frequency_weight) +
-                  (recency_score * config.recency_weight) +
-                  (affinity_score * config.affinity_weight) +
-                  (social_score * config.social_weight)
+    total_score =
+      frequency_score * config.frequency_weight +
+        recency_score * config.recency_weight +
+        affinity_score * config.affinity_weight +
+        social_score * config.social_weight
 
     participant
     |> Map.merge(%{
@@ -96,10 +109,11 @@ defmodule EventasaurusApp.GuestInvitations do
 
     scored = Enum.map(participants, &score_participant(&1, config))
 
-    sorted = case sort_order do
-      :desc -> Enum.sort_by(scored, & &1.total_score, :desc)
-      :asc -> Enum.sort_by(scored, & &1.total_score, :asc)
-    end
+    sorted =
+      case sort_order do
+        :desc -> Enum.sort_by(scored, & &1.total_score, :desc)
+        :asc -> Enum.sort_by(scored, & &1.total_score, :asc)
+      end
 
     if limit do
       Enum.take(sorted, limit)
@@ -136,7 +150,9 @@ defmodule EventasaurusApp.GuestInvitations do
   """
   def calculate_recency_score(last_participation, config \\ nil) do
     case last_participation do
-      nil -> 0.0
+      nil ->
+        0.0
+
       date ->
         config = config || default_config()
         thresholds = config.recency_thresholds
@@ -148,7 +164,8 @@ defmodule EventasaurusApp.GuestInvitations do
           days_ago <= thresholds.moderate -> 0.6
           days_ago <= thresholds.some -> 0.4
           days_ago <= thresholds.old -> 0.2
-          true -> 0.1  # Older than 2 years but still some value
+          # Older than 2 years but still some value
+          true -> 0.1
         end
     end
   end
@@ -189,8 +206,9 @@ defmodule EventasaurusApp.GuestInvitations do
   """
   def validate_config(config) do
     # Validate weights
-    total_weight = config.frequency_weight + config.recency_weight +
-                   config.affinity_weight + config.social_weight
+    total_weight =
+      config.frequency_weight + config.recency_weight +
+        config.affinity_weight + config.social_weight
 
     if total_weight > 1.1 do
       raise ArgumentError, "Total scoring weights exceed 1.0: #{total_weight}"
@@ -198,17 +216,20 @@ defmodule EventasaurusApp.GuestInvitations do
 
     # Validate frequency thresholds are in descending order
     freq = config.frequency_thresholds
+
     unless freq.excellent >= freq.good >= freq.moderate >= freq.some >= freq.minimal do
       raise ArgumentError, "Frequency thresholds must be in descending order"
     end
 
     # Validate recency thresholds are in ascending order (days)
     rec = config.recency_thresholds
+
     unless rec.very_recent <= rec.recent and
-           rec.recent <= rec.moderate and
-           rec.moderate <= rec.some and
-           rec.some <= rec.old do
-      raise ArgumentError, "Recency thresholds must be in ascending order (days). Got: #{inspect(rec)}"
+             rec.recent <= rec.moderate and
+             rec.moderate <= rec.some and
+             rec.some <= rec.old do
+      raise ArgumentError,
+            "Recency thresholds must be in ascending order (days). Got: #{inspect(rec)}"
     end
 
     config
@@ -249,7 +270,7 @@ defmodule EventasaurusApp.GuestInvitations do
     }
   end
 
-      # Private helper functions
+  # Private helper functions
 
   defp get_frequency_tier(count, config) do
     thresholds = config.frequency_thresholds
@@ -266,7 +287,9 @@ defmodule EventasaurusApp.GuestInvitations do
 
   defp get_recency_tier(last_participation, config) do
     case last_participation do
-      nil -> "never"
+      nil ->
+        "never"
+
       date ->
         thresholds = config.recency_thresholds
         days_ago = DateTime.diff(DateTime.utc_now(), date, :day)

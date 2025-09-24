@@ -34,16 +34,24 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
       assert vote3.vote_type == :no
     end
 
-    test "create_event_date_vote/3 prevents duplicate votes from same user", %{option: option, user: user} do
+    test "create_event_date_vote/3 prevents duplicate votes from same user", %{
+      option: option,
+      user: user
+    } do
       # Create first vote
       assert {:ok, _vote} = Events.create_event_date_vote(option, user, :yes)
 
       # Try to create duplicate
-      assert {:error, %Ecto.Changeset{} = changeset} = Events.create_event_date_vote(option, user, :no)
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Events.create_event_date_vote(option, user, :no)
+
       assert "user has already voted for this date option" in errors_on(changeset).event_date_option_id
     end
 
-    test "get_event_date_vote!/1 returns vote with preloaded associations", %{option: option, user: user} do
+    test "get_event_date_vote!/1 returns vote with preloaded associations", %{
+      option: option,
+      user: user
+    } do
       {:ok, vote} = Events.create_event_date_vote(option, user, :yes)
 
       retrieved_vote = Events.get_event_date_vote!(vote.id)
@@ -60,7 +68,10 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
       assert found_vote.vote_type == :yes
     end
 
-    test "get_user_vote_for_option/2 returns nil when no vote exists", %{option: option, user: user} do
+    test "get_user_vote_for_option/2 returns nil when no vote exists", %{
+      option: option,
+      user: user
+    } do
       assert Events.get_user_vote_for_option(option, user) == nil
     end
 
@@ -129,7 +140,13 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
   describe "vote tallies and analytics" do
     setup do
       poll = insert(:event_date_poll)
-      option = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(50)})
+
+      option =
+        insert(:event_date_option, %{
+          event_date_poll: poll,
+          date: Date.utc_today() |> Date.add(50)
+        })
+
       %{poll: poll, option: option}
     end
 
@@ -151,8 +168,10 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
       assert tally.if_need_be == 1
       assert tally.no == 1
       assert tally.total == 4
-      assert tally.score == 2.5  # (2 * 1.0) + (1 * 0.5) + (1 * 0.0)
-      assert tally.percentage == 62.5  # (2.5 / 4.0) * 100
+      # (2 * 1.0) + (1 * 0.5) + (1 * 0.0)
+      assert tally.score == 2.5
+      # (2.5 / 4.0) * 100
+      assert tally.percentage == 62.5
     end
 
     test "get_date_option_vote_tally/1 handles no votes", %{option: option} do
@@ -167,8 +186,11 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     end
 
     test "list_votes_for_poll/1 returns votes across all options", %{poll: poll} do
-      option1 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(1)})
-      option2 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(2)})
+      option1 =
+        insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(1)})
+
+      option2 =
+        insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(2)})
 
       user1 = insert(:user)
       user2 = insert(:user)
@@ -181,8 +203,11 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     end
 
     test "list_user_votes_for_poll/2 returns user's votes for poll", %{poll: poll} do
-      option1 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(7)})
-      option2 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(8)})
+      option1 =
+        insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(7)})
+
+      option2 =
+        insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(8)})
 
       user1 = insert(:user)
       user2 = insert(:user)
@@ -203,8 +228,18 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     test "get_poll_vote_tallies/1 returns tallies sorted by score", %{poll: _poll} do
       # Create a fresh poll for this test to avoid interference
       fresh_poll = insert(:event_date_poll)
-      option1 = insert(:event_date_option, %{event_date_poll: fresh_poll, date: Date.utc_today() |> Date.add(9)})
-      option2 = insert(:event_date_option, %{event_date_poll: fresh_poll, date: Date.utc_today() |> Date.add(10)})
+
+      option1 =
+        insert(:event_date_option, %{
+          event_date_poll: fresh_poll,
+          date: Date.utc_today() |> Date.add(9)
+        })
+
+      option2 =
+        insert(:event_date_option, %{
+          event_date_poll: fresh_poll,
+          date: Date.utc_today() |> Date.add(10)
+        })
 
       user1 = insert(:user)
       user2 = insert(:user)
@@ -231,11 +266,12 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
 
   describe "event_date_vote validations" do
     test "changeset with valid attributes" do
-      changeset = EventDateVote.changeset(%EventDateVote{}, %{
-        event_date_option_id: 1,
-        user_id: 1,
-        vote_type: :yes
-      })
+      changeset =
+        EventDateVote.changeset(%EventDateVote{}, %{
+          event_date_option_id: 1,
+          user_id: 1,
+          vote_type: :yes
+        })
 
       assert changeset.valid?
     end
@@ -249,11 +285,12 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     end
 
     test "changeset validates vote_type inclusion" do
-      changeset = EventDateVote.changeset(%EventDateVote{}, %{
-        event_date_option_id: 1,
-        user_id: 1,
-        vote_type: :invalid
-      })
+      changeset =
+        EventDateVote.changeset(%EventDateVote{}, %{
+          event_date_option_id: 1,
+          user_id: 1,
+          vote_type: :invalid
+        })
 
       refute changeset.valid?
       assert "is invalid" in errors_on(changeset).vote_type
@@ -261,11 +298,12 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
 
     test "changeset accepts all valid vote types" do
       for vote_type <- [:yes, :if_need_be, :no] do
-        changeset = EventDateVote.changeset(%EventDateVote{}, %{
-          event_date_option_id: 1,
-          user_id: 1,
-          vote_type: vote_type
-        })
+        changeset =
+          EventDateVote.changeset(%EventDateVote{}, %{
+            event_date_option_id: 1,
+            user_id: 1,
+            vote_type: vote_type
+          })
 
         assert changeset.valid?
       end

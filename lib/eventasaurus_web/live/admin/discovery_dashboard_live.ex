@@ -93,8 +93,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     limit = parse_int(params["limit"], 100)
     radius = parse_int(params["radius"], 50)
 
-    if (is_nil(source) or source == "") or (is_nil(city_id) or city_id == "") do
-      socket = put_flash(socket, :error, "Please select a source and city before starting an import")
+    if is_nil(source) or source == "" or (is_nil(city_id) or city_id == "") do
+      socket =
+        put_flash(socket, :error, "Please select a source and city before starting an import")
+
       {:noreply, socket}
     else
       # Queue the discovery sync job
@@ -179,11 +181,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     socket =
       case result do
         {:ok, count} ->
-          message = if clear_oban_jobs do
-            "Successfully cleared #{count} events and related Oban jobs"
-          else
-            "Successfully cleared #{count} events"
-          end
+          message =
+            if clear_oban_jobs do
+              "Successfully cleared #{count} events and related Oban jobs"
+            else
+              "Successfully cleared #{count} events"
+            end
 
           socket
           |> put_flash(:info, message)
@@ -241,7 +244,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     city_stats = get_city_statistics()
 
     # Get available cities
-    cities = Repo.all(from c in City, order_by: c.name, preload: :country)
+    cities = Repo.all(from(c in City, order_by: c.name, preload: :country))
 
     # Get available sources
     sources = ["ticketmaster", "bandsintown", "karnet", "all"]
@@ -251,6 +254,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
     # Get upcoming vs past events
     today = DateTime.utc_now()
+
     upcoming_count =
       Repo.aggregate(
         from(e in PublicEvent, where: e.starts_at >= ^today),
@@ -278,32 +282,37 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   defp count_unique_venues do
     Repo.one(
-      from e in PublicEvent,
+      from(e in PublicEvent,
         where: not is_nil(e.venue_id),
         select: count(e.venue_id, :distinct)
+      )
     ) || 0
   end
 
   defp count_unique_performers do
     # Count distinct performers from the performers association
     Repo.one(
-      from pep in EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
+      from(pep in EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
         select: count(pep.performer_id, :distinct)
+      )
     ) || 0
   end
 
   defp count_unique_sources do
     Repo.one(
-      from s in PublicEventSource,
+      from(s in PublicEventSource,
         select: count(s.source_id, :distinct)
+      )
     ) || 0
   end
 
   defp get_source_statistics do
     Repo.all(
-      from pes in PublicEventSource,
-        join: e in PublicEvent, on: e.id == pes.event_id,
-        join: s in EventasaurusDiscovery.Sources.Source, on: s.id == pes.source_id,
+      from(pes in PublicEventSource,
+        join: e in PublicEvent,
+        on: e.id == pes.event_id,
+        join: s in EventasaurusDiscovery.Sources.Source,
+        on: s.id == pes.source_id,
         group_by: [s.id, s.name],
         select: %{
           source: s.name,
@@ -311,14 +320,17 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           last_sync: max(pes.inserted_at)
         },
         order_by: [desc: count(pes.id)]
+      )
     )
   end
 
   defp get_city_statistics do
     Repo.all(
-      from e in PublicEvent,
-        join: v in EventasaurusApp.Venues.Venue, on: v.id == e.venue_id,
-        join: c in City, on: c.id == v.city_id,
+      from(e in PublicEvent,
+        join: v in EventasaurusApp.Venues.Venue,
+        on: v.id == e.venue_id,
+        join: c in City,
+        on: c.id == v.city_id,
         group_by: [c.id, c.name],
         having: count(e.id) >= 10,
         select: %{
@@ -327,6 +339,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           count: count(e.id)
         },
         order_by: [desc: count(e.id)]
+      )
     )
   end
 
@@ -393,6 +406,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   defp parse_int(nil, default), do: default
   defp parse_int("", default), do: default
   defp parse_int(v, _default) when is_integer(v), do: v
+
   defp parse_int(v, default) when is_binary(v) do
     case Integer.parse(v) do
       {i, _} -> i

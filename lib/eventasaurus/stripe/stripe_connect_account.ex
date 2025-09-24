@@ -3,12 +3,12 @@ defmodule EventasaurusApp.Stripe.StripeConnectAccount do
   import Ecto.Changeset
 
   schema "stripe_connect_accounts" do
-    field :stripe_user_id, :string
-    field :connected_at, :utc_datetime
-    field :disconnected_at, :utc_datetime
+    field(:stripe_user_id, :string)
+    field(:connected_at, :utc_datetime)
+    field(:disconnected_at, :utc_datetime)
 
-    belongs_to :user, EventasaurusApp.Accounts.User
-    has_many :orders, EventasaurusApp.Events.Order, foreign_key: :stripe_connect_account_id
+    belongs_to(:user, EventasaurusApp.Accounts.User)
+    has_many(:orders, EventasaurusApp.Events.Order, foreign_key: :stripe_connect_account_id)
 
     timestamps()
   end
@@ -19,7 +19,10 @@ defmodule EventasaurusApp.Stripe.StripeConnectAccount do
     |> cast(attrs, [:stripe_user_id, :connected_at, :disconnected_at, :user_id])
     |> validate_required([:stripe_user_id, :user_id, :connected_at])
     |> unique_constraint(:stripe_user_id)
-    |> unique_constraint(:user_id, name: :stripe_connect_accounts_user_id_index, message: "already has an active Stripe Connect account")
+    |> unique_constraint(:user_id,
+      name: :stripe_connect_accounts_user_id_index,
+      message: "already has an active Stripe Connect account"
+    )
     |> foreign_key_constraint(:user_id)
   end
 

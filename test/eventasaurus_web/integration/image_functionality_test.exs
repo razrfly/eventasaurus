@@ -53,10 +53,11 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       assert html =~ "Drag and drop or click here to upload"
 
       # Simulate upload success
-      _html = render_hook(view, "image_upload_success", %{
-        "url" => "https://storage.supabase.com/uploaded-image.jpg",
-        "path" => "events/uploaded-image.jpg"
-      })
+      _html =
+        render_hook(view, "image_upload_success", %{
+          "url" => "https://storage.supabase.com/uploaded-image.jpg",
+          "path" => "events/uploaded-image.jpg"
+        })
 
       # Verify upload success message
       html = render(view)
@@ -85,6 +86,7 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
 
       # Verify image data is preserved
       assert html =~ "test-image"
+
       # Verify validation error is shown by checking for error styling or required field indicators
       assert html =~ "phx-feedback-for" or html =~ "invalid" or html =~ "error"
     end
@@ -114,28 +116,32 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Select the first image
-      html = render_hook(view, "select_image", %{
-        "source" => "unsplash",
-        "image_url" => "https://images.unsplash.com/test-image",
-        "image_data" => %{
-          "id" => "test-123",
-          "user" => %{"name" => "Test Photographer"}
-        }
-      })
+      html =
+        render_hook(view, "select_image", %{
+          "source" => "unsplash",
+          "image_url" => "https://images.unsplash.com/test-image",
+          "image_data" => %{
+            "id" => "test-123",
+            "user" => %{"name" => "Test Photographer"}
+          }
+        })
 
       # Verify image was selected and picker closed
-      refute html =~ "Search for more photos"  # Modal should be closed
+      # Modal should be closed
+      refute html =~ "Search for more photos"
       assert html =~ "https://images.unsplash.com/test-image"
     end
 
     test "image upload functionality integration", %{conn: conn, user: user} do
       # Using TestClient for Supabase integration
       test_token = "test_token_for_upload"
+
       test_user = %{
         "id" => user.supabase_id,
         "email" => user.email,
         "user_metadata" => %{"name" => user.name}
       }
+
       TestClient.set_test_user(test_token, test_user)
 
       {:ok, view, _html} =
@@ -155,10 +161,11 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       assert html =~ "Choose File"
 
       # Simulate upload success
-      _html = render_hook(view, "image_upload_success", %{
-        "url" => "https://storage.supabase.com/uploaded-image.jpg",
-        "path" => "events/uploaded-image.jpg"
-      })
+      _html =
+        render_hook(view, "image_upload_success", %{
+          "url" => "https://storage.supabase.com/uploaded-image.jpg",
+          "path" => "events/uploaded-image.jpg"
+        })
 
       # Verify upload success message
       html = render(view)
@@ -173,7 +180,8 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Use unified search
-      html = view
+      html =
+        view
         |> element("form[phx-submit='unified_search']")
         |> render_submit(%{search_query: "party"})
 
@@ -206,7 +214,8 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       assert html =~ "phx-submit=\"unified_search\""
 
       # Test search with non-existent term
-      _html = view
+      _html =
+        view
         |> element("form[phx-submit='unified_search']")
         |> render_submit(%{search_query: "nonexistent_search_term_that_should_fail_gracefully"})
 

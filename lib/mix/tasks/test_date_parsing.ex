@@ -14,12 +14,18 @@ defmodule Mix.Tasks.Test.DateParsing do
     Mix.Task.run("app.start")
 
     test_dates = [
-      "2025-09-14T16:00:00",      # Full datetime
-      "2025-09-14",               # Date only
-      "2024-12-25T23:59:59Z",     # With timezone
-      nil,                        # Nil value
-      "",                         # Empty string
-      "invalid-date"              # Invalid format
+      # Full datetime
+      "2025-09-14T16:00:00",
+      # Date only
+      "2025-09-14",
+      # With timezone
+      "2024-12-25T23:59:59Z",
+      # Nil value
+      nil,
+      # Empty string
+      "",
+      # Invalid format
+      "invalid-date"
     ]
 
     Logger.info("🧪 Testing date parsing with various formats...")

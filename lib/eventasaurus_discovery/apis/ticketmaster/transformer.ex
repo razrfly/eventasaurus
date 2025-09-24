@@ -17,7 +17,8 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
       start_at: parse_event_datetime(tm_event),
       ends_at: parse_event_end_datetime(tm_event),
       status: map_event_status(tm_event),
-      is_ticketed: true,  # All Ticketmaster events are ticketed
+      # All Ticketmaster events are ticketed
+      is_ticketed: true,
       venue_data: extract_venue(tm_event),
       performers: extract_performers(tm_event),
       metadata: extract_event_metadata(tm_event),
@@ -36,7 +37,8 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
       address: get_in(tm_venue, ["address", "line1"]),
       city: get_in(tm_venue, ["city", "name"]),
       state: get_in(tm_venue, ["state", "name"]) || get_in(tm_venue, ["state", "stateCode"]),
-      country: get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"]),
+      country:
+        get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"]),
       postal_code: tm_venue["postalCode"],
       latitude: get_in(tm_venue, ["location", "latitude"]) |> to_float(),
       longitude: get_in(tm_venue, ["location", "longitude"]) |> to_float(),
@@ -72,42 +74,46 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
     parts = []
 
     # Add genre/classification info
-    parts = if classifications = event["classifications"] do
-      classification = List.first(classifications) || %{}
-      genre = get_in(classification, ["genre", "name"])
-      segment = get_in(classification, ["segment", "name"])
+    parts =
+      if classifications = event["classifications"] do
+        classification = List.first(classifications) || %{}
+        genre = get_in(classification, ["genre", "name"])
+        segment = get_in(classification, ["segment", "name"])
 
-      if genre && segment do
-        ["#{segment} - #{genre}" | parts]
+        if genre && segment do
+          ["#{segment} - #{genre}" | parts]
+        else
+          parts
+        end
       else
         parts
       end
-    else
-      parts
-    end
 
     # Add price range info
-    parts = if price_ranges = event["priceRanges"] do
-      price = List.first(price_ranges) || %{}
-      if min = price["min"] do
-        ["Starting from #{min} #{price["currency"]}" | parts]
+    parts =
+      if price_ranges = event["priceRanges"] do
+        price = List.first(price_ranges) || %{}
+
+        if min = price["min"] do
+          ["Starting from #{min} #{price["currency"]}" | parts]
+        else
+          parts
+        end
       else
         parts
       end
-    else
-      parts
-    end
 
     # Add sale dates
-    parts = if sales = get_in(event, ["sales", "public"]) do
-      if start_date = sales["startDateTime"] do
-        ["Tickets on sale: #{format_date(start_date)}" | parts]
+    parts =
+      if sales = get_in(event, ["sales", "public"]) do
+        if start_date = sales["startDateTime"] do
+          ["Tickets on sale: #{format_date(start_date)}" | parts]
+        else
+          parts
+        end
       else
         parts
       end
-    else
-      parts
-    end
 
     Enum.join(parts, ". ")
   end
@@ -122,6 +128,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
       nil ->
         Logger.warning("No start date found for event #{event["id"]}")
         nil
+
       date_string ->
         parse_datetime_string(date_string, dates["timezone"])
     end
@@ -146,10 +153,12 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
         case DateTime.from_iso8601(datetime_string) do
           {:ok, datetime, _offset} ->
             datetime
+
           {:error, :missing_offset} ->
             # Parse as local time in venue timezone
             # Ticketmaster sends local times without timezone indicators
             parse_as_local_time(datetime_string, venue_timezone)
+
           _ ->
             Logger.warning("Could not parse datetime: #{datetime_string}")
             nil
@@ -168,6 +177,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
 
             # Convert to DateTime in the venue's timezone
             convert_to_utc(naive_datetime, timezone)
+
           _ ->
             Logger.warning("Could not parse date: #{datetime_string}")
             nil
@@ -183,7 +193,10 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
       convert_to_utc(naive_dt, timezone)
     else
       _ ->
-        Logger.warning("Could not parse local datetime: #{datetime_string} with timezone: #{timezone}")
+        Logger.warning(
+          "Could not parse local datetime: #{datetime_string} with timezone: #{timezone}"
+        )
+
         nil
     end
   end
@@ -194,9 +207,11 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
       {:error, _} ->
         Logger.warning("Could not convert to timezone: #{timezone}, falling back to UTC")
         DateTime.from_naive!(naive_datetime, "Etc/UTC")
+
       %DateTime{} = dt ->
         # Convert to UTC for storage
         Timex.to_datetime(dt, "Etc/UTC")
+
       _ ->
         Logger.warning("Unexpected result from timezone conversion")
         DateTime.from_naive!(naive_datetime, "Etc/UTC")
@@ -234,9 +249,12 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
     classifications = attraction["classifications"] || []
 
     case List.first(classifications) do
-      nil -> "artist"
+      nil ->
+        "artist"
+
       classification ->
         segment = get_in(classification, ["segment", "name"])
+
         case String.downcase(segment || "") do
           "music" -> "band"
           "sports" -> "team"
@@ -300,6 +318,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
   end
 
   defp extract_images(nil), do: []
+
   defp extract_images(images) when is_list(images) do
     images
     |> Enum.map(fn img ->
@@ -316,6 +335,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
 
   defp extract_products(event) do
     products = get_in(event, ["products"]) || []
+
     Enum.map(products, fn product ->
       %{
         id: product["id"],
@@ -327,6 +347,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
   end
 
   defp extract_external_links(nil), do: %{}
+
   defp extract_external_links(links) do
     Enum.reduce(links, %{}, fn {platform, platform_links}, acc ->
       if is_list(platform_links) && length(platform_links) > 0 do
@@ -342,6 +363,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
     case DateTime.from_iso8601(date_string) do
       {:ok, datetime, _} ->
         Calendar.strftime(datetime, "%B %d, %Y")
+
       _ ->
         date_string
     end
@@ -350,6 +372,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
   defp to_float(nil), do: nil
   defp to_float(value) when is_float(value), do: value
   defp to_float(value) when is_integer(value), do: value * 1.0
+
   defp to_float(value) when is_binary(value) do
     case Float.parse(value) do
       {float, _} -> float

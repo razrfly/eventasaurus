@@ -32,11 +32,12 @@ defmodule EventasaurusWeb.AuthControllerTest do
 
       # Mock successful authentication
       expect(MockAuthClient, :sign_in, fn ^user_email, ^user_password ->
-        {:ok, %{
-          "access_token" => "mock_access_token",
-          "refresh_token" => "mock_refresh_token",
-          "user" => %{"id" => "user123", "email" => user_email}
-        }}
+        {:ok,
+         %{
+           "access_token" => "mock_access_token",
+           "refresh_token" => "mock_refresh_token",
+           "user" => %{"id" => "user123", "email" => user_email}
+         }}
       end)
 
       # Mock successful user retrieval
@@ -44,13 +45,14 @@ defmodule EventasaurusWeb.AuthControllerTest do
         {:ok, %{"id" => "user123", "email" => user_email}}
       end)
 
-      conn = post(conn, ~p"/auth/login", %{
-        "user" => %{
-          "email" => user_email,
-          "password" => user_password,
-          "remember_me" => "true"
-        }
-      })
+      conn =
+        post(conn, ~p"/auth/login", %{
+          "user" => %{
+            "email" => user_email,
+            "password" => user_password,
+            "remember_me" => "true"
+          }
+        })
 
       assert redirected_to(conn) == ~p"/dashboard"
       assert get_flash(conn, :info) == "You have been logged in successfully."
@@ -66,11 +68,12 @@ defmodule EventasaurusWeb.AuthControllerTest do
 
       # Mock successful authentication
       expect(MockAuthClient, :sign_in, fn ^user_email, ^user_password ->
-        {:ok, %{
-          "access_token" => "mock_access_token",
-          "refresh_token" => "mock_refresh_token",
-          "user" => %{"id" => "user123", "email" => user_email}
-        }}
+        {:ok,
+         %{
+           "access_token" => "mock_access_token",
+           "refresh_token" => "mock_refresh_token",
+           "user" => %{"id" => "user123", "email" => user_email}
+         }}
       end)
 
       # Mock successful user retrieval
@@ -78,13 +81,14 @@ defmodule EventasaurusWeb.AuthControllerTest do
         {:ok, %{"id" => "user123", "email" => user_email}}
       end)
 
-      conn = post(conn, ~p"/auth/login", %{
-        "user" => %{
-          "email" => user_email,
-          "password" => user_password,
-          "remember_me" => "false"
-        }
-      })
+      conn =
+        post(conn, ~p"/auth/login", %{
+          "user" => %{
+            "email" => user_email,
+            "password" => user_password,
+            "remember_me" => "false"
+          }
+        })
 
       assert redirected_to(conn) == ~p"/dashboard"
       assert get_flash(conn, :info) == "You have been logged in successfully."
@@ -100,11 +104,12 @@ defmodule EventasaurusWeb.AuthControllerTest do
 
       # Mock successful authentication
       expect(MockAuthClient, :sign_in, fn ^user_email, ^user_password ->
-        {:ok, %{
-          "access_token" => "mock_access_token",
-          "refresh_token" => "mock_refresh_token",
-          "user" => %{"id" => "user123", "email" => user_email}
-        }}
+        {:ok,
+         %{
+           "access_token" => "mock_access_token",
+           "refresh_token" => "mock_refresh_token",
+           "user" => %{"id" => "user123", "email" => user_email}
+         }}
       end)
 
       # Mock successful user retrieval
@@ -113,12 +118,13 @@ defmodule EventasaurusWeb.AuthControllerTest do
       end)
 
       # Test with missing remember_me parameter (should default to true)
-      conn = post(conn, ~p"/auth/login", %{
-        "user" => %{
-          "email" => user_email,
-          "password" => user_password
-        }
-      })
+      conn =
+        post(conn, ~p"/auth/login", %{
+          "user" => %{
+            "email" => user_email,
+            "password" => user_password
+          }
+        })
 
       assert redirected_to(conn) == ~p"/dashboard"
       assert get_flash(conn, :info) == "You have been logged in successfully."
@@ -137,22 +143,26 @@ defmodule EventasaurusWeb.AuthControllerTest do
     end
 
     test "facebook_callback with error shows error message", %{conn: conn} do
-      conn = get(conn, ~p"/auth/callback", %{
-        "error" => "access_denied",
-        "error_description" => "User denied the request"
-      })
+      conn =
+        get(conn, ~p"/auth/callback", %{
+          "error" => "access_denied",
+          "error_description" => "User denied the request"
+        })
 
       assert redirected_to(conn) == ~p"/auth/login"
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Facebook authentication was cancelled"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~
+               "Facebook authentication was cancelled"
     end
 
     test "facebook_callback with invalid state shows security error", %{conn: conn} do
-      conn = conn
-      |> init_test_session(%{oauth_state: "valid_state"})
-      |> get(~p"/auth/callback", %{
-        "code" => "test_code",
-        "state" => "invalid_state"
-      })
+      conn =
+        conn
+        |> init_test_session(%{oauth_state: "valid_state"})
+        |> get(~p"/auth/callback", %{
+          "code" => "test_code",
+          "state" => "invalid_state"
+        })
 
       assert redirected_to(conn) == ~p"/auth/login"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "security error"

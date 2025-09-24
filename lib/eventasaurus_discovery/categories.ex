@@ -38,20 +38,24 @@ defmodule EventasaurusDiscovery.Categories do
     parent_id = Keyword.get(opts, :parent_id)
     preloads = Keyword.get(opts, :preload, [])
 
-    query = from c in Category,
-      order_by: [asc: c.display_order, asc: c.name]
+    query =
+      from(c in Category,
+        order_by: [asc: c.display_order, asc: c.name]
+      )
 
-    query = if active_only do
-      where(query, [c], c.is_active == true)
-    else
-      query
-    end
+    query =
+      if active_only do
+        where(query, [c], c.is_active == true)
+      else
+        query
+      end
 
-    query = case parent_id do
-      nil -> query
-      :root -> where(query, [c], is_nil(c.parent_id))
-      id -> where(query, [c], c.parent_id == ^id)
-    end
+    query =
+      case parent_id do
+        nil -> query
+        :root -> where(query, [c], is_nil(c.parent_id))
+        id -> where(query, [c], c.parent_id == ^id)
+      end
 
     query
     |> Repo.all()
@@ -93,7 +97,9 @@ defmodule EventasaurusDiscovery.Categories do
     Category
     |> Repo.get_by(slug: slug)
     |> case do
-      nil -> nil
+      nil ->
+        nil
+
       category ->
         category
         |> Repo.preload(preloads)
@@ -188,22 +194,26 @@ defmodule EventasaurusDiscovery.Categories do
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     # Build rows
-    event_categories = Enum.map(category_ids, fn category_id ->
-      %{
-        event_id: event_id,
-        category_id: category_id,
-        is_primary: category_id == primary_id,
-        source: source,
-        confidence: 1.0,
-        inserted_at: now
-      }
-    end)
+    event_categories =
+      Enum.map(category_ids, fn category_id ->
+        %{
+          event_id: event_id,
+          category_id: category_id,
+          is_primary: category_id == primary_id,
+          source: source,
+          confidence: 1.0,
+          inserted_at: now
+        }
+      end)
 
     multi =
       Multi.new()
       # Remove only prior assignments from the same source
-      |> Multi.delete_all(:delete_old,
-        from(pec in PublicEventCategory, where: pec.event_id == ^event_id and pec.source == ^source)
+      |> Multi.delete_all(
+        :delete_old,
+        from(pec in PublicEventCategory,
+          where: pec.event_id == ^event_id and pec.source == ^source
+        )
       )
       |> Multi.insert_all(
         :upsert,
@@ -217,17 +227,21 @@ defmodule EventasaurusDiscovery.Categories do
     case Repo.transaction(multi) do
       {:ok, %{upsert: result}} ->
         # Handle both single result and list of results
-        rows = case result do
-          {_count, rows} when is_list(rows) -> rows
-          rows when is_list(rows) -> rows
-          single_row -> [single_row]
-        end
-        {:ok, Enum.map(rows, fn row ->
-          case row do
-            %PublicEventCategory{} = cat -> cat
-            map when is_map(map) -> struct(PublicEventCategory, map)
+        rows =
+          case result do
+            {_count, rows} when is_list(rows) -> rows
+            rows when is_list(rows) -> rows
+            single_row -> [single_row]
           end
-        end)}
+
+        {:ok,
+         Enum.map(rows, fn row ->
+           case row do
+             %PublicEventCategory{} = cat -> cat
+             map when is_map(map) -> struct(PublicEventCategory, map)
+           end
+         end)}
+
       {:error, _step, reason, _changes} ->
         {:error, reason}
     end
@@ -243,10 +257,11 @@ defmodule EventasaurusDiscovery.Categories do
 
   """
   def map_external_categories(source, classifications) when is_list(classifications) do
-    formatted_classifications = Enum.map(classifications, fn
-      {type, value} -> {source, type, value}
-      {type, value, _locale} -> {source, type, value}
-    end)
+    formatted_classifications =
+      Enum.map(classifications, fn
+        {type, value} -> {source, type, value}
+        {type, value, _locale} -> {source, type, value}
+      end)
 
     CategoryMapping.find_categories(Repo, formatted_classifications)
   end
@@ -264,9 +279,10 @@ defmodule EventasaurusDiscovery.Categories do
     term = "%#{search_term}%"
 
     from(c in Category,
-      where: ilike(c.name, ^term) or
-             ilike(c.description, ^term) or
-             fragment("EXISTS (
+      where:
+        ilike(c.name, ^term) or
+          ilike(c.description, ^term) or
+          fragment("EXISTS (
                SELECT 1 FROM jsonb_each_text(?) AS t(lang, trans)
                WHERE t.trans::jsonb->>'name' ILIKE ? OR
                      t.trans::jsonb->>'description' ILIKE ?
@@ -283,7 +299,8 @@ defmodule EventasaurusDiscovery.Categories do
     locale = Keyword.get(opts, :locale, "en")
 
     from(c in Category,
-      left_join: pec in PublicEventCategory, on: pec.category_id == c.id,
+      left_join: pec in PublicEventCategory,
+      on: pec.category_id == c.id,
       group_by: c.id,
       select: {c, count(pec.id)},
       order_by: [asc: c.display_order, asc: c.name]
@@ -336,23 +353,113 @@ defmodule EventasaurusDiscovery.Categories do
   def seed_initial_mappings do
     mappings = [
       # Ticketmaster mappings
-      %{external_source: "ticketmaster", external_type: "segment", external_value: "Music", category_slug: "music", priority: 10},
-      %{external_source: "ticketmaster", external_type: "genre", external_value: "Rock", category_slug: "concerts", priority: 5},
-      %{external_source: "ticketmaster", external_type: "genre", external_value: "Pop", category_slug: "concerts", priority: 5},
-      %{external_source: "ticketmaster", external_type: "genre", external_value: "Classical", category_slug: "concerts", priority: 5},
-      %{external_source: "ticketmaster", external_type: "genre", external_value: "Jazz", category_slug: "concerts", priority: 5},
-      %{external_source: "ticketmaster", external_type: "segment", external_value: "Arts & Theatre", category_slug: "performances", priority: 10},
-      %{external_source: "ticketmaster", external_type: "genre", external_value: "Theatre", category_slug: "performances", priority: 5},
-      %{external_source: "ticketmaster", external_type: "segment", external_value: "Film", category_slug: "film", priority: 10},
-      %{external_source: "ticketmaster", external_type: "segment", external_value: "Sports", category_slug: "concerts", priority: 3},
+      %{
+        external_source: "ticketmaster",
+        external_type: "segment",
+        external_value: "Music",
+        category_slug: "music",
+        priority: 10
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "genre",
+        external_value: "Rock",
+        category_slug: "concerts",
+        priority: 5
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "genre",
+        external_value: "Pop",
+        category_slug: "concerts",
+        priority: 5
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "genre",
+        external_value: "Classical",
+        category_slug: "concerts",
+        priority: 5
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "genre",
+        external_value: "Jazz",
+        category_slug: "concerts",
+        priority: 5
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "segment",
+        external_value: "Arts & Theatre",
+        category_slug: "performances",
+        priority: 10
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "genre",
+        external_value: "Theatre",
+        category_slug: "performances",
+        priority: 5
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "segment",
+        external_value: "Film",
+        category_slug: "film",
+        priority: 10
+      },
+      %{
+        external_source: "ticketmaster",
+        external_type: "segment",
+        external_value: "Sports",
+        category_slug: "concerts",
+        priority: 3
+      },
 
       # Karnet mappings (Polish)
-      %{external_source: "karnet", external_type: nil, external_value: "koncerty", category_slug: "concerts", priority: 10},
-      %{external_source: "karnet", external_type: nil, external_value: "festiwale", category_slug: "festivals", priority: 10},
-      %{external_source: "karnet", external_type: nil, external_value: "spektakle", category_slug: "performances", priority: 10},
-      %{external_source: "karnet", external_type: nil, external_value: "wystawy", category_slug: "exhibitions", priority: 10},
-      %{external_source: "karnet", external_type: nil, external_value: "literatura", category_slug: "literature", priority: 10},
-      %{external_source: "karnet", external_type: nil, external_value: "film", category_slug: "film", priority: 10}
+      %{
+        external_source: "karnet",
+        external_type: nil,
+        external_value: "koncerty",
+        category_slug: "concerts",
+        priority: 10
+      },
+      %{
+        external_source: "karnet",
+        external_type: nil,
+        external_value: "festiwale",
+        category_slug: "festivals",
+        priority: 10
+      },
+      %{
+        external_source: "karnet",
+        external_type: nil,
+        external_value: "spektakle",
+        category_slug: "performances",
+        priority: 10
+      },
+      %{
+        external_source: "karnet",
+        external_type: nil,
+        external_value: "wystawy",
+        category_slug: "exhibitions",
+        priority: 10
+      },
+      %{
+        external_source: "karnet",
+        external_type: nil,
+        external_value: "literatura",
+        category_slug: "literature",
+        priority: 10
+      },
+      %{
+        external_source: "karnet",
+        external_type: nil,
+        external_value: "film",
+        category_slug: "film",
+        priority: 10
+      }
     ]
 
     Enum.each(mappings, fn mapping ->

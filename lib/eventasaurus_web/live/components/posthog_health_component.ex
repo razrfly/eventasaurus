@@ -2,38 +2,39 @@ defmodule EventasaurusWeb.Live.Components.PosthogHealthComponent do
   @moduledoc """
   Displays PostHog service health status and monitoring metrics.
   """
-  
+
   use EventasaurusWeb, :live_component
   require Logger
-  
-  @refresh_interval 30_000  # Refresh every 30 seconds
-  
+
+  # Refresh every 30 seconds
+  @refresh_interval 30_000
+
   def mount(socket) do
     if connected?(socket) do
       Process.send_after(self(), :refresh_health, @refresh_interval)
     end
-    
+
     {:ok, assign_health_data(socket)}
   end
-  
+
   def handle_event("refresh", _params, socket) do
     {:noreply, assign_health_data(socket)}
   end
-  
+
   def handle_info(:refresh_health, socket) do
     Process.send_after(self(), :refresh_health, @refresh_interval)
     {:noreply, assign_health_data(socket)}
   end
-  
+
   defp assign_health_data(socket) do
     # Get monitoring stats
     stats = Eventasaurus.Services.PosthogMonitor.get_stats()
     {status, message} = Eventasaurus.Services.PosthogMonitor.health_check()
-    
+
     # Check configuration
     tracking_configured = Eventasaurus.Services.PosthogService.configured?()
     analytics_configured = Eventasaurus.Services.PosthogService.analytics_configured?()
-    
+
     socket
     |> assign(:health_status, status)
     |> assign(:health_message, message)
@@ -41,7 +42,7 @@ defmodule EventasaurusWeb.Live.Components.PosthogHealthComponent do
     |> assign(:tracking_configured, tracking_configured)
     |> assign(:analytics_configured, analytics_configured)
   end
-  
+
   def render(assigns) do
     ~H"""
     <div class="bg-white shadow rounded-lg p-6">
@@ -121,20 +122,21 @@ defmodule EventasaurusWeb.Live.Components.PosthogHealthComponent do
     </div>
     """
   end
-  
+
   defp status_color(:healthy), do: "bg-green-500"
   defp status_color(:degraded), do: "bg-yellow-500"
   defp status_color(:unhealthy), do: "bg-red-500"
-  
+
   defp format_status(:healthy), do: "Healthy"
   defp format_status(:degraded), do: "Degraded"
   defp format_status(:unhealthy), do: "Unhealthy"
-  
+
   defp format_percentage(rate) when is_float(rate) do
     "#{Float.round(rate * 100, 1)}%"
   end
+
   defp format_percentage(_), do: "0%"
-  
+
   defp format_duration(0), do: "N/A"
   defp format_duration(ms) when ms < 1000, do: "#{ms}ms"
   defp format_duration(ms), do: "#{Float.round(ms / 1000, 1)}s"

@@ -135,27 +135,30 @@ defmodule EventasaurusWeb.Live.Components.VenueReviewsComponent do
     # Support both standardized format (new) and old format (for backward compatibility)
 
     # Extract overall rating from standardized format or fallback to old format
-    overall_rating = case rich_data do
-      %{rating: %{value: value}} -> value
-      %{sections: %{reviews: %{overall_rating: rating}}} -> rating
-      %{"metadata" => %{"rating" => rating}} -> rating
-      _ -> nil
-    end
+    overall_rating =
+      case rich_data do
+        %{rating: %{value: value}} -> value
+        %{sections: %{reviews: %{overall_rating: rating}}} -> rating
+        %{"metadata" => %{"rating" => rating}} -> rating
+        _ -> nil
+      end
 
     # Extract total ratings from standardized format or fallback to old format
-    total_ratings = case rich_data do
-      %{rating: %{count: count}} -> count
-      %{sections: %{reviews: %{total_ratings: total}}} -> total
-      %{"metadata" => %{"user_ratings_total" => total}} -> total
-      _ -> nil
-    end
+    total_ratings =
+      case rich_data do
+        %{rating: %{count: count}} -> count
+        %{sections: %{reviews: %{total_ratings: total}}} -> total
+        %{"metadata" => %{"user_ratings_total" => total}} -> total
+        _ -> nil
+      end
 
     # Extract reviews from standardized format or fallback to old format
-    reviews = case rich_data do
-      %{sections: %{reviews: %{reviews: reviews}}} when is_list(reviews) -> reviews
-      %{"additional_data" => %{"reviews" => reviews}} when is_list(reviews) -> reviews
-      _ -> []
-    end
+    reviews =
+      case rich_data do
+        %{sections: %{reviews: %{reviews: reviews}}} when is_list(reviews) -> reviews
+        %{"additional_data" => %{"reviews" => reviews}} when is_list(reviews) -> reviews
+        _ -> []
+      end
 
     socket
     |> assign(:overall_rating, overall_rating)
@@ -170,9 +173,11 @@ defmodule EventasaurusWeb.Live.Components.VenueReviewsComponent do
 
   defp normalize_reviews(reviews) when is_list(reviews) do
     reviews
-    |> Enum.take(5)  # Limit to 5 reviews for display
+    # Limit to 5 reviews for display
+    |> Enum.take(5)
     |> Enum.map(&normalize_review/1)
   end
+
   defp normalize_reviews(_), do: []
 
   defp normalize_review(review) when is_map(review) do
@@ -183,11 +188,13 @@ defmodule EventasaurusWeb.Live.Components.VenueReviewsComponent do
       time: Map.get(review, "time")
     }
   end
+
   defp normalize_review(_), do: %{}
 
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, decimals: 1)
   end
+
   defp format_rating(_), do: "N/A"
 
   defp format_ratings_count(count) when is_integer(count) do
@@ -198,6 +205,7 @@ defmodule EventasaurusWeb.Live.Components.VenueReviewsComponent do
       true -> "No reviews"
     end
   end
+
   defp format_ratings_count(_), do: "No reviews"
 
   defp format_review_time(time) when is_integer(time) do
@@ -216,30 +224,41 @@ defmodule EventasaurusWeb.Live.Components.VenueReviewsComponent do
   rescue
     _ -> "Recently"
   end
+
   defp format_review_time(_), do: ""
 
   defp format_review_text(text) when is_binary(text) do
     text
     |> String.trim()
-    |> truncate_text(200)  # Limit review text length
+    # Limit review text length
+    |> truncate_text(200)
   end
+
   defp format_review_text(_), do: ""
 
   defp truncate_text(text, max_length) when byte_size(text) <= max_length do
     text
   end
+
   defp truncate_text(text, max_length) do
     truncated = String.slice(text, 0, max_length)
+
     case String.last(truncated) do
-      " " -> truncated <> "..."
+      " " ->
+        truncated <> "..."
+
       _ ->
         # Find the last space to avoid cutting words
         words = String.split(truncated, " ")
+
         case length(words) do
-          1 -> truncated <> "..."
+          1 ->
+            truncated <> "..."
+
           _ ->
             words
-            |> Enum.drop(-1)  # Remove the last potentially incomplete word
+            # Remove the last potentially incomplete word
+            |> Enum.drop(-1)
             |> Enum.join(" ")
             |> Kernel.<>("...")
         end

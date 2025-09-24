@@ -26,23 +26,26 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
     if poll do
       # Load poll options with suggested_by user
-      poll_options = Events.list_poll_options(poll)
-      |> Repo.preload(:suggested_by)
-      
+      poll_options =
+        Events.list_poll_options(poll)
+        |> Repo.preload(:suggested_by)
+
       # Load poll statistics for voter count display
-      poll_stats = try do
-        Events.get_poll_voting_stats(poll)
-      rescue
-        _ -> %{options: [], total_unique_voters: 0}
-      end
-      
+      poll_stats =
+        try do
+          Events.get_poll_voting_stats(poll)
+        rescue
+          _ -> %{options: [], total_unique_voters: 0}
+        end
+
       # Load user votes for this poll
-      user_votes = if user do
-        Events.list_user_poll_votes(poll, user)
-      else
-        []
-      end
-      
+      user_votes =
+        if user do
+          Events.list_user_poll_votes(poll, user)
+        else
+          []
+        end
+
       # Get temp votes from assigns or default to empty
       temp_votes = Map.get(assigns, :temp_votes, %{})
 
@@ -86,7 +89,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   # Handle the select element's event structure (for time selector)
-  def handle_event("update_option_field", %{"_target" => ["time_selector"], "time_selector" => value}, socket) do
+  def handle_event(
+        "update_option_field",
+        %{"_target" => ["time_selector"], "time_selector" => value},
+        socket
+      ) do
     {:noreply, assign(socket, :option_title, value)}
   end
 
@@ -107,7 +114,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   def handle_event("clear_place", _params, socket) do
-    {:noreply, 
+    {:noreply,
      socket
      |> assign(:selected_place, nil)
      |> assign(:show_place_search, true)
@@ -145,8 +152,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
           case Events.create_poll_option(option_params) do
             {:ok, _option} ->
               # Reload poll options to show the new option immediately
-              updated_poll_options = Events.list_poll_options(socket.assigns.poll)
-              |> Repo.preload(:suggested_by)
+              updated_poll_options =
+                Events.list_poll_options(socket.assigns.poll)
+                |> Repo.preload(:suggested_by)
 
               # Notify the parent LiveView to reload polls for all users
               send(self(), {:poll_stats_updated, socket.assigns.poll.id, %{}})
@@ -163,6 +171,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
             {:error, changeset} ->
               require Logger
               Logger.error("Failed to create poll option: #{inspect(changeset)}")
+
               {:noreply,
                socket
                |> put_flash(:error, "Failed to add option. Please try again.")
@@ -191,21 +200,21 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
          option when not is_nil(option) <- Events.get_poll_option(option_id_int),
          user when not is_nil(user) <- socket.assigns.current_user,
          true <- Events.can_delete_option_based_on_poll_settings?(option, user) do
-      
       case Events.delete_poll_option(option) do
         {:ok, _} ->
           # Reload poll options
-          updated_poll_options = Events.list_poll_options(socket.assigns.poll)
-          |> Repo.preload(:suggested_by)
-          
+          updated_poll_options =
+            Events.list_poll_options(socket.assigns.poll)
+            |> Repo.preload(:suggested_by)
+
           # Notify parent to reload
           send(self(), {:poll_stats_updated, socket.assigns.poll.id, %{}})
-          
+
           {:noreply,
            socket
            |> put_flash(:info, "Option removed successfully.")
            |> assign(:poll_options, updated_poll_options)}
-           
+
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Failed to remove option.")}
       end
@@ -221,66 +230,77 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     alias EventasaurusWeb.Services.PlacesDataService
 
     # Start with base parameters
-    option_params = Map.merge(poll_option_params, %{
-      "title" => title,
-      "poll_id" => socket.assigns.poll.id,
-      "suggested_by_id" => user.id,
-      "status" => "active"
-    })
+    option_params =
+      Map.merge(poll_option_params, %{
+        "title" => title,
+        "poll_id" => socket.assigns.poll.id,
+        "suggested_by_id" => user.id,
+        "status" => "active"
+      })
 
     # Check if we have a selected place from native Google autocomplete
     cond do
       socket.assigns.poll.poll_type == "places" && socket.assigns[:selected_place] ->
         place_data = socket.assigns.selected_place
-        
+
         # Use the rich data from the selected place
         option_params
         |> Map.put("title", Map.get(place_data, :title, title))
         |> Map.put("description", Map.get(place_data, :description, ""))
         |> Map.put("external_data", Map.get(place_data, :metadata, %{}))
         |> Map.put("image_url", Map.get(place_data, :image_url))
-      
+
       # Apply the EXACT SAME processing as the manager area for places (fallback for JavaScript hook)
       socket.assigns.poll.poll_type == "places" &&
-       Map.has_key?(option_params, "external_data") &&
-       not is_nil(option_params["external_data"]) ->
+        Map.has_key?(option_params, "external_data") &&
+          not is_nil(option_params["external_data"]) ->
+        Logger.debug("Processing places option with PlacesDataService (public interface)")
 
-      Logger.debug("Processing places option with PlacesDataService (public interface)")
+        # Parse external_data if it's a JSON string (SAME AS MANAGER)
+        external_data =
+          case option_params["external_data"] do
+            data when is_binary(data) ->
+              case Jason.decode(data) do
+                {:ok, decoded} -> decoded
+                {:error, _} -> option_params["external_data"]
+              end
 
-      # Parse external_data if it's a JSON string (SAME AS MANAGER)
-      external_data = case option_params["external_data"] do
-        data when is_binary(data) ->
-          case Jason.decode(data) do
-            {:ok, decoded} -> decoded
-            {:error, _} -> option_params["external_data"]
+            data ->
+              data
           end
-        data -> data
-      end
 
-      if external_data && is_map(external_data) do
-        # Use PlacesDataService to prepare data (SAME AS MANAGER)
-        prepared_data = PlacesDataService.prepare_place_option_data(external_data)
+        if external_data && is_map(external_data) do
+          # Use PlacesDataService to prepare data (SAME AS MANAGER)
+          prepared_data = PlacesDataService.prepare_place_option_data(external_data)
 
-        # Preserve any user-provided custom title/description over generated ones (SAME AS MANAGER)
-        final_data = prepared_data
-        |> maybe_preserve_user_input("title", option_params["title"])
-        |> maybe_preserve_user_input("description", option_params["description"])
+          # Preserve any user-provided custom title/description over generated ones (SAME AS MANAGER)
+          final_data =
+            prepared_data
+            |> maybe_preserve_user_input("title", option_params["title"])
+            |> maybe_preserve_user_input("description", option_params["description"])
 
-        # CRITICAL: Ensure required fields are preserved after PlacesDataService processing
-        final_data = Map.merge(final_data, %{
-          "poll_id" => option_params["poll_id"],
-          "suggested_by_id" => option_params["suggested_by_id"],
-          "status" => option_params["status"]
-        })
+          # CRITICAL: Ensure required fields are preserved after PlacesDataService processing
+          final_data =
+            Map.merge(final_data, %{
+              "poll_id" => option_params["poll_id"],
+              "suggested_by_id" => option_params["suggested_by_id"],
+              "status" => option_params["status"]
+            })
 
-        Logger.debug("PlacesDataService applied successfully for place: #{final_data["title"]} (public interface)")
-        Logger.debug("Final data poll_id: #{final_data["poll_id"]}, suggested_by_id: #{final_data["suggested_by_id"]}")
-        final_data
-      else
-        Logger.debug("PlacesDataService skipped - invalid external_data (public interface)")
-        option_params
-      end
-      
+          Logger.debug(
+            "PlacesDataService applied successfully for place: #{final_data["title"]} (public interface)"
+          )
+
+          Logger.debug(
+            "Final data poll_id: #{final_data["poll_id"]}, suggested_by_id: #{final_data["suggested_by_id"]}"
+          )
+
+          final_data
+        else
+          Logger.debug("PlacesDataService skipped - invalid external_data (public interface)")
+          option_params
+        end
+
       true ->
         # Non-places options or manual entry
         option_params
@@ -288,9 +308,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   # Helper to preserve user input over generated content (SAME AS MANAGER)
-  defp maybe_preserve_user_input(prepared_data, key, user_value) when is_binary(user_value) and user_value != "" do
+  defp maybe_preserve_user_input(prepared_data, key, user_value)
+       when is_binary(user_value) and user_value != "" do
     Map.put(prepared_data, key, user_value)
   end
+
   defp maybe_preserve_user_input(prepared_data, _key, _user_value), do: prepared_data
 
   # Note: Native Google autocomplete sends place_selected events directly to this component
@@ -583,17 +605,25 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_poll_title_base(%{poll_type: poll_type} = poll) do
     case poll_type do
-      "places" -> 
+      "places" ->
         # Get the location scope for places polls
         scope_display = PollPhaseUtils.format_poll_type(poll)
         "#{scope_display} Suggestions"
-      "time" -> "Time Suggestions"
-      "date_selection" -> "DateTime Selection"
-      "custom" -> "General Options"
-      _ -> "Suggestions"
+
+      "time" ->
+        "Time Suggestions"
+
+      "date_selection" ->
+        "DateTime Selection"
+
+      "custom" ->
+        "General Options"
+
+      _ ->
+        "Suggestions"
     end
   end
-  
+
   defp get_poll_title_base(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Suggestions"
@@ -604,19 +634,26 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     end
   end
 
-
   defp get_suggestion_title(%{poll_type: poll_type} = poll) do
     case poll_type do
-      "places" -> 
+      "places" ->
         scope_display = PollPhaseUtils.format_poll_type(poll)
         "#{scope_display} Suggestion"
-      "time" -> "Time"
-      "date_selection" -> "DateTime"
-      "custom" -> "Option"
-      _ -> "Suggestion"
+
+      "time" ->
+        "Time"
+
+      "date_selection" ->
+        "DateTime"
+
+      "custom" ->
+        "Option"
+
+      _ ->
+        "Suggestion"
     end
   end
-  
+
   defp get_suggestion_title(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Suggestion"
@@ -629,16 +666,24 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_title_label(%{poll_type: poll_type} = poll) do
     case poll_type do
-      "places" -> 
+      "places" ->
         scope_display = PollPhaseUtils.format_poll_type(poll)
         "#{scope_display} Name"
-      "time" -> "Time"
-      "date_selection" -> "DateTime"
-      "custom" -> "Option Title"
-      _ -> "Title"
+
+      "time" ->
+        "Time"
+
+      "date_selection" ->
+        "DateTime"
+
+      "custom" ->
+        "Option Title"
+
+      _ ->
+        "Title"
     end
   end
-  
+
   defp get_title_label(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Name"
@@ -651,16 +696,24 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_title_placeholder(%{poll_type: poll_type} = poll) do
     case poll_type do
-      "places" -> 
+      "places" ->
         scope_display = PollPhaseUtils.format_poll_type(poll)
         "Enter #{String.downcase(scope_display)} name..."
-      "time" -> "Select a time..."
-      "date_selection" -> "Select a DateTime..."
-      "custom" -> "Enter your option..."
-      _ -> "Enter title..."
+
+      "time" ->
+        "Select a time..."
+
+      "date_selection" ->
+        "Select a DateTime..."
+
+      "custom" ->
+        "Enter your option..."
+
+      _ ->
+        "Enter title..."
     end
   end
-  
+
   defp get_title_placeholder(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Enter place name..."
@@ -677,6 +730,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       case option.external_data do
         %{"latitude" => lat, "longitude" => lng} when is_number(lat) and is_number(lng) ->
           %{latitude: lat, longitude: lng}
+
         _ ->
           nil
       end
@@ -692,13 +746,17 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
-        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
+        %{
+          value: TimeUtils.format_time_value(hour, 0),
+          display: TimeUtils.format_time_display(hour, 0)
+        },
+        %{
+          value: TimeUtils.format_time_value(hour, 30),
+          display: TimeUtils.format_time_display(hour, 30)
+        }
       ]
     end)
   end
-
-
 
   defp format_time_for_display(time_value) do
     # This function is used to display the time value in a user-friendly format.
@@ -707,8 +765,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     case TimeUtils.parse_time_string(time_value) do
       {:ok, {hour, minute}} ->
         TimeUtils.format_time_display(hour, minute)
+
       {:error, _} ->
-        time_value # Return original if parsing fails
+        # Return original if parsing fails
+        time_value
     end
   end
 
@@ -726,17 +786,20 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   # Calculate remaining seconds for deletion window
   defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
+
   defp get_deletion_time_remaining(inserted_at) do
     elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
-    max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
+    # 300 seconds = 5 minutes
+    max(0, 300 - elapsed_seconds)
   end
 
   # Format remaining time for display
   defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
+
   defp format_deletion_time_remaining(seconds) do
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
-    
+
     cond do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
@@ -746,11 +809,12 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   # Helper function to display suggester name with proper blank value handling
   defp display_suggester_name(suggested_by) when is_nil(suggested_by), do: "Anonymous"
   defp display_suggester_name(%Ecto.Association.NotLoaded{}), do: "Anonymous"
+
   defp display_suggester_name(suggested_by) do
     name = Map.get(suggested_by, :name)
     username = Map.get(suggested_by, :username)
     email = Map.get(suggested_by, :email)
-    
+
     cond do
       is_binary(name) and String.trim(name) != "" -> String.trim(name)
       is_binary(username) and String.trim(username) != "" -> String.trim(username)
@@ -776,5 +840,4 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       ""
     end
   end
-
 end

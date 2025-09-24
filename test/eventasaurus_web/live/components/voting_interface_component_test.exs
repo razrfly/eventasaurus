@@ -14,63 +14,72 @@ defmodule EventasaurusWeb.VotingInterfaceComponentTest do
     event = event_fixture()
 
     # Create polls for different voting systems
-    {:ok, binary_poll} = Events.create_poll(%{
-      event_id: event.id,
-      title: "Binary Poll",
-      description: "A binary poll for testing",
-      voting_system: "binary",
-      poll_type: "general",
-      status: "voting",
-      created_by_id: user.id
-    })
+    {:ok, binary_poll} =
+      Events.create_poll(%{
+        event_id: event.id,
+        title: "Binary Poll",
+        description: "A binary poll for testing",
+        voting_system: "binary",
+        poll_type: "general",
+        status: "voting",
+        created_by_id: user.id
+      })
 
-    {:ok, approval_poll} = Events.create_poll(%{
-      event_id: event.id,
-      title: "Approval Poll",
-      description: "An approval poll for testing",
-      voting_system: "approval",
-      poll_type: "general",
-      status: "voting",
-      created_by_id: user.id
-    })
+    {:ok, approval_poll} =
+      Events.create_poll(%{
+        event_id: event.id,
+        title: "Approval Poll",
+        description: "An approval poll for testing",
+        voting_system: "approval",
+        poll_type: "general",
+        status: "voting",
+        created_by_id: user.id
+      })
 
-    {:ok, ranked_poll} = Events.create_poll(%{
-      event_id: event.id,
-      title: "Ranked Poll",
-      description: "A ranked choice poll for testing",
-      voting_system: "ranked",
-      poll_type: "general",
-      status: "voting",
-      created_by_id: user.id
-    })
+    {:ok, ranked_poll} =
+      Events.create_poll(%{
+        event_id: event.id,
+        title: "Ranked Poll",
+        description: "A ranked choice poll for testing",
+        voting_system: "ranked",
+        poll_type: "general",
+        status: "voting",
+        created_by_id: user.id
+      })
 
-    {:ok, star_poll} = Events.create_poll(%{
-      event_id: event.id,
-      title: "Star Poll",
-      description: "A star rating poll for testing",
-      voting_system: "star",
-      poll_type: "general",
-      status: "voting",
-      created_by_id: user.id
-    })
+    {:ok, star_poll} =
+      Events.create_poll(%{
+        event_id: event.id,
+        title: "Star Poll",
+        description: "A star rating poll for testing",
+        voting_system: "star",
+        poll_type: "general",
+        status: "voting",
+        created_by_id: user.id
+      })
 
     # Create options for each poll
     for poll <- [binary_poll, approval_poll, ranked_poll, star_poll] do
-      {:ok, _} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Option 1",
-        description: "First option"
-      })
-      {:ok, _} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Option 2",
-        description: "Second option"
-      })
-      {:ok, _} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Option 3",
-        description: "Third option"
-      })
+      {:ok, _} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 1",
+          description: "First option"
+        })
+
+      {:ok, _} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 2",
+          description: "Second option"
+        })
+
+      {:ok, _} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 3",
+          description: "Third option"
+        })
     end
 
     %{
@@ -185,8 +194,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponentTest do
 
       # Check for mobile-friendly classes
       assert html =~ "touch-"
-      assert html =~ "text-lg" # Larger text for mobile
-      assert html =~ "p-4" # Adequate padding for touch targets
+      # Larger text for mobile
+      assert html =~ "text-lg"
+      # Adequate padding for touch targets
+      assert html =~ "p-4"
     end
 
     test "shows responsive design elements", %{user: user, approval_poll: poll} do
@@ -220,7 +231,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponentTest do
       html = render_component(VotingInterfaceComponent, assigns)
 
       # Should show the vote state
-      assert html =~ "bg-green-" # Voted state styling
+      # Voted state styling
+      assert html =~ "bg-green-"
     end
 
     test "handles multiple approval votes", %{user: user, approval_poll: poll} do

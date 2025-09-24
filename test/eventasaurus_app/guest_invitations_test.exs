@@ -76,9 +76,12 @@ defmodule EventasaurusApp.GuestInvitationsTest do
 
       scored = GuestInvitations.score_participant(participant)
 
-      assert scored.frequency_score == 0.8  # Good tier
-      assert scored.recency_score == 1.0    # Very recent tier (30 days = boundary)
-      assert scored.total_score == (0.8 * 0.6) + (1.0 * 0.4)  # 0.48 + 0.4 = 0.88
+      # Good tier
+      assert scored.frequency_score == 0.8
+      # Very recent tier (30 days = boundary)
+      assert scored.recency_score == 1.0
+      # 0.48 + 0.4 = 0.88
+      assert scored.total_score == 0.8 * 0.6 + 1.0 * 0.4
       assert Map.has_key?(scored, :scoring_config)
     end
   end
@@ -87,17 +90,28 @@ defmodule EventasaurusApp.GuestInvitationsTest do
     test "scores and sorts multiple participants" do
       participants = [
         %{user_id: 1, participation_count: 1, last_participation: nil},
-        %{user_id: 2, participation_count: 10, last_participation: DateTime.add(DateTime.utc_now(), -15 * 24 * 60 * 60, :second)},
-        %{user_id: 3, participation_count: 3, last_participation: DateTime.add(DateTime.utc_now(), -200 * 24 * 60 * 60, :second)}
+        %{
+          user_id: 2,
+          participation_count: 10,
+          last_participation: DateTime.add(DateTime.utc_now(), -15 * 24 * 60 * 60, :second)
+        },
+        %{
+          user_id: 3,
+          participation_count: 3,
+          last_participation: DateTime.add(DateTime.utc_now(), -200 * 24 * 60 * 60, :second)
+        }
       ]
 
       scored = GuestInvitations.score_participants(participants)
 
       # Should be sorted by total_score in descending order
       assert length(scored) == 3
-      assert Enum.at(scored, 0).user_id == 2  # Highest score (frequent + recent)
-      assert Enum.at(scored, 1).user_id == 3  # Medium score
-      assert Enum.at(scored, 2).user_id == 1  # Lowest score
+      # Highest score (frequent + recent)
+      assert Enum.at(scored, 0).user_id == 2
+      # Medium score
+      assert Enum.at(scored, 1).user_id == 3
+      # Lowest score
+      assert Enum.at(scored, 2).user_id == 1
     end
 
     test "respects limit option" do
@@ -127,7 +141,8 @@ defmodule EventasaurusApp.GuestInvitationsTest do
       assert explanation.total_score == scored.total_score
       assert explanation.breakdown.frequency.tier == "good"
       assert explanation.breakdown.recency.tier == "recent"
-      assert is_binary(explanation.recommendation)  # Just check it's a valid recommendation
+      # Just check it's a valid recommendation
+      assert is_binary(explanation.recommendation)
     end
   end
 end

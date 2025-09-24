@@ -14,8 +14,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
     EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
       name: "Ticketmaster Discovery API",
       slug: "ticketmaster",
-      priority: 100,  # Highest priority - authoritative source
-      rate_limit: 5,   # requests per second
+      # Highest priority - authoritative source
+      priority: 100,
+      # requests per second
+      rate_limit: 5,
       timeout: 10_000,
       max_retries: 3,
       queue: :discovery,

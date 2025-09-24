@@ -18,8 +18,6 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   alias EventasaurusWeb.ReservedSlugs
 
-
-
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
   @impl true
@@ -27,64 +25,76 @@ defmodule EventasaurusWeb.PublicEventLive do
     IO.puts("=== MOUNT FUNCTION CALLED ===")
     IO.puts("auth_user: #{inspect(socket.assigns.auth_user)}")
     require Logger
-    Logger.debug("PublicEventLive.mount called with auth_user: #{inspect(socket.assigns.auth_user)}")
+
+    Logger.debug(
+      "PublicEventLive.mount called with auth_user: #{inspect(socket.assigns.auth_user)}"
+    )
 
     if ReservedSlugs.reserved?(slug) do
       {:ok,
        socket
        |> put_flash(:error, "Event not found")
-       |> redirect(to: ~p"/")
-      }
+       |> redirect(to: ~p"/")}
     else
       case Events.get_event_by_slug(slug) do
         nil ->
           {:ok,
            socket
            |> put_flash(:error, "Event not found")
-           |> redirect(to: ~p"/")
-          }
+           |> redirect(to: ~p"/")}
 
         event ->
           # Load venue if needed
           venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
-          
+
           # Load group if event belongs to one
           group = if event.group_id, do: Groups.get_group(event.group_id), else: nil
-          
+
           organizers = Events.list_event_organizers(event)
 
           # Load participants for social proof
           participants = Events.list_event_participants(event)
 
           # Load tickets for events that have ticket types (ticketed_event or contribution_collection)
-          should_show_tickets = event.taxation_type in ["ticketed_event", "contribution_collection"]
-          tickets = if should_show_tickets do
-            Ticketing.list_tickets_for_event(event.id)
-          else
-            []
-          end
+          should_show_tickets =
+            event.taxation_type in ["ticketed_event", "contribution_collection"]
+
+          tickets =
+            if should_show_tickets do
+              Ticketing.list_tickets_for_event(event.id)
+            else
+              []
+            end
 
           # Subscribe to real-time ticket updates for events with tickets
-          subscribed_to_tickets = if should_show_tickets do
-            Ticketing.subscribe()
-            true
-          else
-            false
-          end
+          subscribed_to_tickets =
+            if should_show_tickets do
+              Ticketing.subscribe()
+              true
+            else
+              false
+            end
 
           # Determine registration status if user is authenticated
           Logger.debug("PublicEventLive.mount - auth_user: #{inspect(socket.assigns.auth_user)}")
-          {registration_status, user, user_participant_status} = case ensure_user_struct(socket.assigns.auth_user) do
-            {:ok, user} ->
-              Logger.debug("PublicEventLive.mount - user found: #{inspect(user)}")
-              status = Events.get_user_registration_status(event, user)
-              participant_status = Events.get_user_participant_status(event, user)
-              Logger.debug("PublicEventLive.mount - registration status: #{inspect(status)}, participant status: #{inspect(participant_status)}")
-              {status, user, participant_status}
-            {:error, reason} ->
-              Logger.debug("PublicEventLive.mount - no user found, reason: #{inspect(reason)}")
-              {:not_authenticated, nil, nil}
-          end
+
+          {registration_status, user, user_participant_status} =
+            case ensure_user_struct(socket.assigns.auth_user) do
+              {:ok, user} ->
+                Logger.debug("PublicEventLive.mount - user found: #{inspect(user)}")
+                status = Events.get_user_registration_status(event, user)
+                participant_status = Events.get_user_participant_status(event, user)
+
+                Logger.debug(
+                  "PublicEventLive.mount - registration status: #{inspect(status)}, participant status: #{inspect(participant_status)}"
+                )
+
+                {status, user, participant_status}
+
+              {:error, reason} ->
+                Logger.debug("PublicEventLive.mount - no user found, reason: #{inspect(reason)}")
+                {:not_authenticated, nil, nil}
+            end
 
           # Legacy date polling removed - now using generic polling system
 
@@ -95,34 +105,46 @@ defmodule EventasaurusWeb.PublicEventLive do
           event_url = url(socket, ~p"/#{event.slug}")
 
           # Use movie backdrop as social image if available, otherwise use default
-          social_image_url = if event.rich_external_data && event.rich_external_data["metadata"] && event.rich_external_data["metadata"]["backdrop_path"] do
-            backdrop_path = event.rich_external_data["metadata"]["backdrop_path"]
-            if is_binary(backdrop_path) && backdrop_path != "" do
-              EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(backdrop_path, "w1280")
+          social_image_url =
+            if event.rich_external_data && event.rich_external_data["metadata"] &&
+                 event.rich_external_data["metadata"]["backdrop_path"] do
+              backdrop_path = event.rich_external_data["metadata"]["backdrop_path"]
+
+              if is_binary(backdrop_path) && backdrop_path != "" do
+                EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+                  backdrop_path,
+                  "w1280"
+                )
+              else
+                social_card_url(socket, event)
+              end
             else
               social_card_url(socket, event)
             end
-          else
-            social_card_url(socket, event)
-          end
 
           # Enhanced description with movie data
-          description = if event.rich_external_data && event.rich_external_data["title"] do
-            movie_title = event.rich_external_data["title"]
-            movie_overview = event.rich_external_data["metadata"]["overview"]
+          description =
+            if event.rich_external_data && event.rich_external_data["title"] do
+              movie_title = event.rich_external_data["title"]
+              movie_overview = event.rich_external_data["metadata"]["overview"]
 
-            base_description = event.description || "Join us for #{event.title}"
-            movie_description = if movie_overview && String.length(movie_overview) > 0 do
-              truncated_overview = String.slice(movie_overview, 0, 200)
-              if String.length(movie_overview) > 200, do: truncated_overview <> "...", else: truncated_overview
+              base_description = event.description || "Join us for #{event.title}"
+
+              movie_description =
+                if movie_overview && String.length(movie_overview) > 0 do
+                  truncated_overview = String.slice(movie_overview, 0, 200)
+
+                  if String.length(movie_overview) > 200,
+                    do: truncated_overview <> "...",
+                    else: truncated_overview
+                else
+                  "A special screening of #{movie_title}"
+                end
+
+              "#{base_description} - #{movie_description}"
             else
-              "A special screening of #{movie_title}"
+              truncate_description(event.description || "Join us for #{event.title}")
             end
-
-            "#{base_description} - #{movie_description}"
-          else
-            truncate_description(event.description || "Join us for #{event.title}")
-          end
 
           {:ok,
            socket
@@ -142,13 +164,18 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:pending_vote, nil)
            |> assign(:show_vote_modal, false)
            # Legacy temp_votes removed
-           |> assign(:poll_temp_votes, %{})  # Map of poll_id => temp_votes for generic polls
-           |> assign(:show_generic_vote_modal, false)  # Show generic poll vote modal
-           |> assign(:modal_poll, nil)  # Current poll for modal
-           |> assign(:modal_temp_votes, %{})  # Temp votes for modal
+           # Map of poll_id => temp_votes for generic polls
+           |> assign(:poll_temp_votes, %{})
+           # Show generic poll vote modal
+           |> assign(:show_generic_vote_modal, false)
+           # Current poll for modal
+           |> assign(:modal_poll, nil)
+           # Temp votes for modal
+           |> assign(:modal_temp_votes, %{})
            |> assign(:show_interest_modal, false)
            |> assign(:tickets, tickets)
-           |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
+           # Map of ticket_id => quantity
+           |> assign(:selected_tickets, %{})
            |> assign(:ticket_loading, false)
            |> assign(:subscribed_to_tickets, subscribed_to_tickets)
            |> assign(:should_show_tickets, should_show_tickets)
@@ -158,25 +185,24 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:meta_image, social_image_url)
            |> assign(:meta_url, event_url)
            |> assign(:structured_data, generate_structured_data(event, event_url))
-                     # Load event polls for display
-          |> load_event_polls()
-          # Subscribe to poll statistics updates for real-time voting stats
-          |> subscribe_to_poll_stats()
-          # Track event page view
-          |> push_event("track_event", %{
-               event: "event_page_viewed",
-               properties: %{
-                 event_id: event.id,
-                 event_title: event.title,
-                 event_slug: event.slug,
-                 is_ticketed: event.is_ticketed,
-                 has_date_polling: event.status == :polling,
-                 user_type: if(user, do: "authenticated", else: "anonymous"),
-                 registration_status: registration_status,
-                 theme: theme
-               }
-             })
-          }
+           # Load event polls for display
+           |> load_event_polls()
+           # Subscribe to poll statistics updates for real-time voting stats
+           |> subscribe_to_poll_stats()
+           # Track event page view
+           |> push_event("track_event", %{
+             event: "event_page_viewed",
+             properties: %{
+               event_id: event.id,
+               event_title: event.title,
+               event_slug: event.slug,
+               is_ticketed: event.is_ticketed,
+               has_date_polling: event.status == :polling,
+               user_type: if(user, do: "authenticated", else: "anonymous"),
+               registration_status: registration_status,
+               theme: theme
+             }
+           })}
       end
     end
   end
@@ -187,14 +213,12 @@ defmodule EventasaurusWeb.PublicEventLive do
     if socket.assigns[:subscribed_to_tickets] do
       Ticketing.unsubscribe()
     end
+
     :ok
   end
 
   # ==================== EVENT HANDLERS ====================
   # All handle_event/3 functions grouped together to avoid compilation issues
-
-
-
 
   @impl true
   def handle_event("save_all_votes", _params, socket) do
@@ -202,6 +226,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:error, _} when map_size(socket.assigns.temp_votes) > 0 ->
         {:noreply, assign(socket, :show_vote_modal, true)}
+
       _ ->
         {:noreply, socket}
     end
@@ -216,7 +241,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     handle_event("register_with_status", %{"status" => "accepted"}, socket)
   end
 
-    def handle_event("register_with_status", %{"status" => status}, socket) do
+  def handle_event("register_with_status", %{"status" => status}, socket) do
     status_atom = String.to_atom(status)
 
     case ensure_user_struct(socket.assigns.auth_user) do
@@ -224,13 +249,14 @@ defmodule EventasaurusWeb.PublicEventLive do
         # Check if user wants to remove existing status (toggle off)
         current_status = socket.assigns.user_participant_status
 
-        action_result = if current_status == status_atom do
-          # User has this status already, remove it
-          Events.remove_user_participant_status(socket.assigns.event, user)
-        else
-          # User either has no status or different status, set new one
-          Events.update_user_participant_status(socket.assigns.event, user, status_atom)
-        end
+        action_result =
+          if current_status == status_atom do
+            # User has this status already, remove it
+            Events.remove_user_participant_status(socket.assigns.event, user)
+          else
+            # User either has no status or different status, set new one
+            Events.update_user_participant_status(socket.assigns.event, user, status_atom)
+          end
 
         case action_result do
           {:ok, _} ->
@@ -238,56 +264,58 @@ defmodule EventasaurusWeb.PublicEventLive do
             updated_participants = Events.list_event_participants(socket.assigns.event)
             new_user_status = Events.get_user_participant_status(socket.assigns.event, user)
 
-            message = if current_status == status_atom do
-              case status_atom do
-                :accepted -> "Registration cancelled."
-                :interested -> "Interest removed."
-                _ -> "Status removed."
+            message =
+              if current_status == status_atom do
+                case status_atom do
+                  :accepted -> "Registration cancelled."
+                  :interested -> "Interest removed."
+                  _ -> "Status removed."
+                end
+              else
+                case status_atom do
+                  :accepted -> "You're now registered for #{socket.assigns.event.title}!"
+                  :interested -> "Thanks for your interest in #{socket.assigns.event.title}!"
+                  _ -> "Your status has been updated!"
+                end
               end
-            else
-              case status_atom do
-                :accepted -> "You're now registered for #{socket.assigns.event.title}!"
-                :interested -> "Thanks for your interest in #{socket.assigns.event.title}!"
-                _ -> "Your status has been updated!"
-              end
-            end
 
             {:noreply,
              socket
-             |> assign(:registration_status, Events.get_user_registration_status(socket.assigns.event, user))
+             |> assign(
+               :registration_status,
+               Events.get_user_registration_status(socket.assigns.event, user)
+             )
              |> assign(:user_participant_status, new_user_status)
              |> assign(:just_registered, false)
              |> assign(:participants, updated_participants)
              |> put_flash(:info, message)
              |> push_event("track_event", %{
-                 event: "participant_status_updated",
-                 properties: %{
-                   event_id: socket.assigns.event.id,
-                   event_title: socket.assigns.event.title,
-                   event_slug: socket.assigns.event.slug,
-                   user_type: "authenticated",
-                   status: if(current_status == status_atom, do: :removed, else: status_atom),
-                   registration_method: "one_click"
-                 }
-               })
-            }
+               event: "participant_status_updated",
+               properties: %{
+                 event_id: socket.assigns.event.id,
+                 event_title: socket.assigns.event.title,
+                 event_slug: socket.assigns.event.slug,
+                 user_type: "authenticated",
+                 status: if(current_status == status_atom, do: :removed, else: status_atom),
+                 registration_method: "one_click"
+               }
+             })}
 
           {:error, :not_found} when current_status == status_atom ->
             {:noreply,
              socket
-             |> put_flash(:info, "Status already removed.")
-            }
+             |> put_flash(:info, "Status already removed.")}
 
           {:error, reason} ->
             {:noreply,
              socket
-             |> put_flash(:error, "Unable to update status: #{inspect(reason)}")
-            }
+             |> put_flash(:error, "Unable to update status: #{inspect(reason)}")}
         end
 
       {:error, _} ->
         # For unauthenticated users, show the registration modal with intended status
-        {:noreply, socket |> assign(:show_registration_modal, true) |> assign(:intended_status, status_atom)}
+        {:noreply,
+         socket |> assign(:show_registration_modal, true) |> assign(:intended_status, status_atom)}
     end
   end
 
@@ -304,27 +332,23 @@ defmodule EventasaurusWeb.PublicEventLive do
              |> assign(:registration_status, :cancelled)
              |> assign(:just_registered, false)
              |> assign(:participants, updated_participants)
-             |> put_flash(:info, "Your registration has been cancelled.")
-            }
+             |> put_flash(:info, "Your registration has been cancelled.")}
 
           {:error, :not_registered} ->
             {:noreply,
              socket
-             |> put_flash(:error, "You're not registered for this event.")
-            }
+             |> put_flash(:error, "You're not registered for this event.")}
 
           {:error, reason} ->
             {:noreply,
              socket
-             |> put_flash(:error, "Unable to cancel registration: #{inspect(reason)}")
-            }
+             |> put_flash(:error, "Unable to cancel registration: #{inspect(reason)}")}
         end
 
       {:error, _} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Please log in to manage your registration.")
-        }
+         |> put_flash(:error, "Please log in to manage your registration.")}
     end
   end
 
@@ -339,33 +363,34 @@ defmodule EventasaurusWeb.PublicEventLive do
             {:noreply,
              socket
              |> assign(:registration_status, :registered)
-             |> assign(:just_registered, false)  # Existing users don't need email verification
+             # Existing users don't need email verification
+             |> assign(:just_registered, false)
              |> assign(:participants, updated_participants)
-             |> put_flash(:info, "Welcome back! You're now registered for #{socket.assigns.event.title}.")
+             |> put_flash(
+               :info,
+               "Welcome back! You're now registered for #{socket.assigns.event.title}."
+             )
              |> push_event("track_event", %{
-                 event: "event_registration_completed",
-                 properties: %{
-                   event_id: socket.assigns.event.id,
-                   event_title: socket.assigns.event.title,
-                   event_slug: socket.assigns.event.slug,
-                   user_type: "authenticated",
-                   registration_method: "reregister"
-                 }
-               })
-            }
+               event: "event_registration_completed",
+               properties: %{
+                 event_id: socket.assigns.event.id,
+                 event_title: socket.assigns.event.title,
+                 event_slug: socket.assigns.event.slug,
+                 user_type: "authenticated",
+                 registration_method: "reregister"
+               }
+             })}
 
           {:error, reason} ->
             {:noreply,
              socket
-             |> put_flash(:error, "Unable to register: #{inspect(reason)}")
-            }
+             |> put_flash(:error, "Unable to register: #{inspect(reason)}")}
         end
 
       {:error, _} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Please log in to register for this event.")
-        }
+         |> put_flash(:error, "Please log in to register for this event.")}
     end
   end
 
@@ -384,21 +409,18 @@ defmodule EventasaurusWeb.PublicEventLive do
              |> assign(:event, updated_event)
              |> assign(:theme, theme_atom)
              |> push_event("switch-theme-css", %{theme: new_theme})
-             |> put_flash(:info, "Theme switched to #{String.capitalize(new_theme)}!")
-            }
+             |> put_flash(:info, "Theme switched to #{String.capitalize(new_theme)}!")}
 
           {:error, reason} ->
             {:noreply,
              socket
-             |> put_flash(:error, "Unable to switch theme: #{inspect(reason)}")
-            }
+             |> put_flash(:error, "Unable to switch theme: #{inspect(reason)}")}
         end
 
       _ ->
         {:noreply,
          socket
-         |> put_flash(:error, "Only event organizers can switch themes.")
-        }
+         |> put_flash(:error, "Only event organizers can switch themes.")}
     end
   end
 
@@ -428,14 +450,12 @@ defmodule EventasaurusWeb.PublicEventLive do
                  socket
                  |> assign(:participants, updated_participants)
                  |> assign(:user_participant_status, new_status)
-                 |> put_flash(:info, "Status updated successfully!")
-                }
+                 |> put_flash(:info, "Status updated successfully!")}
 
               {:error, reason} ->
                 {:noreply,
                  socket
-                 |> put_flash(:error, "Unable to update status: #{inspect(reason)}")
-                }
+                 |> put_flash(:error, "Unable to update status: #{inspect(reason)}")}
             end
 
           _ ->
@@ -451,21 +471,19 @@ defmodule EventasaurusWeb.PublicEventLive do
                  |> assign(:user_participant_status, new_status)
                  |> put_flash(:info, "Status updated successfully!")
                  |> push_event("track_event", %{
-                     event: "participant_status_updated",
-                     properties: %{
-                       event_id: socket.assigns.event.id,
-                       event_slug: socket.assigns.event.slug,
-                       status: status_atom,
-                       user_type: "authenticated"
-                     }
-                   })
-                }
+                   event: "participant_status_updated",
+                   properties: %{
+                     event_id: socket.assigns.event.id,
+                     event_slug: socket.assigns.event.slug,
+                     status: status_atom,
+                     user_type: "authenticated"
+                   }
+                 })}
 
               {:error, reason} ->
                 {:noreply,
                  socket
-                 |> put_flash(:error, "Unable to update status: #{inspect(reason)}")
-                }
+                 |> put_flash(:error, "Unable to update status: #{inspect(reason)}")}
             end
         end
 
@@ -476,8 +494,7 @@ defmodule EventasaurusWeb.PublicEventLive do
         else
           {:noreply,
            socket
-           |> put_flash(:error, "Please log in to update your status.")
-          }
+           |> put_flash(:error, "Please log in to update your status.")}
         end
     end
   end
@@ -490,36 +507,41 @@ defmodule EventasaurusWeb.PublicEventLive do
     if ticket do
       current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
       available_quantity = Ticketing.available_quantity(ticket)
-      max_per_order = 10  # Set reasonable limit
+      # Set reasonable limit
+      max_per_order = 10
 
-      new_quantity = if current_quantity < available_quantity and current_quantity < max_per_order do
-        current_quantity + 1
-      else
-        current_quantity
-      end
+      new_quantity =
+        if current_quantity < available_quantity and current_quantity < max_per_order do
+          current_quantity + 1
+        else
+          current_quantity
+        end
 
       # Only update if quantity actually changed
       if new_quantity != current_quantity do
         updated_selection = Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
 
-        socket = socket
-        |> assign(:selected_tickets, updated_selection)
+        socket =
+          socket
+          |> assign(:selected_tickets, updated_selection)
 
         # Show feedback if at limit
-        socket = if new_quantity == available_quantity do
-          put_flash(socket, :warning, "Maximum available tickets selected for #{ticket.title}")
-        else
-          socket
-        end
+        socket =
+          if new_quantity == available_quantity do
+            put_flash(socket, :warning, "Maximum available tickets selected for #{ticket.title}")
+          else
+            socket
+          end
 
         {:noreply, socket}
       else
         # At limit - show feedback
-        message = cond do
-          current_quantity >= available_quantity -> "No more #{ticket.title} tickets available"
-          current_quantity >= max_per_order -> "Maximum #{max_per_order} tickets per order"
-          true -> "Cannot increase quantity"
-        end
+        message =
+          cond do
+            current_quantity >= available_quantity -> "No more #{ticket.title} tickets available"
+            current_quantity >= max_per_order -> "Maximum #{max_per_order} tickets per order"
+            true -> "Cannot increase quantity"
+          end
 
         {:noreply, put_flash(socket, :warning, message)}
       end
@@ -533,11 +555,13 @@ defmodule EventasaurusWeb.PublicEventLive do
     current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
 
     new_quantity = max(0, current_quantity - 1)
-    updated_selection = if new_quantity == 0 do
-      Map.delete(socket.assigns.selected_tickets, ticket_id)
-    else
-      Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
-    end
+
+    updated_selection =
+      if new_quantity == 0 do
+        Map.delete(socket.assigns.selected_tickets, ticket_id)
+      else
+        Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
+      end
 
     {:noreply, assign(socket, :selected_tickets, updated_selection)}
   end
@@ -576,9 +600,9 @@ defmodule EventasaurusWeb.PublicEventLive do
             end)
 
           case Ticketing.create_multi_ticket_checkout_session(
-            socket.assigns.user,
-            ticket_items
-          ) do
+                 socket.assigns.user,
+                 ticket_items
+               ) do
             {:ok, %{checkout_url: checkout_url}} ->
               {:noreply,
                socket
@@ -618,8 +642,7 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> assign(:show_generic_vote_modal, false)
      |> assign(:pending_vote, nil)
      |> assign(:modal_poll, nil)
-     |> assign(:modal_temp_votes, %{})
-    }
+     |> assign(:modal_temp_votes, %{})}
   end
 
   def handle_event("close_generic_vote_modal", _params, socket) do
@@ -627,11 +650,8 @@ defmodule EventasaurusWeb.PublicEventLive do
      socket
      |> assign(:show_generic_vote_modal, false)
      |> assign(:modal_poll, nil)
-     |> assign(:modal_temp_votes, %{})
-    }
+     |> assign(:modal_temp_votes, %{})}
   end
-
-
 
   # Legacy cast_vote handler removed - using generic polling system
 
@@ -649,24 +669,25 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply,
      socket
      |> assign(:show_interest_modal, false)
-     |> put_flash(:info, "Magic link sent to #{email}! Check your email to complete registration and express interest.")
+     |> put_flash(
+       :info,
+       "Magic link sent to #{email}! Check your email to complete registration and express interest."
+     )
      |> push_event("track_event", %{
-         event: "interest_magic_link_sent",
-         properties: %{
-           event_id: socket.assigns.event.id,
-           event_slug: socket.assigns.event.slug,
-           email_domain: email |> String.split("@") |> List.last()
-         }
-       })
-    }
+       event: "interest_magic_link_sent",
+       properties: %{
+         event_id: socket.assigns.event.id,
+         event_slug: socket.assigns.event.slug,
+         email_domain: email |> String.split("@") |> List.last()
+       }
+     })}
   end
 
   @impl true
   def handle_info({:magic_link_error, reason}, socket) do
     {:noreply,
      socket
-     |> put_flash(:error, "Failed to send magic link: #{reason}")
-    }
+     |> put_flash(:error, "Failed to send magic link: #{reason}")}
   end
 
   @impl true
@@ -676,52 +697,64 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   @impl true
   def handle_info({:registration_success, type, _name, _email, intended_status}, socket) do
-    action_text = case intended_status do
-      :interested -> "expressed interest in"
-      _ -> "registered for"
-    end
+    action_text =
+      case intended_status do
+        :interested -> "expressed interest in"
+        _ -> "registered for"
+      end
 
-    message = case type do
-      :new_registration -> "Successfully #{action_text} #{socket.assigns.event.title}! Please check your email for a magic link to create your account."
-      :existing_user_registered -> "Successfully #{action_text} #{socket.assigns.event.title}!"
-      :registered -> "Successfully #{action_text} #{socket.assigns.event.title}!"
-      :already_registered -> "You are already registered for this event."
-    end
+    message =
+      case type do
+        :new_registration ->
+          "Successfully #{action_text} #{socket.assigns.event.title}! Please check your email for a magic link to create your account."
+
+        :existing_user_registered ->
+          "Successfully #{action_text} #{socket.assigns.event.title}!"
+
+        :registered ->
+          "Successfully #{action_text} #{socket.assigns.event.title}!"
+
+        :already_registered ->
+          "You are already registered for this event."
+      end
 
     # Reload participants to show updated count
     updated_participants = Events.list_event_participants(socket.assigns.event)
 
     # Only show email verification for truly new registrations
-    just_registered = case type do
-      :new_registration -> true
-      :existing_user_registered -> false
-      :registered -> true
-      :already_registered -> false
-    end
+    just_registered =
+      case type do
+        :new_registration -> true
+        :existing_user_registered -> false
+        :registered -> true
+        :already_registered -> false
+      end
 
     {:noreply,
      socket
      |> put_flash(:info, message)
      |> assign(:just_registered, just_registered)
      |> assign(:show_registration_modal, false)
-     |> assign(:registration_status, :registered)  # Update registration status to show success UI
+     # Update registration status to show success UI
+     |> assign(:registration_status, :registered)
      |> assign(:participants, updated_participants)
      |> push_event("track_event", %{
-         event: "event_registration_completed",
-         properties: %{
-           event_id: socket.assigns.event.id,
-           event_title: socket.assigns.event.title,
-           event_slug: socket.assigns.event.slug,
-           user_type: case type do
+       event: "event_registration_completed",
+       properties: %{
+         event_id: socket.assigns.event.id,
+         event_title: socket.assigns.event.title,
+         event_slug: socket.assigns.event.slug,
+         user_type:
+           case type do
              :new_registration -> "new_user"
              :existing_user_registered -> "existing_user"
              :registered -> "authenticated"
              :already_registered -> "returning_user"
            end,
-           registration_method: "form_submission",
-           registration_type: type
-         }
-       })}
+         registration_method: "form_submission",
+         registration_type: type
+       }
+     })}
   end
 
   # Backward compatibility for old format without intended_status
@@ -732,24 +765,28 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   @impl true
   def handle_info({:registration_error, reason}, socket) do
-    error_message = case reason do
-      :already_registered ->
-        "You're already registered for this event! Check your email for details."
-      %{message: msg} ->
-        msg
-      %{status: 422} ->
-        "This email address is already in use. Please try logging in instead."
-      %{status: _} ->
-        "We're having trouble creating your account. Please try again in a moment."
-      _ ->
-        "Something went wrong. Please try again or contact the event organizer."
-    end
+    error_message =
+      case reason do
+        :already_registered ->
+          "You're already registered for this event! Check your email for details."
+
+        %{message: msg} ->
+          msg
+
+        %{status: 422} ->
+          "This email address is already in use. Please try logging in instead."
+
+        %{status: _} ->
+          "We're having trouble creating your account. Please try again in a moment."
+
+        _ ->
+          "Something went wrong. Please try again or contact the event organizer."
+      end
 
     {:noreply,
      socket
      |> assign(:show_registration_modal, false)
-     |> put_flash(:error, error_message)
-    }
+     |> put_flash(:error, error_message)}
   end
 
   @impl true
@@ -760,8 +797,7 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> assign(:show_generic_vote_modal, false)
      |> assign(:pending_vote, nil)
      |> assign(:modal_poll, nil)
-     |> assign(:modal_temp_votes, %{})
-    }
+     |> assign(:modal_temp_votes, %{})}
   end
 
   @impl true
@@ -770,8 +806,7 @@ defmodule EventasaurusWeb.PublicEventLive do
      socket
      |> assign(:show_generic_vote_modal, false)
      |> assign(:modal_poll, nil)
-     |> assign(:modal_temp_votes, %{})
-    }
+     |> assign(:modal_temp_votes, %{})}
   end
 
   @impl true
@@ -781,41 +816,47 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   @impl true
   def handle_info({:vote_success, type, _name, email}, socket) do
-    message = case type do
-      :new_voter ->
-        "Thanks! Your vote has been recorded. Please check your email for a magic link to create your account."
-      :existing_user_voted ->
-        "Great! Your vote has been recorded."
-    end
+    message =
+      case type do
+        :new_voter ->
+          "Thanks! Your vote has been recorded. Please check your email for a magic link to create your account."
+
+        :existing_user_voted ->
+          "Great! Your vote has been recorded."
+      end
 
     # Reload vote data to show the updated vote
     # Find the date selection poll from the generic polls collection
     date_poll = Enum.find(socket.assigns.event_polls || [], &(&1.poll_type == "date_selection"))
 
-    user_votes = case socket.assigns.auth_user do
-      nil ->
-        # For anonymous users, try to find the user by email to show their votes
-        user = Accounts.get_user_by_email(email)
-        if user && date_poll do
-          Events.list_user_poll_votes(date_poll, user)
-        else
-          []
-        end
-      auth_user ->
-        # For authenticated users, reload their votes normally
-        case ensure_user_struct(auth_user) do
-          {:ok, user} when not is_nil(date_poll) -> Events.list_user_poll_votes(date_poll, user)
-          {:error, _} -> []
-          _ -> []
-        end
-    end
+    user_votes =
+      case socket.assigns.auth_user do
+        nil ->
+          # For anonymous users, try to find the user by email to show their votes
+          user = Accounts.get_user_by_email(email)
+
+          if user && date_poll do
+            Events.list_user_poll_votes(date_poll, user)
+          else
+            []
+          end
+
+        auth_user ->
+          # For authenticated users, reload their votes normally
+          case ensure_user_struct(auth_user) do
+            {:ok, user} when not is_nil(date_poll) -> Events.list_user_poll_votes(date_poll, user)
+            {:error, _} -> []
+            _ -> []
+          end
+      end
 
     # Reload voting summary as well
-    voting_summary = if date_poll do
-      Events.get_enhanced_poll_vote_tallies(date_poll)
-    else
-      []
-    end
+    voting_summary =
+      if date_poll do
+        Events.get_enhanced_poll_vote_tallies(date_poll)
+      else
+        []
+      end
 
     {:noreply,
      socket
@@ -825,51 +866,58 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> assign(:voting_summary, voting_summary)
      |> put_flash(:info, message)
      |> push_event("track_event", %{
-         event: "event_date_vote_cast",
-         properties: %{
-           event_id: socket.assigns.event.id,
-           event_title: socket.assigns.event.title,
-           event_slug: socket.assigns.event.slug,
-           poll_id: date_poll && date_poll.id,
-           user_type: case type do
+       event: "event_date_vote_cast",
+       properties: %{
+         event_id: socket.assigns.event.id,
+         event_title: socket.assigns.event.title,
+         event_slug: socket.assigns.event.slug,
+         poll_id: date_poll && date_poll.id,
+         user_type:
+           case type do
              :new_voter -> "new_user"
              :existing_user_voted -> "existing_user"
            end,
-           vote_method: "anonymous_form",
-           vote_type: type
-         }
-       })
-    }
+         vote_method: "anonymous_form",
+         vote_type: type
+       }
+     })}
   end
 
   @impl true
   def handle_info({:vote_error, reason}, socket) do
-    error_message = case reason do
-      :event_not_found ->
-        "Event not found. Please refresh the page and try again."
-      %{message: msg} ->
-        msg
-      %{status: 422} ->
-        "This email address is already in use. Please try logging in instead."
-      %{status: _} ->
-        "We're having trouble saving your vote. Please try again in a moment."
-      _ ->
-        "Something went wrong. Please try again or contact the event organizer."
-    end
+    error_message =
+      case reason do
+        :event_not_found ->
+          "Event not found. Please refresh the page and try again."
+
+        %{message: msg} ->
+          msg
+
+        %{status: 422} ->
+          "This email address is already in use. Please try logging in instead."
+
+        %{status: _} ->
+          "We're having trouble saving your vote. Please try again in a moment."
+
+        _ ->
+          "Something went wrong. Please try again or contact the event organizer."
+      end
 
     {:noreply,
      socket
      |> assign(:show_vote_modal, false)
      |> assign(:pending_vote, nil)
-     |> put_flash(:error, error_message)
-    }
+     |> put_flash(:error, error_message)}
   end
 
   @impl true
-  def handle_info({:save_all_poll_votes_for_user, poll_id, name, email, temp_votes, _poll_options}, socket) do
+  def handle_info(
+        {:save_all_poll_votes_for_user, poll_id, name, email, temp_votes, _poll_options},
+        socket
+      ) do
     # Handle bulk anonymous poll votes submission
     alias EventasaurusApp.{Events, Accounts}
-    
+
     # First, register the user properly to ensure they get a magic link
     case Events.register_user_for_event(socket.assigns.event.id, name, email) do
       {:ok, registration_type, _participant} ->
@@ -879,34 +927,39 @@ defmodule EventasaurusWeb.PublicEventLive do
             # This shouldn't happen, but handle it gracefully
             {:noreply,
              socket
-             |> put_flash(:error, "Unable to find user account after registration. Please try again.")
+             |> put_flash(
+               :error,
+               "Unable to find user account after registration. Please try again."
+             )
              |> assign(:show_generic_vote_modal, false)
              |> assign(:modal_poll, nil)
-             |> assign(:modal_temp_votes, %{})
-            }
-          
+             |> assign(:modal_temp_votes, %{})}
+
           user ->
             vote_results = cast_poll_votes(poll_id, temp_votes, user)
-            
+
             # Check if all votes were successful
             case Enum.find(vote_results, &match?({:error, _}, &1)) do
               nil ->
                 # All votes successful
                 socket = load_event_polls(socket)
                 socket = assign(socket, :user, user)
-                
+
                 # Reload participants to show updated count
                 updated_participants = Events.list_event_participants(socket.assigns.event)
-                
-                message = case registration_type do
-                  :new_registration ->
-                    "All votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
-                  :existing_user_registered ->
-                    "All votes saved successfully! You're registered for #{socket.assigns.event.title}."
-                  _ ->
-                    "All votes saved successfully!"
-                end
-                
+
+                message =
+                  case registration_type do
+                    :new_registration ->
+                      "All votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
+
+                    :existing_user_registered ->
+                      "All votes saved successfully! You're registered for #{socket.assigns.event.title}."
+
+                    _ ->
+                      "All votes saved successfully!"
+                  end
+
                 {:noreply,
                  socket
                  |> assign(:show_generic_vote_modal, false)
@@ -916,28 +969,30 @@ defmodule EventasaurusWeb.PublicEventLive do
                  |> assign(:registration_status, :registered)
                  |> assign(:just_registered, registration_type == :new_registration)
                  |> assign(:participants, updated_participants)
-                 |> put_flash(:info, message)
-                }
-              
+                 |> put_flash(:info, message)}
+
               {:error, reason} ->
-                error_message = case reason do
-                  :option_not_found ->
-                    "One or more poll options not found."
-                  :unsupported_voting_system ->
-                    "Unsupported voting system."
-                  _ ->
-                    "Unable to save votes. Please try again."
-                end
+                error_message =
+                  case reason do
+                    :option_not_found ->
+                      "One or more poll options not found."
+
+                    :unsupported_voting_system ->
+                      "Unsupported voting system."
+
+                    _ ->
+                      "Unable to save votes. Please try again."
+                  end
+
                 {:noreply,
                  socket
                  |> put_flash(:error, error_message)
                  |> assign(:show_generic_vote_modal, false)
                  |> assign(:modal_poll, nil)
-                 |> assign(:modal_temp_votes, %{})
-                }
+                 |> assign(:modal_temp_votes, %{})}
             end
         end
-        
+
       {:error, :already_registered} ->
         # User is already registered, just cast their votes
         case Accounts.get_user_by_email(email) do
@@ -947,22 +1002,21 @@ defmodule EventasaurusWeb.PublicEventLive do
              |> put_flash(:error, "Unable to find user account. Please try again.")
              |> assign(:show_generic_vote_modal, false)
              |> assign(:modal_poll, nil)
-             |> assign(:modal_temp_votes, %{})
-            }
-          
+             |> assign(:modal_temp_votes, %{})}
+
           user ->
             vote_results = cast_poll_votes(poll_id, temp_votes, user)
-            
+
             # Check if all votes were successful
             case Enum.find(vote_results, &match?({:error, _}, &1)) do
               nil ->
                 # All votes successful
                 socket = load_event_polls(socket)
                 socket = assign(socket, :user, user)
-                
+
                 # Reload participants to show updated count
                 updated_participants = Events.list_event_participants(socket.assigns.event)
-                
+
                 {:noreply,
                  socket
                  |> assign(:show_generic_vote_modal, false)
@@ -971,34 +1025,34 @@ defmodule EventasaurusWeb.PublicEventLive do
                  |> assign(:poll_temp_votes, %{})
                  |> assign(:registration_status, :registered)
                  |> assign(:participants, updated_participants)
-                 |> put_flash(:info, "All votes saved successfully!")
-                }
-              
+                 |> put_flash(:info, "All votes saved successfully!")}
+
               {:error, _reason} ->
                 {:noreply,
                  socket
                  |> put_flash(:error, "Unable to save some votes. Please try again.")
                  |> assign(:show_generic_vote_modal, false)
                  |> assign(:modal_poll, nil)
-                 |> assign(:modal_temp_votes, %{})
-                }
+                 |> assign(:modal_temp_votes, %{})}
             end
         end
-        
+
       {:error, reason} ->
-        error_message = case reason do
-          :event_not_found ->
-            "Event not found. Please refresh the page and try again."
-          _ ->
-            "Unable to register for event. Please try again."
-        end
+        error_message =
+          case reason do
+            :event_not_found ->
+              "Event not found. Please refresh the page and try again."
+
+            _ ->
+              "Unable to register for event. Please try again."
+          end
+
         {:noreply,
          socket
          |> put_flash(:error, error_message)
          |> assign(:show_generic_vote_modal, false)
          |> assign(:modal_poll, nil)
-         |> assign(:modal_temp_votes, %{})
-        }
+         |> assign(:modal_temp_votes, %{})}
     end
   end
 
@@ -1015,22 +1069,26 @@ defmodule EventasaurusWeb.PublicEventLive do
       updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
 
       # Update socket with fresh ticket data
-      socket = socket
-      |> assign(:tickets, updated_tickets)
-      |> assign(:ticket_loading, false)
+      socket =
+        socket
+        |> assign(:tickets, updated_tickets)
+        |> assign(:ticket_loading, false)
 
       # Show user-friendly notification for certain actions
-      socket = case action do
-        :order_confirmed ->
-          # Find the ticket name for better UX
-          ticket_name = updated_ticket.title
-          put_flash(socket, :info, "🎫 #{ticket_name} availability updated!")
-        :order_created ->
-          # Someone else is purchasing, show subtle update
-          socket
-        _ ->
-          socket
-      end
+      socket =
+        case action do
+          :order_confirmed ->
+            # Find the ticket name for better UX
+            ticket_name = updated_ticket.title
+            put_flash(socket, :info, "🎫 #{ticket_name} availability updated!")
+
+          :order_created ->
+            # Someone else is purchasing, show subtle update
+            socket
+
+          _ ->
+            socket
+        end
 
       {:noreply, socket}
     else
@@ -1045,15 +1103,14 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, socket}
   end
 
-    @impl true
+  @impl true
   def handle_info({:ranked_votes_submitted}, socket) do
     # Reload poll user votes to show updated rankings
     socket = load_event_polls(socket)
 
     {:noreply,
      socket
-     |> put_flash(:info, "Your ranking has been saved!")
-    }
+     |> put_flash(:info, "Your ranking has been saved!")}
   end
 
   @impl true
@@ -1071,8 +1128,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     {:noreply,
      socket
-     |> put_flash(:info, "All votes cleared successfully!")
-    }
+     |> put_flash(:info, "All votes cleared successfully!")}
   end
 
   @impl true
@@ -1082,8 +1138,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     {:noreply,
      socket
-     |> put_flash(:info, "All votes cleared successfully!")
-    }
+     |> put_flash(:info, "All votes cleared successfully!")}
   end
 
   @impl true
@@ -1134,14 +1189,14 @@ defmodule EventasaurusWeb.PublicEventLive do
   def handle_info({:music_track_selected, track_data, option_data}, socket) do
     # Handle music track selection from the music poll component
     Logger.info("Music track selected: #{track_data["title"]} (ID: #{track_data["id"]})")
-    
+
     # Create the poll option using the Events context
     case Events.create_poll_option(option_data) do
       {:ok, _option} ->
         # Reload polls to show the new option
         socket = load_event_polls(socket)
         {:noreply, put_flash(socket, :info, "Music track added successfully!")}
-      
+
       {:error, changeset} ->
         Logger.error("Failed to add music track: #{inspect(changeset.errors)}")
         {:noreply, put_flash(socket, :error, "Failed to add music track. Please try again.")}
@@ -1163,8 +1218,7 @@ defmodule EventasaurusWeb.PublicEventLive do
        |> assign(:poll_temp_votes, updated_poll_temp_votes)
        |> assign(:show_generic_vote_modal, true)
        |> assign(:modal_poll, poll)
-       |> assign(:modal_temp_votes, temp_votes)
-      }
+       |> assign(:modal_temp_votes, temp_votes)}
     else
       {:noreply, socket}
     end
@@ -1938,7 +1992,8 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
 
     # Add movie schema if TMDB data is available
-    if event.rich_external_data && event.rich_external_data["title"] && event.rich_external_data["type"] == "movie" do
+    if event.rich_external_data && event.rich_external_data["title"] &&
+         event.rich_external_data["type"] == "movie" do
       movie_data = event.rich_external_data
       metadata = movie_data["metadata"] || %{}
 
@@ -1948,42 +2003,57 @@ defmodule EventasaurusWeb.PublicEventLive do
         "description" => metadata["overview"],
         "datePublished" => metadata["release_date"],
         "genre" => metadata["genres"] || [],
-        "aggregateRating" => if metadata["vote_average"] do
-          %{
-            "@type" => "AggregateRating",
-            "ratingValue" => metadata["vote_average"],
-            "ratingCount" => metadata["vote_count"],
-            "bestRating" => 10
-          }
-        end,
-        "image" => if metadata["poster_path"] do
-          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(metadata["poster_path"], "w500")
-        end
+        "aggregateRating" =>
+          if metadata["vote_average"] do
+            %{
+              "@type" => "AggregateRating",
+              "ratingValue" => metadata["vote_average"],
+              "ratingCount" => metadata["vote_count"],
+              "bestRating" => 10
+            }
+          end,
+        "image" =>
+          if metadata["poster_path"] do
+            EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+              metadata["poster_path"],
+              "w500"
+            )
+          end
       }
 
       # Add cast information if available
-      cast_schema = if movie_data["cast"] do
-        Enum.take(movie_data["cast"], 5)
-        |> Enum.map(fn cast_member ->
-          %{
-            "@type" => "Person",
-            "name" => cast_member["name"],
-            "image" => if cast_member["profile_path"] do
-              EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(cast_member["profile_path"], "w185")
-            end
-          }
-        end)
-      end
+      cast_schema =
+        if movie_data["cast"] do
+          Enum.take(movie_data["cast"], 5)
+          |> Enum.map(fn cast_member ->
+            %{
+              "@type" => "Person",
+              "name" => cast_member["name"],
+              "image" =>
+                if cast_member["profile_path"] do
+                  EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+                    cast_member["profile_path"],
+                    "w185"
+                  )
+                end
+            }
+          end)
+        end
 
-      movie_schema = if cast_schema, do: Map.put(movie_schema, "actor", cast_schema), else: movie_schema
+      movie_schema =
+        if cast_schema, do: Map.put(movie_schema, "actor", cast_schema), else: movie_schema
 
       # Combine event and movie schemas
       Map.merge(base_schema, %{
         "workFeatured" => movie_schema,
         "about" => movie_schema,
-        "image" => if metadata["backdrop_path"] do
-          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(metadata["backdrop_path"], "w1280")
-        end
+        "image" =>
+          if metadata["backdrop_path"] do
+            EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+              metadata["backdrop_path"],
+              "w1280"
+            )
+          end
       })
     else
       base_schema
@@ -2022,10 +2092,12 @@ defmodule EventasaurusWeb.PublicEventLive do
   # - `{:error, reason}`: Failed to process or no user
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
+
   defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
     # Use shared function to find or create user
     Accounts.find_or_create_from_supabase(supabase_user)
   end
+
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   # Helper function for poll phase CSS classes
@@ -2062,29 +2134,33 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     try do
       # Load polls for all events on public pages with hidden options filtered out
-      event_polls = Events.list_polls(event)
+      event_polls =
+        Events.list_polls(event)
         |> Enum.map(fn poll ->
           # Filter out hidden poll options (status != "active") for public display
           # Handle both loaded associations and NotLoaded structs
-          visible_options = case poll.poll_options do
-            %Ecto.Association.NotLoaded{} -> []
-            options when is_list(options) -> Enum.filter(options, &(&1.status == "active"))
-            _ -> []
-          end
+          visible_options =
+            case poll.poll_options do
+              %Ecto.Association.NotLoaded{} -> []
+              options when is_list(options) -> Enum.filter(options, &(&1.status == "active"))
+              _ -> []
+            end
+
           %{poll | poll_options: visible_options}
         end)
 
       # Load user votes for each poll if user is authenticated
-      poll_user_votes = if user && length(event_polls) > 0 do
-        event_polls
-        |> Enum.map(fn poll ->
-          votes = Events.list_user_poll_votes(poll, user)
-          {poll.id, votes}
-        end)
-        |> Map.new()
-      else
-        %{}
-      end
+      poll_user_votes =
+        if user && length(event_polls) > 0 do
+          event_polls
+          |> Enum.map(fn poll ->
+            votes = Events.list_user_poll_votes(poll, user)
+            {poll.id, votes}
+          end)
+          |> Map.new()
+        else
+          %{}
+        end
 
       socket
       |> assign(:event_polls, event_polls)
@@ -2092,6 +2168,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     rescue
       error ->
         Logger.error("Failed to load event polls: #{inspect(error)}")
+
         socket
         |> assign(:event_polls, [])
         |> assign(:poll_user_votes, %{})
@@ -2102,66 +2179,77 @@ defmodule EventasaurusWeb.PublicEventLive do
   defp cast_poll_votes(poll_id, temp_votes, user) do
     # Get the poll to determine voting system
     poll = Events.get_poll!(poll_id)
-    
+
     # Cast votes based on the voting system
     # Handle different temp_votes structures
-    votes_to_cast = case temp_votes do
-      %{votes: votes, poll_type: :ranked} ->
-        # Convert ranked structure to expected format
-        Enum.map(votes, fn %{rank: rank, option_id: option_id} -> 
-          {option_id, rank}
-        end)
-      map when is_map(map) ->
-        # Regular map structure
-        Enum.to_list(map)
-      _ ->
-        []
-    end
-    
+    votes_to_cast =
+      case temp_votes do
+        %{votes: votes, poll_type: :ranked} ->
+          # Convert ranked structure to expected format
+          Enum.map(votes, fn %{rank: rank, option_id: option_id} ->
+            {option_id, rank}
+          end)
+
+        map when is_map(map) ->
+          # Regular map structure
+          Enum.to_list(map)
+
+        _ ->
+          []
+      end
+
     # Short-circuit empty submissions
     if votes_to_cast == [] do
       [{:error, :no_votes}]
     else
       # Handle ranked voting separately (needs all votes at once)
       if poll.voting_system == "ranked" do
-      # For ranked voting, submit all votes at once
-      # cast_ranked_votes properly clears existing votes first in a transaction
-      case Events.cast_ranked_votes(poll, votes_to_cast, user) do
-        {:ok, votes} -> Enum.map(votes, fn v -> {:ok, v} end)
-        {:error, reason} -> [{:error, reason}]
-      end
-    else
-      # For other voting systems, process votes individually
-      for {option_id, vote_value} <- votes_to_cast do
-        case Events.get_poll_option(option_id) do
-          nil ->
-            {:error, :option_not_found}
-          poll_option ->
-            case poll.voting_system do
-              "binary" ->
-                Events.cast_binary_vote(poll, poll_option, user, vote_value)
-              "approval" when vote_value == "selected" ->
-                Events.cast_approval_vote(poll, poll_option, user, true)
-              "star" ->
-                # Safely parse and clamp rating to 1–5
-                case vote_value do
-                  i when is_integer(i) ->
-                    Events.cast_star_vote(poll, poll_option, user, i |> min(5) |> max(1))
-                  s when is_binary(s) ->
-                    case Integer.parse(s) do
-                      {i, ""} -> Events.cast_star_vote(poll, poll_option, user, i |> min(5) |> max(1))
-                      _ -> {:error, :invalid_rating}
-                    end
-                  _ ->
-                    {:error, :invalid_rating}
-                end
-              _ ->
-                {:error, :unsupported_voting_system}
-            end
+        # For ranked voting, submit all votes at once
+        # cast_ranked_votes properly clears existing votes first in a transaction
+        case Events.cast_ranked_votes(poll, votes_to_cast, user) do
+          {:ok, votes} -> Enum.map(votes, fn v -> {:ok, v} end)
+          {:error, reason} -> [{:error, reason}]
         end
-      end
+      else
+        # For other voting systems, process votes individually
+        for {option_id, vote_value} <- votes_to_cast do
+          case Events.get_poll_option(option_id) do
+            nil ->
+              {:error, :option_not_found}
+
+            poll_option ->
+              case poll.voting_system do
+                "binary" ->
+                  Events.cast_binary_vote(poll, poll_option, user, vote_value)
+
+                "approval" when vote_value == "selected" ->
+                  Events.cast_approval_vote(poll, poll_option, user, true)
+
+                "star" ->
+                  # Safely parse and clamp rating to 1–5
+                  case vote_value do
+                    i when is_integer(i) ->
+                      Events.cast_star_vote(poll, poll_option, user, i |> min(5) |> max(1))
+
+                    s when is_binary(s) ->
+                      case Integer.parse(s) do
+                        {i, ""} ->
+                          Events.cast_star_vote(poll, poll_option, user, i |> min(5) |> max(1))
+
+                        _ ->
+                          {:error, :invalid_rating}
+                      end
+
+                    _ ->
+                      {:error, :invalid_rating}
+                  end
+
+                _ ->
+                  {:error, :unsupported_voting_system}
+              end
+          end
+        end
       end
     end
   end
-
 end

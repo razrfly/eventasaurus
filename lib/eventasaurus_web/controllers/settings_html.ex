@@ -13,17 +13,20 @@ defmodule EventasaurusWeb.SettingsHTML do
   """
   def format_connection_date(nil), do: "Unknown"
   def format_connection_date("Unknown"), do: "Unknown"
+
   def format_connection_date(date_string) when is_binary(date_string) do
     try do
       case Date.from_iso8601(date_string) do
         {:ok, date} ->
           # Format as "January 15, 2024"
           Calendar.strftime(date, "%B %d, %Y")
+
         {:error, _} ->
           # Try parsing as datetime
           case DateTime.from_iso8601(date_string) do
             {:ok, datetime, _} ->
               Calendar.strftime(datetime, "%B %d, %Y")
+
             {:error, _} ->
               "Invalid date"
           end
@@ -32,7 +35,6 @@ defmodule EventasaurusWeb.SettingsHTML do
       _ -> "Invalid date"
     end
   end
+
   def format_connection_date(_), do: "Unknown"
-
-
 end

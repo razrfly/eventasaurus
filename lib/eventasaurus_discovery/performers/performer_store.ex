@@ -22,6 +22,7 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
       [existing | _] ->
         Logger.info("🎤 Found existing performer by fuzzy match: #{existing.name}")
         {:ok, existing}
+
       [] ->
         # No fuzzy match found, proceed with upsert
         upsert_by_slug(normalized_attrs)
@@ -29,17 +30,19 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
   end
 
   defp upsert_by_slug(attrs) do
-    changeset = %Performer{}
-    |> Performer.changeset(attrs)
+    changeset =
+      %Performer{}
+      |> Performer.changeset(attrs)
 
     case Repo.insert(changeset,
-      on_conflict: {:replace, [:name, :image_url, :metadata, :updated_at]},
-      conflict_target: :slug,
-      returning: true
-    ) do
+           on_conflict: {:replace, [:name, :image_url, :metadata, :updated_at]},
+           conflict_target: :slug,
+           returning: true
+         ) do
       {:ok, performer} ->
         Logger.info("🎤 Upserted performer: #{performer.name} (#{performer.id})")
         {:ok, performer}
+
       {:error, changeset} ->
         # Try to find existing performer
         if has_unique_violation?(changeset) do
@@ -62,14 +65,17 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
       |> Normalizer.normalize_text()
       |> Normalizer.create_slug()
 
-    query = from p in Performer,
-      where: p.slug == ^slug,
-      limit: 1
+    query =
+      from(p in Performer,
+        where: p.slug == ^slug,
+        limit: 1
+      )
 
     case Repo.one(query) do
       nil ->
         Logger.error("Could not find existing performer: #{name}")
         {:error, :performer_not_found}
+
       performer ->
         Logger.info("Found existing performer: #{performer.name} (#{performer.id})")
         {:ok, performer}
@@ -94,7 +100,6 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     end)
   end
 
-
   @doc """
   Find performers by name (fuzzy match).
   """
@@ -102,30 +107,35 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     threshold = Keyword.get(opts, :threshold, 0.8)
     source_id = Keyword.get(opts, :source_id)
 
-    query = from p in Performer
+    query = from(p in Performer)
 
-    query = if source_id do
-      where(query, [p], p.source_id == ^source_id)
-    else
-      query
-    end
+    query =
+      if source_id do
+        where(query, [p], p.source_id == ^source_id)
+      else
+        query
+      end
 
     query
     |> Repo.all()
     |> Enum.filter(fn performer ->
       # Use String.jaro_distance for fuzzy matching
-      similarity = String.jaro_distance(
-        String.downcase(performer.name),
-        String.downcase(name)
-      )
+      similarity =
+        String.jaro_distance(
+          String.downcase(performer.name),
+          String.downcase(name)
+        )
+
       similarity >= threshold
     end)
     |> Enum.sort_by(fn performer ->
       # Sort by similarity (highest first)
-      similarity = String.jaro_distance(
-        String.downcase(performer.name),
-        String.downcase(name)
-      )
+      similarity =
+        String.jaro_distance(
+          String.downcase(performer.name),
+          String.downcase(name)
+        )
+
       -similarity
     end)
   end
@@ -146,15 +156,18 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     source_id = Keyword.get(opts, :source_id)
     limit = Keyword.get(opts, :limit, 100)
 
-    query = from p in Performer,
-      order_by: [desc: p.inserted_at],
-      limit: ^limit
+    query =
+      from(p in Performer,
+        order_by: [desc: p.inserted_at],
+        limit: ^limit
+      )
 
-    query = if source_id do
-      where(query, [p], p.source_id == ^source_id)
-    else
-      query
-    end
+    query =
+      if source_id do
+        where(query, [p], p.source_id == ^source_id)
+      else
+        query
+      end
 
     Repo.all(query)
   end

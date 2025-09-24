@@ -60,7 +60,8 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
 
       event2 = %{
         slug: "tech-meetup-february",
-        title: "Tech Meetup",  # Same title, different slug
+        # Same title, different slug
+        title: "Tech Meetup",
         cover_image_url: "https://example.com/image.jpg",
         updated_at: ~N[2023-01-01 12:00:00]
       }
@@ -68,7 +69,8 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
       hash1 = HashGenerator.generate_hash(event1)
       hash2 = HashGenerator.generate_hash(event2)
 
-      assert hash1 != hash2, "Events with same title but different slugs must have different hashes"
+      assert hash1 != hash2,
+             "Events with same title but different slugs must have different hashes"
     end
 
     test "generates different hashes for different image URLs" do
@@ -196,10 +198,14 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
 
     test "returns nil for invalid paths" do
       invalid_paths = [
-        "/events/my-event/social_card.png",  # Wrong format
-        "/events/my-event/social-card-.png", # Missing hash
-        "/events/my-event/social-card-abc.png", # Hash too short
-        "/events/my-event/social-card-a1b2c3d4e5.png", # Hash too long
+        # Wrong format
+        "/events/my-event/social_card.png",
+        # Missing hash
+        "/events/my-event/social-card-.png",
+        # Hash too short
+        "/events/my-event/social-card-abc.png",
+        # Hash too long
+        "/events/my-event/social-card-a1b2c3d4e5.png",
         "/invalid/path",
         "",
         "/events/my-event/other-file.png"

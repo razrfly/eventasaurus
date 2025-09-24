@@ -38,7 +38,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
     |> String.slice(0, 8)
   end
 
-    @doc """
+  @doc """
   Generates a cache-busting URL path for a social card.
 
   Format: /events/{slug}/social-card-{hash}.png
@@ -53,11 +53,12 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   @spec generate_url_path(map()) :: String.t()
   def generate_url_path(event) when is_map(event) do
     # Use the same robust slug generation logic
-    slug = case {Map.get(event, :slug), Map.get(event, :id)} do
-      {slug, _} when is_binary(slug) and slug != "" -> slug
-      {_, id} when not is_nil(id) -> "event-#{id}"
-      _ -> "unknown-event-#{System.unique_integer([:positive])}"
-    end
+    slug =
+      case {Map.get(event, :slug), Map.get(event, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "event-#{id}"
+        _ -> "unknown-event-#{System.unique_integer([:positive])}"
+      end
 
     hash = generate_hash(event)
     "/events/#{slug}/social-card-#{hash}.png"
@@ -108,11 +109,12 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
   defp build_fingerprint(event) do
     # Ensure we always have a valid slug, even if :id is missing
-    slug = case {Map.get(event, :slug), Map.get(event, :id)} do
-      {slug, _} when is_binary(slug) and slug != "" -> slug
-      {_, id} when not is_nil(id) -> "event-#{id}"
-      _ -> "unknown-event-#{System.unique_integer([:positive])}"
-    end
+    slug =
+      case {Map.get(event, :slug), Map.get(event, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "event-#{id}"
+        _ -> "unknown-event-#{System.unique_integer([:positive])}"
+      end
 
     %{
       slug: slug,

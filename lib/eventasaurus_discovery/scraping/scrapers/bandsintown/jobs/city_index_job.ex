@@ -27,25 +27,30 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     city_slug = args["city_slug"] || args["city"]
     limit = args["limit"]
     use_playwright = Map.get(args, "use_playwright", false)
-    max_pages = Map.get(args, "max_pages", 5)  # Default to 5 pages
+    # Default to 5 pages
+    max_pages = Map.get(args, "max_pages", 5)
 
     # Fetch city from database if city_id provided, otherwise try to find by slug
-    city = cond do
-      city_id ->
-        Repo.get!(City, city_id) |> Repo.preload(:country)
-      city_slug ->
-        # Try to find city by slug - this is for backwards compatibility
-        case Repo.get_by(City, slug: extract_city_name(city_slug)) do
-          nil ->
-            Logger.error("❌ City not found: #{city_slug}")
-            {:error, :city_not_found}
-          city ->
-            Repo.preload(city, :country)
-        end
-      true ->
-        Logger.error("❌ No city_id or city_slug provided")
-        {:error, :no_city_specified}
-    end
+    city =
+      cond do
+        city_id ->
+          Repo.get!(City, city_id) |> Repo.preload(:country)
+
+        city_slug ->
+          # Try to find city by slug - this is for backwards compatibility
+          case Repo.get_by(City, slug: extract_city_name(city_slug)) do
+            nil ->
+              Logger.error("❌ City not found: #{city_slug}")
+              {:error, :city_not_found}
+
+            city ->
+              Repo.preload(city, :country)
+          end
+
+        true ->
+          Logger.error("❌ No city_id or city_slug provided")
+          {:error, :no_city_specified}
+      end
 
     # Handle early return if city not found
     case city do
@@ -53,6 +58,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
         if job_id do
           JobMetadata.update_error(job_id, reason, %{city_id: city_id, city_slug: city_slug})
         end
+
         {:error, reason}
 
       city ->
@@ -78,12 +84,13 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
 
         try do
           # Use the new pagination API with coordinates
-          fetch_result = Client.fetch_all_city_events(
-            latitude,
-            longitude,
-            bandsintown_slug,
-            max_pages: max_pages
-          )
+          fetch_result =
+            Client.fetch_all_city_events(
+              latitude,
+              longitude,
+              bandsintown_slug,
+              max_pages: max_pages
+            )
 
           case fetch_result do
             {:ok, events} ->
@@ -92,6 +99,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
         rescue
           e ->
             Logger.error("❌ City Index Job failed: #{Exception.message(e)}")
+
             if job_id do
               JobMetadata.update_error(job_id, e, %{
                 city_id: city.id,
@@ -99,6 +107,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
                 coordinates: {latitude, longitude}
               })
             end
+
             {:error, e}
         end
     end
@@ -108,19 +117,24 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     total_events = length(events)
 
     # Apply limit if specified
-    events_to_process = if limit do
-      Logger.info("🧪 Limiting to #{limit} events (found #{total_events})")
-      Enum.take(events, limit)
-    else
-      events
-    end
+    events_to_process =
+      if limit do
+        Logger.info("🧪 Limiting to #{limit} events (found #{total_events})")
+        Enum.take(events, limit)
+      else
+        events
+      end
 
     processed_count = length(events_to_process)
 
     # Log extracted events for debugging
     Logger.info("📋 Events to process:")
+
     Enum.each(events_to_process, fn event ->
-      Logger.info("  - #{event.artist_name || event[:artist_name]} at #{event.venue_name || event[:venue_name]} on #{event.date || event[:date]}")
+      Logger.info(
+        "  - #{event.artist_name || event[:artist_name]} at #{event.venue_name || event[:venue_name]} on #{event.date || event[:date]}"
+      )
+
       Logger.info("    URL: #{event.url || event[:url]}")
     end)
 
@@ -154,32 +168,34 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     Logger.info("📅 Scheduling #{length(events)} detail jobs")
 
     # Schedule individual jobs for each event with rate limiting
-    scheduled_jobs = events
-    |> Enum.with_index()
-    |> Enum.map(fn {event, index} ->
-      # Add delay between jobs to respect rate limits
-      # Start immediately, then 5 seconds between each job
-      scheduled_at = DateTime.add(DateTime.utc_now(), index * 5, :second)
+    scheduled_jobs =
+      events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, index} ->
+        # Add delay between jobs to respect rate limits
+        # Start immediately, then 5 seconds between each job
+        scheduled_at = DateTime.add(DateTime.utc_now(), index * 5, :second)
 
-      job_args = %{
-        "url" => event.url || event[:url],
-        "source_id" => source_id,
-        "event_data" => event
-      }
+        job_args = %{
+          "url" => event.url || event[:url],
+          "source_id" => source_id,
+          "event_data" => event
+        }
 
-      # Create the job changeset
-      EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(job_args,
-        queue: "scraper_detail",
-        scheduled_at: scheduled_at
-      )
-      |> Oban.insert()
-    end)
+        # Create the job changeset
+        EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(job_args,
+          queue: "scraper_detail",
+          scheduled_at: scheduled_at
+        )
+        |> Oban.insert()
+      end)
 
     # Count successful insertions
-    successful_count = Enum.count(scheduled_jobs, fn
-      {:ok, _} -> true
-      _ -> false
-    end)
+    successful_count =
+      Enum.count(scheduled_jobs, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
 
     Logger.info("✅ Successfully scheduled #{successful_count}/#{length(events)} detail jobs")
     successful_count
@@ -209,12 +225,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
   # Helper to extract city name from old-style slugs like "krakow-poland"
   defp extract_city_name(city_slug) when is_binary(city_slug) do
     parts = city_slug |> String.downcase() |> String.split("-")
+
     case parts do
       [] -> nil
-      [single] -> single  # Return single-part slugs as-is (e.g., "krakow")
-      _ -> parts |> Enum.drop(-1) |> Enum.join("-")  # Remove country suffix for multi-part slugs
+      # Return single-part slugs as-is (e.g., "krakow")
+      [single] -> single
+      # Remove country suffix for multi-part slugs
+      _ -> parts |> Enum.drop(-1) |> Enum.join("-")
     end
   end
+
   defp extract_city_name(_), do: nil
 
   # Build the Bandsintown URL slug from city and country

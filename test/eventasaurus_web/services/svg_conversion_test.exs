@@ -28,7 +28,6 @@ defmodule EventasaurusWeb.Services.SvgConversionTest do
         # Verify the PNG file has content
         png_stats = File.stat!(png_path)
         assert png_stats.size > 0
-
       after
         # Cleanup temporary files
         File.rm(svg_path)

@@ -230,12 +230,13 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   # Phase Badge Rendering
   defp render_phase_badge(phase) do
-    {text, class} = case phase do
-      "list_building" -> {"Building List", "bg-blue-100 text-blue-800"}
-      "voting" -> {"Voting Open", "bg-green-100 text-green-800"}
-      "closed" -> {"Closed", "bg-gray-100 text-gray-800"}
-      _ -> {"Unknown", "bg-red-100 text-red-800"}
-    end
+    {text, class} =
+      case phase do
+        "list_building" -> {"Building List", "bg-blue-100 text-blue-800"}
+        "voting" -> {"Voting Open", "bg-green-100 text-green-800"}
+        "closed" -> {"Closed", "bg-gray-100 text-gray-800"}
+        _ -> {"Unknown", "bg-red-100 text-red-800"}
+      end
 
     assigns = %{text: text, class: class}
 
@@ -399,44 +400,51 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
     # Since poll_votes are associated with poll_options, we need to collect them
     # For now, we'll provide safe defaults if poll data isn't fully loaded
-    poll_votes = case poll.poll_options do
-      options when is_list(options) ->
-        Enum.flat_map(options, fn option ->
-          case option do
-            %{poll_votes: votes} when is_list(votes) -> votes
-            _ -> []
-          end
-        end)
-      _ -> []
-    end
+    poll_votes =
+      case poll.poll_options do
+        options when is_list(options) ->
+          Enum.flat_map(options, fn option ->
+            case option do
+              %{poll_votes: votes} when is_list(votes) -> votes
+              _ -> []
+            end
+          end)
+
+        _ ->
+          []
+      end
 
     total_votes = length(poll_votes)
 
     # Count unique participants
-    unique_participants = poll_votes
-    |> Enum.map(fn vote ->
-      case vote do
-        %{voter_id: voter_id} -> voter_id
-        %{user_id: user_id} -> user_id
-        _ -> nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-    |> length()
+    unique_participants =
+      poll_votes
+      |> Enum.map(fn vote ->
+        case vote do
+          %{voter_id: voter_id} -> voter_id
+          %{user_id: user_id} -> user_id
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> length()
 
     # Calculate participation rate based on event participants
     # Note: This assumes event has participants preloaded
-    total_possible_participants = case poll.event do
-      %{participants: participants} when is_list(participants) -> length(participants)
-      _ -> 1  # Avoid division by zero
-    end
+    total_possible_participants =
+      case poll.event do
+        %{participants: participants} when is_list(participants) -> length(participants)
+        # Avoid division by zero
+        _ -> 1
+      end
 
-    participation_rate = if total_possible_participants > 0 do
-      round((unique_participants / total_possible_participants) * 100)
-    else
-      0
-    end
+    participation_rate =
+      if total_possible_participants > 0 do
+        round(unique_participants / total_possible_participants * 100)
+      else
+        0
+      end
 
     %{
       total_options: total_options,
@@ -452,8 +460,6 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   end
 
   # UI Helper Functions
-
-
 
   defp format_voting_system(voting_system) do
     case voting_system do
@@ -474,25 +480,36 @@ defmodule EventasaurusWeb.PollDetailsComponent do
         diff = DateTime.diff(now, dt, :minute)
 
         cond do
-          diff < 1 -> "just now"
-          diff < 60 -> "#{diff}m ago"
-          diff < 1440 -> "#{div(diff, 60)}h ago"
-          diff < 10080 -> "#{div(diff, 1440)}d ago"
+          diff < 1 ->
+            "just now"
+
+          diff < 60 ->
+            "#{diff}m ago"
+
+          diff < 1440 ->
+            "#{div(diff, 60)}h ago"
+
+          diff < 10080 ->
+            "#{div(diff, 1440)}d ago"
+
           true ->
             # For older dates, show the actual date in event timezone
             timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+
             dt
             |> DateTimeHelper.utc_to_timezone(timezone)
             |> DateTime.to_date()
             |> Date.to_string()
         end
-      _ -> "unknown"
+
+      _ ->
+        "unknown"
     end
   end
 
   # Version without event for backward compatibility
   defp format_deadline(deadline), do: format_deadline(deadline, nil)
-  
+
   defp format_deadline(deadline, event) do
     case deadline do
       %DateTime{} = dt ->
@@ -503,12 +520,19 @@ defmodule EventasaurusWeb.PollDetailsComponent do
           diff = DateTime.diff(dt, now, :minute)
 
           cond do
-            diff < 60 -> "in #{diff}m"
-            diff < 1440 -> "in #{div(diff, 60)}h"
-            diff < 10080 -> "in #{div(diff, 1440)}d"
-            true -> 
+            diff < 60 ->
+              "in #{diff}m"
+
+            diff < 1440 ->
+              "in #{div(diff, 60)}h"
+
+            diff < 10080 ->
+              "in #{div(diff, 1440)}d"
+
+            true ->
               # For farther dates, show the actual date in event timezone
               timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+
               dt
               |> DateTimeHelper.utc_to_timezone(timezone)
               |> DateTime.to_date()
@@ -519,19 +543,28 @@ defmodule EventasaurusWeb.PollDetailsComponent do
           diff = DateTime.diff(now, dt, :minute)
 
           cond do
-            diff < 60 -> "#{diff}m ago"
-            diff < 1440 -> "#{div(diff, 60)}h ago"
-            diff < 10080 -> "#{div(diff, 1440)}d ago"
-            true -> 
+            diff < 60 ->
+              "#{diff}m ago"
+
+            diff < 1440 ->
+              "#{div(diff, 60)}h ago"
+
+            diff < 10080 ->
+              "#{div(diff, 1440)}d ago"
+
+            true ->
               # For older dates, show the actual date in event timezone
               timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+
               dt
               |> DateTimeHelper.utc_to_timezone(timezone)
               |> DateTime.to_date()
               |> Date.to_string()
           end
         end
-      _ -> "Not set"
+
+      _ ->
+        "Not set"
     end
   end
 
@@ -545,14 +578,20 @@ defmodule EventasaurusWeb.PollDetailsComponent do
           diff = DateTime.diff(dt, now, :hour)
 
           cond do
-            diff < 1 -> "text-red-600"    # Less than 1 hour
-            diff < 24 -> "text-yellow-600" # Less than 1 day
-            true -> "text-green-600"       # More than 1 day
+            # Less than 1 hour
+            diff < 1 -> "text-red-600"
+            # Less than 1 day
+            diff < 24 -> "text-yellow-600"
+            # More than 1 day
+            true -> "text-green-600"
           end
         else
-          "text-red-600"  # Past deadline
+          # Past deadline
+          "text-red-600"
         end
-      _ -> "text-gray-500"
+
+      _ ->
+        "text-gray-500"
     end
   end
 
@@ -564,14 +603,17 @@ defmodule EventasaurusWeb.PollDetailsComponent do
         else
           "No deadline set"
         end
+
       "voting" ->
         if poll.voting_deadline do
           "Phase deadline: #{format_deadline(poll.voting_deadline)}"
         else
           "No deadline set"
         end
+
       "closed" ->
         "Poll completed"
+
       _ ->
         ""
     end

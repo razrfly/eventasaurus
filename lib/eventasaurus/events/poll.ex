@@ -767,6 +767,7 @@ defmodule EventasaurusApp.Events.Poll do
           case Integer.parse(value) do
             {parsed, ""} when parsed in [3, 5, 7] ->
               Map.put(settings, "max_rankings", parsed)
+
             _ ->
               Map.put(settings, "max_rankings", 3)
           end
@@ -848,17 +849,24 @@ defmodule EventasaurusApp.Events.Poll do
     # Normalize option_removal_time_limit if present
     settings =
       case Map.get(settings, "option_removal_time_limit") do
-        nil -> settings
+        nil ->
+          settings
+
         value when is_integer(value) and value > 0 ->
           Map.put(settings, "option_removal_time_limit", min(value, 1440))
+
         value when is_binary(value) ->
           case Integer.parse(value) do
             {parsed, ""} when parsed > 0 ->
               Map.put(settings, "option_removal_time_limit", min(parsed, 1440))
-            _ -> Map.put(settings, "option_removal_time_limit", 5)
+
+            _ ->
+              Map.put(settings, "option_removal_time_limit", 5)
           end
+
         # Invalid type or value, default to 5
-        _ -> Map.put(settings, "option_removal_time_limit", 5)
+        _ ->
+          Map.put(settings, "option_removal_time_limit", 5)
       end
 
     settings
@@ -915,23 +923,42 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_option_removal_strategy_setting(changeset, settings) do
     case Map.get(settings, "option_removal_strategy") do
-      nil -> changeset
-      strategy when strategy in ["vote_based", "time_based", "disabled"] -> changeset
-      _ -> add_error(changeset, :settings, "option_removal_strategy must be one of: vote_based, time_based, disabled")
+      nil ->
+        changeset
+
+      strategy when strategy in ["vote_based", "time_based", "disabled"] ->
+        changeset
+
+      _ ->
+        add_error(
+          changeset,
+          :settings,
+          "option_removal_strategy must be one of: vote_based, time_based, disabled"
+        )
     end
   end
 
   defp validate_option_removal_time_limit_setting(changeset, settings) do
-    strategy = Map.get(settings, "option_removal_strategy") || get_option_removal_strategy(changeset.data)
+    strategy =
+      Map.get(settings, "option_removal_strategy") || get_option_removal_strategy(changeset.data)
+
     case Map.get(settings, "option_removal_time_limit") do
       nil when strategy == "time_based" ->
-        add_error(changeset, :settings, "option_removal_time_limit is required when strategy is time_based")
+        add_error(
+          changeset,
+          :settings,
+          "option_removal_time_limit is required when strategy is time_based"
+        )
+
       value when is_integer(value) and value > 0 and value <= 1440 ->
         changeset
+
       value when is_integer(value) and value > 1440 ->
         add_error(changeset, :settings, "option_removal_time_limit must be <= 1440 minutes")
+
       _ when strategy == "time_based" ->
         add_error(changeset, :settings, "option_removal_time_limit must be a positive integer")
+
       _ ->
         changeset
     end

@@ -88,7 +88,9 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoderTest do
 
     test "returns error for insufficient address data" do
       venue_data = %{}
-      assert {:error, "Insufficient address data for geocoding"} = VenueGeocoder.geocode_venue(venue_data)
+
+      assert {:error, "Insufficient address data for geocoding"} =
+               VenueGeocoder.geocode_venue(venue_data)
     end
   end
 end

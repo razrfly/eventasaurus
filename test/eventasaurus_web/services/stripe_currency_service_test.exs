@@ -7,23 +7,26 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
   # Mock for Stripe API
   defmodule MockStripe do
     def list(_params) do
-      {:ok, %{
-        data: [
-          %{supported_payment_currencies: ["usd", "eur", "gbp"]},
-          %{supported_payment_currencies: ["jpy", "cad", "aud"]},
-          %{supported_payment_currencies: ["usd", "eur"]} # Duplicate to test uniqueness
-        ]
-      }}
+      {:ok,
+       %{
+         data: [
+           %{supported_payment_currencies: ["usd", "eur", "gbp"]},
+           %{supported_payment_currencies: ["jpy", "cad", "aud"]},
+           # Duplicate to test uniqueness
+           %{supported_payment_currencies: ["usd", "eur"]}
+         ]
+       }}
     end
   end
 
   defmodule MockStripeError do
     def list(_params) do
-      {:error, %Stripe.Error{
-        source: :stripe,
-        code: :invalid_request_error,
-        message: "API key not provided"
-      }}
+      {:error,
+       %Stripe.Error{
+         source: :stripe,
+         code: :invalid_request_error,
+         message: "API key not provided"
+       }}
     end
   end
 
@@ -33,11 +36,15 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
     :ok
   end
 
-    describe "get_currencies/0" do
+  describe "get_currencies/0" do
     test "returns currencies from cache when available" do
       # Pre-populate cache with test data
       expiry = :os.system_time(:millisecond) + 60_000
-      :ets.insert(:stripe_currencies_cache, {:supported_currencies, ["USD", "EUR", "GBP"], expiry})
+
+      :ets.insert(
+        :stripe_currencies_cache,
+        {:supported_currencies, ["USD", "EUR", "GBP"], expiry}
+      )
 
       currencies = StripeCurrencyService.get_currencies()
 
@@ -46,23 +53,24 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
 
     test "returns fallback currencies when cache is empty and API fails" do
       # Mock Stripe API to fail
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> MockStripeError.list(nil) end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> MockStripeError.list(nil) end) do
         currencies = StripeCurrencyService.get_currencies()
 
         # Should return fallback currencies
         assert is_list(currencies)
-        assert length(currencies) > 100 # Fallback has many currencies
+        # Fallback has many currencies
+        assert length(currencies) > 100
         assert "USD" in currencies
         assert "EUR" in currencies
       end
     end
 
-        test "fetches from API when cache is expired" do
+    test "fetches from API when cache is expired" do
       # Insert expired cache entry
       expired_time = :os.system_time(:millisecond) - 1000
       :ets.insert(:stripe_currencies_cache, {:supported_currencies, ["OLD"], expired_time})
 
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> MockStripe.list(nil) end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> MockStripe.list(nil) end) do
         currencies = StripeCurrencyService.get_currencies()
 
         # Should fetch fresh data and not return the old cached value
@@ -78,11 +86,15 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
     end
   end
 
-    describe "get_grouped_currencies/0" do
+  describe "get_grouped_currencies/0" do
     test "returns currencies grouped by region" do
       # Pre-populate cache with test data
       expiry = :os.system_time(:millisecond) + 60_000
-      :ets.insert(:stripe_currencies_cache, {:supported_currencies, ["USD", "EUR", "GBP", "JPY"], expiry})
+
+      :ets.insert(
+        :stripe_currencies_cache,
+        {:supported_currencies, ["USD", "EUR", "GBP", "JPY"], expiry}
+      )
 
       grouped = StripeCurrencyService.get_grouped_currencies()
 
@@ -120,7 +132,7 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
     end
   end
 
-    describe "cache behavior" do
+  describe "cache behavior" do
     test "cache TTL is respected" do
       # Insert cache entry that will expire soon
       short_expiry = :os.system_time(:millisecond) + 100
@@ -133,19 +145,23 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
       Process.sleep(150)
 
       # Should now fetch fresh data (fallback in this case since mocked API fails)
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> MockStripeError.list(nil) end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> MockStripeError.list(nil) end) do
         currencies = StripeCurrencyService.get_currencies()
         assert currencies != ["TEST"]
-        assert length(currencies) > 100 # Fallback currencies
+        # Fallback currencies
+        assert length(currencies) > 100
       end
     end
 
     test "handles cache corruption gracefully" do
       # Insert malformed cache data
-      :ets.insert(:stripe_currencies_cache, {:supported_currencies, nil, :os.system_time(:millisecond) + 60_000})
+      :ets.insert(
+        :stripe_currencies_cache,
+        {:supported_currencies, nil, :os.system_time(:millisecond) + 60_000}
+      )
 
       # Should handle gracefully and return fallback
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> MockStripeError.list(nil) end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> MockStripeError.list(nil) end) do
         # Clear the cache first to simulate the service handling corruption
         :ets.delete(:stripe_currencies_cache, :supported_currencies)
         currencies = StripeCurrencyService.get_currencies()
@@ -157,7 +173,7 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
 
   describe "error handling" do
     test "handles Stripe API exceptions gracefully" do
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> raise "Network error" end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> raise "Network error" end) do
         currencies = StripeCurrencyService.get_currencies()
 
         # Should fall back to hardcoded currencies
@@ -168,7 +184,7 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
     end
 
     test "handles malformed API responses" do
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> {:ok, %{data: nil}} end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> {:ok, %{data: nil}} end) do
         currencies = StripeCurrencyService.get_currencies()
 
         # Should fall back to hardcoded currencies
@@ -178,9 +194,9 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
     end
   end
 
-    describe "currency deduplication and formatting" do
+  describe "currency deduplication and formatting" do
     test "removes duplicates and formats currencies correctly" do
-      with_mock(Stripe.CountrySpec, [list: fn(_) -> MockStripe.list(nil) end]) do
+      with_mock(Stripe.CountrySpec, list: fn _ -> MockStripe.list(nil) end) do
         currencies = StripeCurrencyService.get_currencies()
 
         # Should be uppercase, sorted, and unique
@@ -198,7 +214,7 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
     end
   end
 
-    describe "regional grouping" do
+  describe "regional grouping" do
     test "correctly groups major currencies by region" do
       grouped = StripeCurrencyService.get_grouped_currencies()
 
@@ -249,7 +265,8 @@ defmodule EventasaurusWeb.Services.StripeCurrencyServiceTest do
       {cache_time, _} = :timer.tc(fn -> StripeCurrencyService.get_currencies() end)
 
       # Should be very fast (under 1ms)
-      assert cache_time < 1000 # microseconds
+      # microseconds
+      assert cache_time < 1000
     end
   end
 end

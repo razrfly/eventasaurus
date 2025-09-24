@@ -19,6 +19,7 @@ defmodule EventasaurusApp.Auth.TestClient do
     case :ets.lookup(@table_name, token) do
       [{^token, user_data}] ->
         {:ok, user_data}
+
       [] ->
         {:error, %{message: "Invalid token", status: 401}}
     end
@@ -48,6 +49,7 @@ defmodule EventasaurusApp.Auth.TestClient do
     case :ets.whereis(@table_name) do
       :undefined ->
         :ets.new(@table_name, [:named_table, :public, :set])
+
       _ ->
         :ok
     end

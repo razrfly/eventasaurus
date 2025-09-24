@@ -32,35 +32,35 @@ defmodule EventasaurusWeb.Services.RichDataProviderBehaviour do
   """
 
   @type search_result :: %{
-    id: any(),
-    type: atom(),
-    title: String.t(),
-    description: String.t(),
-    images: list(),
-    metadata: map()
-  }
+          id: any(),
+          type: atom(),
+          title: String.t(),
+          description: String.t(),
+          images: list(),
+          metadata: map()
+        }
 
   @type detailed_result :: %{
-    id: any(),
-    type: atom(),
-    title: String.t(),
-    description: String.t(),
-    metadata: map(),
-    images: list(),
-    external_urls: map(),
-    cast: list(),
-    crew: list(),
-    media: map(),
-    additional_data: map()
-  }
+          id: any(),
+          type: atom(),
+          title: String.t(),
+          description: String.t(),
+          metadata: map(),
+          images: list(),
+          external_urls: map(),
+          cast: list(),
+          crew: list(),
+          media: map(),
+          additional_data: map()
+        }
 
   @type provider_config :: %{
-    api_key: String.t(),
-    base_url: String.t(),
-    rate_limit: integer(),
-    cache_ttl: integer(),
-    options: map()
-  }
+          api_key: String.t(),
+          base_url: String.t(),
+          rate_limit: integer(),
+          cache_ttl: integer(),
+          options: map()
+        }
 
   @doc """
   Get the provider's unique identifier.
@@ -98,7 +98,7 @@ defmodule EventasaurusWeb.Services.RichDataProviderBehaviour do
   - `{:error, reason}`: Error with reason
   """
   @callback search(query :: String.t(), options :: map()) ::
-    {:ok, [search_result()]} | {:error, any()}
+              {:ok, [search_result()]} | {:error, any()}
 
   @doc """
   Get detailed information for a specific content item.
@@ -115,7 +115,7 @@ defmodule EventasaurusWeb.Services.RichDataProviderBehaviour do
   - `{:error, reason}`: Error with reason
   """
   @callback get_details(id :: any(), type :: atom(), options :: map()) ::
-    {:ok, detailed_result()} | {:error, any()}
+              {:ok, detailed_result()} | {:error, any()}
 
   @doc """
   Get cached details if available, otherwise fetch fresh data.
@@ -124,7 +124,7 @@ defmodule EventasaurusWeb.Services.RichDataProviderBehaviour do
   handles caching automatically.
   """
   @callback get_cached_details(id :: any(), type :: atom(), options :: map()) ::
-    {:ok, detailed_result()} | {:error, any()}
+              {:ok, detailed_result()} | {:error, any()}
 
   @doc """
   Validate provider configuration.
@@ -149,7 +149,7 @@ defmodule EventasaurusWeb.Services.RichDataProviderBehaviour do
   the Rich Data Manager.
   """
   @callback normalize_data(raw_data :: map(), type :: atom()) ::
-    {:ok, detailed_result()} | {:error, any()}
+              {:ok, detailed_result()} | {:error, any()}
 
   @optional_callbacks [
     config_schema: 0,

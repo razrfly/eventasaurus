@@ -10,7 +10,8 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
 
   @cache_table :stripe_currencies_cache
   @cache_key :supported_currencies
-  @cache_ttl :timer.hours(24) # Cache for 24 hours
+  # Cache for 24 hours
+  @cache_ttl :timer.hours(24)
 
   # Client API
 
@@ -26,14 +27,18 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
     case get_from_cache() do
       {:ok, currencies} ->
         currencies
+
       {:error, :not_found} ->
         refresh_currencies()
+
         case get_from_cache() do
           {:ok, currencies} -> currencies
           {:error, :not_found} -> fallback_currencies()
         end
+
       {:error, :expired} ->
         refresh_currencies()
+
         case get_from_cache() do
           {:ok, currencies} -> currencies
           _ -> fallback_currencies()
@@ -76,11 +81,13 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
       {:ok, currencies} ->
         cache_currencies(currencies)
         Logger.info("StripeCurrencyService: Successfully cached #{length(currencies)} currencies")
+
       {:error, reason} ->
         Logger.warning("StripeCurrencyService: Failed to fetch currencies: #{inspect(reason)}")
         # Cache fallback currencies if API fails
         cache_currencies(fallback_currencies())
     end
+
     {:noreply, state}
   end
 
@@ -108,13 +115,15 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
               # If specs is empty but has_more is true, this is an API inconsistency
               # Return what we have so far to avoid infinite recursion
               {:ok, %{data: all_specs}}
+
             _ ->
-              last_id = (List.last(specs)).id
+              last_id = List.last(specs).id
               fetch_all_country_specs(all_specs, last_id)
           end
         else
           {:ok, %{data: all_specs}}
         end
+
       {:error, error} ->
         {:error, error}
     end
@@ -123,10 +132,14 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
   defp fetch_currencies_from_stripe do
     # Check if Stripe API key is configured - check environment variable directly
     # to avoid timing issues with Application config loading
-    api_key = System.get_env("STRIPE_SECRET_KEY") || Application.get_env(:stripity_stripe, :api_key)
+    api_key =
+      System.get_env("STRIPE_SECRET_KEY") || Application.get_env(:stripity_stripe, :api_key)
 
     if is_nil(api_key) or api_key == "" or api_key == "sk_test_YOUR_TEST_KEY_HERE" do
-      Logger.info("StripeCurrencyService: Stripe API key not configured, using fallback currencies")
+      Logger.info(
+        "StripeCurrencyService: Stripe API key not configured, using fallback currencies"
+      )
+
       {:error, :no_api_key}
     else
       # Ensure Stripe is configured with the API key before making calls
@@ -151,7 +164,10 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
         end
       rescue
         exception ->
-          Logger.error("StripeCurrencyService: Exception fetching currencies: #{inspect(exception)}")
+          Logger.error(
+            "StripeCurrencyService: Exception fetching currencies: #{inspect(exception)}"
+          )
+
           {:error, exception}
       end
     end
@@ -171,6 +187,7 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
           :ets.delete(@cache_table, @cache_key)
           {:error, :expired}
         end
+
       [] ->
         {:error, :not_found}
     end
@@ -180,32 +197,165 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
     # Comprehensive list of currencies commonly supported by Stripe
     # This serves as a fallback when the API is unavailable
     [
-      "AED", "AFN", "ALL", "AMD", "ANG", "AOA", "ARS", "AUD", "AWG", "AZN",
-      "BAM", "BBD", "BDT", "BGN", "BHD", "BIF", "BMD", "BND", "BOB", "BRL", "BSD", "BWP", "BYN", "BZD",
-      "CAD", "CDF", "CHF", "CLP", "CNY", "COP", "CRC", "CUC", "CUP", "CVE", "CZK",
-      "DJF", "DKK", "DOP", "DZD",
-      "EGP", "ERN", "ETB", "EUR",
-      "FJD", "FKP",
-      "GBP", "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD",
-      "HKD", "HNL", "HRK", "HTG", "HUF",
-      "IDR", "ILS", "INR", "IQD", "IRR", "ISK",
-      "JMD", "JOD", "JPY",
-      "KES", "KGS", "KHR", "KMF", "KPW", "KRW", "KWD", "KYD", "KZT",
-      "LAK", "LBP", "LKR", "LRD", "LSL", "LYD",
-      "MAD", "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR", "MWK", "MXN", "MYR", "MZN",
-      "NAD", "NGN", "NIO", "NOK", "NPR", "NZD",
+      "AED",
+      "AFN",
+      "ALL",
+      "AMD",
+      "ANG",
+      "AOA",
+      "ARS",
+      "AUD",
+      "AWG",
+      "AZN",
+      "BAM",
+      "BBD",
+      "BDT",
+      "BGN",
+      "BHD",
+      "BIF",
+      "BMD",
+      "BND",
+      "BOB",
+      "BRL",
+      "BSD",
+      "BWP",
+      "BYN",
+      "BZD",
+      "CAD",
+      "CDF",
+      "CHF",
+      "CLP",
+      "CNY",
+      "COP",
+      "CRC",
+      "CUC",
+      "CUP",
+      "CVE",
+      "CZK",
+      "DJF",
+      "DKK",
+      "DOP",
+      "DZD",
+      "EGP",
+      "ERN",
+      "ETB",
+      "EUR",
+      "FJD",
+      "FKP",
+      "GBP",
+      "GEL",
+      "GHS",
+      "GIP",
+      "GMD",
+      "GNF",
+      "GTQ",
+      "GYD",
+      "HKD",
+      "HNL",
+      "HRK",
+      "HTG",
+      "HUF",
+      "IDR",
+      "ILS",
+      "INR",
+      "IQD",
+      "IRR",
+      "ISK",
+      "JMD",
+      "JOD",
+      "JPY",
+      "KES",
+      "KGS",
+      "KHR",
+      "KMF",
+      "KPW",
+      "KRW",
+      "KWD",
+      "KYD",
+      "KZT",
+      "LAK",
+      "LBP",
+      "LKR",
+      "LRD",
+      "LSL",
+      "LYD",
+      "MAD",
+      "MDL",
+      "MGA",
+      "MKD",
+      "MMK",
+      "MNT",
+      "MOP",
+      "MRU",
+      "MUR",
+      "MVR",
+      "MWK",
+      "MXN",
+      "MYR",
+      "MZN",
+      "NAD",
+      "NGN",
+      "NIO",
+      "NOK",
+      "NPR",
+      "NZD",
       "OMR",
-      "PAB", "PEN", "PGK", "PHP", "PKR", "PLN", "PYG",
+      "PAB",
+      "PEN",
+      "PGK",
+      "PHP",
+      "PKR",
+      "PLN",
+      "PYG",
       "QAR",
-      "RON", "RSD", "RUB", "RWF",
-      "SAR", "SBD", "SCR", "SDG", "SEK", "SGD", "SHP", "SLE", "SLL", "SOS", "SRD", "SSP", "STN", "SYP", "SZL",
-      "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TVD", "TWD", "TZS",
-      "UAH", "UGX", "USD", "UYU", "UZS",
-      "VED", "VES", "VND", "VUV",
+      "RON",
+      "RSD",
+      "RUB",
+      "RWF",
+      "SAR",
+      "SBD",
+      "SCR",
+      "SDG",
+      "SEK",
+      "SGD",
+      "SHP",
+      "SLE",
+      "SLL",
+      "SOS",
+      "SRD",
+      "SSP",
+      "STN",
+      "SYP",
+      "SZL",
+      "THB",
+      "TJS",
+      "TMT",
+      "TND",
+      "TOP",
+      "TRY",
+      "TTD",
+      "TVD",
+      "TWD",
+      "TZS",
+      "UAH",
+      "UGX",
+      "USD",
+      "UYU",
+      "UZS",
+      "VED",
+      "VES",
+      "VND",
+      "VUV",
       "WST",
-      "XAF", "XCD", "XDR", "XOF", "XPF",
+      "XAF",
+      "XCD",
+      "XDR",
+      "XOF",
+      "XPF",
       "YER",
-      "ZAR", "ZMW", "ZWL"
+      "ZAR",
+      "ZMW",
+      "ZWL"
     ]
   end
 
@@ -218,23 +368,181 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
   defp get_currency_region(currency) do
     case currency do
       # North America
-      code when code in ["USD", "CAD", "MXN", "GTQ", "BZD", "CRC", "HNL", "NIO", "PAB", "CUC", "CUP", "DOP", "HTG", "JMD", "XCD", "BBD", "BMD", "KYD", "TTD"] ->
+      code
+      when code in [
+             "USD",
+             "CAD",
+             "MXN",
+             "GTQ",
+             "BZD",
+             "CRC",
+             "HNL",
+             "NIO",
+             "PAB",
+             "CUC",
+             "CUP",
+             "DOP",
+             "HTG",
+             "JMD",
+             "XCD",
+             "BBD",
+             "BMD",
+             "KYD",
+             "TTD"
+           ] ->
         "North America"
 
       # Europe
-      code when code in ["EUR", "GBP", "CHF", "NOK", "SEK", "DKK", "ISK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RSD", "BAM", "MKD", "ALL", "MDL", "UAH", "BYN", "RUB", "TRY", "GEL", "AMD", "AZN"] ->
+      code
+      when code in [
+             "EUR",
+             "GBP",
+             "CHF",
+             "NOK",
+             "SEK",
+             "DKK",
+             "ISK",
+             "PLN",
+             "CZK",
+             "HUF",
+             "RON",
+             "BGN",
+             "HRK",
+             "RSD",
+             "BAM",
+             "MKD",
+             "ALL",
+             "MDL",
+             "UAH",
+             "BYN",
+             "RUB",
+             "TRY",
+             "GEL",
+             "AMD",
+             "AZN"
+           ] ->
         "Europe"
 
       # Asia Pacific
-      code when code in ["JPY", "CNY", "HKD", "SGD", "AUD", "NZD", "KRW", "TWD", "PHP", "THB", "MYR", "IDR", "VND", "INR", "PKR", "LKR", "NPR", "BDT", "MMK", "KHR", "LAK", "MNT", "KZT", "KGS", "UZS", "TJS", "TMT", "AFN", "IRR", "IQD", "BHD", "KWD", "OMR", "QAR", "SAR", "AED", "YER", "JOD", "LBP", "SYP", "ILS", "FJD", "PGK", "SBD", "TOP", "VUV", "WST", "TVD"] ->
+      code
+      when code in [
+             "JPY",
+             "CNY",
+             "HKD",
+             "SGD",
+             "AUD",
+             "NZD",
+             "KRW",
+             "TWD",
+             "PHP",
+             "THB",
+             "MYR",
+             "IDR",
+             "VND",
+             "INR",
+             "PKR",
+             "LKR",
+             "NPR",
+             "BDT",
+             "MMK",
+             "KHR",
+             "LAK",
+             "MNT",
+             "KZT",
+             "KGS",
+             "UZS",
+             "TJS",
+             "TMT",
+             "AFN",
+             "IRR",
+             "IQD",
+             "BHD",
+             "KWD",
+             "OMR",
+             "QAR",
+             "SAR",
+             "AED",
+             "YER",
+             "JOD",
+             "LBP",
+             "SYP",
+             "ILS",
+             "FJD",
+             "PGK",
+             "SBD",
+             "TOP",
+             "VUV",
+             "WST",
+             "TVD"
+           ] ->
         "Asia Pacific"
 
       # Africa
-      code when code in ["ZAR", "EGP", "NGN", "GHS", "KES", "UGX", "TZS", "RWF", "ETB", "ZMW", "MWK", "MZN", "BWP", "SZL", "LSL", "NAD", "AOA", "CDF", "XAF", "XOF", "CFA", "GMD", "SLL", "LRD", "GNF", "BIF", "DJF", "ERN", "SOS", "SDG", "SSP", "MAD", "DZD", "TND", "LYD", "MGA", "KMF", "MUR", "SCR", "MVR", "CVE", "STN", "SLE"] ->
+      code
+      when code in [
+             "ZAR",
+             "EGP",
+             "NGN",
+             "GHS",
+             "KES",
+             "UGX",
+             "TZS",
+             "RWF",
+             "ETB",
+             "ZMW",
+             "MWK",
+             "MZN",
+             "BWP",
+             "SZL",
+             "LSL",
+             "NAD",
+             "AOA",
+             "CDF",
+             "XAF",
+             "XOF",
+             "CFA",
+             "GMD",
+             "SLL",
+             "LRD",
+             "GNF",
+             "BIF",
+             "DJF",
+             "ERN",
+             "SOS",
+             "SDG",
+             "SSP",
+             "MAD",
+             "DZD",
+             "TND",
+             "LYD",
+             "MGA",
+             "KMF",
+             "MUR",
+             "SCR",
+             "MVR",
+             "CVE",
+             "STN",
+             "SLE"
+           ] ->
         "Africa"
 
       # South America
-      code when code in ["BRL", "ARS", "CLP", "PEN", "COP", "VES", "VED", "UYU", "PYG", "BOB", "SRD", "GYD", "FKP"] ->
+      code
+      when code in [
+             "BRL",
+             "ARS",
+             "CLP",
+             "PEN",
+             "COP",
+             "VES",
+             "VED",
+             "UYU",
+             "PYG",
+             "BOB",
+             "SRD",
+             "GYD",
+             "FKP"
+           ] ->
         "South America"
 
       # Other/Unknown

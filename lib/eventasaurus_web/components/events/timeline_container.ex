@@ -1,6 +1,6 @@
 defmodule EventasaurusWeb.Components.Events.TimelineContainer do
   use EventasaurusWeb, :live_component
-  
+
   alias EventasaurusWeb.Components.Events.{
     TimelineDateMarker,
     EventCard
@@ -98,17 +98,19 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
     # The events are already sorted correctly from the database
     events
     |> Enum.reduce([], fn event, acc ->
-      date = if event.start_at do
-        event.start_at |> DateTime.to_date()
-      else
-        :no_date
-      end
-      
+      date =
+        if event.start_at do
+          event.start_at |> DateTime.to_date()
+        else
+          :no_date
+        end
+
       # Find if we already have this date in our accumulator
       case Enum.find_index(acc, fn {d, _} -> d == date end) do
         nil ->
           # New date, add it to the list
           acc ++ [{date, [event]}]
+
         index ->
           # Existing date, add event to that date's list
           List.update_at(acc, index, fn {d, events_list} ->

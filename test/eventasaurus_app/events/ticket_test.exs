@@ -25,11 +25,11 @@ defmodule EventasaurusApp.Events.TicketTest do
       changeset = Ticket.changeset(%Ticket{}, %{})
 
       assert %{
-        title: ["can't be blank"],
-        base_price_cents: ["can't be blank"],
-        quantity: ["can't be blank"],
-        event_id: ["can't be blank"]
-      } = errors_on(changeset)
+               title: ["can't be blank"],
+               base_price_cents: ["can't be blank"],
+               quantity: ["can't be blank"],
+               event_id: ["can't be blank"]
+             } = errors_on(changeset)
     end
 
     test "allows free tickets (base_price_cents = 0)" do
@@ -232,7 +232,12 @@ defmodule EventasaurusApp.Events.TicketTest do
     end
 
     test "effective_price/1 for flexible pricing model" do
-      ticket = %Ticket{pricing_model: "flexible", minimum_price_cents: 1000, base_price_cents: 2500}
+      ticket = %Ticket{
+        pricing_model: "flexible",
+        minimum_price_cents: 1000,
+        base_price_cents: 2500
+      }
+
       assert Ticket.effective_price(ticket) == 1000
     end
 
@@ -267,7 +272,12 @@ defmodule EventasaurusApp.Events.TicketTest do
     end
 
     test "suggested_price/1 returns base price for flexible tickets without explicit suggestion" do
-      ticket = %Ticket{pricing_model: "flexible", base_price_cents: 2000, suggested_price_cents: nil}
+      ticket = %Ticket{
+        pricing_model: "flexible",
+        base_price_cents: 2000,
+        suggested_price_cents: nil
+      }
+
       assert Ticket.suggested_price(ticket) == 2000
     end
 
@@ -292,28 +302,34 @@ defmodule EventasaurusApp.Events.TicketTest do
 
     test "returns true when current time is within availability window" do
       now = DateTime.utc_now()
+
       ticket = %Ticket{
         starts_at: DateTime.add(now, -3600, :second),
         ends_at: DateTime.add(now, 3600, :second)
       }
+
       assert Ticket.on_sale?(ticket)
     end
 
     test "returns false when current time is before starts_at" do
       now = DateTime.utc_now()
+
       ticket = %Ticket{
         starts_at: DateTime.add(now, 3600, :second),
         ends_at: DateTime.add(now, 7200, :second)
       }
+
       refute Ticket.on_sale?(ticket)
     end
 
     test "returns false when current time is after ends_at" do
       now = DateTime.utc_now()
+
       ticket = %Ticket{
         starts_at: DateTime.add(now, -7200, :second),
         ends_at: DateTime.add(now, -3600, :second)
       }
+
       refute Ticket.on_sale?(ticket)
     end
   end
@@ -371,12 +387,16 @@ defmodule EventasaurusApp.Events.TicketTest do
       }
 
       changeset = Ticket.changeset(%Ticket{}, attrs)
-      assert %{suggested_price_cents: ["should be at least the minimum price"]} = errors_on(changeset)
+
+      assert %{suggested_price_cents: ["should be at least the minimum price"]} =
+               errors_on(changeset)
 
       # Suggested price way above base price (more than 2x)
       attrs = %{attrs | suggested_price_cents: 7000}
       changeset = Ticket.changeset(%Ticket{}, attrs)
-      assert %{suggested_price_cents: ["suggested price seems too high compared to base price"]} = errors_on(changeset)
+
+      assert %{suggested_price_cents: ["suggested price seems too high compared to base price"]} =
+               errors_on(changeset)
     end
 
     test "fixed pricing model defaults work correctly" do
@@ -385,7 +405,8 @@ defmodule EventasaurusApp.Events.TicketTest do
       attrs = %{
         title: "Fixed Price Ticket",
         base_price_cents: 2500,
-        minimum_price_cents: 2500,  # Need to explicitly set for fixed pricing
+        # Need to explicitly set for fixed pricing
+        minimum_price_cents: 2500,
         pricing_model: "fixed",
         currency: "usd",
         quantity: 100,

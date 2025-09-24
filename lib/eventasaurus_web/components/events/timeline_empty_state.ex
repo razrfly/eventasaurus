@@ -54,12 +54,14 @@ defmodule EventasaurusWeb.Components.Events.TimelineEmptyState do
 
   defp empty_state_description(:user_dashboard, filters, config) do
     ownership_filter = Map.get(filters || %{}, :ownership_filter, :all)
-    
+
     cond do
       ownership_filter == :all ->
         "Get started by creating your first event or joining an existing one."
+
       Map.get(config, :description) ->
         Map.get(config, :description)
+
       true ->
         "Try adjusting your filters to see more events."
     end

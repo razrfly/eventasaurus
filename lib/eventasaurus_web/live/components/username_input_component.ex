@@ -48,15 +48,16 @@ defmodule EventasaurusWeb.UsernameInputComponent do
       {:noreply, socket}
     else
       # Clear previous results and show loading state for non-empty usernames
-      socket = if username != "" do
-        socket
-        |> assign(:checking, true)
-        |> assign(:check_result, nil)
-      else
-        socket
-        |> assign(:checking, false)
-        |> assign(:check_result, nil)
-      end
+      socket =
+        if username != "" do
+          socket
+          |> assign(:checking, true)
+          |> assign(:check_result, nil)
+        else
+          socket
+          |> assign(:checking, false)
+          |> assign(:check_result, nil)
+        end
 
       if username != "" do
         # Make HTTP request to check availability

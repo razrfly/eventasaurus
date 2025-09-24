@@ -62,6 +62,7 @@ defmodule EventasaurusWeb.ConnCase do
       "email" => user.email,
       "user_metadata" => %{"name" => user.name}
     }
+
     TestClient.set_test_user(token, supabase_user)
 
     # Add the token to the session and return the conn

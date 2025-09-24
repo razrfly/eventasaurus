@@ -1,7 +1,7 @@
 defmodule EventasaurusApp.Events.RankedChoiceVoting do
   @moduledoc """
   Implements Instant Runoff Voting (IRV) algorithm for ranked choice polls.
-  
+
   IRV works by:
   1. Counting first-choice votes
   2. If no candidate has majority (>50%), eliminate the lowest
@@ -12,14 +12,14 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
   alias EventasaurusApp.Repo
   import Ecto.Query
-  
+
   # Simple in-memory cache for IRV results
   @irv_cache_name :irv_results_cache
 
   @doc """
   Calculate the IRV winner for a poll with all round-by-round details.
   Uses caching to avoid recalculating unchanged results.
-  
+
   Returns:
     %{
       winner: %PollOption{} | nil,
@@ -32,13 +32,14 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   def calculate_irv_winner(%Poll{id: poll_id} = poll) do
     # Generate cache key based on vote hash for this poll
     cache_key = generate_cache_key(poll_id)
-    
+
     case get_cached_result(cache_key) do
       nil ->
         # Calculate fresh result and cache it
         result = calculate_irv_winner_uncached(poll)
         cache_result(cache_key, result)
         result
+
       cached_result ->
         cached_result
     end
@@ -49,10 +50,10 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     # Get all votes and options
     votes = get_ranked_votes(poll_id)
     options = get_poll_options(poll_id)
-    
+
     total_voters = count_unique_voters(votes)
     majority_threshold = div(total_voters, 2) + 1
-    
+
     if total_voters == 0 do
       %{
         winner: nil,
@@ -64,11 +65,11 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     else
       # Run IRV rounds
       rounds = run_irv_rounds(votes, options, nil, [])
-      
+
       # Determine winner and final state
       winner = determine_winner(rounds)
       final_percentages = calculate_final_percentages(rounds, total_voters)
-      
+
       %{
         winner: winner,
         rounds: rounds,
@@ -81,7 +82,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
 
   @doc """
   Get a simplified leaderboard for display.
-  
+
   Returns:
     [
       %{
@@ -96,7 +97,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   """
   def get_leaderboard(%Poll{} = poll) do
     result = calculate_irv_winner(poll)
-    
+
     if result.total_voters == 0 do
       []
     else
@@ -137,7 +138,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   defp run_irv_rounds(votes, options, _majority_threshold, rounds) do
     # Group votes by voter to track their full ballot
     ballots = group_votes_by_voter(votes)
-    
+
     # Run elimination rounds - majority threshold now calculated per round based on active ballots
     run_elimination_rounds(ballots, Map.keys(options), options, nil, rounds, 1)
   end
@@ -154,22 +155,30 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     |> Map.new()
   end
 
-  defp run_elimination_rounds(ballots, active_options, all_options, _majority_threshold, rounds, round_num) do
+  defp run_elimination_rounds(
+         ballots,
+         active_options,
+         all_options,
+         _majority_threshold,
+         rounds,
+         round_num
+       ) do
     # Count first preferences among active options
     vote_counts = count_first_preferences(ballots, active_options)
-    
+
     # Calculate percentages and active majority threshold based on current ballots
     total_votes = Enum.sum(Map.values(vote_counts))
     active_majority_threshold = div(total_votes, 2) + 1
-    
+
     if total_votes == 0 do
       # No more votes, end here
       rounds
     else
-      percentages = Map.new(vote_counts, fn {option_id, count} ->
-        {option_id, (count / total_votes) * 100}
-      end)
-      
+      percentages =
+        Map.new(vote_counts, fn {option_id, count} ->
+          {option_id, count / total_votes * 100}
+        end)
+
       # Create round summary
       round = %{
         round_number: round_num,
@@ -178,36 +187,39 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
         active_options: active_options,
         eliminated: nil
       }
-      
+
       # Check for majority winner
-      {_leading_option, leading_votes} = Enum.max_by(vote_counts, fn {_, v} -> v end, fn -> {nil, 0} end)
-      
+      {_leading_option, leading_votes} =
+        Enum.max_by(vote_counts, fn {_, v} -> v end, fn -> {nil, 0} end)
+
       cond do
         # Someone has majority
         leading_votes >= active_majority_threshold ->
           [round | rounds] |> Enum.reverse()
-        
+
         # Only one candidate left
         length(active_options) <= 1 ->
           [round | rounds] |> Enum.reverse()
-        
+
         # Need to eliminate lowest
         true ->
           # Find option(s) with lowest votes
           min_votes = vote_counts |> Map.values() |> Enum.min()
-          lowest_options = vote_counts
+
+          lowest_options =
+            vote_counts
             |> Enum.filter(fn {_, v} -> v == min_votes end)
             |> Enum.map(fn {k, _} -> k end)
-          
+
           # Eliminate one (in case of tie, eliminate first by ID for deterministic behavior)
           eliminated = Enum.min(lowest_options)
-          
+
           # Update round with elimination
           round = Map.put(round, :eliminated, eliminated)
-          
+
           # Remove eliminated option and continue
-          remaining_options = Enum.reject(active_options, & &1 == eliminated)
-          
+          remaining_options = Enum.reject(active_options, &(&1 == eliminated))
+
           run_elimination_rounds(
             ballots,
             remaining_options,
@@ -224,7 +236,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     ballots
     |> Enum.map(fn {_voter_id, preferences} ->
       # Find first preference that's still active
-      Enum.find(preferences, & &1 in active_options)
+      Enum.find(preferences, &(&1 in active_options))
     end)
     |> Enum.reject(&is_nil/1)
     |> Enum.frequencies()
@@ -241,13 +253,17 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
 
   defp determine_winner(rounds) do
     case List.last(rounds) do
-      nil -> nil
+      nil ->
+        nil
+
       %{vote_counts: counts} when map_size(counts) > 0 ->
         {winner_id, _} = Enum.max_by(counts, fn {_, v} -> v end)
-        
+
         # Fetch the actual option
         get_option_by_id(winner_id)
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -262,9 +278,10 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   defp build_leaderboard(%{rounds: rounds, winner: winner}) do
     # Get final round for current standings
     final_round = List.last(rounds) || %{vote_counts: %{}, percentages: %{}}
-    
+
     # Track eliminations by round
-    eliminations = rounds
+    eliminations =
+      rounds
       |> Enum.with_index(1)
       |> Enum.reduce(%{}, fn {round, idx}, acc ->
         if round.eliminated do
@@ -273,44 +290,46 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
           acc
         end
       end)
-    
+
     # Get all options that participated
-    all_option_ids = rounds
+    all_option_ids =
+      rounds
       |> Enum.flat_map(& &1.active_options)
       |> Enum.uniq()
-    
+
     # Fetch all options in a single query to avoid N+1
     options_map = get_options_by_ids(all_option_ids)
-    
+
     # Build leaderboard entries
     all_option_ids
     |> Enum.map(fn option_id ->
       option = Map.get(options_map, option_id)
-      
+
       # Determine status and stats
-      {status, eliminated_round, votes, percentage} = cond do
-        winner && winner.id == option_id ->
-          votes = Map.get(final_round.vote_counts, option_id, 0)
-          pct = Map.get(final_round.percentages, option_id, 0.0)
-          {:winner, nil, votes, pct}
-        
-        Map.has_key?(eliminations, option_id) ->
-          # Get stats from round before elimination
-          elim_round = Map.get(eliminations, option_id)
-          round_data = Enum.find(rounds, & &1.round_number == elim_round)
-          votes = Map.get(round_data.vote_counts, option_id, 0)
-          pct = Map.get(round_data.percentages, option_id, 0.0)
-          {:eliminated, elim_round, votes, pct}
-        
-        option_id in Map.keys(final_round.vote_counts) ->
-          votes = Map.get(final_round.vote_counts, option_id, 0)
-          pct = Map.get(final_round.percentages, option_id, 0.0)
-          {:runner_up, nil, votes, pct}
-        
-        true ->
-          {:eliminated, nil, 0, 0.0}
-      end
-      
+      {status, eliminated_round, votes, percentage} =
+        cond do
+          winner && winner.id == option_id ->
+            votes = Map.get(final_round.vote_counts, option_id, 0)
+            pct = Map.get(final_round.percentages, option_id, 0.0)
+            {:winner, nil, votes, pct}
+
+          Map.has_key?(eliminations, option_id) ->
+            # Get stats from round before elimination
+            elim_round = Map.get(eliminations, option_id)
+            round_data = Enum.find(rounds, &(&1.round_number == elim_round))
+            votes = Map.get(round_data.vote_counts, option_id, 0)
+            pct = Map.get(round_data.percentages, option_id, 0.0)
+            {:eliminated, elim_round, votes, pct}
+
+          option_id in Map.keys(final_round.vote_counts) ->
+            votes = Map.get(final_round.vote_counts, option_id, 0)
+            pct = Map.get(final_round.percentages, option_id, 0.0)
+            {:runner_up, nil, votes, pct}
+
+          true ->
+            {:eliminated, nil, 0, 0.0}
+        end
+
       %{
         option: option,
         option_id: option_id,
@@ -348,7 +367,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   end
 
   # Cache management functions
-  
+
   @doc """
   Invalidate IRV cache for a specific poll when votes change.
   """
@@ -359,9 +378,13 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
           # Delete all entries for this poll (any vote/options count)
           :ets.match_delete(@irv_cache_name, {{:irv, poll_id, :_, :_}, :_})
         rescue
-          ArgumentError -> :ok  # Cache unavailable, silently continue
+          # Cache unavailable, silently continue
+          ArgumentError -> :ok
         end
-      :error -> :ok  # Cache unavailable, silently continue
+
+      # Cache unavailable, silently continue
+      :error ->
+        :ok
     end
   end
 
@@ -370,12 +393,15 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   """
   def clear_all_cache do
     case :ets.whereis(@irv_cache_name) do
-      :undefined -> :ok
-      _table -> 
+      :undefined ->
+        :ok
+
+      _table ->
         try do
           :ets.delete_all_objects(@irv_cache_name)
         rescue
-          ArgumentError -> :ok  # Table was destroyed, already cleared
+          # Table was destroyed, already cleared
+          ArgumentError -> :ok
         end
     end
   end
@@ -410,9 +436,13 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
             [] -> nil
           end
         rescue
-          ArgumentError -> nil  # Table doesn't exist, return nil to trigger fresh calculation
+          # Table doesn't exist, return nil to trigger fresh calculation
+          ArgumentError -> nil
         end
-      :error -> nil  # Cache unavailable, return nil to trigger fresh calculation
+
+      # Cache unavailable, return nil to trigger fresh calculation
+      :error ->
+        nil
     end
   end
 
@@ -422,9 +452,13 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
         try do
           :ets.insert(@irv_cache_name, {cache_key, result})
         rescue
-          ArgumentError -> :ok  # Cache unavailable, silently continue
+          # Cache unavailable, silently continue
+          ArgumentError -> :ok
         end
-      :error -> :ok  # Cache unavailable, silently continue
+
+      # Cache unavailable, silently continue
+      :error ->
+        :ok
     end
   end
 
@@ -432,17 +466,26 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     case :ets.whereis(@irv_cache_name) do
       :undefined ->
         try do
-          :ets.new(@irv_cache_name, [:set, :public, :named_table, :read_concurrency, :write_concurrency])
+          :ets.new(@irv_cache_name, [
+            :set,
+            :public,
+            :named_table,
+            :read_concurrency,
+            :write_concurrency
+          ])
+
           :ok
         rescue
-          ArgumentError -> 
+          ArgumentError ->
             # Table might already exist, check again
             case :ets.whereis(@irv_cache_name) do
               :undefined -> :error
               _table -> :ok
             end
         end
-      _table -> :ok
+
+      _table ->
+        :ok
     end
   end
 end

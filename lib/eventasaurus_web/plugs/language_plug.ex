@@ -28,11 +28,15 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
   defp determine_language(conn) do
     # 1. Check query parameter
     case conn.params["lang"] do
-      lang when lang in @supported_languages -> lang
+      lang when lang in @supported_languages ->
+        lang
+
       _ ->
         # 2. Check session
         case get_session(conn, :language) do
-          lang when lang in @supported_languages -> lang
+          lang when lang in @supported_languages ->
+            lang
+
           _ ->
             # 3. Check Accept-Language header
             case extract_language_from_header(conn) do
@@ -58,7 +62,8 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
         end)
         |> Enum.find(&(&1 in @supported_languages))
 
-      _ -> nil
+      _ ->
+        nil
     end
   end
 end

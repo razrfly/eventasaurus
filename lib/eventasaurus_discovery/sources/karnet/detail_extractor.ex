@@ -54,7 +54,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
         Floki.find(document, ".event-title, .title, title")
         |> List.first()
         |> case do
-          nil -> "Untitled Event"
+          nil ->
+            "Untitled Event"
+
           elem ->
             Floki.text(elem)
             |> String.trim()
@@ -111,30 +113,35 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
       "main p"
     ]
 
-    description = Enum.find_value(selectors, fn selector ->
-      case Floki.find(document, selector) do
-        [] -> nil
-        elements ->
-          text = elements
-          |> Enum.map(&Floki.text/1)
-          |> Enum.join("\n")
-          |> String.trim()
-
-          # Reduced threshold from 50 to 20 characters for Polish content
-          if String.length(text) > 20 do
-            text
-          else
+    description =
+      Enum.find_value(selectors, fn selector ->
+        case Floki.find(document, selector) do
+          [] ->
             nil
-          end
-      end
-    end)
+
+          elements ->
+            text =
+              elements
+              |> Enum.map(&Floki.text/1)
+              |> Enum.join("\n")
+              |> String.trim()
+
+            # Reduced threshold from 50 to 20 characters for Polish content
+            if String.length(text) > 20 do
+              text
+            else
+              nil
+            end
+        end
+      end)
 
     # Clean up and limit length
     if description do
       description
       |> String.replace(~r/\s+/, " ")
       |> String.trim()
-      |> String.slice(0, 2000)  # Limit to 2000 chars
+      # Limit to 2000 chars
+      |> String.slice(0, 2000)
     else
       nil
     end
@@ -153,7 +160,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
 
     Enum.find_value(date_selectors, fn selector ->
       case Floki.find(document, selector) do
-        [] -> nil
+        [] ->
+          nil
+
         elements ->
           # Get the first non-empty date text
           elements
@@ -169,67 +178,70 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     # The venue is in a link with data-name attribute or in an h3 tag
     venue_links = Floki.find(document, "a.event-list-element[data-name]")
 
-    venue_data = if length(venue_links) > 0 do
-      # Extract venue from the data-name attribute
-      venue_link = List.first(venue_links)
-      venue_name = Floki.attribute(venue_link, "data-name") |> List.first()
+    venue_data =
+      if length(venue_links) > 0 do
+        # Extract venue from the data-name attribute
+        venue_link = List.first(venue_links)
+        venue_name = Floki.attribute(venue_link, "data-name") |> List.first()
 
-      # Try to find address near the selected link, scoped to its container
-      venue_address =
-        case Floki.find(venue_link, ".data") do
-          [addr | _] ->
-            Floki.text(addr) |> String.trim()
-          _ ->
-            # Find the specific container that contains this venue link
-            container =
-              Floki.find(document, ".event-list-element")
-              |> Enum.find(fn section ->
-                Floki.find(section, "a.event-list-element[data-name]")
-                |> Enum.any?(fn a ->
-                  Floki.attribute(a, "data-name") |> List.first() == venue_name
+        # Try to find address near the selected link, scoped to its container
+        venue_address =
+          case Floki.find(venue_link, ".data") do
+            [addr | _] ->
+              Floki.text(addr) |> String.trim()
+
+            _ ->
+              # Find the specific container that contains this venue link
+              container =
+                Floki.find(document, ".event-list-element")
+                |> Enum.find(fn section ->
+                  Floki.find(section, "a.event-list-element[data-name]")
+                  |> Enum.any?(fn a ->
+                    Floki.attribute(a, "data-name") |> List.first() == venue_name
+                  end)
                 end)
-              end)
 
-            case container && Floki.find(container, ".data") do
-              [addr | _] -> Floki.text(addr) |> String.trim()
-              _ -> extract_venue_address_fallback(document)
-            end
-        end
-
-      %{
-        name: venue_name,
-        address: venue_address,
-        city: "Kraków",
-        country: "Poland"
-      }
-    else
-      # Fallback: try to find venue in article content using pattern matching
-      article_content = Floki.find(document, ".article-content")
-
-      if length(article_content) > 0 do
-        content_text = Floki.text(article_content)
-        venue_name = extract_venue_from_text(content_text)
+              case container && Floki.find(container, ".data") do
+                [addr | _] -> Floki.text(addr) |> String.trim()
+                _ -> extract_venue_address_fallback(document)
+              end
+          end
 
         %{
           name: venue_name,
-          address: extract_venue_address_fallback(document),
+          address: venue_address,
           city: "Kraków",
           country: "Poland"
         }
       else
-        %{
-          name: extract_venue_name_fallback(document),
-          address: extract_venue_address_fallback(document),
-          city: "Kraków",
-          country: "Poland"
-        }
+        # Fallback: try to find venue in article content using pattern matching
+        article_content = Floki.find(document, ".article-content")
+
+        if length(article_content) > 0 do
+          content_text = Floki.text(article_content)
+          venue_name = extract_venue_from_text(content_text)
+
+          %{
+            name: venue_name,
+            address: extract_venue_address_fallback(document),
+            city: "Kraków",
+            country: "Poland"
+          }
+        else
+          %{
+            name: extract_venue_name_fallback(document),
+            address: extract_venue_address_fallback(document),
+            city: "Kraków",
+            country: "Poland"
+          }
+        end
       end
-    end
 
     # Check if we have a valid venue name (not generic placeholder)
-    valid_name = venue_data.name &&
-                 String.length(venue_data.name) > 0 &&
-                 !String.contains?(String.downcase(venue_data.name), "miejsce wydarzenia")
+    valid_name =
+      venue_data.name &&
+        String.length(venue_data.name) > 0 &&
+        !String.contains?(String.downcase(venue_data.name), "miejsce wydarzenia")
 
     if valid_name do
       venue_data
@@ -247,7 +259,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
         Floki.find(document, ".location, .venue, .miejsce")
         |> List.first()
         |> case do
-          nil -> nil
+          nil ->
+            nil
+
           elem ->
             Floki.text(elem)
             |> String.split(",")
@@ -258,7 +272,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
       [_header | _] ->
         # Get the next sibling content
         case Floki.find(document, "h3:fl-contains('Miejsce wydarzenia') ~ *") do
-          [] -> nil
+          [] ->
+            nil
+
           [next | _] ->
             case Floki.find(next, "h3, h4, a") do
               [] -> Floki.text(next) |> String.trim()
@@ -274,11 +290,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     |> Enum.map(&Floki.text/1)
     |> Enum.map(&String.trim/1)
     |> Enum.find(fn text ->
+      # Avoid long paragraphs
       (String.contains?(text, "ul.") ||
-       String.contains?(text, "al.") ||
-       String.contains?(text, "plac") ||
-       String.contains?(text, "Rynek")) &&
-      String.length(text) < 200  # Avoid long paragraphs
+         String.contains?(text, "al.") ||
+         String.contains?(text, "plac") ||
+         String.contains?(text, "Rynek")) &&
+        String.length(text) < 200
     end)
   end
 
@@ -366,7 +383,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
 
     Enum.find_value(ticket_selectors, fn selector ->
       case Floki.find(document, selector) do
-        [] -> nil
+        [] ->
+          nil
+
         links ->
           # Get the first external ticket link
           links
@@ -388,55 +407,63 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
       "[class*='category']"
     ]
 
-    category = Enum.find_value(category_selectors, fn selector ->
-      case Floki.find(document, selector) do
-        [] -> nil
-        elements ->
-          Floki.text(List.first(elements))
-          |> String.trim()
-          |> String.downcase()
-          |> case do
-            "" -> nil
-            text -> text
-          end
-      end
-    end)
+    category =
+      Enum.find_value(category_selectors, fn selector ->
+        case Floki.find(document, selector) do
+          [] ->
+            nil
 
-    # NEW: Extract from breadcrumbs if no category found
-    category = if is_nil(category) do
-      breadcrumbs = Floki.find(document, ".breadcrumb a, nav.breadcrumbs a, .breadcrumbs a")
-      Enum.find_value(breadcrumbs, fn link ->
-        href = Floki.attribute([link], "href") |> List.first()
-        text = Floki.text(link) |> String.trim() |> String.downcase()
-
-        # Check if this is a category breadcrumb
-        if href && String.contains?(href, "/wydarzenia/") do
-          # Extract from URL or use text
-          extract_category_from_wydarzenia_url(href) || text
+          elements ->
+            Floki.text(List.first(elements))
+            |> String.trim()
+            |> String.downcase()
+            |> case do
+              "" -> nil
+              text -> text
+            end
         end
       end)
-    else
-      category
-    end
+
+    # NEW: Extract from breadcrumbs if no category found
+    category =
+      if is_nil(category) do
+        breadcrumbs = Floki.find(document, ".breadcrumb a, nav.breadcrumbs a, .breadcrumbs a")
+
+        Enum.find_value(breadcrumbs, fn link ->
+          href = Floki.attribute([link], "href") |> List.first()
+          text = Floki.text(link) |> String.trim() |> String.downcase()
+
+          # Check if this is a category breadcrumb
+          if href && String.contains?(href, "/wydarzenia/") do
+            # Extract from URL or use text
+            extract_category_from_wydarzenia_url(href) || text
+          end
+        end)
+      else
+        category
+      end
 
     # NEW: Extract from canonical URL as last resort
-    category = if is_nil(category) do
-      canonical = Floki.find(document, "link[rel='canonical']")
-      |> Floki.attribute("href")
-      |> List.first()
+    category =
+      if is_nil(category) do
+        canonical =
+          Floki.find(document, "link[rel='canonical']")
+          |> Floki.attribute("href")
+          |> List.first()
 
-      if canonical do
-        extract_category_from_wydarzenia_url(canonical)
+        if canonical do
+          extract_category_from_wydarzenia_url(canonical)
+        end
+      else
+        category
       end
-    else
-      category
-    end
 
     # Normalize common categories to English
     normalize_category(category)
   end
 
   defp extract_category_from_wydarzenia_url(nil), do: nil
+
   defp extract_category_from_wydarzenia_url(url) when is_binary(url) do
     case Regex.run(~r{/wydarzenia/([^/,]+)}, url) do
       [_, category] -> String.trim(category) |> String.downcase()
@@ -445,6 +472,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   end
 
   defp normalize_category(nil), do: nil
+
   defp normalize_category(category) do
     cond do
       String.contains?(category, "festiwal") -> "festival"
@@ -465,6 +493,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
 
     if og_image do
       full_og = normalize_image_url(og_image)
+
       if full_og && valid_event_image?(full_og) do
         full_og
       else
@@ -489,29 +518,31 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
       ]
 
       # Collect all valid images and sort by quality
-      all_images = Enum.flat_map(image_selectors, fn selector ->
-        Floki.find(document, selector)
-        |> Enum.map(fn img ->
-          src = Floki.attribute(img, "src") |> List.first()
-          data_src = Floki.attribute(img, "data-src") |> List.first()
-          url = src || data_src
+      all_images =
+        Enum.flat_map(image_selectors, fn selector ->
+          Floki.find(document, selector)
+          |> Enum.map(fn img ->
+            src = Floki.attribute(img, "src") |> List.first()
+            data_src = Floki.attribute(img, "data-src") |> List.first()
+            url = src || data_src
 
-          if url && valid_event_image?(url) do
-            # Make sure it's a full URL
-            full_url = normalize_image_url(url)
-            if full_url do
-              {full_url, image_quality_score(full_url)}
+            if url && valid_event_image?(url) do
+              # Make sure it's a full URL
+              full_url = normalize_image_url(url)
+
+              if full_url do
+                {full_url, image_quality_score(full_url)}
+              else
+                nil
+              end
             else
               nil
             end
-          else
-            nil
-          end
+          end)
+          |> Enum.reject(&is_nil/1)
         end)
-        |> Enum.reject(&is_nil/1)
-      end)
-      |> Enum.uniq_by(fn {url, _} -> url end)
-      |> Enum.sort_by(fn {_, score} -> score end, :desc)
+        |> Enum.uniq_by(fn {url, _} -> url end)
+        |> Enum.sort_by(fn {_, score} -> score end, :desc)
 
       case all_images do
         [{best_url, _} | _] -> best_url
@@ -523,7 +554,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   # Extract og:image meta tag
   defp extract_og_image(document) do
     case Floki.find(document, "meta[property='og:image']") do
-      [] -> nil
+      [] ->
+        nil
+
       [meta | _] ->
         Floki.attribute(meta, "content") |> List.first()
     end
@@ -553,18 +586,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   # Helper function to validate if an image is a real event image
   defp valid_event_image?(url) when is_binary(url) do
     # Accept media.krakow.travel images (these are real event images)
-    String.contains?(url, "media.krakow.travel") ||
     # Accept other large images but reject category icons
-    (not String.contains?(url, "/img/category/") &&
-     not String.contains?(url, "category") &&
-     # Prefer larger image sizes
-     (String.contains?(url, "/xxl") ||
-      String.contains?(url, "/xl") ||
-      String.contains?(url, "/l") ||
-      # If no size indicator, accept if it's not obviously a thumbnail
-      not String.contains?(url, "/s.jpg") &&
-      not String.contains?(url, "/thumb/")))
+    # Prefer larger image sizes
+    # If no size indicator, accept if it's not obviously a thumbnail
+    String.contains?(url, "media.krakow.travel") ||
+      (not String.contains?(url, "/img/category/") &&
+         not String.contains?(url, "category") &&
+         (String.contains?(url, "/xxl") ||
+            String.contains?(url, "/xl") ||
+            String.contains?(url, "/l") ||
+            (not String.contains?(url, "/s.jpg") &&
+               not String.contains?(url, "/thumb/"))))
   end
+
   defp valid_event_image?(_), do: false
 
   defp check_if_free(document) do
@@ -572,11 +606,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     text = Floki.text(document) |> String.downcase()
 
     String.contains?(text, "wstęp wolny") ||
-    String.contains?(text, "wstęp bezpłatny") ||
-    String.contains?(text, "bezpłatne") ||
-    String.contains?(text, "darmowe") ||
-    String.contains?(text, "free entry") ||
-    String.contains?(text, "free admission")
+      String.contains?(text, "wstęp bezpłatny") ||
+      String.contains?(text, "bezpłatne") ||
+      String.contains?(text, "darmowe") ||
+      String.contains?(text, "free entry") ||
+      String.contains?(text, "free admission")
   end
 
   defp check_if_festival(document) do
@@ -584,12 +618,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     text = Floki.text(document) |> String.downcase()
 
     String.contains?(text, "festiwal") ||
-    String.contains?(text, "fest ") ||
-    String.contains?(text, "festival")
+      String.contains?(text, "fest ") ||
+      String.contains?(text, "festival")
   end
 
   # Helper to normalize image URLs
   defp normalize_image_url(nil), do: nil
+
   defp normalize_image_url(url) when is_binary(url) do
     cond do
       String.starts_with?(url, "http") -> url

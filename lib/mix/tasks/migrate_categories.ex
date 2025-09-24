@@ -23,11 +23,13 @@ defmodule Mix.Tasks.MigrateCategories do
     IO.puts("\n🔄 Starting category migration#{if dry_run, do: " (DRY RUN)", else: ""}...")
 
     # Get all events
-    events = Repo.all(
-      from pe in PublicEvent,
-      where: not is_nil(pe.external_id),
-      preload: [:categories]
-    )
+    events =
+      Repo.all(
+        from(pe in PublicEvent,
+          where: not is_nil(pe.external_id),
+          preload: [:categories]
+        )
+      )
 
     IO.puts("Found #{length(events)} events to process\n")
 
@@ -40,33 +42,35 @@ defmodule Mix.Tasks.MigrateCategories do
       failed: 0
     }
 
-    updated_stats = Enum.reduce(events, stats, fn event, acc ->
-      # Check if event already has categories
-      if length(event.categories) > 0 do
-        IO.puts("⏭️  Event #{event.id} already has categories, skipping...")
-        %{acc | already_has_categories: acc.already_has_categories + 1}
-      else
-        # Determine source and process
-        source = determine_source(event.external_id)
-
-        if dry_run do
-          IO.puts("🔍 Would migrate event #{event.id} (#{source}): #{event.title}")
-          update_stats(acc, source)
+    updated_stats =
+      Enum.reduce(events, stats, fn event, acc ->
+        # Check if event already has categories
+        if length(event.categories) > 0 do
+          IO.puts("⏭️  Event #{event.id} already has categories, skipping...")
+          %{acc | already_has_categories: acc.already_has_categories + 1}
         else
-          case migrate_event(event, source) do
-            :ok ->
-              IO.puts("✅ Migrated event #{event.id} (#{source}): #{event.title}")
-              acc
-              |> update_stats(source)
-              |> Map.update!(:migrated, &(&1 + 1))
+          # Determine source and process
+          source = determine_source(event.external_id)
 
-            {:error, reason} ->
-              IO.puts("❌ Failed to migrate event #{event.id}: #{inspect(reason)}")
-              Map.update!(acc, :failed, &(&1 + 1))
+          if dry_run do
+            IO.puts("🔍 Would migrate event #{event.id} (#{source}): #{event.title}")
+            update_stats(acc, source)
+          else
+            case migrate_event(event, source) do
+              :ok ->
+                IO.puts("✅ Migrated event #{event.id} (#{source}): #{event.title}")
+
+                acc
+                |> update_stats(source)
+                |> Map.update!(:migrated, &(&1 + 1))
+
+              {:error, reason} ->
+                IO.puts("❌ Failed to migrate event #{event.id}: #{inspect(reason)}")
+                Map.update!(acc, :failed, &(&1 + 1))
+            end
           end
         end
-      end
-    end)
+      end)
 
     # Print summary
     IO.puts("\n📊 Migration Summary:")
@@ -92,6 +96,7 @@ defmodule Mix.Tasks.MigrateCategories do
       true -> "unknown"
     end
   end
+
   defp determine_source(_), do: "unknown"
 
   defp update_stats(stats, "ticketmaster"), do: Map.update!(stats, :ticketmaster, &(&1 + 1))
@@ -104,15 +109,16 @@ defmodule Mix.Tasks.MigrateCategories do
     # since we don't have the raw event data anymore
     if event.category_id do
       # Map old category_id to new category
-      category_slug = case event.category_id do
-        1 -> "conferences"
-        2 -> "concerts"
-        3 -> "performances"
-        4 -> "exhibitions"
-        5 -> "film"
-        6 -> "festivals"
-        _ -> nil
-      end
+      category_slug =
+        case event.category_id do
+          1 -> "conferences"
+          2 -> "concerts"
+          3 -> "performances"
+          4 -> "exhibitions"
+          5 -> "film"
+          6 -> "festivals"
+          _ -> nil
+        end
 
       if category_slug do
         CategoryExtractor.assign_categories_to_event(
@@ -120,6 +126,7 @@ defmodule Mix.Tasks.MigrateCategories do
           "ticketmaster",
           %{classifications: [%{"segment" => %{"name" => category_slug}}]}
         )
+
         :ok
       else
         {:error, "Unknown category_id: #{event.category_id}"}
@@ -131,23 +138,27 @@ defmodule Mix.Tasks.MigrateCategories do
         "ticketmaster",
         %{classifications: [%{"segment" => %{"name" => "Music"}}]}
       )
+
       :ok
     end
   end
 
   defp migrate_event(event, "karnet") do
     # For Karnet, check metadata or use default
-    category = cond do
-      String.contains?(String.downcase(event.title || ""), "festiwal") -> "festival"
-      String.contains?(String.downcase(event.title || ""), "koncert") -> "koncerty"
-      true -> "koncerty"  # Default to concerts
-    end
+    category =
+      cond do
+        String.contains?(String.downcase(event.title || ""), "festiwal") -> "festival"
+        String.contains?(String.downcase(event.title || ""), "koncert") -> "koncerty"
+        # Default to concerts
+        true -> "koncerty"
+      end
 
     CategoryExtractor.assign_categories_to_event(
       event.id,
       "karnet",
       %{category: category}
     )
+
     :ok
   end
 
@@ -158,6 +169,7 @@ defmodule Mix.Tasks.MigrateCategories do
       "bandsintown",
       %{genre: "concert"}
     )
+
     :ok
   end
 

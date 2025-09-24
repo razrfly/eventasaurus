@@ -21,7 +21,9 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
     test "create_event_date_option/2 accepts string dates", %{poll: poll} do
       tomorrow_string = Date.utc_today() |> Date.add(1) |> Date.to_iso8601()
 
-      assert {:ok, %EventDateOption{} = option} = Events.create_event_date_option(poll, tomorrow_string)
+      assert {:ok, %EventDateOption{} = option} =
+               Events.create_event_date_option(poll, tomorrow_string)
+
       assert option.event_date_poll_id == poll.id
       assert Date.to_iso8601(option.date) == tomorrow_string
     end
@@ -29,7 +31,9 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
     test "create_event_date_option/2 fails with past date", %{poll: poll} do
       yesterday = Date.utc_today() |> Date.add(-1)
 
-      assert {:error, %Ecto.Changeset{} = changeset} = Events.create_event_date_option(poll, yesterday)
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Events.create_event_date_option(poll, yesterday)
+
       assert "cannot be in the past" in errors_on(changeset).date
     end
 
@@ -40,7 +44,9 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
       assert {:ok, _option} = Events.create_event_date_option(poll, tomorrow)
 
       # Try to create duplicate
-      assert {:error, %Ecto.Changeset{} = changeset} = Events.create_event_date_option(poll, tomorrow)
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Events.create_event_date_option(poll, tomorrow)
+
       assert "date already exists for this poll" in errors_on(changeset).event_date_poll_id
     end
 
@@ -121,7 +127,9 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
       assert Events.date_option_exists?(poll, day_after) == false
     end
 
-    test "update_event_date_options/2 preserves existing votes when adding new dates", %{poll: poll} do
+    test "update_event_date_options/2 preserves existing votes when adding new dates", %{
+      poll: poll
+    } do
       # Create initial date options
       date1 = Date.utc_today() |> Date.add(1)
       date2 = Date.utc_today() |> Date.add(2)
@@ -136,7 +144,8 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
       {:ok, vote2} = Events.create_event_date_vote(option2, user, :if_need_be)
 
       # Update to add a new date while keeping existing ones
-      new_dates = [date1, date2, date3]  # Keep date1 and date2, add date3
+      # Keep date1 and date2, add date3
+      new_dates = [date1, date2, date3]
 
       assert {:ok, updated_options} = Events.update_event_date_options(poll, new_dates)
       assert length(updated_options) == 3
@@ -215,10 +224,11 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
 
   describe "event_date_option validations" do
     test "changeset with valid attributes" do
-      changeset = EventDateOption.changeset(%EventDateOption{}, %{
-        event_date_poll_id: 1,
-        date: Date.utc_today() |> Date.add(1)
-      })
+      changeset =
+        EventDateOption.changeset(%EventDateOption{}, %{
+          event_date_poll_id: 1,
+          date: Date.utc_today() |> Date.add(1)
+        })
 
       assert changeset.valid?
     end
@@ -231,20 +241,22 @@ defmodule EventasaurusApp.Events.EventDateOptionTest do
     end
 
     test "changeset validates date is not in past" do
-      changeset = EventDateOption.changeset(%EventDateOption{}, %{
-        event_date_poll_id: 1,
-        date: Date.utc_today() |> Date.add(-1)
-      })
+      changeset =
+        EventDateOption.changeset(%EventDateOption{}, %{
+          event_date_poll_id: 1,
+          date: Date.utc_today() |> Date.add(-1)
+        })
 
       refute changeset.valid?
       assert "cannot be in the past" in errors_on(changeset).date
     end
 
     test "changeset allows today's date" do
-      changeset = EventDateOption.changeset(%EventDateOption{}, %{
-        event_date_poll_id: 1,
-        date: Date.utc_today()
-      })
+      changeset =
+        EventDateOption.changeset(%EventDateOption{}, %{
+          event_date_poll_id: 1,
+          date: Date.utc_today()
+        })
 
       assert changeset.valid?
     end

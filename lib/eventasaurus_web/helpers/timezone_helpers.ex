@@ -26,6 +26,7 @@ defmodule EventasaurusWeb.TimezoneHelpers do
           {"Europe & Africa", europe_africa_options()},
           {"Asia & Pacific", asia_pacific_options()}
         ]
+
         Process.put({__MODULE__, :categorized_options}, {current_time, options})
         options
     end
@@ -44,12 +45,13 @@ defmodule EventasaurusWeb.TimezoneHelpers do
         options
 
       _ ->
-        options = TimeZoneInfo.time_zones()
-                  |> Enum.map(fn tz ->
-                    formatted = format_timezone_option(tz)
-                    {formatted, tz}
-                  end)
-                  |> Enum.sort_by(fn {formatted, _} -> formatted end)
+        options =
+          TimeZoneInfo.time_zones()
+          |> Enum.map(fn tz ->
+            formatted = format_timezone_option(tz)
+            {formatted, tz}
+          end)
+          |> Enum.sort_by(fn {formatted, _} -> formatted end)
 
         Process.put({__MODULE__, :all_options}, {current_time, options})
         options
@@ -80,20 +82,23 @@ defmodule EventasaurusWeb.TimezoneHelpers do
          offset_seconds <- datetime.utc_offset + datetime.std_offset,
          offset_hours <- div(offset_seconds, 3600),
          offset_minutes <- div(rem(offset_seconds, 3600), 60) do
-
       # Format city name more nicely (replace _ with spaces)
-      city = timezone
-             |> String.split("/")
-             |> List.last()
-             |> String.replace("_", " ")
+      city =
+        timezone
+        |> String.split("/")
+        |> List.last()
+        |> String.replace("_", " ")
 
       # Format UTC offset
       sign = if offset_seconds >= 0, do: "+", else: "-"
-      offset_string = "#{sign}#{String.pad_leading("#{abs(offset_hours)}", 2, "0")}:#{String.pad_leading("#{abs(offset_minutes)}", 2, "0")}"
+
+      offset_string =
+        "#{sign}#{String.pad_leading("#{abs(offset_hours)}", 2, "0")}:#{String.pad_leading("#{abs(offset_minutes)}", 2, "0")}"
 
       "#{city} (UTC#{offset_string})"
     else
-      _ -> timezone # Fallback to just the timezone name if anything fails
+      # Fallback to just the timezone name if anything fails
+      _ -> timezone
     end
   end
 
@@ -153,14 +158,16 @@ defmodule EventasaurusWeb.TimezoneHelpers do
   defp asia_pacific_options do
     [
       "Asia/Tokyo",
-      "Asia/Shanghai", # Also Beijing
+      # Also Beijing
+      "Asia/Shanghai",
       "Asia/Singapore",
       "Asia/Seoul",
       "Australia/Sydney",
       "Australia/Melbourne",
       "Pacific/Auckland",
       "Asia/Dubai",
-      "Asia/Kolkata", # Also New Delhi
+      # Also New Delhi
+      "Asia/Kolkata",
       "Asia/Bangkok",
       "Asia/Jakarta",
       "Asia/Kuala_Lumpur",

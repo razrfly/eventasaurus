@@ -50,25 +50,26 @@ defmodule Mix.Tasks.Seed.Dev do
     end
 
     # Parse arguments
-    {opts, _} = OptionParser.parse!(args,
-      strict: [
-        append: :boolean,
-        users: :integer,
-        groups: :integer,
-        events: :integer,
-        polls: :integer,
-        activities: :integer,
-        only: :string,
-        quiet: :boolean
-      ]
-    )
+    {opts, _} =
+      OptionParser.parse!(args,
+        strict: [
+          append: :boolean,
+          users: :integer,
+          groups: :integer,
+          events: :integer,
+          polls: :integer,
+          activities: :integer,
+          only: :string,
+          quiet: :boolean
+        ]
+      )
 
     # Start the app
     Mix.Task.run("app.start")
 
     # Load the runner script with configuration
     config = build_config(opts)
-    
+
     # Set environment variable for the runner to use
     System.put_env("DEV_SEED_CONFIG", Jason.encode!(config))
 

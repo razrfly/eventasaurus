@@ -6,12 +6,12 @@ defmodule EventasaurusApp.Groups.GroupJoinRequest do
   alias EventasaurusApp.Accounts.User
 
   schema "group_join_requests" do
-    belongs_to :group, Group
-    belongs_to :user, User
-    field :status, :string, default: "pending"
-    field :message, :string
-    belongs_to :reviewed_by, User, foreign_key: :reviewed_by_id
-    field :reviewed_at, :utc_datetime
+    belongs_to(:group, Group)
+    belongs_to(:user, User)
+    field(:status, :string, default: "pending")
+    field(:message, :string)
+    belongs_to(:reviewed_by, User, foreign_key: :reviewed_by_id)
+    field(:reviewed_at, :utc_datetime)
 
     timestamps(type: :utc_datetime)
   end

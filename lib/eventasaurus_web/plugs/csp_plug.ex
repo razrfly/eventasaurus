@@ -10,7 +10,7 @@ defmodule EventasaurusWeb.Plugs.CSPPlug do
   def call(conn, _opts) do
     # Generate a nonce for this request
     nonce = :crypto.strong_rand_bytes(16) |> Base.encode64()
-    
+
     conn
     |> assign(:csp_nonce, nonce)
     |> put_resp_header("content-security-policy", build_csp_header(nonce))
@@ -20,11 +20,14 @@ defmodule EventasaurusWeb.Plugs.CSPPlug do
     # Base CSP directives
     directives = %{
       "default-src" => "'self'",
-      "script-src" => "'self' 'nonce-#{nonce}' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://js.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://maps.gstatic.com https://eu-assets.i.posthog.com https://esm.sh blob:",
-      "style-src" => "'self' 'nonce-#{nonce}' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me",
+      "script-src" =>
+        "'self' 'nonce-#{nonce}' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://js.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://maps.gstatic.com https://eu-assets.i.posthog.com https://esm.sh blob:",
+      "style-src" =>
+        "'self' 'nonce-#{nonce}' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me",
       "font-src" => "'self' https://fonts.gstatic.com https://rsms.me data:",
       "img-src" => "'self' data: blob: https: http:",
-      "connect-src" => "'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://eu.i.posthog.com https://eu-assets.i.posthog.com http://localhost:5746 http://localhost:5747",
+      "connect-src" =>
+        "'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://eu.i.posthog.com https://eu-assets.i.posthog.com http://localhost:5746 http://localhost:5747",
       "frame-src" => "'self' https://js.stripe.com https://challenges.cloudflare.com",
       "frame-ancestors" => "'none'",
       "object-src" => "'none'",

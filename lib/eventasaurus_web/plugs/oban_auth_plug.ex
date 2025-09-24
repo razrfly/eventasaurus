@@ -24,7 +24,7 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
       # If no admin password is configured, deny access
       is_nil(admin_password) or admin_password == "" ->
         Logger.warning("Oban Web UI access attempted but OBAN_PASSWORD not configured")
-        
+
         conn
         |> put_flash(:error, "Oban Web UI access is not configured.")
         |> redirect(to: ~p"/dashboard")
@@ -35,12 +35,13 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
         conn
 
       # Handle POSTed password securely
-      conn.method == "POST" and is_binary(conn.params["admin_password"])
-        and Plug.Crypto.secure_compare(conn.params["admin_password"], admin_password) ->
+      conn.method == "POST" and is_binary(conn.params["admin_password"]) and
+          Plug.Crypto.secure_compare(conn.params["admin_password"], admin_password) ->
         conn
         |> configure_session(renew: true)
         |> put_session("oban_admin_token", oban_password_digest(admin_password))
-        |> redirect(to: conn.request_path) # clear query params
+        # clear query params
+        |> redirect(to: conn.request_path)
         |> halt()
 
       # If this is a GET request, show auth form
@@ -168,7 +169,7 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
     """
 
     status = if error_message, do: 401, else: 200
-    
+
     conn
     |> put_resp_content_type("text/html")
     |> send_resp(status, html)

@@ -39,7 +39,8 @@ defmodule EventasaurusApp.AccountsTest do
     end
 
     test "get_user_by_username_or_id/1 handles user-{id} pattern for users without usernames" do
-      user = user_fixture()  # No username set
+      # No username set
+      user = user_fixture()
       slug = "user-#{user.id}"
       found_user = Accounts.get_user_by_username_or_id(slug)
       assert found_user.id == user.id
@@ -54,7 +55,8 @@ defmodule EventasaurusApp.AccountsTest do
     test "get_user_by_username_or_id/1 prioritizes username over ID" do
       # Create user with ID, e.g., 1
       user1 = user_fixture()
-      user2 = user_fixture(%{username: to_string(user1.id)})  # Username is "1"
+      # Username is "1"
+      user2 = user_fixture(%{username: to_string(user1.id)})
 
       # When searching for "1", should find user2 (username) not user1 (ID)
       found_user = Accounts.get_user_by_username_or_id(to_string(user1.id))
@@ -67,14 +69,31 @@ defmodule EventasaurusApp.AccountsTest do
       user = user_fixture()
 
       # Valid usernames
-      valid_usernames = ["user123", "test_user", "my-handle", "abc", "user_with_underscore", "A1B2c3d4e5f6g7h8i9j0k1l2m3n4o"]
+      valid_usernames = [
+        "user123",
+        "test_user",
+        "my-handle",
+        "abc",
+        "user_with_underscore",
+        "A1B2c3d4e5f6g7h8i9j0k1l2m3n4o"
+      ]
+
       for username <- valid_usernames do
         changeset = User.profile_changeset(user, %{username: username})
         assert changeset.valid?, "Username '#{username}' should be valid"
       end
 
       # Invalid usernames
-      invalid_usernames = ["us", "user@name", "user.name", "user name", "user#tag", "user!", "a very long username that exceeds thirty characters"]
+      invalid_usernames = [
+        "us",
+        "user@name",
+        "user.name",
+        "user name",
+        "user#tag",
+        "user!",
+        "a very long username that exceeds thirty characters"
+      ]
+
       for username <- invalid_usernames do
         changeset = User.profile_changeset(user, %{username: username})
         refute changeset.valid?, "Username '#{username}' should be invalid"
@@ -86,14 +105,17 @@ defmodule EventasaurusApp.AccountsTest do
       user = user_fixture()
 
       reserved_usernames = ["admin", "api", "www", "support", "root", "Administrator", "ADMIN"]
-                        for username <- reserved_usernames do
+
+      for username <- reserved_usernames do
         changeset = User.profile_changeset(user, %{username: username})
         refute changeset.valid?, "Username '#{username}' should be invalid"
 
         assert changeset.errors[:username], "Should have username error for '#{username}'"
         error = changeset.errors[:username]
         {error_message, _} = if is_list(error), do: List.first(error), else: error
-        assert String.contains?(error_message, "reserved"), "Error message should contain 'reserved' for '#{username}'"
+
+        assert String.contains?(error_message, "reserved"),
+               "Error message should contain 'reserved' for '#{username}'"
       end
     end
 
@@ -117,6 +139,7 @@ defmodule EventasaurusApp.AccountsTest do
 
       # Valid URLs
       valid_urls = ["https://example.com", "http://test.org", "https://my-site.co.uk"]
+
       for url <- valid_urls do
         changeset = User.profile_changeset(user, %{website_url: url})
         assert changeset.valid?, "URL '#{url}' should be valid"
@@ -124,6 +147,7 @@ defmodule EventasaurusApp.AccountsTest do
 
       # Invalid URLs
       invalid_urls = ["example.com", "ftp://test.com", "not-a-url", "www.example.com"]
+
       for url <- invalid_urls do
         changeset = User.profile_changeset(user, %{website_url: url})
         refute changeset.valid?, "URL '#{url}' should be invalid"
@@ -139,11 +163,12 @@ defmodule EventasaurusApp.AccountsTest do
       user = user_fixture()
 
       # Should remove @ symbol from handles
-      changeset = User.profile_changeset(user, %{
-        instagram_handle: "@testuser",
-        x_handle: "@twitteruser",
-        tiktok_handle: "@tiktokuser"
-      })
+      changeset =
+        User.profile_changeset(user, %{
+          instagram_handle: "@testuser",
+          x_handle: "@twitteruser",
+          tiktok_handle: "@tiktokuser"
+        })
 
       assert changeset.valid?
       assert Ecto.Changeset.get_change(changeset, :instagram_handle) == "testuser"
@@ -172,6 +197,7 @@ defmodule EventasaurusApp.AccountsTest do
 
       # Valid currencies
       valid_currencies = ["USD", "EUR", "GBP", "CAD", "AUD"]
+
       for currency <- valid_currencies do
         changeset = User.profile_changeset(user, %{default_currency: currency})
         assert changeset.valid?, "Currency '#{currency}' should be valid"
@@ -226,11 +252,12 @@ defmodule EventasaurusApp.AccountsTest do
       user = user_fixture()
 
       # Should not allow updating email or supabase_id through profile_changeset
-      changeset = User.profile_changeset(user, %{
-        email: "newemail@example.com",
-        supabase_id: "new-supabase-id",
-        username: "validusername"
-      })
+      changeset =
+        User.profile_changeset(user, %{
+          email: "newemail@example.com",
+          supabase_id: "new-supabase-id",
+          username: "validusername"
+        })
 
       assert changeset.valid?
       assert Ecto.Changeset.get_change(changeset, :email) == nil
@@ -287,7 +314,9 @@ defmodule EventasaurusApp.AccountsTest do
 
     test "shareable_profile_url/2 returns full URL with custom domain" do
       user = %User{id: 1, username: "testuser"}
-      assert User.shareable_profile_url(user, "https://example.com") == "https://example.com/user/testuser"
+
+      assert User.shareable_profile_url(user, "https://example.com") ==
+               "https://example.com/user/testuser"
     end
 
     test "has_username?/1 returns true when username exists" do
@@ -402,6 +431,7 @@ defmodule EventasaurusApp.AccountsTest do
 
     test "extracts name from email when user_metadata name is missing" do
       unique_id = System.unique_integer([:positive])
+
       supabase_user = %{
         "id" => "test-supabase-id-#{unique_id}",
         "email" => "john.doe#{unique_id}@example.com",
@@ -417,6 +447,7 @@ defmodule EventasaurusApp.AccountsTest do
 
     test "handles user_metadata with nil name" do
       unique_id = System.unique_integer([:positive])
+
       supabase_user = %{
         "id" => "test-supabase-id-#{unique_id}",
         "email" => "test#{unique_id}@example.com",
@@ -442,7 +473,8 @@ defmodule EventasaurusApp.AccountsTest do
       ]
 
       for invalid_data <- invalid_data_cases do
-        assert {:error, :invalid_supabase_data} = Accounts.find_or_create_from_supabase(invalid_data)
+        assert {:error, :invalid_supabase_data} =
+                 Accounts.find_or_create_from_supabase(invalid_data)
       end
     end
 
@@ -453,7 +485,8 @@ defmodule EventasaurusApp.AccountsTest do
       # Try to create another user with same email but different supabase_id
       supabase_user = %{
         "id" => "different-supabase-id-#{System.unique_integer([:positive])}",
-        "email" => existing_user.email, # Same email
+        # Same email
+        "email" => existing_user.email,
         "user_metadata" => %{"name" => "Different Name"}
       }
 

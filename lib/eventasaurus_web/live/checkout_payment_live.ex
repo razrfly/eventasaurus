@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
         # Check if order is already confirmed
         if order.status == "confirmed" do
           event = Events.get_event!(order.ticket.event_id)
+
           {:ok,
            socket
            |> put_flash(:success, "This order has already been completed.")
@@ -88,7 +89,10 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
         {:noreply,
          socket
          |> assign(:payment_status, :error)
-         |> put_flash(:error, "Payment was successful but there was an issue confirming your order. Please contact support.")}
+         |> put_flash(
+           :error,
+           "Payment was successful but there was an issue confirming your order. Please contact support."
+         )}
     end
   end
 
@@ -121,7 +125,9 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
       order_id = String.to_integer(order_id)
 
       case Ticketing.get_user_order(user_id, order_id) do
-        nil -> {:error, :not_found}
+        nil ->
+          {:error, :not_found}
+
         order ->
           if order.user_id == user_id do
             {:ok, order}

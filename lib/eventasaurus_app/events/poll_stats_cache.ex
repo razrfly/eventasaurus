@@ -57,10 +57,10 @@ defmodule EventasaurusApp.Events.PollStatsCache do
   def init(_opts) do
     # Create ETS table for caching
     table = :ets.new(@table_name, [:set, :named_table, :public, read_concurrency: true])
-    
+
     # Schedule periodic cleanup
     Process.send_after(self(), :cleanup, @cleanup_interval)
-    
+
     Logger.info("PollStatsCache started with table: #{inspect(table)}")
     {:ok, %{table: table}}
   end
@@ -95,6 +95,7 @@ defmodule EventasaurusApp.Events.PollStatsCache do
           :ets.delete(@table_name, poll_id)
           :miss
         end
+
       [] ->
         :miss
     end
@@ -112,7 +113,7 @@ defmodule EventasaurusApp.Events.PollStatsCache do
   defp cleanup_expired_entries do
     current_time = System.system_time(:millisecond)
     expired_threshold = current_time - @cache_ttl
-    
+
     # Delete expired entries
     :ets.select_delete(@table_name, [
       {{~c"$1", ~c"$2", ~c"$3"}, [{:<, ~c"$3", expired_threshold}], [true]}

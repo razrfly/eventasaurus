@@ -7,18 +7,21 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   Normalizes text by trimming whitespace and removing excessive spaces.
   """
   def normalize_text(nil), do: nil
+
   def normalize_text(text) when is_binary(text) do
     text
     |> String.trim()
     |> String.replace(~r/\s+/, " ")
     |> String.replace(~r/[[:cntrl:]]/, "")
   end
+
   def normalize_text(_), do: nil
 
   @doc """
   Creates a URL-safe slug from text.
   """
   def create_slug(nil), do: nil
+
   def create_slug(text) when is_binary(text) do
     text
     |> String.downcase()
@@ -32,18 +35,21 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   Normalizes a phone number to a consistent format.
   """
   def normalize_phone(nil), do: nil
+
   def normalize_phone(phone) when is_binary(phone) do
     digits = String.replace(phone, ~r/[^0-9]/, "")
 
     case String.length(digits) do
       10 ->
         format_us_phone(digits)
+
       11 ->
         if String.starts_with?(digits, "1") do
           format_us_phone(String.slice(digits, 1..-1//1))
         else
           phone
         end
+
       _ ->
         phone
     end
@@ -60,6 +66,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   Normalizes a URL by ensuring it has a protocol.
   """
   def normalize_url(nil), do: nil
+
   def normalize_url(url) when is_binary(url) do
     cond do
       String.starts_with?(url, "http://") or String.starts_with?(url, "https://") ->
@@ -77,6 +84,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   Extracts and normalizes social media handles.
   """
   def extract_social_handle(nil), do: nil
+
   def extract_social_handle(url) when is_binary(url) do
     cond do
       String.contains?(url, "facebook.com") ->
@@ -130,6 +138,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   Cleans HTML content by removing tags and entities.
   """
   def clean_html(nil), do: nil
+
   def clean_html(html) when is_binary(html) do
     html
     |> String.replace(~r/<[^>]+>/, " ")
@@ -147,6 +156,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   Capitalizes each word in a string (title case).
   """
   def title_case(nil), do: nil
+
   def title_case(text) when is_binary(text) do
     text
     |> String.downcase()

@@ -15,16 +15,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
   """
   def is_festival?(event_data) do
     # Check multiple indicators
-    title_check = event_data[:title] &&
-      (String.contains?(String.downcase(event_data[:title]), "fest") ||
-       String.contains?(String.downcase(event_data[:title]), "festiwal"))
+    title_check =
+      event_data[:title] &&
+        (String.contains?(String.downcase(event_data[:title]), "fest") ||
+           String.contains?(String.downcase(event_data[:title]), "festiwal"))
 
-    category_check = event_data[:category] &&
-      String.contains?(String.downcase(event_data[:category]), "festiwal")
+    category_check =
+      event_data[:category] &&
+        String.contains?(String.downcase(event_data[:category]), "festiwal")
 
     # Multi-day events are often festivals
-    date_range_check = event_data[:date_text] &&
-      String.contains?(event_data[:date_text], " - ")
+    date_range_check =
+      event_data[:date_text] &&
+        String.contains?(event_data[:date_text], " - ")
 
     # Check if explicitly marked as festival
     is_festival_flag = event_data[:is_festival] == true
@@ -61,6 +64,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
           end_date: end_dt,
           duration_days: calculate_duration(start_dt, end_dt)
         }
+
       _ ->
         %{
           text: event_data[:date_text],
@@ -86,16 +90,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
           "h3:fl-contains('Miejsce') ~ *"
         ]
 
-        venues = venue_selectors
-        |> Enum.flat_map(fn selector ->
-          Floki.find(document, selector)
-        end)
-        |> Enum.map(&Floki.text/1)
-        |> Enum.map(&String.trim/1)
-        |> Enum.filter(fn text ->
-          String.length(text) > 3 && String.length(text) < 200
-        end)
-        |> Enum.uniq()
+        venues =
+          venue_selectors
+          |> Enum.flat_map(fn selector ->
+            Floki.find(document, selector)
+          end)
+          |> Enum.map(&Floki.text/1)
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(fn text ->
+            String.length(text) > 3 && String.length(text) < 200
+          end)
+          |> Enum.uniq()
 
         # Return simplified venue list
         Enum.map(venues, fn venue_text ->
@@ -122,24 +127,28 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
           ".performer",
           ".artist",
           ".wykonawca",
-          "strong",  # Often performers are in bold
-          "h4"       # Sometimes in subheadings
+          # Often performers are in bold
+          "strong",
+          # Sometimes in subheadings
+          "h4"
         ]
 
-        performers = performer_selectors
-        |> Enum.flat_map(fn selector ->
-          Floki.find(document, selector)
-        end)
-        |> Enum.map(&Floki.text/1)
-        |> Enum.map(&String.trim/1)
-        |> Enum.filter(fn text ->
-          # Basic filtering for likely performer names
-          String.length(text) > 2 &&
-          String.length(text) < 100 &&
-          not String.contains?(text, ["ul.", "al.", "Kraków", "bilety"])
-        end)
-        |> Enum.take(10)  # Limit to top 10 to avoid noise
-        |> Enum.uniq()
+        performers =
+          performer_selectors
+          |> Enum.flat_map(fn selector ->
+            Floki.find(document, selector)
+          end)
+          |> Enum.map(&Floki.text/1)
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(fn text ->
+            # Basic filtering for likely performer names
+            String.length(text) > 2 &&
+              String.length(text) < 100 &&
+              not String.contains?(text, ["ul.", "al.", "Kraków", "bilety"])
+          end)
+          # Limit to top 10 to avoid noise
+          |> Enum.take(10)
+          |> Enum.uniq()
 
         performers
 
@@ -152,19 +161,24 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
   defp count_sub_events(html) do
     # Estimate sub-events by counting date/time patterns
     date_patterns = [
-      ~r/\d{1,2}\.\d{1,2}\.\d{4}/,  # Polish date format
-      ~r/\d{1,2}:\d{2}/,             # Time format
-      ~r/godz\./                     # Polish "hour" abbreviation
+      # Polish date format
+      ~r/\d{1,2}\.\d{1,2}\.\d{4}/,
+      # Time format
+      ~r/\d{1,2}:\d{2}/,
+      # Polish "hour" abbreviation
+      ~r/godz\./
     ]
 
-    matches = date_patterns
-    |> Enum.map(fn pattern ->
-      Regex.scan(pattern, html) |> length()
-    end)
-    |> Enum.max()
+    matches =
+      date_patterns
+      |> Enum.map(fn pattern ->
+        Regex.scan(pattern, html) |> length()
+      end)
+      |> Enum.max()
 
     # Rough estimate - each date/time likely represents an event
-    min(matches, 50)  # Cap at 50 to avoid outliers
+    # Cap at 50 to avoid outliers
+    min(matches, 50)
   end
 
   @doc """
