@@ -63,7 +63,7 @@ defmodule EventasaurusApp.AuditLogger do
       admin_action: true
     }
 
-    Logger.warn("ADMIN_AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
+    Logger.warning("ADMIN_AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -83,7 +83,7 @@ defmodule EventasaurusApp.AuditLogger do
       security_event: true
     }
 
-    Logger.warn("SECURITY_AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
+    Logger.warning("SECURITY_AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
