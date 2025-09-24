@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.Helpers.LanguageHelpers do
         %{__struct__: EventasaurusDiscovery.PublicEvents.PublicEvent} = event,
         language
       ) do
-    PublicEvents.get_title(event, language: language)
+    PublicEvents.get_title(event, language: language || "en")
   end
 
   def get_event_title(%{title: title}, _language) when is_binary(title), do: title
@@ -31,7 +31,7 @@ defmodule EventasaurusWeb.Helpers.LanguageHelpers do
         %{__struct__: EventasaurusDiscovery.PublicEvents.PublicEvent} = event,
         language
       ) do
-    PublicEvents.get_description(event, language: language)
+    PublicEvents.get_description(event, language: language || "en")
   end
 
   def get_event_description(%{description: description}, _language) when is_binary(description),

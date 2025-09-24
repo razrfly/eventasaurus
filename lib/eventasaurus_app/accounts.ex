@@ -212,6 +212,60 @@ defmodule EventasaurusApp.Accounts do
   def find_or_create_guest_user(_), do: {:error, {:invalid_email, "Email must be a string"}}
 
   @doc """
+  Search for users by name, username, or email.
+
+  Options:
+  - exclude_ids: List of user IDs to exclude from results
+  - limit: Maximum number of results to return (default: 10)
+  """
+  def search_users(query, opts \\ []) when is_binary(query) do
+    exclude_ids = Keyword.get(opts, :exclude_ids, [])
+    limit = Keyword.get(opts, :limit, 10)
+
+    search_query = String.trim(query)
+
+    if search_query == "" do
+      {:ok, []}
+    else
+      # Create search pattern for ILIKE
+      search_pattern = "%#{search_query}%"
+
+      users =
+        from(u in User,
+          where:
+            (ilike(u.name, ^search_pattern) or
+             ilike(u.username, ^search_pattern) or
+             ilike(u.email, ^search_pattern)) and
+            u.id not in ^exclude_ids,
+          limit: ^limit,
+          order_by: [
+            # Prioritize exact matches
+            fragment("CASE
+              WHEN lower(?) = lower(?) THEN 0
+              WHEN lower(?) = lower(?) THEN 0
+              WHEN lower(?) = lower(?) THEN 0
+              ELSE 1
+            END", u.name, ^search_query, u.username, ^search_query, u.email, ^search_query),
+            # Then prioritize starts-with matches
+            fragment("CASE
+              WHEN lower(?) LIKE lower(?) THEN 0
+              WHEN lower(?) LIKE lower(?) THEN 0
+              WHEN lower(?) LIKE lower(?) THEN 0
+              ELSE 1
+            END", u.name, ^"#{search_query}%", u.username, ^"#{search_query}%", u.email, ^"#{search_query}%"),
+            # Finally order by name
+            u.name
+          ]
+        )
+        |> Repo.all()
+
+      {:ok, users}
+    end
+  rescue
+    _ -> {:error, :search_failed}
+  end
+
+  @doc """
   Gets user event statistics for profile display.
 
   Returns a map with:
