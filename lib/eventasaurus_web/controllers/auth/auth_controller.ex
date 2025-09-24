@@ -22,7 +22,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def login(conn, params) do
     require Logger
-    Logger.debug("Login action - params: #{inspect(params)}")
+    Logger.debug("Login action - provider: #{params["provider"] || "direct"}")
 
     # Store return URL if provided in query params (voluntary login)
     conn =
@@ -68,13 +68,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
     case Auth.authenticate(email, password) do
       {:ok, auth_data} ->
-        Logger.debug("Authentication successful, auth_data: #{inspect(auth_data)}")
+        Logger.debug("Authentication successful for user")
 
         case Auth.store_session(conn, auth_data, remember_me) do
           {:ok, conn} ->
             # Fetch current user for the session
             user = Auth.get_current_user(conn)
-            Logger.debug("User data fetched: #{inspect(user)}")
+            Logger.debug("User data fetched successfully")
 
             # Check for stored return URL using the standard session key
             return_to = get_session(conn, :user_return_to)
@@ -407,7 +407,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def callback(conn, params) do
     require Logger
-    Logger.info("Auth callback received: #{inspect(params)}")
+    Logger.info("Auth callback received - type: #{params["type"] || "oauth"}, provider: #{params["provider"] || "unknown"}")
 
     case params do
       # NEW: Server-side authorization code for password recovery
