@@ -334,7 +334,12 @@ defmodule EventasaurusApp.Auth do
           end
 
         true ->
-          Logger.debug("No expiry found in auth data. Keys: #{inspect(Map.keys(auth_data))}")
+          case auth_data do
+            m when is_map(m) ->
+              Logger.debug("No expiry found in auth data. Keys: #{inspect(Map.keys(m))}")
+            other ->
+              Logger.debug("No expiry found in non-map auth data: #{inspect(other)}")
+          end
           nil
       end
 

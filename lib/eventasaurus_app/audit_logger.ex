@@ -22,7 +22,7 @@ defmodule EventasaurusApp.AuditLogger do
       ip_address: get_client_ip(metadata)
     }
 
-    Logger.info("AUDIT: #{event_type}", audit_data)
+    Logger.info("AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -42,7 +42,7 @@ defmodule EventasaurusApp.AuditLogger do
       ip_address: get_client_ip(metadata)
     }
 
-    Logger.info("AUDIT: #{event_type}", audit_data)
+    Logger.info("AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -63,7 +63,7 @@ defmodule EventasaurusApp.AuditLogger do
       admin_action: true
     }
 
-    Logger.warning("ADMIN_AUDIT: #{event_type}", audit_data)
+    Logger.warn("ADMIN_AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -83,7 +83,7 @@ defmodule EventasaurusApp.AuditLogger do
       security_event: true
     }
 
-    Logger.warning("SECURITY_AUDIT: #{event_type}", audit_data)
+    Logger.warn("SECURITY_AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -170,7 +170,7 @@ defmodule EventasaurusApp.AuditLogger do
       ip_address: get_client_ip(metadata)
     }
 
-    Logger.info("AUDIT: #{event_type}", audit_data)
+    Logger.info("AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -196,7 +196,7 @@ defmodule EventasaurusApp.AuditLogger do
       ip_address: get_client_ip(metadata)
     }
 
-    Logger.info("AUDIT: #{event_type}", audit_data)
+    Logger.info("AUDIT: #{event_type}", scrub_metadata(audit_data) |> Map.to_list())
 
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
@@ -313,6 +313,24 @@ defmodule EventasaurusApp.AuditLogger do
   end
 
   # Private functions
+
+  defp scrub_metadata(audit_data) when is_map(audit_data) do
+    audit_data
+    |> Map.update(:metadata, %{}, &scrub_sensitive_fields/1)
+  end
+
+  defp scrub_metadata(audit_data), do: audit_data
+
+  defp scrub_sensitive_fields(metadata) when is_map(metadata) do
+    metadata
+    |> Map.drop([:vote_data, :old_vote, :new_vote])
+    |> Map.update(:details, nil, fn
+      v when is_binary(v) and byte_size(v) > 500 -> binary_part(v, 0, 500) <> "…"
+      v -> v
+    end)
+  end
+
+  defp scrub_sensitive_fields(metadata), do: metadata
 
   defp get_client_ip(metadata) do
     case metadata do

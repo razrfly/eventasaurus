@@ -118,21 +118,21 @@ defmodule EventasaurusApp.Events.Delete do
   defp perform_hard_deletion(%Event{} = event, %User{} = user, reason) do
     case HardDelete.hard_delete_event(event.id, user.id) do
       {:ok, _deleted_event} ->
-        Logger.info("Event hard deleted", %{
+        Logger.info("Event hard deleted",
           event_id: event.id,
           user_id: user.id,
           reason: reason
-        })
+        )
 
         {:ok, :hard_deleted}
 
       {:error, error_reason} ->
         # If hard delete fails, fall back to soft delete
-        Logger.warning("Hard delete failed, falling back to soft delete", %{
+        Logger.warn("Hard delete failed, falling back to soft delete",
           event_id: event.id,
           user_id: user.id,
           error: error_reason
-        })
+        )
 
         perform_soft_deletion(event, user, reason)
     end
@@ -141,20 +141,20 @@ defmodule EventasaurusApp.Events.Delete do
   defp perform_soft_deletion(%Event{} = event, %User{} = user, reason) do
     case SoftDelete.soft_delete_event(event.id, reason, user.id) do
       {:ok, _deleted_event} ->
-        Logger.info("Event soft deleted", %{
+        Logger.info("Event soft deleted",
           event_id: event.id,
           user_id: user.id,
           reason: reason
-        })
+        )
 
         {:ok, :soft_deleted}
 
       {:error, error_reason} ->
-        Logger.error("Soft delete failed", %{
+        Logger.error("Soft delete failed",
           event_id: event.id,
           user_id: user.id,
           error: error_reason
-        })
+        )
 
         {:error, error_reason}
     end

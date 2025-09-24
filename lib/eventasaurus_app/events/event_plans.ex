@@ -25,13 +25,14 @@ defmodule EventasaurusApp.Events.EventPlans do
         |> Repo.preload(:sources)
 
       # Check if the event is in the past
-      case DateTime.compare(public_event.starts_at, DateTime.utc_now()) do
-        :lt ->
-          # Event is in the past, rollback the transaction
+      cond do
+        is_nil(public_event.starts_at) ->
+          Repo.rollback(:missing_starts_at)
+
+        DateTime.compare(public_event.starts_at, DateTime.utc_now()) == :lt ->
           Repo.rollback(:event_in_past)
 
-        _ ->
-          # Event is current or future, continue with creation
+        true ->
           :ok
       end
 
@@ -45,7 +46,7 @@ defmodule EventasaurusApp.Events.EventPlans do
         # Event schema uses start_at, not starts_at!
         start_at: public_event.starts_at,
         ends_at: public_event.ends_at,
-        timezone: "America/Los_Angeles",
+        timezone: attrs[:timezone] || attrs["timezone"] || Map.get(public_event, :timezone) || "UTC",
         # Using atom to match Ecto.Enum
         visibility: :private,
         venue_id: public_event.venue_id,
@@ -60,8 +61,15 @@ defmodule EventasaurusApp.Events.EventPlans do
       case Events.create_event(private_event_attrs) do
         {:ok, private_event} ->
           # Add the creator as an organizer
-          user = Repo.get!(User, user_id)
-          Events.add_user_to_event(private_event, user, "organizer")
+          case Repo.get(User, user_id) do
+            nil ->
+              Repo.rollback(:user_not_found)
+            %User{} = user ->
+              case Events.add_user_to_event(private_event, user, "organizer") do
+                {:ok, _membership} -> :ok
+                {:error, reason} -> Repo.rollback({:organizer_assignment_error, reason})
+              end
+          end
 
           # Create the event_plan link
           event_plan_attrs = %{

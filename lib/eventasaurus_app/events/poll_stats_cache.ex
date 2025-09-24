@@ -116,7 +116,7 @@ defmodule EventasaurusApp.Events.PollStatsCache do
 
     # Delete expired entries
     :ets.select_delete(@table_name, [
-      {{~c"$1", ~c"$2", ~c"$3"}, [{:<, ~c"$3", expired_threshold}], [true]}
+      {{:"$1", :"$2", :"$3"}, [{:<, :"$3", expired_threshold}], [true]}
     ])
   end
 end
