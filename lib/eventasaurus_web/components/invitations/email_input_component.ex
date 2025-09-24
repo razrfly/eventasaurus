@@ -39,29 +39,30 @@ defmodule EventasaurusWeb.Components.Invitations.EmailInputComponent do
         <p class="text-sm text-gray-500 mb-2">
           Enter email addresses separated by commas
         </p>
-        <form phx-target={@myself} phx-submit="add_emails">
-          <div class="flex gap-2">
-            <textarea
-              id={@id <> "_email_input"}
-              name="emails"
-              rows="3"
-              value={@email_input}
-              phx-target={@myself}
-              phx-change="update_email_input"
-              placeholder="friend1@example.com, friend2@example.com"
-              class={[
-                "flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500",
-                @error && "border-red-300"
-              ]}
-            />
-            <button
-              type="submit"
-              class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              Add
-            </button>
-          </div>
-        </form>
+        <div class="flex gap-2">
+          <textarea
+            id={@id <> "_email_input"}
+            name="emails"
+            rows="3"
+            value={@email_input}
+            phx-target={@myself}
+            phx-change="update_email_input"
+            placeholder="friend1@example.com, friend2@example.com"
+            class={[
+              "flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500",
+              @error && "border-red-300"
+            ]}
+          />
+          <button
+            type="button"
+            phx-target={@myself}
+            phx-click="add_emails"
+            phx-value-emails={@email_input}
+            class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            Add
+          </button>
+        </div>
         <%= if @error do %>
           <p class="mt-2 text-sm text-red-600">
             <%= @error %>

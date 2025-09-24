@@ -7,18 +7,18 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   use Phoenix.Component
 
   alias EventasaurusWeb.Components.Invitations.{
-    UserSelectorComponent,
     HistoricalParticipantsComponent,
-    EmailInputComponent,
     SelectedParticipantsComponent,
     InvitationMessageComponent
   }
+  import EventasaurusWeb.Components.SimpleEmailInput
 
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :public_event, :map, required: true
   attr :selected_users, :list, default: []
   attr :selected_emails, :list, default: []
+  attr :current_email_input, :string, default: ""
   attr :invitation_message, :string, default: ""
   attr :organizer, :map, required: true
   attr :on_close, :string, default: "close_plan_modal"
@@ -73,23 +73,24 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                   organizer={@organizer}
                   selected_users={@selected_users}
                   exclude_event_ids={[@public_event.id]}
+                  display_mode="list"
                 />
 
-                <!-- User Search -->
+                <!-- Unified Email Input -->
                 <div class="border-t pt-6">
-                  <.live_component
-                    module={UserSelectorComponent}
-                    id={@id <> "_user_selector"}
-                    selected_users={@selected_users}
-                  />
-                </div>
+                  <div class="mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Invite friends and contacts</h3>
+                    <p class="text-sm text-gray-500">Add email addresses to invite people to this event</p>
+                  </div>
 
-                <!-- Email Input -->
-                <div class="border-t pt-6">
-                  <.live_component
-                    module={EmailInputComponent}
-                    id={@id <> "_email_input"}
-                    selected_emails={@selected_emails}
+                  <.simple_email_input
+                    id="unified-email-input"
+                    emails={@selected_emails}
+                    current_input={@current_email_input}
+                    on_add_email="add_email"
+                    on_remove_email="remove_email"
+                    on_input_change="email_input_change"
+                    placeholder="Enter email address"
                   />
                 </div>
 
