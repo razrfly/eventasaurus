@@ -85,14 +85,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> push_navigate(to: ~p"/activities")
 
       event ->
-        # Get primary category for this event
-        primary_category_id =
-          from(pec in EventasaurusDiscovery.Categories.PublicEventCategory,
-            where: pec.event_id == ^event.id and pec.is_primary == true,
-            select: pec.category_id,
-            limit: 1
-          )
-          |> Repo.one()
+        # Get primary category ID once to avoid multiple queries
+        primary_category_id = get_primary_category_id(event.id)
 
         # Check if user has existing plan
         existing_plan =
@@ -456,12 +450,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 </.link>
                 <span class="text-gray-500">/</span>
                 <%= if @event.categories && @event.categories != [] do %>
-                  <% category = List.first(@event.categories) %>
+                  <% primary_category = get_primary_category(@event) || List.first(@event.categories) %>
                   <.link
-                    navigate={~p"/activities/category/#{String.downcase(category.name)}"}
+                    navigate={~p"/activities?category=#{primary_category.slug}"}
                     class="text-blue-600 hover:text-blue-800"
                   >
-                    <%= category.name %>
+                    <%= primary_category.name %>
                   </.link>
                   <span class="text-gray-500">/</span>
                 <% end %>
@@ -503,15 +497,49 @@ defmodule EventasaurusWeb.PublicEventShowLive do
               <div class="p-8">
                 <!-- Categories -->
                 <%= if @event.categories && @event.categories != [] do %>
-                  <div class="mb-4 flex flex-wrap gap-2">
-                    <%= for category <- @event.categories do %>
-                      <span
-                        class="px-3 py-1 rounded-full text-sm font-medium text-white"
-                        style={"background-color: #{category.color || "#6B7280"}"}
-                      >
-                        <%= category.name %>
-                      </span>
-                    <% end %>
+                  <div class="mb-4">
+                    <!-- Primary Category -->
+                    <% primary_category = get_primary_category(@event) %>
+                    <% secondary_categories = get_secondary_categories(@event) %>
+
+                    <div class="flex flex-wrap gap-2 items-center">
+                      <!-- Primary category - larger and emphasized -->
+                      <%= if primary_category do %>
+                        <.link
+                          navigate={~p"/activities?category=#{primary_category.slug}"}
+                          class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition"
+                          style={"background-color: #{primary_category.color || "#6B7280"}"}
+                        >
+                          <%= if primary_category.icon do %>
+                            <span class="mr-1"><%= primary_category.icon %></span>
+                          <% end %>
+                          <%= primary_category.name %>
+                        </.link>
+                      <% end %>
+
+                      <!-- Secondary categories - smaller and less emphasized -->
+                      <%= if secondary_categories != [] do %>
+                        <span class="text-gray-400 mx-1">•</span>
+                        <%= for category <- secondary_categories do %>
+                          <.link
+                            navigate={~p"/activities?category=#{category.slug}"}
+                            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
+                          >
+                            <%= category.name %>
+                          </.link>
+                        <% end %>
+                      <% end %>
+                    </div>
+
+                    <!-- Category hint text -->
+                    <p class="mt-2 text-xs text-gray-500">
+                      <%= if secondary_categories != [] do %>
+                        <%= gettext("Also filed under: %{categories}",
+                            categories: Enum.map_join(secondary_categories, ", ", & &1.name)) %>
+                      <% else %>
+                        <%= gettext("Click category to see related events") %>
+                      <% end %>
+                    </p>
                   </div>
                 <% end %>
 
@@ -983,5 +1011,35 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp is_valid_email?(email) do
     email =~ ~r/^[^\s]+@[^\s]+\.[^\s]+$/
+  end
+
+  # Category helper functions
+  defp get_primary_category(event) do
+    case event.primary_category_id do
+      nil -> nil
+      cat_id -> Enum.find(event.categories, &(&1.id == cat_id))
+    end
+  end
+
+  defp get_secondary_categories(event) do
+    case event.primary_category_id do
+      nil ->
+        # If no primary found, treat all but first as secondary
+        case event.categories do
+          [_first | rest] -> rest
+          _ -> []
+        end
+      primary_id ->
+        Enum.reject(event.categories, &(&1.id == primary_id))
+    end
+  end
+
+  defp get_primary_category_id(event_id) do
+    Repo.one(
+      from pec in "public_event_categories",
+      where: pec.event_id == ^event_id and pec.is_primary == true,
+      select: pec.category_id,
+      limit: 1
+    )
   end
 end
