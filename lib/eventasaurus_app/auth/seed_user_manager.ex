@@ -104,7 +104,7 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   end
 
   defp create_local_user(attrs) do
-    Logger.warn("Creating local user without auth for #{Map.get(attrs, :email)}")
+    Logger.warning("Creating local user without auth for #{Map.get(attrs, :email)}")
 
     user_attrs =
       attrs
@@ -158,11 +158,11 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
           auth_user["id"]
 
         {:ok, nil} ->
-          Logger.warn("Supabase user not found for #{email}, using pending ID")
+          Logger.warning("Supabase user not found for #{email}, using pending ID")
           "pending-" <> Ecto.UUID.generate()
 
         {:error, reason} ->
-          Logger.warn(
+          Logger.warning(
             "Could not fetch Supabase user for #{email}: #{inspect(reason)}, using pending ID"
           )
 
