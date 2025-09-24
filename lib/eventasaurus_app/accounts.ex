@@ -236,7 +236,7 @@ defmodule EventasaurusApp.Accounts do
             (ilike(u.name, ^search_pattern) or
              ilike(u.username, ^search_pattern) or
              ilike(u.email, ^search_pattern)) and
-            u.id not in ^exclude_ids,
+            (^(exclude_ids == []) or u.id not in ^exclude_ids),
           limit: ^limit,
           order_by: [
             # Prioritize exact matches
@@ -408,7 +408,7 @@ defmodule EventasaurusApp.Accounts do
         # Order by start_at desc, then by role priority (organizer first) for same event
         # Use the fragment directly in ORDER BY since role_priority is a computed field
         order_by: [
-          desc: :start_at,
+          desc_nulls_last: :start_at,
           desc: fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", eu.id)
         ],
         # Use DISTINCT ON to ensure each event appears only once

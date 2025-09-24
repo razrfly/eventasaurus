@@ -102,7 +102,7 @@ defmodule Eventasaurus.Services.SvgConverter do
           Logger.debug("Cleaned up temporary file: #{png_path}")
 
         {:error, reason} ->
-          Logger.warning("Failed to cleanup temporary file #{png_path}: #{inspect(reason)}")
+          Logger.warn("Failed to cleanup temporary file #{png_path}: #{inspect(reason)}")
       end
     end)
 
@@ -188,7 +188,7 @@ defmodule Eventasaurus.Services.SvgConverter do
           :ok
 
         {:error, reason} ->
-          Logger.warning("Failed to cleanup file #{path}: #{inspect(reason)}")
+          Logger.warn("Failed to cleanup file #{path}: #{inspect(reason)}")
       end
     end)
   end
