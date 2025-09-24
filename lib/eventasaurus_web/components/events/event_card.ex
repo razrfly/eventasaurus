@@ -1,11 +1,12 @@
 defmodule EventasaurusWeb.Components.Events.EventCard do
   use EventasaurusWeb, :live_component
-  
+
   alias EventasaurusWeb.Components.Events.{
     EventCardBadges,
     ParticipantAvatars
   }
   alias EventasaurusApp.DateTimeHelper
+  import EventasaurusWeb.Helpers.LanguageHelpers
 
   attr :event, :map, required: true
   attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
