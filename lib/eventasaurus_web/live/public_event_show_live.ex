@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:invitation_message, "")
       |> assign(:selected_users, [])
       |> assign(:selected_emails, [])
+      |> assign(:current_email_input, "")
       |> assign(:modal_organizer, nil)
 
     {:ok, socket}
@@ -278,15 +279,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     {:noreply,
      socket
      |> assign(:show_plan_with_friends_modal, false)
-     |> assign(:emails_input, "")
      |> assign(:invitation_message, "")
      |> assign(:selected_users, [])
-     |> assign(:selected_emails, [])}
-  end
-
-  @impl true
-  def handle_event("update_emails", %{"emails" => emails}, socket) do
-    {:noreply, assign(socket, :emails_input, emails)}
+     |> assign(:selected_emails, [])
+     |> assign(:current_email_input, "")}
   end
 
   @impl true
@@ -297,6 +293,45 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def handle_event("stop_propagation", _params, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("add_email", _params, socket) do
+    email = socket.assigns.current_email_input
+    if is_valid_email?(email) do
+      selected_emails = [email | socket.assigns.selected_emails] |> Enum.uniq()
+      {:noreply,
+        socket
+        |> assign(:selected_emails, selected_emails)
+        |> assign(:current_email_input, "")  # Clear the input field after adding
+      }
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_email_on_enter", _params, socket) do
+    # Same as add_email - handles Enter key press
+    handle_event("add_email", %{}, socket)
+  end
+
+  @impl true
+  def handle_event("remove_email", %{"index" => index_string}, socket) do
+    index = String.to_integer(index_string)
+    selected_emails = List.delete_at(socket.assigns.selected_emails, index)
+    {:noreply, assign(socket, :selected_emails, selected_emails)}
+  end
+
+  @impl true
+  def handle_event("email_input_change", %{"email_input" => email_input}, socket) do
+    {:noreply, assign(socket, :current_email_input, email_input)}
+  end
+
+
+  @impl true
+  def handle_event("clear_all_emails", _params, socket) do
+    {:noreply, assign(socket, :selected_emails, [])}
   end
 
   @impl true
@@ -379,44 +414,27 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp send_invitations(event, selected_users, selected_emails, message, organizer) do
-
-    # Queue invitation emails for existing users
-    Enum.each(selected_users, fn user ->
-      # Queue the invitation email job
+    # Convert selected users to suggestion structs format expected by process_guest_invitations
+    suggestion_structs = Enum.map(selected_users, fn user ->
       %{
-        "user_id" => user.id,
-        "event_id" => event.id,
-        "invitation_message" => message || "",
-        "organizer_id" => organizer.id
+        user_id: user.id,
+        name: user.name,
+        email: user.email,
+        username: Map.get(user, :username),
+        avatar_url: Map.get(user, :avatar_url)
       }
-      |> Eventasaurus.Jobs.EmailInvitationJob.new()
-      |> Oban.insert()
     end)
 
-    # Queue invitation emails for email-only invitations
-    Enum.each(selected_emails, fn email ->
-      # For email-only invitations, we'll need to handle differently
-      # For now, we'll just create participants and send emails
-      # This would normally create a guest user or find existing user
-      case EventasaurusApp.Accounts.get_user_by_email(email) do
-        nil ->
-          # TODO: Create guest user invitation flow
-          # For now, skip email-only invitations
-          :ok
-
-        user ->
-          %{
-            "user_id" => user.id,
-            "event_id" => event.id,
-            "invitation_message" => message || "",
-            "organizer_id" => organizer.id
-          }
-          |> Eventasaurus.Jobs.EmailInvitationJob.new()
-          |> Oban.insert()
-      end
-    end)
-
-    :ok
+    # Process invitations using the same function as the manager area
+    # Using :invitation mode since this is from the public event page (not managing existing event)
+    EventasaurusApp.Events.process_guest_invitations(
+      event,
+      organizer,
+      suggestion_structs: suggestion_structs,
+      manual_emails: selected_emails,
+      invitation_message: message || "",
+      mode: :invitation  # Use invitation mode for public plan modal
+    )
   end
 
   @impl true
@@ -756,6 +774,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           public_event={@event}
           selected_users={@selected_users}
           selected_emails={@selected_emails}
+          current_email_input={@current_email_input}
           invitation_message={@invitation_message}
           organizer={@modal_organizer}
           on_close="close_plan_modal"
@@ -962,4 +981,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp event_is_past?(_), do: false
+
+  defp is_valid_email?(email) do
+    email =~ ~r/^[^\s]+@[^\s]+\.[^\s]+$/
+  end
 end
