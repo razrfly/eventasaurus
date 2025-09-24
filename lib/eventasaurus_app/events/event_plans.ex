@@ -17,6 +17,24 @@ defmodule EventasaurusApp.Events.EventPlans do
   then links them via the event_plans table.
   """
   def create_from_public_event(public_event_id, user_id, attrs \\ %{}) do
+    # Check if user already has a plan for this public event
+    case get_user_plan_for_event(user_id, public_event_id) do
+      %EventPlan{} = existing_plan ->
+        # Return existing plan with :existing tag
+        {:ok, {:existing, existing_plan, existing_plan.private_event}}
+
+      nil ->
+        # Create new plan
+        case create_new_plan(public_event_id, user_id, attrs) do
+          {:ok, {event_plan, private_event}} ->
+            {:ok, {:created, event_plan, private_event}}
+          error ->
+            error
+        end
+    end
+  end
+
+  defp create_new_plan(public_event_id, user_id, attrs) do
     Repo.transaction(fn ->
       # Get the public event with sources
       public_event =
