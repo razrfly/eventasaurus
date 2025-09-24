@@ -17,6 +17,9 @@ defmodule EventasaurusWeb.Router do
 
       # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
+
+      # Discovery Dashboard (dev - no auth)
+      live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
     end
 
     # Category demo routes for testing
@@ -52,9 +55,12 @@ defmodule EventasaurusWeb.Router do
     
     scope "/admin" do
       pipe_through :oban_admin
-      
+
       # Oban Web UI with admin authentication
       oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
+
+      # Discovery Dashboard with admin authentication
+      live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
     end
   end
 
