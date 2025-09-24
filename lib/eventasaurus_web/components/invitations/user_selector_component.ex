@@ -42,6 +42,7 @@ defmodule EventasaurusWeb.Components.Invitations.UserSelectorComponent do
         <div class="relative">
           <input
             type="text"
+            name="query"
             value={@search_query}
             phx-target={@myself}
             phx-change="search_users"
@@ -100,7 +101,7 @@ defmodule EventasaurusWeb.Components.Invitations.UserSelectorComponent do
   end
 
   @impl true
-  def handle_event("search_users", %{"value" => query}, socket) do
+  def handle_event("search_users", %{"query" => query}, socket) do
     socket = assign(socket, :search_query, query)
 
     if String.trim(query) == "" do

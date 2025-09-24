@@ -14,7 +14,8 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
      |> assign(:participants, [])
      |> assign(:loading, false)
      |> assign(:expanded, false)
-     |> assign(:selected_ids, MapSet.new())}
+     |> assign(:selected_ids, MapSet.new())
+     |> assign(:display_mode, "grid")}  # "grid" or "list"
   end
 
   @impl true
@@ -25,10 +26,14 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
         users -> MapSet.new(users, & &1.id)
       end
 
+    # Allow display_mode to be passed in as an assign
+    display_mode = assigns[:display_mode] || socket.assigns[:display_mode] || "grid"
+
     socket =
       socket
       |> assign(assigns)
       |> assign(:selected_ids, selected_ids)
+      |> assign(:display_mode, display_mode)
 
     # Load participants synchronously if we have an organizer and haven't loaded yet
     socket =
@@ -53,7 +58,10 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
         |> assign(:participants, participants)
         |> assign(:loading, false)
       else
+        # If we already have participants, filter out any that are now selected
+        filtered_participants = filter_selected_participants(socket.assigns.participants, selected_ids)
         socket
+        |> assign(:participants, filtered_participants)
       end
 
     {:ok, socket}
@@ -77,54 +85,107 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
           </div>
         <% else %>
           <%= if length(@participants) > 0 do %>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              <%= for participant <- display_participants(@participants, @expanded) do %>
-                <button
-                  type="button"
-                  phx-target={@myself}
-                  phx-click="toggle_participant"
-                  phx-value-user-id={participant.user_id}
-                  class={[
-                    "relative p-3 rounded-lg border-2 transition-all",
-                    if(MapSet.member?(@selected_ids, participant.user_id),
-                      do: "border-green-500 bg-green-50",
-                      else: "border-gray-200 hover:border-gray-300 bg-white"
-                    )
-                  ]}
-                >
-                  <div class="flex flex-col items-center">
-                    <div class="relative mb-2">
-                      <%= if Map.get(participant, :avatar_url) do %>
+            <%= if @display_mode == "list" do %>
+              <!-- List View (Manager Style) -->
+              <div class="bg-gray-50 rounded-lg border border-gray-200 max-h-60 overflow-y-auto">
+                <%= for participant <- display_participants(@participants, @expanded) do %>
+                  <div class="flex items-center justify-between p-3 border-b border-gray-200 last:border-0 hover:bg-gray-100">
+                    <div class="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id={"participant-#{participant.user_id}"}
+                        name="selected_participants[]"
+                        value={participant.user_id}
+                        checked={MapSet.member?(@selected_ids, participant.user_id)}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        phx-target={@myself}
+                        phx-click="toggle_participant"
+                        phx-value-user-id={participant.user_id}
+                      />
+                      <!-- User Avatar -->
+                      <div class="flex-shrink-0">
                         <img
-                          src={participant.avatar_url}
+                          src={get_participant_avatar(participant)}
                           alt={participant.name || participant.username}
-                          class="w-12 h-12 rounded-full"
+                          class="h-10 w-10 rounded-full object-cover"
                         />
-                      <% else %>
-                        <div class="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-lg font-medium text-gray-600">
-                          <%= String.first(participant.name || participant.username || "?") |> String.upcase() %>
-                        </div>
-                      <% end %>
-                      <%= if MapSet.member?(@selected_ids, participant.user_id) do %>
-                        <div class="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-0.5">
-                          <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                          </svg>
-                        </div>
-                      <% end %>
-                    </div>
-                    <div class="text-center">
-                      <div class="text-sm font-medium text-gray-900 truncate max-w-full">
-                        <%= participant.name || participant.username %>
                       </div>
-                      <div class="text-xs text-gray-500">
-                        <%= participation_text(participant) %>
+                      <div class="flex-1">
+                        <div class="flex items-center space-x-2">
+                          <label for={"participant-#{participant.user_id}"} class="font-medium text-gray-900 cursor-pointer">
+                            <%= participant.name || participant.username %>
+                          </label>
+                          <%= if Map.get(participant, :recommendation_level) && participant.recommendation_level != "not_recommended" do %>
+                            <span class={[
+                              "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+                              case participant.recommendation_level do
+                                "highly_recommended" -> "bg-green-100 text-green-800"
+                                "recommended" -> "bg-blue-100 text-blue-800"
+                                "somewhat_recommended" -> "bg-yellow-100 text-yellow-800"
+                                _ -> "bg-gray-100 text-gray-800"
+                              end
+                            ]}>
+                              <%= String.replace(to_string(participant.recommendation_level), "_", " ") |> String.capitalize() %>
+                            </span>
+                          <% end %>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                          <%= participant.email %>
+                          • <%= participation_text(participant) %>
+                          <%= if Map.get(participant, :last_participation) do %>
+                            • Last event <%= days_since_last_participation(participant.last_participation) %> days ago
+                          <% end %>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </button>
-              <% end %>
-            </div>
+                <% end %>
+              </div>
+            <% else %>
+              <!-- Grid View (Current/Default) -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <%= for participant <- display_participants(@participants, @expanded) do %>
+                  <button
+                    type="button"
+                    phx-target={@myself}
+                    phx-click="toggle_participant"
+                    phx-value-user-id={participant.user_id}
+                    class={[
+                      "relative p-3 rounded-lg border-2 transition-all",
+                      if(MapSet.member?(@selected_ids, participant.user_id),
+                        do: "border-green-500 bg-green-50",
+                        else: "border-gray-200 hover:border-gray-300 bg-white"
+                      )
+                    ]}
+                  >
+                    <div class="flex flex-col items-center">
+                      <div class="relative mb-2">
+                        <img
+                          src={get_participant_avatar(participant)}
+                          alt={participant.name || participant.username}
+                          class="w-12 h-12 rounded-full"
+                        />
+                        <%= if MapSet.member?(@selected_ids, participant.user_id) do %>
+                          <div class="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-0.5">
+                            <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                            </svg>
+                          </div>
+                        <% end %>
+                      </div>
+                      <div class="text-center">
+                        <div class="text-sm font-medium text-gray-900 truncate max-w-full">
+                          <%= participant.name || participant.username %>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                          <%= participation_text(participant) %>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                <% end %>
+              </div>
+            <% end %>
 
             <%= if length(@participants) > 10 && !@expanded do %>
               <button
@@ -201,5 +262,27 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
       1 -> "1 event"
       n -> "#{n} events"
     end
+  end
+
+  defp days_since_last_participation(last_participation) when is_nil(last_participation), do: nil
+
+  defp days_since_last_participation(last_participation) do
+    case last_participation do
+      %DateTime{} = dt ->
+        DateTime.diff(DateTime.utc_now(), dt, :day)
+      _ ->
+        nil
+    end
+  end
+
+  defp get_participant_avatar(participant) do
+    # Use DiceBear avatar generation with participant info
+    EventasaurusApp.Avatars.generate_user_avatar(participant, size: 40)
+  end
+
+  defp filter_selected_participants(participants, selected_ids) do
+    Enum.reject(participants, fn participant ->
+      MapSet.member?(selected_ids, participant.user_id)
+    end)
   end
 end
