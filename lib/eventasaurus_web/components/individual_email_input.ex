@@ -29,11 +29,13 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
             value={@current_input}
             placeholder={@placeholder}
             class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            phx-input="email_input_change"
+            phx-debounce="300"
             phx-hook="EmailInput"
             phx-keydown="add_email_on_enter"
             phx-key="Enter"
           />
-          
+
           <!-- Validation message -->
           <div
             :if={@current_input != "" && !valid_email?(@current_input)}
@@ -42,7 +44,7 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
             Please enter a valid email address
           </div>
         </div>
-        
+
         <button
           type="button"
           phx-click={@on_add_email}
@@ -51,85 +53,6 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
         >
           Add
         </button>
-      </div>
-
-      <!-- Email chips/tags -->
-      <div :if={length(@emails) > 0} class="flex flex-wrap gap-2">
-        <div
-          :for={{email, index} <- Enum.with_index(@emails)}
-          class="inline-flex items-center gap-2 px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full"
-        >
-          <!-- Email avatar -->
-          <div class="flex-shrink-0">
-            <div class="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center">
-              <span class="text-xs font-medium text-blue-700">
-                <%= String.first(email) |> String.upcase() %>
-              </span>
-            </div>
-          </div>
-          
-          <!-- Email address -->
-          <span class="font-medium"><%= email %></span>
-          
-          <!-- Remove button -->
-          <button
-            type="button"
-            phx-click={@on_remove_email}
-            phx-value-index={index}
-            class="flex-shrink-0 ml-1 text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-full p-1 transition-colors"
-            aria-label={"Remove #{email}"}
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Email count and bulk actions -->
-      <div :if={length(@emails) > 0} class="flex items-center justify-between text-sm text-gray-500">
-        <span>
-          <%= length(@emails) %> email<%= if length(@emails) != 1, do: "s" %> added
-        </span>
-        
-        <button
-          type="button"
-          phx-click="clear_all_emails"
-          class="text-red-600 hover:text-red-800 font-medium"
-        >
-          Clear all
-        </button>
-      </div>
-
-      <!-- Bulk paste support -->
-      <div class="border-t border-gray-200 pt-3">
-        <details class="group">
-          <summary class="cursor-pointer text-sm text-gray-600 hover:text-gray-800 font-medium">
-            <span class="group-open:hidden">+ Paste multiple emails</span>
-            <span class="hidden group-open:inline">− Hide bulk paste</span>
-          </summary>
-          
-          <div class="mt-3 space-y-2">
-            <form phx-change="bulk_email_input">
-              <textarea
-                id={"#{@id}-bulk-input"}
-                name="bulk_email_input"
-                value={@bulk_input}
-                rows="3"
-                placeholder="Paste multiple emails separated by commas or new lines:&#10;user1@example.com, user2@example.com&#10;user3@example.com"
-                class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              ></textarea>
-            </form>
-            
-            <button
-              type="button"
-              phx-click="add_bulk_emails"
-              class="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Add all valid emails
-            </button>
-          </div>
-        </details>
       </div>
     </div>
     """
