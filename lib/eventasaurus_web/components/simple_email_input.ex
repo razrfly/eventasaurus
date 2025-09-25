@@ -28,6 +28,8 @@ defmodule EventasaurusWeb.Components.SimpleEmailInput do
             value={@current_input}
             placeholder={@placeholder}
             class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            phx-input="email_input_change"
+            phx-debounce="300"
             phx-hook="EmailInput"
             phx-keydown="add_email_on_enter"
             phx-key="Enter"

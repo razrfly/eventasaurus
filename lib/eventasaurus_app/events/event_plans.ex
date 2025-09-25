@@ -28,8 +28,17 @@ defmodule EventasaurusApp.Events.EventPlans do
         case create_new_plan(public_event_id, user_id, attrs) do
           {:ok, {event_plan, private_event}} ->
             {:ok, {:created, event_plan, private_event}}
-          error ->
-            error
+          {:error, {:event_plan_error, %Ecto.Changeset{} = cs}} ->
+            if unique_violation?(cs, :unique_user_plan_per_public_event) do
+              case get_user_plan_for_event(user_id, public_event_id) do
+                %EventPlan{} = ep -> {:ok, {:existing, ep, ep.private_event}}
+                _ -> {:error, {:event_plan_error, cs}}
+              end
+            else
+              {:error, {:event_plan_error, cs}}
+            end
+          other ->
+            other
         end
     end
   end
@@ -172,6 +181,16 @@ defmodule EventasaurusApp.Events.EventPlans do
   defp get_image_from_sources(sources) do
     Enum.find_value(sources, nil, fn source ->
       source.image_url
+    end)
+  end
+
+  defp unique_violation?(%Ecto.Changeset{errors: errors}, constraint_name) do
+    wanted = to_string(constraint_name)
+    Enum.any?(errors, fn
+      {_field, {_msg, opts}} ->
+        opts[:constraint] == :unique and to_string(opts[:constraint_name] || "") == wanted
+      _ ->
+        false
     end)
   end
 end
