@@ -185,9 +185,12 @@ defmodule EventasaurusApp.Events.EventPlans do
   end
 
   defp unique_violation?(%Ecto.Changeset{errors: errors}, constraint_name) do
+    wanted = to_string(constraint_name)
     Enum.any?(errors, fn
-      {_field, {_msg, opts}} -> opts[:constraint] == :unique and opts[:constraint_name] == constraint_name
-      _ -> false
+      {_field, {_msg, opts}} ->
+        opts[:constraint] == :unique and to_string(opts[:constraint_name] || "") == wanted
+      _ ->
+        false
     end)
   end
 end
