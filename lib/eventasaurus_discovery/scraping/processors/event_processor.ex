@@ -303,16 +303,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp update_event_source(event, source_id, priority, data) do
-    # Find or create the event source record
-    event_source =
-      Repo.get_by(PublicEventSource,
-        event_id: event.id,
-        source_id: source_id
-      ) || %PublicEventSource{}
+    # CRITICAL FIX: Check for existing record by external_id FIRST (like Bandsintown does)
+    # This prevents duplicates when scrapers run repeatedly
+    existing_by_external =
+      if data.external_id do
+        Repo.get_by(PublicEventSource,
+          source_id: source_id,
+          external_id: data.external_id
+        )
+      else
+        nil
+      end
 
     # Store priority in metadata if provided
     base = data.metadata || %{}
-
     metadata =
       case priority do
         nil -> base
@@ -330,9 +334,62 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       image_url: data.image_url
     }
 
-    event_source
-    |> PublicEventSource.changeset(attrs)
-    |> Repo.insert_or_update()
+    case existing_by_external do
+      # Found existing record with same external_id - update it
+      %PublicEventSource{} = existing when existing.event_id != event.id ->
+        Logger.info("""
+        🔄 Updating event source link from event ##{existing.event_id} to ##{event.id}
+        External ID: #{data.external_id}
+        Source ID: #{source_id}
+        """)
+
+        existing
+        |> PublicEventSource.changeset(attrs)
+        |> Repo.update()
+
+      # Found existing record already pointing to this event - just update last_seen_at
+      %PublicEventSource{} = existing when existing.event_id == event.id ->
+        Logger.debug("✅ Event source link already exists, updating last_seen_at")
+
+        existing
+        |> PublicEventSource.changeset(%{
+          last_seen_at: attrs.last_seen_at,
+          metadata: attrs.metadata,
+          image_url: attrs.image_url
+        })
+        |> Repo.update()
+
+      # No existing record by external_id, check by event_id as fallback
+      nil ->
+        existing_by_event =
+          Repo.get_by(PublicEventSource,
+            event_id: event.id,
+            source_id: source_id
+          )
+
+        case existing_by_event do
+          # Event already has a link from this source with different external_id
+          %PublicEventSource{} = existing ->
+            Logger.warning("""
+            ⚠️ Event ##{event.id} already linked to source #{source_id} with different external_id
+            Old external_id: #{existing.external_id}
+            New external_id: #{data.external_id}
+            Updating to new external_id
+            """)
+
+            existing
+            |> PublicEventSource.changeset(attrs)
+            |> Repo.update()
+
+          # No existing link at all - create new one
+          nil ->
+            Logger.debug("✨ Creating new event source link for event ##{event.id}")
+
+            %PublicEventSource{}
+            |> PublicEventSource.changeset(attrs)
+            |> Repo.insert()
+        end
+    end
   end
 
   defp process_performers(_event, %{performer_names: []}), do: {:ok, []}
