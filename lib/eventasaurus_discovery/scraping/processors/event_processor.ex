@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Services.CollisionDetector
   alias EventasaurusDiscovery.Categories.CategoryExtractor
+  alias Ecto.Multi
 
   import Ecto.Query
   require Logger
@@ -305,11 +306,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp update_event_source(event, source_id, priority, data) do
     # CRITICAL FIX: Check for existing record by external_id FIRST (like Bandsintown does)
     # This prevents duplicates when scrapers run repeatedly
+
+    # Normalize external_id to avoid empty string collisions
+    ext_id =
+      case data.external_id do
+        nil -> nil
+        id when is_binary(id) ->
+          id = String.trim(id)
+          if id == "", do: nil, else: id
+        id -> id
+      end
+
     existing_by_external =
-      if data.external_id do
+      if ext_id do
         Repo.get_by(PublicEventSource,
           source_id: source_id,
-          external_id: data.external_id
+          external_id: ext_id
         )
       else
         nil
@@ -326,7 +338,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     attrs = %{
       event_id: event.id,
       source_id: source_id,
-      external_id: data.external_id,
+      external_id: ext_id,  # Use normalized ID to avoid empty strings
       source_url: data.source_url,
       last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second),
       metadata: metadata,
@@ -339,23 +351,41 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       %PublicEventSource{} = existing when existing.event_id != event.id ->
         Logger.info("""
         🔄 Updating event source link from event ##{existing.event_id} to ##{event.id}
-        External ID: #{data.external_id}
+        External ID: #{ext_id}
         Source ID: #{source_id}
         """)
 
-        existing
-        |> PublicEventSource.changeset(attrs)
-        |> Repo.update()
+        # Avoid unique constraint violation on [:event_id, :source_id]
+        conflicting_by_event =
+          Repo.get_by(PublicEventSource, event_id: event.id, source_id: source_id)
 
-      # Found existing record already pointing to this event - just update last_seen_at
+        if conflicting_by_event do
+          # Use transaction to atomically delete conflict and move the external record
+          Multi.new()
+          |> Multi.delete(:delete_conflict, conflicting_by_event)
+          |> Multi.update(:move_external, PublicEventSource.changeset(existing, attrs))
+          |> Repo.transaction()
+          |> case do
+            {:ok, %{move_external: moved}} -> {:ok, moved}
+            {:error, _step, changeset, _} -> {:error, changeset}
+          end
+        else
+          existing
+          |> PublicEventSource.changeset(attrs)
+          |> Repo.update()
+        end
+
+      # Found existing record already pointing to this event - update all fields
       %PublicEventSource{} = existing when existing.event_id == event.id ->
-        Logger.debug("✅ Event source link already exists, updating last_seen_at")
+        Logger.debug("✅ Event source link already exists, updating all fields")
 
         existing
         |> PublicEventSource.changeset(%{
           last_seen_at: attrs.last_seen_at,
           metadata: attrs.metadata,
-          image_url: attrs.image_url
+          image_url: attrs.image_url,
+          source_url: attrs.source_url,
+          description_translations: attrs.description_translations
         })
         |> Repo.update()
 
@@ -370,10 +400,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         case existing_by_event do
           # Event already has a link from this source with different external_id
           %PublicEventSource{} = existing ->
-            Logger.warning("""
+            Logger.warn("""
             ⚠️ Event ##{event.id} already linked to source #{source_id} with different external_id
             Old external_id: #{existing.external_id}
-            New external_id: #{data.external_id}
+            New external_id: #{ext_id}
             Updating to new external_id
             """)
 
@@ -548,7 +578,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         {:ok, categories}
 
       {:error, reason} ->
-        Logger.warning("Failed to assign categories: #{inspect(reason)}")
+        Logger.warn("Failed to assign categories: #{inspect(reason)}")
         # Don't fail the whole event processing
         {:ok, []}
     end
