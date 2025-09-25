@@ -78,8 +78,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
       :category_id,
       :occurrences
     ])
-    |> validate_required([:title, :starts_at],
-      message: "An event must have both a title and start date - these are non-negotiable"
+    |> validate_required([:title, :starts_at, :venue_id],
+      message: "Public events must have a venue for proper location and collision detection"
     )
     |> validate_length(:currency, is: 3)
     |> validate_number(:min_price, greater_than_or_equal_to: 0)
