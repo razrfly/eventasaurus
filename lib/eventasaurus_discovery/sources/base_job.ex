@@ -55,6 +55,9 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
               Source: #{source.name}
               """)
 
+              # Schedule coordinate recalculation after successful sync
+              schedule_coordinate_update(city_id)
+
               {:ok, %{events_processed: length(processed), city: city.name}}
 
             {:discard, reason} ->
@@ -90,6 +93,17 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
 
       defp process_events(events, source) do
         Processor.process_source_data(events, source)
+      end
+
+      defp schedule_coordinate_update(city_id) do
+        # Schedule the coordinate calculation job
+        # It will check internally if update is needed (24hr check)
+        EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob.schedule_update(city_id)
+        :ok
+      rescue
+        error ->
+          Logger.warning("Failed to schedule coordinate update for city #{city_id}: #{inspect(error)}")
+          :ok  # Don't fail the main job if coordinate update scheduling fails
       end
 
       # Sources must implement source_config/0
