@@ -30,7 +30,15 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
   @impl EventasaurusDiscovery.Sources.BaseJob
   def transform_events(raw_events) do
-    Enum.map(raw_events, &Transformer.transform_event/1)
+    # Transform each event using our Transformer
+    # Filter out events that fail venue validation
+    raw_events
+    |> Enum.map(&Transformer.transform_event/1)
+    |> Enum.filter(fn
+      {:ok, _event} -> true
+      {:error, _reason} -> false
+    end)
+    |> Enum.map(fn {:ok, event} -> event end)
   end
 
   def source_config do

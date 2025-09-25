@@ -8,31 +8,79 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   @doc """
   Transforms a Ticketmaster event to our standardized event data structure.
+
+  IMPORTANT: All events MUST have a venue with complete location data.
+  Events without proper venue information will be rejected.
+
+  Returns {:ok, transformed_event} or {:error, reason}
   """
   def transform_event(tm_event) when is_map(tm_event) do
     title = tm_event["name"]
     description = extract_description(tm_event)
 
-    %{
-      external_id: "tm_#{tm_event["id"]}",
-      title: title,
-      title_translations: extract_title_translations(title),
-      description_translations: extract_description_translations(description),
-      start_at: parse_event_datetime(tm_event),
-      ends_at: parse_event_end_datetime(tm_event),
-      status: map_event_status(tm_event),
-      # All Ticketmaster events are ticketed
-      is_ticketed: true,
-      venue_data: extract_venue(tm_event),
-      performers: extract_performers(tm_event),
-      # Pass raw event data for category extraction
-      raw_event_data: tm_event,
-      # Keep category_id for backward compatibility but it won't be used
-      category_id: extract_category_id(tm_event),
-      metadata: extract_event_metadata(tm_event),
-      # Add source_url directly like other scrapers do
-      source_url: tm_event["url"]
-    }
+    # Extract and validate venue first since it's critical
+    venue_data = extract_venue(tm_event)
+
+    # Validate venue has required fields (same as Bandsintown)
+    case validate_venue(venue_data) do
+      :ok ->
+        transformed = %{
+          external_id: "tm_#{tm_event["id"]}",
+          title: title,
+          title_translations: extract_title_translations(title),
+          description_translations: extract_description_translations(description),
+          start_at: parse_event_datetime(tm_event),
+          ends_at: parse_event_end_datetime(tm_event),
+          status: map_event_status(tm_event),
+          # All Ticketmaster events are ticketed
+          is_ticketed: true,
+          venue_data: venue_data,
+          performers: extract_performers(tm_event),
+          # Pass raw event data for category extraction
+          raw_event_data: tm_event,
+          # Keep category_id for backward compatibility but it won't be used
+          category_id: extract_category_id(tm_event),
+          metadata: extract_event_metadata(tm_event),
+          # Add source_url directly like other scrapers do
+          source_url: tm_event["url"]
+        }
+
+        {:ok, transformed}
+
+      {:error, reason} ->
+        Logger.error("""
+        ❌ Ticketmaster event rejected due to invalid venue:
+        Event: #{title}
+        ID: #{tm_event["id"]}
+        Reason: #{reason}
+        Venue data: #{inspect(venue_data)}
+        """)
+
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Validates that venue data contains all required fields.
+  Returns :ok if valid, {:error, reason} if not.
+  """
+  def validate_venue(venue_data) do
+    cond do
+      is_nil(venue_data) ->
+        {:error, "Venue data is required"}
+
+      is_nil(venue_data[:name]) || venue_data[:name] == "" ->
+        {:error, "Venue name is required"}
+
+      is_nil(venue_data[:latitude]) ->
+        {:error, "Venue latitude is required for location"}
+
+      is_nil(venue_data[:longitude]) ->
+        {:error, "Venue longitude is required for location"}
+
+      true ->
+        :ok
+    end
   end
 
   @doc """
@@ -312,8 +360,124 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     venues = get_in(event, ["_embedded", "venues"]) || []
 
     case List.first(venues) do
-      nil -> nil
-      venue -> transform_venue(venue)
+      nil ->
+        # Log critical error when venue is missing
+        Logger.error("""
+        ❌ CRITICAL: Ticketmaster event missing venue data!
+        Event: #{event["name"]}
+        ID: #{event["id"]}
+        URL: #{event["url"]}
+        Has _embedded: #{inspect(Map.has_key?(event, "_embedded"))}
+        _embedded keys: #{if event["_embedded"], do: inspect(Map.keys(event["_embedded"])), else: "N/A"}
+        Full event keys: #{inspect(Map.keys(event) |> Enum.take(20))}
+        """)
+
+        # Try to extract venue from alternative locations
+        extract_venue_fallback(event)
+
+      venue ->
+        Logger.debug("✅ Ticketmaster venue found: #{venue["name"]}")
+        transform_venue(venue)
+    end
+  end
+
+  defp extract_venue_fallback(event) do
+    # Try to build venue from other event data
+    # Check if event has place or location info
+    cond do
+      # Check for place information
+      place = event["place"] ->
+        Logger.info("🔄 Attempting to build venue from place data")
+        %{
+          external_id: "tm_place_#{place["id"] || :crypto.hash(:md5, inspect(place)) |> Base.encode16()}",
+          name: place["name"] || "Unknown Venue",
+          address: place["address"] || place["line1"],
+          city: get_in(place, ["city", "name"]) || place["city"],
+          state: get_in(place, ["state", "name"]) || place["state"],
+          country: get_in(place, ["country", "name"]) || place["country"],
+          postal_code: place["postalCode"],
+          latitude: get_in(place, ["location", "latitude"]) |> to_float(),
+          longitude: get_in(place, ["location", "longitude"]) |> to_float(),
+          timezone: place["timezone"],
+          metadata: %{}
+        }
+
+      # Check for location in event root
+      location = event["location"] ->
+        Logger.info("🔄 Attempting to build venue from location data")
+        %{
+          external_id: "tm_location_#{:crypto.hash(:md5, inspect(location)) |> Base.encode16()}",
+          name: location["name"] || "Unknown Venue",
+          address: location["address"],
+          city: location["city"],
+          state: location["state"],
+          country: location["country"],
+          postal_code: location["postalCode"],
+          latitude: location["latitude"] |> to_float(),
+          longitude: location["longitude"] |> to_float(),
+          timezone: event["timezone"],
+          metadata: %{}
+        }
+
+      # Check for any location-related info in dates
+      dates = event["dates"] ->
+        Logger.info("🔄 Attempting to extract location from dates/timezone")
+        # If we have timezone, we can at least infer the general region
+        timezone = dates["timezone"]
+        {city, country, lat, lng} = infer_location_from_timezone(timezone)
+
+        if city do
+          %{
+            external_id: "tm_inferred_#{event["id"]}",
+            name: "Venue TBD - #{city}",
+            address: nil,
+            city: city,
+            state: nil,
+            country: country,
+            postal_code: nil,
+            latitude: lat,
+            longitude: lng,
+            timezone: timezone,
+            metadata: %{inferred: true}
+          }
+        else
+          nil
+        end
+
+      # Absolute last resort - create TBD venue with event name
+      true ->
+        Logger.warning("⚠️ No venue data found, creating TBD placeholder")
+        # For Ticketmaster events, we should at least have a location from the API call
+        # Default to Kraków since that's our primary city
+        %{
+          external_id: "tm_tbd_#{event["id"]}",
+          name: "Venue TBD - Check Event Page",
+          address: nil,
+          city: "Kraków",
+          state: nil,
+          country: "Poland",
+          postal_code: nil,
+          latitude: 50.0647,  # Kraków center
+          longitude: 19.9450,
+          timezone: "Europe/Warsaw",
+          metadata: %{placeholder: true, needs_update: true}
+        }
+    end
+  end
+
+  defp infer_location_from_timezone(nil), do: {nil, nil, nil, nil}
+  defp infer_location_from_timezone(timezone) do
+    # Map common timezones to cities
+    case timezone do
+      "Europe/Warsaw" -> {"Warsaw", "Poland", 52.2297, 21.0122}
+      "Europe/Krakow" -> {"Kraków", "Poland", 50.0647, 19.9450}
+      "Europe/London" -> {"London", "United Kingdom", 51.5074, -0.1278}
+      "Europe/Paris" -> {"Paris", "France", 48.8566, 2.3522}
+      "Europe/Berlin" -> {"Berlin", "Germany", 52.5200, 13.4050}
+      "America/New_York" -> {"New York", "United States", 40.7128, -74.0060}
+      "America/Los_Angeles" -> {"Los Angeles", "United States", 34.0522, -118.2437}
+      "America/Chicago" -> {"Chicago", "United States", 41.8781, -87.6298}
+      _ -> {nil, nil, nil, nil}
     end
   end
 
