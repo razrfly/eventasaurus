@@ -1079,8 +1079,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp event_is_past?(%{starts_at: starts_at}) when not is_nil(starts_at) do
-    # For events without end dates, consider past if it has already started
-    DateTime.compare(starts_at, DateTime.utc_now()) == :lt
+    # For events without end dates, consider them active for 24 hours after start
+    # This handles single-day events and events where end time wasn't specified
+    DateTime.compare(
+      DateTime.add(starts_at, 24, :hour),
+      DateTime.utc_now()
+    ) == :lt
   end
 
   defp event_is_past?(_), do: false
