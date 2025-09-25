@@ -25,12 +25,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     * `:city_id` - Filter by city ID
     * `:country_id` - Filter by country ID
     * `:venue_ids` - List of venue IDs
+    * `:center_lat` - Center latitude for geographic filtering
+    * `:center_lng` - Center longitude for geographic filtering
+    * `:radius_km` - Radius in kilometers for geographic filtering
     * `:search` - Text search query
     * `:language` - Language code for translations (default: "en")
     * `:sort_by` - Sort field (:starts_at, :price, :title, :relevance)
     * `:sort_order` - :asc or :desc
     * `:page` - Page number for pagination
-    * `:page_size` - Items per page (max: 100)
+    * `:page_size` - Items per page (max: 500)
   """
   def list_events(opts \\ []) do
     base_query = from(pe in PublicEvent)
@@ -41,6 +44,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> filter_by_date_range(opts[:start_date], opts[:end_date])
     |> filter_by_price_range(opts[:min_price], opts[:max_price])
     |> filter_by_location(opts[:city_id], opts[:country_id], opts[:venue_ids])
+    |> filter_by_radius(opts[:center_lat], opts[:center_lng], opts[:radius_km])
     |> apply_search(opts[:search])
     |> apply_sorting(opts[:sort_by], opts[:sort_order])
     |> paginate(opts[:page], opts[:page_size])
@@ -259,6 +263,36 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp filter_by_venues(query, venue_ids) when is_list(venue_ids) do
     from(pe in query, where: pe.venue_id in ^venue_ids)
+  end
+
+  ## Geographic Filtering
+
+  defp filter_by_radius(query, nil, nil, nil), do: query
+  defp filter_by_radius(query, nil, _lng, _radius), do: query
+  defp filter_by_radius(query, _lat, nil, _radius), do: query
+  defp filter_by_radius(query, _lat, _lng, nil), do: query
+
+  defp filter_by_radius(query, center_lat, center_lng, radius_km)
+       when is_number(center_lat) and is_number(center_lng) and is_number(radius_km) do
+    radius_meters = radius_km * 1000
+
+    from(pe in query,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      where: not is_nil(v.latitude) and not is_nil(v.longitude),
+      where: fragment(
+        "ST_DWithin(
+          ST_MakePoint(?::float, ?::float)::geography,
+          ST_MakePoint(?::float, ?::float)::geography,
+          ?
+        )",
+        ^center_lng,
+        ^center_lat,
+        v.longitude,
+        v.latitude,
+        ^radius_meters
+      )
+    )
   end
 
   ## Search

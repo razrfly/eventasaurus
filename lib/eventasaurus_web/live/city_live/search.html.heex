@@ -199,7 +199,7 @@
         <%= if @view_mode == "grid" do %>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             <%= for event <- @events do %>
-              <.link navigate={~p"/e/#{event.slug}"} class="block">
+              <.link navigate={~p"/activities/#{event.slug}"} class="block">
                 <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300">
                   <div class="aspect-w-16 aspect-h-9 relative">
                     <%= if event.cover_image_url do %>
@@ -226,7 +226,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <%= Calendar.strftime(event.start_time, "%b %d, %Y") %>
+                        <%= Calendar.strftime(event.starts_at, "%b %d, %Y") %>
                       </div>
                       <%= if event.venue_name do %>
                         <div class="flex items-center">
@@ -247,7 +247,7 @@
           <!-- List View -->
           <div class="space-y-4">
             <%= for event <- @events do %>
-              <.link navigate={~p"/e/#{event.slug}"} class="block">
+              <.link navigate={~p"/activities/#{event.slug}"} class="block">
                 <div class="bg-white rounded-lg shadow-md p-4 hover:shadow-xl transition-shadow duration-300">
                   <div class="flex gap-4">
                     <%= if event.cover_image_url do %>
@@ -270,7 +270,7 @@
                               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
-                              <%= Calendar.strftime(event.start_time, "%B %d, %Y at %I:%M %p") %>
+                              <%= Calendar.strftime(event.starts_at, "%B %d, %Y at %I:%M %p") %>
                             </div>
                             <%= if event.venue_name do %>
                               <div class="flex items-center">

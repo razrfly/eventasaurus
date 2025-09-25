@@ -156,53 +156,56 @@ defmodule EventasaurusWeb.CityLive.Search do
   defp fetch_events(socket) do
     city = socket.assigns.city
     filters = socket.assigns.filters
+    language = socket.assigns.language
 
-    events = if filters.search && String.trim(filters.search) != "" do
-      # Get events with search applied
-      base_events = Locations.get_city_events(city,
-        radius_km: filters.radius_km,
-        limit: 200,
-        upcoming_only: true
-      )
+    # Get city coordinates for radius filtering
+    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
-      search_term = String.downcase(filters.search)
+    # Build query filters using PublicEventsEnhanced for consistency
+    query_filters = Map.merge(filters, %{
+      language: language,
+      center_lat: lat,
+      center_lng: lng,
+      radius_km: filters[:radius_km] || 50,
+      search: filters[:search],
+      categories: filters[:categories],
+      sort_by: filters[:sort_by],
+      sort_order: :asc,
+      page: filters[:page] || 1,
+      page_size: filters[:page_size] || 25
+    })
 
-      base_events
-      |> Enum.filter(fn event ->
-        title = String.downcase(Map.get(event, :title, ""))
-        desc = String.downcase(Map.get(event, :description, ""))
+    alias EventasaurusDiscovery.PublicEventsEnhanced
 
-        String.contains?(title, search_term) || String.contains?(desc, search_term)
-      end)
+    # Use PublicEventsEnhanced to get events with all filters applied at DB level
+    events = if lat && lng do
+      PublicEventsEnhanced.list_events(query_filters)
     else
-      Locations.get_city_events(city,
-        radius_km: filters.radius_km,
-        limit: 200,
-        upcoming_only: true
-      )
+      []
     end
 
-    # Apply sorting
-    sorted_events = sort_events(events, filters.sort_by)
+    # Build pagination metadata
+    page = filters[:page] || 1
+    page_size = filters[:page_size] || 25
+    _has_next = length(events) == page_size
 
-    # Paginate
-    paginated_result = Pagination.paginate(sorted_events, filters.page, filters.page_size)
+    pagination = %Pagination{
+      entries: events,
+      page_number: page,
+      page_size: page_size,
+      total_entries: nil,  # Would need separate count query
+      total_pages: nil  # Would need separate count query
+    }
 
     assign(socket,
-      events: paginated_result.entries,
-      pagination: paginated_result,
+      events: events,
+      pagination: pagination,
       total_events: length(events)
     )
   end
 
-  defp sort_events(events, :date), do: Enum.sort_by(events, & &1.start_time)
-  defp sort_events(events, :name), do: Enum.sort_by(events, & &1.title)
-  defp sort_events(events, :price) do
-    Enum.sort_by(events, fn event ->
-      Map.get(event, :price_low, 0)
-    end)
-  end
-  defp sort_events(events, _), do: events
+  # Sorting is now handled at the database level via PublicEventsEnhanced
 
   defp build_path(socket) do
     filters = socket.assigns.filters
@@ -250,7 +253,15 @@ defmodule EventasaurusWeb.CityLive.Search do
     end
   end
 
-  defp parse_sort(nil), do: :date
-  defp parse_sort(value) when is_binary(value), do: String.to_existing_atom(value)
+  defp parse_sort(nil), do: :starts_at
+  defp parse_sort(value) when is_binary(value) do
+    case value do
+      "starts_at" -> :starts_at
+      "price" -> :price
+      "title" -> :title
+      "relevance" -> :relevance
+      _ -> :starts_at
+    end
+  end
   defp parse_sort(value) when is_atom(value), do: value
 end
