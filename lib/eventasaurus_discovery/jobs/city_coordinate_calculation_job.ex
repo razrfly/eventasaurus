@@ -91,14 +91,15 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
   defp calculate_coordinates(%City{id: city_id}) do
     # Calculate average coordinates from all venues in this city
     # that have valid coordinates
-    query = from v in Venue,
-      where: v.city_id == ^city_id,
-      where: not is_nil(v.latitude) and not is_nil(v.longitude),
-      select: %{
-        avg_lat: fragment("AVG(CAST(? AS FLOAT))", v.latitude),
-        avg_lng: fragment("AVG(CAST(? AS FLOAT))", v.longitude),
-        count: count(v.id)
-      }
+    query =
+      from v in Venue,
+        where: v.city_id == ^city_id,
+        where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        select: %{
+          avg_lat: type(avg(v.latitude), :decimal),
+          avg_lng: type(avg(v.longitude), :decimal),
+          count: count(v.id)
+        }
 
     case Repo.one(query) do
       %{avg_lat: lat, avg_lng: lng, count: count} when not is_nil(lat) and count > 0 ->
@@ -114,8 +115,8 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
       from(c in City, where: c.id == ^city_id, select: c)
       |> Repo.update_all(
         [set: [
-          latitude: Decimal.from_float(lat),
-          longitude: Decimal.from_float(lng),
+          latitude: lat,
+          longitude: lng,
           updated_at: NaiveDateTime.utc_now()
         ]],
         returning: true
@@ -131,10 +132,24 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
   @doc """
   Convenience function to schedule a coordinate update for a city.
   Used by other modules to trigger updates.
+
+  Options:
+  - `force`: When true, bypasses the 24h uniqueness window
   """
-  def schedule_update(city_id) when is_integer(city_id) do
-    %{city_id: city_id}
-    |> __MODULE__.new()
+  def schedule_update(city_id, force \\ false) when is_integer(city_id) do
+    args = if force, do: %{city_id: city_id, force: true}, else: %{city_id: city_id}
+
+    unique =
+      if force do
+        # Allow bypassing the 24h window but dedupe identical forced submissions briefly
+        [fields: [:args, :queue, :worker], keys: [:city_id, :force], period: 0, states: [:available, :scheduled, :executing]]
+      else
+        # At most one job per city per 24h across relevant states
+        [fields: [:args, :queue, :worker], keys: [:city_id], period: 86_400, states: [:available, :scheduled, :executing]]
+      end
+
+    args
+    |> __MODULE__.new(unique: unique)
     |> Oban.insert()
   end
 end
