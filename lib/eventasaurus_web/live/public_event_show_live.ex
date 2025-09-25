@@ -90,8 +90,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
         # Check if user has existing plan
         existing_plan =
-          if socket.assigns[:current_user] do
-            EventPlans.get_user_plan_for_event(socket.assigns.current_user.id, event.id)
+          case get_current_user_id(socket) do
+            nil -> nil
+            user_id -> EventPlans.get_user_plan_for_event(user_id, event.id)
           end
 
         # Enrich with display fields
@@ -280,6 +281,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
+  def handle_event("view_existing_plan", _params, socket) do
+    case socket.assigns.existing_plan do
+      %{private_event: private_event} ->
+        {:noreply, redirect(socket, to: ~p"/events/#{private_event.slug}")}
+
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, gettext("No existing plan found"))
+         |> push_navigate(to: ~p"/activities")}
+    end
+  end
+
+  @impl true
   def handle_event("update_message", %{"message" => message}, socket) do
     {:noreply, assign(socket, :invitation_message, message)}
   end
@@ -331,7 +346,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def handle_event("submit_plan_with_friends", _params, socket) do
     case create_plan_from_public_event(socket) do
-      {:ok, private_event} ->
+      {:ok, {:created, private_event}} ->
         # Send invitations to selected users and emails
         organizer = get_authenticated_user(socket)
         send_invitations(
@@ -345,6 +360,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         {:noreply,
          socket
          |> put_flash(:info, gettext("Your private event has been created!"))
+         |> redirect(to: ~p"/events/#{private_event.slug}")}
+
+      {:ok, {:existing, private_event}} ->
+        # For existing events, show different message and don't send invitations again
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Redirecting to your existing private event..."))
          |> redirect(to: ~p"/events/#{private_event.slug}")}
 
       {:error, :event_in_past} ->
@@ -375,9 +397,37 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       user.id
     )
     |> case do
-      {:ok, {_event_plan, private_event}} -> {:ok, private_event}
+      {:ok, {:created, _event_plan, private_event}} -> {:ok, {:created, private_event}}
+      {:ok, {:existing, _event_plan, private_event}} -> {:ok, {:existing, private_event}}
       error -> error
     end
+  end
+
+  defp get_current_user_id(socket) do
+    cond do
+      # Try processed user from database first
+      socket.assigns[:user] && socket.assigns.user.id ->
+        socket.assigns.user.id
+
+      # Try current_user (might be the correct key)
+      socket.assigns[:current_user] && socket.assigns.current_user.id ->
+        socket.assigns.current_user.id
+
+      # Try auth_user from Supabase/dev mode
+      socket.assigns[:auth_user] ->
+        case socket.assigns.auth_user do
+          # Dev mode: User struct directly
+          %{id: id} when is_integer(id) -> id
+          # Supabase auth: map with string id
+          %{"id" => id} when is_binary(id) -> String.to_integer(id)
+          %{id: id} when is_binary(id) -> String.to_integer(id)
+          _ -> nil
+        end
+
+      true -> nil
+    end
+  rescue
+    _ -> nil
   end
 
   defp get_authenticated_user(socket) do
@@ -452,7 +502,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 <%= if @event.categories && @event.categories != [] do %>
                   <% primary_category = get_primary_category(@event) || List.first(@event.categories) %>
                   <.link
-                    navigate={~p"/activities?category=#{primary_category.slug}"}
+                    navigate={~p"/activities?#{[category: primary_category.slug]}"}
                     class="text-blue-600 hover:text-blue-800"
                   >
                     <%= primary_category.name %>
@@ -506,9 +556,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       <!-- Primary category - larger and emphasized -->
                       <%= if primary_category do %>
                         <.link
-                          navigate={~p"/activities?category=#{primary_category.slug}"}
+                          navigate={~p"/activities?#{[category: primary_category.slug]}"}
                           class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition"
-                          style={"background-color: #{primary_category.color || "#6B7280"}"}
+                          style={safe_background_style(primary_category.color)}
                         >
                           <%= if primary_category.icon do %>
                             <span class="mr-1"><%= primary_category.icon %></span>
@@ -522,7 +572,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                         <span class="text-gray-400 mx-1">•</span>
                         <%= for category <- secondary_categories do %>
                           <.link
-                            navigate={~p"/activities?category=#{category.slug}"}
+                            navigate={~p"/activities?#{[category: category.slug]}"}
                             class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
                           >
                             <%= category.name %>
@@ -619,13 +669,32 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   <!-- Plan with Friends Button (Only for future events) -->
                   <%= unless event_is_past?(@event) do %>
                     <div>
-                      <button
-                        phx-click="open_plan_modal"
-                        class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
-                      >
-                        <Heroicons.user_group class="w-5 h-5 mr-2" />
-                        <%= gettext("Plan with Friends") %>
-                      </button>
+                      <%= if @existing_plan do %>
+                        <!-- User already has a plan - show different button -->
+                        <div class="space-y-2">
+                          <button
+                            phx-click="view_existing_plan"
+                            class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+                          >
+                            <Heroicons.eye class="w-5 h-5 mr-2" />
+                            <%= gettext("View Your Event") %>
+                          </button>
+                          <!-- Plan status indicator -->
+                          <div class="text-sm text-gray-600 flex items-center">
+                            <Heroicons.check_circle class="w-4 h-4 mr-1 text-green-500" />
+                            <%= gettext("Created %{date}", date: format_plan_date(@existing_plan.inserted_at)) %>
+                          </div>
+                        </div>
+                      <% else %>
+                        <!-- No existing plan - show create button -->
+                        <button
+                          phx-click="open_plan_modal"
+                          class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
+                        >
+                          <Heroicons.user_group class="w-5 h-5 mr-2" />
+                          <%= gettext("Plan with Friends") %>
+                        </button>
+                      <% end %>
                     </div>
                   <% end %>
                 </div>
@@ -904,6 +973,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
+  defp format_plan_date(datetime) do
+    case DateTime.from_naive(datetime, "Etc/UTC") do
+      {:ok, dt} -> format_relative_time(dt)
+      {:error, _} -> gettext("recently")
+    end
+  end
+
   # Occurrence helper functions
   defp parse_occurrences(%{occurrences: nil}), do: nil
 
@@ -1042,4 +1118,26 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       limit: 1
     )
   end
+
+  defp safe_background_style(color) do
+    color =
+      if valid_hex_color?(color) do
+        color
+      else
+        "#6B7280"
+      end
+
+    "background-color: #{color}"
+  end
+
+  defp valid_hex_color?(color) when is_binary(color) do
+    case color do
+      <<?#, _::binary>> = hex when byte_size(hex) in [4, 7] ->
+        String.match?(hex, ~r/^#(?:[0-9a-fA-F]{3}){1,2}$/)
+      _ ->
+        false
+    end
+  end
+
+  defp valid_hex_color?(_), do: false
 end
