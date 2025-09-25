@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
+  alias EventasaurusWeb.Helpers.CategoryHelpers
 
   @impl true
   def mount(_params, _session, socket) do
@@ -631,8 +632,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
           <% end %>
 
           <%= if @event.categories && @event.categories != [] do %>
-            <% category = List.first(@event.categories) %>
-            <%= if category.color do %>
+            <% category = CategoryHelpers.get_preferred_category(@event.categories) %>
+            <%= if category && category.color do %>
               <div
                 class="absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-medium text-white"
                 style={"background-color: #{category.color}"}

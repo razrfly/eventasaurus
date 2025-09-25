@@ -10,6 +10,7 @@ defmodule EventasaurusDiscovery.Locations do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.PublicEvents
+  alias EventasaurusDiscovery.PublicEventsEnhanced
 
   @doc """
   Get a city by its slug.
@@ -67,24 +68,52 @@ defmodule EventasaurusDiscovery.Locations do
     radius_km = Keyword.get(opts, :radius_km, 25)
     limit = Keyword.get(opts, :limit, 50)
     upcoming_only = Keyword.get(opts, :upcoming_only, true)
+    language = Keyword.get(opts, :language, "en")
 
     # Convert Decimal to float for coordinates
     lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
     lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
     if lat && lng do
-      # Use existing optimized by_location function
-      # Convert km to miles for the existing function
-      events = PublicEvents.by_location(lat, lng,
-        radius_miles: radius_km * 0.621371,
-        limit: limit,
-        upcoming_only: upcoming_only
-      )
+      # Use PublicEventsEnhanced to get properly formatted events with categories
+      # but then filter by radius manually since it doesn't support radius filtering
+      enhanced_opts = [
+        show_past: not upcoming_only,
+        limit: limit * 3, # Get more to account for radius filtering
+        language: language
+      ]
 
-      # Add cover_image_url like PublicEventsEnhanced does
-      Enum.map(events, fn event ->
-        Map.put(event, :cover_image_url, get_cover_image_url(event))
+      all_enhanced_events = PublicEventsEnhanced.list_events(enhanced_opts)
+
+      # Filter by radius using PostGIS distance calculation
+      radius_meters = radius_km * 1000
+
+      filtered_events = Enum.filter(all_enhanced_events, fn event ->
+        case event.venue do
+          %{latitude: venue_lat, longitude: venue_lng} when not is_nil(venue_lat) and not is_nil(venue_lng) ->
+            # Convert Decimal to float if needed
+            venue_lat = if is_struct(venue_lat, Decimal), do: Decimal.to_float(venue_lat), else: venue_lat
+            venue_lng = if is_struct(venue_lng, Decimal), do: Decimal.to_float(venue_lng), else: venue_lng
+
+            # Calculate distance using the same query we use elsewhere
+            query = """
+            SELECT ST_Distance(
+              ST_MakePoint($1::float, $2::float)::geography,
+              ST_MakePoint($3::float, $4::float)::geography
+            ) as distance_meters
+            """
+
+            case Repo.query(query, [lng, lat, venue_lng, venue_lat]) do
+              {:ok, %{rows: [[distance]]}} -> distance <= radius_meters
+              _ -> false
+            end
+          _ ->
+            false
+        end
       end)
+
+      # Take only the requested limit
+      Enum.take(filtered_events, limit)
     else
       # Return empty list if city has no coordinates yet
       []
