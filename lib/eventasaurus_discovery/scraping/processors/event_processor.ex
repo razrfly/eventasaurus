@@ -400,7 +400,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         case existing_by_event do
           # Event already has a link from this source with different external_id
           %PublicEventSource{} = existing ->
-            Logger.warning("""
+            Logger.warn("""
             ⚠️ Event ##{event.id} already linked to source #{source_id} with different external_id
             Old external_id: #{existing.external_id}
             New external_id: #{ext_id}
@@ -578,7 +578,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         {:ok, categories}
 
       {:error, reason} ->
-        Logger.warning("Failed to assign categories: #{inspect(reason)}")
+        Logger.warn("Failed to assign categories: #{inspect(reason)}")
         # Don't fail the whole event processing
         {:ok, []}
     end
