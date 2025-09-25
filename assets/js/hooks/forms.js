@@ -402,12 +402,15 @@ export const EmailInput = {
   handleKeyDown(event) {
     // If Enter key is pressed, clear the input field immediately to prevent race conditions
     if (event.key === 'Enter') {
+      // Prevent default form submission on Enter
+      event.preventDefault();
+
       // Small delay to allow the Phoenix event to fire first, then clear the field
       setTimeout(() => {
         this.el.value = '';
         // Send an empty input change to sync with server
-        this.pushEvent("email_input_change", { 
-          "email_input": "" 
+        this.pushEvent("email_input_change", {
+          "email_input": ""
         });
       }, 50);
     }

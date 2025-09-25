@@ -28,6 +28,8 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
             name="email_input"
             value={@current_input}
             placeholder={@placeholder}
+            autocomplete="email"
+            inputmode="email"
             class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             phx-input="email_input_change"
             phx-debounce="300"
