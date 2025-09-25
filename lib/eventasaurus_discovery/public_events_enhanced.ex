@@ -11,7 +11,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusDiscovery.Locations.City
 
   @default_limit 20
-  @max_limit 100
+  @max_limit 500
 
   @doc """
   List events with comprehensive filtering options.
