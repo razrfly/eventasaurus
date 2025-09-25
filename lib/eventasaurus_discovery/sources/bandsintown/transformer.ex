@@ -83,6 +83,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   Validates that venue data contains all required fields.
   Returns :ok if valid, {:error, reason} if not.
   """
+  def validate_venue(nil), do: {:error, "Venue data is required"}
+
   def validate_venue(venue_data) do
     cond do
       is_nil(venue_data[:name]) || venue_data[:name] == "" ->
@@ -134,7 +136,14 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   end
 
   defp extract_starts_at(event) do
-    DateParser.parse_start_date(event["date"])
+    case DateParser.parse_start_date(event["date"]) do
+      nil ->
+        Logger.warning("No valid start date found for Bandsintown event: #{inspect(event["title"] || event["artist_name"])}")
+        # Default to tomorrow if no date available
+        DateTime.utc_now() |> DateTime.add(86400, :second)
+      date ->
+        date
+    end
   end
 
   defp extract_ends_at(event) do

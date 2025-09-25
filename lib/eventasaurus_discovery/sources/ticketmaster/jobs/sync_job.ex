@@ -9,6 +9,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     queue: :discovery,
     max_attempts: 3
 
+  require Logger
   alias EventasaurusDiscovery.Sources.Ticketmaster.{Config, Client, Transformer}
 
   @impl EventasaurusDiscovery.Sources.BaseJob
@@ -33,12 +34,15 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     # Transform each event using our Transformer
     # Filter out events that fail venue validation
     raw_events
-    |> Enum.map(&Transformer.transform_event/1)
-    |> Enum.filter(fn
-      {:ok, _event} -> true
-      {:error, _reason} -> false
+    |> Enum.flat_map(fn raw_event ->
+      case Transformer.transform_event(raw_event) do
+        {:ok, event} ->
+          [event]
+        {:error, reason} ->
+          Logger.debug("Ticketmaster event transformation failed: #{reason}")
+          []
+      end
     end)
-    |> Enum.map(fn {:ok, event} -> event end)
   end
 
   def source_config do

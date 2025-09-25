@@ -242,15 +242,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         case DetailExtractor.extract_event_details(html, url) do
           {:ok, details} ->
             # Merge basic and detailed data
-            merged = Map.merge(basic_event, details)
-
-            # Check if venue data exists
-            if merged[:venue_data] && merged[:venue_data][:name] do
-              merged
-            else
-              Logger.warning("⚠️ Skipping Karnet event without valid venue: #{url}")
-              nil
-            end
+            Map.merge(basic_event, details)
 
           {:error, reason} ->
             Logger.warning("Failed to extract details from #{url}: #{inspect(reason)}")
