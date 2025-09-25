@@ -20,12 +20,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: _job_id, args: _args}) do
-    # This job is deprecated - return error to prevent execution
-    Logger.error("""
+    # This job is deprecated - discard to prevent execution and retries
+    Logger.warning("""
     ⛔ DEPRECATED: Bandsintown CityIndexJob should not be used.
     Please use EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob instead.
     This ensures all events go through the unified Processor with venue requirements.
     """)
-    {:error, :deprecated_job}
+    {:discard, :deprecated_job}
   end
 end
