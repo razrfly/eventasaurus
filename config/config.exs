@@ -112,7 +112,9 @@ config :eventasaurus, Oban,
     # Single concurrency to respect Google's rate limits
     google_lookup: 1,
     # Default queue for other background jobs
-    default: 10
+    default: 10,
+    # Maintenance queue for background tasks like coordinate calculation
+    maintenance: 2
   ],
   plugins: [
     # Keep completed jobs for 7 days for debugging
