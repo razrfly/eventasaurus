@@ -85,6 +85,24 @@ defmodule EventasaurusWeb.Router do
     plug EventasaurusWeb.Plugs.LanguagePlug
   end
 
+  # City browser pipeline with city validation
+  pipeline :city_browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :fetch_query_params
+    plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    if Mix.env() == :dev do
+      plug EventasaurusWeb.Dev.DevAuthPlug
+    end
+    plug :fetch_auth_user
+    plug :assign_user_struct
+    plug EventasaurusWeb.Plugs.LanguagePlug
+    plug EventasaurusWeb.Plugs.ValidateCity
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
     plug :fetch_session
@@ -365,6 +383,36 @@ defmodule EventasaurusWeb.Router do
 
       # Backward compatibility redirects for old /user/ URLs
       get "/user/:username", ProfileController, :redirect_legacy
+    end
+  end
+
+  # City-based routes with /c/ prefix
+  live_session :city,
+    on_mount: [
+      {EventasaurusWeb.Live.AuthHooks, :assign_auth_user},
+      {EventasaurusWeb.Live.CityHooks, :assign_city}
+    ] do
+    scope "/c", EventasaurusWeb do
+      pipe_through :city_browser
+
+      # City homepage (shows events by default)
+      live "/:city_slug", CityLive.Index, :index
+
+      # Explicit events routes with filters
+      live "/:city_slug/events", CityLive.Events, :index
+      live "/:city_slug/events/today", CityLive.Events, :today
+      live "/:city_slug/events/weekend", CityLive.Events, :weekend
+      live "/:city_slug/events/week", CityLive.Events, :week
+
+      # City venues
+      live "/:city_slug/venues", CityLive.Venues, :index
+      live "/:city_slug/venues/:venue_slug", VenueLive.Show, :show
+
+      # Event detail within city context
+      live "/:city_slug/events/:event_slug", EventLive.Show, :show
+
+      # City search
+      live "/:city_slug/search", CityLive.Search, :index
     end
   end
 

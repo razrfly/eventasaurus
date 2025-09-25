@@ -1,0 +1,344 @@
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <div class="bg-white shadow-sm border-b">
+    <div class="container mx-auto px-4 py-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">
+            Search Events in <%= @city.name %>
+          </h1>
+          <p class="text-gray-600 mt-2">
+            Found <%= @total_events %> events
+          </p>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <!-- View Mode Toggle -->
+          <div class="flex items-center bg-gray-100 rounded-lg p-1">
+            <button
+              phx-click="toggle_view"
+              phx-value-mode="grid"
+              class={"px-3 py-1.5 rounded-md text-sm font-medium transition-colors #{if @view_mode == "grid", do: "bg-white text-gray-900 shadow-sm", else: "text-gray-500"}"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              phx-click="toggle_view"
+              phx-value-mode="list"
+              class={"px-3 py-1.5 rounded-md text-sm font-medium transition-colors #{if @view_mode == "list", do: "bg-white text-gray-900 shadow-sm", else: "text-gray-500"}"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Filters Button -->
+          <button
+            phx-click="toggle_filters"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            Filters
+          </button>
+        </div>
+      </div>
+
+      <!-- Search Bar (auto-focused on this page) -->
+      <div class="mt-6">
+        <form phx-submit="search" phx-change="search" class="relative">
+          <input
+            type="text"
+            name="search"
+            value={@filters.search}
+            placeholder="Search for events, artists, venues..."
+            class="w-full px-4 py-3 pl-12 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            phx-mounted={@search_focused && JS.focus()}
+          />
+          <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-4 top-3.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <%= if @filters.search do %>
+            <button
+              type="button"
+              phx-click="clear_search"
+              class="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          <% end %>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container mx-auto px-4 py-8">
+    <div class="flex gap-8">
+      <!-- Filters Panel -->
+      <div class={"transition-all duration-300 #{if @show_filters, do: "w-64 opacity-100", else: "w-0 opacity-0 overflow-hidden"}"}>
+        <%= if @show_filters do %>
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-lg font-semibold mb-4">Filters</h3>
+
+            <form phx-submit="filter">
+              <!-- Radius Filter -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Search Radius
+                </label>
+                <select
+                  name="filter[radius_km]"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="5" selected={@filters.radius_km == 5}>5 km</option>
+                  <option value="10" selected={@filters.radius_km == 10}>10 km</option>
+                  <option value="25" selected={@filters.radius_km == 25}>25 km</option>
+                  <option value="50" selected={@filters.radius_km == 50}>50 km</option>
+                  <option value="100" selected={@filters.radius_km == 100}>100 km</option>
+                </select>
+              </div>
+
+              <!-- Sort By -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Sort By
+                </label>
+                <select
+                  name="filter[sort_by]"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="date" selected={@filters.sort_by == :date}>Date</option>
+                  <option value="name" selected={@filters.sort_by == :name}>Name</option>
+                  <option value="price" selected={@filters.sort_by == :price}>Price</option>
+                </select>
+              </div>
+
+              <!-- Date Range -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Date Range
+                </label>
+                <input
+                  type="date"
+                  name="filter[start_date]"
+                  value={@filters.start_date}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                />
+                <input
+                  type="date"
+                  name="filter[end_date]"
+                  value={@filters.end_date}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <!-- Price Range -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Price Range
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    type="number"
+                    name="filter[min_price]"
+                    placeholder="Min"
+                    value={@filters.min_price}
+                    class="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <input
+                    type="number"
+                    name="filter[max_price]"
+                    placeholder="Max"
+                    value={@filters.max_price}
+                    class="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <!-- Categories -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Categories
+                </label>
+                <div class="space-y-2">
+                  <%= for category <- @categories do %>
+                    <label class="flex items-center">
+                      <input
+                        type="checkbox"
+                        name="filter[categories][]"
+                        value={category.id}
+                        checked={category.id in @filters.categories}
+                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span class="ml-2 text-sm text-gray-700"><%= category.name %></span>
+                    </label>
+                  <% end %>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                class="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                Apply Filters
+              </button>
+            </form>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Events Grid/List -->
+      <div class="flex-1">
+        <%= if @view_mode == "grid" do %>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <%= for event <- @events do %>
+              <.link navigate={~p"/e/#{event.slug}"} class="block">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                  <div class="aspect-w-16 aspect-h-9 relative">
+                    <%= if event.cover_image_url do %>
+                      <img
+                        src={event.cover_image_url}
+                        alt={event.title}
+                        class="w-full h-48 object-cover"
+                      />
+                    <% else %>
+                      <div class="w-full h-48 bg-gradient-to-br from-indigo-500 to-purple-600"></div>
+                    <% end %>
+                    <%= if event.ticket_url do %>
+                      <div class="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                        TICKETED
+                      </div>
+                    <% end %>
+                  </div>
+                  <div class="p-4">
+                    <h3 class="font-semibold text-lg mb-2 line-clamp-2">
+                      <%= Map.get(event, :display_title, event.title) %>
+                    </h3>
+                    <div class="text-sm text-gray-600 space-y-1">
+                      <div class="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <%= Calendar.strftime(event.start_time, "%b %d, %Y") %>
+                      </div>
+                      <%= if event.venue_name do %>
+                        <div class="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span class="truncate"><%= event.venue_name %></span>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                </div>
+              </.link>
+            <% end %>
+          </div>
+        <% else %>
+          <!-- List View -->
+          <div class="space-y-4">
+            <%= for event <- @events do %>
+              <.link navigate={~p"/e/#{event.slug}"} class="block">
+                <div class="bg-white rounded-lg shadow-md p-4 hover:shadow-xl transition-shadow duration-300">
+                  <div class="flex gap-4">
+                    <%= if event.cover_image_url do %>
+                      <img
+                        src={event.cover_image_url}
+                        alt={event.title}
+                        class="w-24 h-24 object-cover rounded-lg flex-shrink-0"
+                      />
+                    <% else %>
+                      <div class="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex-shrink-0"></div>
+                    <% end %>
+                    <div class="flex-1">
+                      <div class="flex items-start justify-between">
+                        <div>
+                          <h3 class="font-semibold text-lg mb-1">
+                            <%= Map.get(event, :display_title, event.title) %>
+                          </h3>
+                          <div class="text-sm text-gray-600 space-y-1">
+                            <div class="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <%= Calendar.strftime(event.start_time, "%B %d, %Y at %I:%M %p") %>
+                            </div>
+                            <%= if event.venue_name do %>
+                              <div class="flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <%= event.venue_name %>
+                              </div>
+                            <% end %>
+                          </div>
+                        </div>
+                        <%= if event.ticket_url do %>
+                          <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                            TICKETED
+                          </span>
+                        <% end %>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </.link>
+            <% end %>
+          </div>
+        <% end %>
+
+        <!-- Pagination -->
+        <%= if @pagination.total_pages > 1 do %>
+          <div class="mt-8 flex justify-center">
+            <nav class="flex items-center space-x-2">
+              <%= if @pagination.current_page > 1 do %>
+                <button
+                  phx-click="paginate"
+                  phx-value-page={@pagination.current_page - 1}
+                  class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Previous
+                </button>
+              <% end %>
+
+              <%= for page <- 1..@pagination.total_pages do %>
+                <%= if abs(page - @pagination.current_page) < 3 or page == 1 or page == @pagination.total_pages do %>
+                  <button
+                    phx-click="paginate"
+                    phx-value-page={page}
+                    class={"px-3 py-2 rounded-md #{if page == @pagination.current_page, do: "bg-indigo-600 text-white", else: "bg-white border border-gray-300 hover:bg-gray-50"}"}
+                  >
+                    <%= page %>
+                  </button>
+                <% end %>
+                <%= if abs(page - @pagination.current_page) == 3 and page != 1 and page != @pagination.total_pages do %>
+                  <span class="px-2">...</span>
+                <% end %>
+              <% end %>
+
+              <%= if @pagination.current_page < @pagination.total_pages do %>
+                <button
+                  phx-click="paginate"
+                  phx-value-page={@pagination.current_page + 1}
+                  class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              <% end %>
+            </nav>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+</div>
