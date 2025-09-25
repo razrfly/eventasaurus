@@ -2,8 +2,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
   @moduledoc """
   Unified Oban job for syncing BandsInTown events.
 
-  Processes events inline using the unified discovery pipeline to enable
-  collision detection with other sources.
+  Uses the standardized BaseJob behaviour for consistent processing across all sources.
+  All events are processed through the unified Processor which enforces venue requirements.
   """
 
   use EventasaurusDiscovery.Sources.BaseJob,
@@ -12,151 +12,84 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Sources.Bandsintown.{Config, Transformer}
   alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
 
-  @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
-    # Ensure HTTPoison is started
-    HTTPoison.start()
-
-    city_id = args["city_id"]
-    limit = args["limit"] || 100
-    max_pages = calculate_max_pages(limit)
-
-    # Get city with coordinates
-    city = Repo.get!(City, city_id) |> Repo.preload(:country)
-
-    # Build BandsInTown city slug
-    bandsintown_slug = build_bandsintown_slug(city)
-
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(city, limit, _options) do
     Logger.info("""
-    🎵 Starting BandsInTown inline sync
+    🎵 Fetching Bandsintown events
     City: #{city.name}, #{city.country.name}
-    Limit: #{limit} events
-    Max pages: #{max_pages}
+    Target events: #{limit}
     """)
 
-    # Get or create source
-    source = get_or_create_bandsintown_source()
-
-    # Convert coordinates to float
+    # Use the API-based approach with coordinates (the original working method)
     latitude = Decimal.to_float(city.latitude)
     longitude = Decimal.to_float(city.longitude)
+    city_slug = build_bandsintown_slug(city)
+    max_pages = calculate_max_pages(limit)
 
-    # Fetch events from API
-    {:ok, events} =
-      Client.fetch_all_city_events(latitude, longitude, bandsintown_slug, max_pages: max_pages)
+    # Fetch events using the API (not Playwright)
+    with {:ok, events} <- Client.fetch_all_city_events(latitude, longitude, city_slug, max_pages: max_pages) do
+      # Limit events
+      limited_events = Enum.take(events, limit)
 
-    # Apply limit
-    events_to_process = if limit, do: Enum.take(events, limit), else: events
-
-    # Schedule individual jobs for each event with rate limiting
-    enqueued_count = schedule_detail_jobs(events_to_process, source.id)
-
-    Logger.info("""
-    ✅ BandsInTown sync job completed
-    Events found: #{length(events_to_process)}
-    Detail jobs enqueued: #{enqueued_count}
-    """)
-
-    {:ok, %{enqueued: enqueued_count, total: length(events_to_process)}}
-  end
-
-  @impl EventasaurusDiscovery.Sources.BaseJob
-  def fetch_events(_city, _limit, _options) do
-    # This will be implemented when we fully refactor BandsInTown
-    {:error, :not_implemented}
+      # The events from the API already have the data we need
+      # No need to fetch additional details since the API provides complete info
+      {:ok, limited_events}
+    else
+      {:error, reason} = error ->
+        Logger.error("Failed to fetch Bandsintown events: #{inspect(reason)}")
+        error
+    end
   end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
   def transform_events(raw_events) do
-    # This will be implemented when we fully refactor BandsInTown
+    # Transform each event using our Transformer
+    # Filter out events that fail venue validation
     raw_events
+    |> Enum.map(&Transformer.transform_event/1)
+    |> Enum.filter(fn
+      {:ok, _event} -> true
+      {:error, _reason} -> false
+    end)
+    |> Enum.map(fn {:ok, event} -> event end)
   end
 
   # Required by BaseJob for source configuration
   def source_config do
-    %{
-      name: "Bandsintown",
-      slug: "bandsintown",
-      website_url: "https://www.bandsintown.com",
-      priority: 80,
-      config: %{
-        "rate_limit_seconds" => 3,
-        "max_requests_per_hour" => 500
-      }
-    }
+    Config.source_config()
   end
 
-  defp schedule_detail_jobs(events, source_id) do
-    # Schedule individual jobs for each event with rate limiting
-    scheduled_jobs =
-      events
-      |> Enum.with_index()
-      |> Enum.map(fn {event, index} ->
-        # Add delay between jobs to respect rate limits
-        # Start immediately, then 5 seconds between each job
-        scheduled_at = DateTime.add(DateTime.utc_now(), index * 5, :second)
-
-        job_args = %{
-          "url" => event.url || event[:url],
-          "source_id" => source_id,
-          "event_data" => event
-        }
-
-        # Create the job using the module's new function
-        result =
-          EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(
-            job_args,
-            queue: "scraper_detail",
-            scheduled_at: scheduled_at
-          )
-          |> Oban.insert()
-
-        case result do
-          {:error, reason} -> Logger.error("Failed to insert job: #{inspect(reason)}")
-          _ -> nil
-        end
-
-        result
-      end)
-
-    # Count successful insertions
-    successful_count =
-      Enum.count(scheduled_jobs, fn
-        {:ok, _} -> true
-        _ -> false
-      end)
-
-    successful_count
-  end
-
-  defp get_or_create_bandsintown_source do
-    case Repo.get_by(Source, slug: "bandsintown") do
-      nil ->
-        config = source_config()
-
-        %Source{}
-        |> Source.changeset(config)
-        |> Repo.insert!()
-
-      source ->
-        source
-    end
-  end
-
-  defp build_bandsintown_slug(city) do
-    city_slug = city.slug || String.downcase(city.name) |> String.replace(" ", "-")
-    country_slug = String.downcase(city.country.name) |> String.replace(" ", "-")
-    "#{city_slug}-#{country_slug}"
-  end
+  # Private helper functions
 
   defp calculate_max_pages(limit) do
     # Estimate pages based on ~20 events per page
     pages = div(limit, 20)
     if rem(limit, 20) > 0, do: pages + 1, else: pages
+  end
+
+  defp build_bandsintown_slug(city) do
+    # Convert city name to URL-friendly format
+    city_part =
+      city.name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9\s-]/, "")
+      |> String.replace(~r/\s+/, "-")
+
+    # For US cities, try to use state code
+    if city.country.code == "US" && city.state_code do
+      "#{city_part}-#{String.downcase(city.state_code)}"
+    else
+      # For non-US, use country
+      country_part =
+        city.country.name
+        |> String.downcase()
+        |> String.replace(~r/[^a-z0-9\s-]/, "")
+        |> String.replace(~r/\s+/, "-")
+
+      "#{city_part}-#{country_part}"
+    end
   end
 end

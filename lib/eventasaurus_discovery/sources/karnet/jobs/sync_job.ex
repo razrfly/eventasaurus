@@ -2,8 +2,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   @moduledoc """
   Unified Oban job for syncing Karnet Kraków events.
 
-  Fetches event listings from the Karnet website and schedules detail jobs
-  for individual event processing.
+  Uses the standardized BaseJob behaviour for consistent processing across all sources.
+  All events are processed through the unified Processor which enforces venue requirements.
   """
 
   use EventasaurusDiscovery.Sources.BaseJob,
@@ -14,8 +14,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.Sources.Karnet.{Client, Config, IndexExtractor}
+  alias EventasaurusDiscovery.Sources.Karnet.{Client, Config, IndexExtractor, DetailExtractor, Transformer}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -97,15 +96,57 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
-  def fetch_events(_city, _limit, _options) do
-    # This will be implemented when we fully integrate with unified pipeline
-    {:error, :not_implemented}
+  def fetch_events(city, limit, _options) do
+    Logger.info("""
+    🎭 Fetching Karnet events
+    City: #{city.name}, #{city.country.name}
+    Target events: #{limit}
+    """)
+
+    # Verify it's Kraków (Karnet only serves Kraków)
+    unless String.downcase(city.name) in ["kraków", "krakow", "cracow"] do
+      Logger.warning("⚠️ Karnet scraper is designed for Kraków but got: #{city.name}")
+    end
+
+    max_pages = calculate_max_pages(limit)
+
+    # Fetch all index pages
+    with {:ok, pages} <- Client.fetch_all_index_pages(max_pages) do
+      Logger.info("📚 Fetched #{length(pages)} index pages")
+
+      # Extract basic events from index
+      basic_events = IndexExtractor.extract_events_from_pages(pages)
+      Logger.info("📋 Extracted #{length(basic_events)} events from index")
+
+      # Apply limit
+      limited_events = Enum.take(basic_events, limit)
+
+      # Fetch details for each event
+      detailed_events =
+        limited_events
+        |> Enum.map(&fetch_and_merge_details/1)
+        |> Enum.reject(&is_nil/1)
+
+      Logger.info("✅ Successfully fetched #{length(detailed_events)} events with details")
+      {:ok, detailed_events}
+    else
+      {:error, reason} = error ->
+        Logger.error("Failed to fetch Karnet events: #{inspect(reason)}")
+        error
+    end
   end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
   def transform_events(raw_events) do
-    # This will be implemented when we fully integrate with unified pipeline
+    # Transform each event using our Transformer
+    # Filter out events that fail venue validation
     raw_events
+    |> Enum.map(&Transformer.transform_event/1)
+    |> Enum.filter(fn
+      {:ok, _event} -> true
+      {:error, _reason} -> false
+    end)
+    |> Enum.map(fn {:ok, event} -> event end)
   end
 
   # Required by BaseJob for source configuration
@@ -189,6 +230,42 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
       source ->
         source
     end
+  end
+
+  # Private helper functions
+
+  defp fetch_and_merge_details(%{url: url} = basic_event) do
+    Logger.debug("🔍 Fetching details for: #{url}")
+
+    case Client.fetch_page(url) do
+      {:ok, html} ->
+        case DetailExtractor.extract_event_details(html, url) do
+          {:ok, details} ->
+            # Merge basic and detailed data
+            merged = Map.merge(basic_event, details)
+
+            # Check if venue data exists
+            if merged[:venue_data] && merged[:venue_data][:name] do
+              merged
+            else
+              Logger.warning("⚠️ Skipping Karnet event without valid venue: #{url}")
+              nil
+            end
+
+          {:error, reason} ->
+            Logger.warning("Failed to extract details from #{url}: #{inspect(reason)}")
+            nil
+        end
+
+      {:error, reason} ->
+        Logger.warning("Failed to fetch event page #{url}: #{inspect(reason)}")
+        nil
+    end
+  end
+
+  defp fetch_and_merge_details(basic_event) do
+    Logger.warning("Event without URL: #{inspect(basic_event)}")
+    nil
   end
 
   defp calculate_max_pages(limit) do

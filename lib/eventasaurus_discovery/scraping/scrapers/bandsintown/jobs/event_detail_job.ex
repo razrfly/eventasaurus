@@ -1,12 +1,13 @@
 defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob do
   @moduledoc """
-  Oban job for fetching and parsing individual event detail pages from Bandsintown.
+  DEPRECATED: This job is replaced by Sources.Bandsintown.Jobs.SyncJob
+  which uses the unified Processor for venue enforcement.
 
-  This job:
-  1. Receives event URL and basic data from CityIndexJob
-  2. Fetches the event detail page
-  3. Extracts comprehensive event information
-  4. Stores or updates the event in database
+  Old Oban job for fetching and parsing individual event detail pages from Bandsintown.
+  This job directly created events without going through the unified Processor,
+  which bypassed venue requirements and collision detection.
+
+  DO NOT USE - Kept for reference only.
   """
 
   use Oban.Worker,
@@ -236,7 +237,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
             title_translations: if(title, do: detect_title_language(title), else: nil),
             starts_at: starts_at,
             ends_at: DateParser.parse_end_date(event_data["end_date"]),
-            venue_id: if(venue, do: venue.id, else: nil),
+            venue_id: if(venue, do: venue.id, else: raise("Venue is required for all events")),
             # Remove hardcoded category_id - will assign via new system
             # external_id now stored only in public_event_sources
             ticket_url: event_data["ticket_url"],
