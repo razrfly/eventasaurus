@@ -109,7 +109,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  defp process_venue(%{venue_data: nil}), do: {:ok, nil}
+  defp process_venue(%{venue_data: nil}) do
+    # Public events from scrapers MUST have venues
+    {:error, "Public events must have venue data for proper location tracking"}
+  end
 
   defp process_venue(%{venue_data: venue_data}) do
     VenueProcessor.process_venue(venue_data)
@@ -207,14 +210,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp create_event(data, venue, slug) do
-    city_id = if venue, do: venue.city_id, else: nil
+    # Public events MUST have venues
+    unless venue do
+      raise ArgumentError, "Cannot create public event without venue. All public events require venue for location tracking and collision detection."
+    end
 
     attrs = %{
       title: data.title,
       title_translations: data.title_translations,
       slug: slug,
-      venue_id: if(venue, do: venue.id, else: nil),
-      city_id: city_id,
+      venue_id: venue.id,
+      city_id: venue.city_id,
       # Note: normalized data uses start_at, schema uses starts_at
       starts_at: data.start_at,
       ends_at: data.ends_at,
@@ -400,7 +406,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         case existing_by_event do
           # Event already has a link from this source with different external_id
           %PublicEventSource{} = existing ->
-            Logger.warn("""
+            Logger.warning("""
             ⚠️ Event ##{event.id} already linked to source #{source_id} with different external_id
             Old external_id: #{existing.external_id}
             New external_id: #{ext_id}
@@ -578,7 +584,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         {:ok, categories}
 
       {:error, reason} ->
-        Logger.warn("Failed to assign categories: #{inspect(reason)}")
+        Logger.warning("Failed to assign categories: #{inspect(reason)}")
         # Don't fail the whole event processing
         {:ok, []}
     end

@@ -191,25 +191,32 @@ defmodule DevSeeds.Events do
   defp create_event(attrs, users, groups, venue_pool \\ []) do
     # Select a random organizer
     organizer = Enum.random(users)
-    
+
     # Maybe assign to a group
     group = if Enum.random([true, false, false]) && length(groups) > 0 do
       Enum.random(groups)
     else
       nil
     end
-    
-    # Venue assignment: virtual URL or venue_id from pool
+
+    # Venue assignment: virtual events use virtual_venue_url, physical events use venue_id
     venue_attrs = if Map.get(attrs, :is_virtual) do
-      %{virtual_venue_url: Faker.Internet.url()}
+      # Virtual events don't need a physical venue, just a URL
+      %{
+        virtual_venue_url: Faker.Internet.url(),
+        is_virtual: true
+      }
     else
       # Assign a venue from the pool (if available) for physical events
       if length(venue_pool) > 0 do
         venue = Enum.random(venue_pool)
-        %{venue_id: venue.id}
+        %{venue_id: venue.id, is_virtual: false}
       else
-        # Fallback: keep as virtual if no venues available
-        %{is_virtual: true, virtual_venue_url: Faker.Internet.url()}
+        # Fallback: make it virtual if no physical venues available
+        %{
+          is_virtual: true,
+          virtual_venue_url: Faker.Internet.url()
+        }
       end
     end
     
