@@ -106,13 +106,7 @@ defmodule Mix.Tasks.Discovery.CalculateCityCoordinates do
   end
 
   defp schedule_calculation(city_id, city_name, force) do
-    args = if force do
-      %{city_id: city_id, force: true}
-    else
-      %{city_id: city_id}
-    end
-
-    case CityCoordinateCalculationJob.new(args) |> Oban.insert() do
+    case CityCoordinateCalculationJob.schedule_update(city_id, force) do
       {:ok, _job} ->
         :scheduled
       {:error, %Ecto.Changeset{errors: [args: {"has already been scheduled", _}]}} ->
