@@ -15,8 +15,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Helpers.CategoryHelpers
 
   @default_radius_km 50
-  @max_radius_km 100
-  @min_radius_km 5
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
@@ -46,7 +44,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:meta_description, meta_description(city))
            |> assign(:categories, Categories.list_categories())
            |> assign(:events, [])
-           |> assign(:pagination, %Pagination{entries: [], page_number: 1, page_size: 21, total_entries: 0, total_pages: 0})
+           |> assign(:pagination, %Pagination{entries: [], page_number: 1, page_size: 60, total_entries: 0, total_pages: 0})
            |> fetch_events()
            |> fetch_nearby_cities()}
         else
@@ -105,7 +103,7 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_by: parse_sort(filter_params["sort_by"]),
       sort_order: :asc,
       page: 1,
-      page_size: 21
+      page_size: 60  # Divisible by 3 for grid layout
     }
 
     socket =
@@ -628,7 +626,7 @@ defmodule EventasaurusWeb.CityLive.Index do
     query_filters = Map.merge(filters, %{
       language: language,
       sort_order: filters[:sort_order] || :asc,
-      page_size: 25,  # Standard page size now that filtering is efficient
+      page_size: filters[:page_size] || 60,  # Use filter's page_size, default to 60 (divisible by 3)
       page: filters[:page] || 1,
       # Add geographic filtering parameters
       center_lat: lat,
@@ -637,20 +635,25 @@ defmodule EventasaurusWeb.CityLive.Index do
     })
 
     # Get events with geographic filtering done at database level
-    geographic_events = if lat && lng do
-      PublicEventsEnhanced.list_events(query_filters)
+    {geographic_events, total_count} = if lat && lng do
+      # Get the paginated events
+      events = PublicEventsEnhanced.list_events(query_filters)
+
+      # Get the total count without pagination
+      count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
+      total = PublicEventsEnhanced.count_events(count_filters)
+
+      {events, total}
     else
       # No coordinates, fallback to empty list
-      []
+      {[], 0}
     end
 
-    # Since we're now using database pagination, events are already paginated
-    # For a production app, you'd want a separate count query
+    # Use actual counts for pagination
     page = filters[:page] || 1
-    page_size = 25
-    total_entries = length(geographic_events) * 10  # Estimate for now
-    total_pages = if total_entries > 0, do: ceil(total_entries / page_size), else: 1
-    _has_next = length(geographic_events) == page_size
+    page_size = filters[:page_size] || 60
+    total_entries = total_count
+    total_pages = ceil(total_entries / page_size)
 
     pagination = %Pagination{
       entries: geographic_events,
@@ -663,7 +666,7 @@ defmodule EventasaurusWeb.CityLive.Index do
     socket
     |> assign(:events, geographic_events)
     |> assign(:pagination, pagination)
-    |> assign(:total_events, length(geographic_events))
+    |> assign(:total_events, total_entries)  # Use the total from pagination, not current page length
     |> assign(:loading, false)
   end
 
@@ -672,15 +675,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     socket
   end
 
-  defp parse_radius(nil), do: @default_radius_km
-  defp parse_radius(radius_str) do
-    case Integer.parse(radius_str) do
-      {radius, _} when radius >= @min_radius_km and radius <= @max_radius_km ->
-        radius
-      _ ->
-        @default_radius_km
-    end
-  end
 
   defp page_title(city) do
     "Events in #{city.name}, #{city.country.name} | Eventasaurus"
@@ -760,7 +754,7 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_by: :starts_at,
       sort_order: :asc,
       page: 1,
-      page_size: 21
+      page_size: 60  # Divisible by 3 for grid layout
     }
   end
 

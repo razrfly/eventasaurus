@@ -301,10 +301,10 @@
         <%= if @pagination.total_pages > 1 do %>
           <div class="mt-8 flex justify-center">
             <nav class="flex items-center space-x-2">
-              <%= if @pagination.current_page > 1 do %>
+              <%= if @pagination.page_number > 1 do %>
                 <button
                   phx-click="paginate"
-                  phx-value-page={@pagination.current_page - 1}
+                  phx-value-page={@pagination.page_number - 1}
                   class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Previous
@@ -312,24 +312,24 @@
               <% end %>
 
               <%= for page <- 1..@pagination.total_pages do %>
-                <%= if abs(page - @pagination.current_page) < 3 or page == 1 or page == @pagination.total_pages do %>
+                <%= if abs(page - @pagination.page_number) < 3 or page == 1 or page == @pagination.total_pages do %>
                   <button
                     phx-click="paginate"
                     phx-value-page={page}
-                    class={"px-3 py-2 rounded-md #{if page == @pagination.current_page, do: "bg-indigo-600 text-white", else: "bg-white border border-gray-300 hover:bg-gray-50"}"}
+                    class={"px-3 py-2 rounded-md #{if page == @pagination.page_number, do: "bg-indigo-600 text-white", else: "bg-white border border-gray-300 hover:bg-gray-50"}"}
                   >
                     <%= page %>
                   </button>
                 <% end %>
-                <%= if abs(page - @pagination.current_page) == 3 and page != 1 and page != @pagination.total_pages do %>
+                <%= if abs(page - @pagination.page_number) == 3 and page != 1 and page != @pagination.total_pages do %>
                   <span class="px-2">...</span>
                 <% end %>
               <% end %>
 
-              <%= if @pagination.current_page < @pagination.total_pages do %>
+              <%= if @pagination.page_number < @pagination.total_pages do %>
                 <button
                   phx-click="paginate"
-                  phx-value-page={@pagination.current_page + 1}
+                  phx-value-page={@pagination.page_number + 1}
                   class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Next
