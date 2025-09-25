@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:selected_users, [])
       |> assign(:selected_emails, [])
       |> assign(:current_email_input, "")
+      |> assign(:bulk_email_input, "")
       |> assign(:modal_organizer, nil)
 
     {:ok, socket}
@@ -277,7 +278,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
      |> assign(:invitation_message, "")
      |> assign(:selected_users, [])
      |> assign(:selected_emails, [])
-     |> assign(:current_email_input, "")}
+     |> assign(:current_email_input, "")
+     |> assign(:bulk_email_input, "")}
   end
 
   @impl true
@@ -872,6 +874,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           selected_users={@selected_users}
           selected_emails={@selected_emails}
           current_email_input={@current_email_input}
+          bulk_email_input={@bulk_email_input}
           invitation_message={@invitation_message}
           organizer={@modal_organizer}
           on_close="close_plan_modal"

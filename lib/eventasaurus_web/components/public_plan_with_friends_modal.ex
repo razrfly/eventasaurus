@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
     SelectedParticipantsComponent,
     InvitationMessageComponent
   }
-  import EventasaurusWeb.Components.SimpleEmailInput
+  import EventasaurusWeb.Components.IndividualEmailInput
 
   attr :id, :string, required: true
   attr :show, :boolean, default: false
@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :selected_users, :list, default: []
   attr :selected_emails, :list, default: []
   attr :current_email_input, :string, default: ""
+  attr :bulk_email_input, :string, default: ""
   attr :invitation_message, :string, default: ""
   attr :organizer, :map, required: true
   attr :on_close, :string, default: "close_plan_modal"
@@ -83,10 +84,11 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                     <p class="text-sm text-gray-500">Add email addresses to invite people to this event</p>
                   </div>
 
-                  <.simple_email_input
+                  <.individual_email_input
                     id="unified-email-input"
                     emails={@selected_emails}
                     current_input={@current_email_input}
+                    bulk_input={@bulk_email_input}
                     on_add_email="add_email"
                     on_remove_email="remove_email"
                     on_input_change="email_input_change"
