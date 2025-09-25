@@ -1,27 +1,62 @@
-defmodule EventasaurusWeb.PublicEventsIndexLive do
+defmodule EventasaurusWeb.CityLive.Index do
+  @moduledoc """
+  LiveView for city-based event discovery pages.
+
+  Displays events within a configurable radius of a city's center,
+  using the city's dynamically calculated coordinates.
+  """
+
   use EventasaurusWeb, :live_view
 
+  alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
+  alias EventasaurusApp.Repo
   alias EventasaurusWeb.Helpers.CategoryHelpers
 
+  @default_radius_km 50
+  @max_radius_km 100
+  @min_radius_km 5
+
   @impl true
-  def mount(_params, _session, socket) do
-    # Get language from session or default to English
-    language = get_connect_params(socket)["locale"] || "en"
+  def mount(%{"city_slug" => city_slug}, _session, socket) do
+    case Locations.get_city_by_slug(city_slug) do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "City not found")
+         |> push_navigate(to: ~p"/activities")}
 
-    socket =
-      socket
-      |> assign(:language, language)
-      |> assign(:view_mode, "grid")
-      |> assign(:filters, default_filters())
-      |> assign(:categories, Categories.list_categories())
-      |> assign(:filter_facets, %{})
-      |> assign(:show_filters, false)
-      |> assign(:loading, false)
+      city ->
+        if city.latitude && city.longitude do
+          # Get language from session or default to English
+          language = get_connect_params(socket)["locale"] || "en"
 
-    {:ok, socket}
+          {:ok,
+           socket
+           |> assign(:city, city)
+           |> assign(:language, language)
+           |> assign(:radius_km, @default_radius_km)
+           |> assign(:view_mode, "grid")
+           |> assign(:filters, default_filters())
+           |> assign(:show_filters, false)
+           |> assign(:loading, false)
+           |> assign(:total_events, 0)
+           |> assign(:page_title, page_title(city))
+           |> assign(:meta_description, meta_description(city))
+           |> assign(:categories, Categories.list_categories())
+           |> assign(:events, [])
+           |> assign(:pagination, %Pagination{entries: [], page_number: 1, page_size: 21, total_entries: 0, total_pages: 0})
+           |> fetch_events()
+           |> fetch_nearby_cities()}
+        else
+          {:ok,
+           socket
+           |> put_flash(:error, "City location data is being processed. Please try again later.")
+           |> push_navigate(to: ~p"/activities")}
+        end
+    end
   end
 
   @impl true
@@ -30,7 +65,6 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       socket
       |> apply_params_to_filters(params)
       |> fetch_events()
-      |> fetch_facets()
 
     {:noreply, socket}
   end
@@ -43,40 +77,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       socket
       |> assign(:filters, filters)
       |> fetch_events()
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
-      )
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("filter", %{"filter" => filter_params}, socket) do
-    # Parse the filter parameters and merge with existing filters
-    current_filters = socket.assigns.filters
-
-    new_filters = %{
-      categories: parse_id_list(filter_params["categories"]),
-      start_date: parse_date(filter_params["start_date"]),
-      end_date: parse_date(filter_params["end_date"]),
-      min_price: parse_decimal(filter_params["min_price"]),
-      max_price: parse_decimal(filter_params["max_price"]),
-      sort_by: parse_sort(filter_params["sort_by"]),
-      sort_order: :asc,
-      city_id: nil,
-      # Keep existing search
-      search: current_filters.search,
-      # Reset to page 1 when filters change
-      page: 1,
-      page_size: current_filters.page_size
-    }
-
-    socket =
-      socket
-      |> assign(:filters, new_filters)
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, new_filters)})
-      )
+      |> push_patch(to: build_path(socket, filters))
 
     {:noreply, socket}
   end
@@ -89,28 +90,31 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       socket
       |> assign(:filters, filters)
       |> fetch_events()
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
-      )
+      |> push_patch(to: build_path(socket, filters))
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("remove_category", %{"id" => category_id}, socket) do
-    category_id = String.to_integer(category_id)
-    current_categories = socket.assigns.filters.categories || []
-    updated_categories = Enum.reject(current_categories, &(&1 == category_id))
+  def handle_event("filter", %{"filter" => filter_params}, socket) do
+    radius_km = parse_integer(filter_params["radius"]) || @default_radius_km
 
-    filters = Map.put(socket.assigns.filters, :categories, updated_categories)
+    filters = %{
+      search: socket.assigns.filters.search,
+      categories: parse_id_list(filter_params["categories"]),
+      radius_km: radius_km,
+      sort_by: parse_sort(filter_params["sort_by"]),
+      sort_order: :asc,
+      page: 1,
+      page_size: 21
+    }
 
     socket =
       socket
       |> assign(:filters, filters)
+      |> assign(:radius_km, radius_km)
       |> fetch_events()
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
-      )
+      |> push_patch(to: build_path(socket, filters))
 
     {:noreply, socket}
   end
@@ -122,9 +126,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     socket =
       socket
       |> assign(:filters, cleared_filters)
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, cleared_filters)})
-      )
+      |> assign(:radius_km, @default_radius_km)
+      |> fetch_events()
+      |> push_patch(to: build_path(socket, cleared_filters))
 
     {:noreply, socket}
   end
@@ -147,238 +151,10 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     socket =
       socket
       |> assign(:filters, updated_filters)
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, updated_filters)})
-      )
+      |> fetch_events()
+      |> push_patch(to: build_path(socket, updated_filters))
 
     {:noreply, socket}
-  end
-
-  defp fetch_events(socket) do
-    filters = socket.assigns.filters
-    language = socket.assigns.language
-
-    # Ensure sort_order is included
-    query_filters =
-      Map.merge(filters, %{
-        language: language,
-        sort_order: filters[:sort_order] || :asc
-      })
-
-    events = PublicEventsEnhanced.list_events(query_filters)
-
-    total = PublicEventsEnhanced.count_events(filters)
-
-    pagination = %Pagination{
-      entries: events,
-      page_number: filters.page,
-      page_size: filters.page_size,
-      total_entries: total,
-      total_pages: ceil(total / filters.page_size)
-    }
-
-    assign(socket,
-      events: events,
-      pagination: pagination
-    )
-  end
-
-  defp fetch_facets(socket) do
-    # Fetch filter facets for displaying counts
-    facets = PublicEventsEnhanced.get_filter_facets(socket.assigns.filters)
-    assign(socket, :filter_facets, facets)
-  end
-
-  defp apply_params_to_filters(socket, params) do
-    # Handle both singular category (slug from route) and plural categories (IDs from query)
-    category_ids =
-      case params do
-        %{"category" => slug} when is_binary(slug) and slug != "" ->
-          # Single category slug from route like /activities/category/concerts
-          case Categories.get_category_by_slug(slug) do
-            nil -> []
-            category -> [category.id]
-          end
-
-        %{"categories" => ids} ->
-          # Multiple category IDs from query params
-          parse_id_list(ids)
-
-        _ ->
-          []
-      end
-
-    filters = %{
-      search: params["search"],
-      categories: category_ids,
-      start_date: parse_date(params["start_date"]),
-      end_date: parse_date(params["end_date"]),
-      min_price: parse_decimal(params["min_price"]),
-      max_price: parse_decimal(params["max_price"]),
-      city_id: parse_integer(params["city"]),
-      sort_by: parse_sort(params["sort"]),
-      # Add default sort order
-      sort_order: :asc,
-      page: parse_integer(params["page"]) || 1,
-      page_size: 21
-    }
-
-    assign(socket, :filters, filters)
-  end
-
-  defp default_filters do
-    %{
-      search: nil,
-      categories: [],
-      start_date: nil,
-      end_date: nil,
-      min_price: nil,
-      max_price: nil,
-      city_id: nil,
-      sort_by: :starts_at,
-      sort_order: :asc,
-      page: 1,
-      page_size: 21
-    }
-  end
-
-  # Currently unused but kept for potential future use
-  # defp parse_filter_params(params) do
-  #   %{
-  #     categories: parse_id_list(params["categories"]),
-  #     start_date: parse_date(params["start_date"]),
-  #     end_date: parse_date(params["end_date"]),
-  #     min_price: parse_decimal(params["min_price"]),
-  #     max_price: parse_decimal(params["max_price"]),
-  #     city_id: parse_integer(params["city_id"]),
-  #     sort_by: parse_sort(params["sort_by"])
-  #   }
-  # end
-
-  defp parse_id_list(nil), do: []
-  defp parse_id_list(""), do: []
-
-  defp parse_id_list(ids) when is_list(ids) do
-    ids
-    |> Enum.map(fn id ->
-      case id do
-        id when is_integer(id) ->
-          id
-
-        id when is_binary(id) ->
-          case Integer.parse(id) do
-            {num, _} -> num
-            _ -> nil
-          end
-
-        _ ->
-          nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp parse_id_list(ids) when is_binary(ids) do
-    ids
-    |> String.split(",")
-    |> Enum.map(fn id ->
-      case Integer.parse(id) do
-        {num, _} -> num
-        _ -> nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp parse_integer(nil), do: nil
-  defp parse_integer(""), do: nil
-
-  defp parse_integer(val) when is_binary(val) do
-    case Integer.parse(val) do
-      {num, _} -> num
-      :error -> nil
-    end
-  end
-
-  defp parse_decimal(nil), do: nil
-  defp parse_decimal(""), do: nil
-
-  defp parse_decimal(val) when is_binary(val) do
-    case Decimal.parse(val) do
-      {dec, _} when is_struct(dec, Decimal) -> dec
-      _ -> nil
-    end
-  end
-
-  defp parse_date(nil), do: nil
-  defp parse_date(""), do: nil
-
-  defp parse_date(date_str) when is_binary(date_str) do
-    case Date.from_iso8601(date_str) do
-      {:ok, date} -> DateTime.new!(date, ~T[00:00:00])
-      _ -> nil
-    end
-  end
-
-  defp parse_sort(nil), do: :starts_at
-  defp parse_sort("price"), do: :price
-  defp parse_sort("title"), do: :title
-  defp parse_sort("relevance"), do: :relevance
-  defp parse_sort(_), do: :starts_at
-
-  defp build_path(socket) do
-    filters = socket.assigns.filters
-    params = build_filter_params(filters)
-
-    case socket.assigns[:live_action] do
-      :search ->
-        ~p"/activities/search?#{params}"
-
-      :category ->
-        case socket.assigns[:category] do
-          nil -> ~p"/activities?#{params}"
-          category -> ~p"/activities/category/#{category}?#{params}"
-        end
-
-      _ ->
-        ~p"/activities?#{params}"
-    end
-  end
-
-  defp build_filter_params(filters) do
-    filters
-    |> Map.take([
-      :search,
-      :categories,
-      :start_date,
-      :end_date,
-      :min_price,
-      :max_price,
-      :city_id,
-      :sort_by,
-      :page
-    ])
-    |> Enum.reject(fn
-      {_k, nil} -> true
-      {_k, []} -> true
-      {_k, ""} -> true
-      {:page, 1} -> true
-      # Don't include default sort
-      {:sort_by, :starts_at} -> true
-      _ -> false
-    end)
-    |> Enum.map(fn
-      {:categories, ids} when is_list(ids) -> {"categories", Enum.join(ids, ",")}
-      {:start_date, date} -> {"start_date", Date.to_iso8601(DateTime.to_date(date))}
-      {:end_date, date} -> {"end_date", Date.to_iso8601(DateTime.to_date(date))}
-      {:min_price, price} -> {"min_price", to_string(price)}
-      {:max_price, price} -> {"max_price", to_string(price)}
-      {:city_id, id} -> {"city", to_string(id)}
-      {:sort_by, sort} -> {"sort", to_string(sort)}
-      {:page, page} -> {"page", to_string(page)}
-      {k, v} -> {to_string(k), to_string(v)}
-    end)
-    |> Enum.into(%{})
   end
 
   @impl true
@@ -390,7 +166,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div class="flex justify-between items-center">
             <h1 class="text-3xl font-bold text-gray-900">
-              <%= gettext("Discover Events") %>
+              Events in {@city.name}
             </h1>
             <div class="flex items-center space-x-4">
               <!-- View Mode Toggle -->
@@ -434,7 +210,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
                 type="text"
                 name="search"
                 value={@filters.search}
-                placeholder={gettext("Search events...")}
+                placeholder="Search events..."
                 class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <button type="submit" class="absolute right-3 top-3.5">
@@ -450,8 +226,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <.filter_panel
             filters={@filters}
+            radius_km={@radius_km}
             categories={@categories}
-            facets={@filter_facets}
           />
         </div>
       </div>
@@ -460,7 +236,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       <div :if={active_filter_count(@filters) > 0} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         <div class="flex items-center space-x-2">
           <span class="text-sm text-gray-600">Active filters:</span>
-          <.active_filter_tags filters={@filters} categories={@categories} />
+          <.active_filter_tags filters={@filters} radius_km={@radius_km} categories={@categories} />
           <button
             phx-click="clear_filters"
             class="ml-4 text-sm text-blue-600 hover:text-blue-800"
@@ -481,24 +257,24 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
             <div class="text-center py-12">
               <Heroicons.calendar_days class="mx-auto h-12 w-12 text-gray-400" />
               <h3 class="mt-2 text-lg font-medium text-gray-900">
-                <%= gettext("No events found") %>
+                No events found
               </h3>
               <p class="mt-1 text-sm text-gray-500">
-                <%= gettext("Try adjusting your filters or search query") %>
+                Try adjusting your filters or search query
               </p>
             </div>
           <% else %>
             <div class="mb-4 text-sm text-gray-600">
-              <%= gettext("Found %{count} events", count: @pagination.total_entries) %>
+              Found {@total_events} events
             </div>
 
             <%= if @view_mode == "grid" do %>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <.event_card :for={event <- @events} event={event} language={@language} />
+                <.event_card :for={event <- @events} event={event} language="en" />
               </div>
             <% else %>
               <div class="space-y-4">
-                <.event_list_item :for={event <- @events} event={event} language={@language} />
+                <.event_list_item :for={event <- @events} event={event} language="en" />
               </div>
             <% end %>
 
@@ -509,110 +285,157 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
           <% end %>
         <% end %>
       </div>
+
     </div>
     """
   end
 
-  # Component: Filter Panel
+  # Component: Filter Panel with radius selector
   defp filter_panel(assigns) do
     ~H"""
     <form phx-change="filter" class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Categories -->
+        <!-- Search Radius -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">
-            <%= gettext("Categories") %>
+            Search Radius
           </label>
-          <div class="space-y-2 max-h-48 overflow-y-auto">
-            <div :for={category <- @categories} class="flex items-center">
-              <input
-                type="checkbox"
-                name="filter[categories][]"
-                value={category.id}
-                checked={category.id in (@filters.categories || [])}
-                class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label class="ml-2 text-sm text-gray-700">
-                <%= category.name %>
-                <span :if={get_facet_count(@facets, :categories, category.id)} class="text-gray-500">
-                  (<%= get_facet_count(@facets, :categories, category.id) %>)
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Date Range -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            <%= gettext("Date Range") %>
-          </label>
-          <input
-            type="date"
-            name="filter[start_date]"
-            value={format_date(@filters.start_date)}
+          <select
+            name="filter[radius]"
             class="w-full px-3 py-2 border border-gray-300 rounded-md"
-          />
-          <input
-            type="date"
-            name="filter[end_date]"
-            value={format_date(@filters.end_date)}
-            class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md"
-          />
-        </div>
-
-        <!-- Price Range -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            <%= gettext("Price Range") %>
-          </label>
-          <div class="flex space-x-2">
-            <input
-              type="number"
-              name="filter[min_price]"
-              value={@filters.min_price}
-              placeholder="Min"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-            <input
-              type="number"
-              name="filter[max_price]"
-              value={@filters.max_price}
-              placeholder="Max"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
+          >
+            <option value="5" selected={@radius_km == 5}>5 km</option>
+            <option value="10" selected={@radius_km == 10}>10 km</option>
+            <option value="25" selected={@radius_km == 25}>25 km</option>
+            <option value="50" selected={@radius_km == 50}>50 km</option>
+            <option value="100" selected={@radius_km == 100}>100 km</option>
+          </select>
         </div>
 
         <!-- Sort By -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">
-            <%= gettext("Sort By") %>
+            Sort By
           </label>
           <select
             name="filter[sort_by]"
             class="w-full px-3 py-2 border border-gray-300 rounded-md"
           >
             <option value="starts_at" selected={@filters.sort_by == :starts_at}>
-              <%= gettext("Date") %>
+              Date
             </option>
-            <option value="price" selected={@filters.sort_by == :price}>
-              <%= gettext("Price") %>
+            <option value="distance" selected={@filters.sort_by == :distance}>
+              Distance
             </option>
             <option value="title" selected={@filters.sort_by == :title}>
-              <%= gettext("Title") %>
-            </option>
-            <option value="relevance" selected={@filters.sort_by == :relevance}>
-              <%= gettext("Relevance") %>
+              Title
             </option>
           </select>
+        </div>
+      </div>
+
+      <!-- Categories -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          Categories
+        </label>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          <%= for category <- @categories do %>
+            <label class="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                name="filter[categories][]"
+                value={category.id}
+                checked={category.id in @filters.categories}
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span class="text-sm text-gray-700"><%= category.name %></span>
+            </label>
+          <% end %>
         </div>
       </div>
     </form>
     """
   end
 
-  # Component: Event Card
+  # Component: Active Filter Tags
+  defp active_filter_tags(assigns) do
+    ~H"""
+    <div class="flex flex-wrap gap-2">
+      <%= if @filters.search do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          Search: <%= @filters.search %>
+          <button phx-click="clear_search" class="ml-2">
+            <Heroicons.x_mark class="w-3 h-3" />
+          </button>
+        </span>
+      <% end %>
+
+      <%= if @radius_km != 50 do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          Radius: <%= @radius_km %>km
+        </span>
+      <% end %>
+
+      <%= for category_id <- @filters.categories do %>
+        <% category = Enum.find(@categories, & &1.id == category_id) %>
+        <%= if category do %>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+            <%= category.name %>
+          </span>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Component: Pagination - EXACT same from Activities page
+  defp pagination(assigns) do
+    ~H"""
+    <nav class="flex justify-center">
+      <div class="flex items-center space-x-2">
+        <!-- Previous -->
+        <button
+          :if={@pagination.page_number > 1}
+          phx-click="paginate"
+          phx-value-page={@pagination.page_number - 1}
+          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Previous
+        </button>
+
+        <!-- Page Numbers -->
+        <div class="flex space-x-1">
+          <%= for page <- Pagination.page_links(@pagination) do %>
+            <%= if page == :ellipsis do %>
+              <span class="px-3 py-2">...</span>
+            <% else %>
+              <button
+                phx-click="paginate"
+                phx-value-page={page}
+                class={"px-3 py-2 rounded-md #{if page == @pagination.page_number, do: "bg-blue-600 text-white", else: "border border-gray-300 hover:bg-gray-50"}"}
+              >
+                <%= page %>
+              </button>
+            <% end %>
+          <% end %>
+        </div>
+
+        <!-- Next -->
+        <button
+          :if={@pagination.page_number < @pagination.total_pages}
+          phx-click="paginate"
+          phx-value-page={@pagination.page_number + 1}
+          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Next
+        </button>
+      </div>
+    </nav>
+    """
+  end
+
+  # EXACT same event_card component from Activities page with multi-occurrence indicators
   defp event_card(assigns) do
     alias EventasaurusDiscovery.PublicEvents.PublicEvent
 
@@ -687,7 +510,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
           <% else %>
             <div class="mt-2">
               <span class="text-sm font-medium text-green-600">
-                <%= gettext("Free") %>
+                Free
               </span>
             </div>
           <% end %>
@@ -697,7 +520,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     """
   end
 
-  # Component: Event List Item
+  # EXACT same event_list_item component from Activities page with multi-occurrence indicators
   defp event_list_item(assigns) do
     alias EventasaurusDiscovery.PublicEvents.PublicEvent
 
@@ -781,7 +604,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
               </div>
             <% else %>
               <div class="text-lg font-semibold text-green-600">
-                <%= gettext("Free") %>
+                Free
               </div>
             <% end %>
           </div>
@@ -791,116 +614,145 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     """
   end
 
-  # Component: Pagination
-  defp pagination(assigns) do
-    ~H"""
-    <nav class="flex justify-center">
-      <div class="flex items-center space-x-2">
-        <!-- Previous -->
-        <button
-          :if={@pagination.page_number > 1}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number - 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          <%= gettext("Previous") %>
-        </button>
+  # Private functions
 
-        <!-- Page Numbers -->
-        <div class="flex space-x-1">
-          <%= for page <- Pagination.page_links(@pagination) do %>
-            <%= if page == :ellipsis do %>
-              <span class="px-3 py-2">...</span>
-            <% else %>
-              <button
-                phx-click="paginate"
-                phx-value-page={page}
-                class={"px-3 py-2 rounded-md #{if page == @pagination.page_number, do: "bg-blue-600 text-white", else: "border border-gray-300 hover:bg-gray-50"}"}
-              >
-                <%= page %>
-              </button>
-            <% end %>
-          <% end %>
-        </div>
+  defp fetch_events(socket) do
+    city = socket.assigns.city
+    filters = socket.assigns.filters
+    language = socket.assigns.language
 
-        <!-- Next -->
-        <button
-          :if={@pagination.page_number < @pagination.total_pages}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number + 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          <%= gettext("Next") %>
-        </button>
-      </div>
-    </nav>
-    """
+    # Use EXACT same data pipeline as Activities page
+    query_filters = Map.merge(filters, %{
+      language: language,
+      sort_order: filters[:sort_order] || :asc,
+      # Start with higher limit since we'll filter by radius
+      page_size: 1000,
+      page: 1
+    })
+
+    # Get all enhanced events (same as Activities page)
+    all_events = PublicEventsEnhanced.list_events(query_filters)
+
+    # Apply geographic filtering if city has coordinates
+    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
+
+    geographic_events = if lat && lng do
+      radius_meters = filters.radius_km * 1000
+
+      Enum.filter(all_events, fn event ->
+        case event.venue do
+          %{latitude: venue_lat, longitude: venue_lng} when not is_nil(venue_lat) and not is_nil(venue_lng) ->
+            venue_lat = if is_struct(venue_lat, Decimal), do: Decimal.to_float(venue_lat), else: venue_lat
+            venue_lng = if is_struct(venue_lng, Decimal), do: Decimal.to_float(venue_lng), else: venue_lng
+
+            query = """
+            SELECT ST_Distance(
+              ST_MakePoint($1::float, $2::float)::geography,
+              ST_MakePoint($3::float, $4::float)::geography
+            ) as distance_meters
+            """
+
+            case Repo.query(query, [lng, lat, venue_lng, venue_lat]) do
+              {:ok, %{rows: [[distance]]}} -> distance <= radius_meters
+              _ -> false
+            end
+          _ ->
+            false
+        end
+      end)
+    else
+      []
+    end
+
+    # Paginate the filtered results manually
+    total_entries = length(geographic_events)
+    page = filters.page
+    page_size = filters.page_size
+    total_pages = ceil(total_entries / page_size)
+    offset = (page - 1) * page_size
+
+    paginated_events = geographic_events |> Enum.drop(offset) |> Enum.take(page_size)
+
+    pagination = %Pagination{
+      entries: paginated_events,
+      page_number: page,
+      page_size: page_size,
+      total_entries: total_entries,
+      total_pages: total_pages
+    }
+
+    socket
+    |> assign(:events, paginated_events)
+    |> assign(:pagination, pagination)
+    |> assign(:total_events, total_entries)
+    |> assign(:loading, false)
   end
 
-  # Component: Active Filter Tags
-  defp active_filter_tags(assigns) do
-    ~H"""
-    <div class="flex flex-wrap gap-2">
-      <%= if @filters.search do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          Search: <%= @filters.search %>
-          <button phx-click="clear_search" class="ml-2">
-            <Heroicons.x_mark class="w-3 h-3" />
-          </button>
-        </span>
-      <% end %>
-
-      <%= for category_id <- @filters.categories || [] do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          <%= get_category_name(@categories, category_id) %>
-          <button phx-click="remove_category" phx-value-id={category_id} class="ml-2">
-            <Heroicons.x_mark class="w-3 h-3" />
-          </button>
-        </span>
-      <% end %>
-
-      <!-- Add more filter tags as needed -->
-    </div>
-    """
+  defp fetch_nearby_cities(socket) do
+    # No longer showing nearby cities
+    socket
   end
 
-  # Helper Functions
-  defp active_filter_count(filters) do
-    count = 0
-    count = if filters.search, do: count + 1, else: count
-    count = if filters.categories != [], do: count + 1, else: count
-    count = if filters.start_date, do: count + 1, else: count
-    count = if filters.end_date, do: count + 1, else: count
-    count = if filters.min_price, do: count + 1, else: count
-    count = if filters.max_price, do: count + 1, else: count
-    count
-  end
-
-  defp get_category_name(categories, id) do
-    Enum.find_value(categories, fn cat ->
-      if cat.id == id, do: cat.name
-    end) || "Unknown"
-  end
-
-  defp get_facet_count(facets, type, id) do
-    facets[type]
-    |> Enum.find(fn item -> item.id == id end)
-    |> case do
-      nil -> nil
-      item -> item.count
+  defp parse_radius(nil), do: @default_radius_km
+  defp parse_radius(radius_str) do
+    case Integer.parse(radius_str) do
+      {radius, _} when radius >= @min_radius_km and radius <= @max_radius_km ->
+        radius
+      _ ->
+        @default_radius_km
     end
   end
 
-  defp format_datetime(nil), do: "TBD"
-
-  defp format_datetime(datetime) do
-    Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
+  defp page_title(city) do
+    "Events in #{city.name}, #{city.country.name} | Eventasaurus"
   end
 
-  defp format_date(nil), do: nil
+  defp meta_description(city) do
+    "Discover upcoming events in #{city.name}, #{city.country.name}. Find concerts, festivals, workshops, and more happening near you."
+  end
 
-  defp format_date(datetime) do
-    Date.to_iso8601(DateTime.to_date(datetime))
+
+  defp active_filter_count(filters) do
+    count = 0
+    count = if filters.search && filters.search != "", do: count + 1, else: count
+    count = if filters.radius_km && filters.radius_km != @default_radius_km, do: count + 1, else: count
+    count = count + length(filters.categories || [])
+    count
+  end
+
+  defp parse_id_list(nil), do: []
+  defp parse_id_list([]), do: []
+  defp parse_id_list(ids) when is_list(ids) do
+    ids
+    |> Enum.map(fn id ->
+      case id do
+        id when is_integer(id) -> id
+        id when is_binary(id) ->
+          case Integer.parse(id) do
+            {num, _} -> num
+            _ -> nil
+          end
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+  defp parse_id_list(ids) when is_binary(ids) do
+    ids
+    |> String.split(",")
+    |> Enum.map(fn id ->
+      case Integer.parse(id) do
+        {num, _} -> num
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp format_datetime(nil), do: "TBD"
+  defp format_datetime(datetime) do
+    Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
   end
 
   defp format_price_range(event) do
@@ -921,4 +773,75 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
         "Free"
     end
   end
+
+  defp default_filters do
+    %{
+      search: nil,
+      categories: [],
+      radius_km: @default_radius_km,
+      sort_by: :starts_at,
+      sort_order: :asc,
+      page: 1,
+      page_size: 21
+    }
+  end
+
+  defp apply_params_to_filters(socket, params) do
+    filters = %{
+      search: params["search"],
+      categories: parse_id_list(params["categories"]),
+      radius_km: parse_integer(params["radius"]) || socket.assigns.radius_km,
+      sort_by: parse_sort(params["sort"]),
+      sort_order: :asc,
+      page: parse_integer(params["page"]) || 1,
+      page_size: 21
+    }
+
+    socket
+    |> assign(:filters, filters)
+    |> assign(:radius_km, filters.radius_km)
+  end
+
+  defp build_path(socket, filters) do
+    params = build_filter_params(filters)
+    ~p"/c/#{socket.assigns.city.slug}?#{params}"
+  end
+
+  defp build_filter_params(filters) do
+    filters
+    |> Map.take([:search, :categories, :radius_km, :sort_by, :page])
+    |> Enum.reject(fn
+      {_k, nil} -> true
+      {_k, ""} -> true
+      {_k, []} -> true  # Empty categories list
+      {:page, 1} -> true
+      {:radius_km, @default_radius_km} -> true  # Don't include default radius
+      {:sort_by, :starts_at} -> true
+      _ -> false
+    end)
+    |> Enum.map(fn
+      {:categories, cats} when is_list(cats) -> {"categories", Enum.join(cats, ",")}
+      {:radius_km, radius} -> {"radius", to_string(radius)}
+      {:sort_by, sort} -> {"sort", to_string(sort)}
+      {:page, page} -> {"page", to_string(page)}
+      {k, v} -> {to_string(k), to_string(v)}
+    end)
+    |> Enum.into(%{})
+  end
+
+
+  defp parse_integer(nil), do: nil
+  defp parse_integer(""), do: nil
+  defp parse_integer(val) when is_binary(val) do
+    case Integer.parse(val) do
+      {num, _} -> num
+      :error -> nil
+    end
+  end
+
+  defp parse_sort(nil), do: :starts_at
+  defp parse_sort("distance"), do: :distance
+  defp parse_sort("title"), do: :title
+  defp parse_sort(_), do: :starts_at
+
 end
