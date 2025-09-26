@@ -215,7 +215,7 @@
                     <% else %>
                       <div class="w-full h-48 bg-gradient-to-br from-indigo-500 to-purple-600"></div>
                     <% end %>
-                    <%= if event.ticket_url do %>
+                    <%= if has_ticket_url?(event) do %>
                       <div class="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
                         TICKETED
                       </div>
@@ -287,7 +287,7 @@
                             <% end %>
                           </div>
                         </div>
-                        <%= if event.ticket_url do %>
+                        <%= if has_ticket_url?(event) do %>
                           <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
                             TICKETED
                           </span>

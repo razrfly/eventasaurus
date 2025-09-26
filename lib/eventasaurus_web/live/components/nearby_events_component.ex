@@ -156,11 +156,45 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
     end
   end
 
+  defp get_primary_source(event) do
+    # Get primary source based on priority and last_seen_at, similar to PublicEventShowLive
+    case event.sources do
+      [] -> nil
+      sources ->
+        sources
+        |> Enum.sort_by(fn source ->
+          priority =
+            case source.metadata do
+              %{"priority" => p} when is_integer(p) -> p
+              %{"priority" => p} when is_binary(p) ->
+                case Integer.parse(p) do
+                  {num, _} -> num
+                  _ -> 10
+                end
+              _ -> 10
+            end
+
+          # Newer timestamps first (negative for descending sort)
+          ts =
+            case source.last_seen_at do
+              %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+              _ -> 9_223_372_036_854_775_807
+            end
+
+          {priority, ts}
+        end)
+        |> List.first()
+    end
+  end
+
   defp format_price(event) do
-    min = event.min_price
-    max = event.max_price
-    curr = event.currency
-    is_free = Map.get(event, :is_free, false) || (is_zero?(min) and is_zero?(max))
+    # Get pricing from the primary source instead of removed fields
+    primary_source = get_primary_source(event)
+
+    min = primary_source && primary_source.min_price
+    max = primary_source && primary_source.max_price
+    curr = primary_source && primary_source.currency
+    is_free = (primary_source && primary_source.is_free) || (is_zero?(min) and is_zero?(max))
 
     cond do
       is_free ->
@@ -259,4 +293,5 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
         nil
     end
   end
+
 end

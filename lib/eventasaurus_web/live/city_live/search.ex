@@ -275,4 +275,15 @@ defmodule EventasaurusWeb.CityLive.Search do
     end
   end
   defp parse_sort(value) when is_atom(value), do: value
+
+  defp has_ticket_url?(event) do
+    case event.sources do
+      [] -> false
+      sources when is_list(sources) ->
+        Enum.any?(sources, fn source ->
+          source.source_url && source.source_url != ""
+        end)
+      _ -> false
+    end
+  end
 end
