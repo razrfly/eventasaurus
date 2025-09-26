@@ -517,7 +517,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   def count_events(opts \\ []) do
     base_query = from(pe in PublicEvent, select: count(pe.id))
 
-    base_query
+    # Apply geographic filter if coordinates are provided
+    query = if opts[:center_lat] && opts[:center_lng] && opts[:radius_km] do
+      filter_by_radius(base_query, opts[:center_lat], opts[:center_lng], opts[:radius_km])
+    else
+      base_query
+    end
+
+    query
     |> filter_past_events(opts[:show_past])
     |> filter_by_categories(opts[:categories])
     |> filter_by_date_range(opts[:start_date], opts[:end_date])

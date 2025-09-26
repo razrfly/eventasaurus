@@ -5,7 +5,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddSpatialIndexToVenues do
     # Create a GIST index on the geography point for efficient spatial queries
     # This significantly improves performance for ST_DWithin and other spatial operations
     execute(
-      "CREATE INDEX IF NOT EXISTS venues_location_gist ON venues USING GIST ((ST_MakePoint(longitude, latitude)::geography))",
+      "CREATE INDEX IF NOT EXISTS venues_location_gist ON venues USING GIST ((ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography))",
       "DROP INDEX IF EXISTS venues_location_gist"
     )
 
