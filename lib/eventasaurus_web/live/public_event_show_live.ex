@@ -138,35 +138,48 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
+  defp get_primary_source_ticket_url(event) do
+    # Sort sources by priority and take the first one's source_url
+    sorted_sources = get_sorted_sources(event.sources)
+
+    case sorted_sources do
+      [primary_source | _] -> primary_source.source_url
+      [] -> nil
+    end
+  end
+
+  defp get_sorted_sources(sources) do
+    sources
+    |> Enum.sort_by(fn source ->
+      priority =
+        case source.metadata do
+          %{"priority" => p} when is_integer(p) ->
+            p
+
+          %{"priority" => p} when is_binary(p) ->
+            case Integer.parse(p) do
+              {num, _} -> num
+              _ -> 10
+            end
+
+          _ ->
+            10
+        end
+
+      # Newer timestamps first (negative for descending sort)
+      ts =
+        case source.last_seen_at do
+          %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+          _ -> 9_223_372_036_854_775_807
+        end
+
+      {priority, ts}
+    end)
+  end
+
   defp get_localized_description(event, language) do
     # Sort sources by priority and take the first one's description
-    sorted_sources =
-      event.sources
-      |> Enum.sort_by(fn source ->
-        priority =
-          case source.metadata do
-            %{"priority" => p} when is_integer(p) ->
-              p
-
-            %{"priority" => p} when is_binary(p) ->
-              case Integer.parse(p) do
-                {num, _} -> num
-                _ -> 10
-              end
-
-            _ ->
-              10
-          end
-
-        # Newer timestamps first (negative for descending sort)
-        ts =
-          case source.last_seen_at do
-            %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-            _ -> 9_223_372_036_854_775_807
-          end
-
-        {priority, ts}
-      end)
+    sorted_sources = get_sorted_sources(event.sources)
 
     case sorted_sources do
       [source | _] ->
@@ -706,10 +719,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   --%>
 
                   <!-- Ticket Link -->
-                  <%= if @event.ticket_url do %>
+                  <%= if ticket_url = get_primary_source_ticket_url(@event) do %>
                     <div>
                       <a
-                        href={@event.ticket_url}
+                        href={ticket_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
