@@ -896,32 +896,34 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
   end
 
-  defp format_price_range(event) do
-    symbol = currency_symbol(event.currency)
-
-    cond do
-      event.min_price && event.max_price && event.min_price == event.max_price ->
-        "#{symbol}#{event.min_price}"
-
-      event.min_price && event.max_price ->
-        "#{symbol}#{event.min_price} - #{symbol}#{event.max_price}"
-
-      event.min_price ->
-        gettext("From %{price}", price: "#{symbol}#{event.min_price}")
-
-      event.max_price ->
-        gettext("Up to %{price}", price: "#{symbol}#{event.max_price}")
-
-      true ->
-        gettext("See details")
-    end
-  end
-
-  defp currency_symbol(nil), do: "$"
-  defp currency_symbol("USD"), do: "$"
-  defp currency_symbol("EUR"), do: "€"
-  defp currency_symbol("PLN"), do: "zł"
-  defp currency_symbol(_), do: "$"
+  # Commented out - price display temporarily hidden as no APIs provide price data
+  # See GitHub issue #1281 for details
+  # defp format_price_range(event) do
+  #   symbol = currency_symbol(event.currency)
+  #
+  #   cond do
+  #     event.min_price && event.max_price && event.min_price == event.max_price ->
+  #       "#{symbol}#{event.min_price}"
+  #
+  #     event.min_price && event.max_price ->
+  #       "#{symbol}#{event.min_price} - #{symbol}#{event.max_price}"
+  #
+  #     event.min_price ->
+  #       gettext("From %{price}", price: "#{symbol}#{event.min_price}")
+  #
+  #     event.max_price ->
+  #       gettext("Up to %{price}", price: "#{symbol}#{event.max_price}")
+  #
+  #     true ->
+  #       gettext("See details")
+  #   end
+  # end
+  #
+  # defp currency_symbol(nil), do: "$"
+  # defp currency_symbol("USD"), do: "$"
+  # defp currency_symbol("EUR"), do: "€"
+  # defp currency_symbol("PLN"), do: "zł"
+  # defp currency_symbol(_), do: "$"
 
   defp format_description(nil), do: Phoenix.HTML.raw("")
 
