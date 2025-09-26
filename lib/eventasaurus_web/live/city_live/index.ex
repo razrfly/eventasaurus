@@ -297,11 +297,11 @@ defmodule EventasaurusWeb.CityLive.Index do
 
             <%= if @view_mode == "grid" do %>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <.event_card :for={event <- @events} event={event} language="en" />
+                <.event_card :for={event <- @events} event={event} language={@language} />
               </div>
             <% else %>
               <div class="space-y-4">
-                <.event_list_item :for={event <- @events} event={event} language="en" />
+                <.event_list_item :for={event <- @events} event={event} language={@language} />
               </div>
             <% end %>
 

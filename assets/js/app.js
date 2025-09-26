@@ -29,6 +29,18 @@ let Hooks = {};
 // TicketQR hook for generating QR codes on tickets
 Hooks.TicketQR = TicketQR;
 
+// Language cookie hook for persistence
+Hooks.LanguageCookie = {
+  mounted() {
+    this.handleEvent("set_language_cookie", ({ language }) => {
+      const secure = location.protocol === "https:" ? "; Secure" : ""
+      document.cookie =
+        `language_preference=${encodeURIComponent(language)}; ` +
+        `Max-Age=${60 * 60 * 24 * 365}; Path=/; SameSite=Lax${secure}`
+    })
+  }
+}
+
 // SupabaseAuthHandler hook is imported from auth/supabase-manager.js
 
 // Supabase image upload hook for file input
