@@ -124,6 +124,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   defp extract_description(document) do
     # Look for main description content with Polish-specific selectors
     selectors = [
+      ".article-content",  # Primary selector for Karnet pages
       ".event-description",
       ".description",
       ".content article",

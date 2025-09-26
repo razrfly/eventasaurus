@@ -157,37 +157,73 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   end
 
   defp format_price(event) do
-    cond do
-      is_nil(event.min_price) && is_nil(event.max_price) ->
-        nil
+    min = event.min_price
+    max = event.max_price
+    curr = event.currency
+    is_free = Map.get(event, :is_free, false) || (is_zero?(min) and is_zero?(max))
 
-      event.min_price == 0 || (event.min_price == event.max_price && event.min_price == 0) ->
+    cond do
+      is_free ->
         gettext("Free")
 
-      event.min_price == event.max_price ->
-        format_currency(event.min_price, event.currency)
+      is_nil(min) and is_nil(max) ->
+        nil
+
+      not is_nil(min) and (is_nil(max) or amounts_equal?(min, max)) ->
+        format_currency(min, curr)
+
+      not is_nil(min) and not is_nil(max) ->
+        "#{format_currency(min, curr)} - #{format_currency(max, curr)}"
 
       true ->
-        "#{format_currency(event.min_price, event.currency)} - #{format_currency(event.max_price, event.currency)}"
+        nil
     end
   end
 
   defp format_currency(amount, currency) when is_nil(amount) or is_nil(currency), do: ""
   defp format_currency(amount, currency) do
-    # Simple currency formatting - could be enhanced
-    symbol = case String.upcase(currency) do
-      "USD" -> "$"
-      "EUR" -> "€"
-      "GBP" -> "£"
-      "PLN" -> "zł"
-      _ -> currency <> " "
+    dec = to_decimal(amount)
+    num = Decimal.to_string(dec, :normal)
+    case String.upcase(currency) do
+      "USD" -> "$" <> num
+      "EUR" -> "€" <> num
+      "GBP" -> "£" <> num
+      "PLN" -> num <> " zł"
+      code when is_binary(code) and byte_size(code) > 0 -> num <> " " <> code
+      _ -> num
     end
+  end
 
-    if String.ends_with?(symbol, " ") do
-      "#{symbol}#{Decimal.to_string(amount)}"
-    else
-      "#{symbol}#{Decimal.to_string(amount)}"
+  defp is_zero?(nil), do: false
+  defp is_zero?(%Decimal{} = d), do: Decimal.compare(d, 0) == :eq
+  defp is_zero?(n) when is_integer(n), do: n == 0
+  defp is_zero?(n) when is_float(n), do: n == 0.0
+  defp is_zero?(s) when is_binary(s) do
+    case Decimal.new(s) do
+      %Decimal{} = d -> Decimal.compare(d, 0) == :eq
+      _ -> false
     end
+  rescue
+    _ -> false
+  end
+
+  defp amounts_equal?(a, b) do
+    with %Decimal{} = da <- to_decimal(a),
+         %Decimal{} = db <- to_decimal(b) do
+      Decimal.compare(da, db) == :eq
+    else
+      _ -> false
+    end
+  end
+
+  defp to_decimal(%Decimal{} = d), do: d
+  defp to_decimal(nil), do: nil
+  defp to_decimal(n) when is_integer(n), do: Decimal.new(n)
+  defp to_decimal(n) when is_float(n), do: Decimal.from_float(n)
+  defp to_decimal(s) when is_binary(s) do
+    Decimal.new(s)
+  rescue
+    _ -> nil
   end
 
   defp get_event_image_url(event) do
