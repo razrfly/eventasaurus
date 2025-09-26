@@ -735,24 +735,26 @@ defmodule EventasaurusWeb.CityLive.Index do
     Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
   end
 
-  defp format_price_range(event) do
-    cond do
-      event.min_price && event.max_price && event.min_price == event.max_price ->
-        "$#{event.min_price}"
-
-      event.min_price && event.max_price ->
-        "$#{event.min_price} - $#{event.max_price}"
-
-      event.min_price ->
-        "From $#{event.min_price}"
-
-      event.max_price ->
-        "Up to $#{event.max_price}"
-
-      true ->
-        "Price not available"
-    end
-  end
+  # Commented out - price display temporarily hidden as no APIs provide price data
+  # See GitHub issue #1281 for details
+  # defp format_price_range(event) do
+  #   cond do
+  #     event.min_price && event.max_price && event.min_price == event.max_price ->
+  #       "$#{event.min_price}"
+  #
+  #     event.min_price && event.max_price ->
+  #       "$#{event.min_price} - $#{event.max_price}"
+  #
+  #     event.min_price ->
+  #       "From $#{event.min_price}"
+  #
+  #     event.max_price ->
+  #       "Up to $#{event.max_price}"
+  #
+  #     true ->
+  #       "Price not available"
+  #   end
+  # end
 
   defp default_filters do
     %{
