@@ -332,18 +332,24 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
         Logger.debug("📝 Using Polish-only content")
         enriched_data = merge_metadata(polish_data, metadata)
         # Add Polish translation when there's no English version
-        enriched_data = enriched_data
+        pl_desc = get_description_text(polish_data)
+        desc_tx = if pl_desc && pl_desc != "", do: %{"pl" => pl_desc}, else: nil
+        enriched_data =
+          enriched_data
           |> Map.put(:title_translations, %{"pl" => polish_data[:title]})
-          |> Map.put(:description_translations, %{"pl" => get_description_text(polish_data)})
+          |> Map.put(:description_translations, desc_tx)
         {:ok, enriched_data}
 
       {{:ok, polish_data}, {:error, _}} ->
         Logger.debug("📝 Using Polish content (English failed)")
         enriched_data = merge_metadata(polish_data, metadata)
         # Add Polish translation when English extraction failed
-        enriched_data = enriched_data
+        pl_desc = get_description_text(polish_data)
+        desc_tx = if pl_desc && pl_desc != "", do: %{"pl" => pl_desc}, else: nil
+        enriched_data =
+          enriched_data
           |> Map.put(:title_translations, %{"pl" => polish_data[:title]})
-          |> Map.put(:description_translations, %{"pl" => get_description_text(polish_data)})
+          |> Map.put(:description_translations, desc_tx)
         {:ok, enriched_data}
 
       {{:error, reason}, _} ->
@@ -399,8 +405,25 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   defp get_description_text(nil), do: nil
   defp get_description_text(data) do
     # Extract description text from event data
-    # This might be in different fields depending on the extractor
-    data[:description] || data[:summary] || data[:content] || ""
+    # The DetailExtractor returns description_translations with Polish content
+    cond do
+      # If description_translations exists and has Polish content
+      is_map(data[:description_translations]) && data[:description_translations]["pl"] ->
+        data[:description_translations]["pl"]
+
+      # Fallback to other possible fields
+      data[:description] ->
+        data[:description]
+
+      data[:summary] ->
+        data[:summary]
+
+      data[:content] ->
+        data[:content]
+
+      true ->
+        ""
+    end
   end
 
   defp validate_translation_match(polish_data, english_data) do
