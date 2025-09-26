@@ -45,7 +45,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
           "✅ Found #{page_info["totalElements"] || 0} total events (fetched #{length(events)})"
         )
 
-        transformed_events = Enum.map(events, &Transformer.transform_event/1)
+        transformed_events = Enum.map(events, &Transformer.transform_event(&1, locale))
         {:ok, transformed_events}
 
       {:error, reason} = error ->

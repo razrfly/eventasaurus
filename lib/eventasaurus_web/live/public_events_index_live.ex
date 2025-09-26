@@ -97,6 +97,16 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   @impl true
+  def handle_event("change_language", %{"language" => language}, socket) do
+    socket =
+      socket
+      |> assign(:language, language)
+      |> fetch_events()
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("remove_category", %{"id" => category_id}, socket) do
     category_id = String.to_integer(category_id)
     current_categories = socket.assigns.filters.categories || []
@@ -393,6 +403,26 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
               <%= gettext("Discover Events") %>
             </h1>
             <div class="flex items-center space-x-4">
+              <!-- Language Switcher -->
+              <div class="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  phx-click="change_language"
+                  phx-value-language="en"
+                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "en", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                  title="English"
+                >
+                  🇬🇧 EN
+                </button>
+                <button
+                  phx-click="change_language"
+                  phx-value-language="pl"
+                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "pl", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                  title="Polski"
+                >
+                  🇵🇱 PL
+                </button>
+              </div>
+
               <!-- View Mode Toggle -->
               <div class="flex bg-gray-100 rounded-lg p-1">
                 <button
