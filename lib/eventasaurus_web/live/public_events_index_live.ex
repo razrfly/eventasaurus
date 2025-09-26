@@ -102,6 +102,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       socket
       |> assign(:language, language)
       |> fetch_events()
+      |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
 
     {:noreply, socket}
   end
@@ -331,7 +332,6 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   defp parse_sort(nil), do: :starts_at
-  defp parse_sort("price"), do: :price
   defp parse_sort("title"), do: :title
   defp parse_sort("relevance"), do: :relevance
   defp parse_sort(_), do: :starts_at
@@ -631,9 +631,6 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
           >
             <option value="starts_at" selected={@filters.sort_by == :starts_at}>
               <%= gettext("Date") %>
-            </option>
-            <option value="price" selected={@filters.sort_by == :price}>
-              <%= gettext("Price") %>
             </option>
             <option value="title" selected={@filters.sort_by == :title}>
               <%= gettext("Title") %>
