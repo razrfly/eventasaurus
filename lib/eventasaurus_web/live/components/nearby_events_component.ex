@@ -170,17 +170,25 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
         nil
 
       not is_nil(min) and (is_nil(max) or amounts_equal?(min, max)) ->
-        format_currency(min, curr)
+        case format_currency(min, curr) do
+          nil -> nil
+          one -> one
+        end
 
       not is_nil(min) and not is_nil(max) ->
-        "#{format_currency(min, curr)} - #{format_currency(max, curr)}"
+        with a when is_binary(a) <- format_currency(min, curr),
+             b when is_binary(b) <- format_currency(max, curr) do
+          "#{a} - #{b}"
+        else
+          _ -> nil
+        end
 
       true ->
         nil
     end
   end
 
-  defp format_currency(amount, currency) when is_nil(amount) or is_nil(currency), do: ""
+  defp format_currency(amount, currency) when is_nil(amount) or is_nil(currency), do: nil
   defp format_currency(amount, currency) do
     dec = to_decimal(amount)
     num = Decimal.to_string(dec, :normal)

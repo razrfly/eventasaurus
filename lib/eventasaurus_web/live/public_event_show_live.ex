@@ -250,7 +250,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       socket
       |> assign(:language, language)
       |> fetch_event(socket.assigns.event.slug)
-      |> put_flash(:info, nil)  # Clear any existing flash
+      |> clear_flash()  # Clear any existing flash
       |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
 
     {:noreply, socket}
@@ -924,15 +924,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       <% end %>
     </div>
 
-    <script>
-      // Handle language cookie setting
-      this.handleEvent("set_language_cookie", (data) => {
-        // Set cookie for 1 year
-        const expires = new Date();
-        expires.setFullYear(expires.getFullYear() + 1);
-        document.cookie = `language_preference=${data.language}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
-      });
-    </script>
+    <div id="language-cookie-hook" phx-hook="LanguageCookie"></div>
     """
   end
 
