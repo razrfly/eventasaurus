@@ -587,4 +587,123 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
     language in title_langs || language in desc_langs
   end
+
+  @doc """
+  Get nearby activities for a given event based on venue location.
+
+  Returns a randomized selection of upcoming events within the specified radius,
+  excluding the current event.
+
+  ## Options
+    * `:radius_km` - Search radius in kilometers (default: 25)
+    * `:pool_size` - Number of events to fetch before randomizing (default: 12)
+    * `:display_count` - Number of events to return after randomization (default: 4)
+    * `:language` - Language code for translations (default: "en")
+
+  ## Examples
+
+      iex> PublicEvents.get_nearby_activities(current_event)
+      [%PublicEvent{...}, ...]
+
+      iex> PublicEvents.get_nearby_activities(current_event, radius_km: 50, display_count: 3)
+      [%PublicEvent{...}, ...]
+  """
+  def get_nearby_activities(%PublicEvent{venue: %Venue{} = venue} = current_event, opts \\ []) do
+    radius_km = Keyword.get(opts, :radius_km, 25)
+    pool_size = Keyword.get(opts, :pool_size, 12)
+    display_count = Keyword.get(opts, :display_count, 4)
+    language = Keyword.get(opts, :language, "en")
+
+    # Check if venue has coordinates
+    case {venue.latitude, venue.longitude} do
+      {nil, _} -> []
+      {_, nil} -> []
+      {lat, lng} ->
+        # Use PublicEventsEnhanced for geographic filtering
+        nearby = EventasaurusDiscovery.PublicEventsEnhanced.list_events([
+          center_lat: lat,
+          center_lng: lng,
+          radius_km: radius_km,
+          page_size: pool_size + 1,  # Get extra in case current event is in results
+          show_past: false,
+          language: language
+        ])
+
+        # Filter out current event and randomize selection
+        nearby
+        |> Enum.reject(&(&1.id == current_event.id))
+        |> Enum.shuffle()
+        |> Enum.take(display_count)
+        |> Repo.preload([:venue, :categories, :performers, sources: :source])
+    end
+  end
+
+  @doc """
+  Get nearby activities with fallback strategies.
+
+  If no nearby events are found within the initial radius, progressively
+  expands the search radius. Falls back to popular upcoming events if
+  still no results.
+
+  ## Options
+    * `:initial_radius` - Starting radius in km (default: 25)
+    * `:max_radius` - Maximum radius to try in km (default: 100)
+    * `:display_count` - Number of events to return (default: 4)
+    * `:language` - Language code for translations (default: "en")
+  """
+  def get_nearby_activities_with_fallback(%PublicEvent{} = current_event, opts \\ []) do
+    initial_radius = Keyword.get(opts, :initial_radius, 25)
+    max_radius = Keyword.get(opts, :max_radius, 100)
+    display_count = Keyword.get(opts, :display_count, 4)
+    language = Keyword.get(opts, :language, "en")
+
+    # Try initial radius
+    nearby = get_nearby_activities(current_event, [
+      radius_km: initial_radius,
+      display_count: display_count,
+      language: language
+    ])
+
+    cond do
+      # Found enough events
+      length(nearby) >= display_count ->
+        nearby
+
+      # Try expanded radius
+      initial_radius < max_radius ->
+        expanded = get_nearby_activities(current_event, [
+          radius_km: max_radius,
+          display_count: display_count,
+          language: language
+        ])
+
+        if length(expanded) > length(nearby) do
+          expanded
+        else
+          # Fall back to popular upcoming events in same category
+          get_fallback_events(current_event, display_count, language)
+        end
+
+      # Use fallback
+      true ->
+        get_fallback_events(current_event, display_count, language)
+    end
+  end
+
+  defp get_fallback_events(%PublicEvent{} = current_event, display_count, language) do
+    # Get category IDs from current event
+    category_ids = Enum.map(current_event.categories || [], & &1.id)
+
+    # Get upcoming events from same categories or just popular upcoming events
+    opts = if length(category_ids) > 0 do
+      [categories: category_ids, page_size: display_count * 2, language: language]
+    else
+      [page_size: display_count * 2, language: language]
+    end
+
+    EventasaurusDiscovery.PublicEventsEnhanced.list_events(opts)
+    |> Enum.reject(&(&1.id == current_event.id))
+    |> Enum.take(display_count)
+    |> Repo.preload([:venue, :categories, :performers, sources: :source])
+  end
 end

@@ -19,31 +19,56 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   Returns a map with all extracted information.
   """
   def extract_event_details(html, url) when is_binary(html) do
-    case Floki.parse_document(html) do
-      {:ok, document} ->
-        event_data = %{
-          url: url,
-          source_url: url,
-          title: extract_title(document),
-          title_translations: extract_title_translations(document),
-          description_translations: extract_description_translations(document),
-          date_text: extract_date_text(document),
-          venue_data: extract_venue(document),
-          performers: extract_performers(document),
-          ticket_url: extract_ticket_url(document),
-          category: extract_category(document),
-          image_url: extract_image_url(document),
-          is_free: check_if_free(document),
-          is_festival: check_if_festival(document),
-          extracted_at: DateTime.utc_now()
-        }
+    # First check if this is an error page
+    if is_error_page?(html) do
+      Logger.warning("⚠️ Detected error page for URL: #{url}")
+      {:error, :error_page}
+    else
+      case Floki.parse_document(html) do
+        {:ok, document} ->
+          event_data = %{
+            url: url,
+            source_url: url,
+            title: extract_title(document),
+            title_translations: extract_title_translations(document),
+            description_translations: extract_description_translations(document),
+            date_text: extract_date_text(document),
+            venue_data: extract_venue(document),
+            performers: extract_performers(document),
+            ticket_url: extract_ticket_url(document),
+            category: extract_category(document),
+            image_url: extract_image_url(document),
+            is_free: check_if_free(document),
+            is_festival: check_if_festival(document),
+            extracted_at: DateTime.utc_now()
+          }
 
-        {:ok, event_data}
+          {:ok, event_data}
 
-      {:error, reason} ->
-        Logger.error("Failed to parse event HTML: #{inspect(reason)}")
-        {:error, :parse_failed}
+        {:error, reason} ->
+          Logger.error("Failed to parse event HTML: #{inspect(reason)}")
+          {:error, :parse_failed}
+      end
     end
+  end
+
+  @doc """
+  Detect if the HTML content is an error page (404, 500, etc.)
+  """
+  def is_error_page?(html) when is_binary(html) do
+    # Check for common error page indicators
+    String.contains?(html, "Error 404") ||
+    String.contains?(html, "404 - ") ||
+    String.contains?(html, "Page not found") ||
+    String.contains?(html, "Nie znaleziono strony") ||
+    String.contains?(html, "Strona nie została znaleziona") ||
+    String.contains?(html, "No such page") ||
+    String.contains?(html, "class=\"error-404\"") ||
+    String.contains?(html, "id=\"error-404\"") ||
+    # Check if the title contains Error followed by a number
+    Regex.match?(~r/<title>[^<]*Error\s+\d{3}/i, html) ||
+    # Check for h1 with Error text
+    Regex.match?(~r/<h1[^>]*>Error\s+\d{3}/i, html)
   end
 
   defp extract_title(document) do
