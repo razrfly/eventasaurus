@@ -254,8 +254,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     slug = Normalizer.create_slug(country_name)
     code = derive_country_code(country_name)
 
-    Repo.get_by(Country, slug: slug) ||
-      create_country(country_name, code, slug)
+    # First try to find existing country by code (most reliable)
+    existing_country = if code != "XX" do
+      Repo.get_by(Country, code: code)
+    else
+      nil
+    end
+
+    # If not found by code, try by slug
+    existing_country = existing_country || Repo.get_by(Country, slug: slug)
+
+    # If still not found, create new country
+    existing_country || create_country(country_name, code, slug)
   end
 
   defp create_country(name, code, slug) do

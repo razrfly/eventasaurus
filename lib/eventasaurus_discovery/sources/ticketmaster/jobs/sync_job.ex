@@ -17,25 +17,67 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     radius = options["radius"] || options[:radius] || Config.default_radius()
     max_pages = calculate_max_pages(limit)
 
+    # Determine locales based on country
+    locales = determine_locales(city, options)
+
     Logger.info("""
     🎫 Fetching Ticketmaster events
     City: #{city.name}, #{city.country.name}
     Coordinates: (#{city.latitude}, #{city.longitude})
     Radius: #{radius}km
+    Locales: #{inspect(locales)}
     Max pages: #{max_pages}
     Target events: #{limit}
     """)
 
-    fetch_all_pages(city, radius, max_pages, limit)
+    # Fetch events for each locale and combine results
+    # We need to keep all versions to get translations in different languages
+    all_events =
+      locales
+      |> Enum.flat_map(fn locale ->
+        Logger.info("🌐 Fetching events with locale: #{locale}")
+
+        case fetch_all_pages(city, radius, max_pages, limit, locale) do
+          {:ok, events} ->
+            # Tag each event with its locale for transformation
+            Enum.map(events, &Map.put(&1, "_locale", locale))
+          {:error, reason} ->
+            Logger.warning("Failed to fetch events for locale #{locale}: #{inspect(reason)}")
+            []
+        end
+      end)
+      # Don't deduplicate here - we want all language versions!
+      # The EventProcessor will merge translations for the same external_id
+      |> Enum.take(limit * length(locales))  # Take more since we have duplicates
+
+    {:ok, all_events}
   end
 
+  defp determine_locales(city, options) do
+    # Check if locale was explicitly provided
+    case options["locale"] || options[:locale] do
+      nil ->
+        # No explicit locale, use country-based detection
+        Config.country_locales(city.country.code)
+      locale ->
+        # Explicit locale provided, use only that one
+        [locale]
+    end
+  end
+
+
   @impl EventasaurusDiscovery.Sources.BaseJob
-  def transform_events(raw_events) do
+  def transform_events(raw_events, _options \\ %{}) do
     # Transform each event using our Transformer
-    # Filter out events that fail venue validation
+    # Each event has its locale tagged in "_locale" field
     raw_events
     |> Enum.flat_map(fn raw_event ->
-      case Transformer.transform_event(raw_event) do
+      # Extract the locale that was tagged on this event
+      locale = Map.get(raw_event, "_locale")
+      # Remove the temporary locale tag before transformation
+      event_data = Map.delete(raw_event, "_locale")
+
+      case Transformer.transform_event(event_data, locale) do
         {:ok, event} ->
           [event]
         {:error, reason} ->
@@ -43,6 +85,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
           []
       end
     end)
+  end
+
+  # Override the helper from BaseJob to use our version with options
+  defp transform_events_with_options(raw_events, options) do
+    transform_events(raw_events, options)
   end
 
   def source_config do
@@ -57,22 +104,22 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     if rem(limit, Config.default_page_size()) > 0, do: pages + 1, else: pages
   end
 
-  defp fetch_all_pages(city, radius, max_pages, target_limit) do
-    fetch_pages_recursive(city, radius, 0, max_pages, [], target_limit)
+  defp fetch_all_pages(city, radius, max_pages, target_limit, locale) do
+    fetch_pages_recursive(city, radius, 0, max_pages, [], target_limit, locale)
   end
 
-  defp fetch_pages_recursive(_city, _radius, page, max_pages, events, _limit)
+  defp fetch_pages_recursive(_city, _radius, page, max_pages, events, _limit, _locale)
        when page >= max_pages do
     {:ok, events}
   end
 
-  defp fetch_pages_recursive(_city, _radius, _page, _max_pages, events, limit)
+  defp fetch_pages_recursive(_city, _radius, _page, _max_pages, events, limit, _locale)
        when length(events) >= limit do
     {:ok, Enum.take(events, limit)}
   end
 
-  defp fetch_pages_recursive(city, radius, page, max_pages, accumulated_events, limit) do
-    case Client.fetch_events_by_location(city.latitude, city.longitude, radius, page) do
+  defp fetch_pages_recursive(city, radius, page, max_pages, accumulated_events, limit, locale) do
+    case Client.fetch_events_by_location(city.latitude, city.longitude, radius, page, locale) do
       {:ok, %{"_embedded" => %{"events" => page_events}}} when is_list(page_events) ->
         all_events = accumulated_events ++ page_events
 
@@ -84,7 +131,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
           # Minimum 100ms between requests
           sleep_ms = max(div(1000, rate_limit), 100)
           Process.sleep(sleep_ms)
-          fetch_pages_recursive(city, radius, page + 1, max_pages, all_events, limit)
+          fetch_pages_recursive(city, radius, page + 1, max_pages, all_events, limit, locale)
         end
 
       {:ok, _} ->
