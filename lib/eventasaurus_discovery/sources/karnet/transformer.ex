@@ -43,7 +43,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
           ends_at: extract_ends_at(raw_event),
 
           # Venue data - REQUIRED and validated
-          venue: venue_data,
+          venue_data: venue_data,
 
           # Optional fields
           description: extract_description(raw_event),
