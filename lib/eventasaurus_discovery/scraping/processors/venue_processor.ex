@@ -12,7 +12,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
-  alias EventasaurusDiscovery.Locations.{City, Country}
+  alias EventasaurusDiscovery.Locations.{City, Country, CountryResolver}
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusWeb.Services.GooglePlaces.VenueGeocoder
 
@@ -223,30 +223,35 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp ensure_city(%{city_name: city_name, country_name: country_name} = data) do
     country = find_or_create_country(country_name)
 
-    # First try to find by exact name match
-    city =
-      from(c in City,
-        where: c.name == ^city_name and c.country_id == ^country.id,
-        limit: 1
-      )
-      |> Repo.one()
-
-    # If not found, try to find by slug to handle variations (e.g., Kraków vs Krakow)
-    city =
-      city ||
+    # If we couldn't resolve the country, we can't proceed
+    if country == nil do
+      {:error, "Cannot process city '#{city_name}' without a valid country. Unknown country: '#{country_name}'"}
+    else
+      # First try to find by exact name match
+      city =
         from(c in City,
-          where: c.slug == ^Normalizer.create_slug(city_name) and c.country_id == ^country.id,
+          where: c.name == ^city_name and c.country_id == ^country.id,
           limit: 1
         )
         |> Repo.one()
 
-    # If still not found, create it
-    city = city || create_city(city_name, country, data)
+      # If not found, try to find by slug to handle variations (e.g., Kraków vs Krakow)
+      city =
+        city ||
+          from(c in City,
+            where: c.slug == ^Normalizer.create_slug(city_name) and c.country_id == ^country.id,
+            limit: 1
+          )
+          |> Repo.one()
 
-    if city do
-      {:ok, city}
-    else
-      {:error, "Failed to find or create city: #{city_name}"}
+      # If still not found, create it
+      city = city || create_city(city_name, country, data)
+
+      if city do
+        {:ok, city}
+      else
+        {:error, "Failed to find or create city: #{city_name}"}
+      end
     end
   end
 
@@ -255,7 +260,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     code = derive_country_code(country_name)
 
     # First try to find existing country by code (most reliable)
-    existing_country = if code != "XX" do
+    existing_country = if code do
       Repo.get_by(Country, code: code)
     else
       nil
@@ -264,8 +269,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # If not found by code, try by slug
     existing_country = existing_country || Repo.get_by(Country, slug: slug)
 
-    # If still not found, create new country
-    existing_country || create_country(country_name, code, slug)
+    # If still not found and we have a valid code, create new country
+    # If we don't have a valid code, we should NOT create a country with nil code
+    if existing_country do
+      existing_country
+    else
+      if code do
+        create_country(country_name, code, slug)
+      else
+        # Log error and return nil - we can't create a country without a valid code
+        Logger.error("Cannot create country '#{country_name}' without a valid ISO code")
+        nil
+      end
+    end
   end
 
   defp create_country(name, code, slug) do
@@ -279,43 +295,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp derive_country_code(country_name) when is_binary(country_name) do
-    # Use Countries library to get proper country code
-    case find_country_by_name(country_name) do
+    # Use CountryResolver which handles translations like "Polska" -> "Poland"
+    case CountryResolver.resolve(country_name) do
       nil ->
-        Logger.warning("Unknown country: #{country_name}, using XX")
-        "XX"
+        Logger.warning("Unknown country: #{country_name}, defaulting to nil")
+        nil
 
       country ->
         country.alpha2
     end
   end
 
-  defp derive_country_code(_), do: "XX"
+  defp derive_country_code(_), do: nil
 
-  defp find_country_by_name(name) when is_binary(name) do
-    input = String.trim(name)
-
-    # Try as country code first
-    country =
-      if String.length(input) <= 3 do
-        Countries.get(String.upcase(input))
-      end
-
-    # Try by exact name
-    country =
-      country ||
-        case Countries.filter_by(:name, input) do
-          [c | _] -> c
-          _ -> nil
-        end
-
-    # Try by unofficial names
-    country ||
-      case Countries.filter_by(:unofficial_names, input) do
-        [c | _] -> c
-        _ -> nil
-      end
-  end
 
   defp create_city(name, country, data) do
     attrs = %{
