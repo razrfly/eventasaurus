@@ -14,12 +14,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   Returns {:ok, transformed_event} or {:error, reason}
   """
-  def transform_event(tm_event, locale \\ nil) when is_map(tm_event) do
+  def transform_event(tm_event, locale \\ nil, city \\ nil) when is_map(tm_event) do
     title = tm_event["name"]
     description = extract_description(tm_event)
 
     # Extract and validate venue first since it's critical
-    venue_data = extract_venue(tm_event)
+    venue_data = extract_venue(tm_event, city)
 
     # Validate venue has required fields (same as Bandsintown)
     case validate_venue(venue_data) do
@@ -100,15 +100,22 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   @doc """
   Transforms a Ticketmaster venue to our standardized venue data structure.
   """
-  def transform_venue(tm_venue) when is_map(tm_venue) do
+  def transform_venue(tm_venue, city \\ nil) when is_map(tm_venue) do
+    # Use the KNOWN country from city context, not the unreliable API response
+    country = if city && city.country do
+      city.country.name
+    else
+      # Fallback to API data only if no context (shouldn't happen)
+      get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"])
+    end
+
     %{
       external_id: "tm_venue_#{tm_venue["id"]}",
       name: tm_venue["name"],
       address: get_in(tm_venue, ["address", "line1"]),
       city: get_in(tm_venue, ["city", "name"]),
       state: get_in(tm_venue, ["state", "name"]) || get_in(tm_venue, ["state", "stateCode"]),
-      country:
-        get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"]),
+      country: country,
       postal_code: tm_venue["postalCode"],
       latitude: get_in(tm_venue, ["location", "latitude"]) |> to_float(),
       longitude: get_in(tm_venue, ["location", "longitude"]) |> to_float(),
@@ -417,7 +424,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     end
   end
 
-  defp extract_venue(event) do
+  defp extract_venue(event, city) do
     venues = get_in(event, ["_embedded", "venues"]) || []
 
     case List.first(venues) do
@@ -434,15 +441,18 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         """)
 
         # Try to extract venue from alternative locations
-        extract_venue_fallback(event)
+        extract_venue_fallback(event, city)
 
       venue ->
         Logger.debug("✅ Ticketmaster venue found: #{venue["name"]}")
-        transform_venue(venue)
+        transform_venue(venue, city)
     end
   end
 
-  defp extract_venue_fallback(event) do
+  defp extract_venue_fallback(event, city) do
+    # Use the KNOWN country from city context
+    known_country = if city && city.country, do: city.country.name, else: nil
+
     # Try to build venue from other event data
     # Check if event has place or location info
     cond do
@@ -455,7 +465,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           address: place["address"] || place["line1"],
           city: get_in(place, ["city", "name"]) || place["city"],
           state: get_in(place, ["state", "name"]) || place["state"],
-          country: get_in(place, ["country", "name"]) || place["country"],
+          country: known_country || get_in(place, ["country", "name"]) || place["country"],
           postal_code: place["postalCode"],
           latitude: get_in(place, ["location", "latitude"]) |> to_float(),
           longitude: get_in(place, ["location", "longitude"]) |> to_float(),
@@ -472,7 +482,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           address: location["address"],
           city: location["city"],
           state: location["state"],
-          country: location["country"],
+          country: known_country || location["country"],
           postal_code: location["postalCode"],
           latitude: location["latitude"] |> to_float(),
           longitude: location["longitude"] |> to_float(),
@@ -485,16 +495,16 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         Logger.info("🔄 Attempting to extract location from dates/timezone")
         # If we have timezone, we can at least infer the general region
         timezone = dates["timezone"]
-        {city, country, lat, lng} = infer_location_from_timezone(timezone)
+        {city_name, country_name, lat, lng} = infer_location_from_timezone(timezone)
 
-        if city do
+        if city_name do
           %{
             external_id: "tm_inferred_#{event["id"]}",
-            name: "Venue TBD - #{city}",
+            name: "Venue TBD - #{city_name}",
             address: nil,
-            city: city,
+            city: city_name,
             state: nil,
-            country: country,
+            country: known_country || country_name,
             postal_code: nil,
             latitude: lat,
             longitude: lng,
