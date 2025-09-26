@@ -57,8 +57,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     # Check if locale was explicitly provided
     case options["locale"] || options[:locale] do
       nil ->
-        # No explicit locale, use country-based detection
-        Config.country_locales(city.country.code)
+        # No explicit locale, use country-based detection with safe fallback
+        case Config.country_locales(city.country.code) do
+          locales when is_list(locales) and locales != [] -> locales
+          _ -> ["en-us"]  # safe fallback if country detection fails
+        end
       locale ->
         # Explicit locale provided, use only that one
         [locale]
