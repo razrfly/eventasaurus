@@ -14,8 +14,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
 
   @impl true
   def fetch_events_by_city(latitude, longitude, city_name, options \\ %{}) do
+    # Extract locale from options
+    locale = options[:locale] || options["locale"]
+
     params =
-      Config.default_params()
+      Config.default_params(locale: locale)
       |> Map.merge(%{
         latlong: "#{latitude},#{longitude}",
         radius: options[:radius] || Config.default_radius(),
@@ -29,6 +32,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
     🎫 Fetching Ticketmaster events for #{city_name}
     Coordinates: (#{latitude}, #{longitude})
     Radius: #{params.radius}#{params.unit}
+    Locale: #{locale || "default"}
     Page: #{params.page}, Size: #{params.size}
     """)
 
@@ -53,9 +57,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
   @doc """
   Fetch events by geographic location (latitude/longitude)
   """
-  def fetch_events_by_location(latitude, longitude, radius, page \\ 0) do
+  def fetch_events_by_location(latitude, longitude, radius, page \\ 0, locale \\ nil) do
     params =
-      Config.default_params()
+      Config.default_params(locale: locale)
       |> Map.merge(%{
         latlong: "#{latitude},#{longitude}",
         radius: "#{radius}",
@@ -132,7 +136,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
 
   def fetch_all_events_by_city(latitude, longitude, city_name, options \\ %{}) do
     max_pages = options[:max_pages] || 10
-    fetch_all_pages(latitude, longitude, city_name, 0, max_pages, [], options)
+    locale = options[:locale] || options["locale"]
+    fetch_all_pages(latitude, longitude, city_name, 0, max_pages, [], Map.put(options, :locale, locale))
   end
 
   defp fetch_all_pages(latitude, longitude, city_name, current_page, max_pages, acc, options)
