@@ -9,7 +9,6 @@ defmodule EventasaurusDiscovery.Locations do
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.PublicEventsEnhanced
 
   @doc """
@@ -75,95 +74,25 @@ defmodule EventasaurusDiscovery.Locations do
     lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
     if lat && lng do
-      # Use PublicEventsEnhanced to get properly formatted events with categories
-      # but then filter by radius manually since it doesn't support radius filtering
+      # Use PublicEventsEnhanced with geographic filtering at database level
       enhanced_opts = [
         show_past: not upcoming_only,
-        limit: limit * 3, # Get more to account for radius filtering
-        language: language
+        page: 1,
+        page_size: limit,  # Use page_size instead of limit
+        language: language,
+        # Add geographic filtering parameters
+        center_lat: lat,
+        center_lng: lng,
+        radius_km: radius_km
       ]
 
-      all_enhanced_events = PublicEventsEnhanced.list_events(enhanced_opts)
-
-      # Filter by radius using PostGIS distance calculation
-      radius_meters = radius_km * 1000
-
-      filtered_events = Enum.filter(all_enhanced_events, fn event ->
-        case event.venue do
-          %{latitude: venue_lat, longitude: venue_lng} when not is_nil(venue_lat) and not is_nil(venue_lng) ->
-            # Convert Decimal to float if needed
-            venue_lat = if is_struct(venue_lat, Decimal), do: Decimal.to_float(venue_lat), else: venue_lat
-            venue_lng = if is_struct(venue_lng, Decimal), do: Decimal.to_float(venue_lng), else: venue_lng
-
-            # Calculate distance using the same query we use elsewhere
-            query = """
-            SELECT ST_Distance(
-              ST_MakePoint($1::float, $2::float)::geography,
-              ST_MakePoint($3::float, $4::float)::geography
-            ) as distance_meters
-            """
-
-            case Repo.query(query, [lng, lat, venue_lng, venue_lat]) do
-              {:ok, %{rows: [[distance]]}} -> distance <= radius_meters
-              _ -> false
-            end
-          _ ->
-            false
-        end
-      end)
-
-      # Take only the requested limit
-      Enum.take(filtered_events, limit)
+      PublicEventsEnhanced.list_events(enhanced_opts)
     else
       # Return empty list if city has no coordinates yet
       []
     end
   end
 
-  defp get_cover_image_url(event) do
-    # Check if sources are loaded
-    case event do
-      %{sources: %Ecto.Association.NotLoaded{}} ->
-        # Need to preload sources if not loaded
-        event = Repo.preload(event, :sources)
-        extract_image_from_sources(event.sources)
-      %{sources: sources} when is_list(sources) ->
-        extract_image_from_sources(sources)
-      _ ->
-        nil
-    end
-  end
-
-  defp extract_image_from_sources([]), do: nil
-  defp extract_image_from_sources(sources) do
-    # Sort by priority and get first image_url
-    sources
-    |> Enum.sort_by(fn source ->
-      priority = case source.metadata do
-        %{"priority" => p} when is_integer(p) -> p
-        %{"priority" => p} when is_binary(p) ->
-          case Integer.parse(p) do
-            {num, _} -> num
-            _ -> 10
-          end
-        _ -> 10
-      end
-
-      # Use negative timestamp to sort newest first
-      timestamp = case source.last_seen_at do
-        %DateTime{} = dt -> -DateTime.to_unix(dt)
-        _ -> 0
-      end
-
-      {priority, timestamp}
-    end)
-    |> Enum.find_value(fn source ->
-      case source.image_url do
-        url when is_binary(url) and url != "" -> url
-        _ -> nil
-      end
-    end)
-  end
 
   @doc """
   Get nearby cities based on coordinates.
