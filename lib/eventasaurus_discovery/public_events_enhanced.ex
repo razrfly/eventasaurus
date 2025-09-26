@@ -205,31 +205,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     )
   end
 
+  # Price filtering moved to source-specific implementation
+  # TODO: Implement price filtering using public_event_sources data when needed
   defp filter_by_price_range(query, nil, nil), do: query
-
-  defp filter_by_price_range(query, min_price, nil) do
-    from(pe in query,
-      where:
-        not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
-          (pe.min_price >= ^min_price or pe.max_price >= ^min_price)
-    )
-  end
-
-  defp filter_by_price_range(query, nil, max_price) do
-    from(pe in query,
-      where:
-        not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
-          (pe.min_price <= ^max_price or pe.max_price <= ^max_price)
-    )
-  end
-
-  defp filter_by_price_range(query, min_price, max_price) do
-    from(pe in query,
-      where:
-        not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
-          (pe.max_price >= ^min_price and pe.min_price <= ^max_price)
-    )
-  end
+  defp filter_by_price_range(query, _min_price, _max_price), do: query
 
   defp filter_by_location(query, nil, nil, nil), do: query
 
@@ -325,9 +304,6 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     from(pe in query, order_by: [{^order, pe.starts_at}])
   end
 
-  defp apply_sorting(query, :price, order) when order in [:asc, :desc] do
-    from(pe in query, order_by: [{^order, pe.min_price}])
-  end
 
   defp apply_sorting(query, :title, order) when order in [:asc, :desc] do
     from(pe in query, order_by: [{^order, pe.title}])
@@ -581,39 +557,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end)
   end
 
-  defp get_price_range_counts(base_filters) do
-    # Define price ranges
-    ranges = [
-      {:free, 0, 0},
-      {:under_25, 0.01, 25},
-      {:under_50, 25.01, 50},
-      {:under_100, 50.01, 100},
-      {:over_100, 100.01, 999_999}
-    ]
-
-    Enum.map(ranges, fn {label, min, max} ->
-      query =
-        from(pe in PublicEvent,
-          where: pe.starts_at > ^DateTime.utc_now()
-        )
-
-      count =
-        if min == 0 and max == 0 do
-          from(pe in query,
-            where: is_nil(pe.min_price) or pe.min_price == 0,
-            select: count(pe.id)
-          )
-        else
-          from(pe in query,
-            where: pe.min_price >= ^min and pe.min_price <= ^max,
-            select: count(pe.id)
-          )
-        end
-        |> apply_base_filters(base_filters)
-        |> Repo.one()
-
-      %{label: label, min: min, max: max, count: count}
-    end)
+  defp get_price_range_counts(_base_filters) do
+    # Price filtering not available - pricing data is source-specific
+    # TODO: Implement using public_event_sources when price filtering is needed
+    []
   end
 
   defp get_date_range_counts(base_filters) do
