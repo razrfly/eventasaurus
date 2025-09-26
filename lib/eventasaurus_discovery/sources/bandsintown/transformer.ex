@@ -28,9 +28,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
   Returns {:ok, transformed_event} or {:error, reason}
   """
-  def transform_event(raw_event) do
+  def transform_event(raw_event, city \\ nil) do
     # Extract and validate venue first since it's critical
-    venue_data = extract_venue(raw_event)
+    venue_data = extract_venue(raw_event, city)
 
     # Validate venue has required fields
     case validate_venue(venue_data) do
@@ -154,9 +154,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
     end
   end
 
-  defp extract_venue(event) do
+  defp extract_venue(event, city) do
     # CRITICAL: Venue with location is REQUIRED
     # We MUST always return valid venue data
+
+    # Use the KNOWN country from city context, not the API response
+    known_country = if city && city.country, do: city.country.name, else: nil
 
     venue_name = event["venue_name"]
 
@@ -169,7 +172,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       event["venue_address"],
       event["venue_city"],
       event["venue_state"],
-      event["venue_country"]
+      known_country || event["venue_country"]
     ] |> Enum.filter(&(&1 && &1 != ""))
 
     address = if Enum.any?(address_parts), do: Enum.join(address_parts, ", "), else: nil
@@ -184,7 +187,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
           address: address,
           city: event["venue_city"],
           state: event["venue_state"],
-          country: event["venue_country"],
+          country: known_country || event["venue_country"],
           postal_code: event["venue_postal_code"]
         }
 
@@ -197,7 +200,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         """)
 
         # Try to infer coordinates from city
-        {lat, lng} = get_city_coordinates(event["venue_city"], event["venue_country"])
+        {lat, lng} = get_city_coordinates(event["venue_city"], known_country || event["venue_country"])
 
         %{
           name: venue_name,
@@ -206,7 +209,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
           address: address,
           city: event["venue_city"],
           state: event["venue_state"],
-          country: event["venue_country"],
+          country: known_country || event["venue_country"],
           postal_code: event["venue_postal_code"],
           needs_geocoding: true
         }
@@ -222,18 +225,18 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         # Default to a general location
         # Since Bandsintown is global, we'll use event location if available
         # Otherwise default to New York as Bandsintown is US-based
-        city = event["venue_city"] || "New York"
-        country = event["venue_country"] || "United States"
-        {lat, lng} = get_city_coordinates(city, country)
+        city_name = event["venue_city"] || "New York"
+        country_name = known_country || event["venue_country"] || "United States"
+        {lat, lng} = get_city_coordinates(city_name, country_name)
 
         %{
           name: "Venue TBD - #{event["artist_name"] || "Unknown Artist"}",
           latitude: lat,
           longitude: lng,
           address: nil,
-          city: city,
+          city: city_name,
           state: event["venue_state"],
-          country: country,
+          country: country_name,
           postal_code: nil,
           metadata: %{placeholder: true}
         }

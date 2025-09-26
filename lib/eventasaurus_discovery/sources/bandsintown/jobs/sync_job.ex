@@ -45,16 +45,24 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
   end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
-  def transform_events(raw_events) do
+  def transform_events(raw_events, options \\ %{}) do
+    # Extract city context from options (passed by BaseJob)
+    city = options["city"]
+
     # Transform each event using our Transformer
     # Filter out events that fail venue validation
     raw_events
-    |> Enum.map(&Transformer.transform_event/1)
+    |> Enum.map(&Transformer.transform_event(&1, city))
     |> Enum.filter(fn
       {:ok, _event} -> true
       {:error, _reason} -> false
     end)
     |> Enum.map(fn {:ok, event} -> event end)
+  end
+
+  # Override the helper from BaseJob to use our version with options
+  defp transform_events_with_options(raw_events, options) do
+    transform_events(raw_events, options)
   end
 
   # Required by BaseJob for source configuration
