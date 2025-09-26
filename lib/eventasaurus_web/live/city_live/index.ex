@@ -498,6 +498,9 @@ defmodule EventasaurusWeb.CityLive.Index do
             </div>
           <% end %>
 
+          <%!-- Price display temporarily hidden - no APIs provide price data
+               Infrastructure retained for future API support
+               See GitHub issue #1281 for details
           <%= if @event.min_price || @event.max_price do %>
             <div class="mt-2">
               <span class="text-sm font-medium text-gray-900">
@@ -506,11 +509,12 @@ defmodule EventasaurusWeb.CityLive.Index do
             </div>
           <% else %>
             <div class="mt-2">
-              <span class="text-sm font-medium text-green-600">
-                Free
+              <span class="text-sm font-medium text-gray-500">
+                Price not available
               </span>
             </div>
           <% end %>
+          --%>
         </div>
       </div>
     </.link>
@@ -594,17 +598,21 @@ defmodule EventasaurusWeb.CityLive.Index do
             <% end %>
           </div>
 
+          <%!-- Price display temporarily hidden - no APIs provide price data
+               Infrastructure retained for future API support
+               See GitHub issue #1281 for details
           <div class="ml-6 text-right">
             <%= if @event.min_price || @event.max_price do %>
               <div class="text-lg font-semibold text-gray-900">
                 <%= format_price_range(@event) %>
               </div>
             <% else %>
-              <div class="text-lg font-semibold text-green-600">
-                Free
+              <div class="text-lg font-semibold text-gray-500">
+                Price not available
               </div>
             <% end %>
           </div>
+          --%>
         </div>
       </div>
     </.link>
@@ -742,7 +750,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         "Up to $#{event.max_price}"
 
       true ->
-        "Free"
+        "Price not available"
     end
   end
 

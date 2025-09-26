@@ -84,7 +84,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Add raw data for category extraction
       raw_event_data: data[:raw_event_data] || data["raw_event_data"],
       # Karnet category
-      category: data[:category] || data["category"]
+      category: data[:category] || data["category"],
+      # Price data - now stored at source level
+      min_price: data[:min_price] || data["min_price"],
+      max_price: data[:max_price] || data["max_price"],
+      currency: data[:currency] || data["currency"],
+      is_free: data[:is_free] || data["is_free"]
     }
 
     cond do
@@ -349,7 +354,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second),
       metadata: metadata,
       description_translations: data.description_translations,
-      image_url: data.image_url
+      image_url: data.image_url,
+      # Add price fields
+      min_price: data[:min_price],
+      max_price: data[:max_price],
+      currency: data[:currency],
+      is_free: data[:is_free] || false
     }
 
     case existing_by_external do
@@ -391,7 +401,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           metadata: attrs.metadata,
           image_url: attrs.image_url,
           source_url: attrs.source_url,
-          description_translations: attrs.description_translations
+          description_translations: attrs.description_translations,
+          # Add price fields
+          min_price: attrs.min_price,
+          max_price: attrs.max_price,
+          currency: attrs.currency,
+          is_free: attrs.is_free
         })
         |> Repo.update()
 
@@ -1024,6 +1039,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       image_url: occurrence_data[:image_url] || occurrence_data["image_url"],
       description_translations:
         occurrence_data[:description_translations] || occurrence_data["description_translations"],
+      # Price fields from source data
+      min_price: occurrence_data[:min_price],
+      max_price: occurrence_data[:max_price],
+      currency: occurrence_data[:currency],
+      is_free: occurrence_data[:is_free] || false,
       metadata: %{
         "occurrence" => true,
         "merged_at" => DateTime.utc_now(),
