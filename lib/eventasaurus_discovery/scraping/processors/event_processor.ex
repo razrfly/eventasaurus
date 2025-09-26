@@ -72,9 +72,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       title_translations: data[:title_translations] || data["title_translations"],
       description_translations:
         data[:description_translations] || data["description_translations"],
-      start_at: parse_datetime(data[:start_at] || data["start_at"]),
+      start_at: parse_datetime(data[:start_at] || data["start_at"] || data[:starts_at] || data["starts_at"]),
       ends_at: parse_datetime(data[:ends_at] || data["ends_at"]),
-      venue_data: data[:venue_data] || data["venue_data"],
+      venue_data: data[:venue_data] || data["venue_data"] || data[:venue] || data["venue"],
       performer_names: data[:performer_names] || data["performer_names"] || [],
       metadata: data[:metadata] || data["metadata"] || %{},
       source_url: data[:source_url] || data["source_url"],

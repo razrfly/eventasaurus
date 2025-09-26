@@ -38,12 +38,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           title: title,
           title_translations: extract_title_translations(title, lang_key),
           description_translations: extract_description_translations(description, lang_key),
-          start_at: parse_event_datetime(tm_event),
+          starts_at: parse_event_datetime(tm_event),
           ends_at: parse_event_end_datetime(tm_event),
           status: map_event_status(tm_event),
           # All Ticketmaster events are ticketed
           is_ticketed: true,
-          venue_data: venue_data,
+          venue: venue_data,
           performers: extract_performers(tm_event),
           # Pass raw event data for category extraction
           raw_event_data: tm_event,

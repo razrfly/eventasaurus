@@ -21,10 +21,24 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     url = args["url"]
     source_id = args["source_id"]
     event_metadata = args["event_metadata"] || %{}
+    external_id = args["external_id"] || extract_external_id(url)
 
-    Logger.info("🎭 Processing Karnet event: #{url}")
+    Logger.info("🎭 Processing Karnet event: #{url} (External ID: #{external_id})")
 
-    # Fetch the event page
+    # Check if we can extract event ID for bilingual processing
+    case extract_event_id_from_external_id(external_id) do
+      nil ->
+        Logger.warning("Cannot extract event ID from external_id: #{external_id}, falling back to single language")
+        fallback_to_single_language(url, source_id, event_metadata)
+
+      event_id ->
+        Logger.info("🌐 Processing bilingual event ID: #{event_id}")
+        process_bilingual_event(url, event_id, source_id, event_metadata)
+    end
+  end
+
+  defp fallback_to_single_language(url, source_id, event_metadata) do
+    # Original single-language processing
     case Client.fetch_page(url) do
       {:ok, html} ->
         process_event_html(html, url, source_id, event_metadata)
@@ -35,6 +49,41 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
       {:error, reason} ->
         Logger.error("Failed to fetch event page #{url}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp process_bilingual_event(original_url, event_id, source_id, event_metadata) do
+    # Build bilingual URLs
+    urls = build_bilingual_urls(original_url, event_id)
+
+    Logger.info("🌐 Fetching bilingual content for event #{event_id}")
+    Logger.debug("Polish URL: #{urls.polish}")
+    Logger.debug("English URL: #{urls.english}")
+
+    # Fetch both language versions
+    {polish_result, english_result} = fetch_bilingual_content(urls, original_url)
+
+    # Merge bilingual content
+    case merge_bilingual_content(polish_result, english_result, event_metadata) do
+      {:ok, enriched_data} ->
+        Logger.debug("✅ Bilingual content merged successfully")
+
+        # Check if venue data is valid
+        if is_nil(enriched_data[:venue_data]) do
+          Logger.warning("⚠️ Discarding event without valid venue: #{original_url}")
+          {:discard, :no_valid_venue}
+        else
+          # Parse dates and process through pipeline
+          enriched_data = add_parsed_dates(enriched_data)
+
+          # Get source and process
+          source = Repo.get!(Source, source_id)
+          process_through_pipeline(enriched_data, source)
+        end
+
+      {:error, reason} ->
+        Logger.error("❌ Bilingual processing failed for #{original_url}: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -203,5 +252,113 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       [_, id] -> "karnet_#{id}"
       _ -> nil
     end
+  end
+
+  # New bilingual support functions
+
+  defp extract_event_id_from_external_id("karnet_" <> id), do: id
+  defp extract_event_id_from_external_id(_), do: nil
+
+  defp build_bilingual_urls(original_url, _event_id) do
+    # Extract slug from original URL
+    # Original: https://karnet.krakowculture.pl/60671-krakow-brncui-sculpting-with-light
+    # Extract: 60671-krakow-brncui-sculpting-with-light
+    slug = case Regex.run(~r/\/(\d+-krakow-.+)$/, original_url) do
+      [_, slug] -> slug
+      _ ->
+        # Fallback: extract everything after the last slash
+        original_url |> String.split("/") |> List.last() || ""
+    end
+
+    %{
+      polish: "https://karnet.krakowculture.pl/pl/#{slug}",
+      english: "https://karnet.krakowculture.pl/en/#{slug}"
+    }
+  end
+
+  defp fetch_bilingual_content(urls, _original_url) do
+    Logger.debug("🌐 Fetching bilingual content - PL: #{urls.polish}, EN: #{urls.english}")
+
+    # Fetch Polish version (should always exist)
+    polish_result = case Client.fetch_page(urls.polish) do
+      {:ok, html} ->
+        Logger.debug("✅ Polish content fetched successfully")
+        DetailExtractor.extract_event_details(html, urls.polish)
+      {:error, reason} ->
+        Logger.warning("❌ Failed to fetch Polish version: #{inspect(reason)}")
+        {:error, reason}
+    end
+
+    # Fetch English version (may not exist)
+    english_result = case Client.fetch_page(urls.english) do
+      {:ok, html} ->
+        Logger.debug("✅ English content fetched successfully")
+        DetailExtractor.extract_event_details(html, urls.english)
+      {:error, :not_found} ->
+        Logger.info("ℹ️ English version not available: #{urls.english}")
+        {:ok, nil}
+      {:error, reason} ->
+        Logger.warning("⚠️ Failed to fetch English version: #{inspect(reason)}")
+        {:ok, nil}
+    end
+
+    {polish_result, english_result}
+  end
+
+  defp merge_bilingual_content(polish_result, english_result, metadata) do
+    case {polish_result, english_result} do
+      {{:ok, polish_data}, {:ok, english_data}} when not is_nil(english_data) ->
+        Logger.debug("🔀 Merging Polish and English content")
+        merged_data = merge_language_data(polish_data, english_data, metadata)
+        {:ok, merged_data}
+
+      {{:ok, polish_data}, {:ok, nil}} ->
+        Logger.debug("📝 Using Polish-only content")
+        enriched_data = merge_metadata(polish_data, metadata)
+        {:ok, enriched_data}
+
+      {{:ok, polish_data}, {:error, _}} ->
+        Logger.debug("📝 Using Polish content (English failed)")
+        enriched_data = merge_metadata(polish_data, metadata)
+        {:ok, enriched_data}
+
+      {{:error, reason}, _} ->
+        Logger.error("❌ Polish content extraction failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp merge_language_data(polish_data, english_data, metadata) do
+    # Start with Polish data as base
+    base_data = merge_metadata(polish_data, metadata)
+
+    # Merge title translations
+    polish_title = polish_data[:title]
+    english_title = english_data[:title]
+
+    title_translations = %{}
+    title_translations = if polish_title, do: Map.put(title_translations, "pl", polish_title), else: title_translations
+    title_translations = if english_title, do: Map.put(title_translations, "en", english_title), else: title_translations
+
+    # Merge description translations
+    polish_desc = get_description_text(polish_data)
+    english_desc = get_description_text(english_data)
+
+    description_translations = %{}
+    description_translations = if polish_desc, do: Map.put(description_translations, "pl", polish_desc), else: description_translations
+    description_translations = if english_desc, do: Map.put(description_translations, "en", english_desc), else: description_translations
+
+    # Merge the translation data
+    base_data
+    |> Map.put(:title_translations, title_translations)
+    |> Map.put(:description_translations, description_translations)
+    |> Map.put(:title, polish_title || english_title)  # Fallback to available title
+  end
+
+  defp get_description_text(nil), do: nil
+  defp get_description_text(data) do
+    # Extract description text from event data
+    # This might be in different fields depending on the extractor
+    data[:description] || data[:summary] || data[:content] || ""
   end
 end

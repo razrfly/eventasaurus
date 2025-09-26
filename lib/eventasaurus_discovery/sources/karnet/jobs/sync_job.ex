@@ -191,7 +191,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         job_args = %{
           "url" => event.url,
           "source_id" => source_id,
-          "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category])
+          "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
+          "external_id" => extract_external_id_from_url(event.url)
         }
 
         # For now, we'll create a placeholder - EventDetailJob will be implemented in Phase 2
@@ -276,5 +277,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     events_per_page = 12
     pages = div(limit, events_per_page)
     if rem(limit, events_per_page) > 0, do: pages + 1, else: pages
+  end
+
+  defp extract_external_id_from_url(url) do
+    # Extract the event ID from the URL
+    # Format: /60682-krakow-event-name
+    case Regex.run(~r/\/(\d+)-/, url) do
+      [_, id] -> "karnet_#{id}"
+      _ -> nil
+    end
   end
 end
