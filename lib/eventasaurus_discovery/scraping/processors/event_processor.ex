@@ -395,13 +395,26 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       %PublicEventSource{} = existing when existing.event_id == event.id ->
         Logger.debug("✅ Event source link already exists, updating all fields")
 
+        # Merge translations instead of replacing them
+        merged_translations =
+          case {existing.description_translations, attrs.description_translations} do
+            {nil, new} -> new
+            {old, nil} -> old
+            {old, new} when is_map(old) and is_map(new) ->
+              Map.merge(old, new, fn _k, old_val, new_val ->
+                # If new value is nil or empty, keep old value
+                if new_val in [nil, ""], do: old_val, else: new_val
+              end)
+            {_old, new} -> new
+          end
+
         existing
         |> PublicEventSource.changeset(%{
           last_seen_at: attrs.last_seen_at,
           metadata: attrs.metadata,
           image_url: attrs.image_url,
           source_url: attrs.source_url,
-          description_translations: attrs.description_translations,
+          description_translations: merged_translations,
           # Add price fields
           min_price: attrs.min_price,
           max_price: attrs.max_price,
