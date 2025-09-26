@@ -109,11 +109,17 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"])
     end
 
+    # Trim city name to avoid trailing spaces that cause slug conflicts
+    city_name = case get_in(tm_venue, ["city", "name"]) do
+      nil -> nil
+      name -> String.trim(name)
+    end
+
     %{
       external_id: "tm_venue_#{tm_venue["id"]}",
       name: tm_venue["name"],
       address: get_in(tm_venue, ["address", "line1"]),
-      city: get_in(tm_venue, ["city", "name"]),
+      city: city_name,
       state: get_in(tm_venue, ["state", "name"]) || get_in(tm_venue, ["state", "stateCode"]),
       country: country,
       postal_code: tm_venue["postalCode"],
@@ -139,31 +145,27 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   # Private helper functions
 
   defp extract_title_translations(title, lang_key) when is_binary(title) and is_binary(lang_key) do
+    # We explicitly requested this locale, so we know what language we got back
+    # Ticketmaster returns content in the language we requested via the locale parameter
     %{lang_key => title}
   end
 
   defp extract_title_translations(title, nil) when is_binary(title) do
-    # Fallback to detection if no language key provided
-    if polish_content?(title) do
-      %{"pl" => title}
-    else
-      %{"en" => title}
-    end
+    # If no locale was specified, default to Polish for Kraków events
+    # since that's the primary language for this market
+    %{"pl" => title}
   end
 
   defp extract_title_translations(_, _), do: nil
 
   defp extract_description_translations(description, lang_key) when is_binary(description) and is_binary(lang_key) do
+    # Same as titles - we know what language we requested
     %{lang_key => description}
   end
 
   defp extract_description_translations(description, nil) when is_binary(description) do
-    # Fallback to detection if no language key provided
-    if polish_content?(description) do
-      %{"pl" => description}
-    else
-      %{"en" => description}
-    end
+    # Default to Polish for Kraków events when no locale specified
+    %{"pl" => description}
   end
 
   defp extract_description_translations(_, _), do: nil
@@ -207,52 +209,6 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     end
   end
 
-  defp polish_content?(title) do
-    # List of common Polish words and patterns found in event titles
-    polish_indicators = [
-      # Common Polish words in event titles
-      "koncert",
-      "wystawa",
-      "spektakl",
-      "przedstawienie",
-      "festiwal",
-      "teatr",
-      "opera",
-      "balet",
-      "film",
-      "kino",
-      "muzeum",
-      # Polish prepositions and articles
-      " w ",
-      " na ",
-      " do ",
-      " ze ",
-      " przy ",
-      " dla ",
-      # Polish venue/location indicators
-      "kraków",
-      "warszawa",
-      "gdańsk",
-      "wrocław",
-      "poznań",
-      # Polish diacritics
-      "ą",
-      "ć",
-      "ę",
-      "ł",
-      "ń",
-      "ó",
-      "ś",
-      "ź",
-      "ż"
-    ]
-
-    title_lower = String.downcase(title)
-
-    Enum.any?(polish_indicators, fn indicator ->
-      String.contains?(title_lower, String.downcase(indicator))
-    end)
-  end
 
   defp extract_description(event) do
     cond do
@@ -459,11 +415,17 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       # Check for place information
       place = event["place"] ->
         Logger.info("🔄 Attempting to build venue from place data")
+        # Trim city name to avoid trailing spaces
+        city_name = case get_in(place, ["city", "name"]) || place["city"] do
+          nil -> nil
+          name -> String.trim(name)
+        end
+
         %{
           external_id: "tm_place_#{place["id"] || :crypto.hash(:md5, inspect(place)) |> Base.encode16()}",
           name: place["name"] || "Unknown Venue",
           address: place["address"] || place["line1"],
-          city: get_in(place, ["city", "name"]) || place["city"],
+          city: city_name,
           state: get_in(place, ["state", "name"]) || place["state"],
           country: known_country || get_in(place, ["country", "name"]) || place["country"],
           postal_code: place["postalCode"],

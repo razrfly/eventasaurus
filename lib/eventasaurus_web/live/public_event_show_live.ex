@@ -26,6 +26,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:current_email_input, "")
       |> assign(:bulk_email_input, "")
       |> assign(:modal_organizer, nil)
+      |> assign(:nearby_events, [])
 
     {:ok, socket}
   end
@@ -105,10 +106,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           |> Map.put(:cover_image_url, get_cover_image_url(event))
           |> Map.put(:occurrence_list, parse_occurrences(event))
 
+        # Get nearby activities (with fallback)
+        nearby_events = EventasaurusDiscovery.PublicEvents.get_nearby_activities_with_fallback(
+          event,
+          [
+            initial_radius: 25,
+            max_radius: 50,
+            display_count: 4,
+            language: language
+          ]
+        )
+
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
         |> assign(:existing_plan, existing_plan)
+        |> assign(:nearby_events, nearby_events)
     end
   end
 
@@ -228,6 +241,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       true ->
         nil
     end
+  end
+
+  @impl true
+  def handle_event("change_language", %{"language" => language}, socket) do
+    socket =
+      socket
+      |> assign(:language, language)
+      |> fetch_event(socket.assigns.event.slug)
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -494,6 +517,28 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       <% else %>
         <%= if @event do %>
           <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Language Switcher -->
+            <div class="flex justify-end mb-4">
+              <div class="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  phx-click="change_language"
+                  phx-value-language="en"
+                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "en", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                  title="English"
+                >
+                  🇬🇧 EN
+                </button>
+                <button
+                  phx-click="change_language"
+                  phx-value-language="pl"
+                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "pl", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                  title="Polski"
+                >
+                  🇵🇱 PL
+                </button>
+              </div>
+            </div>
+
             <!-- Breadcrumb -->
             <div class="mb-6">
               <nav class="flex items-center space-x-2 text-sm">
@@ -848,23 +893,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             </div>
 
             <!-- Related Events -->
-            <div class="mt-8">
-              <h2 class="text-2xl font-semibold text-gray-900 mb-6">
-                <%= gettext("More Activities") %>
-              </h2>
-              <div class="text-center py-8 bg-white rounded-lg">
-                <p class="text-gray-500">
-                  <%= gettext("Related events coming soon") %>
-                </p>
-                <.link
-                  navigate={~p"/activities"}
-                  class="mt-4 inline-flex items-center text-blue-600 hover:text-blue-800"
-                >
-                  <%= gettext("Browse all activities") %>
-                  <Heroicons.arrow_right class="w-4 h-4 ml-1" />
-                </.link>
-              </div>
-            </div>
+            <.live_component
+              module={EventasaurusWeb.Components.NearbyEventsComponent}
+              id="nearby-events"
+              events={@nearby_events}
+              language={@language}
+            />
           </div>
         <% end %>
       <% end %>
