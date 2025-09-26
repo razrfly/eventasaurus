@@ -314,6 +314,8 @@ defmodule EventasaurusWeb.CityLive.Index do
       </div>
 
     </div>
+
+    <div id="language-cookie-hook" phx-hook="LanguageCookie"></div>
     """
   end
 
