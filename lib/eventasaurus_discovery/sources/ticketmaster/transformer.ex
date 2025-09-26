@@ -724,11 +724,16 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           currency = price_ranges
           |> Enum.find_value(fn r -> r["currency"] end)
           |> case do
-            nil -> "USD"  # Default to USD for Ticketmaster
-            curr -> curr
+            curr when is_binary(curr) and byte_size(curr) > 0 -> String.upcase(curr)
+            _ -> nil  # Don't assume currency when not provided
           end
 
-          {min_price, max_price, currency, is_free}
+          # Return nil prices when free to comply with DB constraint
+          if is_free do
+            {nil, nil, currency, true}
+          else
+            {min_price, max_price, currency, false}
+          end
         end
 
       _ ->
