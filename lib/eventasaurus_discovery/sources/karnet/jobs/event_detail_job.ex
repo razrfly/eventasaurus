@@ -287,7 +287,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     polish_result = case Client.fetch_page(urls.polish) do
       {:ok, html} ->
         Logger.debug("✅ Polish content fetched successfully")
-        DetailExtractor.extract_event_details(html, urls.polish)
+        case DetailExtractor.extract_event_details(html, urls.polish) do
+          {:error, :error_page} ->
+            Logger.warning("⚠️ Polish URL returned an error page: #{urls.polish}")
+            {:error, :error_page}
+          result ->
+            result
+        end
       {:error, reason} ->
         Logger.warning("❌ Failed to fetch Polish version: #{inspect(reason)}")
         {:error, reason}
@@ -297,7 +303,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     english_result = case Client.fetch_page(urls.english) do
       {:ok, html} ->
         Logger.debug("✅ English content fetched successfully")
-        DetailExtractor.extract_event_details(html, urls.english)
+        case DetailExtractor.extract_event_details(html, urls.english) do
+          {:error, :error_page} ->
+            Logger.info("ℹ️ English version returned error page (404 likely): #{urls.english}")
+            {:ok, nil}  # Treat error page as missing English version
+          result ->
+            result
+        end
       {:error, :not_found} ->
         Logger.info("ℹ️ English version not available: #{urls.english}")
         {:ok, nil}
@@ -319,11 +331,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       {{:ok, polish_data}, {:ok, nil}} ->
         Logger.debug("📝 Using Polish-only content")
         enriched_data = merge_metadata(polish_data, metadata)
+        # Add Polish translation when there's no English version
+        enriched_data = enriched_data
+          |> Map.put(:title_translations, %{"pl" => polish_data[:title]})
+          |> Map.put(:description_translations, %{"pl" => get_description_text(polish_data)})
         {:ok, enriched_data}
 
       {{:ok, polish_data}, {:error, _}} ->
         Logger.debug("📝 Using Polish content (English failed)")
         enriched_data = merge_metadata(polish_data, metadata)
+        # Add Polish translation when English extraction failed
+        enriched_data = enriched_data
+          |> Map.put(:title_translations, %{"pl" => polish_data[:title]})
+          |> Map.put(:description_translations, %{"pl" => get_description_text(polish_data)})
         {:ok, enriched_data}
 
       {{:error, reason}, _} ->
@@ -340,23 +360,40 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     polish_title = polish_data[:title]
     english_title = english_data[:title]
 
-    title_translations = %{}
-    title_translations = if polish_title, do: Map.put(title_translations, "pl", polish_title), else: title_translations
-    title_translations = if english_title, do: Map.put(title_translations, "en", english_title), else: title_translations
+    # Validate that the English content is actually for the same event
+    if english_title && !validate_translation_match(polish_data, english_data) do
+      Logger.warning("⚠️ English translation seems unrelated to Polish event, skipping English data")
+      Logger.warning("  Polish: #{inspect(polish_title)}")
+      Logger.warning("  English: #{inspect(english_title)}")
 
-    # Merge description translations
-    polish_desc = get_description_text(polish_data)
-    english_desc = get_description_text(english_data)
+      # Only use Polish data - don't include bad English translation
+      title_translations = %{"pl" => polish_title}
+      description_translations = %{"pl" => get_description_text(polish_data)}
 
-    description_translations = %{}
-    description_translations = if polish_desc, do: Map.put(description_translations, "pl", polish_desc), else: description_translations
-    description_translations = if english_desc, do: Map.put(description_translations, "en", english_desc), else: description_translations
+      base_data
+      |> Map.put(:title_translations, title_translations)
+      |> Map.put(:description_translations, description_translations)
+      |> Map.put(:title, polish_title || base_data[:title])  # Keep original title
+    else
+      # Normal flow - merge both languages
+      title_translations = %{}
+      title_translations = if polish_title, do: Map.put(title_translations, "pl", polish_title), else: title_translations
+      title_translations = if english_title, do: Map.put(title_translations, "en", english_title), else: title_translations
 
-    # Merge the translation data
-    base_data
-    |> Map.put(:title_translations, title_translations)
-    |> Map.put(:description_translations, description_translations)
-    |> Map.put(:title, polish_title || english_title)  # Fallback to available title
+      # Merge description translations
+      polish_desc = get_description_text(polish_data)
+      english_desc = get_description_text(english_data)
+
+      description_translations = %{}
+      description_translations = if polish_desc, do: Map.put(description_translations, "pl", polish_desc), else: description_translations
+      description_translations = if english_desc, do: Map.put(description_translations, "en", english_desc), else: description_translations
+
+      # Merge the translation data
+      base_data
+      |> Map.put(:title_translations, title_translations)
+      |> Map.put(:description_translations, description_translations)
+      |> Map.put(:title, polish_title || english_title)  # Fallback to available title
+    end
   end
 
   defp get_description_text(nil), do: nil
@@ -364,5 +401,47 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Extract description text from event data
     # This might be in different fields depending on the extractor
     data[:description] || data[:summary] || data[:content] || ""
+  end
+
+  defp validate_translation_match(polish_data, english_data) do
+    # Simple validation - if dates or venues match, they're likely the same event
+    polish_date = polish_data[:date_text] || polish_data[:event_date]
+    english_date = english_data[:date_text] || english_data[:event_date]
+
+    polish_venue = polish_data[:venue_data]
+    english_venue = english_data[:venue_data]
+
+    # If both have dates and they match, it's the same event
+    dates_match = polish_date && english_date && polish_date == english_date
+
+    # If both have venue names and they're similar, it's the same event
+    venues_match = case {polish_venue, english_venue} do
+      {%{name: pv}, %{name: ev}} when is_binary(pv) and is_binary(ev) ->
+        String.downcase(pv) == String.downcase(ev) ||
+        String.contains?(String.downcase(pv), String.downcase(ev)) ||
+        String.contains?(String.downcase(ev), String.downcase(pv))
+      _ -> false
+    end
+
+    # If we have evidence it's the same event, return true
+    # Otherwise, check if titles are suspiciously different
+    if dates_match || venues_match do
+      true
+    else
+      # Check if titles share any numbers or key patterns
+      polish_title = polish_data[:title] || ""
+      english_title = english_data[:title] || ""
+
+      # Extract numbers from both titles
+      polish_numbers = Regex.scan(~r/\d+/, polish_title) |> List.flatten()
+      english_numbers = Regex.scan(~r/\d+/, english_title) |> List.flatten()
+
+      # If they share numbers, they might be related
+      numbers_match = length(polish_numbers) > 0 && length(english_numbers) > 0 &&
+                     Enum.any?(polish_numbers, &(&1 in english_numbers))
+
+      # Default to true unless we're sure they're different
+      numbers_match || (polish_title == "" || english_title == "")
+    end
   end
 end

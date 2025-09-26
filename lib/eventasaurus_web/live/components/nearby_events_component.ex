@@ -1,0 +1,218 @@
+defmodule EventasaurusWeb.Components.NearbyEventsComponent do
+  @moduledoc """
+  Component for displaying nearby events on activity pages.
+  Shows geographically nearby upcoming activities with graceful fallbacks.
+  """
+  use EventasaurusWeb, :live_component
+
+  def render(assigns) do
+    ~H"""
+    <div class="mt-8">
+      <h2 class="text-2xl font-semibold text-gray-900 mb-6">
+        <%= if @events && @events != [] do %>
+          <%= gettext("Nearby Activities") %>
+        <% else %>
+          <%= gettext("More Activities") %>
+        <% end %>
+      </h2>
+
+      <div :if={@events && @events != []} class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <.event_card :for={event <- @events} event={event} language={@language} />
+      </div>
+
+      <div :if={!@events || @events == []} class="text-center py-8 bg-white rounded-lg">
+        <p class="text-gray-500">
+          <%= gettext("No nearby events at this time") %>
+        </p>
+        <.link
+          navigate={~p"/activities"}
+          class="mt-4 inline-flex items-center text-blue-600 hover:text-blue-800"
+        >
+          <%= gettext("Browse all activities") %>
+          <Heroicons.arrow_right class="w-4 h-4 ml-1" />
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
+  # Event card component
+  attr :event, :map, required: true
+  attr :language, :string, default: "en"
+
+  defp event_card(assigns) do
+    # Calculate distance if venue has coordinates
+    distance_text = format_distance(assigns.event)
+
+    # Get localized title and description
+    display_title = get_localized_title(assigns.event, assigns.language)
+
+    # Format date
+    formatted_date = format_event_date(assigns.event)
+
+    # Get venue name
+    venue_name = get_venue_name(assigns.event)
+
+    # Get price display
+    price_display = format_price(assigns.event)
+
+    # Get event image URL
+    image_url = get_event_image_url(assigns.event)
+
+    assigns = assigns
+      |> assign(:distance_text, distance_text)
+      |> assign(:display_title, display_title)
+      |> assign(:formatted_date, formatted_date)
+      |> assign(:venue_name, venue_name)
+      |> assign(:price_display, price_display)
+      |> assign(:image_url, image_url)
+
+    ~H"""
+    <.link
+      navigate={~p"/activities/#{@event.slug}"}
+      class="group block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+    >
+      <div class="aspect-w-16 aspect-h-9 bg-gray-200">
+        <%= if @image_url do %>
+          <img
+            src={@image_url}
+            alt={@display_title}
+            class="w-full h-48 object-cover group-hover:opacity-95 transition-opacity"
+            loading="lazy"
+          />
+        <% else %>
+          <div class="w-full h-48 bg-gray-100 flex items-center justify-center">
+            <Heroicons.calendar_days class="w-12 h-12 text-gray-400" />
+          </div>
+        <% end %>
+      </div>
+
+      <div class="p-4">
+        <h3 class="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+          <%= @display_title %>
+        </h3>
+
+        <div class="mt-2 space-y-1 text-sm text-gray-600">
+          <div class="flex items-center">
+            <Heroicons.calendar class="w-4 h-4 mr-1 flex-shrink-0" />
+            <span class="truncate"><%= @formatted_date %></span>
+          </div>
+
+          <div class="flex items-center">
+            <Heroicons.map_pin class="w-4 h-4 mr-1 flex-shrink-0" />
+            <span class="truncate">
+              <%= @venue_name %>
+              <%= if @distance_text do %>
+                <span class="text-gray-500">• <%= @distance_text %></span>
+              <% end %>
+            </span>
+          </div>
+
+          <%= if @price_display do %>
+            <div class="flex items-center">
+              <Heroicons.ticket class="w-4 h-4 mr-1 flex-shrink-0" />
+              <span><%= @price_display %></span>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </.link>
+    """
+  end
+
+  # Helper functions
+
+  defp format_distance(_event) do
+    # TODO: Calculate actual distance when we have the current venue coordinates
+    # For now, return nil
+    nil
+  end
+
+  defp get_localized_title(event, language) do
+    case event.title_translations do
+      nil -> event.title
+      translations when is_map(translations) ->
+        translations[language] || translations["en"] || event.title
+      _ -> event.title
+    end
+  end
+
+  defp format_event_date(event) do
+    case event.starts_at do
+      nil -> gettext("Date TBD")
+      date ->
+        # Format as "Dec 25, 2024 at 7:00 PM"
+        # Note: %I is 12-hour format with leading zeros, we'll trim them
+        formatted = Calendar.strftime(date, "%b %d, %Y at %I:%M %p")
+        # Remove leading zero from hour if present
+        String.replace(formatted, ~r/at 0(\d)/, "at \\1")
+    end
+  end
+
+  defp get_venue_name(event) do
+    case event.venue do
+      %{name: name} when is_binary(name) -> name
+      _ -> gettext("Venue TBD")
+    end
+  end
+
+  defp format_price(event) do
+    cond do
+      is_nil(event.min_price) && is_nil(event.max_price) ->
+        nil
+
+      event.min_price == 0 || (event.min_price == event.max_price && event.min_price == 0) ->
+        gettext("Free")
+
+      event.min_price == event.max_price ->
+        format_currency(event.min_price, event.currency)
+
+      true ->
+        "#{format_currency(event.min_price, event.currency)} - #{format_currency(event.max_price, event.currency)}"
+    end
+  end
+
+  defp format_currency(amount, currency) when is_nil(amount) or is_nil(currency), do: ""
+  defp format_currency(amount, currency) do
+    # Simple currency formatting - could be enhanced
+    symbol = case String.upcase(currency) do
+      "USD" -> "$"
+      "EUR" -> "€"
+      "GBP" -> "£"
+      "PLN" -> "zł"
+      _ -> currency <> " "
+    end
+
+    if String.ends_with?(symbol, " ") do
+      "#{symbol}#{Decimal.to_string(amount)}"
+    else
+      "#{symbol}#{Decimal.to_string(amount)}"
+    end
+  end
+
+  defp get_event_image_url(event) do
+    # Try to get image from sources
+    cond do
+      # Check sources for image URLs - most have image_url field directly
+      event.sources && length(event.sources) > 0 ->
+        event.sources
+        |> Enum.find_value(fn source ->
+          # Direct image_url field (most common)
+          case source do
+            %{image_url: url} when is_binary(url) and url != "" -> url
+            _ ->
+              # Check metadata for image URLs
+              case source.metadata do
+                %{"image_url" => url} when is_binary(url) and url != "" -> url
+                %{"images" => [%{"url" => url} | _]} when is_binary(url) and url != "" -> url
+                %{"image" => url} when is_binary(url) and url != "" -> url
+                _ -> nil
+              end
+          end
+        end)
+
+      true ->
+        nil
+    end
+  end
+end
