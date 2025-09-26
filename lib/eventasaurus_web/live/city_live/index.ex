@@ -858,4 +858,16 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp parse_sort("title"), do: :title
   defp parse_sort(_), do: :starts_at
 
+  defp has_ticket_url?(event) do
+    # Check if event has a ticket URL in any of its sources
+    case event.sources do
+      [] -> false
+      sources when is_list(sources) ->
+        Enum.any?(sources, fn source ->
+          source.source_url && source.source_url != ""
+        end)
+      _ -> false
+    end
+  end
+
 end
