@@ -53,6 +53,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         case result do
           {:ok, _} = success ->
             schedule_coordinate_update(city_id)
+            Logger.info("🗺️ Scheduled coordinate update for city #{city_id}")
             success
           other ->
             other
