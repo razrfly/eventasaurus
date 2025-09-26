@@ -46,7 +46,8 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
         with {:ok, city} <- get_city(city_id),
              {:ok, source} <- get_or_create_source(),
              {:ok, raw_events} <- fetch_events(city, limit, options),
-             transformed_events <- transform_events_with_options(raw_events, options),
+             # Pass city context through transformation
+             transformed_events <- transform_events_with_options(raw_events, Map.put(options, "city", city)),
              result <- process_events(transformed_events, source) do
           case result do
             {:ok, processed} ->
