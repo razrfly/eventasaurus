@@ -198,7 +198,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
       title: extract_text(document, "h1"),
       description: extract_description(document),
       start_at: extract_datetime(document),
-      venue: extract_venue_info(document),
+      venue_data: extract_venue_info(document),
       performers: extract_performers(document),
       ticket_url: extract_ticket_url(document),
       image_url: extract_image_url(document),

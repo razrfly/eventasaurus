@@ -32,8 +32,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
         fallback_to_single_language(url, source_id, event_metadata)
 
       event_id ->
-        Logger.info("🌐 Processing bilingual event ID: #{event_id}")
-        process_bilingual_event(url, event_id, source_id, event_metadata)
+        # Validate that the event ID is numeric
+        if is_binary(event_id) and event_id =~ ~r/^\d+$/ do
+          Logger.info("🌐 Processing bilingual event ID: #{event_id}")
+          process_bilingual_event(url, event_id, source_id, event_metadata)
+        else
+          Logger.warning("Invalid event ID format: #{event_id}, falling back to single language")
+          fallback_to_single_language(url, source_id, event_metadata)
+        end
     end
   end
 
@@ -198,8 +204,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
       # Venue - will be processed by VenueProcessor
       venue_data: venue_data,
-      # Alternative key
-      venue: venue_data,
 
       # Performers
       performers: event_data[:performers] || [],
