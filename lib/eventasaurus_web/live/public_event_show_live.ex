@@ -139,13 +139,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp get_primary_source_ticket_url(event) do
-    # Sort sources by priority and take the first one's source_url
+    # Sort sources by priority and find the first one with a valid ticket URL
     sorted_sources = get_sorted_sources(event.sources)
 
-    case sorted_sources do
-      [primary_source | _] -> primary_source.source_url
-      [] -> nil
-    end
+    # Find the first source with a valid ticket URL
+    sorted_sources
+    |> Enum.find_value(fn source ->
+      case source.source_url do
+        nil -> nil
+        "" -> nil
+        url -> url
+      end
+    end)
   end
 
   defp get_sorted_sources(sources) do
