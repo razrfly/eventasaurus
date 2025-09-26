@@ -24,6 +24,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     # Validate venue has required fields (same as Bandsintown)
     case validate_venue(venue_data) do
       :ok ->
+        # Extract price information
+        {min_price, max_price, currency, is_free} = extract_price_info(tm_event)
+
         transformed = %{
           external_id: "tm_#{tm_event["id"]}",
           title: title,
@@ -42,7 +45,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           category_id: extract_category_id(tm_event),
           metadata: extract_event_metadata(tm_event),
           # Add source_url directly like other scrapers do
-          source_url: tm_event["url"]
+          source_url: tm_event["url"],
+          # Add price fields
+          min_price: min_price,
+          max_price: max_price,
+          currency: currency,
+          is_free: is_free
         }
 
         {:ok, transformed}
@@ -673,6 +681,58 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     case Float.parse(value) do
       {float, _} -> float
       :error -> nil
+    end
+  end
+
+  # Extract price information from priceRanges array
+  # Returns {min_price, max_price, currency, is_free}
+  #
+  # NOTE: As of September 2025, Ticketmaster's Polish market API returns null
+  # for all priceRanges fields, making price extraction impossible.
+  # This infrastructure is retained for future API improvements.
+  # See GitHub issue #1281 for details.
+  defp extract_price_info(event) do
+    case event["priceRanges"] do
+      nil ->
+        {nil, nil, nil, false}  # No price data, not confirmed free
+
+      [] ->
+        {nil, nil, nil, false}  # Empty price ranges, not confirmed free
+
+      price_ranges when is_list(price_ranges) ->
+        # Get all min and max prices
+        all_prices = price_ranges
+        |> Enum.flat_map(fn range ->
+          prices = []
+          prices = if range["min"], do: [range["min"] | prices], else: prices
+          prices = if range["max"], do: [range["max"] | prices], else: prices
+          prices
+        end)
+        |> Enum.filter(&is_number/1)
+
+        if Enum.empty?(all_prices) do
+          {nil, nil, nil, false}  # No numeric prices found
+        else
+          # Get the absolute min and max across all price tiers
+          min_price = Enum.min(all_prices)
+          max_price = Enum.max(all_prices)
+
+          # Check if event is free (all prices are 0)
+          is_free = min_price == 0 && max_price == 0
+
+          # Get currency from first price range that has it
+          currency = price_ranges
+          |> Enum.find_value(fn r -> r["currency"] end)
+          |> case do
+            nil -> "USD"  # Default to USD for Ticketmaster
+            curr -> curr
+          end
+
+          {min_price, max_price, currency, is_free}
+        end
+
+      _ ->
+        {nil, nil, nil, false}
     end
   end
 end

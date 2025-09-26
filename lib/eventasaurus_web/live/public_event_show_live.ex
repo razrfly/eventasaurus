@@ -642,6 +642,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     </div>
                   <% end %>
 
+                  <%!-- Price display temporarily hidden - no APIs provide price data
+                       Infrastructure retained for future API support
+                       See GitHub issue #1281 for details
                   <!-- Price -->
                   <div>
                     <div class="flex items-center text-gray-600 mb-1">
@@ -652,6 +655,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       <%= format_price_range(@event) %>
                     </p>
                   </div>
+                  --%>
 
                   <!-- Ticket Link -->
                   <%= if @event.ticket_url do %>

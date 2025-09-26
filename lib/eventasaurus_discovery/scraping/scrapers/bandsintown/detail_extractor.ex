@@ -131,6 +131,10 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp extract_ticket_url([]), do: nil
   defp extract_ticket_url([offer | _]), do: offer["url"]
 
+  # NOTE: As of September 2025, Bandsintown's JSON-LD does not include actual price values
+  # in the offers object - only availability status. The price/lowPrice/highPrice fields
+  # are either missing or null. This infrastructure is retained for future API improvements.
+  # See GitHub issue #1281 for details.
   defp extract_min_price([]), do: nil
 
   defp extract_min_price(offers) do
