@@ -541,7 +541,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     # Map common timezones to cities
     case timezone do
       "Europe/Warsaw" -> {"Warsaw", "Poland", 52.2297, 21.0122}
-      "Europe/Krakow" -> {"Kraków", "Poland", 50.0647, 19.9450}
+      # Note: Kraków uses Europe/Warsaw timezone in IANA tz database
       "Europe/London" -> {"London", "United Kingdom", 51.5074, -0.1278}
       "Europe/Paris" -> {"Paris", "France", 48.8566, 2.3522}
       "Europe/Berlin" -> {"Berlin", "Germany", 52.5200, 13.4050}
