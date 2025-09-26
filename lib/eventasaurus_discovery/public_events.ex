@@ -620,10 +620,12 @@ defmodule EventasaurusDiscovery.PublicEvents do
       %Venue{latitude: nil} -> []
       %Venue{longitude: nil} -> []
       %Venue{latitude: lat, longitude: lng} ->
+        lat_f = if match?(%Decimal{}, lat), do: Decimal.to_float(lat), else: lat
+        lng_f = if match?(%Decimal{}, lng), do: Decimal.to_float(lng), else: lng
         nearby =
           EventasaurusDiscovery.PublicEventsEnhanced.list_events([
-            center_lat: lat,
-            center_lng: lng,
+            center_lat: lat_f,
+            center_lng: lng_f,
             radius_km: radius_km,
             page_size: pool_size + 1,
             show_past: false,
