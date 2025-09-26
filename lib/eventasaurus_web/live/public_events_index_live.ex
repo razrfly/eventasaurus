@@ -915,22 +915,24 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     Date.to_iso8601(DateTime.to_date(datetime))
   end
 
-  defp format_price_range(event) do
-    cond do
-      event.min_price && event.max_price && event.min_price == event.max_price ->
-        "$#{event.min_price}"
-
-      event.min_price && event.max_price ->
-        "$#{event.min_price} - $#{event.max_price}"
-
-      event.min_price ->
-        "From $#{event.min_price}"
-
-      event.max_price ->
-        "Up to $#{event.max_price}"
-
-      true ->
-        "Free"
-    end
-  end
+  # Commented out - price display temporarily hidden as no APIs provide price data
+  # See GitHub issue #1281 for details
+  # defp format_price_range(event) do
+  #   cond do
+  #     event.min_price && event.max_price && event.min_price == event.max_price ->
+  #       "$#{event.min_price}"
+  #
+  #     event.min_price && event.max_price ->
+  #       "$#{event.min_price} - $#{event.max_price}"
+  #
+  #     event.min_price ->
+  #       "From $#{event.min_price}"
+  #
+  #     event.max_price ->
+  #       "Up to $#{event.max_price}"
+  #
+  #     true ->
+  #       "Free"
+  #   end
+  # end
 end
