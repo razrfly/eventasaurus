@@ -69,8 +69,13 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
   end
 
 
+  # Keep @impl on the 1-arity variant to satisfy BaseJob behaviour
   @impl EventasaurusDiscovery.Sources.BaseJob
-  def transform_events(raw_events, options \\ %{}) do
+  def transform_events(raw_events) do
+    transform_events(raw_events, %{})
+  end
+
+  def transform_events(raw_events, options) do
     # Extract city context from options (passed by BaseJob)
     city = options["city"]
 
