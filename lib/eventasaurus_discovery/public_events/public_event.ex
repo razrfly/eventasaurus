@@ -30,10 +30,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     field(:starts_at, :utc_datetime)
     field(:ends_at, :utc_datetime)
     # external_id moved to public_event_sources table
-    field(:ticket_url, :string)
-    field(:min_price, :decimal)
-    field(:max_price, :decimal)
-    field(:currency, :string)
+    # ticket_url moved to public_event_sources table (source-specific)
+    # min_price, max_price, currency moved to public_event_sources table (source-specific)
     # metadata moved to public_event_sources table
     field(:occurrences, :map)
 
@@ -71,37 +69,18 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
       :starts_at,
       :ends_at,
       :venue_id,
-      :ticket_url,
-      :min_price,
-      :max_price,
-      :currency,
       :category_id,
       :occurrences
     ])
     |> validate_required([:title, :starts_at, :venue_id],
       message: "Public events must have a venue for proper location and collision detection"
     )
-    |> validate_length(:currency, is: 3)
-    |> validate_number(:min_price, greater_than_or_equal_to: 0)
-    |> validate_number(:max_price, greater_than_or_equal_to: 0)
-    |> validate_price_range()
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
     # external_id can collide across sources; uniqueness enforced in PublicEventSource
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:category_id)
-  end
-
-  defp validate_price_range(changeset) do
-    min_price = get_field(changeset, :min_price)
-    max_price = get_field(changeset, :max_price)
-
-    if min_price && max_price && Decimal.compare(max_price, min_price) == :lt do
-      add_error(changeset, :max_price, "must be greater than or equal to min_price")
-    else
-      changeset
-    end
   end
 
   defp validate_date_order(changeset) do
