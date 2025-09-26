@@ -58,7 +58,19 @@ defmodule EventasaurusWeb.Helpers.CategoryHelpers do
         # Find first non-"Other" category (ignore nil/blank names)
         non_other = Enum.find(multiple, fn cat ->
           name = Map.get(cat, :name) || Map.get(cat, "name")
-          name = if is_binary(name), do: String.trim(name), else: nil
+
+          name =
+            cond do
+              is_binary(name) ->
+                case String.trim(name) do
+                  "" -> nil
+                  trimmed -> trimmed
+                end
+
+              true ->
+                nil
+            end
+
           name && String.downcase(name) != "other"
         end)
 
@@ -75,7 +87,14 @@ defmodule EventasaurusWeb.Helpers.CategoryHelpers do
   def only_other_categories?(categories) when is_list(categories) do
     Enum.all?(categories, fn cat ->
       name = Map.get(cat, :name) || Map.get(cat, "name")
-      name == "Other"
+      # Normalize blank strings to nil before checking
+      name = if is_binary(name) do
+        trimmed = String.trim(name)
+        if trimmed == "", do: nil, else: trimmed
+      else
+        nil
+      end
+      name == "Other" || is_nil(name)
     end)
   end
 end
