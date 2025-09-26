@@ -404,25 +404,22 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
   defp get_description_text(nil), do: nil
   defp get_description_text(data) do
-    # Extract description text from event data
-    # The DetailExtractor returns description_translations with Polish content
-    cond do
-      # If description_translations exists and has Polish content
-      is_map(data[:description_translations]) && data[:description_translations]["pl"] ->
-        data[:description_translations]["pl"]
+    # Prefer translations["pl"], then description/summary/content; treat blanks as nil
+    val =
+      cond do
+        is_map(data[:description_translations]) ->
+          data[:description_translations]["pl"]
+        data[:description] -> data[:description]
+        data[:summary] -> data[:summary]
+        data[:content] -> data[:content]
+        true -> nil
+      end
 
-      # Fallback to other possible fields
-      data[:description] ->
-        data[:description]
-
-      data[:summary] ->
-        data[:summary]
-
-      data[:content] ->
-        data[:content]
-
-      true ->
-        ""
+    case val do
+      s when is_binary(s) ->
+        trimmed = String.trim(s)
+        if trimmed != "", do: trimmed, else: nil
+      _ -> nil
     end
   end
 
