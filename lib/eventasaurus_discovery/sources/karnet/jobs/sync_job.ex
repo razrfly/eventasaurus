@@ -43,13 +43,23 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         Max pages: #{max_pages}
         """)
 
-        continue_sync(city,
+        result = continue_sync(city,
           source: get_or_create_karnet_source(),
           limit: limit,
           max_pages: max_pages
         )
+
+        # Schedule coordinate recalculation after successful sync
+        case result do
+          {:ok, _} = success ->
+            schedule_coordinate_update(city_id)
+            success
+          other ->
+            other
+        end
     end
   end
+
 
   defp continue_sync(_city, opts) do
     source = opts[:source]
