@@ -608,33 +608,35 @@ defmodule EventasaurusDiscovery.PublicEvents do
       iex> PublicEvents.get_nearby_activities(current_event, radius_km: 50, display_count: 3)
       [%PublicEvent{...}, ...]
   """
-  def get_nearby_activities(%PublicEvent{venue: %Venue{} = venue} = current_event, opts \\ []) do
+  def get_nearby_activities(%PublicEvent{} = current_event, opts \\ []) do
     radius_km = Keyword.get(opts, :radius_km, 25)
     pool_size = Keyword.get(opts, :pool_size, 12)
     display_count = Keyword.get(opts, :display_count, 4)
     language = Keyword.get(opts, :language, "en")
 
-    # Check if venue has coordinates
-    case {venue.latitude, venue.longitude} do
-      {nil, _} -> []
-      {_, nil} -> []
-      {lat, lng} ->
-        # Use PublicEventsEnhanced for geographic filtering
-        nearby = EventasaurusDiscovery.PublicEventsEnhanced.list_events([
-          center_lat: lat,
-          center_lng: lng,
-          radius_km: radius_km,
-          page_size: pool_size + 1,  # Get extra in case current event is in results
-          show_past: false,
-          language: language
-        ])
+    current_event = Repo.preload(current_event, [:venue])
 
-        # Filter out current event and randomize selection
+    case current_event.venue do
+      %Venue{latitude: nil} -> []
+      %Venue{longitude: nil} -> []
+      %Venue{latitude: lat, longitude: lng} ->
+        nearby =
+          EventasaurusDiscovery.PublicEventsEnhanced.list_events([
+            center_lat: lat,
+            center_lng: lng,
+            radius_km: radius_km,
+            page_size: pool_size + 1,
+            show_past: false,
+            language: language
+          ])
+
         nearby
         |> Enum.reject(&(&1.id == current_event.id))
         |> Enum.shuffle()
         |> Enum.take(display_count)
         |> Repo.preload([:venue, :categories, :performers, sources: :source])
+      _ ->
+        []
     end
   end
 

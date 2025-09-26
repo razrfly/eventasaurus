@@ -5,8 +5,9 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
   Sets the current language based on:
   1. Query parameter (?lang=pl)
   2. Session storage
-  3. Accept-Language header
-  4. Default to "en"
+  3. Cookie (language_preference)
+  4. Accept-Language header
+  5. Default to "en"
   """
 
   import Plug.Conn
@@ -38,12 +39,29 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
             lang
 
           _ ->
-            # 3. Check Accept-Language header
-            case extract_language_from_header(conn) do
-              lang when lang in @supported_languages -> lang
-              _ -> @default_language
+            # 3. Check cookie
+            case extract_language_from_cookie(conn) do
+              lang when lang in @supported_languages ->
+                lang
+
+              _ ->
+                # 4. Check Accept-Language header
+                case extract_language_from_header(conn) do
+                  lang when lang in @supported_languages -> lang
+                  _ -> @default_language
+                end
             end
         end
+    end
+  end
+
+  defp extract_language_from_cookie(conn) do
+    case conn.req_cookies do
+      %{"language_preference" => lang} when lang in @supported_languages ->
+        lang
+
+      _ ->
+        nil
     end
   end
 

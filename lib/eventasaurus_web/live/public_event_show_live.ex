@@ -7,10 +7,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   import Ecto.Query
 
   @impl true
-  def mount(_params, _session, socket) do
-    # Get language from connect params if connected; default to English
+  def mount(_params, session, socket) do
+    # Get language from session (set by LanguagePlug), then connect params, then default to English
     params = get_connect_params(socket) || %{}
-    language = params["locale"] || "en"
+    language = session["language"] || params["locale"] || "en"
 
     socket =
       socket
@@ -245,10 +245,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   @impl true
   def handle_event("change_language", %{"language" => language}, socket) do
+    # Set cookie to persist language preference
     socket =
       socket
       |> assign(:language, language)
       |> fetch_event(socket.assigns.event.slug)
+      |> put_flash(:info, nil)  # Clear any existing flash
+      |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
 
     {:noreply, socket}
   end
@@ -920,6 +923,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         />
       <% end %>
     </div>
+
+    <script>
+      // Handle language cookie setting
+      this.handleEvent("set_language_cookie", (data) => {
+        // Set cookie for 1 year
+        const expires = new Date();
+        expires.setFullYear(expires.getFullYear() + 1);
+        document.cookie = `language_preference=${data.language}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+      });
+    </script>
     """
   end
 
