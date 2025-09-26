@@ -9,6 +9,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventSource do
     field(:metadata, :map, default: %{})
     field(:description_translations, :map)
     field(:image_url, :string)
+    field(:min_price, :decimal)
+    field(:max_price, :decimal)
+    field(:currency, :string)
+    field(:is_free, :boolean, default: false)
 
     belongs_to(:event, EventasaurusDiscovery.PublicEvents.PublicEvent)
     belongs_to(:source, EventasaurusDiscovery.Sources.Source)
@@ -27,7 +31,11 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventSource do
       :last_seen_at,
       :metadata,
       :description_translations,
-      :image_url
+      :image_url,
+      :min_price,
+      :max_price,
+      :currency,
+      :is_free
     ])
     |> validate_required([:event_id, :source_id, :last_seen_at])
     |> foreign_key_constraint(:event_id)
