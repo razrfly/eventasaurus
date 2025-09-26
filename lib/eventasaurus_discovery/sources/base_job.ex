@@ -46,7 +46,7 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
         with {:ok, city} <- get_city(city_id),
              {:ok, source} <- get_or_create_source(),
              {:ok, raw_events} <- fetch_events(city, limit, options),
-             transformed_events <- transform_events(raw_events),
+             transformed_events <- transform_events_with_options(raw_events, options),
              result <- process_events(transformed_events, source) do
           case result do
             {:ok, processed} ->
@@ -95,6 +95,14 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
         Processor.process_source_data(events, source)
       end
 
+      # Helper function to call transform_events with options if the implementation supports it
+      # This function can be overridden by specific implementations if needed
+      defp transform_events_with_options(raw_events, options) do
+        # Default implementation just calls the single-argument version
+        # Specific implementations like Ticketmaster can override this to use options
+        transform_events(raw_events)
+      end
+
       defp schedule_coordinate_update(city_id) do
         # Schedule the coordinate calculation job
         # It will check internally if update is needed (24hr check)
@@ -109,7 +117,7 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
       # Sources must implement source_config/0
       # We don't define it here to avoid conflicts
 
-      defoverridable perform: 1
+      defoverridable perform: 1, transform_events_with_options: 2
     end
   end
 end

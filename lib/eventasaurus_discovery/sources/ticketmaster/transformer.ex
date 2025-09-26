@@ -14,7 +14,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   Returns {:ok, transformed_event} or {:error, reason}
   """
-  def transform_event(tm_event) when is_map(tm_event) do
+  def transform_event(tm_event, locale \\ nil) when is_map(tm_event) do
     title = tm_event["name"]
     description = extract_description(tm_event)
 
@@ -27,11 +27,17 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         # Extract price information
         {min_price, max_price, currency, is_free} = extract_price_info(tm_event)
 
+        # Determine language key from locale
+        lang_key = locale_to_language_key(locale)
+
+        # Extract stable ID from URL - this is consistent across locales
+        stable_id = extract_stable_id(tm_event)
+
         transformed = %{
-          external_id: "tm_#{tm_event["id"]}",
+          external_id: stable_id,
           title: title,
-          title_translations: extract_title_translations(title),
-          description_translations: extract_description_translations(description),
+          title_translations: extract_title_translations(title, lang_key),
+          description_translations: extract_description_translations(description, lang_key),
           start_at: parse_event_datetime(tm_event),
           ends_at: parse_event_end_datetime(tm_event),
           status: map_event_status(tm_event),
@@ -125,8 +131,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   # Private helper functions
 
-  defp extract_title_translations(title) when is_binary(title) do
-    # Detect language based on common Polish words and patterns
+  defp extract_title_translations(title, lang_key) when is_binary(title) and is_binary(lang_key) do
+    %{lang_key => title}
+  end
+
+  defp extract_title_translations(title, nil) when is_binary(title) do
+    # Fallback to detection if no language key provided
     if polish_content?(title) do
       %{"pl" => title}
     else
@@ -134,10 +144,14 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     end
   end
 
-  defp extract_title_translations(_), do: nil
+  defp extract_title_translations(_, _), do: nil
 
-  defp extract_description_translations(description) when is_binary(description) do
-    # Use same Polish detection logic as titles for consistency
+  defp extract_description_translations(description, lang_key) when is_binary(description) and is_binary(lang_key) do
+    %{lang_key => description}
+  end
+
+  defp extract_description_translations(description, nil) when is_binary(description) do
+    # Fallback to detection if no language key provided
     if polish_content?(description) do
       %{"pl" => description}
     else
@@ -145,7 +159,46 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     end
   end
 
-  defp extract_description_translations(_), do: nil
+  defp extract_description_translations(_, _), do: nil
+
+  # Convert locale format (e.g., "pl-pl", "en-us") to language key (e.g., "pl", "en")
+  defp locale_to_language_key(nil), do: nil
+  defp locale_to_language_key(locale) when is_binary(locale) do
+    # Take the first part of the locale (language code)
+    locale
+    |> String.downcase()
+    |> String.split("-")
+    |> List.first()
+  end
+  defp locale_to_language_key(_), do: nil
+
+  # Extract stable ID from the event URL
+  # The URL contains a numeric ID that's consistent across locales
+  defp extract_stable_id(tm_event) do
+    case tm_event["url"] do
+      nil ->
+        # Fallback to the original ID if no URL
+        "tm_#{tm_event["id"]}"
+
+      url when is_binary(url) ->
+        # Extract the numeric ID from URLs like:
+        # https://www.ticketmaster.pl/event/muzeum-banksy-bilety/741913259
+        # https://www.ticketmaster.pl/event/muzeum-banksy-tickets/741913259?language=en-us
+        case Regex.run(~r/\/(\d+)(?:\?|$)/, url) do
+          [_, numeric_id] ->
+            # Use the URL ID as the stable identifier
+            "tm_url_#{numeric_id}"
+          _ ->
+            # If we can't extract the URL ID, fall back to the event ID
+            Logger.warning("Could not extract URL ID from: #{url}, using event ID")
+            "tm_#{tm_event["id"]}"
+        end
+
+      _ ->
+        # Fallback for non-string URLs
+        "tm_#{tm_event["id"]}"
+    end
+  end
 
   defp polish_content?(title) do
     # List of common Polish words and patterns found in event titles
