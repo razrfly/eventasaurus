@@ -70,7 +70,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
 
   @impl EventasaurusDiscovery.Sources.BaseJob
-  def transform_events(raw_events, _options \\ %{}) do
+  def transform_events(raw_events, options \\ %{}) do
+    # Extract city context from options (passed by BaseJob)
+    city = options["city"]
+
     # Transform each event using our Transformer
     # Each event has its locale tagged in "_locale" field
     raw_events
@@ -80,7 +83,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
       # Remove the temporary locale tag before transformation
       event_data = Map.delete(raw_event, "_locale")
 
-      case Transformer.transform_event(event_data, locale) do
+      case Transformer.transform_event(event_data, locale, city) do
         {:ok, event} ->
           [event]
         {:error, reason} ->
