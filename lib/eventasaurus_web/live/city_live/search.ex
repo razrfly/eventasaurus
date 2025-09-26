@@ -137,7 +137,7 @@ defmodule EventasaurusWeb.CityLive.Search do
       sort_order: :asc,
       search: nil,
       page: 1,
-      page_size: 20
+      page_size: 60  # Divisible by 3 for grid layout
     }
   end
 
@@ -173,7 +173,7 @@ defmodule EventasaurusWeb.CityLive.Search do
       sort_by: filters[:sort_by],
       sort_order: :asc,
       page: filters[:page] || 1,
-      page_size: filters[:page_size] || 25
+      page_size: filters[:page_size] || 60
     })
 
     alias EventasaurusDiscovery.PublicEventsEnhanced
@@ -187,15 +187,26 @@ defmodule EventasaurusWeb.CityLive.Search do
 
     # Build pagination metadata
     page = filters[:page] || 1
-    page_size = filters[:page_size] || 25
-    _has_next = length(events) == page_size
+    page_size = filters[:page_size] || 60
+    has_next = length(events) == page_size
+
+    # Estimate total entries based on current page
+    total_entries = if has_next do
+      # Estimate based on current page having full results
+      page * page_size + 1
+    else
+      # Current page is the last page
+      (page - 1) * page_size + length(events)
+    end
+
+    total_pages = ceil(total_entries / page_size)
 
     pagination = %Pagination{
       entries: events,
       page_number: page,
       page_size: page_size,
-      total_entries: nil,  # Would need separate count query
-      total_pages: nil  # Would need separate count query
+      total_entries: total_entries,
+      total_pages: total_pages
     }
 
     assign(socket,
