@@ -70,8 +70,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         # Stagger jobs slightly to avoid overwhelming the system
         scheduled_at = DateTime.add(DateTime.utc_now(), index * 2, :second)
 
+        # CRITICAL: Clean UTF-8 before storing in job args
+        # This prevents PostgreSQL UTF-8 errors when the job is stored
+        clean_event = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(event)
+
         job_args = %{
-          "event_data" => event,
+          "event_data" => clean_event,
           "source_id" => source_id
         }
 

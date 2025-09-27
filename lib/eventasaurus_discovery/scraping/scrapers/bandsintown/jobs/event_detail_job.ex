@@ -25,9 +25,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Services.CollisionDetector
   alias EventasaurusDiscovery.Categories.CategoryExtractor
+  alias EventasaurusDiscovery.Utils.ObanHelpers
+
+  # Override to truncate args in Oban Web display
+  def __meta__(:display_args) do
+    fn args -> ObanHelpers.truncate_job_args(args) end
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args}) do
+    # Option A: Trust data that's already been validated at HTTP boundary
     url = args["url"]
     source_id = args["source_id"]
     event_data = args["event_data"] || %{}
