@@ -42,23 +42,21 @@ defmodule EventasaurusDiscovery.Utils.UTF8 do
     if String.valid?(fixed) do
       fixed
     else
-      # Last resort: use Erlang's unicode module
-      case :unicode.characters_to_binary(fixed, :utf8) do
+      # Last resort: normalize with Erlang and, if needed, drop invalid codepoints safely
+      case :unicode.characters_to_binary(fixed, :utf8, :utf8) do
+        valid when is_binary(valid) ->
+          valid
+
         {:error, good, _bad} ->
           good
 
         {:incomplete, good, _bad} ->
           good
 
-        valid_binary when is_binary(valid_binary) ->
-          valid_binary
-
         _ ->
-          # Ultimate fallback: filter at codepoint level
-          fixed
-          |> String.codepoints()
-          |> Enum.filter(&String.valid?/1)
-          |> Enum.join()
+          # Ultimate fallback: keep only valid UTF-8 codepoints (skip invalid bytes)
+          # This bitstring comprehension safely iterates through valid UTF-8 sequences only
+          for <<cp::utf8 <- fixed>>, into: "", do: <<cp::utf8>>
       end
     end
   end

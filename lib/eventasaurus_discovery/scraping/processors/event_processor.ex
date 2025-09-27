@@ -461,9 +461,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp process_performers(event, %{performer_names: names}) do
     performers =
-      Enum.map(names, fn name ->
-        find_or_create_performer(name)
-      end)
+      names
+      |> Enum.map(&find_or_create_performer/1)
+      |> Enum.reject(&is_nil/1)  # Filter out any nil results from invalid names
 
     # Clear existing associations
     from(pep in PublicEventPerformer, where: pep.event_id == ^event.id)
@@ -511,11 +511,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     if is_nil(normalized_name) or normalized_name == "" do
       nil
     else
-      # Use Slug library to generate the same slug as the changeset
-      slug = Slug.slugify(normalized_name)
+      # Try to find existing performer by name (case-insensitive)
+      # This avoids the slug generation issue entirely
+      existing =
+        Repo.one(
+          from p in Performer,
+          where: fragment("lower(?) = lower(?)", p.name, ^normalized_name),
+          limit: 1
+        )
 
-      # Use slug-based lookup for better consistency
-      case Repo.get_by(Performer, slug: slug) do
+      case existing do
         nil -> create_performer(normalized_name)
         performer -> performer
       end

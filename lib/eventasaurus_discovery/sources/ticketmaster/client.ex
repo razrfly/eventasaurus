@@ -210,25 +210,39 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
       ])
 
     case Tesla.get(client, url) do
-      {:ok, %Tesla.Env{status: 200, body: raw_body}} when is_binary(raw_body) ->
-        # PostgreSQL Boundary Protection:
-        # 1. Clean raw response to handle malformed bytes
-        clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(raw_body)
+      {:ok, %Tesla.Env{status: 200, body: body}} ->
+        cond do
+          is_binary(body) ->
+            # PostgreSQL Boundary Protection:
+            # 1. Clean raw response to handle malformed bytes
+            clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(body)
 
-        # 2. Decode JSON (creates new strings from bytes)
-        case Jason.decode(clean_body) do
-          {:ok, decoded_body} ->
-            # 3. Clean decoded data - JSON decoder can create invalid UTF-8 strings
-            clean_decoded = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(decoded_body)
+            # 2. Decode JSON (creates new strings from bytes)
+            case Jason.decode(clean_body) do
+              {:ok, decoded_body} ->
+                # 3. Clean decoded data - JSON decoder can create invalid UTF-8 strings
+                clean_decoded = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(decoded_body)
 
+                case validate_response(clean_decoded) do
+                  :ok -> {:ok, clean_decoded}
+                  error -> error
+                end
+
+              {:error, reason} = json_error ->
+                Logger.error("Failed to decode Ticketmaster JSON response: #{inspect(reason)}")
+                json_error
+            end
+
+          is_map(body) ->
+            # Middleware already decoded the response
+            clean_decoded = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(body)
             case validate_response(clean_decoded) do
               :ok -> {:ok, clean_decoded}
               error -> error
             end
 
-          {:error, _} = json_error ->
-            Logger.error("Failed to decode Ticketmaster JSON response")
-            json_error
+          true ->
+            {:error, "Unexpected response body type for 200"}
         end
 
       {:ok, %Tesla.Env{status: 401}} ->
@@ -254,9 +268,22 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
           end
 
         error_msg =
-          if is_map(decoded_body) && decoded_body["fault"],
-            do: decoded_body["fault"]["faultstring"],
-            else: "HTTP #{status}"
+          cond do
+            is_map(decoded_body) && get_in(decoded_body, ["fault", "faultstring"]) ->
+              get_in(decoded_body, ["fault", "faultstring"])
+
+            is_map(decoded_body) && is_list(decoded_body["errors"]) && decoded_body["errors"] != [] ->
+              errors = decoded_body["errors"]
+              |> Enum.map(fn
+                %{"message" => msg} -> msg
+                error -> inspect(error)
+              end)
+              |> Enum.join(", ")
+              "Ticketmaster errors: #{errors}"
+
+            true ->
+              "HTTP #{status}"
+          end
 
         {:error, error_msg}
 
