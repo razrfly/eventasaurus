@@ -24,32 +24,85 @@ defmodule EventasaurusDiscovery.Utils.UTF8 do
       # Already valid, return as-is
       string
     else
-      # Try to preserve as much valid content as possible
-      # First attempt: use Erlang's unicode module to clean it
-      case :unicode.characters_to_binary(string, :utf8) do
-        {:error, good, _bad} ->
-          # Return the good part that could be converted
-          good
+      # IMPORTANT: For production issues with Ticketmaster data
+      # We need to handle partial UTF-8 sequences that get truncated
+      # Common issue: en-dash (—) being truncated to 0xe2 0x20 instead of 0xe2 0x80 0x93
 
-        {:incomplete, good, _bad} ->
-          # Return the good part
-          good
+      # First, try to fix known problematic patterns
+      # The pattern we're seeing is 0xe2 (start of en-dash) followed by wrong bytes
+      # This happens when UTF-8 multi-byte sequences get corrupted
+      fixed = string
+        # Fix truncated en-dash where next bytes are wrong (e.g., 0xe2 0x20 0x46)
+        # Just replace the broken 0xe2 with a regular dash
+        |> fix_broken_utf8_sequences()
 
-        valid_binary when is_binary(valid_binary) ->
-          valid_binary
+      # Now validate the fixed string
+      if String.valid?(fixed) do
+        fixed
+      else
+        # If still invalid, use Erlang's unicode module to clean it
+        case :unicode.characters_to_binary(fixed, :utf8) do
+          {:error, good, _bad} ->
+            # Return the good part that could be converted
+            good
 
-        _ ->
-          # Fallback: filter at the codepoint level
-          string
-          |> String.codepoints()
-          |> Enum.filter(&String.valid?/1)
-          |> Enum.join()
+          {:incomplete, good, _bad} ->
+            # Return the good part
+            good
+
+          valid_binary when is_binary(valid_binary) ->
+            valid_binary
+
+          _ ->
+            # Fallback: filter at the codepoint level
+            string
+            |> String.codepoints()
+            |> Enum.filter(&String.valid?/1)
+            |> Enum.join()
+        end
       end
     end
   end
 
   def ensure_valid_utf8(nil), do: nil
   def ensure_valid_utf8(other), do: to_string(other) |> ensure_valid_utf8()
+
+  # Fix broken UTF-8 sequences by detecting and replacing them
+  defp fix_broken_utf8_sequences(binary) do
+    # Use regex to find and replace broken UTF-8 sequences
+    # 0xe2 is the start of many 3-byte UTF-8 sequences (including en-dash and em-dash)
+    # When followed by bytes that don't form valid UTF-8, replace with a dash
+    binary
+    |> :binary.bin_to_list()
+    |> fix_bytes([])
+    |> :binary.list_to_bin()
+  end
+
+  defp fix_bytes([], acc), do: Enum.reverse(acc)
+
+  # Detect 0xe2 followed by invalid continuation bytes
+  # In UTF-8, 0xe2 should be followed by bytes in range 0x80-0xBF
+  defp fix_bytes([0xe2, b2, b3 | rest], acc) when b2 >= 0x80 and b2 <= 0xBF and b3 >= 0x80 and b3 <= 0xBF do
+    # This looks like valid UTF-8, keep it
+    fix_bytes([b3 | rest], [b2, 0xe2 | acc])
+  end
+
+  # Detect 0xe2 followed by non-continuation bytes (like 0x20)
+  # This is broken - replace with dash and keep the following bytes
+  defp fix_bytes([0xe2, b2 | rest], acc) when b2 < 0x80 or b2 > 0xBF do
+    # Replace 0xe2 with " - " and keep processing from b2
+    fix_bytes([b2 | rest], [32, 45, 32 | acc])  # " - "
+  end
+
+  # Detect standalone 0xe2 at end
+  defp fix_bytes([0xe2], acc) do
+    fix_bytes([], [32, 45, 32 | acc])  # " - "
+  end
+
+  # Valid UTF-8 or other bytes, keep as-is
+  defp fix_bytes([byte | rest], acc) do
+    fix_bytes(rest, [byte | acc])
+  end
 
   @doc """
   Validates all string values in a map (useful for Oban job args).

@@ -193,10 +193,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
   defp make_request(endpoint, params) do
     url = Config.build_url(endpoint)
 
+    # Don't use JSON middleware - we need to validate UTF-8 BEFORE decoding
     client =
       Tesla.client([
         {Tesla.Middleware.Query, params},
-        Tesla.Middleware.JSON,
         {Tesla.Middleware.Timeout, timeout: Config.source_config().timeout},
         {Tesla.Middleware.Retry,
          delay: 1000,
@@ -210,10 +210,22 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
       ])
 
     case Tesla.get(client, url) do
-      {:ok, %Tesla.Env{status: 200, body: body}} ->
-        case validate_response(body) do
-          :ok -> {:ok, body}
-          error -> error
+      {:ok, %Tesla.Env{status: 200, body: raw_body}} when is_binary(raw_body) ->
+        # CRITICAL: Validate UTF-8 BEFORE JSON decoding
+        # This is the ONLY place we validate - true Option A implementation
+        clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(raw_body)
+
+        # Now decode the clean JSON
+        case Jason.decode(clean_body) do
+          {:ok, decoded_body} ->
+            case validate_response(decoded_body) do
+              :ok -> {:ok, decoded_body}
+              error -> error
+            end
+
+          {:error, _} = json_error ->
+            Logger.error("Failed to decode Ticketmaster JSON response")
+            json_error
         end
 
       {:ok, %Tesla.Env{status: 401}} ->
@@ -226,9 +238,21 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
         {:error, "Resource not found"}
 
       {:ok, %Tesla.Env{status: status, body: body}} ->
+        # For error responses, try to decode if it's a string
+        decoded_body =
+          case body do
+            raw when is_binary(raw) ->
+              clean = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(raw)
+              case Jason.decode(clean) do
+                {:ok, decoded} -> decoded
+                _ -> nil
+              end
+            other -> other
+          end
+
         error_msg =
-          if is_map(body) && body["fault"],
-            do: body["fault"]["faultstring"],
+          if is_map(decoded_body) && decoded_body["fault"],
+            do: decoded_body["fault"]["faultstring"],
             else: "HTTP #{status}"
 
         {:error, error_msg}
