@@ -135,10 +135,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   """
   def transform_performer(tm_attraction) when is_map(tm_attraction) do
     %{
-      external_id: "tm_performer_#{tm_attraction["id"]}",
-      name: tm_attraction["name"],
-      type: extract_performer_type(tm_attraction),
-      metadata: extract_performer_metadata(tm_attraction)
+      "external_id" => "tm_performer_#{tm_attraction["id"]}",
+      "name" => tm_attraction["name"],
+      "type" => extract_performer_type(tm_attraction),
+      "metadata" => extract_performer_metadata(tm_attraction),
+      "image_url" => extract_performer_image(tm_attraction),
+      "source_id" => 1  # Will be overridden in PerformerStore if needed
     }
   end
 
@@ -644,6 +646,18 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         external_links: extract_external_links(attraction["externalLinks"])
       }
     }
+  end
+
+  defp extract_performer_image(attraction) do
+    # Get the first suitable image from the attraction
+    images = attraction["images"] || []
+
+    image = Enum.find(images, fn img ->
+      # Prefer 16:9 ratio images, or take the first one
+      img["ratio"] == "16_9" || img["ratio"] == "4_3"
+    end) || List.first(images)
+
+    if image, do: image["url"], else: nil
   end
 
   defp extract_images(nil), do: []
