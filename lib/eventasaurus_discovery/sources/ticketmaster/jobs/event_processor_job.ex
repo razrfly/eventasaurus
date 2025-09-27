@@ -15,11 +15,21 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
+  alias EventasaurusDiscovery.Utils.ObanHelpers
+
+  # Override to truncate args in Oban Web display
+  def __meta__(:display_args) do
+    fn args -> ObanHelpers.truncate_job_args(args) end
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    event_data = args["event_data"] || %{}
-    source_id = args["source_id"]
+    # Clean UTF-8 from potentially corrupted job args stored in DB
+    # This handles jobs that were stored with bad UTF-8 before our fixes
+    clean_args = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(args)
+
+    event_data = clean_args["event_data"] || %{}
+    source_id = clean_args["source_id"]
     external_id = Map.get(event_data, "external_id") || Map.get(event_data, :external_id)
 
     Logger.info("🎫 Processing Ticketmaster event: #{external_id}")
@@ -42,7 +52,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
       {:error, reason} ->
         # Regular error - allow retry
+        truncated_args = ObanHelpers.truncate_job_args(args)
         Logger.error("❌ Failed to process event #{external_id}: #{inspect(reason)}")
+        Logger.debug("Truncated job args: #{inspect(truncated_args)}")
         {:error, reason}
     end
   end

@@ -18,10 +18,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    url = args["url"]
-    source_id = args["source_id"]
-    event_metadata = args["event_metadata"] || %{}
-    external_id = args["external_id"] || extract_external_id(url)
+    # Clean the data that comes from job storage (may have been corrupted during serialization)
+    clean_args = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(args)
+    url = clean_args["url"]
+    source_id = clean_args["source_id"]
+    event_metadata = clean_args["event_metadata"] || %{}
+    external_id = clean_args["external_id"] || extract_external_id(url)
 
     Logger.info("🎭 Processing Karnet event: #{url} (External ID: #{external_id})")
 

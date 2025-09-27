@@ -106,7 +106,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
             body
           end
 
-        {:ok, body}
+        # Ensure UTF-8 validity at HTTP entry point
+        clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(body)
+        {:ok, clean_body}
 
       {:ok, %HTTPoison.Response{status_code: status_code}} ->
         Logger.error("❌ HTTP #{status_code} for: #{url}")
@@ -193,14 +195,19 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
             body
           end
 
+        # Ensure UTF-8 validity at HTTP entry point
+        clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(body)
+
         # Try to parse as JSON first
-        case Jason.decode(body) do
+        case Jason.decode(clean_body) do
           {:ok, json_data} ->
-            {:ok, json_data}
+            # Clean JSON data recursively if it contains strings
+            clean_json = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(json_data)
+            {:ok, clean_json}
 
           {:error, _} ->
-            # If not JSON, might be HTML
-            {:ok, body}
+            # If not JSON, might be HTML (already cleaned)
+            {:ok, clean_body}
         end
 
       {:ok, %HTTPoison.Response{status_code: status_code}} ->

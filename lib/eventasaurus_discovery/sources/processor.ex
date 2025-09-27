@@ -130,9 +130,17 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   defp process_performers(performers_data, source) when is_list(performers_data) do
     results =
       Enum.map(performers_data, fn performer_data ->
+        # Normalize performer data - handle both maps and plain strings
+        attrs =
+          case performer_data do
+            %{} = map -> map
+            name when is_binary(name) -> %{"name" => name}
+            other -> %{"name" => to_string(other)}
+          end
+
         # Add source_id to performer data if not present
-        performer_data_with_source = Map.put_new(performer_data, "source_id", source.id)
-        PerformerStore.find_or_create_performer(performer_data_with_source)
+        attrs_with_source = Map.put_new(attrs, "source_id", source.id)
+        PerformerStore.find_or_create_performer(attrs_with_source)
       end)
 
     performers =
@@ -153,7 +161,10 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     event_with_venue = Map.put(event_data, :venue_id, venue.id)
 
     # EventProcessor expects performer_names as a list of strings
-    performer_names = Enum.map(performers, fn p -> p.name end)
+    # Clean UTF-8 from performer names to prevent Slug library crashes
+    performer_names = Enum.map(performers, fn p ->
+      EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(p.name)
+    end)
     event_with_performers = Map.put(event_with_venue, :performer_names, performer_names)
 
     # EventProcessor expects source_id, not the source struct

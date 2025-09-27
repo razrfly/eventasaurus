@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   Returns {:ok, transformed_event} or {:error, reason}
   """
   def transform_event(tm_event, locale \\ nil, city \\ nil) when is_map(tm_event) do
+    # Data is already cleaned at HTTP client level
     title = tm_event["name"]
     description = extract_description(tm_event)
 
@@ -134,6 +135,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   Transforms a Ticketmaster attraction/performer to our standardized performer data structure.
   """
   def transform_performer(tm_attraction) when is_map(tm_attraction) do
+    # Data is already cleaned at HTTP client level
     %{
       "external_id" => "tm_performer_#{tm_attraction["id"]}",
       "name" => tm_attraction["name"],
