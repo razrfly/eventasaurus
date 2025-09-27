@@ -132,19 +132,27 @@ defmodule EventasaurusApp.Venues.Venue do
   # Validate that string fields contain valid UTF-8
   defp validate_utf8_fields(changeset) do
     changeset
-    |> validate_change(:name, fn :name, name ->
-      if String.valid?(name) do
+    |> validate_change(:name, fn
+      :name, name when is_binary(name) ->
+        if String.valid?(name) do
+          []
+        else
+          [name: "contains invalid UTF-8 characters after sanitization"]
+        end
+
+      :name, _ ->
         []
-      else
-        [name: "contains invalid UTF-8 characters after sanitization"]
-      end
     end)
-    |> validate_change(:address, fn :address, address ->
-      if is_nil(address) or String.valid?(address) do
+    |> validate_change(:address, fn
+      :address, address when is_binary(address) ->
+        if String.valid?(address) do
+          []
+        else
+          [address: "contains invalid UTF-8 characters after sanitization"]
+        end
+
+      :address, _ ->
         []
-      else
-        [address: "contains invalid UTF-8 characters after sanitization"]
-      end
     end)
   end
 
