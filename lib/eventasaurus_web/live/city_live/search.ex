@@ -180,10 +180,15 @@ defmodule EventasaurusWeb.CityLive.Search do
 
     # Use PublicEventsEnhanced to get events with all filters applied at DB level
     events = if lat && lng do
-      PublicEventsEnhanced.list_events(query_filters)
-      |> Enum.map(fn event ->
-        # Add primary_category_id to each event for category display
-        Map.put(event, :primary_category_id, get_primary_category_id(event.id))
+      events = PublicEventsEnhanced.list_events(query_filters)
+
+      # Batch fetch primary categories to avoid N+1 queries
+      event_ids = Enum.map(events, & &1.id)
+      primary_category_map = fetch_primary_category_ids(event_ids)
+
+      # Add primary_category_id to each event for category display
+      Enum.map(events, fn event ->
+        Map.put(event, :primary_category_id, Map.get(primary_category_map, event.id))
       end)
     else
       []
@@ -299,15 +304,17 @@ defmodule EventasaurusWeb.CityLive.Search do
     end
   end
 
-  defp get_primary_category_id(event_id) do
+  defp fetch_primary_category_ids(event_ids) when is_list(event_ids) and event_ids != [] do
     import Ecto.Query
     alias EventasaurusApp.Repo
 
-    Repo.one(
+    Repo.all(
       from pec in "public_event_categories",
-      where: pec.event_id == ^event_id and pec.is_primary == true,
-      select: pec.category_id,
-      limit: 1
+      where: pec.event_id in ^event_ids and pec.is_primary == true,
+      select: {pec.event_id, pec.category_id}
     )
+    |> Map.new()
   end
+
+  defp fetch_primary_category_ids(_), do: %{}
 end
