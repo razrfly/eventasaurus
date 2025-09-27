@@ -234,8 +234,8 @@ defmodule EventasaurusDiscovery.Categories do
         :upsert,
         PublicEventCategory,
         event_categories,
-        # Only replace confidence and source, NOT is_primary to avoid constraint violations
-        on_conflict: {:replace, [:confidence, :source]},
+        # Replace confidence, source, and is_primary (old primaries were deleted earlier)
+        on_conflict: {:replace, [:confidence, :source, :is_primary]},
         conflict_target: [:event_id, :category_id],
         returning: true
       )
