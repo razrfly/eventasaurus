@@ -49,6 +49,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         enqueued: enqueued_count
       }}
     else
+      {:discard, reason} ->
+        Logger.error("Job discarded: #{reason}")
+        {:discard, reason}
+
       {:error, reason} = error ->
         Logger.error("Failed to sync Ticketmaster events: #{inspect(reason)}")
         error

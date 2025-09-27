@@ -18,9 +18,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    event_data = args["event_data"]
+    event_data = args["event_data"] || %{}
     source_id = args["source_id"]
-    external_id = event_data["external_id"] || event_data[:external_id]
+    external_id = Map.get(event_data, "external_id") || Map.get(event_data, :external_id)
 
     Logger.info("🎫 Processing Ticketmaster event: #{external_id}")
 
@@ -31,6 +31,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
       Logger.info("✅ Successfully processed Ticketmaster event: #{external_id}")
       {:ok, %{event_id: external_id, status: "processed"}}
     else
+      {:error, :source_not_found} ->
+        Logger.error("🚫 Discarding event #{external_id}: source #{source_id} not found")
+        {:discard, :source_not_found}
+
       {:error, {:discard, reason}} ->
         # Critical failure (e.g., missing GPS coordinates) - discard the job
         Logger.error("🚫 Discarding event #{external_id}: #{reason}")
@@ -58,12 +62,28 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
         {:ok, processed_event}
 
       {:ok, []} ->
-        # Event was filtered out or skipped
-        {:ok, nil}
+        # Empty result means the event failed to process - this is an ERROR!
+        Logger.error("Event processing returned empty result - processing failed")
+        {:error, :event_processing_failed}
+
+      {:error, :all_events_failed} ->
+        # The single event failed to process
+        Logger.error("Event processing failed")
+        {:error, :event_processing_failed}
+
+      {:error, {:partial_failure, _, _}} ->
+        # Single event can't have partial failure, this means it failed
+        Logger.error("Event processing failed (unexpected partial failure for single event)")
+        {:error, :event_processing_failed}
 
       {:discard, reason} ->
         # Critical failure that should discard the job
-        {:error, {:discard, reason}}
+        {:discard, reason}
+
+      {:error, reason} ->
+        # Other errors should be retried
+        Logger.error("Event processing failed: #{inspect(reason)}")
+        {:error, reason}
 
       other ->
         # Catch any other unexpected return value

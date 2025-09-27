@@ -83,9 +83,32 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
   end
 
   defp normalize_performer_attrs(attrs) do
-    attrs
-    |> Map.put_new(:source_id, get_default_source_id())
-    |> Map.update(:name, "", &String.trim/1)
+    # Convert to string keys first to ensure consistency
+    string_attrs = for {key, value} <- attrs, into: %{} do
+      {to_string(key), value}
+    end
+
+    # Now work with string keys consistently
+    string_attrs
+    |> Map.put_new("source_id", get_default_source_id())
+    |> Map.update("name", "", fn
+      nil -> ""
+      name when is_binary(name) -> String.trim(name)
+      other -> to_string(other) |> String.trim()
+    end)
+    |> then(fn map ->
+      # Convert back to atom keys for the changeset
+      %{
+        name: map["name"],
+        source_id: map["source_id"],
+        external_id: map["external_id"],
+        metadata: map["metadata"],
+        type: map["type"],
+        image_url: map["image_url"]
+      }
+      |> Enum.filter(fn {_k, v} -> v != nil end)
+      |> Map.new()
+    end)
   end
 
   defp get_default_source_id do
