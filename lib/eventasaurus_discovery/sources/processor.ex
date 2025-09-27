@@ -161,7 +161,10 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     event_with_venue = Map.put(event_data, :venue_id, venue.id)
 
     # EventProcessor expects performer_names as a list of strings
-    performer_names = Enum.map(performers, fn p -> p.name end)
+    # Clean UTF-8 from performer names to prevent Slug library crashes
+    performer_names = Enum.map(performers, fn p ->
+      EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(p.name)
+    end)
     event_with_performers = Map.put(event_with_venue, :performer_names, performer_names)
 
     # EventProcessor expects source_id, not the source struct
