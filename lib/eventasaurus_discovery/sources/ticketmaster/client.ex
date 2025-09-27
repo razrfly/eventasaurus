@@ -211,15 +211,18 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
 
     case Tesla.get(client, url) do
       {:ok, %Tesla.Env{status: 200, body: raw_body}} when is_binary(raw_body) ->
-        # CRITICAL: Validate UTF-8 BEFORE JSON decoding
-        # This is the ONLY place we validate - true Option A implementation
+        # PostgreSQL Boundary Protection:
+        # 1. Clean raw response to handle malformed bytes
         clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(raw_body)
 
-        # Now decode the clean JSON
+        # 2. Decode JSON (creates new strings from bytes)
         case Jason.decode(clean_body) do
           {:ok, decoded_body} ->
-            case validate_response(decoded_body) do
-              :ok -> {:ok, decoded_body}
+            # 3. Clean decoded data - JSON decoder can create invalid UTF-8 strings
+            clean_decoded = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(decoded_body)
+
+            case validate_response(clean_decoded) do
+              :ok -> {:ok, clean_decoded}
               error -> error
             end
 

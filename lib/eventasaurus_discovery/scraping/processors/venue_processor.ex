@@ -24,11 +24,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   Creates or finds existing venue, city, and country as needed.
   """
   def process_venue(venue_data, source \\ "scraper") do
-    # Universal UTF-8 protection for all scrapers
-    # Ensures venue data from Karnet, Ticketmaster, Bandsintown, etc. is clean
-    clean_venue_data = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(venue_data)
-
-    with {:ok, normalized_data} <- normalize_venue_data(clean_venue_data),
+    # Data is already cleaned at HTTP client level (single entry point validation)
+    with {:ok, normalized_data} <- normalize_venue_data(venue_data),
          {:ok, city} <- ensure_city(normalized_data),
          {:ok, venue} <- find_or_create_venue(normalized_data, city, source) do
       {:ok, venue}
@@ -116,13 +113,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   def find_existing_venue(%{name: name, city_id: city_id}) do
-    # Ensure valid UTF-8 before querying to prevent encoding errors
-    clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
-
+    # Data is already cleaned at HTTP client level
     # First try exact match
     exact_match =
       from(v in Venue,
-        where: v.name == ^clean_name and v.city_id == ^city_id,
+        where: v.name == ^name and v.city_id == ^city_id,
         limit: 1
       )
       |> Repo.one()
@@ -132,8 +127,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       fuzzy_match =
         from(v in Venue,
           where: v.city_id == ^city_id,
-          where: fragment("similarity(?, ?) > ?", v.name, ^clean_name, 0.7),
-          order_by: [desc: fragment("similarity(?, ?)", v.name, ^clean_name)],
+          where: fragment("similarity(?, ?) > ?", v.name, ^name, 0.7),
+          order_by: [desc: fragment("similarity(?, ?)", v.name, ^name)],
           limit: 1
         )
         |> Repo.one()
@@ -155,12 +150,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   def find_existing_venue(_), do: nil
 
   defp calculate_similarity(name1, name2) do
-    # Ensure both strings are valid UTF-8 before calculating similarity
-    # This prevents ArgumentError when invalid UTF-8 is passed to jaro_distance
+    # PostgreSQL boundary protection: clean UTF-8 before similarity calculation
+    # Elixir's jaro_distance crashes on invalid UTF-8
     clean_name1 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name1)
     clean_name2 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name2)
-
-    # Use Elixir's String.jaro_distance for logging
     Float.round(String.jaro_distance(clean_name1, clean_name2), 2)
   end
 

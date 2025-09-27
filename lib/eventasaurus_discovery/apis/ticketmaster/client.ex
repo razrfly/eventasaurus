@@ -191,8 +191,11 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Client do
 
     case Tesla.get(client, url) do
       {:ok, %Tesla.Env{status: 200, body: body}} ->
-        case validate_response(body) do
-          :ok -> {:ok, body}
+        # Ensure UTF-8 validity at HTTP entry point
+        clean_body = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(body)
+
+        case validate_response(clean_body) do
+          :ok -> {:ok, clean_body}
           error -> error
         end
 

@@ -24,9 +24,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    # Option A: Trust data that's already been validated at HTTP boundary
-    event_data = args["event_data"] || %{}
-    source_id = args["source_id"]
+    # Clean UTF-8 from potentially corrupted job args stored in DB
+    # This handles jobs that were stored with bad UTF-8 before our fixes
+    clean_args = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(args)
+
+    event_data = clean_args["event_data"] || %{}
+    source_id = clean_args["source_id"]
     external_id = Map.get(event_data, "external_id") || Map.get(event_data, :external_id)
 
     Logger.info("🎫 Processing Ticketmaster event: #{external_id}")
