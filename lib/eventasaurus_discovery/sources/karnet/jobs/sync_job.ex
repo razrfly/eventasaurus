@@ -188,13 +188,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         # Start immediately, then rate_limit seconds between each job
         scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
 
+        # PostgreSQL boundary protection: clean UTF-8 before Oban storage
         job_args = %{
           "url" => event.url,
           "source_id" => source_id,
           "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
           "external_id" => extract_external_id_from_url(event.url)
         }
-        # Validate all strings in the job args to prevent UTF-8 errors
         |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
 
         # For now, we'll create a placeholder - EventDetailJob will be implemented in Phase 2

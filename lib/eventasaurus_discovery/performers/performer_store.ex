@@ -23,7 +23,13 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
       {:error, :name_required}
     else
       # First try fuzzy matching to find existing performer
-      case find_by_name(normalized_attrs.name, threshold: 0.85) do
+      # Scope by source_id if provided to avoid cross-source matches
+      fuzzy_opts = [threshold: 0.85]
+      fuzzy_opts = if normalized_attrs[:source_id],
+        do: Keyword.put(fuzzy_opts, :source_id, normalized_attrs[:source_id]),
+        else: fuzzy_opts
+
+      case find_by_name(normalized_attrs.name, fuzzy_opts) do
         [existing | _] ->
           Logger.info("🎤 Found existing performer by fuzzy match: #{existing.name}")
           {:ok, existing}
@@ -124,11 +130,6 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     end)
   end
 
-  defp get_default_source_id do
-    # TODO: Get or create a Bandsintown source
-    # For now, use a fixed ID (1) or create the source if needed
-    1
-  end
 
   defp has_unique_violation?(changeset) do
     Enum.any?(changeset.errors, fn {_field, {_msg, opts}} ->
@@ -143,6 +144,9 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     threshold = Keyword.get(opts, :threshold, 0.8)
     source_id = Keyword.get(opts, :source_id)
 
+    # Clean input name to prevent jaro_distance crashes
+    clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
+
     query = from(p in Performer)
 
     query =
@@ -155,21 +159,27 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     query
     |> Repo.all()
     |> Enum.filter(fn performer ->
+      # Clean performer name from DB - may contain invalid UTF-8
+      clean_performer_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(performer.name)
+
       # Use String.jaro_distance for fuzzy matching
       similarity =
         String.jaro_distance(
-          String.downcase(performer.name),
-          String.downcase(name)
+          String.downcase(clean_performer_name),
+          String.downcase(clean_name)
         )
 
       similarity >= threshold
     end)
     |> Enum.sort_by(fn performer ->
+      # Clean performer name from DB again for sorting
+      clean_performer_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(performer.name)
+
       # Sort by similarity (highest first)
       similarity =
         String.jaro_distance(
-          String.downcase(performer.name),
-          String.downcase(name)
+          String.downcase(clean_performer_name),
+          String.downcase(clean_name)
         )
 
       -similarity
