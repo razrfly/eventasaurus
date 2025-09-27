@@ -127,10 +127,12 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   defp process_performers(nil, _source), do: {:ok, []}
   defp process_performers([], _source), do: {:ok, []}
 
-  defp process_performers(performers_data, _source) when is_list(performers_data) do
+  defp process_performers(performers_data, source) when is_list(performers_data) do
     results =
       Enum.map(performers_data, fn performer_data ->
-        PerformerStore.find_or_create_performer(performer_data)
+        # Add source_id to performer data if not present
+        performer_data_with_source = Map.put_new(performer_data, "source_id", source.id)
+        PerformerStore.find_or_create_performer(performer_data_with_source)
       end)
 
     performers =

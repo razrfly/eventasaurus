@@ -17,15 +17,21 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
   def find_or_create_performer(attrs) do
     normalized_attrs = normalize_performer_attrs(attrs)
 
-    # First try fuzzy matching to find existing performer
-    case find_by_name(normalized_attrs.name, threshold: 0.85) do
-      [existing | _] ->
-        Logger.info("🎤 Found existing performer by fuzzy match: #{existing.name}")
-        {:ok, existing}
+    # Check if name is valid
+    if is_nil(normalized_attrs[:name]) or normalized_attrs[:name] == "" do
+      Logger.error("Performer name is required but was blank or nil")
+      {:error, :name_required}
+    else
+      # First try fuzzy matching to find existing performer
+      case find_by_name(normalized_attrs.name, threshold: 0.85) do
+        [existing | _] ->
+          Logger.info("🎤 Found existing performer by fuzzy match: #{existing.name}")
+          {:ok, existing}
 
-      [] ->
-        # No fuzzy match found, proceed with upsert
-        upsert_by_slug(normalized_attrs)
+        [] ->
+          # No fuzzy match found, proceed with upsert
+          upsert_by_slug(normalized_attrs)
+      end
     end
   end
 
@@ -90,11 +96,18 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
 
     # Now work with string keys consistently
     string_attrs
-    |> Map.put_new("source_id", get_default_source_id())
-    |> Map.update("name", "", fn
-      nil -> ""
-      name when is_binary(name) -> String.trim(name)
-      other -> to_string(other) |> String.trim()
+    |> Map.update("name", nil, fn
+      nil -> nil
+      name when is_binary(name) ->
+        case String.trim(name) do
+          "" -> nil
+          trimmed -> trimmed
+        end
+      other ->
+        case to_string(other) |> String.trim() do
+          "" -> nil
+          trimmed -> trimmed
+        end
     end)
     |> then(fn map ->
       # Convert back to atom keys for the changeset
