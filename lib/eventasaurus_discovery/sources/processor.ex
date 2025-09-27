@@ -57,11 +57,23 @@ defmodule EventasaurusDiscovery.Sources.Processor do
           _ -> false
         end)
 
-      if length(failed) > 0 do
-        Logger.warning("Failed to process #{length(failed)} events out of #{length(events)}")
-      end
+      # Return proper error tuples based on results
+      case {successful, failed} do
+        {[], [_ | _] = failed} ->
+          # All events failed - return error
+          Logger.error("All #{length(failed)} events failed processing")
+          {:error, :all_events_failed}
 
-      {:ok, Enum.map(successful, fn {:ok, event} -> event end)}
+        {successful, []} ->
+          # All events succeeded
+          Logger.info("Successfully processed all #{length(successful)} events")
+          {:ok, Enum.map(successful, fn {:ok, event} -> event end)}
+
+        {_successful, failed} ->
+          # Partial success - return error so Oban can retry
+          Logger.warning("Partial failure: #{length(failed)} failed out of #{length(events)} total events")
+          {:error, {:partial_failure, length(failed), length(events)}}
+      end
     end
   end
 
