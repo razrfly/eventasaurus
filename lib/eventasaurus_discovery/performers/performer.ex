@@ -28,7 +28,13 @@ defmodule EventasaurusDiscovery.Performers.Performer do
     performer
     |> cast(attrs, [:name, :image_url, :metadata, :source_id])
     |> validate_required([:name])
+    |> sanitize_utf8()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
+  end
+
+  defp sanitize_utf8(changeset) do
+    changeset
+    |> update_change(:name, &EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8/1)
   end
 end
