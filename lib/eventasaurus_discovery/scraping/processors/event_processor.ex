@@ -26,7 +26,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   Creates or updates the event and manages source associations.
   """
   def process_event(event_data, source_id, source_priority \\ 10) do
-    with {:ok, normalized} <- normalize_event_data(event_data),
+    # Universal UTF-8 protection for all scrapers
+    # Ensures event data from any scraper is properly sanitized before processing
+    clean_event_data = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(event_data)
+
+    with {:ok, normalized} <- normalize_event_data(clean_event_data),
          {:ok, venue} <- process_venue(normalized),
          {:ok, event, action} <- find_or_create_event(normalized, venue, source_id),
          {:ok, _source} <-

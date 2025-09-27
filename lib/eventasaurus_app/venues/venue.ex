@@ -1,5 +1,6 @@
 defmodule EventasaurusApp.Venues.Venue.Slug do
   use EctoAutoslugField.Slug, to: :slug
+  require Logger
 
   def get_sources(_changeset, _opts) do
     # Use name as primary source, but also include city_id for uniqueness
@@ -7,14 +8,60 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
   end
 
   def build_slug(sources, changeset) do
-    # Get the default slug from name and city_id
-    slug = super(sources, changeset)
+    # Universal UTF-8 protection for venue slugs
+    # This handles the same issues as PublicEvent slugs
+    safe_sources = sources |> Enum.map(&ensure_safe_string/1)
 
-    # Add some randomness to ensure uniqueness even for identical names + city_ids
-    random_suffix = :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
+    # Only proceed if we have valid content
+    case safe_sources do
+      ["" | _] ->
+        # Fallback slug if name is empty/invalid after cleaning
+        "venue-#{DateTime.utc_now() |> DateTime.to_unix()}-#{random_suffix()}"
 
-    # Combine with random suffix
-    "#{slug}-#{random_suffix}"
+      _ ->
+        # Get the default slug from cleaned sources
+        slug = super(safe_sources, changeset)
+
+        # Add some randomness to ensure uniqueness
+        "#{slug}-#{random_suffix()}"
+    end
+  end
+
+  # Universal UTF-8 safety function (same as PublicEvent.Slug)
+  defp ensure_safe_string(value) do
+    case value do
+      # Handle error tuples from failed UTF-8 conversions
+      {:error, _, invalid_bytes} ->
+        Logger.warning("""
+        Invalid UTF-8 detected in venue slug source
+        Error tuple: #{inspect(value)}
+        Invalid bytes: #{inspect(invalid_bytes, limit: 50)}
+        """)
+        ""
+
+      # Handle valid binary strings
+      str when is_binary(str) ->
+        EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(str)
+
+      # Handle nil values
+      nil ->
+        ""
+
+      # Convert other types to string and ensure UTF-8
+      other ->
+        other
+        |> to_string()
+        |> EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8()
+    end
+  rescue
+    # Catch any conversion errors and return empty string
+    error ->
+      Logger.error("Error in ensure_safe_string: #{inspect(error)}")
+      ""
+  end
+
+  defp random_suffix do
+    :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
   end
 end
 
@@ -45,8 +92,12 @@ defmodule EventasaurusApp.Venues.Venue do
 
   @doc false
   def changeset(venue, attrs) do
+    # Universal UTF-8 protection for all venue data
+    # This ensures clean data from all sources (Ticketmaster, Karnet, Bandsintown, etc.)
+    cleaned_attrs = sanitize_attrs(attrs)
+
     venue
-    |> cast(attrs, [
+    |> cast(cleaned_attrs, [
       :name,
       :address,
       :latitude,
@@ -63,11 +114,38 @@ defmodule EventasaurusApp.Venues.Venue do
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
     |> validate_inclusion(:source, ["user", "scraper", "google"])
     |> validate_length(:place_id, max: 255)
+    |> validate_utf8_fields()
     |> validate_gps_coordinates()
     |> validate_place_id_source()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
     |> foreign_key_constraint(:city_id)
+  end
+
+  # Universal UTF-8 sanitization for all venue attributes
+  defp sanitize_attrs(attrs) when is_map(attrs) do
+    EventasaurusDiscovery.Utils.UTF8.validate_map_strings(attrs)
+  end
+
+  defp sanitize_attrs(attrs), do: attrs
+
+  # Validate that string fields contain valid UTF-8
+  defp validate_utf8_fields(changeset) do
+    changeset
+    |> validate_change(:name, fn :name, name ->
+      if String.valid?(name) do
+        []
+      else
+        [name: "contains invalid UTF-8 characters after sanitization"]
+      end
+    end)
+    |> validate_change(:address, fn :address, address ->
+      if is_nil(address) or String.valid?(address) do
+        []
+      else
+        [address: "contains invalid UTF-8 characters after sanitization"]
+      end
+    end)
   end
 
   defp validate_gps_coordinates(changeset) do
