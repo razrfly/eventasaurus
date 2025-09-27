@@ -66,10 +66,13 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
         # Also check fuzzy title matching at the same venue
         fuzzy_match =
           if is_nil(time_match) && title do
+            # Ensure valid UTF-8 before similarity query
+            clean_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
+
             from(pe in PublicEvent,
               where: pe.venue_id == ^venue.id,
-              where: fragment("similarity(?, ?) > ?", pe.title, ^title, 0.85),
-              order_by: [desc: fragment("similarity(?, ?)", pe.title, ^title)],
+              where: fragment("similarity(?, ?) > ?", pe.title, ^clean_title, 0.85),
+              order_by: [desc: fragment("similarity(?, ?)", pe.title, ^clean_title)],
               limit: 1
             )
             |> Repo.one()

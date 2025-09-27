@@ -159,20 +159,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
   end
 
   defp ensure_utf8(body) when is_binary(body) do
-    case :unicode.characters_to_binary(body, :utf8, :utf8) do
-      {:error, _good, _bad} ->
-        # Try to fix encoding issues
-        body
-        |> :unicode.characters_to_binary(:latin1, :utf8)
-        |> case do
-          # Return original if all else fails
-          {:error, _, _} -> body
-          fixed -> fixed
-        end
-
-      converted ->
-        converted
-    end
+    # Use our new UTF8 utility to ensure valid UTF-8
+    # This avoids the latin1 conversion that was corrupting multi-byte sequences
+    EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8_with_logging(body, "Karnet HTTP response")
   end
 
   defp ensure_utf8(body), do: body

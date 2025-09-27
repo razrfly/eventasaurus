@@ -210,10 +210,11 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
   # Private helper functions
 
   defp clear_discovery_oban_jobs do
-    # Clear all completed discovery-related Oban jobs to allow re-importing
+    # Clear all discovery-related Oban jobs to allow re-importing
+    # Include ALL states to ensure jobs can be re-queued in production
     {count, _} =
       Repo.delete_all(
-        from(j in "oban_jobs",
+        from(j in Oban.Job,
           where:
             j.worker in [
               "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
@@ -223,11 +224,11 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
               "EventasaurusDiscovery.Scraping.Scrapers.Ticketmaster.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Admin.DiscoverySyncJob"
-            ] and j.state in ["completed", "discarded", "cancelled"]
+            ] and j.state in ["completed", "discarded", "cancelled", "retryable", "scheduled", "available", "executing"]
         )
       )
 
-    Logger.info("Cleared #{count} completed discovery Oban jobs")
+    Logger.info("Cleared #{count} discovery Oban jobs (all states)")
     count
   end
 
