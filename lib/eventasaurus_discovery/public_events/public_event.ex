@@ -151,12 +151,16 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   # This is a safety check after sanitization
   defp validate_utf8_fields(changeset) do
     changeset
-    |> validate_change(:title, fn :title, title ->
-      if String.valid?(title) do
+    |> validate_change(:title, fn
+      :title, title when is_binary(title) ->
+        if String.valid?(title) do
+          []
+        else
+          [title: "contains invalid UTF-8 characters after sanitization"]
+        end
+
+      :title, _ ->
         []
-      else
-        [title: "contains invalid UTF-8 characters after sanitization"]
-      end
     end)
   end
 
