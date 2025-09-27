@@ -139,8 +139,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       "name" => tm_attraction["name"],
       "type" => extract_performer_type(tm_attraction),
       "metadata" => extract_performer_metadata(tm_attraction),
-      "image_url" => extract_performer_image(tm_attraction),
-      "source_id" => 1  # Will be overridden in PerformerStore if needed
+      "image_url" => extract_performer_image(tm_attraction)
     }
   end
 

@@ -1009,18 +1009,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       )
 
     # Update the event with new occurrences and adjust end date
-    # For recurring events, ends_at should be the latest occurrence date/time
-    # We should NOT update ends_at to be earlier than starts_at
+    # For recurring events, ends_at should be the latest occurrence date/time.
+    # Never allow ends_at < starts_at; guard nil starts_at to avoid crashes.
     new_end_date =
-      if parent_event.ends_at do
-        latest_date([parent_event.ends_at, new_occurrence.start_at])
-      else
-        # If no ends_at is set, use the new occurrence if it's after the start
-        if DateTime.compare(new_occurrence.start_at, parent_event.starts_at) == :gt do
+      cond do
+        is_nil(parent_event.starts_at) ->
+          if parent_event.ends_at,
+            do: latest_date([parent_event.ends_at, new_occurrence.start_at]),
+            else: nil
+        parent_event.ends_at ->
+          latest_date([parent_event.ends_at, new_occurrence.start_at, parent_event.starts_at])
+        DateTime.compare(new_occurrence.start_at, parent_event.starts_at) == :gt ->
           new_occurrence.start_at
-        else
-          nil  # Don't set ends_at if it would be before starts_at
-        end
+        true ->
+          nil
       end
 
     parent_event
