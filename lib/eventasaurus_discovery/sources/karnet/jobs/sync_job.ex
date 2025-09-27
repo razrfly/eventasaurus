@@ -194,6 +194,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
           "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
           "external_id" => extract_external_id_from_url(event.url)
         }
+        # Validate all strings in the job args to prevent UTF-8 errors
+        |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
 
         # For now, we'll create a placeholder - EventDetailJob will be implemented in Phase 2
         # Using a dummy module name that we'll implement later

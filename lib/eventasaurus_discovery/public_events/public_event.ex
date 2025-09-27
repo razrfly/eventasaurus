@@ -1,5 +1,6 @@
 defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
   use EctoAutoslugField.Slug, to: :slug
+  require Logger
 
   def get_sources(_changeset, _opts) do
     # Use title as primary source for slug generation
@@ -7,14 +8,64 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
   end
 
   def build_slug(sources, changeset) do
-    # Get the default slug from title
-    slug = super(sources, changeset)
+    # Universal UTF-8 protection for all scrapers
+    # This ensures that regardless of which scraper (Karnet, Ticketmaster, Bandsintown, etc.)
+    # provides the data, we handle UTF-8 issues consistently
+    safe_sources = sources |> Enum.map(&ensure_safe_string/1)
 
-    # Add some randomness to ensure uniqueness even for identical titles + external_ids
-    random_suffix = :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
+    # Only proceed if we have valid content
+    case safe_sources do
+      ["" | _] ->
+        # Fallback slug if title is empty/invalid after cleaning
+        # This prevents slug generation errors when UTF-8 cleaning results in empty string
+        "event-#{DateTime.utc_now() |> DateTime.to_unix()}-#{random_suffix()}"
 
-    # Combine with random suffix
-    "#{slug}-#{random_suffix}"
+      _ ->
+        # Get the default slug from cleaned sources
+        slug = super(safe_sources, changeset)
+
+        # Add some randomness to ensure uniqueness
+        "#{slug}-#{random_suffix()}"
+    end
+  end
+
+  # Universal UTF-8 safety function used by all scrapers
+  defp ensure_safe_string(value) do
+    case value do
+      # Handle error tuples from failed UTF-8 conversions
+      # This catches the {:error, "", <<226>>} type errors from Ticketmaster
+      {:error, _, invalid_bytes} ->
+        Logger.warning("""
+        Invalid UTF-8 detected in slug source
+        Error tuple: #{inspect(value)}
+        Invalid bytes: #{inspect(invalid_bytes, limit: 50)}
+        """)
+        ""
+
+      # Handle valid binary strings
+      str when is_binary(str) ->
+        # Use our universal UTF8 utility to clean the string
+        EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(str)
+
+      # Handle nil values
+      nil ->
+        ""
+
+      # Convert other types to string and ensure UTF-8
+      other ->
+        other
+        |> to_string()
+        |> EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8()
+    end
+  rescue
+    # Catch any conversion errors and return empty string
+    error ->
+      Logger.error("Error in ensure_safe_string: #{inspect(error)}")
+      ""
+  end
+
+  defp random_suffix do
+    :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
   end
 end
 
@@ -62,8 +113,12 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
 
   @doc false
   def changeset(public_event, attrs) do
+    # Universal UTF-8 protection for all scrapers
+    # This ensures clean data from Karnet, Ticketmaster, Bandsintown, and any future scrapers
+    cleaned_attrs = sanitize_attrs(attrs)
+
     public_event
-    |> cast(attrs, [
+    |> cast(cleaned_attrs, [
       :title,
       :title_translations,
       :starts_at,
@@ -75,12 +130,34 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     |> validate_required([:title, :starts_at, :venue_id],
       message: "Public events must have a venue for proper location and collision detection"
     )
+    |> validate_utf8_fields()
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
     # external_id can collide across sources; uniqueness enforced in PublicEventSource
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:category_id)
+  end
+
+  # Universal UTF-8 sanitization for all event attributes
+  # Used by all scrapers to ensure clean data
+  defp sanitize_attrs(attrs) when is_map(attrs) do
+    EventasaurusDiscovery.Utils.UTF8.validate_map_strings(attrs)
+  end
+
+  defp sanitize_attrs(attrs), do: attrs
+
+  # Validate that string fields contain valid UTF-8
+  # This is a safety check after sanitization
+  defp validate_utf8_fields(changeset) do
+    changeset
+    |> validate_change(:title, fn :title, title ->
+      if String.valid?(title) do
+        []
+      else
+        [title: "contains invalid UTF-8 characters after sanitization"]
+      end
+    end)
   end
 
   defp validate_date_order(changeset) do
