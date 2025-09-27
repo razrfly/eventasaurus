@@ -1,9 +1,13 @@
 defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
   @moduledoc """
-  Plug for authenticating Oban Web UI access using a configured admin password.
+  Plug for authenticating Oban Web UI access.
 
-  This plug checks for the OBAN_PASSWORD environment variable and compares it
-  against the admin_password parameter or session value for authentication.
+  This plug provides two authentication methods:
+  1. Admin email list - checks if the logged-in user's email is in the ADMIN_EMAILS env var
+  2. Admin password - fallback to OBAN_PASSWORD env var for backward compatibility
+
+  If ADMIN_EMAILS is configured, users with emails in that list bypass the password prompt.
+  Otherwise, falls back to the legacy OBAN_PASSWORD authentication.
   """
 
   import Plug.Conn
@@ -18,15 +22,60 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
   def init(default), do: default
 
   def call(conn, _default) do
+    # Check if user is authorized via email list
+    if is_admin_email?(conn) do
+      # User is authenticated as admin via email, allow access
+      Logger.info("Admin access granted to #{conn.assigns.user.email} via email whitelist")
+      conn
+    else
+      # Fall back to password authentication for backward compatibility
+      handle_password_auth(conn)
+    end
+  end
+
+  # Check if the current user's email is in the admin email list
+  defp is_admin_email?(conn) do
+    admin_emails = get_admin_emails()
+    current_user = conn.assigns[:user]
+
+    # Only check if we have both admin emails configured and a logged-in user
+    admin_emails != [] && current_user && current_user.email &&
+      String.downcase(current_user.email) in admin_emails
+  end
+
+  # Parse the ADMIN_EMAILS environment variable into a list
+  defp get_admin_emails do
+    case System.get_env("ADMIN_EMAILS") do
+      nil -> []
+      "" -> []
+      emails ->
+        emails
+        |> String.split(",")
+        |> Enum.map(&String.trim/1)
+        |> Enum.map(&String.downcase/1)
+        |> Enum.filter(&(&1 != ""))
+    end
+  end
+
+  # Handle legacy password authentication
+  defp handle_password_auth(conn) do
     admin_password = System.get_env("OBAN_PASSWORD")
 
     cond do
-      # If no admin password is configured, deny access
+      # If no admin password is configured, check if we should provide more helpful message
       is_nil(admin_password) or admin_password == "" ->
-        Logger.warning("Oban Web UI access attempted but OBAN_PASSWORD not configured")
+        admin_emails = get_admin_emails()
+
+        error_message = if admin_emails == [] do
+          "Admin access is not configured. Please set either ADMIN_EMAILS or OBAN_PASSWORD environment variable."
+        else
+          "Access denied. Your email is not authorized for admin access."
+        end
+
+        Logger.warning("Oban Web UI access denied: #{error_message}")
 
         conn
-        |> put_flash(:error, "Oban Web UI access is not configured.")
+        |> put_flash(:error, error_message)
         |> redirect(to: ~p"/dashboard")
         |> halt()
 
