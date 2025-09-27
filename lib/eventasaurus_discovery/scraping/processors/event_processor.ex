@@ -774,14 +774,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp find_recurring_parent(title, venue, external_id, source_id) do
     if venue do
+      # Ensure title is valid UTF-8 before processing
+      safe_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
+
       # Normalize the incoming title for matching
-      normalized_title = normalize_for_matching(title)
+      normalized_title = normalize_for_matching(safe_title)
 
       # Extract series base for better matching
-      series_base = extract_series_base(title)
+      series_base = extract_series_base(safe_title)
 
       # Calculate dynamic threshold based on title patterns
-      similarity_threshold = calculate_similarity_threshold(title, venue)
+      similarity_threshold = calculate_similarity_threshold(safe_title, venue)
 
       # Step 1: Get all events at the same venue
       same_venue_query =
@@ -806,7 +809,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         if length(similar_venue_ids) > 0 do
           from(e in PublicEvent,
             where: e.venue_id in ^similar_venue_ids,
-            where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
+            where: fragment("similarity(?, ?) > ?", e.title, ^safe_title, ^similarity_threshold),
             order_by: [asc: e.starts_at]
           )
           |> Repo.all()
@@ -840,8 +843,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             end
 
           # Calculate match score with multiple strategies
-          normalized_event_title = normalize_for_matching(event.title)
-          event_series_base = extract_series_base(event.title)
+          # Ensure event title is valid UTF-8 before processing
+          safe_event_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(event.title)
+          normalized_event_title = normalize_for_matching(safe_event_title)
+          event_series_base = extract_series_base(safe_event_title)
 
           # Try multiple matching strategies
           title_score = String.jaro_distance(normalized_title, normalized_event_title)
