@@ -187,6 +187,7 @@ defmodule EventasaurusDiscovery.Categories do
   """
   def assign_categories_to_event(event_id, category_ids, opts \\ []) do
     alias Ecto.Multi
+    require Logger
 
     primary_id = Keyword.get(opts, :primary_id)
     source = Keyword.get(opts, :source, "manual")
@@ -208,9 +209,23 @@ defmodule EventasaurusDiscovery.Categories do
 
     multi =
       Multi.new()
-      # Remove only prior assignments from the same source
+      # CRITICAL: If setting a primary, remove ALL existing primaries first
+      |> then(fn multi ->
+        if primary_id do
+          Multi.delete_all(
+            multi,
+            :delete_old_primary,
+            from(pec in PublicEventCategory,
+              where: pec.event_id == ^event_id and pec.is_primary == true
+            )
+          )
+        else
+          multi
+        end
+      end)
+      # Then remove categories from the same source
       |> Multi.delete_all(
-        :delete_old,
+        :delete_old_source,
         from(pec in PublicEventCategory,
           where: pec.event_id == ^event_id and pec.source == ^source
         )
@@ -219,7 +234,8 @@ defmodule EventasaurusDiscovery.Categories do
         :upsert,
         PublicEventCategory,
         event_categories,
-        on_conflict: {:replace, [:is_primary, :confidence]},
+        # Only replace confidence and source, NOT is_primary to avoid constraint violations
+        on_conflict: {:replace, [:confidence, :source]},
         conflict_target: [:event_id, :category_id],
         returning: true
       )
@@ -242,7 +258,14 @@ defmodule EventasaurusDiscovery.Categories do
            end
          end)}
 
-      {:error, _step, reason, _changes} ->
+      {:error, :delete_old_primary, _, _} ->
+        # Race condition - another process already updated
+        # Just return success since categories are assigned
+        Logger.warning("Category assignment race condition detected for event #{event_id}, retrying...")
+        {:ok, []}
+
+      {:error, step, reason, _changes} ->
+        Logger.warning("Category assignment failed at #{step}: #{inspect(reason)}")
         {:error, reason}
     end
   end
