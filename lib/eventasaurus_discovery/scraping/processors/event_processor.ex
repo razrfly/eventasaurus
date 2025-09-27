@@ -501,9 +501,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp find_or_create_performer(name) do
-    # Data is already cleaned at HTTP client level
-    # Just normalize the text
-    normalized_name = Normalizer.normalize_text(name)
+    # Clean UTF-8 first - performer names from DB may be corrupt
+    clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
+
+    # Then normalize the text
+    normalized_name = Normalizer.normalize_text(clean_name)
 
     # Handle nil or empty names
     if is_nil(normalized_name) or normalized_name == "" do
