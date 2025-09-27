@@ -113,12 +113,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
 
   @doc false
   def changeset(public_event, attrs) do
-    # Universal UTF-8 protection for all scrapers
-    # This ensures clean data from Karnet, Ticketmaster, Bandsintown, and any future scrapers
-    cleaned_attrs = sanitize_attrs(attrs)
-
     public_event
-    |> cast(cleaned_attrs, [
+    |> cast(attrs, [
       :title,
       :title_translations,
       :starts_at,
@@ -130,7 +126,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     |> validate_required([:title, :starts_at, :venue_id],
       message: "Public events must have a venue for proper location and collision detection"
     )
-    |> validate_utf8_fields()
+    |> sanitize_utf8()  # PostgreSQL boundary protection
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
@@ -139,29 +135,12 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     |> foreign_key_constraint(:category_id)
   end
 
-  # Universal UTF-8 sanitization for all event attributes
-  # Used by all scrapers to ensure clean data
-  defp sanitize_attrs(attrs) when is_map(attrs) do
-    EventasaurusDiscovery.Utils.UTF8.validate_map_strings(attrs)
-  end
-
-  defp sanitize_attrs(attrs), do: attrs
-
-  # Validate that string fields contain valid UTF-8
-  # This is a safety check after sanitization
-  defp validate_utf8_fields(changeset) do
+  # PostgreSQL boundary protection - validate UTF-8 before DB insertion
+  defp sanitize_utf8(changeset) do
     changeset
-    |> validate_change(:title, fn
-      :title, title when is_binary(title) ->
-        if String.valid?(title) do
-          []
-        else
-          [title: "contains invalid UTF-8 characters after sanitization"]
-        end
-
-      :title, _ ->
-        []
-    end)
+    |> update_change(:title, &EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8/1)
+    |> update_change(:title_translations, &EventasaurusDiscovery.Utils.UTF8.validate_map_strings/1)
+    |> update_change(:occurrences, &EventasaurusDiscovery.Utils.UTF8.validate_map_strings/1)
   end
 
   defp validate_date_order(changeset) do

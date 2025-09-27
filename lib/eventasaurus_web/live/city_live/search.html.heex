@@ -222,6 +222,19 @@
                     <% end %>
                   </div>
                   <div class="p-4">
+                    <!-- Category Badge -->
+                    <% primary_category = get_primary_category(event) %>
+                    <%= if primary_category do %>
+                      <div class="mb-2">
+                        <span
+                          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white"
+                          style={"background-color: #{primary_category.color || "#6B7280"}"}
+                        >
+                          <%= primary_category.name %>
+                        </span>
+                      </div>
+                    <% end %>
+
                     <h3 class="font-semibold text-lg mb-2 line-clamp-2">
                       <%= Map.get(event, :display_title, event.title) %>
                     </h3>
@@ -266,6 +279,19 @@
                     <div class="flex-1">
                       <div class="flex items-start justify-between">
                         <div>
+                          <!-- Category Badge -->
+                          <% primary_category = get_primary_category(event) %>
+                          <%= if primary_category do %>
+                            <div class="mb-1">
+                              <span
+                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white"
+                                style={"background-color: #{primary_category.color || "#6B7280"}"}
+                              >
+                                <%= primary_category.name %>
+                              </span>
+                            </div>
+                          <% end %>
+
                           <h3 class="font-semibold text-lg mb-1">
                             <%= Map.get(event, :display_title, event.title) %>
                           </h3>

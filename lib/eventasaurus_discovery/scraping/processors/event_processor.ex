@@ -26,11 +26,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   Creates or updates the event and manages source associations.
   """
   def process_event(event_data, source_id, source_priority \\ 10) do
-    # Universal UTF-8 protection for all scrapers
-    # Ensures event data from any scraper is properly sanitized before processing
-    clean_event_data = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(event_data)
-
-    with {:ok, normalized} <- normalize_event_data(clean_event_data),
+    # Data is already cleaned at HTTP client level (single entry point validation)
+    with {:ok, normalized} <- normalize_event_data(event_data),
          {:ok, venue} <- process_venue(normalized),
          {:ok, event, action} <- find_or_create_event(normalized, venue, source_id),
          {:ok, _source} <-
@@ -504,14 +501,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp find_or_create_performer(name) do
-    normalized_name = Normalizer.normalize_text(name)
-    # Use Slug library to generate the same slug as the changeset
-    slug = Slug.slugify(normalized_name)
+    # Clean UTF-8 first - performer names from DB may be corrupt
+    clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
 
-    # Use slug-based lookup for better consistency
-    case Repo.get_by(Performer, slug: slug) do
-      nil -> create_performer(normalized_name)
-      performer -> performer
+    # Then normalize the text
+    normalized_name = Normalizer.normalize_text(clean_name)
+
+    # Handle nil or empty names
+    if is_nil(normalized_name) or normalized_name == "" do
+      nil
+    else
+      # Use Slug library to generate the same slug as the changeset
+      slug = Slug.slugify(normalized_name)
+
+      # Use slug-based lookup for better consistency
+      case Repo.get_by(Performer, slug: slug) do
+        nil -> create_performer(normalized_name)
+        performer -> performer
+      end
     end
   end
 
@@ -774,17 +781,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp find_recurring_parent(title, venue, external_id, source_id) do
     if venue do
-      # Ensure title is valid UTF-8 before processing
-      safe_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
+      # Ensure UTF-8 validity before any string operations
+      # PostgreSQL may have stored corrupt data that crashes jaro_distance
+      clean_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
 
       # Normalize the incoming title for matching
-      normalized_title = normalize_for_matching(safe_title)
+      normalized_title = normalize_for_matching(clean_title)
 
       # Extract series base for better matching
-      series_base = extract_series_base(safe_title)
+      series_base = extract_series_base(clean_title)
 
       # Calculate dynamic threshold based on title patterns
-      similarity_threshold = calculate_similarity_threshold(safe_title, venue)
+      similarity_threshold = calculate_similarity_threshold(clean_title, venue)
 
       # Step 1: Get all events at the same venue
       same_venue_query =
@@ -809,7 +817,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         if length(similar_venue_ids) > 0 do
           from(e in PublicEvent,
             where: e.venue_id in ^similar_venue_ids,
-            where: fragment("similarity(?, ?) > ?", e.title, ^safe_title, ^similarity_threshold),
+            where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
             order_by: [asc: e.starts_at]
           )
           |> Repo.all()
@@ -843,10 +851,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             end
 
           # Calculate match score with multiple strategies
-          # Ensure event title is valid UTF-8 before processing
-          safe_event_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(event.title)
-          normalized_event_title = normalize_for_matching(safe_event_title)
-          event_series_base = extract_series_base(safe_event_title)
+          # Clean event title from database - may contain invalid UTF-8
+          clean_event_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(event.title)
+          normalized_event_title = normalize_for_matching(clean_event_title)
+          event_series_base = extract_series_base(clean_event_title)
 
           # Try multiple matching strategies
           title_score = String.jaro_distance(normalized_title, normalized_event_title)
@@ -860,7 +868,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
           # Bonus for series patterns
           series_bonus =
-            if is_series_event?(title) && is_series_event?(event.title), do: 0.05, else: 0.0
+            if is_series_event?(clean_title) && is_series_event?(clean_event_title), do: 0.05, else: 0.0
 
           final_score = base_score + venue_bonus + series_bonus
 
