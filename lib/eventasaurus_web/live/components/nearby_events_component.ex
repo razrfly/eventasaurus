@@ -160,7 +160,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
     # Get primary source based on priority and last_seen_at, similar to PublicEventShowLive
     case event.sources do
       [] -> nil
-      sources ->
+      sources when is_list(sources) ->
         sources
         |> Enum.sort_by(fn source ->
           priority =
@@ -184,6 +184,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
           {priority, ts}
         end)
         |> List.first()
+      _ -> nil
     end
   end
 
