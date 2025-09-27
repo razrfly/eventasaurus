@@ -12,13 +12,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
 
   use Oban.Worker,
     queue: :scraper_detail,
-    max_attempts: 3,
-    unique: [
-      # Don't re-scrape same event within 1 hour
-      period: 3600,
-      fields: [:args],
-      keys: [:url]
-    ]
+    max_attempts: 3
 
   require Logger
 

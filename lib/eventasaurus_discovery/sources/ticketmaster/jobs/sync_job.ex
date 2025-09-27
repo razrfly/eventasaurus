@@ -3,6 +3,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
   Unified Oban job for syncing Ticketmaster events.
 
   Uses the standardized BaseJob behaviour for consistent processing across all sources.
+  Now schedules individual EventProcessorJob for each event instead of batch processing.
   """
 
   use EventasaurusDiscovery.Sources.BaseJob,
@@ -11,6 +12,82 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Ticketmaster.{Config, Client, Transformer}
+  alias EventasaurusDiscovery.Sources.{SourceStore}
+  alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Locations.City
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: args}) do
+    city_id = args["city_id"]
+    limit = args["limit"] || 100
+    options = args["options"] || %{}
+
+    with {:ok, city} <- get_city(city_id),
+         {:ok, source} <- get_or_create_source(),
+         {:ok, raw_events} <- fetch_events(city, limit, options),
+         # Pass city context through transformation
+         transformed_events <- transform_events_with_options(raw_events, Map.put(options, "city", city)) do
+
+      # Schedule individual jobs for each transformed event
+      enqueued_count = schedule_event_jobs(transformed_events, source.id)
+
+      Logger.info("""
+      ✅ Ticketmaster sync completed
+      City: #{city.name}
+      Events found: #{length(raw_events)}
+      Events transformed: #{length(transformed_events)}
+      Jobs enqueued: #{enqueued_count}
+      """)
+
+      # Schedule coordinate recalculation after successful sync
+      schedule_coordinate_update(city_id)
+
+      {:ok, %{
+        city: city.name,
+        found: length(raw_events),
+        transformed: length(transformed_events),
+        enqueued: enqueued_count
+      }}
+    else
+      {:error, reason} = error ->
+        Logger.error("Failed to sync Ticketmaster events: #{inspect(reason)}")
+        error
+    end
+  end
+
+
+  defp schedule_event_jobs(events, source_id) do
+    # Schedule individual EventProcessorJob for each event
+    # Following the same pattern as Karnet's schedule_detail_jobs
+    scheduled_jobs =
+      events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, index} ->
+        # Stagger jobs slightly to avoid overwhelming the system
+        scheduled_at = DateTime.add(DateTime.utc_now(), index * 2, :second)
+
+        job_args = %{
+          "event_data" => event,
+          "source_id" => source_id
+        }
+
+        EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob.new(job_args,
+          queue: :scraper_detail,
+          scheduled_at: scheduled_at
+        )
+        |> Oban.insert()
+      end)
+
+    # Count successful insertions
+    successful_count =
+      Enum.count(scheduled_jobs, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
+
+    Logger.info("📋 Scheduled #{successful_count}/#{length(events)} Ticketmaster event processing jobs")
+    successful_count
+  end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
   def fetch_events(city, limit, options) do
