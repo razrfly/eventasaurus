@@ -52,6 +52,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
           max_price: parse_price(raw_event["max_price"]),
           currency: "USD",  # Bandsintown typically uses USD
 
+          # Image URL - extract from the event data
+          image_url: raw_event["image_url"] || raw_event["artist_image_url"],
+
           # Performer data
           performer: extract_performer(raw_event),
 
@@ -192,24 +195,41 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         }
 
       # We have venue name but missing coordinates - use city location
-      venue_name && event["venue_city"] ->
+      venue_name && (event["venue_city"] || city) ->
+        # Use city context if available, otherwise use event's venue_city
+        actual_city_name = if city && city.name do
+          city.name
+        else
+          event["venue_city"] || "Unknown City"
+        end
+
+        actual_country_name = if city && city.country do
+          city.country.name
+        else
+          known_country || event["venue_country"]
+        end
+
         Logger.warning("""
         ⚠️ Missing coordinates for Bandsintown venue, using city center:
         Venue: #{venue_name}
-        City: #{event["venue_city"]}
+        City: #{actual_city_name}
         """)
 
-        # Try to infer coordinates from city
-        {lat, lng} = get_city_coordinates(event["venue_city"], known_country || event["venue_country"])
+        # Try to get coordinates from city context first
+        {lat, lng} = if city && city.latitude && city.longitude do
+          {Decimal.to_float(city.latitude), Decimal.to_float(city.longitude)}
+        else
+          get_city_coordinates(actual_city_name, actual_country_name)
+        end
 
         %{
           name: venue_name,
           latitude: lat,
           longitude: lng,
           address: address,
-          city: event["venue_city"],
+          city: actual_city_name,
           state: event["venue_state"],
-          country: known_country || event["venue_country"],
+          country: actual_country_name,
           postal_code: event["venue_postal_code"],
           needs_geocoding: true
         }
@@ -222,12 +242,29 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         Artist: #{inspect(event["artist_name"])}
         """)
 
-        # Default to a general location
-        # Since Bandsintown is global, we'll use event location if available
-        # Otherwise default to New York as Bandsintown is US-based
-        city_name = event["venue_city"] || "New York"
-        country_name = known_country || event["venue_country"] || "United States"
-        {lat, lng} = get_city_coordinates(city_name, country_name)
+        # Use the city context if provided, otherwise fall back to event data or defaults
+        {city_name, country_name, lat, lng} = if city && city.name do
+          # We have city context - use it!
+          city_name = city.name
+          country_name = if city.country, do: city.country.name, else: known_country
+          lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+          lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
+
+          # If city doesn't have coordinates, try to get them
+          {lat, lng} = if lat && lng do
+            {lat, lng}
+          else
+            get_city_coordinates(city_name, country_name)
+          end
+
+          {city_name, country_name, lat, lng}
+        else
+          # No city context - use event data if available
+          city_name = event["venue_city"] || "New York"
+          country_name = known_country || event["venue_country"] || "United States"
+          {lat, lng} = get_city_coordinates(city_name, country_name)
+          {city_name, country_name, lat, lng}
+        end
 
         %{
           name: "Venue TBD - #{event["artist_name"] || "Unknown Artist"}",
@@ -286,7 +323,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       %{
         name: event["artist_name"],
         genres: event["genres"] || [],
-        image_url: event["artist_image_url"]
+        # The API returns image_url, not artist_image_url
+        image_url: event["image_url"] || event["artist_image_url"]
       }
     else
       nil
