@@ -566,8 +566,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Look up source by ID to get the slug - don't hardcode IDs!
     source_name =
       case Repo.get(Source, source_id) do
-        nil -> "unknown"
-        source -> source.slug
+        %Source{slug: slug} when is_binary(slug) and slug != "" ->
+          String.trim(slug)
+        _ ->
+          "unknown"
       end
 
     # Extract and assign categories based on source
