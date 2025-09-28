@@ -76,18 +76,30 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
       {:ok, total_pages} when total_pages > 0 ->
         Logger.info("📚 Found #{total_pages} index pages to process")
 
+        # Calculate how many pages we actually need for the limit
+        pages_to_schedule = if limit do
+          pages_needed = calculate_max_pages(limit)
+          min(total_pages, pages_needed)
+        else
+          total_pages
+        end
+
+        Logger.info("📋 Scheduling #{pages_to_schedule} pages (limit: #{limit || "none"})")
+
         # Schedule IndexPageJobs for each page
-        scheduled_count = schedule_index_page_jobs(total_pages, source.id, limit)
+        scheduled_count = schedule_index_page_jobs(pages_to_schedule, source.id, limit)
 
         Logger.info("""
         ✅ Karnet sync job completed (asynchronous mode)
-        Total pages: #{total_pages}
+        Total pages available: #{total_pages}
+        Pages scheduled: #{pages_to_schedule}
         Index page jobs scheduled: #{scheduled_count}
         Events will be processed asynchronously
         """)
 
         {:ok, %{
           pages_found: total_pages,
+          pages_scheduled: pages_to_schedule,
           jobs_scheduled: scheduled_count,
           mode: "asynchronous"
         }}
