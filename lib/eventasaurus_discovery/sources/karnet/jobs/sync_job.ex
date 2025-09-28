@@ -13,6 +13,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   require Logger
 
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Sources.Karnet.{Client, Config, IndexExtractor, DetailExtractor, Transformer}
 
@@ -67,41 +68,36 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     limit = opts[:limit]
     max_pages = opts[:max_pages]
 
-    # Fetch all index pages
-    case Client.fetch_all_index_pages(max_pages) do
-      {:ok, pages} ->
-        Logger.info("📚 Fetched #{length(pages)} index pages")
+    # New asynchronous approach: determine page count and schedule IndexPageJobs
+    Logger.info("🚀 Starting asynchronous Karnet sync")
 
-        # Extract events from all pages
-        events = IndexExtractor.extract_events_from_pages(pages)
-        Logger.info("📋 Extracted #{length(events)} total events")
+    # Determine the total number of pages to process
+    case determine_page_count(max_pages) do
+      {:ok, total_pages} when total_pages > 0 ->
+        Logger.info("📚 Found #{total_pages} index pages to process")
 
-        # Apply limit
-        events_to_process = if limit, do: Enum.take(events, limit), else: events
-
-        Logger.info(
-          "🎯 Processing #{length(events_to_process)} events (limit: #{limit || "none"})"
-        )
-
-        # Schedule individual detail jobs
-        enqueued_count = schedule_detail_jobs(events_to_process, source.id)
+        # Schedule IndexPageJobs for each page
+        scheduled_count = schedule_index_page_jobs(total_pages, source.id, limit)
 
         Logger.info("""
-        ✅ Karnet sync job completed
-        Events found: #{length(events)}
-        Events to process: #{length(events_to_process)}
-        Detail jobs enqueued: #{enqueued_count}
+        ✅ Karnet sync job completed (asynchronous mode)
+        Total pages: #{total_pages}
+        Index page jobs scheduled: #{scheduled_count}
+        Events will be processed asynchronously
         """)
 
-        {:ok,
-         %{
-           found: length(events),
-           processed: length(events_to_process),
-           enqueued: enqueued_count
-         }}
+        {:ok, %{
+          pages_found: total_pages,
+          jobs_scheduled: scheduled_count,
+          mode: "asynchronous"
+        }}
+
+      {:ok, 0} ->
+        Logger.warning("⚠️ No pages found to process")
+        {:ok, %{pages_found: 0, jobs_scheduled: 0}}
 
       {:error, reason} ->
-        Logger.error("❌ Failed to fetch index pages: #{inspect(reason)}")
+        Logger.error("❌ Failed to determine page count: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -176,49 +172,72 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     }
   end
 
-  defp schedule_detail_jobs(events, source_id) do
-    Logger.info("📅 Scheduling #{length(events)} detail jobs")
+  defp determine_page_count(max_pages) do
+    Logger.info("🔍 Determining total page count (max: #{max_pages || "unlimited"})")
 
-    # Schedule individual jobs for each event with rate limiting
+    # Quick scan to determine how many pages have events
+    # We'll fetch pages sequentially until we find one without events
+    # This is faster than fetching all pages upfront
+    scan_pages_for_count(1, max_pages, 0)
+  end
+
+  defp scan_pages_for_count(current_page, max_pages, _last_valid)
+       when is_integer(max_pages) and current_page > max_pages do
+    {:ok, max_pages}
+  end
+
+  defp scan_pages_for_count(current_page, max_pages, last_valid) do
+    url = Config.build_events_url(current_page)
+
+    case Client.fetch_page(url) do
+      {:ok, html} ->
+        if has_events?(html) do
+          Logger.debug("✅ Page #{current_page} has events")
+          scan_pages_for_count(current_page + 1, max_pages, current_page)
+        else
+          Logger.info("📭 No events on page #{current_page}, total pages: #{last_valid}")
+          {:ok, last_valid}
+        end
+
+      {:error, :not_found} ->
+        Logger.info("📭 Page #{current_page} not found, total pages: #{last_valid}")
+        {:ok, last_valid}
+
+      {:error, reason} ->
+        if last_valid > 0 do
+          Logger.warning("⚠️ Error scanning page #{current_page}, using last valid: #{last_valid}")
+          {:ok, last_valid}
+        else
+          {:error, reason}
+        end
+    end
+  end
+
+  defp schedule_index_page_jobs(total_pages, source_id, limit) do
+    Logger.info("📅 Scheduling #{total_pages} index page jobs")
+
+    # Schedule IndexPageJobs for each page
     scheduled_jobs =
-      events
-      |> Enum.with_index()
-      |> Enum.map(fn {event, index} ->
-        # Add delay between jobs to respect rate limits
-        # Start immediately, then rate_limit seconds between each job
-        scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
+      1..total_pages
+      |> Enum.map(fn page_num ->
+        # Stagger the jobs slightly to avoid thundering herd
+        # But allow some concurrency (pages can be processed in parallel)
+        delay_seconds = div(page_num - 1, 3) * Config.rate_limit()
+        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
-        # PostgreSQL boundary protection: clean UTF-8 before Oban storage
         job_args = %{
-          "url" => event.url,
+          "page_number" => page_num,
           "source_id" => source_id,
-          "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
-          "external_id" => extract_external_id_from_url(event.url)
+          "limit" => if(page_num == 1, do: limit, else: nil),
+          "total_pages" => total_pages
         }
-        |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
 
-        # For now, we'll create a placeholder - EventDetailJob will be implemented in Phase 2
-        # Using a dummy module name that we'll implement later
-        %{
-          module: EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob,
-          args: job_args,
-          queue: "scraper_detail",
+        EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob.new(
+          job_args,
+          queue: :scraper_index,
           scheduled_at: scheduled_at
-        }
-        |> then(fn job_spec ->
-          # Check if the module exists before trying to insert
-          if Code.ensure_loaded?(job_spec.module) do
-            job_spec.module.new(job_args,
-              queue: job_spec.queue,
-              scheduled_at: job_spec.scheduled_at
-            )
-            |> Oban.insert()
-          else
-            # For now, just log that we would schedule this job
-            Logger.debug("Would schedule detail job for: #{event.url}")
-            {:ok, :placeholder}
-          end
-        end)
+        )
+        |> Oban.insert()
       end)
 
     # Count successful insertions
@@ -228,8 +247,16 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         _ -> false
       end)
 
-    Logger.info("✅ Successfully scheduled #{successful_count}/#{length(events)} detail jobs")
+    Logger.info("✅ Successfully scheduled #{successful_count}/#{total_pages} index page jobs")
     successful_count
+  end
+
+  defp has_events?(html) do
+    # Check if the HTML contains event listings
+    String.contains?(html, "class=\"event-item\"") ||
+      String.contains?(html, "class=\"wydarzenie\"") ||
+      String.contains?(html, "data-event-id") ||
+      (String.contains?(html, "href") && String.contains?(html, "/wydarzenia/"))
   end
 
   defp get_or_create_karnet_source do
@@ -281,12 +308,4 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     if rem(limit, events_per_page) > 0, do: pages + 1, else: pages
   end
 
-  defp extract_external_id_from_url(url) do
-    # Extract the event ID from the URL
-    # Format: /60682-krakow-event-name
-    case Regex.run(~r/\/(\d+)-/, url) do
-      [_, id] -> "karnet_#{id}"
-      _ -> nil
-    end
-  end
 end

@@ -42,6 +42,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
     end
   end
 
+  @doc """
+  Extract events from a single page tuple (page_num, html).
+  Convenience method for IndexPageJob.
+  """
+  def extract_events_from_page({_page_num, html}) do
+    extract_events_from_html(html)
+  end
+
   defp extract_event_cards(document) do
     # Try multiple possible selectors for event cards
     # The site structure might use different class names
