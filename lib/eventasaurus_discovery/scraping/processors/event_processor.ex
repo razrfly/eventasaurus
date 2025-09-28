@@ -507,6 +507,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Then normalize the text
     normalized_name = Normalizer.normalize_text(clean_name)
 
+    # CRITICAL: Clean UTF-8 again after normalization
+    # The Normalizer's regex operations can corrupt UTF-8
+    normalized_name = if normalized_name do
+      EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(normalized_name)
+    else
+      nil
+    end
+
     # Handle nil or empty names
     if is_nil(normalized_name) or normalized_name == "" do
       nil
@@ -542,8 +550,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       {:ok, _} ->
         # Conflict occurred (on_conflict: :nothing) - fetch the existing performer
-        # Use Slug library to generate the same slug as the changeset
-        slug = Slug.slugify(name)
+        # Clean name before slugifying to prevent crashes
+        clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
+        slug = Slug.slugify(clean_name)
         Repo.get_by!(Performer, slug: slug)
 
       {:error, changeset} ->

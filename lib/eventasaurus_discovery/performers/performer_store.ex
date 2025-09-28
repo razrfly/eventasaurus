@@ -105,12 +105,16 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     |> Map.update("name", nil, fn
       nil -> nil
       name when is_binary(name) ->
-        case String.trim(name) do
+        # Clean UTF-8 before any string operations
+        clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
+        case String.trim(clean_name) do
           "" -> nil
           trimmed -> trimmed
         end
       other ->
-        case to_string(other) |> String.trim() do
+        # Convert to string and clean UTF-8
+        clean_other = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(to_string(other))
+        case String.trim(clean_other) do
           "" -> nil
           trimmed -> trimmed
         end

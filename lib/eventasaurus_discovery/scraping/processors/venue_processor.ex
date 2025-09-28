@@ -113,11 +113,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   def find_existing_venue(%{name: name, city_id: city_id}) do
-    # Data is already cleaned at HTTP client level
+    # Clean UTF-8 before any database operations
+    clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
+
     # First try exact match
     exact_match =
       from(v in Venue,
-        where: v.name == ^name and v.city_id == ^city_id,
+        where: v.name == ^clean_name and v.city_id == ^city_id,
         limit: 1
       )
       |> Repo.one()
@@ -127,15 +129,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       fuzzy_match =
         from(v in Venue,
           where: v.city_id == ^city_id,
-          where: fragment("similarity(?, ?) > ?", v.name, ^name, 0.7),
-          order_by: [desc: fragment("similarity(?, ?)", v.name, ^name)],
+          where: fragment("similarity(?, ?) > ?", v.name, ^clean_name, 0.7),
+          order_by: [desc: fragment("similarity(?, ?)", v.name, ^clean_name)],
           limit: 1
         )
         |> Repo.one()
 
       if fuzzy_match do
         Logger.info(
-          "🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{name}' (similarity: #{calculate_similarity(fuzzy_match.name, name)})"
+          "🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{clean_name}' (similarity: #{calculate_similarity(fuzzy_match.name, clean_name)})"
         )
 
         fuzzy_match
@@ -194,8 +196,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp normalize_venue_data(data) do
+    # Normalize the venue name and clean UTF-8 after normalization
+    # Normalizer.normalize_text can corrupt UTF-8 with its regex operations
+    raw_name = data[:name] || data["name"]
+    normalized_name = if raw_name do
+      raw_name
+      |> Normalizer.normalize_text()
+      |> EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8()
+    else
+      nil
+    end
+
     normalized = %{
-      name: Normalizer.normalize_text(data[:name] || data["name"]),
+      name: normalized_name,
       address: data[:address] || data["address"],
       city_name: data[:city] || data["city"],
       state: data[:state] || data["state"],
@@ -352,8 +365,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp find_or_create_venue(data, city, source) do
+    # Clean UTF-8 before creating venue attributes
     venue_attrs = %{
-      name: data.name,
+      name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name),
       city_id: city.id,
       place_id: data.place_id,
       latitude: data.latitude,
@@ -389,7 +403,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
           {:error, reason} ->
             Logger.error(
-              "🗺️❌ Failed to geocode venue '#{data.name}': #{inspect(reason)} - Venue creation will fail due to missing GPS coordinates"
+              "🗺️❌ Failed to geocode venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{inspect(reason)} - Venue creation will fail due to missing GPS coordinates"
             )
 
             {nil, nil}
@@ -400,8 +414,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       end
 
     # All discovery sources use "scraper" as the venue source
+    # Clean UTF-8 for venue name before database insert
     attrs = %{
-      name: data.name,
+      name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name),
       address: data.address,
       city: city.name,
       state: data.state,
@@ -420,12 +435,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
       {:error, changeset} ->
         errors = format_changeset_errors(changeset)
-        Logger.error("❌ Failed to create venue '#{data.name}': #{errors}")
+        Logger.error("❌ Failed to create venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}")
 
         # If it's specifically a GPS coordinate error, provide clear message for Oban
         if has_coordinate_errors?(changeset) do
           {:error,
-           "GPS coordinates required but unavailable for venue '#{data.name}' in #{city.name}. Geocoding failed or returned no results."}
+           "GPS coordinates required but unavailable for venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}' in #{city.name}. Geocoding failed or returned no results."}
         else
           {:error, "Failed to create venue: #{errors}"}
         end
