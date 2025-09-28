@@ -318,14 +318,15 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
           ""
       end
 
+    # IMPORTANT: Use string keys (not atoms) for compatibility with Transformer module
     %{
-      url: Map.get(event, "eventUrl", ""),
-      artist_name: Map.get(event, "artistName", ""),
-      venue_name: Map.get(event, "venueName", ""),
-      date: Map.get(event, "startsAt", ""),
-      description: Map.get(event, "title", ""),
-      image_url: Map.get(event, "artistImageSrc", "") || Map.get(event, "fallbackImageUrl", ""),
-      external_id: external_id
+      "url" => Map.get(event, "eventUrl", ""),
+      "artist_name" => Map.get(event, "artistName", ""),
+      "venue_name" => Map.get(event, "venueName", ""),
+      "date" => Map.get(event, "startsAt", ""),
+      "description" => Map.get(event, "title", ""),
+      "image_url" => Map.get(event, "artistImageSrc", "") || Map.get(event, "fallbackImageUrl", ""),
+      "external_id" => external_id
     }
   end
 
