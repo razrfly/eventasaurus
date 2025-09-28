@@ -102,6 +102,9 @@ config :eventasaurus, Oban,
     # Scraper detail queue for individual event processing
     # Limited concurrency for event detail scraping
     scraper_detail: 3,
+    # Scraper index queue for processing index pages
+    # Low concurrency to prevent timeouts and respect rate limits
+    scraper_index: 2,
     # Discovery queue for unified sync jobs
     # Limited concurrency for discovery source sync
     discovery: 3,
