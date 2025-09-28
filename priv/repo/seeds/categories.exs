@@ -108,23 +108,26 @@ categories = [
     icon: "💼",
     color: "#708090",
     display_order: 13
+  },
+  %{
+    name: "Other",
+    slug: "other",
+    description: "Uncategorized events",
+    icon: "📌",
+    color: "#808080",
+    display_order: 999
   }
 ]
 
 Enum.each(categories, fn category_attrs ->
-  case Repo.get_by(Category, slug: category_attrs.slug) do
-    nil ->
-      %Category{}
-      |> Category.changeset(category_attrs)
-      |> Repo.insert!()
-      IO.puts("Created category: #{category_attrs.name}")
-
-    existing ->
-      existing
-      |> Category.changeset(category_attrs)
-      |> Repo.update!()
-      IO.puts("Updated category: #{category_attrs.name}")
-  end
+  # Use insert with on_conflict option to avoid conflicts with migration data
+  %Category{}
+  |> Category.changeset(category_attrs)
+  |> Repo.insert!(
+    on_conflict: {:replace_all_except, [:id, :inserted_at]},
+    conflict_target: :slug
+  )
+  IO.puts("✅ Category ready: #{category_attrs.name}")
 end)
 
 IO.puts("\n✅ Categories seeded successfully!")
@@ -186,21 +189,17 @@ tm_count = Enum.reduce(ticketmaster_mappings, 0, fn {value, type, category_id, p
       external_value: value,
       external_locale: "en",
       category_id: category_id,
-      priority: priority,
-      metadata: %{"source" => "seed", "created_at" => DateTime.utc_now()}
+      priority: priority
     }
 
-    case Repo.get_by(CategoryMapping,
-      external_source: attrs.external_source,
-      external_type: attrs.external_type,
-      external_value: attrs.external_value
-    ) do
-      nil ->
-        %CategoryMapping{} |> CategoryMapping.changeset(attrs) |> Repo.insert!()
-        acc + 1
-      _ ->
-        acc
-    end
+    # Use insert with on_conflict to avoid duplicates from migration
+    %CategoryMapping{}
+    |> CategoryMapping.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: :nothing,
+      conflict_target: [:external_source, :external_type, :external_value, :external_locale]
+    )
+    acc + 1
   else
     acc
   end
@@ -239,20 +238,17 @@ karnet_count = Enum.reduce(karnet_mappings, 0, fn {value, category_id, locale, p
       external_value: value,
       external_locale: locale,
       category_id: category_id,
-      priority: priority,
-      metadata: %{"source" => "seed", "created_at" => DateTime.utc_now()}
+      priority: priority
     }
 
-    case Repo.get_by(CategoryMapping,
-      external_source: attrs.external_source,
-      external_value: attrs.external_value
-    ) do
-      nil ->
-        %CategoryMapping{} |> CategoryMapping.changeset(attrs) |> Repo.insert!()
-        acc + 1
-      _ ->
-        acc
-    end
+    # Use insert with on_conflict to avoid duplicates from migration
+    %CategoryMapping{}
+    |> CategoryMapping.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: :nothing,
+      conflict_target: [:external_source, :external_type, :external_value, :external_locale]
+    )
+    acc + 1
   else
     acc
   end
@@ -288,20 +284,17 @@ bit_count = Enum.reduce(bandsintown_mappings, 0, fn {value, category_id, priorit
       external_value: value,
       external_locale: "en",
       category_id: category_id,
-      priority: priority,
-      metadata: %{"source" => "seed", "created_at" => DateTime.utc_now()}
+      priority: priority
     }
 
-    case Repo.get_by(CategoryMapping,
-      external_source: attrs.external_source,
-      external_value: attrs.external_value
-    ) do
-      nil ->
-        %CategoryMapping{} |> CategoryMapping.changeset(attrs) |> Repo.insert!()
-        acc + 1
-      _ ->
-        acc
-    end
+    # Use insert with on_conflict to avoid duplicates from migration
+    %CategoryMapping{}
+    |> CategoryMapping.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: :nothing,
+      conflict_target: [:external_source, :external_type, :external_value, :external_locale]
+    )
+    acc + 1
   else
     acc
   end
