@@ -25,7 +25,7 @@ defmodule EventasaurusApp.Repo.Migrations.EnrichProductionCategoriesData do
       ('community', 'Community gatherings and local events', '👥', '#87CEEB', 11),
       ('education', 'Workshops, lectures, and educational events', '🎓', '#4169E1', 12),
       ('business', 'Conferences, networking, and business events', '💼', '#708090', 13),
-      ('other', 'Events that do not fit into standard categories', '❓', '#808080', 14)
+      ('other', 'Uncategorized events', '📌', '#808080', 999)
     ) AS data(slug, description, icon, color, display_order)
     WHERE categories.slug = data.slug;
     """
