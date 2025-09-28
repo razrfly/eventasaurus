@@ -29,7 +29,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   def perform(%Oban.Job{args: args}) do
     # Validate and normalize input arguments
     with {:ok, page_number} <- validate_integer(args["page_number"], "page_number"),
-         {:ok, source_id} <- validate_integer(args["source_id"], "source_id") do
+         {:ok, source_id} <- validate_integer(args["source_id"], "source_id"),
+         true <- page_number >= 1 || {:error, "page_number", "must be >= 1"},
+         true <- source_id > 0 || {:error, "source_id", "must be > 0"} do
 
       # Optional arguments with defaults
       limit = validate_optional_integer(args["limit"])
@@ -81,10 +83,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   defp validate_integer(value, field), do: {:error, field, "expected integer, got: #{inspect(value)}"}
 
   defp validate_optional_integer(nil), do: nil
-  defp validate_optional_integer(value) when is_integer(value), do: value
+  defp validate_optional_integer(value) when is_integer(value) and value > 0, do: value
+  defp validate_optional_integer(value) when is_integer(value), do: nil  # Reject non-positive
   defp validate_optional_integer(value) when is_binary(value) do
     case Integer.parse(value) do
-      {int, ""} -> int
+      {int, ""} when int > 0 -> int
       _ -> nil
     end
   end
