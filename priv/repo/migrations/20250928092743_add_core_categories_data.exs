@@ -64,7 +64,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddCoreCategoriesData do
     # Add core category mappings for Karnet (Polish)
     execute """
     INSERT INTO category_mappings (external_source, external_type, external_value, external_locale, category_id, priority, inserted_at, updated_at)
-    SELECT 'karnet', NULL, value, 'pl', cat.id, priority, NOW(), NOW()
+    SELECT 'karnet', 'category', value, 'pl', cat.id, priority, NOW(), NOW()
     FROM (VALUES
       ('koncerty', 'concerts', 100),
       ('teatr', 'theatre', 100),
@@ -93,7 +93,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddCoreCategoriesData do
     # Add core category mappings for Bandsintown
     execute """
     INSERT INTO category_mappings (external_source, external_type, external_value, external_locale, category_id, priority, inserted_at, updated_at)
-    SELECT 'bandsintown', NULL, value, 'en', cat.id, priority, NOW(), NOW()
+    SELECT 'bandsintown', 'category', value, 'en', cat.id, priority, NOW(), NOW()
     FROM (VALUES
       ('concert', 'concerts', 100),
       ('festival', 'festivals', 100),
