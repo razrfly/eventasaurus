@@ -5,6 +5,9 @@
 require Logger
 alias EventasaurusDiscovery.Utils.UTF8
 
+# Start the application so Repo/Oban/etc. are available
+Mix.Task.run("app.start")
+
 IO.puts("\n=== Verifying UTF-8 Fixes Across All Boundaries ===\n")
 
 # Test 1: The exact production error pattern
@@ -168,13 +171,12 @@ if Enum.empty?(failed_jobs) do
 else
   IO.puts("  Found #{length(failed_jobs)} failed jobs:")
   for job <- failed_jobs do
-    # Try to detect UTF-8 issues in args
-    args_json = try do
-      Jason.encode!(job.args)
-    rescue
-      _ -> "encoding_failed"
-    end
-    has_corruption = not String.valid?(inspect(job.args))
+    # Try to detect UTF-8 issues in args using JSON encoding
+    has_corruption =
+      case Jason.encode(job.args) do
+        {:ok, _} -> false
+        {:error, _} -> true
+      end
 
     IO.puts("    Job #{job.id}: #{job.worker}")
     IO.puts("      State: #{job.state}, Attempt: #{job.attempt}/#{job.max_attempts}")

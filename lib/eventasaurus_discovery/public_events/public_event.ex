@@ -86,6 +86,9 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     # metadata moved to public_event_sources table
     field(:occurrences, :map)
 
+    # Virtual field for primary category (populated in queries when needed)
+    field(:primary_category_id, :id, virtual: true)
+
     belongs_to(:venue, EventasaurusApp.Venues.Venue)
 
     # Keep old relationship for backward compatibility during transition
