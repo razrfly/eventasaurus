@@ -7,6 +7,9 @@ import Ecto.Query
 alias EventasaurusApp.Repo
 alias EventasaurusDiscovery.Utils.UTF8
 
+# Start the application so Repo/Oban/etc. are available
+Mix.Task.run("app.start")
+
 IO.puts("\n=== Cleaning Up Legacy Oban Jobs with UTF-8 Corruption ===\n")
 
 # Find all retryable/scheduled jobs in relevant queues

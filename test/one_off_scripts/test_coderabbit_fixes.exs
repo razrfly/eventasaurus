@@ -7,6 +7,9 @@ import Ecto.Query
 alias EventasaurusApp.Repo
 alias EventasaurusDiscovery.Utils.UTF8
 
+# Start the application so Repo/Oban/etc. are available
+Mix.Task.run("app.start")
+
 IO.puts("\n=== Testing CodeRabbit Suggested Fixes ===\n")
 
 # Test 1: Category upsert with is_primary flag
