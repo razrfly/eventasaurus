@@ -11,7 +11,6 @@ defmodule Mix.Tasks.Karnet.TestAsync do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.{City, Country}
-  alias EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob
 
   @shortdoc "Test the asynchronous Karnet scraping architecture"
 
@@ -80,12 +79,16 @@ defmodule Mix.Tasks.Karnet.TestAsync do
   end
 
   defp get_or_create_poland do
+    # First try to get existing
     case Repo.get_by(Country, code: "PL") do
       nil ->
-        %Country{
+        # Create new if doesn't exist
+        %Country{}
+        |> Country.changeset(%{
           name: "Poland",
-          code: "PL"
-        }
+          code: "PL",
+          slug: "poland"
+        })
         |> Repo.insert!()
 
       country ->
@@ -94,14 +97,17 @@ defmodule Mix.Tasks.Karnet.TestAsync do
   end
 
   defp get_or_create_krakow(poland) do
+    # First try to get existing
     case Repo.get_by(City, name: "Kraków", country_id: poland.id) do
       nil ->
-        %City{
+        # Create new if doesn't exist
+        %City{}
+        |> City.changeset(%{
           name: "Kraków",
           country_id: poland.id,
           latitude: Decimal.new("50.0647"),
           longitude: Decimal.new("19.9450")
-        }
+        })
         |> Repo.insert!()
 
       city ->

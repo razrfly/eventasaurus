@@ -27,16 +27,29 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    page_number = args["page_number"]
-    source_id = args["source_id"]
-    limit = args["limit"]
-    total_pages = args["total_pages"]
+    # Validate and normalize input arguments
+    with {:ok, page_number} <- validate_integer(args["page_number"], "page_number"),
+         {:ok, source_id} <- validate_integer(args["source_id"], "source_id") do
 
-    Logger.info("""
-    📄 Processing Karnet index page
-    Page: #{page_number}/#{total_pages || "unknown"}
-    Source ID: #{source_id}
-    """)
+      # Optional arguments with defaults
+      limit = validate_optional_integer(args["limit"])
+      total_pages = validate_optional_integer(args["total_pages"])
+
+      Logger.info("""
+      📄 Processing Karnet index page
+      Page: #{page_number}/#{total_pages || "unknown"}
+      Source ID: #{source_id}
+      """)
+
+      process_page(page_number, source_id, limit, total_pages)
+    else
+      {:error, field, reason} ->
+        Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
+        {:error, "invalid_args_#{field}"}
+    end
+  end
+
+  defp process_page(page_number, source_id, limit, _total_pages) do
 
     # Build URL for this specific page
     url = Config.build_events_url(page_number)
@@ -56,7 +69,28 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     end
   end
 
-  defp process_index_page(html, page_number, source_id, limit) do
+  # Validation helpers
+  defp validate_integer(nil, field), do: {:error, field, "is required"}
+  defp validate_integer(value, _field) when is_integer(value), do: {:ok, value}
+  defp validate_integer(value, field) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} -> {:ok, int}
+      _ -> {:error, field, "invalid integer: #{inspect(value)}"}
+    end
+  end
+  defp validate_integer(value, field), do: {:error, field, "expected integer, got: #{inspect(value)}"}
+
+  defp validate_optional_integer(nil), do: nil
+  defp validate_optional_integer(value) when is_integer(value), do: value
+  defp validate_optional_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+  defp validate_optional_integer(_), do: nil
+
+  defp process_index_page(html, page_number, source_id, _limit) do
     # Check if page has events
     if has_events?(html) do
       # Extract events from this page
@@ -64,13 +98,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
 
       Logger.info("📋 Extracted #{length(events)} events from page #{page_number}")
 
-      # Apply limit if this is the first page and we have a limit
-      events_to_process =
-        if page_number == 1 && limit do
-          Enum.take(events, limit)
-        else
-          events
-        end
+      # Apply limit calculation
+      # For async mode, limit is already enforced by only scheduling necessary pages
+      # We process all events on scheduled pages
+      events_to_process = events
 
       # Schedule detail jobs for each event
       scheduled_count = schedule_detail_jobs(events_to_process, source_id, page_number)
@@ -141,7 +172,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       (String.contains?(html, "href") && String.contains?(html, "/wydarzenia/"))
   end
 
-  defp extract_external_id_from_url(url) do
+  defp extract_external_id_from_url(nil), do: nil
+  defp extract_external_id_from_url(url) when is_binary(url) do
     # Extract the event ID from the URL
     # Format: /60682-krakow-event-name
     case Regex.run(~r/\/(\d+)-/, url) do
@@ -149,4 +181,5 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       _ -> nil
     end
   end
+  defp extract_external_id_from_url(_), do: nil
 end
