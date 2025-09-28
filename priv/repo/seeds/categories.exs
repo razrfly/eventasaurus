@@ -121,10 +121,11 @@ categories = [
 
 Enum.each(categories, fn category_attrs ->
   # Use insert with on_conflict option to avoid conflicts with migration data
+  # Only replace the fields we're actually setting to avoid NULLing translations, is_active, parent_id
   %Category{}
   |> Category.changeset(category_attrs)
   |> Repo.insert!(
-    on_conflict: {:replace_all_except, [:id, :inserted_at]},
+    on_conflict: {:replace, [:name, :description, :icon, :color, :display_order, :updated_at]},
     conflict_target: :slug
   )
   IO.puts("✅ Category ready: #{category_attrs.name}")
@@ -234,7 +235,7 @@ karnet_count = Enum.reduce(karnet_mappings, 0, fn {value, category_id, locale, p
   if category_id do
     attrs = %{
       external_source: "karnet",
-      external_type: nil,
+      external_type: "category",
       external_value: value,
       external_locale: locale,
       category_id: category_id,
@@ -280,7 +281,7 @@ bit_count = Enum.reduce(bandsintown_mappings, 0, fn {value, category_id, priorit
   if category_id do
     attrs = %{
       external_source: "bandsintown",
-      external_type: nil,
+      external_type: "category",
       external_value: value,
       external_locale: "en",
       category_id: category_id,
