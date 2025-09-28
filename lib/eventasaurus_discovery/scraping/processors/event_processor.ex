@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Services.CollisionDetector
   alias EventasaurusDiscovery.Categories.CategoryExtractor
+  alias EventasaurusDiscovery.Sources.Source
   alias Ecto.Multi
 
   import Ecto.Query
@@ -562,19 +563,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp process_categories(event, data, source_id) do
-    # Determine source name from source_id
-    # FIXED: Corrected source ID mapping based on actual database IDs
+    # Look up source by ID to get the slug - don't hardcode IDs!
     source_name =
-      case source_id do
-        # ID 1 is Bandsintown (was wrongly "ticketmaster")
-        1 -> "bandsintown"
-        # ID 2 is Ticketmaster (was wrongly "karnet")
-        2 -> "ticketmaster"
-        # ID 3 is StubHub (not currently used)
-        3 -> "stubhub"
-        # ID 4 is Karnet (was wrongly ID 2)
-        4 -> "karnet"
-        _ -> "unknown"
+      case Repo.get(Source, source_id) do
+        nil -> "unknown"
+        source -> source.slug
       end
 
     # Extract and assign categories based on source
