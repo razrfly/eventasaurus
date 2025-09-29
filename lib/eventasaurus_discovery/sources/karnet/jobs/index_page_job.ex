@@ -34,7 +34,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
          true <- source_id > 0 || {:error, "source_id", "must be > 0"} do
 
       # Optional arguments with defaults
-      limit = validate_optional_integer(args["limit"])
+      chunk_budget = validate_optional_integer(args["chunk_budget"])
       total_pages = validate_optional_integer(args["total_pages"])
       skip_in_first = validate_optional_integer(args["skip_in_first"]) || 0
 
@@ -43,9 +43,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       Page: #{page_number}/#{total_pages || "unknown"}
       Source ID: #{source_id}
       Skip: #{skip_in_first} events
+      Budget: #{chunk_budget || "unlimited"}
       """)
 
-      process_page(page_number, source_id, limit, total_pages, skip_in_first)
+      process_page(page_number, source_id, chunk_budget, total_pages, skip_in_first)
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
@@ -53,7 +54,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     end
   end
 
-  defp process_page(page_number, source_id, limit, _total_pages, skip_in_first) do
+  defp process_page(page_number, source_id, chunk_budget, _total_pages, skip_in_first) do
 
     # Build URL for this specific page
     url = Config.build_events_url(page_number)
@@ -61,7 +62,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     # Fetch the page
     case Client.fetch_page(url) do
       {:ok, html} ->
-        process_index_page(html, page_number, source_id, limit, skip_in_first)
+        process_index_page(html, page_number, source_id, chunk_budget, skip_in_first)
 
       {:error, :not_found} ->
         Logger.info("📭 Page #{page_number} not found - likely past last page")
@@ -95,7 +96,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   end
   defp validate_optional_integer(_), do: nil
 
-  defp process_index_page(html, page_number, source_id, _limit, skip_in_first) do
+  defp process_index_page(html, page_number, source_id, chunk_budget, skip_in_first) do
     # Check if page has events
     if has_events?(html) do
       # Extract events from this page
@@ -111,17 +112,21 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
 
       Logger.info("📋 Extracted #{length(events)} events from page #{page_number} (#{length(events_after_skip)} after skip)")
 
-      # Apply limit calculation
-      # For async mode, limit is already enforced by only scheduling necessary pages
-      # We process all events on scheduled pages after applying skip
-      events_to_process = events_after_skip
+      # Apply chunk budget to prevent overshooting
+      events_to_process = if chunk_budget do
+        Logger.info("💰 Applying chunk budget: #{chunk_budget} events")
+        Enum.take(events_after_skip, chunk_budget)
+      else
+        # No budget limit - process all events (for backward compatibility)
+        events_after_skip
+      end
 
       # Schedule detail jobs for each event
       scheduled_count = schedule_detail_jobs(events_to_process, source_id, page_number)
 
       Logger.info("""
       ✅ Index page #{page_number} processed
-      Events found: #{length(events)} (#{length(events_after_skip)} after skip)
+      Events found: #{length(events)} (#{length(events_after_skip)} after skip, #{length(events_to_process)} final)
       Detail jobs scheduled: #{scheduled_count}
       """)
 

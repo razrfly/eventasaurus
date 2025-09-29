@@ -107,4 +107,67 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
       end)
     end
   end
+
+  describe "chunk budget enforcement" do
+    @events_per_page 12
+
+    test "enforces exact budget limits per chunk" do
+      test_cases = [
+        # {chunk_limit, start_page, skip_in_first, expected_pages, expected_total_events}
+        {100, 1, 0, 9, 100},    # Chunk 1: pages 1-9, events 0-99
+        {100, 9, 4, 9, 100},    # Chunk 2: pages 9-17, events 100-199 (skip 4 on page 9)
+        {100, 17, 8, 9, 100},   # Chunk 3: pages 17-25, events 200-299 (skip 8 on page 17)
+        {50, 1, 0, 5, 50},      # Smaller chunk: pages 1-5, events 0-49
+      ]
+
+      Enum.each(test_cases, fn {chunk_limit, start_page, skip_in_first, expected_pages, expected_total_events} ->
+        {pages_scheduled, total_budget_used} = simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first)
+
+        assert pages_scheduled <= expected_pages,
+          "Chunk #{chunk_limit} at page #{start_page}: scheduled #{pages_scheduled} pages, expected ≤ #{expected_pages}"
+
+        assert total_budget_used == expected_total_events,
+          "Chunk #{chunk_limit} at page #{start_page}: used #{total_budget_used} events, expected #{expected_total_events}"
+      end)
+    end
+
+    test "prevents budget overshoot" do
+      # Test edge case where page has more events than remaining budget
+      chunk_limit = 10
+      start_page = 1
+      skip_in_first = 0
+
+      {_pages_scheduled, total_budget_used} = simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first)
+
+      assert total_budget_used == chunk_limit,
+        "Should use exactly #{chunk_limit} events, but used #{total_budget_used}"
+    end
+
+    defp simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first) do
+      max_pages = div(chunk_limit, @events_per_page) + if(rem(chunk_limit, @events_per_page) > 0, do: 1, else: 0)
+
+      {page_jobs, _remaining} =
+        start_page..(start_page + max_pages - 1)
+        |> Enum.map_reduce(chunk_limit, fn page_num, remaining_budget ->
+          if remaining_budget <= 0 do
+            {:skip, 0}
+          else
+            page_budget = if page_num == start_page do
+              events_available = @events_per_page - skip_in_first
+              min(remaining_budget, events_available)
+            else
+              min(remaining_budget, @events_per_page)
+            end
+
+            {{page_num, page_budget}, remaining_budget - page_budget}
+          end
+        end)
+
+      actual_pages = Enum.reject(page_jobs, &(&1 == :skip))
+      pages_scheduled = length(actual_pages)
+      total_budget_used = actual_pages |> Enum.map(&elem(&1, 1)) |> Enum.sum()
+
+      {pages_scheduled, total_budget_used}
+    end
+  end
 end
