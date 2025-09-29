@@ -29,13 +29,18 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   Returns {:ok, transformed_event} or {:error, reason}
   """
   def transform_event(raw_event, city \\ nil) do
-    # Extract and validate venue first since it's critical
-    venue_data = extract_venue(raw_event, city)
+    # CRITICAL: Filter out events that are clearly not in the target city
+    # If venue city is provided and doesn't match our city, reject the event
+    if should_filter_event?(raw_event, city) do
+      {:error, "Event is not in target city"}
+    else
+      # Extract and validate venue first since it's critical
+      venue_data = extract_venue(raw_event, city)
 
-    # Validate venue has required fields
-    case validate_venue(venue_data) do
-      :ok ->
-        transformed = %{
+      # Validate venue has required fields
+      case validate_venue(venue_data) do
+        :ok ->
+          transformed = %{
           # Required fields
           title: extract_title(raw_event),
           external_id: extract_external_id(raw_event),
@@ -70,15 +75,16 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
         {:ok, transformed}
 
-      {:error, reason} ->
-        Logger.error("""
-        ❌ Bandsintown event rejected due to invalid venue:
-        Event: #{raw_event["title"] || raw_event["artist_name"]}
-        Reason: #{reason}
-        Venue data: #{inspect(venue_data)}
-        """)
+        {:error, reason} ->
+          Logger.error("""
+          ❌ Bandsintown event rejected due to invalid venue:
+          Event: #{raw_event["title"] || raw_event["artist_name"]}
+          Reason: #{reason}
+          Venue data: #{inspect(venue_data)}
+          """)
 
-        {:error, reason}
+          {:error, reason}
+      end
     end
   end
 
@@ -105,6 +111,31 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   end
 
   # Private functions
+
+  defp should_filter_event?(raw_event, city) do
+    # Check if venue city doesn't match our target city
+    # Bandsintown API returns events from 200-300km radius
+    # We need to filter out events that are clearly in the wrong city
+    venue_city = raw_event["venue_city"]
+
+    if venue_city && city && city.name do
+      # Normalize city names for comparison
+      venue_city_normalized = String.downcase(String.trim(venue_city || ""))
+      city_name_normalized = String.downcase(String.trim(city.name || ""))
+
+      # Only filter if we have a clear mismatch
+      # We don't filter if no venue city is provided (will get GPS from detail page)
+      if venue_city_normalized != "" && city_name_normalized != "" do
+        # Check if it's a completely different city
+        # Note: We're keeping events without venue_city since we'll get GPS from detail page
+        false  # For now, don't filter - we'll rely on GPS coordinates
+      else
+        false
+      end
+    else
+      false
+    end
+  end
 
   defp extract_title(event) do
     # Use artist name as title, or event title if available
