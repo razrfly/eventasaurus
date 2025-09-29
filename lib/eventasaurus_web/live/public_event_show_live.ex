@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
   alias EventasaurusWeb.Components.PublicPlanWithFriendsModal
+  alias EventasaurusWeb.StaticMapComponent
   import Ecto.Query
 
   @impl true
@@ -705,6 +706,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                           </span>
                         <% end %>
                       </p>
+                    </div>
+                  <% end %>
+
+                  <!-- Map Display -->
+                  <%= if @event.venue do %>
+                    <div class="mt-6">
+                      <.live_component
+                        module={StaticMapComponent}
+                        id="event-location-map"
+                        venue={@event.venue}
+                        theme={:minimal}
+                        size={:medium}
+                      />
                     </div>
                   <% end %>
 

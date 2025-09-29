@@ -178,6 +178,14 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
           ""
       end
 
+    # Extract and validate image URL
+    image_url =
+      case Map.get(event, "artistImageSrc") do
+        nil -> Map.get(event, "fallbackImageUrl")
+        "" -> Map.get(event, "fallbackImageUrl")
+        url -> url
+      end
+
     # IMPORTANT: Use string keys (not atoms) for compatibility with Transformer module
     # Also extract venue location data if available
     %{
@@ -190,7 +198,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       "venue_longitude" => Map.get(event, "venueLng"),
       "date" => Map.get(event, "startsAt", ""),
       "description" => Map.get(event, "title", ""),
-      "image_url" => Map.get(event, "artistImageSrc", "") || Map.get(event, "fallbackImageUrl", ""),
+      "image_url" => image_url,
       "external_id" => external_id
     }
   end

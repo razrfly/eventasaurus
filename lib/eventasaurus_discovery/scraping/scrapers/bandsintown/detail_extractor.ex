@@ -139,15 +139,33 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp extract_performer(performer) when is_map(performer), do: performer
 
   defp extract_image_url(nil), do: nil
-  defp extract_image_url(image) when is_binary(image), do: image
-  defp extract_image_url(image) when is_map(image), do: image["url"]
+  defp extract_image_url(image) when is_binary(image) do
+    # Validate the URL before returning it
+    validate_url(image)
+  end
+  defp extract_image_url(image) when is_map(image) do
+    validate_url(image["url"])
+  end
   defp extract_image_url(images) when is_list(images) do
     case List.first(images) do
       nil -> nil
-      img when is_binary(img) -> img
-      img when is_map(img) -> img["url"]
+      img when is_binary(img) -> validate_url(img)
+      img when is_map(img) -> validate_url(img["url"])
     end
   end
+
+  defp validate_url(nil), do: nil
+  defp validate_url(""), do: nil
+  defp validate_url(url) when is_binary(url) do
+    # Filter out known invalid Bandsintown image URLs
+    cond do
+      String.contains?(url, "/null.") -> nil
+      String.contains?(url, "/undefined.") -> nil
+      String.contains?(url, "/thumb/.") -> nil
+      true -> url
+    end
+  end
+  defp validate_url(_), do: nil
 
   defp extract_ticket_url([], event), do: event["url"]
   defp extract_ticket_url([offer | _], _event), do: offer["url"]
