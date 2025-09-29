@@ -57,8 +57,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
           max_price: parse_price(raw_event["max_price"]),
           currency: "USD",  # Bandsintown typically uses USD
 
-          # Image URL - extract from the event data
-          image_url: raw_event["image_url"] || raw_event["artist_image_url"],
+          # Image URL - extract from the event data and validate
+          image_url: validate_image_url(raw_event["image_url"] || raw_event["artist_image_url"]),
 
           # Performer data
           performer: extract_performer(raw_event),
@@ -354,8 +354,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       %{
         name: event["artist_name"],
         genres: event["genres"] || [],
-        # The API returns image_url, not artist_image_url
-        image_url: event["image_url"] || event["artist_image_url"]
+        # The API returns image_url, not artist_image_url - validate it
+        image_url: validate_image_url(event["image_url"] || event["artist_image_url"])
       }
     else
       nil
@@ -391,4 +391,22 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   defp parse_price(price) when is_number(price) do
     Decimal.new(price)
   end
+
+  # Validate image URLs - filter out null/invalid Bandsintown placeholder images
+  defp validate_image_url(nil), do: nil
+  defp validate_image_url(""), do: nil
+  defp validate_image_url(url) when is_binary(url) do
+    # Check for known invalid Bandsintown image URLs
+    cond do
+      # Filter out null placeholder images
+      String.contains?(url, "/null.") -> nil
+      # Filter out "undefined" placeholder images
+      String.contains?(url, "/undefined.") -> nil
+      # Filter out empty placeholder images
+      String.contains?(url, "/thumb/.") -> nil
+      # Valid URL
+      true -> url
+    end
+  end
+  defp validate_image_url(_), do: nil
 end
