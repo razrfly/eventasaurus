@@ -29,6 +29,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Sources.Bandsintown.Transformer
   alias EventasaurusDiscovery.Sources.Processor
+  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.{Client, DetailExtractor}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -49,10 +50,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     # Get source and city
     with {:ok, source} <- get_source(source_id),
          {:ok, city} <- get_city(city_id),
+         # Fetch event detail page to get GPS coordinates from JSON-LD
+         enriched_event_data <- enrich_with_detail_page(event_data),
          # Transform the event data with city context for proper venue association
-         {:ok, transformed_event} <- transform_event(event_data, city),
+         {:ok, transformed_event} <- transform_event(enriched_event_data, city),
          # Process through unified Processor for venue validation
-         {:ok, result} <- process_event(transformed_event, source, city) do
+         {:ok, result} <- process_event(transformed_event, source) do
 
       case result do
         event when is_struct(event) ->
@@ -100,6 +103,54 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     end
   end
 
+  defp enrich_with_detail_page(event_data) do
+    # If we have a URL, fetch the detail page to get GPS coordinates from JSON-LD
+    case event_data["url"] do
+      nil ->
+        Logger.warning("⚠️ No URL for event, cannot fetch detail page")
+        event_data
+
+      url when is_binary(url) and url != "" ->
+        Logger.debug("🌐 Fetching event detail page: #{url}")
+
+        case Client.fetch_event_page(url) do
+          {:ok, html} ->
+            # Extract details from the HTML page, including JSON-LD with GPS
+            case DetailExtractor.extract_event_details(html, url) do
+              {:ok, detail_data} ->
+                # Merge the detail page data with the API data
+                # Detail page data takes precedence for GPS coordinates
+                merged_data = Map.merge(event_data, detail_data)
+
+                if detail_data["venue_latitude"] && detail_data["venue_longitude"] do
+                  Logger.info("""
+                  📍 Extracted GPS coordinates from detail page:
+                  Venue: #{merged_data["venue_name"]}
+                  Lat: #{detail_data["venue_latitude"]}
+                  Lng: #{detail_data["venue_longitude"]}
+                  """)
+                else
+                  Logger.warning("⚠️ No GPS coordinates found in detail page JSON-LD")
+                end
+
+                merged_data
+
+              {:error, reason} ->
+                Logger.warning("⚠️ Failed to extract details from page: #{inspect(reason)}")
+                event_data
+            end
+
+          {:error, reason} ->
+            Logger.warning("⚠️ Failed to fetch detail page: #{inspect(reason)}")
+            event_data
+        end
+
+      _ ->
+        Logger.warning("⚠️ Invalid URL for event")
+        event_data
+    end
+  end
+
   defp transform_event(event_data, city) do
     # Use the Transformer to convert the event data
     # The event_data already has string keys from IndexPageJob
@@ -115,7 +166,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     end
   end
 
-  defp process_event(event, source, _city) do
+  defp process_event(event, source) do
     # Process through the unified Processor
     # This maintains the venue validation requirements from commit d42309da
     # The Processor expects a list of events
@@ -136,7 +187,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
             Logger.info("""
             ✅ Event processed successfully
             Title: #{processed_event.title}
-            Venue: #{processed_event.venue.name}
+            Venue: #{if processed_event.venue, do: processed_event.venue.name, else: "Unknown"}
             """)
             {:ok, processed_event}
 
