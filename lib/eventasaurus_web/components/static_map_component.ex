@@ -48,51 +48,38 @@ defmodule EventasaurusWeb.StaticMapComponent do
     # Don't render if venue is nil or doesn't have location data
     if should_render_map?(assigns.venue) do
       ~H"""
-      <div class={["bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mb-8 shadow-sm", @class]}>
-        <h2 class="text-xl font-semibold mb-4 text-gray-900">Location</h2>
-        
-        <!-- Address fallback (always visible) -->
-        <div class="mb-4">
-          <p class="text-gray-700 font-medium"><%= @venue.name %></p>
-          <%= if @venue.address do %>
-            <p class="text-gray-600"><%= format_address(@venue) %></p>
-          <% end %>
-        </div>
-        
-        <!-- Map image -->
-        <div class={map_container_classes(@size)} id={"map-container-#{@id}"}>
-          <%= if has_coordinates?(@venue) do %>
-            <img
-              src={mapbox_static_url(@venue, @theme, @size)}
-              alt={map_alt_text(@venue)}
-              class="w-full h-full object-cover rounded-lg"
-              loading="lazy"
-              onerror={"this.style.display='none'; document.getElementById('map-fallback-#{@id}').style.display='block'"}
-            />
-            <!-- Error fallback (hidden by default) -->
-            <div 
-              id={"map-fallback-#{@id}"} 
-              class="hidden w-full h-full bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 text-sm"
-            >
-              <div class="text-center">
-                <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
-                </svg>
-                <p>Map unavailable</p>
-              </div>
+      <div class={map_container_classes(@size)} id={"map-container-#{@id}"}>
+        <%= if has_coordinates?(@venue) do %>
+          <img
+            src={mapbox_static_url(@venue, @theme, @size)}
+            alt={map_alt_text(@venue)}
+            class="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm"
+            loading="lazy"
+            onerror={"this.style.display='none'; document.getElementById('map-fallback-#{@id}').style.display='block'"}
+          />
+          <!-- Error fallback (hidden by default) -->
+          <div
+            id={"map-fallback-#{@id}"}
+            class="hidden w-full h-full bg-gray-100 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 text-sm"
+          >
+            <div class="text-center">
+              <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
+              </svg>
+              <p>Map unavailable</p>
             </div>
-          <% else %>
-            <!-- Address-only fallback -->
-            <div class="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 text-sm">
-              <div class="text-center">
-                <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
-                </svg>
-                <p>Map unavailable</p>
-              </div>
+          </div>
+        <% else %>
+          <!-- Address-only fallback -->
+          <div class="w-full h-full bg-gray-100 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 text-sm">
+            <div class="text-center">
+              <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
+              </svg>
+              <p>Map unavailable</p>
             </div>
-          <% end %>
-        </div>
+          </div>
+        <% end %>
       </div>
       """
     else
