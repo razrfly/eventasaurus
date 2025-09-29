@@ -158,10 +158,18 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp validate_url(""), do: nil
   defp validate_url(url) when is_binary(url) do
     # Filter out known invalid Bandsintown image URLs
+    downcased = String.downcase(url)
+
     cond do
-      String.contains?(url, "/null.") -> nil
-      String.contains?(url, "/undefined.") -> nil
-      String.contains?(url, "/thumb/.") -> nil
+      # Filter out null/undefined placeholder images
+      String.contains?(downcased, "/null.") -> nil
+      String.contains?(downcased, "/undefined.") -> nil
+      # Filter out thumb placeholders (all zeros, default, etc)
+      String.contains?(downcased, "/thumb/0000") -> nil
+      String.contains?(downcased, "/thumb/default") -> nil
+      # Filter out any suspiciously small thumb images (single digit names)
+      Regex.match?(~r"/thumb/\d\.jpg", downcased) -> nil
+      # Valid URL
       true -> url
     end
   end
