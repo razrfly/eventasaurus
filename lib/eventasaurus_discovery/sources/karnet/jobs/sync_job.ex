@@ -355,33 +355,53 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   defp schedule_index_page_jobs(total_pages, source_id, limit, opts) do
     start_page = Keyword.get(opts, :start_page, 1)
     skip_in_first = Keyword.get(opts, :skip_in_first, 0)
+    events_per_page = 12
 
     Logger.info("📅 Scheduling #{total_pages} index page jobs (starting from page #{start_page})")
 
-    # Schedule IndexPageJobs for each page
-    scheduled_jobs =
+    # Track remaining budget across pages to prevent overshooting
+    {scheduled_jobs, _remaining_budget} =
       start_page..(start_page + total_pages - 1)
-      |> Enum.map(fn page_num ->
-        # Stagger the jobs slightly to avoid thundering herd
-        # But allow some concurrency (pages can be processed in parallel)
-        delay_seconds = div(page_num - start_page, 3) * Config.rate_limit()
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
+      |> Enum.map_reduce(limit, fn page_num, remaining_budget ->
+        # Stop scheduling if budget is exhausted
+        if remaining_budget <= 0 do
+          {:skip, 0}
+        else
+          # Calculate how many events this page should process
+          page_budget = if page_num == start_page do
+            # First page: account for skip_in_first
+            events_available_on_page = events_per_page - skip_in_first
+            min(remaining_budget, events_available_on_page)
+          else
+            # Subsequent pages: can process up to events_per_page
+            min(remaining_budget, events_per_page)
+          end
 
-        job_args = %{
-          "page_number" => page_num,
-          "source_id" => source_id,
-          "limit" => if(page_num == start_page, do: limit, else: nil),
-          "skip_in_first" => if(page_num == start_page, do: skip_in_first, else: 0),
-          "total_pages" => total_pages
-        }
+          # Stagger the jobs slightly to avoid thundering herd
+          delay_seconds = div(page_num - start_page, 3) * Config.rate_limit()
+          scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
-        EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob.new(
-          job_args,
-          queue: :scraper_index,
-          scheduled_at: scheduled_at
-        )
-        |> Oban.insert()
+          job_args = %{
+            "page_number" => page_num,
+            "source_id" => source_id,
+            "chunk_budget" => page_budget,
+            "skip_in_first" => if(page_num == start_page, do: skip_in_first, else: 0),
+            "total_pages" => total_pages
+          }
+
+          job = EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob.new(
+            job_args,
+            queue: :scraper_index,
+            scheduled_at: scheduled_at
+          )
+          |> Oban.insert()
+
+          {job, remaining_budget - page_budget}
+        end
       end)
+
+    # Filter out :skip entries
+    scheduled_jobs = Enum.reject(scheduled_jobs, &(&1 == :skip))
 
     # Count successful insertions
     successful_count =
