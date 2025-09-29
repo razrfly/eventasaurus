@@ -54,7 +54,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
-        {:error, "invalid_args_#{field}"}
+        {:discard, "invalid_args_#{field}"}
     end
   end
 
@@ -179,10 +179,15 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       end
 
     # IMPORTANT: Use string keys (not atoms) for compatibility with Transformer module
+    # Also extract venue location data if available
     %{
       "url" => Map.get(event, "eventUrl", ""),
       "artist_name" => Map.get(event, "artistName", ""),
       "venue_name" => Map.get(event, "venueName", ""),
+      "venue_city" => Map.get(event, "venueCity"),
+      "venue_country" => Map.get(event, "venueCountry"),
+      "venue_latitude" => Map.get(event, "venueLat"),
+      "venue_longitude" => Map.get(event, "venueLng"),
       "date" => Map.get(event, "startsAt", ""),
       "description" => Map.get(event, "title", ""),
       "image_url" => Map.get(event, "artistImageSrc", "") || Map.get(event, "fallbackImageUrl", ""),
