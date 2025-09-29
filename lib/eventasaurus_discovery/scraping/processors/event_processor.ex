@@ -881,10 +881,26 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
           final_score = base_score + venue_bonus + series_bonus
 
+          # Check if this is a different event from the same source
+          # For concert events, don't merge different external IDs from same source
+          is_different_from_same_source =
+            if external_id && source_id && String.contains?(clean_title, "@") do
+              # For concert events, check if it's from same source but different external_id
+              from(s in PublicEventSource,
+                where: s.event_id == ^event.id,
+                where: s.source_id == ^source_id,
+                where: s.external_id != ^external_id,
+                select: count(s.id)
+              )
+              |> Repo.one() > 0
+            else
+              false
+            end
+
           # We want high score matches, but not the exact same event instance
-          # Allow same-source siblings to match (different external_id)
-          if is_exact_same do
-            # Skip only if it's the EXACT same event instance
+          # For concerts, don't allow same-source siblings with different external_ids
+          if is_exact_same || is_different_from_same_source do
+            # Skip if it's the exact same event OR a different concert from same source
             {event, 0.0}
           else
             {event, final_score}
@@ -942,10 +958,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       is_series_event?(title) -> 0.70
       # Recurring events (weekly, monthly, etc.) get lower threshold
       is_recurring_event?(title) -> 0.75
-      # Events at same venue get slightly lower threshold
-      venue != nil -> 0.80
+      # Concert events (with @ symbol) need very high threshold to avoid merging different artists
+      String.contains?(title, "@") -> 0.95
+      # Events at same venue get slightly lower threshold (but not for concerts)
+      venue != nil -> 0.85
       # Default threshold
-      true -> 0.85
+      true -> 0.90
     end
   end
 
