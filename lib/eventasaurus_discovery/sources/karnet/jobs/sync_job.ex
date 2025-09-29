@@ -4,6 +4,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
   Uses the standardized BaseJob behaviour for consistent processing across all sources.
   All events are processed through the unified Processor which enforces venue requirements.
+
+  Implements chunked processing to avoid timeouts with large event limits.
   """
 
   use EventasaurusDiscovery.Sources.BaseJob,
@@ -12,16 +14,83 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
   require Logger
 
+  # Process events in chunks to avoid timeouts
+  @chunk_size 100
+
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Sources.Karnet.{Client, Config, IndexExtractor, DetailExtractor, Transformer}
 
   @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"limit" => limit} = args}) when limit > @chunk_size and not is_map_key(args, "chunk") do
+    # Large sync request - break into chunks
+    city_id = args["city_id"]
+
+    Logger.info("""
+    📦 Breaking large Karnet sync into chunks
+    Total limit: #{limit} events
+    Chunk size: #{@chunk_size} events
+    """)
+
+    # Calculate number of chunks needed
+    chunks = div(limit, @chunk_size) + if(rem(limit, @chunk_size) > 0, do: 1, else: 0)
+
+    # Schedule chunked jobs
+    scheduled_jobs = Enum.map(0..(chunks - 1), fn chunk_idx ->
+      chunk_limit = if chunk_idx == chunks - 1 do
+        # Last chunk might be smaller
+        remaining = rem(limit, @chunk_size)
+        if remaining > 0, do: remaining, else: @chunk_size
+      else
+        @chunk_size
+      end
+
+      chunk_args = %{
+        "city_id" => city_id,
+        "limit" => chunk_limit,
+        "chunk" => chunk_idx + 1,
+        "total_chunks" => chunks,
+        "original_limit" => limit,
+        "chunk_offset" => chunk_idx * @chunk_size
+      }
+
+      # Stagger chunks by 30 seconds to avoid overwhelming the source
+      schedule_at = DateTime.add(DateTime.utc_now(), chunk_idx * 30, :second)
+
+      __MODULE__.new(chunk_args, scheduled_at: schedule_at)
+      |> Oban.insert()
+    end)
+
+    successful_count = Enum.count(scheduled_jobs, fn
+      {:ok, _} -> true
+      _ -> false
+    end)
+
+    Logger.info("✅ Scheduled #{successful_count}/#{chunks} chunk jobs for Karnet sync")
+
+    {:ok, %{
+      mode: "chunked",
+      chunks_scheduled: successful_count,
+      total_chunks: chunks,
+      chunk_size: @chunk_size
+    }}
+  end
+
   def perform(%Oban.Job{args: args}) do
+    # Regular sync or chunk processing
     city_id = args["city_id"]
     limit = args["limit"] || 200
     max_pages = args["max_pages"] || calculate_max_pages(limit)
+
+    # Log if this is a chunk
+    if args["chunk"] do
+      Logger.info("""
+      🧩 Processing Karnet sync chunk #{args["chunk"]}/#{args["total_chunks"]}
+      Chunk limit: #{limit} events
+      Offset: #{args["chunk_offset"] || 0}
+      """)
+    end
 
     # Get city (should be Kraków)
     case Repo.get(City, city_id) do
@@ -68,11 +137,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     limit = opts[:limit]
     max_pages = opts[:max_pages]
 
-    # New asynchronous approach: determine page count and schedule IndexPageJobs
-    Logger.info("🚀 Starting asynchronous Karnet sync")
+    # For chunks, use optimistic page discovery to avoid timeout
+    Logger.info("🚀 Starting Karnet sync (limit: #{limit}, max_pages: #{max_pages})")
 
-    # Determine the total number of pages to process
-    case determine_page_count(max_pages) do
+    # For smaller limits, we can still do page discovery
+    # For larger limits or chunks, use optimistic approach
+    if limit <= @chunk_size do
+      # Small sync - do normal page discovery
+      case determine_page_count(max_pages) do
       {:ok, total_pages} when total_pages > 0 ->
         Logger.info("📚 Found #{total_pages} index pages to process")
 
@@ -111,6 +183,30 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
       {:error, reason} ->
         Logger.error("❌ Failed to determine page count: #{inspect(reason)}")
         {:error, reason}
+      end
+    else
+      # Large sync or chunk - use optimistic page scheduling
+      Logger.info("📊 Using optimistic page scheduling for #{limit} events")
+
+      # Estimate pages needed based on events per page
+      estimated_pages = calculate_max_pages(limit)
+      Logger.info("📋 Scheduling #{estimated_pages} pages optimistically")
+
+      # Schedule IndexPageJobs without checking if pages exist
+      # Jobs will handle non-existent pages gracefully
+      scheduled_count = schedule_index_page_jobs(estimated_pages, source.id, limit)
+
+      Logger.info("""
+      ✅ Karnet sync job completed (optimistic mode)
+      Pages scheduled: #{estimated_pages}
+      Index page jobs scheduled: #{scheduled_count}
+      """)
+
+      {:ok, %{
+        pages_scheduled: estimated_pages,
+        jobs_scheduled: scheduled_count,
+        mode: "optimistic"
+      }}
     end
   end
 
