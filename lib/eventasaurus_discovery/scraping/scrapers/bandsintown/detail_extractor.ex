@@ -168,7 +168,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
       String.contains?(downcased, "/thumb/0000") -> nil
       String.contains?(downcased, "/thumb/default") -> nil
       # Filter out any suspiciously small thumb images (single digit names)
-      Regex.match?(~r"/thumb/\d\.jpg", downcased) -> nil
+      Regex.match?(~r|/thumb/\d\.jpg|, downcased) -> nil
       # Valid URL
       true -> url
     end
