@@ -397,13 +397,18 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   defp validate_image_url(""), do: nil
   defp validate_image_url(url) when is_binary(url) do
     # Check for known invalid Bandsintown image URLs
+    downcased = String.downcase(url)
+
     cond do
       # Filter out null placeholder images
-      String.contains?(url, "/null.") -> nil
+      String.contains?(downcased, "/null.") -> nil
       # Filter out "undefined" placeholder images
-      String.contains?(url, "/undefined.") -> nil
-      # Filter out empty placeholder images
-      String.contains?(url, "/thumb/.") -> nil
+      String.contains?(downcased, "/undefined.") -> nil
+      # Filter out thumb placeholders (all zeros, default, etc)
+      String.contains?(downcased, "/thumb/0000") -> nil
+      String.contains?(downcased, "/thumb/default") -> nil
+      # Filter out any suspiciously small thumb images (single digit names)
+      Regex.match?(~r"/thumb/\d\.jpg", downcased) -> nil
       # Valid URL
       true -> url
     end
