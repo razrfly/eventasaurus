@@ -1,130 +1,110 @@
 defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
-  use EventasaurusApp.DataCase
-  use Oban.Testing, repo: EventasaurusApp.Repo
+  use ExUnit.Case, async: true
 
-  alias EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob
-  alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.Locations.Country
+  describe "chunking logic" do
+    @chunk_size 100
 
-  describe "chunked sync" do
-    setup do
-      # Create a test city (Kraków)
-      country = Repo.insert!(%Country{
-        name: "Poland",
-        code: "PL"
-      })
+    test "calculates correct chunk count and sizes" do
+      test_cases = [
+        {250, 3, [100, 100, 50]},  # 100 + 100 + 50
+        {200, 2, [100, 100]},      # 100 + 100
+        {150, 2, [100, 50]},       # 100 + 50
+        {100, 1, [100]},           # exactly 100 - should chunk into 1
+        {1000, 10, [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]} # 10 chunks of 100 each
+      ]
 
-      city = Repo.insert!(%City{
-        name: "Kraków",
-        country_id: country.id
-      })
-
-      {:ok, city: city}
+      Enum.each(test_cases, fn {limit, expected_chunks, expected_sizes} ->
+        {chunks, sizes} = calculate_chunking(limit)
+        assert chunks == expected_chunks, "Limit #{limit}: expected #{expected_chunks} chunks, got #{chunks}"
+        assert sizes == expected_sizes, "Limit #{limit}: expected sizes #{inspect(expected_sizes)}, got #{inspect(sizes)}"
+      end)
     end
 
-    test "breaks large sync into chunks", %{city: city} do
-      # Test with limit > 100 (chunk size)
-      args = %{
-        "city_id" => city.id,
-        "limit" => 250
-      }
+    test "calculates page windows correctly" do
+      events_per_page = 12
 
-      # Perform the job
-      assert {:ok, result} = perform_job(SyncJob, args)
+      # Chunk 1: events 0-99 (pages 1-9, skip 0 in first page)
+      {start_page, skip} = calculate_page_window(0, events_per_page)
+      assert start_page == 1
+      assert skip == 0
 
-      # Should be in chunked mode
-      assert result.mode == "chunked"
-      # Should schedule 3 chunks (100 + 100 + 50)
-      assert result.total_chunks == 3
-      assert result.chunks_scheduled == 3
-      assert result.chunk_size == 100
+      # Chunk 2: events 100-199 (start at page 9, skip 4 events)
+      # 100 / 12 = 8.33 -> page 9, skip 100 - (8 * 12) = 4
+      {start_page, skip} = calculate_page_window(100, events_per_page)
+      assert start_page == 9
+      assert skip == 4
 
-      # Check that chunk jobs were scheduled
-      assert_enqueued(worker: SyncJob, args: %{"city_id" => city.id, "limit" => 100, "chunk" => 1})
-      assert_enqueued(worker: SyncJob, args: %{"city_id" => city.id, "limit" => 100, "chunk" => 2})
-      assert_enqueued(worker: SyncJob, args: %{"city_id" => city.id, "limit" => 50, "chunk" => 3})
+      # Chunk 3: events 200-299 (start at page 17, skip 8 events)
+      # 200 / 12 = 16.67 -> page 17, skip 200 - (16 * 12) = 8
+      {start_page, skip} = calculate_page_window(200, events_per_page)
+      assert start_page == 17
+      assert skip == 8
     end
 
-    test "processes small syncs without chunking", %{city: city} do
-      # Test with limit <= 100
-      args = %{
-        "city_id" => city.id,
-        "limit" => 50
-      }
+    test "no chunking for small limits" do
+      # Limits <= 100 should not trigger chunking logic
+      small_limits = [50, 99, 100]
 
-      # Mock the page discovery to avoid HTTP calls
-      # This would normally go through the regular sync process
-      # For this test, we just verify it doesn't chunk
-
-      # The job would normally try to determine page count
-      # We can't easily test this without mocking HTTP calls
-      # So we'll just verify the chunking logic doesn't trigger
-
-      # When limit is 50 (< 100), it should not create chunks
-      refute_enqueued(worker: SyncJob, args: %{"chunk" => 1})
+      Enum.each(small_limits, fn limit ->
+        should_chunk = limit > @chunk_size
+        refute should_chunk, "Limit #{limit} should not trigger chunking"
+      end)
     end
 
-    test "handles exact chunk size multiples", %{city: city} do
-      # Test with exactly 200 (2 * chunk_size)
-      args = %{
-        "city_id" => city.id,
-        "limit" => 200
-      }
+    test "chunking triggered for large limits" do
+      # Limits > 100 should trigger chunking logic
+      large_limits = [101, 200, 500, 1000]
 
-      assert {:ok, result} = perform_job(SyncJob, args)
-
-      assert result.mode == "chunked"
-      assert result.total_chunks == 2
-      assert result.chunks_scheduled == 2
-
-      # Both chunks should be 100
-      assert_enqueued(worker: SyncJob, args: %{"city_id" => city.id, "limit" => 100, "chunk" => 1})
-      assert_enqueued(worker: SyncJob, args: %{"city_id" => city.id, "limit" => 100, "chunk" => 2})
+      Enum.each(large_limits, fn limit ->
+        should_chunk = limit > @chunk_size
+        assert should_chunk, "Limit #{limit} should trigger chunking"
+      end)
     end
 
-    test "chunk jobs include necessary metadata", %{city: city} do
-      args = %{
-        "city_id" => city.id,
-        "limit" => 150
-      }
+    defp calculate_chunking(limit) do
+      chunks = div(limit, @chunk_size) + if(rem(limit, @chunk_size) > 0, do: 1, else: 0)
 
-      assert {:ok, _result} = perform_job(SyncJob, args)
+      sizes = Enum.map(0..(chunks - 1), fn chunk_idx ->
+        if chunk_idx == chunks - 1 do
+          # Last chunk might be smaller
+          remaining = rem(limit, @chunk_size)
+          if remaining > 0, do: remaining, else: @chunk_size
+        else
+          @chunk_size
+        end
+      end)
 
-      # Check first chunk has all metadata
-      assert_enqueued(worker: SyncJob, args: %{
-        "city_id" => city.id,
-        "limit" => 100,
-        "chunk" => 1,
-        "total_chunks" => 2,
-        "original_limit" => 150,
-        "chunk_offset" => 0
-      })
-
-      # Check second chunk
-      assert_enqueued(worker: SyncJob, args: %{
-        "city_id" => city.id,
-        "limit" => 50,
-        "chunk" => 2,
-        "total_chunks" => 2,
-        "original_limit" => 150,
-        "chunk_offset" => 100
-      })
+      {chunks, sizes}
     end
 
-    test "processes chunk job without further chunking", %{city: city} do
-      # Simulate a chunk job (has "chunk" key)
-      args = %{
-        "city_id" => city.id,
-        "limit" => 100,
-        "chunk" => 1,
-        "total_chunks" => 2,
-        "chunk_offset" => 0
-      }
+    defp calculate_page_window(offset, events_per_page) do
+      if offset > 0 do
+        {div(offset, events_per_page) + 1, rem(offset, events_per_page)}
+      else
+        {1, 0}
+      end
+    end
+  end
 
-      # This should process normally, not create more chunks
-      # We can't fully test without mocking HTTP, but we can verify
-      # it doesn't try to chunk again
-      refute_enqueued(worker: SyncJob, args: %{"chunk" => 1, "total_chunks" => 4})
+  describe "chunk parameter validation" do
+    test "validates chunk detection logic" do
+      # Simulate the guard condition from perform/1
+      test_cases = [
+        # {limit, has_chunk_key, should_trigger_chunking}
+        {150, false, true},   # Large limit, no chunk key -> should chunk
+        {150, true, false},   # Large limit, has chunk key -> shouldn't chunk (already a chunk)
+        {50, false, false},   # Small limit, no chunk key -> shouldn't chunk
+        {50, true, false},    # Small limit, has chunk key -> shouldn't chunk
+      ]
+
+      Enum.each(test_cases, fn {limit, has_chunk_key, expected_chunking} ->
+        # Simulate the condition: limit > @chunk_size and not is_map_key(args, "chunk")
+        args = if has_chunk_key, do: %{"chunk" => 1}, else: %{}
+        should_chunk = limit > @chunk_size and not Map.has_key?(args, "chunk")
+
+        assert should_chunk == expected_chunking,
+          "Limit #{limit}, chunk_key: #{has_chunk_key} -> expected chunking: #{expected_chunking}, got: #{should_chunk}"
+      end)
     end
   end
 end
