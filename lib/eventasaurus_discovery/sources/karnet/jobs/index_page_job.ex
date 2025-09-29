@@ -36,14 +36,16 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       # Optional arguments with defaults
       limit = validate_optional_integer(args["limit"])
       total_pages = validate_optional_integer(args["total_pages"])
+      skip_in_first = validate_optional_integer(args["skip_in_first"]) || 0
 
       Logger.info("""
       📄 Processing Karnet index page
       Page: #{page_number}/#{total_pages || "unknown"}
       Source ID: #{source_id}
+      Skip: #{skip_in_first} events
       """)
 
-      process_page(page_number, source_id, limit, total_pages)
+      process_page(page_number, source_id, limit, total_pages, skip_in_first)
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
@@ -51,7 +53,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     end
   end
 
-  defp process_page(page_number, source_id, limit, _total_pages) do
+  defp process_page(page_number, source_id, limit, _total_pages, skip_in_first) do
 
     # Build URL for this specific page
     url = Config.build_events_url(page_number)
@@ -59,7 +61,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     # Fetch the page
     case Client.fetch_page(url) do
       {:ok, html} ->
-        process_index_page(html, page_number, source_id, limit)
+        process_index_page(html, page_number, source_id, limit, skip_in_first)
 
       {:error, :not_found} ->
         Logger.info("📭 Page #{page_number} not found - likely past last page")
@@ -93,25 +95,33 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   end
   defp validate_optional_integer(_), do: nil
 
-  defp process_index_page(html, page_number, source_id, _limit) do
+  defp process_index_page(html, page_number, source_id, _limit, skip_in_first) do
     # Check if page has events
     if has_events?(html) do
       # Extract events from this page
       events = IndexExtractor.extract_events_from_page({page_number, html})
 
-      Logger.info("📋 Extracted #{length(events)} events from page #{page_number}")
+      # Apply skip_in_first for chunked processing
+      events_after_skip = if skip_in_first > 0 do
+        Logger.info("⏭️ Skipping first #{skip_in_first} events for chunk offset")
+        Enum.drop(events, skip_in_first)
+      else
+        events
+      end
+
+      Logger.info("📋 Extracted #{length(events)} events from page #{page_number} (#{length(events_after_skip)} after skip)")
 
       # Apply limit calculation
       # For async mode, limit is already enforced by only scheduling necessary pages
-      # We process all events on scheduled pages
-      events_to_process = events
+      # We process all events on scheduled pages after applying skip
+      events_to_process = events_after_skip
 
       # Schedule detail jobs for each event
       scheduled_count = schedule_detail_jobs(events_to_process, source_id, page_number)
 
       Logger.info("""
       ✅ Index page #{page_number} processed
-      Events found: #{length(events)}
+      Events found: #{length(events)} (#{length(events_after_skip)} after skip)
       Detail jobs scheduled: #{scheduled_count}
       """)
 
