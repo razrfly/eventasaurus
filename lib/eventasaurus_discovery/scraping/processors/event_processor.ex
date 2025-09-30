@@ -755,7 +755,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   # Recurring event detection and management
 
   # Title normalization for fuzzy matching
-  defp normalize_for_matching(title) do
+  # PUBLIC: Also used by EventFreshnessChecker for prediction consistency
+  def normalize_for_matching(title) do
     title
     |> String.downcase()
     # NEW: Remove date patterns
