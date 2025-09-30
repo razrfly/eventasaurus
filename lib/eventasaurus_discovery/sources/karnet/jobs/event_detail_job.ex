@@ -14,6 +14,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
+  alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor, DateParser}
 
   @impl Oban.Worker
@@ -24,6 +25,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     source_id = clean_args["source_id"]
     event_metadata = clean_args["event_metadata"] || %{}
     external_id = clean_args["external_id"] || extract_external_id(url)
+
+    # CRITICAL: Mark event as seen BEFORE processing
+    # This ensures last_seen_at is updated even if processing fails
+    EventProcessor.mark_event_as_seen(external_id, source_id)
 
     Logger.info("🎭 Processing Karnet event: #{url} (External ID: #{external_id})")
 

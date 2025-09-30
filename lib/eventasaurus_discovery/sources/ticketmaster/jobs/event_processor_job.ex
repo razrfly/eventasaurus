@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
+  alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Utils.ObanHelpers
 
   # Override to truncate args in Oban Web display
@@ -31,6 +32,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
     event_data = clean_args["event_data"] || %{}
     source_id = clean_args["source_id"]
     external_id = Map.get(event_data, "external_id") || Map.get(event_data, :external_id)
+
+    # CRITICAL: Mark event as seen BEFORE processing
+    # This ensures last_seen_at is updated even if processing fails
+    EventProcessor.mark_event_as_seen(external_id, source_id)
 
     Logger.info("🎫 Processing Ticketmaster event: #{external_id}")
 
