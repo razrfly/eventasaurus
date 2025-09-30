@@ -29,14 +29,24 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
          transformed_events <- transform_events_with_options(raw_events, Map.put(options, "city", city)) do
 
       # Schedule individual jobs for each transformed event
-      enqueued_count = schedule_event_jobs(transformed_events, source.id)
+      %{enqueued: enqueued_count, stale: stale_count, fresh: fresh_count} =
+        schedule_event_jobs(transformed_events, source.id)
+
+      efficiency = if length(transformed_events) > 0 do
+        Float.round(enqueued_count / length(transformed_events) * 100, 1)
+      else
+        0.0
+      end
 
       Logger.info("""
       ✅ Ticketmaster sync completed
       City: #{city.name}
       Events found: #{length(raw_events)}
       Events transformed: #{length(transformed_events)}
+      Stale events: #{stale_count}
+      Fresh events: #{fresh_count}
       Jobs enqueued: #{enqueued_count}
+      Efficiency: #{efficiency}%
       """)
 
       # Schedule coordinate recalculation after successful sync
@@ -61,14 +71,36 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
 
   defp schedule_event_jobs(events, source_id) do
-    # Schedule individual EventProcessorJob for each event
+    alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
+    # DEBUG: Check what external_ids we have
+    sample_ids = events |> Enum.take(3) |> Enum.map(& &1[:external_id])
+    Logger.info("🔍 DEBUG: Sample external_ids from events: #{inspect(sample_ids)}")
+    Logger.info("🔍 DEBUG: Total events to check: #{length(events)}, source_id: #{source_id}")
+
+    # Filter to events needing processing based on freshness
+    # EventFreshnessChecker already supports both string and atom keys
+    events_needing_processing = EventFreshnessChecker.filter_events_needing_processing(
+      events,
+      source_id
+    )
+
+    Logger.info("🔍 DEBUG: Events after freshness filter: #{length(events_needing_processing)}")
+
+    stale_count = length(events_needing_processing)
+    fresh_count = length(events) - stale_count
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("🔍 Freshness check: #{stale_count} stale, #{fresh_count} fresh (threshold: #{threshold}h)")
+
+    # Schedule individual EventProcessorJob for each event needing processing
     # Following the same pattern as Karnet's schedule_detail_jobs
     scheduled_jobs =
-      events
+      events_needing_processing
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger jobs slightly to avoid overwhelming the system
-        scheduled_at = DateTime.add(DateTime.utc_now(), index * 2, :second)
+        scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
 
         # CRITICAL: Clean UTF-8 before storing in job args
         # This prevents PostgreSQL UTF-8 errors when the job is stored
@@ -93,8 +125,13 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         _ -> false
       end)
 
-    Logger.info("📋 Scheduled #{successful_count}/#{length(events)} Ticketmaster event processing jobs")
-    successful_count
+    Logger.info("📋 Scheduled #{successful_count}/#{length(events)} Ticketmaster event processing jobs (#{fresh_count} skipped as fresh)")
+
+    %{
+      enqueued: successful_count,
+      stale: stale_count,
+      fresh: fresh_count
+    }
   end
 
   @impl EventasaurusDiscovery.Sources.BaseJob
