@@ -561,10 +561,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   end
 
   defp truncate_text(text, max_length) do
-    if String.length(text) > max_length do
-      String.slice(text, 0, max_length) <> "..."
-    else
-      text
-    end
+    Eventasaurus.Utils.Text.truncate_text(text, max_length)
   end
 end
