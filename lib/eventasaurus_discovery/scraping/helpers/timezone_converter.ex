@@ -152,11 +152,10 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
   end
 
   @doc """
-  Infers timezone from venue location coordinates.
+  Infers timezone from venue location coordinates using TzWorld.
 
-  This is a simplified implementation using coordinate ranges. In a production
-  system, this should be replaced with a proper geo-to-timezone database
-  (such as tzdata, GeoNames, or a similar service).
+  Uses the IANA timezone boundary database to accurately determine timezone
+  from latitude/longitude coordinates. Covers all 400+ timezones worldwide.
 
   ## Examples
 
@@ -172,88 +171,38 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
       iex> infer_timezone_from_location(34.0522, -118.2437)
       "America/Los_Angeles"
 
-      # Unknown location
+      # Coordinates in ocean (no timezone)
       iex> infer_timezone_from_location(0.0, 0.0)
       "Etc/UTC"
 
-  ## Future Enhancement
-
-  Consider integrating with:
-  - [tz_world](https://hex.pm/packages/tz_world) for accurate timezone lookup
-  - [geo_timezone](https://hex.pm/packages/geo_timezone) for coordinate-based detection
-  - Google Maps Timezone API for production-grade accuracy
+      # Nil coordinates
+      iex> infer_timezone_from_location(nil, nil)
+      "Etc/UTC"
   """
   def infer_timezone_from_location(latitude, longitude)
       when not is_nil(latitude) and not is_nil(longitude) do
-    cond do
-      # Poland (approximate bounding box)
-      # Covers most of Poland including Warsaw, Kraków, Gdańsk
-      latitude >= 49.0 and latitude <= 55.0 and longitude >= 14.0 and longitude <= 24.5 ->
-        "Europe/Warsaw"
+    # TzWorld expects {longitude, latitude} tuple
+    case TzWorld.timezone_at({longitude, latitude}) do
+      {:ok, timezone} ->
+        timezone
 
-      # Eastern USA (approximate)
-      # Covers NYC, Boston, Philadelphia, Washington DC, Miami
-      latitude >= 24.0 and latitude <= 50.0 and longitude >= -85.0 and longitude <= -65.0 ->
-        "America/New_York"
-
-      # Central USA (approximate)
-      # Covers Chicago, Dallas, Houston
-      latitude >= 25.0 and latitude <= 50.0 and longitude >= -105.0 and longitude <= -85.0 ->
-        "America/Chicago"
-
-      # Mountain USA (approximate)
-      # Covers Denver, Phoenix, Salt Lake City
-      latitude >= 30.0 and latitude <= 50.0 and longitude >= -115.0 and longitude <= -105.0 ->
-        "America/Denver"
-
-      # Western USA (approximate)
-      # Covers Los Angeles, San Francisco, Seattle, Portland
-      latitude >= 30.0 and latitude <= 50.0 and longitude >= -125.0 and longitude <= -115.0 ->
-        "America/Los_Angeles"
-
-      # UK (approximate)
-      # Covers London, Manchester, Edinburgh
-      latitude >= 50.0 and latitude <= 60.0 and longitude >= -8.0 and longitude <= 2.0 ->
-        "Europe/London"
-
-      # France (approximate)
-      # Covers Paris and most of France
-      latitude >= 42.0 and latitude <= 51.0 and longitude >= -5.0 and longitude <= 8.0 ->
-        "Europe/Paris"
-
-      # Germany (approximate)
-      # Covers Berlin, Munich, Hamburg
-      latitude >= 47.0 and latitude <= 55.0 and longitude >= 6.0 and longitude <= 15.0 ->
-        "Europe/Berlin"
-
-      # Spain (approximate)
-      # Covers Madrid, Barcelona
-      latitude >= 36.0 and latitude <= 44.0 and longitude >= -10.0 and longitude <= 4.0 ->
-        "Europe/Madrid"
-
-      # Italy (approximate)
-      # Covers Rome, Milan, Venice
-      latitude >= 36.0 and latitude <= 47.0 and longitude >= 6.0 and longitude <= 19.0 ->
-        "Europe/Rome"
-
-      # Japan (approximate)
-      # Covers Tokyo, Osaka, Kyoto
-      latitude >= 30.0 and latitude <= 46.0 and longitude >= 129.0 and longitude <= 146.0 ->
-        "Asia/Tokyo"
-
-      # Australia - Sydney (approximate)
-      # Covers Sydney, Melbourne
-      latitude >= -38.0 and latitude <= -28.0 and longitude >= 144.0 and longitude <= 154.0 ->
-        "Australia/Sydney"
-
-      # Central Europe (default for European coordinates not matched above)
-      latitude >= 35.0 and latitude <= 71.0 and longitude >= -10.0 and longitude <= 40.0 ->
-        "Europe/Warsaw"
-
-      # Default to UTC for unknown locations
-      true ->
+      {:error, :time_zone_not_found} ->
         Logger.info(
-          "Unknown timezone for coordinates (#{latitude}, #{longitude}), using UTC"
+          "No timezone found for coordinates (#{latitude}, #{longitude}), using UTC"
+        )
+
+        "Etc/UTC"
+
+      {:error, :enoent} ->
+        Logger.warning(
+          "TzWorld data file not found, using UTC for coordinates (#{latitude}, #{longitude})"
+        )
+
+        "Etc/UTC"
+
+      {:error, reason} ->
+        Logger.warning(
+          "TzWorld error #{inspect(reason)} for coordinates (#{latitude}, #{longitude}), using UTC"
         )
 
         "Etc/UTC"

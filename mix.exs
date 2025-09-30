@@ -135,6 +135,9 @@ defmodule Eventasaurus.MixProject do
       # Comprehensive date/time parsing and manipulation
       {:timex, "~> 3.7"},
 
+      # Timezone lookup by geographic coordinates
+      {:tz_world, "~> 1.3"},
+
       # YAML parsing for category mappings
       {:yaml_elixir, "~> 2.11"}
     ]
