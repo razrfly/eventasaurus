@@ -408,9 +408,6 @@ defmodule EventasaurusWeb.Router do
       live "/:city_slug/venues", CityLive.Venues, :index
       live "/:city_slug/venues/:venue_slug", VenueLive.Show, :show
 
-      # Event detail within city context
-      live "/:city_slug/events/:event_slug", EventLive.Show, :show
-
       # City search
       live "/:city_slug/search", CityLive.Search, :index
     end
@@ -422,7 +419,9 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
-      # Public events discovery pages (scraped events)
+      # ===== SCRAPED/DISCOVERY EVENTS (from external APIs) =====
+      # PublicEventsIndexLive - Browse all scraped events with filters
+      # PublicEventShowLive - Individual scraped event details
       live "/activities", PublicEventsIndexLive, :index
       live "/activities/search", PublicEventsIndexLive, :search
       live "/activities/category/:category", PublicEventsIndexLive, :category
@@ -437,7 +436,9 @@ defmodule EventasaurusWeb.Router do
       # Individual poll page
       live "/:slug/polls/:poll_id", PublicPollLive
 
-      # Public event page with embedded registration (catch-all route should be last)
+      # ===== USER-CREATED EVENTS (private events made public) =====
+      # PublicEventLive - Individual user-created event with registration
+      # IMPORTANT: This is a catch-all route and must be last in this scope
       live "/:slug", PublicEventLive
     end
   end
