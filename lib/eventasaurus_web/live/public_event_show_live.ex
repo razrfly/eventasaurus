@@ -108,15 +108,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           |> Map.put(:occurrence_list, parse_occurrences(event))
 
         # Get nearby activities (with fallback)
-        nearby_events = EventasaurusDiscovery.PublicEvents.get_nearby_activities_with_fallback(
-          event,
-          [
+        nearby_events =
+          EventasaurusDiscovery.PublicEvents.get_nearby_activities_with_fallback(
+            event,
             initial_radius: 25,
             max_radius: 50,
             display_count: 4,
             language: language
-          ]
-        )
+          )
 
         socket
         |> assign(:event, enriched_event)
@@ -269,7 +268,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       socket
       |> assign(:language, language)
       |> fetch_event(socket.assigns.event.slug)
-      |> clear_flash()  # Clear any existing flash
+      # Clear any existing flash
+      |> clear_flash()
       |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
 
     {:noreply, socket}
@@ -289,7 +289,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   def handle_event("open_plan_modal", _params, socket) do
     # Debug logging
     require Logger
-    Logger.debug("Plan with Friends modal - Socket assigns: user=#{inspect(socket.assigns[:user])}, auth_user=#{inspect(socket.assigns[:auth_user])}")
+
+    Logger.debug(
+      "Plan with Friends modal - Socket assigns: user=#{inspect(socket.assigns[:user])}, auth_user=#{inspect(socket.assigns[:auth_user])}"
+    )
+
+    Logger.debug("Selected occurrence: #{inspect(socket.assigns[:selected_occurrence])}")
 
     cond do
       !socket.assigns[:auth_user] ->
@@ -354,13 +359,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def handle_event("add_email", _params, socket) do
     email = socket.assigns.current_email_input
+
     if is_valid_email?(email) do
       selected_emails = [email | socket.assigns.selected_emails] |> Enum.uniq()
+
       {:noreply,
-        socket
-        |> assign(:selected_emails, selected_emails)
-        |> assign(:current_email_input, "")  # Clear the input field after adding
-      }
+       socket
+       |> assign(:selected_emails, selected_emails)
+       # Clear the input field after adding
+       |> assign(:current_email_input, "")}
     else
       {:noreply, socket}
     end
@@ -384,7 +391,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     {:noreply, assign(socket, :current_email_input, email_input)}
   end
 
-
   @impl true
   def handle_event("clear_all_emails", _params, socket) do
     {:noreply, assign(socket, :selected_emails, [])}
@@ -396,6 +402,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       {:ok, {:created, private_event}} ->
         # Send invitations to selected users and emails
         organizer = get_authenticated_user(socket)
+
         send_invitations(
           private_event,
           socket.assigns.selected_users,
@@ -439,9 +446,17 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp create_plan_from_public_event(socket) do
     user = get_authenticated_user(socket)
 
+    # Get the datetime from selected occurrence, or fall back to event starts_at
+    occurrence_datetime =
+      case socket.assigns.selected_occurrence do
+        %{datetime: datetime} -> datetime
+        _ -> socket.assigns.event.starts_at
+      end
+
     EventPlans.create_from_public_event(
       socket.assigns.event.id,
-      user.id
+      user.id,
+      %{occurrence_datetime: occurrence_datetime}
     )
     |> case do
       {:ok, {:created, _event_plan, private_event}} -> {:ok, {:created, private_event}}
@@ -471,7 +486,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           _ -> nil
         end
 
-      true -> nil
+      true ->
+        nil
     end
   rescue
     _ -> nil
@@ -506,15 +522,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp send_invitations(event, selected_users, selected_emails, message, organizer) do
     # Convert selected users to suggestion structs format expected by process_guest_invitations
-    suggestion_structs = Enum.map(selected_users, fn user ->
-      %{
-        user_id: user.id,
-        name: user.name,
-        email: user.email,
-        username: Map.get(user, :username),
-        avatar_url: Map.get(user, :avatar_url)
-      }
-    end)
+    suggestion_structs =
+      Enum.map(selected_users, fn user ->
+        %{
+          user_id: user.id,
+          name: user.name,
+          email: user.email,
+          username: Map.get(user, :username),
+          avatar_url: Map.get(user, :avatar_url)
+        }
+      end)
 
     # Process invitations using the same function as the manager area
     # Using :invitation mode since this is from the public event page (not managing existing event)
@@ -524,7 +541,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       suggestion_structs: suggestion_structs,
       manual_emails: selected_emails,
       invitation_message: message || "",
-      mode: :invitation  # Use invitation mode for public plan modal
+      # Use invitation mode for public plan modal
+      mode: :invitation
     )
   end
 
@@ -944,6 +962,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           id="plan-with-friends-modal"
           show={@show_plan_with_friends_modal}
           public_event={@event}
+          selected_occurrence={@selected_occurrence}
           selected_users={@selected_users}
           selected_emails={@selected_emails}
           current_email_input={@current_email_input}
@@ -1069,6 +1088,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     require Logger
     Logger.debug("Timezone for event: #{inspect(timezone)}")
 
+    now = DateTime.utc_now()
+
     dates
     |> Enum.map(fn date_info ->
       with {:ok, date} <- Date.from_iso8601(date_info["date"]),
@@ -1091,6 +1112,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       end
     end)
     |> Enum.reject(&is_nil/1)
+    # Filter out past occurrences - keep only future events
+    |> Enum.filter(fn occurrence ->
+      DateTime.compare(occurrence.datetime, now) == :gt
+    end)
     |> Enum.sort_by(& &1.datetime, DateTime)
   end
 
@@ -1223,6 +1248,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           [_first | rest] -> rest
           _ -> []
         end
+
       primary_id ->
         Enum.reject(event.categories, &(&1.id == primary_id))
     end
@@ -1230,10 +1256,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp get_primary_category_id(event_id) do
     Repo.one(
-      from pec in "public_event_categories",
-      where: pec.event_id == ^event_id and pec.is_primary == true,
-      select: pec.category_id,
-      limit: 1
+      from(pec in "public_event_categories",
+        where: pec.event_id == ^event_id and pec.is_primary == true,
+        select: pec.category_id,
+        limit: 1
+      )
     )
   end
 
@@ -1252,6 +1279,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     case color do
       <<?#, _::binary>> = hex when byte_size(hex) in [4, 7] ->
         String.match?(hex, ~r/^#(?:[0-9a-fA-F]{3}){1,2}$/)
+
       _ ->
         false
     end
