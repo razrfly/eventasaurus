@@ -112,30 +112,54 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   defp validate_optional_integer(_), do: nil
 
   defp process_api_response(json_data, page_number, source_id, city_id, _limit) do
-    # Extract events from JSON response
+    # Extract ALL events from JSON response
     events = extract_events_from_json(json_data)
 
     if length(events) > 0 do
       Logger.info("📋 Extracted #{length(events)} events from page #{page_number}")
 
-      # Apply limit calculation
-      # For async mode, limit is already enforced by only scheduling necessary pages
-      # We process all events on scheduled pages
-      events_to_process = events
+      # OPTIMIZATION: Check freshness FIRST on all events (same query cost as checking subset)
+      # Add bandsintown_ prefix to external_id for freshness checking
+      events_with_prefixed_ids = Enum.map(events, fn event ->
+        Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
+      end)
 
-      # Schedule detail jobs for each event
-      scheduled_count = schedule_detail_jobs(events_to_process, source_id, city_id, page_number)
+      # Filter to events needing processing based on freshness
+      alias EventasaurusDiscovery.Services.EventFreshnessChecker
+      events_needing_processing = EventFreshnessChecker.filter_events_needing_processing(
+        events_with_prefixed_ids,
+        source_id
+      )
+
+      stale_count = length(events_needing_processing)
+      fresh_count = length(events) - stale_count
+      threshold = EventFreshnessChecker.get_threshold()
+
+      Logger.info("🔍 Freshness check: #{stale_count} stale, #{fresh_count} fresh (threshold: #{threshold}h)")
+
+      # Schedule detail jobs for stale events only (already filtered for freshness)
+      scheduled_count = schedule_detail_jobs(events_needing_processing, source_id, city_id, page_number)
+
+      # Calculate efficiency (for Bandsintown, we process all stale events, no budget limit)
+      efficiency = if stale_count > 0 do
+        Float.round(scheduled_count / stale_count * 100, 1)
+      else
+        0.0
+      end
 
       Logger.info("""
-      ✅ API page #{page_number} processed
-      Events found: #{length(events)}
-      Detail jobs scheduled: #{scheduled_count}
+      ✅ Page #{page_number}: #{scheduled_count} jobs scheduled
+      Total: #{length(events)} events (#{stale_count} stale, #{fresh_count} fresh)
+      Efficiency: #{efficiency}%
       """)
 
       {:ok, %{
         page: page_number,
         events_found: length(events),
-        jobs_scheduled: scheduled_count
+        stale_events: stale_count,
+        fresh_events: fresh_count,
+        jobs_scheduled: scheduled_count,
+        efficiency: efficiency
       }}
     else
       Logger.info("📭 No events on page #{page_number}")
@@ -204,24 +228,16 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   end
 
   defp schedule_detail_jobs(events, source_id, city_id, page_number) do
-    alias EventasaurusDiscovery.Services.EventFreshnessChecker
-
-    # Add bandsintown_ prefix to external_id for freshness checking
-    # This matches the format stored in public_event_sources table
+    # Events are already filtered for freshness in process_api_response
+    # Just ensure they have the bandsintown_ prefix (should already be set)
     events_with_prefixed_ids = Enum.map(events, fn event ->
-      Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
+      case event["external_id"] do
+        "bandsintown_" <> _ -> event
+        id -> Map.put(event, "external_id", "bandsintown_#{id}")
+      end
     end)
 
-    # Filter to events needing processing based on freshness
-    events_to_process = EventFreshnessChecker.filter_events_needing_processing(
-      events_with_prefixed_ids,
-      source_id
-    )
-
-    skipped = length(events) - length(events_to_process)
-    threshold = EventFreshnessChecker.get_threshold()
-
-    Logger.info("📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)")
+    Logger.info("📋 Scheduling #{length(events_with_prefixed_ids)} detail jobs for page #{page_number}")
 
     # Calculate base delay for this page to distribute load
     # Use consistent page offset (30s per page) to prevent scheduling collisions
@@ -229,7 +245,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     base_delay = (page_number - 1) * 30
 
     scheduled_jobs =
-      events_to_process
+      events_with_prefixed_ids
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
