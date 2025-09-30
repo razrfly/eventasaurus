@@ -182,6 +182,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
 
             if venue_name do
               # Find existing events with matching title at same/similar venue
+              # Query timeout added for safety (typical: 5-15ms, max: 5s)
               matching_events =
                 from(e in PublicEvent,
                   join: v in Venue,
@@ -192,7 +193,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
                   limit: 1,
                   select: e.id
                 )
-                |> Repo.all()
+                |> Repo.all(timeout: 5_000)
 
               case matching_events do
                 [event_id | _] ->
@@ -244,6 +245,9 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   defp normalize_title(nil), do: ""
 
   defp normalize_title(title) do
+    # Simple normalization for grouping events with identical titles
+    # We use PostgreSQL's similarity() for fuzzy matching in the query,
+    # so we don't need aggressive normalization here
     title
     |> String.downcase()
     |> String.trim()
