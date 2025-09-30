@@ -8,6 +8,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
   @base_url "https://app.ticketmaster.com/discovery/v2"
   @default_radius 50
   @default_page_size 100
+  # Job staggering delay (seconds between scheduled jobs)
+  @rate_limit 2
 
   @impl EventasaurusDiscovery.Sources.SourceConfig
   def source_config do
@@ -30,6 +32,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
   def base_url, do: @base_url
   def default_radius, do: @default_radius
   def default_page_size, do: @default_page_size
+  def rate_limit, do: @rate_limit
 
   @doc """
   Returns the appropriate Ticketmaster locales for a given country.
