@@ -62,6 +62,8 @@ defmodule Eventasaurus.Application do
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Eventasaurus.Finch},
+      # Start TzWorld backend for timezone lookups
+      TzWorld.Backend.Memory,
       # Start Oban background job processor
       {Oban, Application.fetch_env!(:eventasaurus, Oban)},
       # Add a Task Supervisor for background jobs

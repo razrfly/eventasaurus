@@ -1109,9 +1109,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         end
       )
 
-    # Update the event with new occurrences and adjust end date
-    # For recurring events, ends_at should be the latest occurrence date/time.
+    # Update the event with new occurrences and adjust start/end dates
+    # For recurring events:
+    # - starts_at should be the earliest occurrence date/time (typically GA time, not VIP)
+    # - ends_at should be the latest occurrence date/time
     # Never allow ends_at < starts_at; guard nil starts_at to avoid crashes.
+
+    # Calculate earliest start time (fixes issue #1343 - wrong main time)
+    new_start_date =
+      if is_nil(parent_event.starts_at) do
+        new_occurrence.start_at
+      else
+        earliest_date([parent_event.starts_at, new_occurrence.start_at])
+      end
+
     new_end_date =
       cond do
         is_nil(parent_event.starts_at) ->
@@ -1128,6 +1139,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     parent_event
     |> PublicEvent.changeset(%{
+      starts_at: new_start_date,
       occurrences: updated_occurrences,
       ends_at: new_end_date
     })
@@ -1163,6 +1175,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     dates
     |> Enum.reject(&is_nil/1)
     |> Enum.max_by(&DateTime.to_unix(&1, :second), fn -> nil end)
+  end
+
+  defp earliest_date(dates) do
+    dates
+    |> Enum.reject(&is_nil/1)
+    |> Enum.min_by(&DateTime.to_unix(&1, :second), fn -> nil end)
   end
 
   defp create_occurrence_source_record(parent_event, occurrence_data) do
