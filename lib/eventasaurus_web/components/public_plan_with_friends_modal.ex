@@ -11,11 +11,13 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
     SelectedParticipantsComponent,
     InvitationMessageComponent
   }
+
   import EventasaurusWeb.Components.IndividualEmailInput
 
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :public_event, :map, required: true
+  attr :selected_occurrence, :map, default: nil
   attr :selected_users, :list, default: []
   attr :selected_emails, :list, default: []
   attr :current_email_input, :string, default: ""
@@ -124,12 +126,14 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                     <p class="text-sm text-gray-600">
                       <strong>Event:</strong> <%= @public_event.title %>
                     </p>
-                    <%= if @public_event.starts_at do %>
-                      <p class="text-sm text-gray-600">
-                        <strong>Date:</strong>
+                    <p class="text-sm text-gray-600">
+                      <strong>Date:</strong>
+                      <%= if @selected_occurrence do %>
+                        <%= format_occurrence_datetime(@selected_occurrence) %>
+                      <% else %>
                         <%= format_datetime(@public_event.starts_at) %>
-                      </p>
-                    <% end %>
+                      <% end %>
+                    </p>
                     <%= if @public_event.venue do %>
                       <p class="text-sm text-gray-600">
                         <strong>Location:</strong> <%= @public_event.venue.name %>
@@ -191,4 +195,10 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   end
 
   defp format_datetime(_), do: "TBD"
+
+  defp format_occurrence_datetime(%{datetime: datetime}) do
+    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p")
+  end
+
+  defp format_occurrence_datetime(_), do: "TBD"
 end
