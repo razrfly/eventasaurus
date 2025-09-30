@@ -28,6 +28,7 @@ defmodule EventasaurusApp.Events.EventPlans do
         case create_new_plan(public_event_id, user_id, attrs) do
           {:ok, {event_plan, private_event}} ->
             {:ok, {:created, event_plan, private_event}}
+
           {:error, {:event_plan_error, %Ecto.Changeset{} = cs}} ->
             if unique_violation?(cs, :unique_user_plan_per_public_event) do
               case get_user_plan_for_event(user_id, public_event_id) do
@@ -37,6 +38,7 @@ defmodule EventasaurusApp.Events.EventPlans do
             else
               {:error, {:event_plan_error, cs}}
             end
+
           other ->
             other
         end
@@ -51,12 +53,16 @@ defmodule EventasaurusApp.Events.EventPlans do
         |> Repo.get!(public_event_id)
         |> Repo.preload(:sources)
 
+      # Use occurrence_datetime if provided, otherwise fall back to public_event.starts_at
+      event_datetime =
+        attrs[:occurrence_datetime] || attrs["occurrence_datetime"] || public_event.starts_at
+
       # Check if the event is in the past
       cond do
-        is_nil(public_event.starts_at) ->
+        is_nil(event_datetime) ->
           Repo.rollback(:missing_starts_at)
 
-        DateTime.compare(public_event.starts_at, DateTime.utc_now()) == :lt ->
+        DateTime.compare(event_datetime, DateTime.utc_now()) == :lt ->
           Repo.rollback(:event_in_past)
 
         true ->
@@ -71,9 +77,11 @@ defmodule EventasaurusApp.Events.EventPlans do
         title: attrs["title"] || attrs[:title] || "#{public_event.title} - Private Group",
         description: description,
         # Event schema uses start_at, not starts_at!
-        start_at: public_event.starts_at,
+        # Use the occurrence datetime if provided, otherwise use public_event.starts_at
+        start_at: event_datetime,
         ends_at: public_event.ends_at,
-        timezone: attrs[:timezone] || attrs["timezone"] || Map.get(public_event, :timezone) || "UTC",
+        timezone:
+          attrs[:timezone] || attrs["timezone"] || Map.get(public_event, :timezone) || "UTC",
         # Using atom to match Ecto.Enum
         visibility: :private,
         venue_id: public_event.venue_id,
@@ -91,6 +99,7 @@ defmodule EventasaurusApp.Events.EventPlans do
           case Repo.get(User, user_id) do
             nil ->
               Repo.rollback(:user_not_found)
+
             %User{} = user ->
               case Events.add_user_to_event(private_event, user, "organizer") do
                 {:ok, _membership} -> :ok
@@ -186,9 +195,11 @@ defmodule EventasaurusApp.Events.EventPlans do
 
   defp unique_violation?(%Ecto.Changeset{errors: errors}, constraint_name) do
     wanted = to_string(constraint_name)
+
     Enum.any?(errors, fn
       {_field, {_msg, opts}} ->
         opts[:constraint] == :unique and to_string(opts[:constraint_name] || "") == wanted
+
       _ ->
         false
     end)
