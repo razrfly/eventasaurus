@@ -29,6 +29,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Sources.Bandsintown.Transformer
   alias EventasaurusDiscovery.Sources.Processor
+  alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.{Client, DetailExtractor}
 
   @impl Oban.Worker
@@ -38,6 +39,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     city_id = args["city_id"]
     external_id = args["external_id"]
     from_page = args["from_page"]
+
+    # CRITICAL: Mark event as seen BEFORE processing
+    # This ensures last_seen_at is updated even if processing fails
+    EventProcessor.mark_event_as_seen(external_id, source_id)
 
     Logger.debug("""
     🎵 Processing Bandsintown event

@@ -7,7 +7,9 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
 
   import Ecto.Query
   alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
+  alias EventasaurusApp.Venues.Venue
+  require Logger
 
   @doc """
   Filters events to only those needing processing.
@@ -42,20 +44,70 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
       # Query for recently seen external_ids
       threshold_datetime = DateTime.add(DateTime.utc_now(), -threshold, :hour)
 
-      fresh_external_ids =
+      # Get both fresh external_ids AND the event_ids they belong to
+      fresh_data =
         from(pes in PublicEventSource,
           where: pes.source_id == ^source_id,
           where: pes.external_id in ^external_ids,
           where: pes.last_seen_at > ^threshold_datetime,
-          select: pes.external_id
+          select: %{external_id: pes.external_id, event_id: pes.event_id}
         )
         |> Repo.all()
-        |> MapSet.new()
+
+      fresh_external_ids = MapSet.new(fresh_data, & &1.external_id)
+      fresh_event_ids = MapSet.new(fresh_data, & &1.event_id)
+
+      # Also find event_ids for all external_ids being checked
+      # This helps us identify recurring events that share the same event_id
+      external_id_to_event_id =
+        from(pes in PublicEventSource,
+          where: pes.source_id == ^source_id,
+          where: pes.external_id in ^external_ids,
+          select: %{external_id: pes.external_id, event_id: pes.event_id}
+        )
+        |> Repo.all()
+        |> Map.new(fn %{external_id: ext_id, event_id: evt_id} -> {ext_id, evt_id} end)
+
+      # For new events (external_id not yet in DB), predict which event they'll merge into
+      # by looking at title + venue similarity
+      predicted_event_ids = predict_recurring_event_ids(events, external_id_to_event_id, source_id)
 
       # Return events NOT in fresh set
+      # An event is fresh if EITHER:
+      # 1. Its external_id was recently seen, OR
+      # 2. Its parent event_id was recently updated (for recurring events), OR
+      # 3. The event it WILL merge into was recently updated (predicted recurring events)
       Enum.filter(events, fn event ->
         external_id = extract_external_id(event)
-        is_nil(external_id) or not MapSet.member?(fresh_external_ids, external_id)
+
+        cond do
+          is_nil(external_id) ->
+            # No external_id, process it
+            true
+
+          MapSet.member?(fresh_external_ids, external_id) ->
+            # This exact external_id was recently seen, skip it
+            false
+
+          true ->
+            # Check if this external_id maps to a recently updated event
+            existing_event_id = Map.get(external_id_to_event_id, external_id)
+            predicted_event_id = Map.get(predicted_event_ids, external_id)
+
+            cond do
+              existing_event_id && MapSet.member?(fresh_event_ids, existing_event_id) ->
+                # This external_id belongs to a recurring event that was recently updated
+                false
+
+              predicted_event_id && MapSet.member?(fresh_event_ids, predicted_event_id) ->
+                # This NEW external_id will merge into a recently updated recurring event
+                false
+
+              true ->
+                # Process this event
+                true
+            end
+        end
       end)
     end
   end
@@ -80,4 +132,120 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   defp extract_external_id(%{"external_id" => id}) when not is_nil(id), do: id
   defp extract_external_id(%{external_id: id}) when not is_nil(id), do: id
   defp extract_external_id(_), do: nil
+
+  # Predict which event_id new events will merge into based on title + venue matching
+  # This mimics the recurring event detection logic from EventProcessor
+  #
+  # This is critical for performance optimization:
+  # - Ticketmaster returns 196 "Muzeum Banksy" events (one per day for 6+ months)
+  # - Without prediction, all 196 would be processed as "stale" on every sync
+  # - With prediction, if ANY of the 196 was recently processed, ALL are skipped
+  # - Result: 196 jobs → 0-1 jobs (99.5% reduction)
+  defp predict_recurring_event_ids(events, existing_mappings, _source_id) do
+    # Only predict for events not already in the database
+    new_events =
+      events
+      |> Enum.filter(fn event ->
+        external_id = extract_external_id(event)
+        external_id && !Map.has_key?(existing_mappings, external_id)
+      end)
+
+    Logger.debug("🔮 Recurring prediction: #{length(new_events)} new events to check out of #{length(events)} total")
+
+    if Enum.empty?(new_events) do
+      %{}
+    else
+      # Group by normalized title to find potential recurring series
+      events_by_title =
+        new_events
+        |> Enum.group_by(fn event ->
+          title = get_event_title(event)
+          normalize_title(title)
+        end)
+
+      Logger.debug("🔮 Found #{map_size(events_by_title)} unique title groups")
+
+      # For each group with multiple events, find the parent event they'll merge into
+      predictions =
+        events_by_title
+        |> Enum.flat_map(fn {normalized_title, events_in_group} ->
+          # Only check groups with 2+ events (potential recurring series)
+          if length(events_in_group) >= 2 do
+            # Get venue info from first event
+            sample_event = List.first(events_in_group)
+            venue_name = get_venue_name(sample_event)
+            event_title = get_event_title(sample_event)
+
+            Logger.debug(
+              "🔮 Checking group '#{normalized_title}' with #{length(events_in_group)} events, venue: #{venue_name}"
+            )
+
+            if venue_name do
+              # Find existing events with matching title at same/similar venue
+              matching_events =
+                from(e in PublicEvent,
+                  join: v in Venue,
+                  on: e.venue_id == v.id,
+                  where: fragment("similarity(?, ?) > ?", e.title, ^event_title, 0.85),
+                  where: fragment("similarity(?, ?) > ?", v.name, ^venue_name, 0.7),
+                  order_by: [asc: e.starts_at],
+                  limit: 1,
+                  select: e.id
+                )
+                |> Repo.all()
+
+              case matching_events do
+                [event_id | _] ->
+                  mappings =
+                    events_in_group
+                    |> Enum.map(fn event -> {extract_external_id(event), event_id} end)
+                    |> Enum.reject(fn {ext_id, _} -> is_nil(ext_id) end)
+
+                  Logger.info(
+                    "🎯 Predicted #{length(events_in_group)} events will merge into event ##{event_id} (#{event_title}), created #{length(mappings)} mappings"
+                  )
+
+                  # Map all events in this group to the found parent event
+                  mappings
+
+                [] ->
+                  Logger.debug("🔮 No existing event found for '#{normalized_title}', will create new")
+                  # No parent found, won't merge
+                  []
+              end
+            else
+              Logger.debug("🔮 No venue name found for group '#{normalized_title}', skipping prediction")
+              []
+            end
+          else
+            []
+          end
+        end)
+        |> Map.new()
+
+      Logger.info("🔮 Predicted #{map_size(predictions)} events will merge into existing events")
+      Logger.debug("🔮 Prediction map size: #{map_size(predictions)}, sample: #{inspect(Enum.take(predictions, 3))}")
+      predictions
+    end
+  end
+
+  defp get_event_title(%{"title" => title}), do: title
+  defp get_event_title(%{title: title}), do: title
+  defp get_event_title(_), do: nil
+
+  defp get_venue_name(%{"venue_data" => %{"name" => name}}), do: name
+  defp get_venue_name(%{"venue_data" => %{name: name}}), do: name
+  defp get_venue_name(%{venue_data: %{"name" => name}}), do: name
+  defp get_venue_name(%{venue_data: %{name: name}}), do: name
+  defp get_venue_name(%{"venue" => %{"name" => name}}), do: name
+  defp get_venue_name(%{venue: %{name: name}}), do: name
+  defp get_venue_name(_), do: nil
+
+  defp normalize_title(nil), do: ""
+
+  defp normalize_title(title) do
+    title
+    |> String.downcase()
+    |> String.trim()
+  end
 end

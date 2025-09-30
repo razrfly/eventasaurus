@@ -23,6 +23,36 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   require Logger
 
   @doc """
+  Marks an event as seen by updating last_seen_at timestamp.
+  This MUST be called for every event, even if processing fails.
+
+  Creates a minimal PublicEventSource record if one doesn't exist,
+  or updates the last_seen_at timestamp if it does.
+
+  This ensures failed events don't appear stale forever.
+  """
+  def mark_event_as_seen(external_id, source_id) when is_binary(external_id) and external_id != "" do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %PublicEventSource{}
+    |> PublicEventSource.changeset(%{
+      external_id: external_id,
+      source_id: source_id,
+      last_seen_at: now,
+      # Minimal required fields for initial insert
+      inserted_at: now,
+      updated_at: now
+    })
+    |> Repo.insert(
+      on_conflict: {:replace, [:last_seen_at, :updated_at]},
+      conflict_target: [:external_id, :source_id]
+    )
+  end
+
+  def mark_event_as_seen(nil, _source_id), do: {:ok, :no_external_id}
+  def mark_event_as_seen("", _source_id), do: {:ok, :no_external_id}
+
+  @doc """
   Processes event data from a source.
   Creates or updates the event and manages source associations.
   """
