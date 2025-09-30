@@ -258,6 +258,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         date_entry
       end
 
+    # CRITICAL FIX: Add label from event title to distinguish ticket types
+    # This ensures the first occurrence also has a label, not just consolidated ones
+    date_entry =
+      if data.title && String.trim(data.title) != "" do
+        Map.put(date_entry, "label", data.title)
+      else
+        date_entry
+      end
+
     %{
       "type" => "explicit",
       "dates" => [date_entry]
@@ -1020,6 +1029,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     new_date =
       if new_occurrence[:source_id] || new_occurrence["source_id"] do
         Map.put(new_date, "source_id", new_occurrence[:source_id] || new_occurrence["source_id"])
+      else
+        new_date
+      end
+
+    # CRITICAL FIX: Add label from event title to distinguish ticket types
+    # When events like "VIP Experience" and "General Admission" are consolidated,
+    # preserve their names so users can see what each time option represents
+    new_date =
+      if new_occurrence.title && String.trim(new_occurrence.title) != "" do
+        Map.put(new_date, "label", new_occurrence.title)
       else
         new_date
       end
