@@ -43,15 +43,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  defp maybe_update_event_source(event, source_id, source_priority, normalized, action) do
-    case action do
-      :consolidated ->
-        # Don't update source for consolidated events
-        {:ok, :skipped}
-
-      _ ->
-        update_event_source(event, source_id, source_priority, normalized)
-    end
+  defp maybe_update_event_source(event, source_id, source_priority, normalized, _action) do
+    # IMPORTANT: Always update event source, even for consolidated events
+    # This ensures last_seen_at is updated so freshness checking works correctly
+    # Consolidated events still need to track when they were last seen from each source
+    update_event_source(event, source_id, source_priority, normalized)
   end
 
   @doc """
