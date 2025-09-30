@@ -354,20 +354,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   end
 
   defp convert_to_utc(naive_datetime, timezone) do
-    # Use Timex to convert from local timezone to UTC
-    case Timex.to_datetime(naive_datetime, timezone) do
-      {:error, _} ->
-        Logger.warning("Could not convert to timezone: #{timezone}, falling back to UTC")
-        DateTime.from_naive!(naive_datetime, "Etc/UTC")
-
-      %DateTime{} = dt ->
-        # Convert to UTC for storage
-        Timex.to_datetime(dt, "Etc/UTC")
-
-      _ ->
-        Logger.warning("Unexpected result from timezone conversion")
-        DateTime.from_naive!(naive_datetime, "Etc/UTC")
-    end
+    # Use shared TimezoneConverter for consistent behavior across all scrapers
+    EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.convert_local_to_utc(
+      naive_datetime,
+      timezone
+    )
   end
 
   defp map_event_status(event) do

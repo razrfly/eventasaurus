@@ -170,7 +170,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   end
 
   defp extract_starts_at(event) do
-    case DateParser.parse_start_date(event["date"]) do
+    # Get venue timezone for proper UTC conversion
+    venue_timezone = get_venue_timezone(event)
+
+    case DateParser.parse_start_date(event["date"], venue_timezone) do
       nil ->
         Logger.warning("No valid start date found for Bandsintown event: #{inspect(event["title"] || event["artist_name"])}")
         # Default to tomorrow if no date available
@@ -182,9 +185,31 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
   defp extract_ends_at(event) do
     if event["end_date"] do
-      DateParser.parse_end_date(event["end_date"])
+      # Get venue timezone for proper UTC conversion
+      venue_timezone = get_venue_timezone(event)
+      DateParser.parse_end_date(event["end_date"], venue_timezone)
     else
       nil
+    end
+  end
+
+  defp get_venue_timezone(event) do
+    # Try to get timezone from venue coordinates
+    cond do
+      # If venue has coordinates, infer timezone
+      event["venue_latitude"] && event["venue_longitude"] ->
+        lat = parse_coordinate(event["venue_latitude"])
+        lng = parse_coordinate(event["venue_longitude"])
+
+        if lat && lng do
+          EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.infer_timezone_from_location(lat, lng)
+        else
+          "Etc/UTC"
+        end
+
+      # Default to UTC for unknown venues
+      true ->
+        "Etc/UTC"
     end
   end
 
