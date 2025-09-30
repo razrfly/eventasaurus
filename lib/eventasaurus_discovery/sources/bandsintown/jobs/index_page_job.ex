@@ -204,14 +204,31 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   end
 
   defp schedule_detail_jobs(events, source_id, city_id, page_number) do
-    Logger.debug("📅 Scheduling #{length(events)} detail jobs from page #{page_number}")
+    alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
+    # Add bandsintown_ prefix to external_id for freshness checking
+    # This matches the format stored in public_event_sources table
+    events_with_prefixed_ids = Enum.map(events, fn event ->
+      Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
+    end)
+
+    # Filter to events needing processing based on freshness
+    events_to_process = EventFreshnessChecker.filter_events_needing_processing(
+      events_with_prefixed_ids,
+      source_id
+    )
+
+    skipped = length(events) - length(events_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)")
 
     # Calculate base delay for this page to distribute load
     # Add staggered delays to respect rate limits (3 seconds between requests)
-    base_delay = (page_number - 1) * length(events) * 3
+    base_delay = (page_number - 1) * length(events_to_process) * 3
 
     scheduled_jobs =
-      events
+      events_to_process
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
@@ -223,7 +240,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
           "event_data" => event,
           "source_id" => source_id,
           "city_id" => city_id,
-          "external_id" => "bandsintown_#{event["external_id"]}",
+          # external_id already has bandsintown_ prefix from freshness check above
+          "external_id" => event["external_id"],
           "from_page" => page_number
         }
         |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
