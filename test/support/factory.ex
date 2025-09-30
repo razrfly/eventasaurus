@@ -52,8 +52,7 @@ defmodule EventasaurusApp.Factory do
   """
   def venue_factory do
     # Create a normalized city for the venue
-    country = insert(:country, %{name: "United States of America", code: "US"})
-    city = insert(:city, %{name: "Test City", country_id: country.id})
+    city = insert(:city, %{name: "Test City"})
 
     %Venue{
       name: sequence(:venue_name, &"Test Venue #{&1}"),
@@ -71,7 +70,8 @@ defmodule EventasaurusApp.Factory do
   def country_factory do
     %Country{
       name: sequence(:country_name, &"Country #{&1}"),
-      code: sequence(:country_code, &"C#{&1}")
+      code: sequence(:country_code, &"C#{&1}"),
+      slug: sequence(:country_slug, &"country-#{&1}")
     }
   end
 
@@ -636,6 +636,67 @@ defmodule EventasaurusApp.Factory do
       latitude: Faker.Address.latitude(),
       longitude: Faker.Address.longitude(),
       venue_type: Enum.random(["venue", "city", "region", "online", "tbd"])
+    }
+  end
+
+  @doc """
+  Factory for Source schema (event discovery sources)
+  """
+  def public_event_source_type_factory do
+    alias EventasaurusDiscovery.Sources.Source
+
+    %Source{
+      name: sequence(:source_name, &"Source #{&1}"),
+      slug: sequence(:source_slug, &"source-#{&1}"),
+      website_url: Faker.Internet.url(),
+      priority: Enum.random(1..100),
+      is_active: true,
+      metadata: %{}
+    }
+  end
+
+  @doc """
+  Factory for PublicEventSource schema (links public events to sources)
+  """
+  def public_event_source_factory do
+    alias EventasaurusDiscovery.PublicEvents.{PublicEventSource, PublicEvent}
+
+    # Create a public event and source
+    public_event = insert(:public_event)
+    source = insert(:public_event_source_type)
+
+    %PublicEventSource{
+      event_id: public_event.id,
+      source_id: source.id,
+      source_url: Faker.Internet.url(),
+      external_id: sequence(:external_id, &"external_#{&1}"),
+      last_seen_at: DateTime.utc_now(),
+      metadata: %{},
+      description_translations: %{},
+      image_url: nil,
+      min_price: nil,
+      max_price: nil,
+      currency: "USD",
+      is_free: true
+    }
+  end
+
+  @doc """
+  Factory for PublicEvent schema (events from discovery sources)
+  """
+  def public_event_factory do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
+    # Create a venue (which includes city association)
+    venue = insert(:venue)
+
+    %PublicEvent{
+      title: sequence(:public_event_title, &"Public Event #{&1}"),
+      starts_at: DateTime.utc_now() |> DateTime.add(7, :day),
+      ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(2, :hour),
+      venue_id: venue.id,
+      title_translations: %{},
+      occurrences: %{}
     }
   end
 end

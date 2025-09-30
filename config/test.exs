@@ -89,3 +89,10 @@ config :wallaby,
   js_errors: false,
   timeout: 30_000,
   base_url: "http://localhost:4002"
+
+# Event discovery scraper configuration
+# Note: Not a separate OTP app, just using config namespace for organization
+config :eventasaurus, :event_discovery,
+  # Universal event freshness threshold for all scrapers (in hours)
+  # Events seen within this window will NOT be re-scraped
+  freshness_threshold_hours: 168  # 7 days

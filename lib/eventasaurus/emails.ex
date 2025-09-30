@@ -158,6 +158,14 @@ defmodule Eventasaurus.Emails do
                 margin: 30px 0;
                 border: 1px solid #e9ecef;
             }
+            .event-image {
+                width: 100%;
+                max-width: 600px;
+                height: auto;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                display: block;
+            }
             .event-details h2 {
                 margin: 0 0 20px 0;
                 color: #333;
@@ -222,6 +230,7 @@ defmodule Eventasaurus.Emails do
                 <p>You've been invited to join:</p>
 
                 <div class="event-details">
+                    #{render_event_image(event)}
                     <h2>#{html_escape(event.title)}</h2>
                     #{render_event_description(event)}
 
@@ -311,9 +320,39 @@ defmodule Eventasaurus.Emails do
 
   defp render_personal_message_text(_), do: ""
 
+  defp render_event_image(event) do
+    image_url = get_event_image_url(event)
+
+    if image_url do
+      """
+      <img src="#{html_escape(image_url)}" alt="#{html_escape(event.title)}" class="event-image" />
+      """
+    else
+      ""
+    end
+  end
+
+  # Get event image URL from either cover_image_url or external_image_data
+  defp get_event_image_url(event) do
+    cond do
+      # Check for user-uploaded cover image
+      event.cover_image_url && event.cover_image_url != "" ->
+        event.cover_image_url
+
+      # Check for external image data (Unsplash/TMDB)
+      is_map(event.external_image_data) && Map.get(event.external_image_data, "url") ->
+        Map.get(event.external_image_data, "url")
+
+      # No image available
+      true ->
+        nil
+    end
+  end
+
   defp render_event_description(event) do
     if event.description && event.description != "" do
-      "<p>#{html_escape(event.description)}</p>"
+      truncated = truncate_text(event.description, 400)
+      "<p>#{html_escape(truncated)}</p>"
     else
       ""
     end
@@ -321,11 +360,38 @@ defmodule Eventasaurus.Emails do
 
   defp render_event_description_text(event) do
     if event.description && event.description != "" do
-      "#{event.description}\n"
+      truncated = truncate_text(event.description, 400)
+      "#{truncated}\n"
     else
       ""
     end
   end
+
+  # Truncate text to specified character limit, ending at word boundary
+  defp truncate_text(text, max_length) when is_binary(text) do
+    if String.length(text) <= max_length do
+      text
+    else
+      # Find last space before max_length
+      truncated = String.slice(text, 0, max_length)
+
+      # Split into words and rejoin, dropping the last potentially incomplete word
+      words = String.split(truncated, " ")
+
+      if length(words) > 1 do
+        # Drop the last word (might be incomplete) and rejoin
+        words
+        |> Enum.drop(-1)
+        |> Enum.join(" ")
+        |> Kernel.<>("...")
+      else
+        # Only one word, just add ellipsis
+        truncated <> "..."
+      end
+    end
+  end
+
+  defp truncate_text(text, _max_length), do: to_string(text)
 
   defp render_event_location(event) do
     case get_venue_info(event) do

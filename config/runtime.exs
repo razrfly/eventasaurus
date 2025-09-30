@@ -190,6 +190,14 @@ if config_env() == :prod do
   # Configure base URL for email links
   config :eventasaurus, :base_url, "https://eventasaur.us"
 
+  # Event discovery scraper configuration
+  # Note: Not a separate OTP app, just using config namespace for organization
+  config :eventasaurus, :event_discovery,
+    # Universal event freshness threshold for all scrapers (in hours)
+    # Events seen within this window will NOT be re-scraped
+    # Can be overridden via EVENT_FRESHNESS_THRESHOLD_HOURS env var
+    freshness_threshold_hours: System.get_env("EVENT_FRESHNESS_THRESHOLD_HOURS", "168") |> String.to_integer()
+
   # Stripe configuration is now handled globally above (lines 25-27)
   # Sentry configuration is now handled globally above (lines 29-47)
 end
