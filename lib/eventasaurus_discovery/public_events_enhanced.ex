@@ -589,8 +589,201 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp apply_base_filters(query, filters) do
     # Apply any base filters that should affect facet counts
+    # IMPORTANT: Must include show_past: true to get accurate counts
     query
+    |> filter_past_events(true)  # Always show all events for counts
     |> filter_by_categories(filters[:categories])
     |> apply_search(filters[:search])
+  end
+
+  @doc """
+  Calculate date range boundaries for common filter presets.
+
+  ## Examples
+      iex> calculate_date_range(:today)
+      {~U[2024-01-15 00:00:00Z], ~U[2024-01-15 23:59:59Z]}
+
+      iex> calculate_date_range(:next_7_days)
+      {~U[2024-01-15 00:00:00Z], ~U[2024-01-22 23:59:59Z]}
+  """
+  def calculate_date_range(range_type) do
+    now = DateTime.utc_now()
+    # Start of today (00:00:00 UTC)
+    start_of_today =
+      now
+      |> DateTime.to_date()
+      |> DateTime.new!(~T[00:00:00])
+
+    end_of_today =
+      now
+      |> DateTime.to_date()
+      |> Date.add(1)
+      |> DateTime.new!(~T[00:00:00])
+      |> DateTime.add(-1, :second)
+
+    case range_type do
+      :today ->
+        {start_of_today, end_of_today}
+
+      :tomorrow ->
+        tomorrow_start = DateTime.add(end_of_today, 1, :second)
+        tomorrow_end = DateTime.add(tomorrow_start, 86400 - 1, :second)
+        {tomorrow_start, tomorrow_end}
+
+      :this_weekend ->
+        # Find next Friday, Saturday, Sunday
+        date = DateTime.to_date(now)
+        day_of_week = Date.day_of_week(date)
+
+        # Days until Friday (5)
+        days_to_friday = rem(5 - day_of_week + 7, 7)
+        days_to_friday = if days_to_friday == 0 && day_of_week <= 5, do: 0, else: days_to_friday
+
+        friday = Date.add(date, days_to_friday)
+        sunday = Date.add(friday, 2)
+
+        friday_start = DateTime.new!(friday, ~T[00:00:00])
+        sunday_end = DateTime.new!(sunday, ~T[23:59:59])
+
+        {friday_start, sunday_end}
+
+      :next_7_days ->
+        {start_of_today, DateTime.add(start_of_today, 7 * 86400 - 1, :second)}
+
+      :next_30_days ->
+        {start_of_today, DateTime.add(start_of_today, 30 * 86400 - 1, :second)}
+
+      :this_month ->
+        date = DateTime.to_date(now)
+        end_of_month = Date.end_of_month(date)
+        end_of_month_dt = DateTime.new!(end_of_month, ~T[23:59:59])
+        {start_of_today, end_of_month_dt}
+
+      :next_month ->
+        date = DateTime.to_date(now)
+        next_month_date = Date.add(Date.end_of_month(date), 1)
+        next_month_start = DateTime.new!(next_month_date, ~T[00:00:00])
+        next_month_end_date = Date.end_of_month(next_month_date)
+        next_month_end = DateTime.new!(next_month_end_date, ~T[23:59:59])
+        {next_month_start, next_month_end}
+
+      _ ->
+        {nil, nil}
+    end
+  end
+
+  @doc """
+  Get event counts for each quick date range filter.
+  Supports all filters including geographic filtering (center_lat, center_lng, radius_km).
+  """
+  def get_quick_date_range_counts(filters \\ []) do
+    [
+      :today,
+      :tomorrow,
+      :this_weekend,
+      :next_7_days,
+      :next_30_days,
+      :this_month,
+      :next_month
+    ]
+    |> Enum.map(fn range_type ->
+      {start_date, end_date} = calculate_date_range(range_type)
+
+      # Build count options with date range and all other filters (including geographic)
+      count_opts = filters
+        |> Enum.into(%{})
+        |> Map.put(:start_date, start_date)
+        |> Map.put(:end_date, end_date)
+        |> Map.put(:show_past, true)  # Always show all events in range for counts
+
+      count = count_events(count_opts)
+
+      %{range: range_type, count: count}
+    end)
+    |> Enum.into(%{}, fn %{range: range, count: count} -> {range, count} end)
+  end
+
+  @doc """
+  Group events by temporal periods for organized display.
+  Returns a list of {period_label, events} tuples sorted by time.
+  """
+  def group_events_by_period(events) do
+    now = DateTime.utc_now()
+
+    events
+    |> Enum.group_by(fn event -> categorize_event_period(event.starts_at, now) end)
+    |> Enum.sort_by(fn {period, _events} -> period_sort_order(period) end)
+  end
+
+  defp categorize_event_period(nil, _now), do: :unknown
+
+  defp categorize_event_period(starts_at, now) do
+    today = DateTime.to_date(now)
+    event_date = DateTime.to_date(starts_at)
+    days_diff = Date.diff(event_date, today)
+
+    # Extract year and month for comparison
+    {today_year, today_month, _} = Date.to_erl(today)
+    {event_year, event_month, _} = Date.to_erl(event_date)
+    same_month = today_year == event_year && today_month == event_month
+
+    cond do
+      days_diff == 0 -> :today
+      days_diff == 1 -> :tomorrow
+      days_diff >= 2 && days_diff <= 7 -> :this_week
+      days_diff >= 8 && same_month -> :later_this_month
+      days_diff > 7 && !same_month -> :future
+      true -> :past
+    end
+  end
+
+  defp period_sort_order(period) do
+    case period do
+      :today -> 1
+      :tomorrow -> 2
+      :this_week -> 3
+      :later_this_month -> 4
+      :future -> 5
+      :past -> 6
+      :unknown -> 7
+    end
+  end
+
+  @doc """
+  Get time-sensitive badge info for an event.
+  Returns a map with badge type and label, or nil if no badge applies.
+  """
+  def get_time_sensitive_badge(event) do
+    now = DateTime.utc_now()
+
+    case event.starts_at do
+      nil -> nil
+      starts_at ->
+        hours_until = DateTime.diff(starts_at, now, :hour)
+        days_until = div(hours_until, 24)
+
+        cond do
+          hours_until < 0 -> nil  # Event has passed
+          hours_until < 24 -> %{type: :last_chance, label: "🔥 Last Chance", emoji: "🔥"}
+          days_until <= 7 -> %{type: :this_week, label: "⚡ This Week", emoji: "⚡"}
+          days_until <= 30 -> %{type: :upcoming, label: "📅 Upcoming", emoji: "📅"}
+          true -> nil
+        end
+    end
+  end
+
+  @doc """
+  Get human-readable label for period type.
+  """
+  def period_label(period) do
+    case period do
+      :today -> "Today"
+      :tomorrow -> "Tomorrow"
+      :this_week -> "This Week"
+      :later_this_month -> "Later This Month"
+      :future -> "Future Events"
+      :past -> "Past Events"
+      :unknown -> "Unknown Date"
+    end
   end
 end
