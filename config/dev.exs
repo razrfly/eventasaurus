@@ -120,5 +120,12 @@ config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Local
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
+# Event discovery scraper configuration
+# Note: Not a separate OTP app, just using config namespace for organization
+config :eventasaurus, :event_discovery,
+  # Universal event freshness threshold for all scrapers (in hours)
+  # Events seen within this window will NOT be re-scraped
+  freshness_threshold_hours: 168  # 7 days
+
 # Import database credentials from dev.secret.exs
 import_config "dev.secret.exs"
