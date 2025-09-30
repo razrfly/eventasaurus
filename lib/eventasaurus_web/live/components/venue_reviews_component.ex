@@ -236,32 +236,7 @@ defmodule EventasaurusWeb.Live.Components.VenueReviewsComponent do
 
   defp format_review_text(_), do: ""
 
-  defp truncate_text(text, max_length) when byte_size(text) <= max_length do
-    text
-  end
-
   defp truncate_text(text, max_length) do
-    truncated = String.slice(text, 0, max_length)
-
-    case String.last(truncated) do
-      " " ->
-        truncated <> "..."
-
-      _ ->
-        # Find the last space to avoid cutting words
-        words = String.split(truncated, " ")
-
-        case length(words) do
-          1 ->
-            truncated <> "..."
-
-          _ ->
-            words
-            # Remove the last potentially incomplete word
-            |> Enum.drop(-1)
-            |> Enum.join(" ")
-            |> Kernel.<>("...")
-        end
-    end
+    Eventasaurus.Utils.Text.truncate_text(text, max_length)
   end
 end

@@ -368,30 +368,9 @@ defmodule Eventasaurus.Emails do
   end
 
   # Truncate text to specified character limit, ending at word boundary
-  defp truncate_text(text, max_length) when is_binary(text) do
-    if String.length(text) <= max_length do
-      text
-    else
-      # Find last space before max_length
-      truncated = String.slice(text, 0, max_length)
-
-      # Split into words and rejoin, dropping the last potentially incomplete word
-      words = String.split(truncated, " ")
-
-      if length(words) > 1 do
-        # Drop the last word (might be incomplete) and rejoin
-        words
-        |> Enum.drop(-1)
-        |> Enum.join(" ")
-        |> Kernel.<>("...")
-      else
-        # Only one word, just add ellipsis
-        truncated <> "..."
-      end
-    end
+  defp truncate_text(text, max_length) do
+    Eventasaurus.Utils.Text.truncate_text(text, max_length)
   end
-
-  defp truncate_text(text, _max_length), do: to_string(text)
 
   defp render_event_location(event) do
     case get_venue_info(event) do

@@ -88,25 +88,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
 
   # Simple private helpers
   defp truncate_text(text, max_length) do
-    if String.length(text) <= max_length do
-      text
-    else
-      # Try to break at word boundary to avoid cutting words
-      truncated = String.slice(text, 0, max_length - 3)
-
-      case String.split(truncated, " ") do
-        [_single_word] ->
-          # Single word that's too long, just truncate and add ellipsis
-          String.slice(text, 0, max_length - 3) <> "..."
-
-        words ->
-          # Multiple words, remove last potentially broken word
-          words
-          |> Enum.drop(-1)
-          |> Enum.join(" ")
-          |> Kernel.<>("...")
-      end
-    end
+    Eventasaurus.Utils.Text.truncate_text(text, max_length)
   end
 
   defp valid_scheme?(scheme), do: scheme in ["http", "https"]

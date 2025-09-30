@@ -142,14 +142,33 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   end
 
   defp schedule_detail_jobs(events, source_id, page_number) do
-    Logger.debug("📅 Scheduling #{length(events)} detail jobs from page #{page_number}")
+    alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
+    # Extract external_ids for all events (adds "karnet_" prefix automatically)
+    # This allows us to check freshness before scheduling detail jobs
+    events_with_ids = Enum.map(events, fn event ->
+      external_id = extract_external_id_from_url(event.url)
+      Map.put(event, :external_id, external_id)
+    end)
+
+    # Filter to events needing processing based on freshness
+    events_to_process = EventFreshnessChecker.filter_events_needing_processing(
+      events_with_ids,
+      source_id
+    )
+
+    skipped = length(events) - length(events_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("📋 Karnet page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)")
 
     # Calculate base delay for this page to distribute load
-    # Add staggered delays to respect rate limits
-    base_delay = (page_number - 1) * length(events) * Config.rate_limit()
+    # Use consistent page offset (30s per page) to prevent scheduling collisions
+    # Then stagger individual jobs within the page based on rate limiting
+    base_delay = (page_number - 1) * 30
 
     scheduled_jobs =
-      events
+      events_to_process
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
@@ -161,7 +180,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
           "url" => event.url,
           "source_id" => source_id,
           "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
-          "external_id" => extract_external_id_from_url(event.url),
+          # Reuse the external_id we already extracted (already has "karnet_" prefix)
+          "external_id" => event.external_id,
           "from_page" => page_number
         }
         |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
