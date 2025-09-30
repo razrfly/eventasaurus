@@ -224,8 +224,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     Logger.info("📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)")
 
     # Calculate base delay for this page to distribute load
-    # Add staggered delays to respect rate limits (3 seconds between requests)
-    base_delay = (page_number - 1) * length(events_to_process) * 3
+    # Use consistent page offset (30s per page) to prevent scheduling collisions
+    # Then stagger individual jobs within the page based on rate limiting
+    base_delay = (page_number - 1) * 30
 
     scheduled_jobs =
       events_to_process
