@@ -333,15 +333,8 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
 
   defp format_rating(_), do: "N/A"
 
-  defp truncate_text(text, max_length) when is_binary(text) do
-    if String.length(text) <= max_length do
-      text
-    else
-      text
-      |> String.slice(0, max_length)
-      |> String.trim_trailing()
-      |> Kernel.<>("...")
-    end
+  defp truncate_text(text, max_length) do
+    Eventasaurus.Utils.Text.truncate_text(text, max_length)
   end
 
   defp build_release_info(raw_data) do
