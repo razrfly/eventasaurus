@@ -24,6 +24,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   require Logger
 
   alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
+  alias EventasaurusDiscovery.Sources.Bandsintown.Config
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -38,7 +39,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
          true <- city_id > 0 || {:error, "city_id", "must be > 0"} do
 
       # Optional arguments with defaults
-      limit = validate_optional_integer(args["limit"])
       total_pages = validate_optional_integer(args["total_pages"])
       city_name = args["city_name"] || "Unknown"
 
@@ -50,7 +50,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       City ID: #{city_id}
       """)
 
-      process_page(page_number, latitude, longitude, source_id, city_id, limit, total_pages)
+      process_page(page_number, latitude, longitude, source_id, city_id, total_pages)
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
@@ -58,11 +58,11 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     end
   end
 
-  defp process_page(page_number, latitude, longitude, source_id, city_id, limit, _total_pages) do
+  defp process_page(page_number, latitude, longitude, source_id, city_id, _total_pages) do
     # Fetch the API page
     case Client.fetch_next_events_page(latitude, longitude, page_number) do
       {:ok, json_data} when is_map(json_data) ->
-        process_api_response(json_data, page_number, source_id, city_id, limit)
+        process_api_response(json_data, page_number, source_id, city_id)
 
       {:ok, _html} ->
         Logger.warning("⚠️ Got HTML response instead of JSON for page #{page_number}")
@@ -111,7 +111,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   end
   defp validate_optional_integer(_), do: nil
 
-  defp process_api_response(json_data, page_number, source_id, city_id, _limit) do
+  defp process_api_response(json_data, page_number, source_id, city_id) do
     # Extract events from JSON response
     events = extract_events_from_json(json_data)
 
@@ -233,7 +233,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
-        delay_seconds = base_delay + (index * 3)
+        delay_seconds = base_delay + (index * Config.rate_limit())
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         # Clean UTF-8 before storing in database
