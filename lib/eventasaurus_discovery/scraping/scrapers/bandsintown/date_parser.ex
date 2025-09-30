@@ -2,62 +2,80 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
   @moduledoc """
   Date parsing utilities for Bandsintown events.
 
+  IMPORTANT: Uses venue timezone to convert local event times to UTC for storage.
+  This ensures international events are stored with correct UTC times.
+
   Handles various date formats that appear in Bandsintown data:
   - Full ISO 8601 datetime (e.g., "2025-09-14T16:00:00")
   - Date only (e.g., "2025-09-14")
   - Other formats via comprehensive parser fallback
   """
 
-  @doc """
-  Parses a start date string into a UTC DateTime.
+  alias EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter
 
-  For date-only strings, sets time to midnight (00:00:00) UTC.
-  For datetime strings, preserves the time and converts to UTC.
+  @doc """
+  Parses a start date string into a UTC DateTime using the venue's timezone.
+
+  For date-only strings, sets time to midnight in the venue's timezone, then converts to UTC.
+  For datetime strings, treats the time as local to the venue timezone, then converts to UTC.
 
   ## Examples
 
+      # Event in New York at midnight EST
+      iex> parse_start_date("2025-09-14", "America/New_York")
+      ~U[2025-09-14 04:00:00Z]  # Midnight EST = 4:00 AM UTC
+
+      # Event in Warsaw at 4:00 PM
+      iex> parse_start_date("2025-09-14T16:00:00", "Europe/Warsaw")
+      ~U[2025-09-14 14:00:00Z]  # 4:00 PM CEST = 2:00 PM UTC
+
+      # No timezone provided - defaults to UTC
       iex> parse_start_date("2025-09-14")
       ~U[2025-09-14 00:00:00Z]
-
-      iex> parse_start_date("2025-09-14T16:00:00")
-      ~U[2025-09-14 16:00:00Z]
   """
-  def parse_start_date(date_string) when is_binary(date_string) do
-    parse_date_with_default_time(date_string, ~T[00:00:00])
+  def parse_start_date(date_string, venue_timezone \\ "Etc/UTC")
+
+  def parse_start_date(date_string, venue_timezone) when is_binary(date_string) do
+    parse_date_with_default_time(date_string, ~T[00:00:00], venue_timezone)
   end
 
-  def parse_start_date(_), do: nil
+  def parse_start_date(_, _), do: nil
 
   @doc """
-  Parses an end date string into a UTC DateTime.
+  Parses an end date string into a UTC DateTime using the venue's timezone.
 
-  For date-only strings, sets time to end of day (23:59:59) UTC.
-  For datetime strings, preserves the time and converts to UTC.
+  For date-only strings, sets time to end of day (23:59:59) in the venue's timezone, then converts to UTC.
+  For datetime strings, treats the time as local to the venue timezone, then converts to UTC.
 
   ## Examples
 
-      iex> parse_end_date("2025-09-14")
-      ~U[2025-09-14 23:59:59Z]
+      # Event ends at 11:59 PM in New York
+      iex> parse_end_date("2025-09-14", "America/New_York")
+      ~U[2025-09-15 03:59:59Z]  # Next day, 3:59 AM UTC
 
-      iex> parse_end_date("2025-09-14T16:00:00")
-      ~U[2025-09-14 16:00:00Z]
+      # Event ends at 4:00 PM in Warsaw
+      iex> parse_end_date("2025-09-14T16:00:00", "Europe/Warsaw")
+      ~U[2025-09-14 14:00:00Z]  # 4:00 PM CEST = 2:00 PM UTC
   """
-  def parse_end_date(date_string) when is_binary(date_string) do
-    parse_date_with_default_time(date_string, ~T[23:59:59])
+  def parse_end_date(date_string, venue_timezone \\ "Etc/UTC")
+
+  def parse_end_date(date_string, venue_timezone) when is_binary(date_string) do
+    parse_date_with_default_time(date_string, ~T[23:59:59], venue_timezone)
   end
 
-  def parse_end_date(_), do: nil
+  def parse_end_date(_, _), do: nil
 
   # Private helper function that handles the actual parsing logic
-  defp parse_date_with_default_time(date_string, default_time) do
+  defp parse_date_with_default_time(date_string, default_time, venue_timezone) do
     cond do
       # Full ISO 8601 datetime (e.g., "2025-09-14T16:00:00")
       String.contains?(date_string, "T") ->
-        parse_iso8601_datetime(date_string)
+        # Use shared TimezoneConverter for consistent handling
+        TimezoneConverter.parse_datetime_with_timezone(date_string, venue_timezone)
 
       # Date only (e.g., "2025-09-14")
       Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, date_string) ->
-        parse_date_only(date_string, default_time)
+        parse_date_only(date_string, default_time, venue_timezone)
 
       # Other formats - try comprehensive parsing
       true ->
@@ -67,42 +85,27 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
              :parse_datetime,
              1
            ) do
-          EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string)
+          # The general parser may not have timezone context, so parse first then convert
+          case EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string) do
+            %DateTime{} = dt ->
+              # If we got a datetime, it's already in UTC from the general parser
+              dt
+
+            _ ->
+              nil
+          end
         else
           nil
         end
     end
   end
 
-  defp parse_iso8601_datetime(datetime_string) do
-    # Try with timezone first
-    case DateTime.from_iso8601(datetime_string) do
-      {:ok, datetime, _} ->
-        datetime
-
-      _ ->
-        # If no timezone, assume UTC and add Z
-        case DateTime.from_iso8601(datetime_string <> "Z") do
-          {:ok, datetime, _} ->
-            datetime
-
-          _ ->
-            # Last resort: parse as NaiveDateTime and convert to UTC
-            case NaiveDateTime.from_iso8601(datetime_string) do
-              {:ok, naive_dt} ->
-                DateTime.from_naive!(naive_dt, "Etc/UTC")
-
-              _ ->
-                nil
-            end
-        end
-    end
-  end
-
-  defp parse_date_only(date_string, default_time) do
+  defp parse_date_only(date_string, default_time, venue_timezone) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
-        DateTime.new!(date, default_time, "Etc/UTC")
+        # Create naive datetime and convert from venue timezone to UTC
+        naive_dt = NaiveDateTime.new!(date, default_time)
+        TimezoneConverter.convert_local_to_utc(naive_dt, venue_timezone)
 
       _ ->
         nil
