@@ -137,6 +137,53 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
     """)
 
+    # Use advisory lock to prevent race conditions in concurrent event processing
+    # Lock is scoped to venue+normalized_title to allow parallel processing of different events
+    with_recurring_event_lock(venue, data.title, fn ->
+      do_find_or_create_event(data, venue, source_id, slug)
+    end)
+  end
+
+  # Advisory lock wrapper to prevent concurrent processing of same recurring event
+  defp with_recurring_event_lock(venue, title, func) do
+    # Generate lock key from venue + normalized title
+    lock_key = generate_event_lock_key(venue, title)
+
+    Logger.debug("🔒 Acquiring advisory lock for key: #{lock_key}")
+
+    # Wrap in transaction with advisory lock
+    Repo.transaction(fn ->
+      # Acquire transaction-scoped advisory lock
+      # This lock is automatically released when transaction completes
+      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
+
+      Logger.debug("✅ Advisory lock acquired")
+
+      # Execute the function within the locked context
+      case func.() do
+        {:ok, event, action} -> {event, action}
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, {event, action}} -> {:ok, event, action}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Generate a stable lock key from venue and normalized title
+  # Returns a 64-bit integer for use with PostgreSQL advisory locks
+  defp generate_event_lock_key(venue, title) do
+    # Normalize title the same way we do for matching
+    normalized_title = normalize_for_matching(title)
+
+    # Create lock key from venue_id + normalized_title
+    # Use :erlang.phash2 to create a stable 64-bit integer hash
+    venue_id = if venue, do: venue.id, else: 0
+    :erlang.phash2({venue_id, normalized_title}, 4_294_967_296)
+  end
+
+  defp do_find_or_create_event(data, venue, source_id, slug) do
     # First check if we have this event from this source
     existing_from_source = find_existing_event(data.external_id, source_id)
 
