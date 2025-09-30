@@ -1063,17 +1063,26 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   # Occurrence helper functions
   defp parse_occurrences(%{occurrences: nil}), do: nil
 
-  defp parse_occurrences(%{occurrences: %{"dates" => dates}}) when is_list(dates) do
+  defp parse_occurrences(%{occurrences: %{"dates" => dates}} = event) when is_list(dates) do
+    # Get timezone for this venue (defaults to Poland timezone)
+    timezone = get_event_timezone(event)
+    require Logger
+    Logger.debug("Timezone for event: #{inspect(timezone)}")
+
     dates
     |> Enum.map(fn date_info ->
       with {:ok, date} <- Date.from_iso8601(date_info["date"]),
            {:ok, time} <- parse_time(date_info["time"]) do
-        datetime = DateTime.new!(date, time, "Etc/UTC")
+        # Create datetime in UTC (as stored in database)
+        utc_datetime = DateTime.new!(date, time, "Etc/UTC")
+
+        # Convert to local timezone for display
+        local_datetime = DateTime.shift_zone!(utc_datetime, timezone)
 
         %{
-          datetime: datetime,
-          date: date,
-          time: time,
+          datetime: local_datetime,
+          date: DateTime.to_date(local_datetime),
+          time: DateTime.to_time(local_datetime),
           external_id: date_info["external_id"],
           label: date_info["label"]
         }
@@ -1086,6 +1095,31 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp parse_occurrences(_), do: nil
+
+  defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
+       when not is_nil(lat) and not is_nil(lng) do
+    # For now, all venues are in Poland (Kraków coordinates: ~50.06, ~19.95)
+    # TODO: Implement proper coordinate-to-timezone lookup using a geo database
+    # when we expand to other countries
+    cond do
+      # Poland (approximate bounding box)
+      lat >= 49.0 and lat <= 55.0 and lng >= 14.0 and lng <= 24.5 ->
+        "Europe/Warsaw"
+
+      # Default fallback to Warsaw for European coordinates
+      lat >= 35.0 and lat <= 71.0 and lng >= -10.0 and lng <= 40.0 ->
+        "Europe/Warsaw"
+
+      # Outside Europe - fallback to UTC
+      true ->
+        "Etc/UTC"
+    end
+  end
+
+  defp get_event_timezone(_event) do
+    # Default to Poland timezone since all current events are there
+    "Europe/Warsaw"
+  end
 
   defp parse_time(nil), do: {:ok, ~T[20:00:00]}
 

@@ -227,13 +227,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
           {0, 0}
         end
 
-      case DateTime.new(Date.new!(year, month, day), Time.new!(hour, minute, 0)) do
-        {:ok, datetime} ->
-          # Single date, not a range
-          {:ok, {datetime, datetime}}
+      # Create datetime in Poland timezone and convert to UTC for storage
+      naive_dt = NaiveDateTime.new!(Date.new!(year, month, day), Time.new!(hour, minute, 0))
 
+      # Convert from Europe/Warsaw to UTC using Timex
+      case Timex.to_datetime(naive_dt, "Europe/Warsaw") do
         {:error, reason} ->
           {:error, reason}
+
+        polish_datetime ->
+          # Convert to UTC
+          utc_datetime = Timex.Timezone.convert(polish_datetime, "Etc/UTC")
+          {:ok, {utc_datetime, utc_datetime}}
       end
     else
       Logger.warning("Unknown Polish month: #{month_name}")
@@ -264,8 +269,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
       _ ->
         case Date.from_iso8601(date_string) do
           {:ok, date} ->
-            {:ok, datetime} = DateTime.new(date, Time.new!(0, 0, 0))
-            {:ok, {datetime, datetime}}
+            # Create naive datetime and convert from Poland timezone to UTC
+            naive_dt = NaiveDateTime.new!(date, Time.new!(0, 0, 0))
+
+            case Timex.to_datetime(naive_dt, "Europe/Warsaw") do
+              {:error, reason} ->
+                {:error, reason}
+
+              polish_datetime ->
+                utc_datetime = Timex.Timezone.convert(polish_datetime, "Etc/UTC")
+                {:ok, {utc_datetime, utc_datetime}}
+            end
 
           _ ->
             {:error, :invalid_iso_date}
@@ -306,12 +320,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DateParser do
         {0, 0}
       end
 
-    case DateTime.new(Date.new!(year, month, day), Time.new!(hour, minute, 0)) do
-      {:ok, datetime} ->
-        {:ok, {datetime, datetime}}
+    # Create naive datetime and convert from Poland timezone to UTC
+    naive_dt = NaiveDateTime.new!(Date.new!(year, month, day), Time.new!(hour, minute, 0))
 
+    case Timex.to_datetime(naive_dt, "Europe/Warsaw") do
       {:error, reason} ->
         {:error, reason}
+
+      polish_datetime ->
+        # Convert to UTC for storage
+        utc_datetime = Timex.Timezone.convert(polish_datetime, "Etc/UTC")
+        {:ok, {utc_datetime, utc_datetime}}
     end
   rescue
     _ -> {:error, :invalid_date}
