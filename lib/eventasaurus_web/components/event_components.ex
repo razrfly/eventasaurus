@@ -1827,4 +1827,42 @@ defmodule EventasaurusWeb.EventComponents do
       {:error, _} -> "{}"
     end
   end
+
+  @doc """
+  Renders a date range filter button with optional count badge.
+
+  ## Examples
+
+      <.date_range_button
+        range={:today}
+        label={gettext("Today")}
+        active={@active_date_range == :today}
+        count={Map.get(@date_range_counts, :today, 0)}
+      />
+  """
+  def date_range_button(assigns) do
+    ~H"""
+    <button
+      phx-click="quick_date_filter"
+      phx-value-range={@range}
+      class={[
+        "px-3 py-2 rounded-lg font-medium text-sm transition-all",
+        if(@active,
+          do: "bg-blue-600 text-white shadow-md",
+          else: "bg-gray-100 text-gray-700 hover:bg-gray-200"
+        )
+      ]}
+    >
+      <%= @label %>
+      <%= if @count > 0 do %>
+        <span class={[
+          "ml-1.5 px-1.5 py-0.5 rounded-full text-xs",
+          if(@active, do: "bg-blue-700", else: "bg-gray-200 text-gray-600")
+        ]}>
+          <%= @count %>
+        </span>
+      <% end %>
+    </button>
+    """
+  end
 end
