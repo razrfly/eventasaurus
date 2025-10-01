@@ -88,12 +88,9 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
   end
 
   defp get_index_path(socket) do
-    # Determine the correct index path based on the current request URI
-    case socket.private[:connect_info][:request_path] do
-      "/dev/categories" <> _ -> ~p"/dev/categories"
-      "/admin/categories" <> _ -> ~p"/admin/categories"
-      _ -> ~p"/admin/categories"  # Default fallback
-    end
+    # In production, always use /admin/categories
+    # In dev, we have both /dev and /admin routes available
+    ~p"/admin/categories"
   end
 
   defp load_form(socket, %{"id" => id}) do
