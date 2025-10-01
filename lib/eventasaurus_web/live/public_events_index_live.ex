@@ -6,6 +6,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   alias EventasaurusDiscovery.Categories
   alias EventasaurusWeb.Helpers.CategoryHelpers
 
+  import EventasaurusWeb.EventComponents
+
   @impl true
   def mount(_params, _session, socket) do
     # Get language from session or default to English
@@ -18,8 +20,11 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       |> assign(:filters, default_filters())
       |> assign(:categories, Categories.list_categories())
       |> assign(:filter_facets, %{})
+      |> assign(:date_range_counts, %{})
+      |> assign(:active_date_range, :next_30_days)  # Default active range
       |> assign(:show_filters, false)
       |> assign(:loading, false)
+      |> assign(:group_by_date, false)
 
     {:ok, socket}
   end
@@ -151,6 +156,58 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   @impl true
+  def handle_event("quick_date_filter", %{"range" => range}, socket) do
+    range_atom = String.to_existing_atom(range)
+    {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range_atom)
+
+    filters =
+      socket.assigns.filters
+      |> Map.put(:start_date, start_date)
+      |> Map.put(:end_date, end_date)
+      |> Map.put(:page, 1)
+      # Important: When user explicitly selects a date range, show ALL events in that range
+      # including ones that already started. Don't filter out "past" events.
+      |> Map.put(:show_past, true)
+
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> assign(:active_date_range, range_atom)
+      |> fetch_events()
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
+      )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("clear_date_filter", _params, socket) do
+    filters =
+      socket.assigns.filters
+      |> Map.put(:start_date, nil)
+      |> Map.put(:end_date, nil)
+      |> Map.put(:page, 1)
+      |> Map.put(:show_past, false)
+
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> assign(:active_date_range, nil)
+      |> fetch_events()
+      |> push_patch(
+        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
+      )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_date_grouping", _params, socket) do
+    {:noreply, update(socket, :group_by_date, &(!&1))}
+  end
+
+  @impl true
   def handle_event("paginate", %{"page" => page}, socket) do
     page = String.to_integer(page)
     updated_filters = Map.put(socket.assigns.filters, :page, page)
@@ -197,7 +254,11 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   defp fetch_facets(socket) do
     # Fetch filter facets for displaying counts
     facets = PublicEventsEnhanced.get_filter_facets(socket.assigns.filters)
-    assign(socket, :filter_facets, facets)
+    date_range_counts = PublicEventsEnhanced.get_quick_date_range_counts(socket.assigns.filters)
+
+    socket
+    |> assign(:filter_facets, facets)
+    |> assign(:date_range_counts, date_range_counts)
   end
 
   defp apply_params_to_filters(socket, params) do
@@ -231,25 +292,32 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       # Add default sort order
       sort_order: :asc,
       page: parse_integer(params["page"]) || 1,
-      page_size: 21
+      page_size: 21,
+      # Parse show_past from URL params (defaults to false if not present)
+      show_past: parse_boolean(params["show_past"])
     }
 
     assign(socket, :filters, filters)
   end
 
   defp default_filters do
+    # Default to showing next 30 days of events
+    {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(:next_30_days)
+
     %{
       search: nil,
       categories: [],
-      start_date: nil,
-      end_date: nil,
+      start_date: start_date,
+      end_date: end_date,
       min_price: nil,
       max_price: nil,
       city_id: nil,
       sort_by: :starts_at,
       sort_order: :asc,
       page: 1,
-      page_size: 21
+      page_size: 21,
+      # Default: show all events in the next 30 days range, even if they already started today
+      show_past: true
     }
   end
 
@@ -325,9 +393,17 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   defp parse_date(""), do: nil
 
   defp parse_date(date_str) when is_binary(date_str) do
-    case Date.from_iso8601(date_str) do
-      {:ok, date} -> DateTime.new!(date, ~T[00:00:00])
-      _ -> nil
+    # Try parsing as full datetime first (preserves time component)
+    case DateTime.from_iso8601(date_str) do
+      {:ok, datetime, _offset} ->
+        datetime
+
+      _ ->
+        # Fallback to date-only parsing (defaults to midnight)
+        case Date.from_iso8601(date_str) do
+          {:ok, date} -> DateTime.new!(date, ~T[00:00:00])
+          _ -> nil
+        end
     end
   end
 
@@ -335,6 +411,13 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   defp parse_sort("title"), do: :title
   defp parse_sort("relevance"), do: :relevance
   defp parse_sort(_), do: :starts_at
+
+  defp parse_boolean(nil), do: false
+  defp parse_boolean("true"), do: true
+  defp parse_boolean("false"), do: false
+  defp parse_boolean(true), do: true
+  defp parse_boolean(false), do: false
+  defp parse_boolean(_), do: false
 
   defp build_path(socket) do
     filters = socket.assigns.filters
@@ -366,7 +449,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       :max_price,
       :city_id,
       :sort_by,
-      :page
+      :page,
+      :show_past
     ])
     |> Enum.reject(fn
       {_k, nil} -> true
@@ -375,17 +459,20 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       {:page, 1} -> true
       # Don't include default sort
       {:sort_by, :starts_at} -> true
+      # Don't include default show_past value
+      {:show_past, false} -> true
       _ -> false
     end)
     |> Enum.map(fn
       {:categories, ids} when is_list(ids) -> {"categories", Enum.join(ids, ",")}
-      {:start_date, date} -> {"start_date", Date.to_iso8601(DateTime.to_date(date))}
-      {:end_date, date} -> {"end_date", Date.to_iso8601(DateTime.to_date(date))}
+      {:start_date, date} -> {"start_date", DateTime.to_iso8601(date)}
+      {:end_date, date} -> {"end_date", DateTime.to_iso8601(date)}
       {:min_price, price} -> {"min_price", to_string(price)}
       {:max_price, price} -> {"max_price", to_string(price)}
       {:city_id, id} -> {"city", to_string(id)}
       {:sort_by, sort} -> {"sort", to_string(sort)}
       {:page, page} -> {"page", to_string(page)}
+      {:show_past, val} -> {"show_past", to_string(val)}
       {k, v} -> {to_string(k), to_string(v)}
     end)
     |> Enum.into(%{})
@@ -471,6 +558,70 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
                 <Heroicons.magnifying_glass class="w-5 h-5 text-gray-500" />
               </button>
             </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Date Range Filters -->
+      <div class="bg-white border-b shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-medium text-gray-700">
+              <%= gettext("Quick date filters") %>
+            </h2>
+            <%= if @active_date_range do %>
+              <button
+                phx-click="clear_date_filter"
+                class="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+              >
+                <Heroicons.x_mark class="w-4 h-4 mr-1" />
+                <%= gettext("Clear date filter") %>
+              </button>
+            <% end %>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <.date_range_button
+              range={:today}
+              label={gettext("Today")}
+              active={@active_date_range == :today}
+              count={Map.get(@date_range_counts, :today, 0)}
+            />
+            <.date_range_button
+              range={:tomorrow}
+              label={gettext("Tomorrow")}
+              active={@active_date_range == :tomorrow}
+              count={Map.get(@date_range_counts, :tomorrow, 0)}
+            />
+            <.date_range_button
+              range={:this_weekend}
+              label={gettext("This Weekend")}
+              active={@active_date_range == :this_weekend}
+              count={Map.get(@date_range_counts, :this_weekend, 0)}
+            />
+            <.date_range_button
+              range={:next_7_days}
+              label={gettext("Next 7 Days")}
+              active={@active_date_range == :next_7_days}
+              count={Map.get(@date_range_counts, :next_7_days, 0)}
+            />
+            <.date_range_button
+              range={:next_30_days}
+              label={gettext("Next 30 Days")}
+              active={@active_date_range == :next_30_days}
+              count={Map.get(@date_range_counts, :next_30_days, 0)}
+            />
+            <.date_range_button
+              range={:this_month}
+              label={gettext("This Month")}
+              active={@active_date_range == :this_month}
+              count={Map.get(@date_range_counts, :this_month, 0)}
+            />
+            <.date_range_button
+              range={:next_month}
+              label={gettext("Next Month")}
+              active={@active_date_range == :next_month}
+              count={Map.get(@date_range_counts, :next_month, 0)}
+            />
           </div>
         </div>
       </div>
@@ -676,9 +827,24 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
             <% end %>
           <% end %>
 
+          <!-- Time-Sensitive Badge -->
+          <%= if badge = PublicEventsEnhanced.get_time_sensitive_badge(@event) do %>
+            <div class={[
+              "absolute top-3 right-3 text-white px-2 py-1 rounded-md text-xs font-medium",
+              case badge.type do
+                :last_chance -> "bg-red-500"
+                :this_week -> "bg-orange-500"
+                :upcoming -> "bg-blue-500"
+                _ -> "bg-gray-500"
+              end
+            ]}>
+              <%= badge.label %>
+            </div>
+          <% end %>
+
           <!-- Recurring Event Badge -->
           <%= if PublicEvent.recurring?(@event) do %>
-            <div class="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
+            <div class="absolute bottom-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
               <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
               </svg>
