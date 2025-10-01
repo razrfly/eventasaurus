@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   @refresh_interval 5000
   @country_wide_sources ["pubquiz-pl"]
+  @city_specific_sources %{"karnet" => "krakow"}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -39,6 +40,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:import_limit, 100)
       |> assign(:import_radius, 50)
       |> assign(:country_wide_sources, @country_wide_sources)
+      |> assign(:city_specific_sources, @city_specific_sources)
       |> load_data()
       |> schedule_refresh()
 
@@ -95,9 +97,17 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     limit = parse_int(params["limit"], 100)
     radius = parse_int(params["radius"], 50)
 
-    # Validate: source is required, city is required only for non-country-wide sources
-    city_required = source not in @country_wide_sources
-    missing_city = city_required and (is_nil(city_id) or city_id == "")
+    # For city-specific sources (like Karnet → Kraków), auto-set the city
+    city_id_or_slug =
+      if Map.has_key?(@city_specific_sources, source) do
+        @city_specific_sources[source]
+      else
+        city_id
+      end
+
+    # Validate: source is required, city is required only for non-country-wide and non-city-specific sources
+    city_required = source not in @country_wide_sources and not Map.has_key?(@city_specific_sources, source)
+    missing_city = city_required and (is_nil(city_id_or_slug) or city_id_or_slug == "")
 
     if is_nil(source) or source == "" or missing_city do
       error_msg =
@@ -111,11 +121,23 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       {:noreply, socket}
     else
       # Queue the discovery sync job
-      # Parse city_id to integer if it's a numeric string
+      # For city-specific sources, look up the city by slug
       city_id_val =
-        case Integer.parse(to_string(city_id)) do
-          {i, _} -> i
-          :error -> city_id
+        if Map.has_key?(@city_specific_sources, source) do
+          city_slug = @city_specific_sources[source]
+          case Repo.one(from(c in City, where: c.slug == ^city_slug, select: c.id)) do
+            nil ->
+              Logger.warning("City not found for slug: #{city_slug}, source: #{source}")
+              city_id_or_slug
+            id ->
+              id
+          end
+        else
+          # Parse city_id to integer if it's a numeric string
+          case Integer.parse(to_string(city_id_or_slug)) do
+            {i, _} -> i
+            :error -> city_id_or_slug
+          end
         end
 
       job_args = %{

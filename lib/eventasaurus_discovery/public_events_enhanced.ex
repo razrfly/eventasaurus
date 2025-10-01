@@ -822,17 +822,21 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def list_events_with_aggregation(opts \\ []) do
     if opts[:aggregate] do
-      # Extract pagination params before removing them
-      page = opts[:page] || 1
-      page_size = opts[:page_size] || @default_limit
+      # Extract & sanitize pagination params
+      page = max((opts[:page] || 1), 1)
+      page_size = min((opts[:page_size] || @default_limit), @max_limit)
 
-      # Fetch all events without pagination, but with reasonable limit for performance
-      # Handle both Keyword lists and Maps
+      # Fetch window sized to requested page (cap at @max_limit)
+      # Use 3x multiplier to account for aggregation reducing result count
+      fetch_size = min(@max_limit, page * page_size * 3)
+
+      # Build fetch opts without DB pagination
+      # Handle both Keyword lists and Maps by converting to Map
       opts_without_pagination =
         opts
-        |> Enum.reject(fn {key, _} -> key == :page end)
-        |> Enum.into(%{})
-        |> Map.put(:page_size, @max_limit)  # Fetch up to 500 events
+        |> Map.new()
+        |> Map.drop([:page, :offset, :limit])
+        |> Map.put(:page_size, fetch_size)
 
       events = list_events(opts_without_pagination)
       aggregated = aggregate_events(events, opts)
@@ -886,6 +890,43 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     items
     |> Enum.drop(offset)
     |> Enum.take(page_size)
+  end
+
+  @doc """
+  Counts events with optional aggregation.
+
+  When aggregate: true is passed, returns the count of aggregated groups
+  rather than the raw event count.
+
+  ## Options
+  - `:aggregate` - If true, counts aggregated results instead of raw events
+  - All other options are passed through to count_events/1
+
+  ## Examples
+
+      iex> count_events_with_aggregation(aggregate: true, city_id: 1)
+      15  # Returns count of aggregated groups
+
+      iex> count_events_with_aggregation(city_id: 1)
+      47  # Returns raw event count
+  """
+  def count_events_with_aggregation(opts \\ []) do
+    if opts[:aggregate] do
+      # Fetch all events and aggregate them, then count results
+      # Remove pagination params for counting
+      count_opts =
+        opts
+        |> Map.new()
+        |> Map.drop([:page, :page_size, :offset, :limit])
+        |> Map.put(:page_size, @max_limit)
+
+      events = list_events(count_opts)
+      aggregated = aggregate_events(events, opts)
+
+      length(aggregated)
+    else
+      count_events(opts)
+    end
   end
 
   # Check if an event should be aggregated
