@@ -113,6 +113,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       raw_event_data: data[:raw_event_data] || data["raw_event_data"],
       # Karnet category
       category: data[:category] || data["category"],
+      # Recurring event pattern (for weekly/monthly events like PubQuiz)
+      recurrence_rule: data[:recurrence_rule] || data["recurrence_rule"],
       # Price data - now stored at source level
       min_price: data[:min_price] || data["min_price"],
       max_price: data[:max_price] || data["max_price"],
@@ -317,33 +319,43 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp initialize_occurrence_with_source(data) do
-    date_entry = %{
-      "date" => format_date_only(data.start_at),
-      "time" => format_time_only(data.start_at),
-      "external_id" => data.external_id
-    }
+    # Check if this is a recurring event with a recurrence pattern
+    if data.recurrence_rule do
+      # Create pattern-type occurrences for recurring events (e.g., PubQuiz)
+      %{
+        "type" => "pattern",
+        "pattern" => data.recurrence_rule
+      }
+    else
+      # Create explicit-type occurrences for one-off events
+      date_entry = %{
+        "date" => format_date_only(data.start_at),
+        "time" => format_time_only(data.start_at),
+        "external_id" => data.external_id
+      }
 
-    # Add source_id if available
-    date_entry =
-      if data[:source_id] || Map.get(data, :source_id) do
-        Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
-      else
-        date_entry
-      end
+      # Add source_id if available
+      date_entry =
+        if data[:source_id] || Map.get(data, :source_id) do
+          Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
+        else
+          date_entry
+        end
 
-    # CRITICAL FIX: Add label from event title to distinguish ticket types
-    # This ensures the first occurrence also has a label, not just consolidated ones
-    date_entry =
-      if data.title && String.trim(data.title) != "" do
-        Map.put(date_entry, "label", data.title)
-      else
-        date_entry
-      end
+      # CRITICAL FIX: Add label from event title to distinguish ticket types
+      # This ensures the first occurrence also has a label, not just consolidated ones
+      date_entry =
+        if data.title && String.trim(data.title) != "" do
+          Map.put(date_entry, "label", data.title)
+        else
+          date_entry
+        end
 
-    %{
-      "type" => "explicit",
-      "dates" => [date_entry]
-    }
+      %{
+        "type" => "explicit",
+        "dates" => [date_entry]
+      }
+    end
   end
 
   defp maybe_update_event(event, data, venue) do
@@ -681,11 +693,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             data.raw_event_data
           )
 
-        # Karnet event with category (backward compatibility)
-        data.category && source_name == "karnet" ->
+        # Event with category string (works for all sources: Karnet, PubQuiz, etc.)
+        data.category ->
           CategoryExtractor.assign_categories_to_event(
             event.id,
-            "karnet",
+            source_name,
             %{category: data.category, url: data.source_url}
           )
 

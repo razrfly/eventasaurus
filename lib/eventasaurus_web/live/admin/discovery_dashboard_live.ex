@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   require Logger
 
   @refresh_interval 5000
+  @country_wide_sources ["pubquiz-pl"]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -37,6 +38,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:selected_city, nil)
       |> assign(:import_limit, 100)
       |> assign(:import_radius, 50)
+      |> assign(:country_wide_sources, @country_wide_sources)
       |> load_data()
       |> schedule_refresh()
 
@@ -93,10 +95,19 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     limit = parse_int(params["limit"], 100)
     radius = parse_int(params["radius"], 50)
 
-    if is_nil(source) or source == "" or (is_nil(city_id) or city_id == "") do
-      socket =
-        put_flash(socket, :error, "Please select a source and city before starting an import")
+    # Validate: source is required, city is required only for non-country-wide sources
+    city_required = source not in @country_wide_sources
+    missing_city = city_required and (is_nil(city_id) or city_id == "")
 
+    if is_nil(source) or source == "" or missing_city do
+      error_msg =
+        if missing_city do
+          "Please select a city before starting an import"
+        else
+          "Please select a source before starting an import"
+        end
+
+      socket = put_flash(socket, :error, error_msg)
       {:noreply, socket}
     else
       # Queue the discovery sync job
@@ -247,7 +258,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     cities = Repo.all(from(c in City, order_by: c.name, preload: :country))
 
     # Get available sources
-    sources = ["ticketmaster", "bandsintown", "karnet", "all"]
+    sources = ["ticketmaster", "bandsintown", "karnet", "pubquiz-pl", "all"]
 
     # Get queue statistics
     queue_stats = get_queue_statistics()
@@ -413,6 +424,15 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       :error -> default
     end
   end
+
+  @doc """
+  Checks if a source is country-wide (doesn't require city selection).
+  """
+  def country_wide_source?(source) when is_binary(source) do
+    source in @country_wide_sources
+  end
+
+  def country_wide_source?(_), do: false
 
   @doc """
   Formats a number with thousand separators.

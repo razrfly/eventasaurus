@@ -13,14 +13,17 @@ defmodule Mix.Tasks.Discovery.Sync do
       # Sync from Karnet (Kraków only)
       mix discovery.sync karnet --city krakow --limit 500
 
+      # Sync from PubQuiz (Poland-wide, no city needed)
+      mix discovery.sync pubquiz-pl --limit 5
+
       # Sync from all sources
       mix discovery.sync all --city krakow --limit 500
 
   ## Options
 
-    * `--city` - City slug to sync events for (required)
+    * `--city` - City slug to sync events for (required for city-specific sources)
     * `--city-id` - City database ID (alternative to --city)
-    * `--limit` - Maximum number of events to fetch (default: 100)
+    * `--limit` - Maximum number of events/cities to fetch (default: 100)
     * `--radius` - Search radius in km (Ticketmaster only, default: 50)
     * `--inline` - Run job synchronously for debugging (default: false, async via Oban)
 
@@ -29,6 +32,7 @@ defmodule Mix.Tasks.Discovery.Sync do
       mix discovery.sync ticketmaster --city warsaw --limit 200
       mix discovery.sync bandsintown --city-id 1 --limit 50
       mix discovery.sync karnet --city krakow --limit 100  # Kraków only
+      mix discovery.sync pubquiz --limit 10  # Poland-wide trivia events
       mix discovery.sync all --city krakow --limit 1000
       mix discovery.sync bandsintown --city krakow --limit 10 --inline  # Debug mode
   """
@@ -44,17 +48,30 @@ defmodule Mix.Tasks.Discovery.Sync do
   @sources %{
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
-    "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob
+    "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
+    "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob
   }
+
+  # Sources that don't require a city (country-wide)
+  @country_wide_sources ["pubquiz-pl"]
 
   def run(args) do
     Application.ensure_all_started(:eventasaurus)
 
     {source_name, opts} = parse_args(args)
 
-    # Find the city
-    city = find_city(opts)
-    unless city, do: exit_with_error("City not found")
+    # Find the city (only required for city-specific sources)
+    city =
+      if source_name in @country_wide_sources do
+        nil
+      else
+        find_city(opts)
+      end
+
+    # Validate city for city-specific sources
+    if !city && source_name not in @country_wide_sources && source_name != "all" do
+      exit_with_error("City is required for #{source_name}")
+    end
 
     # Get options
     limit = opts[:limit] || 100
@@ -133,19 +150,35 @@ defmodule Mix.Tasks.Discovery.Sync do
   defp sync_source(source_name, city, limit, options, inline) do
     job_module = @sources[source_name]
 
+    # Build appropriate log message
+    city_info =
+      if source_name in @country_wide_sources do
+        "Country: Poland (all cities)"
+      else
+        "City: #{city.name}, #{city.country.name}"
+      end
+
     Logger.info("""
 
     📊 Starting #{source_name} sync
-    City: #{city.name}, #{city.country.name}
+    #{city_info}
     Limit: #{limit} events
     Mode: #{if inline, do: "inline (debugging)", else: "async (Oban)"}
     """)
 
-    job_args = %{
-      "city_id" => city.id,
-      "limit" => limit,
-      "options" => options
-    }
+    # Build job args based on source type
+    job_args =
+      if source_name in @country_wide_sources do
+        %{
+          "limit" => limit
+        }
+      else
+        %{
+          "city_id" => city.id,
+          "limit" => limit,
+          "options" => options
+        }
+      end
 
     if inline do
       # Run synchronously for debugging

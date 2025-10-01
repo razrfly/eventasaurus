@@ -110,6 +110,14 @@ categories = [
     display_order: 13
   },
   %{
+    name: "Trivia",
+    slug: "trivia",
+    description: "Trivia nights, pub quizzes, and knowledge competitions",
+    icon: "🧠",
+    color: "#9B59B6",
+    display_order: 14
+  },
+  %{
     name: "Other",
     slug: "other",
     description: "Uncategorized events",
