@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.CountCache
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Live.Helpers.EventFilters
 
@@ -462,7 +463,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   # Component: Filter Panel with radius selector
   defp filter_panel(assigns) do
     ~H"""
-    <form phx-change="filter" class="space-y-6">
+    <form id="city-filter-form" phx-change="filter" phx-hook="FilterDebounce" class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Search Radius -->
         <div>
@@ -797,7 +798,12 @@ defmodule EventasaurusWeb.CityLive.Index do
       # Get date range counts with geographic filtering, but without existing date filters
       # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
       date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
-      date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+
+      # Use cache for date range counts (5 minute TTL)
+      cache_key = {:date_counts, city.id, filters[:radius_km] || @default_radius_km, filters[:categories] || []}
+      date_counts = CountCache.get_or_fetch(cache_key, fn ->
+        PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+      end)
 
       # Get the count of ALL events (no date filters) for the "All Events" button
       # Use aggregation-aware count here as well

@@ -17,6 +17,7 @@ import PaymentHooks from "./hooks/payment-business-logic";
 import MediaHooks from "./hooks/media-external-apis";
 import PlacesHooks from "./hooks/places-search";
 import DragDropHooks from "./hooks/poll-drag-drop";
+import FilterHooks from "./hooks/filter-debounce";
 
 // Supabase client setup for identity management
 let supabaseClient = null;
@@ -57,6 +58,7 @@ const ModularHooks = {
   ...MediaHooks,
   ...PlacesHooks,
   ...DragDropHooks,
+  ...FilterHooks,
   SupabaseAuthHandler // Individual hook import
 };
 
