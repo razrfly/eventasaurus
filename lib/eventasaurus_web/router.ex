@@ -27,6 +27,19 @@ defmodule EventasaurusWeb.Router do
       live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
     end
 
+    # Admin routes (dev - no auth, mirrors production paths)
+    scope "/admin" do
+      pipe_through :browser
+
+      # Discovery Dashboard (dev - no auth)
+      live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+      # Category Management (dev - no auth)
+      live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
+      live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
+      live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+    end
+
     # Category demo routes for testing
     scope "/category-demo", EventasaurusWeb do
       pipe_through :browser
