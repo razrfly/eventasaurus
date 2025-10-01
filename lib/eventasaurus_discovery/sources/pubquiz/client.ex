@@ -2,8 +2,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Client do
   @moduledoc """
   HTTP client for PubQuiz.pl website.
 
-  Handles all HTTP requests to pubquiz.pl with proper error handling,
-  rate limiting, and retries.
+  Handles all HTTP requests to pubquiz.pl with proper error handling
+  and rate limiting. Retries are handled at the Oban job level
+  (max_attempts: 3 in each job module).
   """
 
   require Logger

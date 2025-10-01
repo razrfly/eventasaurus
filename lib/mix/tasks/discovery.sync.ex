@@ -32,7 +32,7 @@ defmodule Mix.Tasks.Discovery.Sync do
       mix discovery.sync ticketmaster --city warsaw --limit 200
       mix discovery.sync bandsintown --city-id 1 --limit 50
       mix discovery.sync karnet --city krakow --limit 100  # Kraków only
-      mix discovery.sync pubquiz --limit 10  # Poland-wide trivia events
+      mix discovery.sync pubquiz-pl --limit 10  # Poland-wide trivia events
       mix discovery.sync all --city krakow --limit 1000
       mix discovery.sync bandsintown --city krakow --limit 10 --inline  # Debug mode
   """
