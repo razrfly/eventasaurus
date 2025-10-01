@@ -410,6 +410,9 @@ defmodule EventasaurusWeb.Router do
 
       # City search
       live "/:city_slug/search", CityLive.Search, :index
+
+      # Aggregated content-type routes (trivia, movies, classes, etc.)
+      live "/:city_slug/:content_type/:identifier", AggregatedContentLive, :show
     end
   end
 
