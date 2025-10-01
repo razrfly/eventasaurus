@@ -9,8 +9,7 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
 
   @impl true
   def mount(params, _session, socket) do
-    # Set index path based on environment
-    index_path = if Mix.env() == :dev, do: ~p"/dev/categories", else: ~p"/admin/categories"
+    index_path = get_index_path(socket)
 
     socket =
       socket
@@ -61,10 +60,12 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
   defp save_category(socket, :new, category_params) do
     case Categories.create_category(category_params) do
       {:ok, _category} ->
+        index_path = get_index_path(socket)
+
         {:noreply,
          socket
          |> put_flash(:info, "Category created successfully")
-         |> push_navigate(to: socket.assigns.index_path)}
+         |> push_navigate(to: index_path)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
@@ -74,13 +75,24 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
   defp save_category(socket, :edit, category_params) do
     case Categories.update_category(socket.assigns.category, category_params) do
       {:ok, _category} ->
+        index_path = get_index_path(socket)
+
         {:noreply,
          socket
          |> put_flash(:info, "Category updated successfully")
-         |> push_navigate(to: socket.assigns.index_path)}
+         |> push_navigate(to: index_path)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
+    end
+  end
+
+  defp get_index_path(socket) do
+    # Determine the correct index path based on the current request URI
+    case socket.private[:connect_info][:request_path] do
+      "/dev/categories" <> _ -> ~p"/dev/categories"
+      "/admin/categories" <> _ -> ~p"/admin/categories"
+      _ -> ~p"/admin/categories"  # Default fallback
     end
   end
 
