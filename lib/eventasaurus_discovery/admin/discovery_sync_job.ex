@@ -13,8 +13,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   @sources %{
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
-    "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob
+    "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
+    "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob
   }
+
+  # Sources that don't require a city (country-wide)
+  @country_wide_sources ["pubquiz-pl"]
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -26,16 +30,29 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     # Broadcast start
     broadcast_progress(:started, %{source: source, city_id: city_id})
 
-    # Find the city
-    city = Repo.get(City, city_id) |> Repo.preload(:country)
+    # Find the city (only required for city-specific sources)
+    city =
+      if source in @country_wide_sources do
+        nil
+      else
+        Repo.get(City, city_id) |> Repo.preload(:country)
+      end
 
-    unless city do
+    # Check if city is required but not found
+    if !city && source not in @country_wide_sources && source != "all" do
       broadcast_progress(:error, %{message: "City not found"})
       {:error, "City not found"}
     else
+      city_info =
+        if source in @country_wide_sources do
+          "Country: Poland (all cities)"
+        else
+          "City: #{city.name}, #{city.country.name}"
+        end
+
       Logger.info("""
       📊 Admin Dashboard: Starting #{source} sync
-      City: #{city.name}, #{city.country.name}
+      #{city_info}
       Limit: #{limit} events
       """)
 
@@ -59,20 +76,31 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   defp sync_single_source(source_name, city, limit, options) do
     job_module = @sources[source_name]
 
-    job_args = %{
-      "city_id" => city.id,
-      "limit" => limit,
-      "options" => options
-    }
+    # Build job args based on source type
+    job_args =
+      if source_name in @country_wide_sources do
+        %{
+          "limit" => limit
+        }
+      else
+        %{
+          "city_id" => city.id,
+          "limit" => limit,
+          "options" => options
+        }
+      end
 
     # Queue the actual sync job
     case job_module.new(job_args) |> Oban.insert() do
       {:ok, job} ->
+        city_name =
+          if source_name in @country_wide_sources, do: "Poland (all cities)", else: city.name
+
         broadcast_progress(:completed, %{
           message: "Sync job queued for #{source_name}",
           job_id: job.id,
           source: source_name,
-          city: city.name
+          city: city_name
         })
 
         {:ok, %{job_id: job.id, source: source_name}}
