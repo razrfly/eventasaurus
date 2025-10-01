@@ -251,7 +251,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
     events = PublicEventsEnhanced.list_events_with_aggregation(query_filters)
 
-    total = PublicEventsEnhanced.count_events(filters)
+    # Use count_events_with_aggregation to get accurate count of aggregated results
+    total = PublicEventsEnhanced.count_events_with_aggregation(Map.put(filters, :aggregate, true))
 
     pagination = %Pagination{
       entries: events,
