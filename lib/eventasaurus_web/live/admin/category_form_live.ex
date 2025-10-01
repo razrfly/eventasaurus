@@ -9,9 +9,12 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
 
   @impl true
   def mount(params, _session, socket) do
+    index_path = get_index_path(socket)
+
     socket =
       socket
       |> assign(:action, socket.assigns.live_action)
+      |> assign(:index_path, index_path)
       |> load_form(params)
       |> assign(:parent_categories, list_parent_categories())
 
@@ -34,30 +37,35 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
   end
 
   @impl true
-  def handle_event("generate_slug", %{"name" => name}, socket) do
+  def handle_event("generate_slug", %{"value" => name}, socket) when is_binary(name) do
     slug = generate_slug_from_name(name)
 
-    # Update the changeset with the generated slug
-    category_params = %{
-      "slug" => slug,
-      "name" => name
-    }
+    # Get current form params and update slug
+    current_params = socket.assigns.form.params
+    updated_params = Map.put(current_params, "slug", slug)
 
     changeset =
       socket.assigns.category
-      |> Categories.change_category(category_params)
+      |> Categories.change_category(updated_params)
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, :form, to_form(changeset))}
   end
 
+  def handle_event("generate_slug", _params, socket) do
+    # Ignore if value is not a string
+    {:noreply, socket}
+  end
+
   defp save_category(socket, :new, category_params) do
     case Categories.create_category(category_params) do
       {:ok, _category} ->
+        index_path = get_index_path(socket)
+
         {:noreply,
          socket
          |> put_flash(:info, "Category created successfully")
-         |> push_navigate(to: ~p"/admin/categories")}
+         |> push_navigate(to: index_path)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
@@ -67,14 +75,22 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
   defp save_category(socket, :edit, category_params) do
     case Categories.update_category(socket.assigns.category, category_params) do
       {:ok, _category} ->
+        index_path = get_index_path(socket)
+
         {:noreply,
          socket
          |> put_flash(:info, "Category updated successfully")
-         |> push_navigate(to: ~p"/admin/categories")}
+         |> push_navigate(to: index_path)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
+  end
+
+  defp get_index_path(socket) do
+    # In production, always use /admin/categories
+    # In dev, we have both /dev and /admin routes available
+    ~p"/admin/categories"
   end
 
   defp load_form(socket, %{"id" => id}) do
