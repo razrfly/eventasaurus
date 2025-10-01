@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
   alias EventasaurusWeb.Helpers.CategoryHelpers
+  alias EventasaurusWeb.Live.Helpers.EventFilters
 
   import EventasaurusWeb.EventComponents
 
@@ -21,7 +22,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       |> assign(:categories, Categories.list_categories())
       |> assign(:filter_facets, %{})
       |> assign(:date_range_counts, %{})
-      |> assign(:active_date_range, :next_30_days)  # Default active range
+      |> assign(:active_date_range, nil)  # Default: no date filter (show all events)
+      |> assign(:all_events_count, 0)  # Total events without date filter
       |> assign(:show_filters, false)
       |> assign(:loading, false)
       |> assign(:group_by_date, false)
@@ -133,11 +135,26 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   @impl true
   def handle_event("clear_filters", _params, socket) do
-    cleared_filters = default_filters()
+    # Clear all filters including date filters
+    cleared_filters = %{
+      search: nil,
+      categories: [],
+      start_date: nil,
+      end_date: nil,
+      min_price: nil,
+      max_price: nil,
+      city_id: nil,
+      sort_by: :starts_at,
+      sort_order: :asc,
+      page: 1,
+      page_size: 21,
+      show_past: false
+    }
 
     socket =
       socket
       |> assign(:filters, cleared_filters)
+      |> assign(:active_date_range, nil)
       |> push_patch(
         to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, cleared_filters)})
       )
@@ -157,38 +174,36 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   @impl true
   def handle_event("quick_date_filter", %{"range" => range}, socket) do
-    range_atom = String.to_existing_atom(range)
-    {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range_atom)
+    # Use EventFilters security validation instead of String.to_existing_atom
+    case EventFilters.parse_quick_range(range) do
+      {:ok, range_atom} ->
+        # Apply the date filter using shared helper
+        filters = EventFilters.apply_quick_date_filter(socket.assigns.filters, range_atom)
 
-    filters =
-      socket.assigns.filters
-      |> Map.put(:start_date, start_date)
-      |> Map.put(:end_date, end_date)
-      |> Map.put(:page, 1)
-      # Important: When user explicitly selects a date range, show ALL events in that range
-      # including ones that already started. Don't filter out "past" events.
-      |> Map.put(:show_past, true)
+        # Set active_date_range (nil for :all, atom for others)
+        active_date_range = if range_atom == :all, do: nil, else: range_atom
 
-    socket =
-      socket
-      |> assign(:filters, filters)
-      |> assign(:active_date_range, range_atom)
-      |> fetch_events()
-      |> push_patch(
-        to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
-      )
+        socket =
+          socket
+          |> assign(:filters, filters)
+          |> assign(:active_date_range, active_date_range)
+          |> fetch_events()
+          |> push_patch(
+            to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)})
+          )
 
-    {:noreply, socket}
+        {:noreply, socket}
+
+      :error ->
+        # Invalid range - ignore the request
+        {:noreply, socket}
+    end
   end
 
   @impl true
   def handle_event("clear_date_filter", _params, socket) do
-    filters =
-      socket.assigns.filters
-      |> Map.put(:start_date, nil)
-      |> Map.put(:end_date, nil)
-      |> Map.put(:page, 1)
-      |> Map.put(:show_past, false)
+    # Use EventFilters shared helper
+    filters = EventFilters.clear_date_filter(socket.assigns.filters)
 
     socket =
       socket
@@ -254,11 +269,18 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   defp fetch_facets(socket) do
     # Fetch filter facets for displaying counts
     facets = PublicEventsEnhanced.get_filter_facets(socket.assigns.filters)
-    date_range_counts = PublicEventsEnhanced.get_quick_date_range_counts(socket.assigns.filters)
+
+    # Use EventFilters helper to build date range count filters
+    date_range_count_filters = EventFilters.build_date_range_count_filters(socket.assigns.filters)
+    date_range_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+
+    # Get count of ALL events (no date filters) for "All Events" button
+    all_events_count = PublicEventsEnhanced.count_events(date_range_count_filters)
 
     socket
     |> assign(:filter_facets, facets)
     |> assign(:date_range_counts, date_range_counts)
+    |> assign(:all_events_count, all_events_count)
   end
 
   defp apply_params_to_filters(socket, params) do
@@ -535,9 +557,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
               >
                 <Heroicons.funnel class="w-5 h-5" />
                 <span>Filters</span>
-                <%= if active_filter_count(@filters) > 0 do %>
+                <%= if EventFilters.active_filter_count(@filters) > 0 do %>
                   <span class="ml-2 bg-blue-700 px-2 py-0.5 rounded-full text-xs">
-                    <%= active_filter_count(@filters) %>
+                    <%= EventFilters.active_filter_count(@filters) %>
                   </span>
                 <% end %>
               </button>
@@ -580,6 +602,12 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
             <% end %>
           </div>
           <div class="flex flex-wrap gap-2">
+            <.date_range_button
+              range={:all}
+              label={gettext("All Events")}
+              active={@active_date_range == nil}
+              count={@all_events_count}
+            />
             <.date_range_button
               range={:today}
               label={gettext("Today")}
@@ -638,10 +666,10 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       </div>
 
       <!-- Active Filters -->
-      <div :if={active_filter_count(@filters) > 0} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+      <div :if={EventFilters.active_filter_count(@filters) > 0} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         <div class="flex items-center space-x-2">
           <span class="text-sm text-gray-600">Active filters:</span>
-          <.active_filter_tags filters={@filters} categories={@categories} />
+          <.active_filter_tags filters={@filters} categories={@categories} active_date_range={@active_date_range} />
           <button
             phx-click="clear_filters"
             class="ml-4 text-sm text-blue-600 hover:text-blue-800"
@@ -1044,50 +1072,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     """
   end
 
-  # Component: Active Filter Tags
-  defp active_filter_tags(assigns) do
-    ~H"""
-    <div class="flex flex-wrap gap-2">
-      <%= if @filters.search do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          Search: <%= @filters.search %>
-          <button phx-click="clear_search" class="ml-2">
-            <Heroicons.x_mark class="w-3 h-3" />
-          </button>
-        </span>
-      <% end %>
-
-      <%= for category_id <- @filters.categories || [] do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          <%= get_category_name(@categories, category_id) %>
-          <button phx-click="remove_category" phx-value-id={category_id} class="ml-2">
-            <Heroicons.x_mark class="w-3 h-3" />
-          </button>
-        </span>
-      <% end %>
-
-      <!-- Add more filter tags as needed -->
-    </div>
-    """
-  end
-
   # Helper Functions
-  defp active_filter_count(filters) do
-    count = 0
-    count = if filters.search, do: count + 1, else: count
-    count = if filters.categories != [], do: count + 1, else: count
-    count = if filters.start_date, do: count + 1, else: count
-    count = if filters.end_date, do: count + 1, else: count
-    count = if filters.min_price, do: count + 1, else: count
-    count = if filters.max_price, do: count + 1, else: count
-    count
-  end
-
-  defp get_category_name(categories, id) do
-    Enum.find_value(categories, fn cat ->
-      if cat.id == id, do: cat.name
-    end) || "Unknown"
-  end
 
   defp get_facet_count(facets, type, id) do
     facets[type]
