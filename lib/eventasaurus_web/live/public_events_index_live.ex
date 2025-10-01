@@ -245,10 +245,11 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
     query_filters =
       Map.merge(filters, %{
         language: language,
-        sort_order: filters[:sort_order] || :asc
+        sort_order: filters[:sort_order] || :asc,
+        aggregate: true  # Enable aggregation on index
       })
 
-    events = PublicEventsEnhanced.list_events(query_filters)
+    events = PublicEventsEnhanced.list_events_with_aggregation(query_filters)
 
     total = PublicEventsEnhanced.count_events(filters)
 
@@ -703,11 +704,23 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
             <%= if @view_mode == "grid" do %>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <.event_card :for={event <- @events} event={event} language={@language} />
+                <%= for item <- @events do %>
+                  <%= if is_aggregated?(item) do %>
+                    <.aggregated_card group={item} language={@language} />
+                  <% else %>
+                    <.event_card event={item} language={@language} />
+                  <% end %>
+                <% end %>
               </div>
             <% else %>
               <div class="space-y-4">
-                <.event_list_item :for={event <- @events} event={event} language={@language} />
+                <%= for item <- @events do %>
+                  <%= if is_aggregated?(item) do %>
+                    <.aggregated_list_item group={item} language={@language} />
+                  <% else %>
+                    <.event_list_item event={item} language={@language} />
+                  <% end %>
+                <% end %>
               </div>
             <% end %>
 
@@ -1115,4 +1128,134 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   #       "Free"
   #   end
   # end
+
+  # Helper to check if item is an AggregatedEventGroup
+  defp is_aggregated?(%EventasaurusDiscovery.PublicEvents.AggregatedEventGroup{}), do: true
+  defp is_aggregated?(_), do: false
+
+  # Component: Aggregated Event Group Card (Grid View)
+  defp aggregated_card(assigns) do
+    alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+
+    ~H"""
+    <.link navigate={AggregatedEventGroup.path(@group)} class="block">
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ring-2 ring-green-500 ring-offset-2">
+        <!-- Event Image -->
+        <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
+          <%= if @group.cover_image_url do %>
+            <img src={@group.cover_image_url} alt={@group.source_name} class="w-full h-full object-cover" loading="lazy">
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          <% end %>
+
+          <%= if @group.categories && @group.categories != [] do %>
+            <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
+            <%= if category && category.color do %>
+              <div
+                class="absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-medium text-white"
+                style={"background-color: #{category.color}"}
+              >
+                <%= category.name %>
+              </div>
+            <% end %>
+          <% end %>
+
+          <!-- Aggregated Badge -->
+          <div class="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
+            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+            </svg>
+            <%= @group.event_count %> events
+          </div>
+        </div>
+
+        <!-- Event Details -->
+        <div class="p-4">
+          <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
+            <%= AggregatedEventGroup.title(@group) %>
+          </h3>
+
+          <div class="mt-2 flex items-center text-sm text-green-600 font-medium">
+            <Heroicons.calendar class="w-4 h-4 mr-1" />
+            <%= String.capitalize(@group.aggregation_type) %>
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.building_storefront class="w-4 h-4 mr-1" />
+            <%= AggregatedEventGroup.description(@group) %>
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.map_pin class="w-4 h-4 mr-1" />
+            <%= @group.city.name %>
+          </div>
+        </div>
+      </div>
+    </.link>
+    """
+  end
+
+  # Component: Aggregated Event Group List Item (List View)
+  defp aggregated_list_item(assigns) do
+    alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+
+    ~H"""
+    <.link navigate={AggregatedEventGroup.path(@group)} class="block">
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 flex gap-4 ring-2 ring-green-500 ring-offset-2">
+        <!-- Event Image -->
+        <div class="flex-shrink-0 w-48 h-32 bg-gray-200 rounded relative overflow-hidden">
+          <%= if @group.cover_image_url do %>
+            <img src={@group.cover_image_url} alt={@group.source_name} class="w-full h-full object-cover" loading="lazy">
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Event Details -->
+        <div class="flex-grow">
+          <div class="flex items-start justify-between">
+            <div>
+              <h3 class="font-semibold text-lg text-gray-900">
+                <%= AggregatedEventGroup.title(@group) %>
+              </h3>
+
+              <div class="mt-1 flex items-center text-sm text-green-600 font-medium">
+                <Heroicons.calendar class="w-4 h-4 mr-1" />
+                <%= String.capitalize(@group.aggregation_type) %>
+              </div>
+
+              <div class="mt-1 flex items-center text-sm text-gray-600">
+                <Heroicons.building_storefront class="w-4 h-4 mr-1" />
+                <%= AggregatedEventGroup.description(@group) %>
+              </div>
+
+              <div class="mt-1 flex items-center text-sm text-gray-600">
+                <Heroicons.map_pin class="w-4 h-4 mr-1" />
+                <%= @group.city.name %>
+              </div>
+            </div>
+
+            <!-- Badge -->
+            <div class="flex-shrink-0">
+              <div class="bg-green-500 text-white px-3 py-1 rounded-md text-xs font-medium flex items-center">
+                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                </svg>
+                <%= @group.event_count %> events
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.link>
+    """
+  end
 end

@@ -821,6 +821,35 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     </h3>
 
                     <%= case occurrence_display_type(@event.occurrence_list) do %>
+                      <% :recurring_pattern -> %>
+                        <!-- Recurring pattern display with upcoming dates -->
+                        <div class="mb-4">
+                          <%= if List.first(@event.occurrence_list).pattern do %>
+                            <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                              <div class="flex items-center text-green-800">
+                                <Heroicons.arrow_path class="w-5 h-5 mr-2 flex-shrink-0" />
+                                <span class="font-semibold text-lg"><%= List.first(@event.occurrence_list).pattern %></span>
+                              </div>
+                            </div>
+                          <% end %>
+
+                          <p class="text-sm text-gray-600 mb-4">
+                            <%= gettext("Next %{count} upcoming dates:", count: length(@event.occurrence_list)) %>
+                          </p>
+
+                          <div class="space-y-2">
+                            <%= for {occurrence, index} <- Enum.with_index(@event.occurrence_list) do %>
+                              <button
+                                phx-click="select_occurrence"
+                                phx-value-index={index}
+                                class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-green-600 bg-green-50", else: "border-gray-200 hover:bg-gray-50"}"}
+                              >
+                                <span class="font-medium"><%= format_occurrence_datetime(occurrence) %></span>
+                              </button>
+                            <% end %>
+                          </div>
+                        </div>
+
                       <% :daily_show -> %>
                         <!-- Calendar-like view for events with many dates -->
                         <div class="mb-4">
@@ -1119,7 +1148,164 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     |> Enum.sort_by(& &1.datetime, DateTime)
   end
 
+  # Handle pattern-type occurrences (e.g., "every Wednesday at 8pm")
+  defp parse_occurrences(%{occurrences: %{"type" => "pattern", "pattern" => pattern}} = event) do
+    timezone = get_event_timezone(event)
+    calculate_upcoming_from_pattern(pattern, timezone, 4)
+  end
+
   defp parse_occurrences(_), do: nil
+
+  # Calculate upcoming occurrences from a recurring pattern.
+  #
+  # Pattern structure:
+  # %{
+  #   "frequency" => "weekly",
+  #   "days_of_week" => ["wednesday", "friday"],
+  #   "time" => "20:00",
+  #   "timezone" => "Europe/Warsaw"
+  # }
+  defp calculate_upcoming_from_pattern(pattern, timezone, count) do
+    %{
+      "frequency" => frequency,
+      "days_of_week" => days_of_week,
+      "time" => time_str
+    } = pattern
+
+    # Pattern timezone takes precedence over venue timezone
+    tz = pattern["timezone"] || timezone
+
+    # Parse time
+    {:ok, time} = parse_time(time_str)
+
+    # Get today's date in the target timezone
+    now = DateTime.now!(tz)
+    today = DateTime.to_date(now)
+
+    # Convert day names to integers (1 = Monday, 7 = Sunday)
+    target_weekdays =
+      days_of_week
+      |> Enum.map(&day_name_to_number/1)
+      |> Enum.sort()
+
+    case frequency do
+      "weekly" ->
+        # Generate next 12 weeks of dates, filter to matching weekdays, take first N
+        0..84
+        |> Enum.map(&Date.add(today, &1))
+        |> Enum.filter(fn date ->
+          Date.day_of_week(date) in target_weekdays
+        end)
+        |> Enum.take(count)
+        |> Enum.map(fn date ->
+          # Create datetime in target timezone
+          {:ok, datetime} = DateTime.new(date, time, tz)
+
+          %{
+            datetime: datetime,
+            date: date,
+            time: time,
+            pattern: format_pattern_description(frequency, days_of_week, time_str)
+          }
+        end)
+        |> Enum.filter(fn occurrence ->
+          DateTime.compare(occurrence.datetime, now) == :gt
+        end)
+
+      "daily" ->
+        # Generate next N days
+        0..(count * 2)
+        |> Enum.map(&Date.add(today, &1))
+        |> Enum.take(count)
+        |> Enum.map(fn date ->
+          {:ok, datetime} = DateTime.new(date, time, tz)
+
+          %{
+            datetime: datetime,
+            date: date,
+            time: time,
+            pattern: format_pattern_description(frequency, days_of_week, time_str)
+          }
+        end)
+        |> Enum.filter(fn occurrence ->
+          DateTime.compare(occurrence.datetime, now) == :gt
+        end)
+
+      _ ->
+        # Unsupported frequency - return empty list
+        []
+    end
+  end
+
+  # Convert day name string to ISO day number (1 = Monday, 7 = Sunday).
+  defp day_name_to_number(day) when is_binary(day) do
+    case String.downcase(day) do
+      "monday" -> 1
+      "tuesday" -> 2
+      "wednesday" -> 3
+      "thursday" -> 4
+      "friday" -> 5
+      "saturday" -> 6
+      "sunday" -> 7
+      _ -> 1
+    end
+  end
+
+  # Format pattern description for display (e.g., "Every Wednesday at 8:00 PM").
+  defp format_pattern_description("weekly", days_of_week, time_str) do
+    days =
+      days_of_week
+      |> Enum.map(&capitalize_day/1)
+      |> format_day_list()
+
+    time = format_time_12h(time_str)
+    "Every #{days} at #{time}"
+  end
+
+  defp format_pattern_description("daily", _days, time_str) do
+    time = format_time_12h(time_str)
+    "Daily at #{time}"
+  end
+
+  defp format_pattern_description(_frequency, _days, time_str) do
+    time = format_time_12h(time_str)
+    "Regularly at #{time}"
+  end
+
+  defp capitalize_day(day), do: String.capitalize(day)
+
+  defp format_day_list([day]), do: day
+  defp format_day_list([day1, day2]), do: "#{day1} and #{day2}"
+  defp format_day_list(days) when length(days) > 2 do
+    [last | rest] = Enum.reverse(days)
+    rest_str = rest |> Enum.reverse() |> Enum.join(", ")
+    "#{rest_str}, and #{last}"
+  end
+
+  # Format time string to 12-hour format with AM/PM.
+  defp format_time_12h(time_str) when is_binary(time_str) do
+    case String.split(time_str, ":") do
+      [h, m | _] ->
+        hour = String.to_integer(h)
+        minute = String.to_integer(m)
+
+        {display_hour, period} =
+          cond do
+            hour == 0 -> {12, "AM"}
+            hour < 12 -> {hour, "AM"}
+            hour == 12 -> {12, "PM"}
+            true -> {hour - 12, "PM"}
+          end
+
+        minute_str = String.pad_leading("#{minute}", 2, "0")
+        "#{display_hour}:#{minute_str} #{period}"
+
+      _ ->
+        time_str
+    end
+  end
+
+  defp format_time_12h(_), do: "Time not specified"
 
   defp get_event_timezone(%{venue: %{latitude: lat, longitude: lng}})
        when not is_nil(lat) and not is_nil(lng) do
@@ -1174,6 +1360,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp occurrence_display_type(occurrences) do
     cond do
+      # Pattern-based recurring events (from calculate_upcoming_from_pattern)
+      is_pattern_occurrence?(occurrences) ->
+        :recurring_pattern
+
       # More than 20 dates - daily show
       length(occurrences) > 20 ->
         :daily_show
@@ -1187,6 +1377,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         :multi_day
     end
   end
+
+  defp is_pattern_occurrence?([first | _rest]) do
+    Map.has_key?(first, :pattern)
+  end
+
+  defp is_pattern_occurrence?(_), do: false
 
   defp all_same_day?(occurrences) do
     dates = Enum.map(occurrences, & &1.date) |> Enum.uniq()
