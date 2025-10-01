@@ -45,6 +45,41 @@ cities_data = [
     latitude: 50.2649,
     longitude: 19.0238,
     country_id: poland.id
+  },
+  %{
+    name: "Gdańsk",
+    slug: "gdansk",
+    latitude: 54.3520,
+    longitude: 18.6466,
+    country_id: poland.id
+  },
+  %{
+    name: "Wrocław",
+    slug: "wroclaw",
+    latitude: 51.1079,
+    longitude: 17.0385,
+    country_id: poland.id
+  },
+  %{
+    name: "Poznań",
+    slug: "poznan",
+    latitude: 52.4064,
+    longitude: 16.9252,
+    country_id: poland.id
+  },
+  %{
+    name: "Łódź",
+    slug: "lodz",
+    latitude: 51.7592,
+    longitude: 19.4560,
+    country_id: poland.id
+  },
+  %{
+    name: "Bydgoszcz",
+    slug: "bydgoszcz",
+    latitude: 53.1235,
+    longitude: 18.0084,
+    country_id: poland.id
   }
 ]
 

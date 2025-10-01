@@ -7,6 +7,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource, PublicEventPerformer}
   alias EventasaurusDiscovery.Categories.PublicEventCategory
+  alias EventasaurusDiscovery.Sources.Source
   import Ecto.Query
   require Logger
 
@@ -70,35 +71,43 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
     Logger.info("Starting clear of public events from source: #{source_name}")
 
     Repo.transaction(fn ->
-      # Get all event IDs for this source
-      event_ids =
-        from(pes in PublicEventSource,
-          where: pes.source == ^source_name,
-          select: pes.public_event_id
-        )
-        |> Repo.all()
-        |> Enum.uniq()
+      # First, get the source ID from the source name
+      source = Repo.get_by(Source, name: source_name)
 
-      if Enum.empty?(event_ids) do
+      if is_nil(source) do
+        Logger.warning("Source not found: #{source_name}")
         0
       else
-        # Delete related records
-        from(pep in PublicEventPerformer, where: pep.public_event_id in ^event_ids)
-        |> Repo.delete_all()
+        # Get all event IDs for this source
+        event_ids =
+          from(pes in PublicEventSource,
+            where: pes.source_id == ^source.id,
+            select: pes.event_id
+          )
+          |> Repo.all()
+          |> Enum.uniq()
 
-        from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
-        |> Repo.delete_all()
-
-        from(pes in PublicEventSource, where: pes.public_event_id in ^event_ids)
-        |> Repo.delete_all()
-
-        # Delete events
-        {deleted_count, _} =
-          from(pe in PublicEvent, where: pe.id in ^event_ids)
+        if Enum.empty?(event_ids) do
+          0
+        else
+          # Delete related records
+          from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
           |> Repo.delete_all()
 
-        Logger.info("Successfully cleared #{deleted_count} events from source: #{source_name}")
-        deleted_count
+          from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
+          |> Repo.delete_all()
+
+          from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
+          |> Repo.delete_all()
+
+          # Delete events
+          {deleted_count, _} =
+            from(pe in PublicEvent, where: pe.id in ^event_ids)
+            |> Repo.delete_all()
+
+          Logger.info("Successfully cleared #{deleted_count} events from source: #{source_name}")
+          deleted_count
+        end
       end
     end)
     |> case do
