@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
   alias EventasaurusWeb.Helpers.CategoryHelpers
+  alias EventasaurusWeb.Live.Helpers.EventFilters
 
   import EventasaurusWeb.EventComponents
 
@@ -101,15 +102,15 @@ defmodule EventasaurusWeb.CityLive.Index do
   def handle_event("filter", %{"filter" => filter_params}, socket) do
     radius_km = parse_integer(filter_params["radius"]) || @default_radius_km
 
-    filters = %{
-      search: socket.assigns.filters.search,
-      categories: parse_id_list(filter_params["categories"]),
-      radius_km: radius_km,
-      sort_by: parse_sort(filter_params["sort_by"]),
-      sort_order: :asc,
-      page: 1,
-      page_size: 60  # Divisible by 3 for grid layout
-    }
+    # Update existing filters instead of creating new map
+    # This preserves date filters (start_date, end_date, show_past)
+    filters =
+      socket.assigns.filters
+      |> Map.put(:categories, parse_id_list(filter_params["categories"]))
+      |> Map.put(:radius_km, radius_km)
+      |> Map.put(:sort_by, parse_sort(filter_params["sort_by"]))
+      |> Map.put(:sort_order, :asc)
+      |> Map.put(:page, 1)
 
     socket =
       socket
@@ -123,12 +124,25 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @impl true
   def handle_event("clear_filters", _params, socket) do
-    cleared_filters = default_filters()
+    # Clear all filters including date filters
+    cleared_filters = %{
+      search: nil,
+      categories: [],
+      start_date: nil,
+      end_date: nil,
+      radius_km: @default_radius_km,
+      sort_by: :starts_at,
+      sort_order: :asc,
+      page: 1,
+      page_size: 60,
+      show_past: false
+    }
 
     socket =
       socket
       |> assign(:filters, cleared_filters)
       |> assign(:radius_km, @default_radius_km)
+      |> assign(:active_date_range, nil)
       |> fetch_events()
       |> push_patch(to: build_path(socket, cleared_filters))
 
@@ -170,56 +184,34 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   def handle_event("quick_date_filter", %{"range" => range}, socket) do
-    range_atom = String.to_existing_atom(range)
+    # Use EventFilters security validation instead of String.to_existing_atom
+    case EventFilters.parse_quick_range(range) do
+      {:ok, range_atom} ->
+        # Apply the date filter using shared helper
+        filters = EventFilters.apply_quick_date_filter(socket.assigns.filters, range_atom)
 
-    # Handle "All Events" separately - clear date filters
-    if range_atom == :all do
-      filters =
-        socket.assigns.filters
-        |> Map.put(:start_date, nil)
-        |> Map.put(:end_date, nil)
-        |> Map.put(:page, 1)
-        |> Map.put(:show_past, false)
+        # Set active_date_range (nil for :all, atom for others)
+        active_date_range = if range_atom == :all, do: nil, else: range_atom
 
-      socket =
-        socket
-        |> assign(:filters, filters)
-        |> assign(:active_date_range, nil)
-        |> fetch_events()
-        |> push_patch(to: build_path(socket, filters))
+        socket =
+          socket
+          |> assign(:filters, filters)
+          |> assign(:active_date_range, active_date_range)
+          |> fetch_events()
+          |> push_patch(to: build_path(socket, filters))
 
-      {:noreply, socket}
-    else
-      {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(range_atom)
+        {:noreply, socket}
 
-      filters =
-        socket.assigns.filters
-        |> Map.put(:start_date, start_date)
-        |> Map.put(:end_date, end_date)
-        |> Map.put(:page, 1)
-        # Important: When user explicitly selects a date range, show ALL events in that range
-        # including ones that already started. Don't filter out "past" events.
-        |> Map.put(:show_past, true)
-
-      socket =
-        socket
-        |> assign(:filters, filters)
-        |> assign(:active_date_range, range_atom)
-        |> fetch_events()
-        |> push_patch(to: build_path(socket, filters))
-
-      {:noreply, socket}
+      :error ->
+        # Invalid range - ignore the request
+        {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("clear_date_filter", _params, socket) do
-    filters =
-      socket.assigns.filters
-      |> Map.put(:start_date, nil)
-      |> Map.put(:end_date, nil)
-      |> Map.put(:page, 1)
-      |> Map.put(:show_past, false)
+    # Use EventFilters shared helper
+    filters = EventFilters.clear_date_filter(socket.assigns.filters)
 
     socket =
       socket
@@ -288,9 +280,9 @@ defmodule EventasaurusWeb.CityLive.Index do
               >
                 <Heroicons.funnel class="w-5 h-5" />
                 <span>Filters</span>
-                <%= if active_filter_count(@filters) > 0 do %>
+                <%= if EventFilters.active_filter_count(@filters, 50) > 0 do %>
                   <span class="ml-2 bg-blue-700 px-2 py-0.5 rounded-full text-xs">
-                    <%= active_filter_count(@filters) %>
+                    <%= EventFilters.active_filter_count(@filters, 50) %>
                   </span>
                 <% end %>
               </button>
@@ -395,10 +387,10 @@ defmodule EventasaurusWeb.CityLive.Index do
       </div>
 
       <!-- Active Filters -->
-      <div :if={active_filter_count(@filters) > 0} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+      <div :if={EventFilters.active_filter_count(@filters, 50) > 0} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         <div class="flex items-center space-x-2">
           <span class="text-sm text-gray-600">Active filters:</span>
-          <.active_filter_tags filters={@filters} radius_km={@radius_km} categories={@categories} active_date_range={@active_date_range} />
+          <.active_filter_tags filters={@filters} radius_km={@radius_km} categories={@categories} active_date_range={@active_date_range} default_radius={50} />
           <button
             phx-click="clear_filters"
             class="ml-4 text-sm text-blue-600 hover:text-blue-800"
@@ -522,45 +514,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     """
   end
 
-  # Component: Active Filter Tags
-  defp active_filter_tags(assigns) do
-    ~H"""
-    <div class="flex flex-wrap gap-2">
-      <%= if @filters.search do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          Search: <%= @filters.search %>
-          <button phx-click="clear_search" class="ml-2">
-            <Heroicons.x_mark class="w-3 h-3" />
-          </button>
-        </span>
-      <% end %>
-
-      <%= if @radius_km != 50 do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          Radius: <%= @radius_km %>km
-        </span>
-      <% end %>
-
-      <%= if @filters.start_date || @filters.end_date do %>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-          <%= date_range_label(assigns) %>
-          <button phx-click="clear_date_filter" class="ml-2">
-            <Heroicons.x_mark class="w-3 h-3" />
-          </button>
-        </span>
-      <% end %>
-
-      <%= for category_id <- @filters.categories do %>
-        <% category = Enum.find(@categories, & &1.id == category_id) %>
-        <%= if category do %>
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-            <%= category.name %>
-          </span>
-        <% end %>
-      <% end %>
-    </div>
-    """
-  end
 
   # Component: Pagination - EXACT same from Activities page
   defp pagination(assigns) do
@@ -829,10 +782,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
       # Get date range counts with geographic filtering, but without existing date filters
       # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
-      date_range_count_filters = count_filters
-        |> Map.delete(:start_date)
-        |> Map.delete(:end_date)
-        |> Map.put(:show_past, false)  # Default to not showing past events for date range counts
+      date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
       date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
 
       # Get the count of ALL events (no date filters) for the "All Events" button
@@ -879,41 +829,6 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   defp meta_description(city) do
     "Discover upcoming events in #{city.name}, #{city.country.name}. Find concerts, festivals, workshops, and more happening near you."
-  end
-
-
-  defp active_filter_count(filters) do
-    count = 0
-    count = if filters.search && filters.search != "", do: count + 1, else: count
-    count = if filters.radius_km && filters.radius_km != @default_radius_km, do: count + 1, else: count
-    count = count + length(filters.categories || [])
-    # Count date filters (start_date or end_date present means date filter is active)
-    count = if filters.start_date || filters.end_date, do: count + 1, else: count
-    count
-  end
-
-  defp date_range_label(assigns) do
-    case assigns.active_date_range do
-      :today -> "Today"
-      :tomorrow -> "Tomorrow"
-      :this_weekend -> "This Weekend"
-      :next_7_days -> "Next 7 Days"
-      :next_30_days -> "Next 30 Days"
-      :this_month -> "This Month"
-      :next_month -> "Next Month"
-      _ ->
-        # Custom date range
-        cond do
-          assigns.filters.start_date && assigns.filters.end_date ->
-            "#{Date.to_string(assigns.filters.start_date)} - #{Date.to_string(assigns.filters.end_date)}"
-          assigns.filters.start_date ->
-            "From #{Date.to_string(assigns.filters.start_date)}"
-          assigns.filters.end_date ->
-            "Until #{Date.to_string(assigns.filters.end_date)}"
-          true ->
-            "Date Filter"
-        end
-    end
   end
 
   defp parse_id_list(nil), do: []

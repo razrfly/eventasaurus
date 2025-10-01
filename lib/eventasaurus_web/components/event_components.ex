@@ -1840,6 +1840,11 @@ defmodule EventasaurusWeb.EventComponents do
         count={Map.get(@date_range_counts, :today, 0)}
       />
   """
+  attr :range, :atom, required: true, doc: "date range identifier (e.g., :today, :tomorrow)"
+  attr :label, :string, required: true, doc: "button label text"
+  attr :active, :boolean, default: false, doc: "whether this range is currently active"
+  attr :count, :integer, default: 0, doc: "number of events in this range"
+
   def date_range_button(assigns) do
     ~H"""
     <button
@@ -1863,6 +1868,73 @@ defmodule EventasaurusWeb.EventComponents do
         </span>
       <% end %>
     </button>
+    """
+  end
+
+  @doc """
+  Renders active filter tags with remove buttons.
+
+  Displays tags for:
+  - Search term
+  - Radius (if different from default and provided)
+  - Date range (if active_date_range provided)
+  - Categories
+
+  ## Examples
+
+      <.active_filter_tags
+        filters={@filters}
+        categories={@categories}
+        active_date_range={@active_date_range}
+        radius_km={@radius_km}
+        default_radius={50}
+      />
+  """
+  attr :filters, :map, required: true, doc: "current filter values"
+  attr :categories, :list, required: true, doc: "list of available categories"
+  attr :active_date_range, :atom, default: nil, doc: "currently active date range atom"
+  attr :radius_km, :integer, default: nil, doc: "current radius in km (city page only)"
+  attr :default_radius, :integer, default: 50, doc: "default radius to compare against"
+
+  def active_filter_tags(assigns) do
+    ~H"""
+    <div class="flex flex-wrap gap-2">
+      <%= if @filters[:search] && @filters[:search] != "" do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          Search: <%= @filters[:search] %>
+          <button phx-click="clear_search" class="ml-2">
+            <Heroicons.x_mark class="w-3 h-3" />
+          </button>
+        </span>
+      <% end %>
+
+      <%= if @radius_km && @radius_km != @default_radius do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          Radius: <%= @radius_km %>km
+        </span>
+      <% end %>
+
+      <%= if (@filters[:start_date] || @filters[:end_date]) && @active_date_range do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          <%= EventasaurusWeb.Live.Helpers.EventFilters.date_range_label(@active_date_range, @filters) %>
+          <button phx-click="clear_date_filter" class="ml-2">
+            <Heroicons.x_mark class="w-3 h-3" />
+          </button>
+        </span>
+      <% end %>
+
+      <%= for category_id <- @filters[:categories] || [] do %>
+        <% category = Enum.find(@categories, & &1.id == category_id) %>
+        <%= if category do %>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+            <%= category.name %>
+            <button phx-click="remove_category" phx-value-id={category_id} class="ml-2">
+              <Heroicons.x_mark class="w-3 h-3" />
+            </button>
+          </span>
+        <% end %>
+      <% end %>
+    </div>
     """
   end
 end
