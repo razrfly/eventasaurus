@@ -10,7 +10,6 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.Sources.Source
 
   @default_limit 20
   @max_limit 500
@@ -810,6 +809,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Returns a list containing both regular PublicEvent structs and AggregatedEventGroup structs.
   Events from sources with `aggregate_on_index: true` are grouped by source+city+type.
 
+  When aggregation is enabled, pagination happens AFTER aggregation to ensure:
+  - Aggregated cards appear only once across all pages
+  - Consistent number of results per page (no gaps in grid layout)
+
   ## Options
   Same as list_events/1, plus:
     * `:aggregate` - Enable aggregation (default: false)
@@ -819,8 +822,23 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def list_events_with_aggregation(opts \\ []) do
     if opts[:aggregate] do
-      events = list_events(opts)
-      aggregate_events(events, opts)
+      # Extract pagination params before removing them
+      page = opts[:page] || 1
+      page_size = opts[:page_size] || @default_limit
+
+      # Fetch all events without pagination, but with reasonable limit for performance
+      # Handle both Keyword lists and Maps
+      opts_without_pagination =
+        opts
+        |> Enum.reject(fn {key, _} -> key == :page end)
+        |> Enum.into(%{})
+        |> Map.put(:page_size, @max_limit)  # Fetch up to 500 events
+
+      events = list_events(opts_without_pagination)
+      aggregated = aggregate_events(events, opts)
+
+      # Apply pagination to aggregated results
+      paginate_aggregated_results(aggregated, page, page_size)
     else
       list_events(opts)
     end
@@ -857,6 +875,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       %AggregatedEventGroup{} -> DateTime.utc_now()  # Groups sort to top
       %PublicEvent{starts_at: starts_at} -> starts_at || DateTime.utc_now()
     end)
+  end
+
+  # Paginate aggregated results (in-memory pagination)
+  defp paginate_aggregated_results(items, page, page_size) do
+    page = max(page, 1)
+    page_size = min(page_size, @max_limit)
+    offset = (page - 1) * page_size
+
+    items
+    |> Enum.drop(offset)
+    |> Enum.take(page_size)
   end
 
   # Check if an event should be aggregated
