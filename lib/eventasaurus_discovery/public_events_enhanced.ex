@@ -6,9 +6,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   import Ecto.Query, warn: false
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Sources.Source
 
   @default_limit 20
   @max_limit 500
@@ -45,6 +47,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> filter_by_price_range(opts[:min_price], opts[:max_price])
     |> filter_by_location(opts[:city_id], opts[:country_id], opts[:venue_ids])
     |> filter_by_radius(opts[:center_lat], opts[:center_lng], opts[:radius_km])
+    |> filter_by_source(opts[:source_slug])
     |> apply_search(opts[:search])
     |> apply_sorting(opts[:sort_by], opts[:sort_order])
     |> paginate(opts[:page], opts[:page_size])
@@ -242,6 +245,20 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp filter_by_venues(query, venue_ids) when is_list(venue_ids) do
     from(pe in query, where: pe.venue_id in ^venue_ids)
+  end
+
+  ## Source Filtering
+
+  defp filter_by_source(query, nil), do: query
+
+  defp filter_by_source(query, source_slug) when is_binary(source_slug) do
+    from(pe in query,
+      join: pes in "public_event_sources",
+      on: pes.event_id == pe.id,
+      join: s in "sources",
+      on: s.id == pes.source_id,
+      where: s.slug == ^source_slug
+    )
   end
 
   ## Geographic Filtering
@@ -784,6 +801,116 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       :future -> "Future Events"
       :past -> "Past Events"
       :unknown -> "Unknown Date"
+    end
+  end
+
+  @doc """
+  List events with aggregation support for index pages.
+
+  Returns a list containing both regular PublicEvent structs and AggregatedEventGroup structs.
+  Events from sources with `aggregate_on_index: true` are grouped by source+city+type.
+
+  ## Options
+  Same as list_events/1, plus:
+    * `:aggregate` - Enable aggregation (default: false)
+
+  ## Returns
+  Mixed list of PublicEvent and AggregatedEventGroup structs
+  """
+  def list_events_with_aggregation(opts \\ []) do
+    if opts[:aggregate] do
+      events = list_events(opts)
+      aggregate_events(events, opts)
+    else
+      list_events(opts)
+    end
+  end
+
+  @doc """
+  Aggregates events from sources marked for aggregation.
+
+  Groups events by source+city combination and creates AggregatedEventGroup structs.
+  Non-aggregatable events are returned as-is.
+  """
+  def aggregate_events(events, _opts \\ []) do
+    # Preload sources and venue.city_ref for all events
+    events_with_sources = Repo.preload(events, [sources: :source, venue: :city_ref])
+
+    # Separate aggregatable from non-aggregatable events
+    {aggregatable, non_aggregatable} = Enum.split_with(events_with_sources, &event_aggregatable?/1)
+
+    # Group aggregatable events by source+city
+    aggregated_groups =
+      aggregatable
+      |> Enum.group_by(fn event ->
+        source = get_event_source(event)
+        {source.id, event.venue.city_id, source.aggregation_type}
+      end)
+      |> Enum.map(fn {{source_id, city_id, aggregation_type}, events} ->
+        build_aggregated_group(source_id, city_id, aggregation_type, events)
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    # Combine and sort by starts_at (for groups, use first event's date)
+    (aggregated_groups ++ non_aggregatable)
+    |> Enum.sort_by(fn
+      %AggregatedEventGroup{} -> DateTime.utc_now()  # Groups sort to top
+      %PublicEvent{starts_at: starts_at} -> starts_at || DateTime.utc_now()
+    end)
+  end
+
+  # Check if an event should be aggregated
+  defp event_aggregatable?(%PublicEvent{sources: sources}) when is_list(sources) do
+    Enum.any?(sources, fn es ->
+      es.source && es.source.aggregate_on_index == true
+    end)
+  end
+  defp event_aggregatable?(_), do: false
+
+  # Get the source for an event (first one with aggregate_on_index=true)
+  defp get_event_source(%PublicEvent{sources: sources}) do
+    Enum.find(sources, fn es ->
+      es.source && es.source.aggregate_on_index == true
+    end).source
+  end
+
+  # Build an AggregatedEventGroup from a list of events
+  defp build_aggregated_group(source_id, city_id, aggregation_type, events) do
+    # Get source and city info from first event
+    first_event = List.first(events)
+    source = get_event_source(first_event)
+
+    if first_event.venue && first_event.venue.city_ref do
+      # Get unique venues
+      unique_venues = events |> Enum.map(& &1.venue_id) |> Enum.uniq() |> length()
+
+      # Get all categories from events
+      all_categories =
+        events
+        |> Enum.flat_map(& &1.categories || [])
+        |> Enum.uniq_by(& &1.id)
+
+      # Use first event's cover image
+      cover_image_url = first_event.cover_image_url || List.first(events).cover_image_url
+
+      # Check if any event is recurring
+      is_recurring = Enum.any?(events, &PublicEvent.recurring?/1)
+
+      %AggregatedEventGroup{
+        source_id: source_id,
+        source_slug: source.slug,
+        source_name: source.name,
+        aggregation_type: aggregation_type || "events",
+        city_id: city_id,
+        city: first_event.venue.city_ref,
+        event_count: length(events),
+        venue_count: unique_venues,
+        categories: all_categories,
+        cover_image_url: cover_image_url,
+        is_recurring: is_recurring
+      }
+    else
+      nil
     end
   end
 end
