@@ -87,7 +87,7 @@ defmodule EventasaurusWeb.Admin.CategoryFormLive do
     end
   end
 
-  defp get_index_path(socket) do
+  defp get_index_path(_socket) do
     # In production, always use /admin/categories
     # In dev, we have both /dev and /admin routes available
     ~p"/admin/categories"
