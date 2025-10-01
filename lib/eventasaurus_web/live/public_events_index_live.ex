@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
+  alias EventasaurusDiscovery.CountCache
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Live.Helpers.EventFilters
 
@@ -274,7 +275,13 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
     # Use EventFilters helper to build date range count filters
     date_range_count_filters = EventFilters.build_date_range_count_filters(socket.assigns.filters)
-    date_range_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+
+    # Use cache for date range counts (5 minute TTL)
+    # Cache key includes categories to ensure counts update when filters change
+    cache_key = {:date_counts_global, socket.assigns.filters[:categories] || []}
+    date_range_counts = CountCache.get_or_fetch(cache_key, fn ->
+      PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+    end)
 
     # Get count of ALL events (no date filters) for "All Events" button
     all_events_count = PublicEventsEnhanced.count_events(date_range_count_filters)
@@ -741,7 +748,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   # Component: Filter Panel
   defp filter_panel(assigns) do
     ~H"""
-    <form phx-change="filter" class="space-y-6">
+    <form id="activities-filter-form" phx-change="filter" phx-hook="FilterDebounce" class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Categories -->
         <div>
