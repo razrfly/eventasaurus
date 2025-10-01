@@ -1,6 +1,6 @@
 defmodule EventasaurusWeb.Live.Helpers.EventFilters do
   @moduledoc """
-  Shared event filtering logic for City and Activities pages.
+  Shared event filtering logic for City and Public Events pages.
 
   This module provides pure functions for transforming filter maps,
   calculating active filter counts, and managing date range filters.
@@ -133,13 +133,17 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
     # Custom date range - format the dates
     cond do
       filters[:start_date] && filters[:end_date] ->
-        "#{Date.to_string(filters[:start_date])} - #{Date.to_string(filters[:end_date])}"
+        start_str = filters[:start_date] |> DateTime.to_date() |> Date.to_string()
+        end_str = filters[:end_date] |> DateTime.to_date() |> Date.to_string()
+        "#{start_str} - #{end_str}"
 
       filters[:start_date] ->
-        "From #{Date.to_string(filters[:start_date])}"
+        date_str = filters[:start_date] |> DateTime.to_date() |> Date.to_string()
+        "From #{date_str}"
 
       filters[:end_date] ->
-        "Until #{Date.to_string(filters[:end_date])}"
+        date_str = filters[:end_date] |> DateTime.to_date() |> Date.to_string()
+        "Until #{date_str}"
 
       true ->
         "Date Filter"
