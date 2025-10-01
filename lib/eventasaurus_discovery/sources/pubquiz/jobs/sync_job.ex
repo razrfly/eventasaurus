@@ -77,6 +77,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
 
   defp get_or_create_pubquiz_source do
     alias EventasaurusDiscovery.Sources.Pubquiz.Source, as: PubquizSource
+    alias EventasaurusDiscovery.Sources.Pubquiz.Config
 
     case Repo.get_by(Source, slug: PubquizSource.key()) do
       nil ->
@@ -89,7 +90,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
           website_url: "https://pubquiz.pl",
           priority: PubquizSource.priority(),
           config: %{
-            "rate_limit_seconds" => 2,
+            "rate_limit_seconds" => Config.rate_limit(),
             "max_requests_per_hour" => 300,
             "language" => "pl",
             "supports_recurring_events" => true

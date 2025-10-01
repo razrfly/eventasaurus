@@ -43,7 +43,12 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Transformer do
     end
   end
 
-  defp build_title(venue_name) do
+  @doc """
+  Builds a standardized event title from venue name.
+
+  Removes PubQuiz.pl branding and creates consistent title format.
+  """
+  def build_title(venue_name) do
     # Clean up venue name and create event title
     cleaned_name =
       venue_name

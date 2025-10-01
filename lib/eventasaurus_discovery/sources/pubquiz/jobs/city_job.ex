@@ -48,12 +48,10 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
 
   defp extract_city_name_from_url(url) do
     # Extract city name from URL like "/kategoria-produktu/katowice/"
-    url
-    |> String.split("/")
-    |> Enum.reject(&(&1 == ""))
-    |> List.last()
-    |> String.trim()
-    |> String.capitalize()
+    case String.split(url, "/") |> Enum.reject(&(&1 == "")) do
+      [] -> "Unknown"
+      segments -> segments |> List.last() |> String.trim() |> String.capitalize()
+    end
   end
 
   defp filter_valid_venues(venues) do
@@ -77,7 +75,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     venues
     |> Enum.with_index()
     |> Enum.map(fn {venue, index} ->
-      # Stagger venue jobs to respect rate limits (2 seconds between requests)
+      # Stagger venue jobs to respect rate limits (3 seconds between requests)
       delay_seconds = index * 3
       scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
