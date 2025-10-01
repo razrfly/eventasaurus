@@ -1193,14 +1193,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         Stream.iterate(today, &Date.add(&1, 1))
         |> Stream.filter(fn d -> Date.day_of_week(d) in target_weekdays end)
         |> Stream.map(fn d ->
-          {:ok, dt} = DateTime.new(d, time, tz)
-          %{
-            datetime: dt,
-            date: d,
-            time: time,
-            pattern: format_pattern_description(frequency, days_of_week, time_str)
-          }
+          case DateTime.new(d, time, tz) do
+            {:ok, dt} ->
+              %{
+                datetime: dt,
+                date: d,
+                time: time,
+                pattern: format_pattern_description(frequency, days_of_week, time_str)
+              }
+
+            {:error, _} ->
+              nil
+          end
         end)
+        |> Stream.reject(&is_nil/1)
         |> Stream.filter(fn occ -> DateTime.compare(occ.datetime, now) == :gt end)
         |> Enum.take(count)
 
@@ -1208,14 +1214,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         # Generate next N future daily occurrences
         Stream.iterate(today, &Date.add(&1, 1))
         |> Stream.map(fn d ->
-          {:ok, dt} = DateTime.new(d, time, tz)
-          %{
-            datetime: dt,
-            date: d,
-            time: time,
-            pattern: format_pattern_description(frequency, days_of_week, time_str)
-          }
+          case DateTime.new(d, time, tz) do
+            {:ok, dt} ->
+              %{
+                datetime: dt,
+                date: d,
+                time: time,
+                pattern: format_pattern_description(frequency, days_of_week, time_str)
+              }
+
+            {:error, _} ->
+              nil
+          end
         end)
+        |> Stream.reject(&is_nil/1)
         |> Stream.filter(fn occ -> DateTime.compare(occ.datetime, now) == :gt end)
         |> Enum.take(count)
 
@@ -1264,6 +1276,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp format_day_list([day]), do: day
   defp format_day_list([day1, day2]), do: "#{day1} and #{day2}"
+
   defp format_day_list(days) when length(days) > 2 do
     [last | rest] = Enum.reverse(days)
     rest_str = rest |> Enum.reverse() |> Enum.join(", ")
