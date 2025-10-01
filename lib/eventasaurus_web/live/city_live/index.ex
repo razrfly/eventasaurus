@@ -790,8 +790,9 @@ defmodule EventasaurusWeb.CityLive.Index do
       events = PublicEventsEnhanced.list_events_with_aggregation(Map.put(query_filters, :aggregate, true))
 
       # Get the total count without pagination
+      # Use count_events_with_aggregation to get accurate count of aggregated results
       count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
-      total = PublicEventsEnhanced.count_events(count_filters)
+      total = PublicEventsEnhanced.count_events_with_aggregation(Map.put(count_filters, :aggregate, true))
 
       # Get date range counts with geographic filtering, but without existing date filters
       # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
@@ -799,7 +800,8 @@ defmodule EventasaurusWeb.CityLive.Index do
       date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
 
       # Get the count of ALL events (no date filters) for the "All Events" button
-      all_events = PublicEventsEnhanced.count_events(date_range_count_filters)
+      # Use aggregation-aware count here as well
+      all_events = PublicEventsEnhanced.count_events_with_aggregation(Map.put(date_range_count_filters, :aggregate, true))
 
       {events, total, all_events, date_counts}
     else

@@ -20,6 +20,11 @@ defmodule EventasaurusWeb.Router do
 
       # Discovery Dashboard (dev - no auth)
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+      # Category Management (dev - no auth)
+      live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
+      live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
+      live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
     end
 
     # Category demo routes for testing
@@ -61,6 +66,11 @@ defmodule EventasaurusWeb.Router do
 
       # Discovery Dashboard with admin authentication
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+      # Category Management
+      live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
+      live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
+      live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
     end
   end
 
