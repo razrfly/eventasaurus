@@ -34,6 +34,18 @@ sources = [
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 800
     }
+  },
+  %{
+    name: "PubQuiz Poland",
+    slug: "pubquiz-pl",
+    website_url: "https://pubquiz.pl",
+    priority: 25,
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 300,
+      "language" => "pl",
+      "supports_recurring_events" => true
+    }
   }
 ]
 

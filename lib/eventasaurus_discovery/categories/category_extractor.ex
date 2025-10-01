@@ -132,6 +132,20 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   end
 
   @doc """
+  Extract categories from generic event data with a category string field.
+  Used for sources like PubQuiz that provide a simple category string.
+  """
+  def extract_generic_categories(event_data) when is_map(event_data) do
+    category = event_data[:category] || event_data["category"]
+
+    if category && is_binary(category) do
+      [{nil, nil, String.downcase(category)}]
+    else
+      []
+    end
+  end
+
+  @doc """
   Map external category classifications to internal category IDs.
   Returns a list of {category_id, is_primary} tuples with highest priority first.
   """
@@ -178,7 +192,10 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
         "ticketmaster" -> extract_ticketmaster_categories(external_data)
         "karnet" -> extract_karnet_categories(external_data)
         "bandsintown" -> extract_bandsintown_categories(external_data)
-        _ -> []
+        # For other sources (like PubQuiz), try to extract from generic category field
+        _ ->
+          classifications = extract_generic_categories(external_data)
+          map_to_categories(source, classifications)
       end
 
     if length(categories) > 0 do

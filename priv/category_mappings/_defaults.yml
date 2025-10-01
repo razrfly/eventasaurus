@@ -53,6 +53,12 @@ mappings:
   networking: business
   expo: business
   summit: business
+  trivia: trivia
+  quiz: trivia
+  pubquiz: trivia
+  pub quiz: trivia
+  quiz night: trivia
+  trivia night: trivia
   other: other
   misc: other
   miscellaneous: other
@@ -82,3 +88,5 @@ patterns:
     categories: [food-drink]
   - match: "sport|game|match|race"
     categories: [sports]
+  - match: "trivia|quiz|pub.?quiz"
+    categories: [trivia]
