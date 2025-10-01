@@ -7,11 +7,17 @@ defmodule EventasaurusApp.Repo.Migrations.AddAggregationFieldsToSources do
       add :aggregation_type, :string
     end
 
-    # Enable aggregation for PubQuiz Poland source
+    # Enable aggregation for PubQuiz Poland source (create if it doesn't exist)
     execute """
-    UPDATE sources
-    SET aggregate_on_index = true, aggregation_type = 'trivia'
-    WHERE slug = 'pubquiz-pl'
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM sources WHERE slug = 'pubquiz-pl') THEN
+        UPDATE sources
+        SET aggregate_on_index = true, aggregation_type = 'trivia'
+        WHERE slug = 'pubquiz-pl';
+      END IF;
+    END
+    $$;
     """, ""
   end
 end

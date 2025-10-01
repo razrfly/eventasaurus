@@ -1166,11 +1166,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   #   "timezone" => "Europe/Warsaw"
   # }
   defp calculate_upcoming_from_pattern(pattern, timezone, count) do
-    %{
-      "frequency" => frequency,
-      "days_of_week" => days_of_week,
-      "time" => time_str
-    } = pattern
+    # Safe pattern access with defaults
+    frequency = Map.fetch!(pattern, "frequency")
+    time_str = Map.fetch!(pattern, "time")
+    days_of_week = Map.get(pattern, "days_of_week", [])
 
     # Pattern timezone takes precedence over venue timezone
     tz = pattern["timezone"] || timezone
@@ -1190,46 +1189,35 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
     case frequency do
       "weekly" ->
-        # Generate next 12 weeks of dates, filter to matching weekdays, take first N
-        0..84
-        |> Enum.map(&Date.add(today, &1))
-        |> Enum.filter(fn date ->
-          Date.day_of_week(date) in target_weekdays
-        end)
-        |> Enum.take(count)
-        |> Enum.map(fn date ->
-          # Create datetime in target timezone
-          {:ok, datetime} = DateTime.new(date, time, tz)
-
+        # Generate upcoming dates matching target weekdays, take first N future occurrences
+        Stream.iterate(today, &Date.add(&1, 1))
+        |> Stream.filter(fn d -> Date.day_of_week(d) in target_weekdays end)
+        |> Stream.map(fn d ->
+          {:ok, dt} = DateTime.new(d, time, tz)
           %{
-            datetime: datetime,
-            date: date,
+            datetime: dt,
+            date: d,
             time: time,
             pattern: format_pattern_description(frequency, days_of_week, time_str)
           }
         end)
-        |> Enum.filter(fn occurrence ->
-          DateTime.compare(occurrence.datetime, now) == :gt
-        end)
+        |> Stream.filter(fn occ -> DateTime.compare(occ.datetime, now) == :gt end)
+        |> Enum.take(count)
 
       "daily" ->
-        # Generate next N days
-        0..(count * 2)
-        |> Enum.map(&Date.add(today, &1))
-        |> Enum.take(count)
-        |> Enum.map(fn date ->
-          {:ok, datetime} = DateTime.new(date, time, tz)
-
+        # Generate next N future daily occurrences
+        Stream.iterate(today, &Date.add(&1, 1))
+        |> Stream.map(fn d ->
+          {:ok, dt} = DateTime.new(d, time, tz)
           %{
-            datetime: datetime,
-            date: date,
+            datetime: dt,
+            date: d,
             time: time,
             pattern: format_pattern_description(frequency, days_of_week, time_str)
           }
         end)
-        |> Enum.filter(fn occurrence ->
-          DateTime.compare(occurrence.datetime, now) == :gt
-        end)
+        |> Stream.filter(fn occ -> DateTime.compare(occ.datetime, now) == :gt end)
+        |> Enum.take(count)
 
       _ ->
         # Unsupported frequency - return empty list
