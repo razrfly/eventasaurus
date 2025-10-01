@@ -122,44 +122,51 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     else
       # Queue the discovery sync job
       # For city-specific sources, look up the city by slug
-      city_id_val =
+      city_id_result =
         if Map.has_key?(@city_specific_sources, source) do
           city_slug = @city_specific_sources[source]
           case Repo.one(from(c in City, where: c.slug == ^city_slug, select: c.id)) do
             nil ->
-              Logger.warning("City not found for slug: #{city_slug}, source: #{source}")
-              city_id_or_slug
+              Logger.error("City not found for slug: #{city_slug}, source: #{source}")
+              {:error, "City '#{city_slug}' not found in database. Please add it first."}
             id ->
-              id
+              {:ok, id}
           end
         else
           # Parse city_id to integer if it's a numeric string
           case Integer.parse(to_string(city_id_or_slug)) do
-            {i, _} -> i
-            :error -> city_id_or_slug
+            {i, _} -> {:ok, i}
+            :error -> {:ok, city_id_or_slug}
           end
         end
 
-      job_args = %{
-        "source" => source,
-        "city_id" => city_id_val,
-        "limit" => limit,
-        "radius" => radius
-      }
-
-      case DiscoverySyncJob.new(job_args) |> Oban.insert() do
-        {:ok, job} ->
-          socket =
-            socket
-            |> put_flash(:info, "Queued import job ##{job.id} for #{source}")
-            |> assign(:import_running, true)
-            |> assign(:import_progress, "Queued...")
-
+      case city_id_result do
+        {:error, error_message} ->
+          socket = put_flash(socket, :error, error_message)
           {:noreply, socket}
 
-        {:error, reason} ->
-          socket = put_flash(socket, :error, "Failed to queue import: #{inspect(reason)}")
-          {:noreply, socket}
+        {:ok, city_id_val} ->
+          job_args = %{
+            "source" => source,
+            "city_id" => city_id_val,
+            "limit" => limit,
+            "radius" => radius
+          }
+
+          case DiscoverySyncJob.new(job_args) |> Oban.insert() do
+            {:ok, job} ->
+              socket =
+                socket
+                |> put_flash(:info, "Queued import job ##{job.id} for #{source}")
+                |> assign(:import_running, true)
+                |> assign(:import_progress, "Queued...")
+
+              {:noreply, socket}
+
+            {:error, reason} ->
+              socket = put_flash(socket, :error, "Failed to queue import: #{inspect(reason)}")
+              {:noreply, socket}
+          end
       end
     end
   end
