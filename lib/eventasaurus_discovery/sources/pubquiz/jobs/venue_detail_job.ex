@@ -59,7 +59,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   defp process_through_pipeline(venue_data, source, city_name, external_id) do
     # Build event map for processor
     event_map = %{
-      title: build_title(venue_data["venue_name"]),
+      title: Transformer.build_title(venue_data["venue_name"]),
       source_url: venue_data["venue_url"],
       external_id: external_id,
 
@@ -136,17 +136,6 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
 
       {:discard, :no_valid_schedule}
     end
-  end
-
-  defp build_title(venue_name) do
-    # Clean up venue name
-    cleaned =
-      venue_name
-      |> String.replace(~r/PubQuiz\.pl\s+-\s+/i, "")
-      |> String.replace(~r/Pub\s+Quiz\s+-\s+/i, "")
-      |> String.trim()
-
-    "Weekly Trivia Night - #{cleaned}"
   end
 
   defp extract_external_id(url) do

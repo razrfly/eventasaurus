@@ -51,7 +51,7 @@ Use descriptive slugs that identify the brand and region:
 
 All regional trivia scrapers follow this structure:
 
-```
+```text
 lib/eventasaurus_discovery/sources/[source_name]/
 ├── config.ex              # URLs, rate limits, constants
 ├── source.ex              # Source definition with metadata
