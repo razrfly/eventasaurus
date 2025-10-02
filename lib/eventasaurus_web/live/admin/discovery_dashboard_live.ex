@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   @refresh_interval 5000
   @country_wide_sources ["pubquiz-pl"]
-  @city_specific_sources %{"karnet" => "krakow"}
+  @city_specific_sources %{"karnet" => "krakow", "kino-krakow" => "krakow"}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -287,7 +287,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     cities = Repo.all(from(c in City, order_by: c.name, preload: :country))
 
     # Get available sources
-    sources = ["ticketmaster", "bandsintown", "karnet", "pubquiz-pl", "all"]
+    sources = ["ticketmaster", "bandsintown", "karnet", "kino-krakow", "pubquiz-pl", "all"]
 
     # Get queue statistics
     queue_stats = get_queue_statistics()

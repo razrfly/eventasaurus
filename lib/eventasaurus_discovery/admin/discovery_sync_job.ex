@@ -14,6 +14,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
+    "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob
   }
 

@@ -147,9 +147,13 @@ defmodule EventasaurusWeb.Services.TmdbService do
       type: :movie,
       id: item["id"],
       title: item["title"],
+      original_title: item["original_title"],
+      original_language: item["original_language"],
       overview: item["overview"],
       poster_path: item["poster_path"],
-      release_date: item["release_date"]
+      release_date: item["release_date"],
+      vote_average: item["vote_average"],
+      popularity: item["popularity"]
     }
   end
 
