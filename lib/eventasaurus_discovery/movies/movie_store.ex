@@ -69,7 +69,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
     Movie
     |> limit(^limit)
     |> offset(^offset)
-    |> order_by([{^order_direction, ^order_by_field}])
+    |> order_by([m], [{^order_direction, field(m, ^order_by_field)}])
     |> Repo.all()
   end
 

@@ -123,14 +123,14 @@ end
 ## Test Results
 
 ### Before Fixes
-```
+```text
 Testing: Interstellar (2014)
 Result: ❌ FAILED - :no_candidates
 Reason: All comparisons returned nil due to string key bug
 ```
 
 ### After Fixes
-```
+```text
 Testing: Interstellar (2014)
 Result: ✅ SUCCESS! Matched with high confidence
 TMDB ID: 157336
