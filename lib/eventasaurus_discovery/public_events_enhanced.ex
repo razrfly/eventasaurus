@@ -7,6 +7,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
@@ -852,17 +853,21 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Aggregates events from sources marked for aggregation.
 
   Groups events by source+city combination and creates AggregatedEventGroup structs.
+  Also groups movie screenings by movie+city and creates AggregatedMovieGroup structs.
   Non-aggregatable events are returned as-is.
   """
   def aggregate_events(events, _opts \\ []) do
-    # Preload sources and venue.city_ref for all events
-    events_with_sources = Repo.preload(events, [sources: :source, venue: :city_ref])
+    # Preload sources, movies, and venue.city_ref for all events
+    events_with_sources = Repo.preload(events, [sources: :source, venue: :city_ref, movies: []])
 
-    # Separate aggregatable from non-aggregatable events
-    {aggregatable, non_aggregatable} = Enum.split_with(events_with_sources, &event_aggregatable?/1)
+    # Separate movie events from other events
+    {movie_events, other_events} = Enum.split_with(events_with_sources, &has_movie?/1)
+
+    # Separate aggregatable from non-aggregatable events (for source-based aggregation)
+    {aggregatable, non_aggregatable} = Enum.split_with(other_events, &event_aggregatable?/1)
 
     # Group aggregatable events by source+city
-    aggregated_groups =
+    source_aggregated_groups =
       aggregatable
       |> Enum.group_by(fn event ->
         source = get_event_source(event)
@@ -873,10 +878,23 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end)
       |> Enum.reject(&is_nil/1)
 
-    # Combine and sort by starts_at (for groups, use first event's date)
-    (aggregated_groups ++ non_aggregatable)
+    # Group movie events by movie+city
+    movie_aggregated_groups =
+      movie_events
+      |> Enum.group_by(fn event ->
+        movie = List.first(event.movies)
+        {movie.id, event.venue.city_id}
+      end)
+      |> Enum.map(fn {{movie_id, city_id}, events} ->
+        build_movie_aggregated_group(movie_id, city_id, events)
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    # Combine all types and sort by starts_at (for groups, use first event's date)
+    (source_aggregated_groups ++ movie_aggregated_groups ++ non_aggregatable)
     |> Enum.sort_by(fn
       %AggregatedEventGroup{} -> DateTime.utc_now()  # Groups sort to top
+      %AggregatedMovieGroup{} -> DateTime.utc_now()  # Movie groups sort to top
       %PublicEvent{starts_at: starts_at} -> starts_at || DateTime.utc_now()
     end)
   end
@@ -929,6 +947,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
   end
 
+  # Check if an event has an associated movie
+  defp has_movie?(%PublicEvent{movies: movies}) when is_list(movies) and length(movies) > 0, do: true
+  defp has_movie?(_), do: false
+
   # Check if an event should be aggregated
   defp event_aggregatable?(%PublicEvent{sources: sources}) when is_list(sources) do
     Enum.any?(sources, fn es ->
@@ -978,6 +1000,39 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         categories: all_categories,
         cover_image_url: cover_image_url,
         is_recurring: is_recurring
+      }
+    else
+      nil
+    end
+  end
+
+  # Build an AggregatedMovieGroup from a list of movie screening events
+  defp build_movie_aggregated_group(movie_id, city_id, events) do
+    first_event = List.first(events)
+    movie = List.first(first_event.movies)
+
+    if first_event.venue && first_event.venue.city_ref && movie do
+      # Get unique venues
+      unique_venues = events |> Enum.map(& &1.venue_id) |> Enum.uniq() |> length()
+
+      # Get all categories from events
+      all_categories =
+        events
+        |> Enum.flat_map(& &1.categories || [])
+        |> Enum.uniq_by(& &1.id)
+
+      %AggregatedMovieGroup{
+        movie_id: movie_id,
+        movie_slug: movie.slug,
+        movie_title: movie.title,
+        movie_backdrop_url: movie.backdrop_url,
+        movie_poster_url: movie.poster_url,
+        movie_release_date: movie.release_date,
+        city_id: city_id,
+        city: first_event.venue.city_ref,
+        screening_count: length(events),
+        venue_count: unique_venues,
+        categories: all_categories
       }
     else
       nil
