@@ -1064,8 +1064,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         url = md["url"] -> url
         # Karnet might have it in a different location
         url = md["link"] -> url
-        # Fallback to source_url if it exists
+        # Kino Krakow stores movie page URL in metadata
+        url = md["movie_url"] -> url
+        # Fallback to source_url if it exists (event-specific URL like ticket link)
         source.source_url -> source.source_url
+        # Fallback to source website URL (general source URL like Kino Krakow homepage)
+        source.source && source.source.website_url -> source.source.website_url
         true -> nil
       end
 
