@@ -18,6 +18,6 @@ defmodule EventasaurusDiscovery.PublicEvents.EventMovie do
     |> validate_required([:event_id, :movie_id])
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:movie_id)
-    |> unique_constraint(:event_id, name: :event_movies_event_id_movie_id_index)
+    |> unique_constraint([:event_id, :movie_id], name: :event_movies_event_id_movie_id_index)
   end
 end
