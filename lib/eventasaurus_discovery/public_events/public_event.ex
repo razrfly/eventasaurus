@@ -106,6 +106,12 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
       join_keys: [event_id: :id, performer_id: :id]
     )
 
+    many_to_many(:movies, EventasaurusDiscovery.Movies.Movie,
+      join_through: EventasaurusDiscovery.PublicEvents.EventMovie,
+      join_keys: [event_id: :id, movie_id: :id],
+      on_replace: :delete
+    )
+
     # Association to sources for description_translations access
     has_many(:sources, EventasaurusDiscovery.PublicEvents.PublicEventSource,
       foreign_key: :event_id
