@@ -3,7 +3,7 @@
 ## Issue
 
 Movies were successfully matching TMDB but failing to save to database with validation error:
-```
+```text
 title: {"can't be blank", [validation: :required]}
 ```
 

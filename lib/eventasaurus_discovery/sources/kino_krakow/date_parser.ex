@@ -66,14 +66,16 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DateParser do
   def parse_time(time_string) when is_binary(time_string) do
     case String.split(time_string, ":") do
       [hour, minute] ->
-        {:ok, time} =
-          Time.new(
-            String.to_integer(String.trim(hour)),
-            String.to_integer(String.trim(minute)),
-            0
-          )
-
-        time
+        with {:ok, time} <-
+               Time.new(
+                 String.to_integer(String.trim(hour)),
+                 String.to_integer(String.trim(minute)),
+                 0
+               ) do
+          time
+        else
+          _ -> nil
+        end
 
       _ ->
         nil
@@ -94,8 +96,19 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DateParser do
 
     case {date, time} do
       {%Date{} = d, %Time{} = t} ->
-        {:ok, datetime} = DateTime.new(d, t, "Europe/Warsaw")
-        DateTime.shift_zone!(datetime, "Etc/UTC")
+        case DateTime.new(d, t, "Europe/Warsaw") do
+          {:ok, datetime} ->
+            DateTime.shift_zone!(datetime, "Etc/UTC")
+
+          {:ambiguous, datetime, _} ->
+            DateTime.shift_zone!(datetime, "Etc/UTC")
+
+          {:gap, _, datetime} ->
+            DateTime.shift_zone!(datetime, "Etc/UTC")
+
+          _ ->
+            nil
+        end
 
       _ ->
         nil

@@ -104,7 +104,7 @@ mix run /tmp/debug_multiday.exs
 ```
 
 **Output**:
-```
+```text
 [info] 🎬 Fetching Kino Krakow showtimes (7-day window)
 [debug] 📅 Fetching day 0
 [debug] 📅 Fetching day 1
@@ -131,7 +131,7 @@ LIMIT 5;
 ```
 
 **Result**:
-```
+```text
                     title                     | category
 ----------------------------------------------+----------
  Lilly i kangurek at Galeria Bronowice        | Film
