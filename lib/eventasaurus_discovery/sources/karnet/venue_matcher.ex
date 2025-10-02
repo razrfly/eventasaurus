@@ -2,9 +2,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
   @moduledoc """
   Simplified venue matcher for Kraków venues from Karnet.
 
-  Since Karnet is localized to Kraków and lower priority, this provides
-  basic venue matching without complex geocoding. Most major Kraków venues
-  will likely already exist from Ticketmaster/BandsInTown imports.
+  Provides venue name normalization and basic address extraction.
+  Coordinates are obtained through VenueGeocoder using Google Maps API.
   """
 
   require Logger
@@ -108,58 +107,27 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
   end
 
   @doc """
-  Get coordinates for known Kraków venues.
-  Returns {lat, lng} or nil if not found.
-
-  Note: In production, these would come from a geocoding service
-  or be stored in the database. For now, hardcoding major venues.
-  """
-  def get_venue_coordinates(venue_name) do
-    # Major Kraków venues with approximate coordinates
-    coordinates = %{
-      "Centrum Kongresowe ICE Kraków" => {50.0647, 19.9450},
-      "Tauron Arena Kraków" => {50.0669, 20.0176},
-      "Teatr im. J. Słowackiego" => {50.0640, 19.9415},
-      "Nowohuckie Centrum Kultury" => {50.0676, 20.0367},
-      "MOCAK" => {50.0475, 19.9615},
-      "Muzeum Narodowe w Krakowie - Gmach Główny" => {50.0604, 19.9240},
-      "Opera Krakowska" => {50.0672, 19.9551},
-      "Filharmonia Krakowska" => {50.0642, 19.9382},
-      "Rynek Główny" => {50.0617, 19.9373},
-      "Wawel" => {50.0541, 19.9352}
-    }
-
-    coordinates[venue_name]
-  end
-
-  @doc """
   Process venue data for integration with VenueProcessor.
+
+  Returns venue data with nil coordinates to trigger automatic geocoding
+  via VenueGeocoder using Google Maps API.
   """
   def prepare_venue_for_processor(venue_data) when is_map(venue_data) do
     # Ensure required fields for VenueProcessor
     base_venue = %{
       name: venue_data[:name] || venue_data["name"],
       city: venue_data[:city] || venue_data["city"] || "Kraków",
-      country: venue_data[:country] || venue_data["country"] || "Poland"
+      country: venue_data[:country] || venue_data["country"] || "Poland",
+      # Set coordinates to nil to trigger VenueGeocoder
+      latitude: nil,
+      longitude: nil
     }
 
-    # Add optional fields if available
-    venue =
-      if venue_data[:address] || venue_data["address"] do
-        Map.put(base_venue, :address, venue_data[:address] || venue_data["address"])
-      else
-        base_venue
-      end
-
-    # Add coordinates if available for known venues
-    if coords = get_venue_coordinates(base_venue.name) do
-      {lat, lng} = coords
-
-      venue
-      |> Map.put(:latitude, lat)
-      |> Map.put(:longitude, lng)
+    # Add optional address if available
+    if venue_data[:address] || venue_data["address"] do
+      Map.put(base_venue, :address, venue_data[:address] || venue_data["address"])
     else
-      venue
+      base_venue
     end
   end
 

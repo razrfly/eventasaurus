@@ -152,11 +152,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
   # Calculate confidence score (0.0 - 1.0)
   defp calculate_confidence(kino_movie, tmdb_movie) do
+    # Use available titles with fallbacks
+    primary_title = kino_movie.original_title || kino_movie.polish_title
+    localized_title = kino_movie.polish_title || kino_movie.original_title
+
     # Primary: Compare original titles (most reliable for international films)
-    original_title_score = title_similarity(kino_movie.original_title, tmdb_movie[:original_title]) * 0.50
+    original_title_score = title_similarity(primary_title, tmdb_movie[:original_title]) * 0.50
 
     # Secondary: Compare against localized title as fallback
-    localized_title_score = title_similarity(kino_movie.original_title, tmdb_movie[:title]) * 0.20
+    localized_title_score = title_similarity(localized_title, tmdb_movie[:title]) * 0.20
 
     # Year matching
     year_score = year_match(kino_movie.year, extract_year_from_movie(tmdb_movie)) * 0.30
