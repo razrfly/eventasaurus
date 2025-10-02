@@ -20,6 +20,7 @@ mappings:
   museum: arts
   film: film
   movie: film
+  movies: film
   cinema: film
   sports: sports
   sport: sports

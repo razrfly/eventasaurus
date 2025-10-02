@@ -64,8 +64,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
          {:ok, _source} <-
            maybe_update_event_source(event, source_id, source_priority, normalized, action),
          {:ok, _performers} <- process_performers(event, normalized),
-         {:ok, _categories} <- process_categories(event, normalized, source_id) do
-      {:ok, Repo.preload(event, [:venue, :performers, :categories])}
+         {:ok, _categories} <- process_categories(event, normalized, source_id),
+         {:ok, _movies} <- process_movies(event, normalized) do
+      {:ok, Repo.preload(event, [:venue, :performers, :categories, :movies])}
     else
       {:error, reason} = error ->
         Logger.error("Failed to process event: #{inspect(reason)}")
@@ -119,7 +120,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       min_price: data[:min_price] || data["min_price"],
       max_price: data[:max_price] || data["max_price"],
       currency: data[:currency] || data["currency"],
-      is_free: data[:is_free] || data["is_free"]
+      is_free: data[:is_free] || data["is_free"],
+      # Movie data for movie events (Kino Krakow)
+      movie_id: data[:movie_id] || data["movie_id"],
+      movie_data: data[:movie_data] || data["movie_data"]
     }
 
     cond do
@@ -163,6 +167,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     Source ID: #{source_id}
     Start at: #{data.start_at}
     Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
+    Movie ID: #{data[:movie_id] || "None"}
     """)
 
     # Use advisory lock to prevent race conditions in concurrent event processing
@@ -217,7 +222,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Always check for recurring pattern first, regardless of whether event exists
     Logger.info("🔄 Checking for recurring event pattern...")
-    recurring_parent = find_recurring_parent(data.title, venue, data.external_id, source_id)
+    recurring_parent = find_recurring_parent(data.title, venue, data.external_id, source_id, data[:movie_id])
 
     case {existing_from_source, recurring_parent} do
       # No existing event and no recurring parent - check for collision then create new
@@ -732,6 +737,66 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
+  # Process movie associations for movie events (e.g., Kino Krakow)
+  defp process_movies(_event, %{movie_id: nil}), do: {:ok, []}
+  defp process_movies(_event, data) when not is_map_key(data, :movie_id), do: {:ok, []}
+
+  defp process_movies(event, %{movie_id: movie_id}) when not is_nil(movie_id) do
+    # Check if event already has a movie association
+    existing_movie_id =
+      Repo.one(
+        from(em in EventasaurusDiscovery.PublicEvents.EventMovie,
+          where: em.event_id == ^event.id,
+          select: em.movie_id,
+          limit: 1
+        )
+      )
+
+    cond do
+      # No existing association - create it
+      is_nil(existing_movie_id) ->
+        changeset =
+          %EventasaurusDiscovery.PublicEvents.EventMovie{}
+          |> EventasaurusDiscovery.PublicEvents.EventMovie.changeset(%{
+            event_id: event.id,
+            movie_id: movie_id
+          })
+
+        case Repo.insert(changeset,
+               on_conflict: :nothing,
+               conflict_target: [:event_id, :movie_id]
+             ) do
+          {:ok, association} ->
+            Logger.debug("Created movie association for event ##{event.id} -> movie ##{movie_id}")
+            {:ok, [association]}
+
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to create movie association: #{inspect(reason)} (likely duplicate)"
+            )
+
+            {:ok, []}
+        end
+
+      # Association exists and matches - do nothing
+      existing_movie_id == movie_id ->
+        Logger.debug(
+          "Movie association already exists for event ##{event.id} -> movie ##{movie_id}"
+        )
+
+        {:ok, []}
+
+      # Association exists but DIFFERENT movie - this is a bug!
+      true ->
+        Logger.error(
+          "⚠️ Event ##{event.id} already has movie ##{existing_movie_id} but trying to add movie ##{movie_id}! This should not happen."
+        )
+
+        # Don't create conflicting association
+        {:ok, []}
+    end
+  end
+
   defp format_date(datetime) do
     Calendar.strftime(datetime, "%Y-%m-%d")
   end
@@ -883,8 +948,73 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     String.replace(title, ~r/\s+/, " ")
   end
 
-  defp find_recurring_parent(title, venue, external_id, source_id) do
+  defp find_recurring_parent(title, venue, external_id, source_id, movie_id \\ nil) do
     if venue do
+      # For movie events, use a different consolidation strategy
+      # Movies should consolidate by movie_id + venue only, not by fuzzy title matching
+      if movie_id do
+        find_movie_event_parent(movie_id, venue, external_id, source_id)
+      else
+        find_non_movie_recurring_parent(title, venue, external_id, source_id)
+      end
+    else
+      # Without venue, we can't reliably match recurring events
+      nil
+    end
+  end
+
+  # Find existing movie event for the same movie at the same venue
+  # This is called BEFORE the movie association is created, so we can't rely on it existing
+  # We'll match by movie_id in the event_movies table if it exists, otherwise nil
+  defp find_movie_event_parent(movie_id, venue, external_id, source_id) do
+    # Strategy: Find any event at this venue that has this movie_id associated
+    # Since associations are created AFTER the first event, the first showtime won't have an association
+    # Subsequent showtimes for the same movie should find the first event and consolidate
+    query =
+      from(e in PublicEvent,
+        join: em in EventasaurusDiscovery.PublicEvents.EventMovie,
+        on: em.event_id == e.id,
+        where: em.movie_id == ^movie_id,
+        where: e.venue_id == ^venue.id,
+        order_by: [asc: e.starts_at],
+        limit: 1
+      )
+
+    case Repo.one(query) do
+      nil ->
+        # No event with this movie association found
+        # This is expected for the first showtime of a movie
+        nil
+
+      event ->
+        # Found an event with this movie! Verify it's not the exact same external_id
+        is_exact_same =
+          if external_id && source_id do
+            from(s in PublicEventSource,
+              where: s.event_id == ^event.id,
+              where: s.external_id == ^external_id,
+              where: s.source_id == ^source_id,
+              select: count(s.id)
+            )
+            |> Repo.one() > 0
+          else
+            false
+          end
+
+        if is_exact_same do
+          nil
+        else
+          Logger.info(
+            "🎬 Found movie parent for movie ##{movie_id} at venue ##{venue.id}: event ##{event.id}"
+          )
+
+          event
+        end
+    end
+  end
+
+  # Original fuzzy matching logic for non-movie events
+  defp find_non_movie_recurring_parent(title, venue, external_id, source_id) do
       # Ensure UTF-8 validity before any string operations
       # PostgreSQL may have stored corrupt data that crashes jaro_distance
       clean_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
@@ -1019,10 +1149,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         nil ->
           nil
       end
-    else
-      # Without venue, we can't reliably match recurring events
-      nil
-    end
   end
 
   # NEW: Extract base title for series events
