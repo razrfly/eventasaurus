@@ -160,9 +160,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
         # This shouldn't happen anymore, but handle it
         :completed_without_match
 
-      %{state: state} when state in ["discarded", "retryable"] ->
-        # MovieDetailJob failed (TMDB matching error) - skip this showtime permanently
+      %{state: state} when state in ["discarded"] ->
+        # MovieDetailJob failed permanently - skip this showtime
         :completed_without_match
+
+      %{state: state} when state in ["retryable"] ->
+        # MovieDetailJob is still retrying - wait for it
+        :not_found_or_pending
 
       %{state: _other} ->
         # Still executing, available, scheduled, etc.
