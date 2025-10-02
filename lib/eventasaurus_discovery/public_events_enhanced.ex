@@ -878,20 +878,22 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end)
       |> Enum.reject(&is_nil/1)
 
-    # Group movie events by movie+city
-    movie_aggregated_groups =
+    # Group movie events by movie+city, keeping failed events as individual items
+    {movie_aggregated_groups, failed_movie_events} =
       movie_events
       |> Enum.group_by(fn event ->
         movie = List.first(event.movies)
         {movie.id, event.venue.city_id}
       end)
-      |> Enum.map(fn {{movie_id, city_id}, events} ->
-        build_movie_aggregated_group(movie_id, city_id, events)
+      |> Enum.reduce({[], []}, fn {{movie_id, city_id}, events}, {groups, failed} ->
+        case build_movie_aggregated_group(movie_id, city_id, events) do
+          nil -> {groups, failed ++ events}
+          group -> {[group | groups], failed}
+        end
       end)
-      |> Enum.reject(&is_nil/1)
 
     # Combine all types and sort by starts_at (for groups, use first event's date)
-    (source_aggregated_groups ++ movie_aggregated_groups ++ non_aggregatable)
+    (source_aggregated_groups ++ movie_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
     |> Enum.sort_by(fn
       %AggregatedEventGroup{} -> DateTime.utc_now()  # Groups sort to top
       %AggregatedMovieGroup{} -> DateTime.utc_now()  # Movie groups sort to top
