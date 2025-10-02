@@ -77,7 +77,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event =
       from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
         where: pe.slug == ^slug,
-        preload: [:venue, :categories, :performers, sources: :source]
+        preload: [:categories, :performers, :movies, venue: :city_ref, sources: :source]
       )
       |> Repo.one()
 
@@ -117,11 +117,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             language: language
           )
 
+        movie = get_movie_data(event)
+        is_movie = is_movie_screening?(event)
+        city = if event.venue, do: event.venue.city_ref, else: nil
+        aggregated_url = get_aggregated_movie_url(movie, city)
+
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
         |> assign(:existing_plan, existing_plan)
         |> assign(:nearby_events, nearby_events)
+        |> assign(:movie, movie)
+        |> assign(:is_movie_screening, is_movie)
+        |> assign(:aggregated_movie_url, aggregated_url)
     end
   end
 
@@ -620,15 +628,25 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
             <!-- Event Header -->
             <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-              <!-- Cover Image -->
-              <%= if @event.cover_image_url do %>
+              <!-- Cover Image - use movie backdrop for screenings, otherwise event cover -->
+              <%= if @is_movie_screening && @movie && @movie.backdrop_url do %>
                 <div class="h-96 relative">
                   <img
-                    src={@event.cover_image_url}
-                    alt={@event.display_title}
+                    src={@movie.backdrop_url}
+                    alt={@movie.title}
                     class="w-full h-full object-cover"
                   />
                 </div>
+              <% else %>
+                <%= if @event.cover_image_url do %>
+                  <div class="h-96 relative">
+                    <img
+                      src={@event.cover_image_url}
+                      alt={@event.display_title}
+                      class="w-full h-full object-cover"
+                    />
+                  </div>
+                <% end %>
               <% end %>
 
               <div class="p-8">
@@ -684,6 +702,118 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 <h1 class="text-4xl font-bold text-gray-900 mb-6">
                   <%= @event.display_title %>
                 </h1>
+
+                <!-- Movie Information Section (for movie screenings) -->
+                <%= if @is_movie_screening && @movie do %>
+                  <div class="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                    <div class="flex flex-col md:flex-row gap-6">
+                      <!-- Movie Poster -->
+                      <%= if @movie.poster_url do %>
+                        <div class="flex-shrink-0">
+                          <img
+                            src={@movie.poster_url}
+                            alt={"#{@movie.title} poster"}
+                            class="w-32 h-48 object-cover rounded-lg shadow-lg"
+                            loading="lazy"
+                          />
+                        </div>
+                      <% end %>
+
+                      <!-- Movie Details -->
+                      <div class="flex-1 space-y-4">
+                        <div>
+                          <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                            <%= @movie.title %>
+                            <%= if @movie.release_date do %>
+                              <span class="text-lg font-normal text-gray-600">
+                                (<%= Calendar.strftime(@movie.release_date, "%Y") %>)
+                              </span>
+                            <% end %>
+                          </h2>
+                          <%= if @movie.original_title && @movie.original_title != @movie.title do %>
+                            <p class="text-sm text-gray-600 italic">
+                              <%= gettext("Original title:") %> <%= @movie.original_title %>
+                            </p>
+                          <% end %>
+                        </div>
+
+                        <!-- Movie Metadata -->
+                        <div class="flex flex-wrap gap-4 text-sm">
+                          <%= if @movie.runtime do %>
+                            <div class="flex items-center text-gray-700">
+                              <Heroicons.clock class="w-4 h-4 mr-1" />
+                              <span><%= format_movie_runtime(@movie.runtime) %></span>
+                            </div>
+                          <% end %>
+
+                          <%= if genres = get_in(@movie.metadata, ["genres"]) do %>
+                            <%= if is_list(genres) && length(genres) > 0 do %>
+                              <div class="flex flex-wrap gap-2">
+                                <%= for genre <- Enum.take(genres, 3) do %>
+                                  <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                    <%= genre %>
+                                  </span>
+                                <% end %>
+                              </div>
+                            <% end %>
+                          <% end %>
+                        </div>
+
+                        <!-- Movie Overview -->
+                        <%= if @movie.overview do %>
+                          <div>
+                            <p class="text-gray-700 leading-relaxed line-clamp-3">
+                              <%= @movie.overview %>
+                            </p>
+                          </div>
+                        <% end %>
+
+                        <!-- Links Row -->
+                        <div class="flex flex-wrap gap-3">
+                          <!-- See All Screenings Link -->
+                          <%= if @aggregated_movie_url do %>
+                            <.link
+                              navigate={@aggregated_movie_url}
+                              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+                            >
+                              <Heroicons.film class="w-4 h-4 mr-2" />
+                              <%= gettext("See All Screenings") %>
+                            </.link>
+                          <% end %>
+
+                          <!-- TMDB Link -->
+                          <%= if @movie.tmdb_id do %>
+                            <a
+                              href={"https://www.themoviedb.org/movie/#{@movie.tmdb_id}"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition"
+                            >
+                              <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="#01b4e4">
+                                <path d="M11.42 2c-4.05 0-7.34 3.28-7.34 7.33 0 4.05 3.29 7.33 7.34 7.33 4.05 0 7.33-3.28 7.33-7.33C18.75 5.28 15.47 2 11.42 2zM8.85 14.4l-1.34-2.8 2.59-5.4h1.93l-2.17 4.52L12.4 8.4h1.8l-2.59 5.4H9.68l2.17-4.52L9.31 11.6H7.51L8.85 14.4z"/>
+                              </svg>
+                              <%= gettext("View on TMDB") %>
+                            </a>
+                          <% end %>
+                        </div>
+
+                        <!-- TMDB Attribution -->
+                        <p class="text-xs text-gray-500 mt-2">
+                          <%= gettext("Movie data provided by") %>
+                          <a
+                            href="https://www.themoviedb.org/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-blue-600 hover:text-blue-800 underline"
+                          >
+                            The Movie Database (TMDB)
+                          </a>.
+                          <%= gettext("This product uses the TMDB API but is not endorsed or certified by TMDB.") %>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
 
                 <!-- Key Details Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -1487,4 +1617,49 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp valid_hex_color?(_), do: false
+
+  # Movie helper functions
+
+  defp get_movie_data(event) do
+    case event.movies do
+      [movie | _] when not is_nil(movie) ->
+        movie
+
+      _ ->
+        nil
+    end
+  end
+
+  defp is_movie_screening?(event) do
+    case event.movies do
+      [] -> false
+      nil -> false
+      [movie | _] when not is_nil(movie) -> true
+      _ -> false
+    end
+  end
+
+  defp get_aggregated_movie_url(movie, city) do
+    if movie && city do
+      ~p"/c/#{city.slug}/movies/#{movie.slug}"
+    else
+      nil
+    end
+  end
+
+  defp format_movie_runtime(nil), do: nil
+
+  defp format_movie_runtime(runtime) when is_integer(runtime) do
+    hours = div(runtime, 60)
+    minutes = rem(runtime, 60)
+
+    cond do
+      hours > 0 && minutes > 0 -> "#{hours}h #{minutes}m"
+      hours > 0 -> "#{hours}h"
+      minutes > 0 -> "#{minutes}m"
+      true -> nil
+    end
+  end
+
+  defp format_movie_runtime(_), do: nil
 end
