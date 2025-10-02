@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Live.Helpers.EventFilters
 
@@ -1009,11 +1010,68 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp parse_boolean(false), do: false
   defp parse_boolean(_), do: false
 
-  # Check if an item is an aggregated event group
+  # Check if an item is an aggregated group
   defp is_aggregated?(%AggregatedEventGroup{}), do: true
+  defp is_aggregated?(%AggregatedMovieGroup{}), do: true
   defp is_aggregated?(_), do: false
 
   # Aggregated card component for grid view
+  defp aggregated_card(%{group: %AggregatedMovieGroup{}} = assigns) do
+    ~H"""
+    <.link navigate={AggregatedMovieGroup.path(@group)} class="block">
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ring-2 ring-blue-500 ring-offset-2">
+        <!-- Movie Backdrop/Poster -->
+        <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
+          <%= if @group.movie_backdrop_url do %>
+            <img src={@group.movie_backdrop_url} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy">
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <Heroicons.film class="w-12 h-12 text-gray-400" />
+            </div>
+          <% end %>
+
+          <%= if @group.categories && @group.categories != [] do %>
+            <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
+            <%= if category do %>
+              <div class="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
+                <%= category.name %>
+              </div>
+            <% end %>
+          <% end %>
+
+          <!-- Movie Badge -->
+          <div class="absolute top-3 right-3 bg-blue-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
+            <Heroicons.film class="w-3 h-3 mr-1" />
+            <%= @group.screening_count %> screenings
+          </div>
+        </div>
+
+        <!-- Movie Details -->
+        <div class="p-4">
+          <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
+            <%= AggregatedMovieGroup.title(@group) %>
+          </h3>
+
+          <div class="mt-2 flex items-center text-sm text-blue-600 font-medium">
+            <Heroicons.calendar class="w-4 h-4 mr-1" />
+            Movie Screenings
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.building_storefront class="w-4 h-4 mr-1" />
+            <%= AggregatedMovieGroup.description(@group) %>
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.map_pin class="w-4 h-4 mr-1" />
+            <%= @group.city.name %>
+          </div>
+        </div>
+      </div>
+    </.link>
+    """
+  end
+
   defp aggregated_card(assigns) do
     ~H"""
     <.link navigate={AggregatedEventGroup.path(@group)} class="block">
@@ -1074,7 +1132,64 @@ defmodule EventasaurusWeb.CityLive.Index do
     """
   end
 
-  # Aggregated list item component for list view
+  # Aggregated list item component for list view - Movie variant
+  defp aggregated_list_item(%{group: %AggregatedMovieGroup{}} = assigns) do
+    ~H"""
+    <.link navigate={AggregatedMovieGroup.path(@group)} class="block">
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 flex gap-4 ring-2 ring-blue-500 ring-offset-2">
+        <!-- Movie Backdrop/Poster -->
+        <div class="flex-shrink-0 w-32 h-32 bg-gray-200 rounded-lg relative overflow-hidden">
+          <%= if @group.movie_backdrop_url do %>
+            <img src={@group.movie_backdrop_url} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy">
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <Heroicons.film class="w-8 h-8 text-gray-400" />
+            </div>
+          <% end %>
+
+          <%= if @group.categories && @group.categories != [] do %>
+            <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
+            <%= if category do %>
+              <div class="absolute top-2 left-2 bg-blue-600 text-white px-1.5 py-0.5 rounded text-xs font-medium">
+                <%= category.name %>
+              </div>
+            <% end %>
+          <% end %>
+
+          <!-- Movie Badge -->
+          <div class="absolute top-2 right-2 bg-blue-500 text-white px-1.5 py-0.5 rounded text-xs font-medium flex items-center">
+            <Heroicons.film class="w-3 h-3 mr-0.5" />
+            <%= @group.screening_count %>
+          </div>
+        </div>
+
+        <!-- Movie Details -->
+        <div class="flex-1 min-w-0">
+          <h3 class="font-semibold text-lg text-gray-900 line-clamp-1">
+            <%= AggregatedMovieGroup.title(@group) %>
+          </h3>
+
+          <div class="mt-2 flex items-center text-sm text-blue-600 font-medium">
+            <Heroicons.calendar class="w-4 h-4 mr-1" />
+            Movie Screenings
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.building_storefront class="w-4 h-4 mr-1" />
+            <%= AggregatedMovieGroup.description(@group) %>
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.map_pin class="w-4 h-4 mr-1" />
+            <%= @group.city.name %>
+          </div>
+        </div>
+      </div>
+    </.link>
+    """
+  end
+
+  # Aggregated list item component for list view - Event variant
   defp aggregated_list_item(assigns) do
     ~H"""
     <.link navigate={AggregatedEventGroup.path(@group)} class="block">
