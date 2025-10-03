@@ -948,7 +948,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     String.replace(title, ~r/\s+/, " ")
   end
 
-  defp find_recurring_parent(title, venue, external_id, source_id, movie_id \\ nil) do
+  defp find_recurring_parent(title, venue, external_id, source_id, movie_id) do
     if venue do
       # For movie events, use a different consolidation strategy
       # Movies should consolidate by movie_id + venue only, not by fuzzy title matching
