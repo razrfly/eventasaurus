@@ -839,12 +839,33 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   # Component: Event Card
+  defp event_card(%{event: nil} = assigns) do
+    ~H""
+  end
+
   defp event_card(assigns) do
     alias EventasaurusDiscovery.PublicEvents.PublicEvent
+    alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
+
+    # Handle both PublicEvent and AggregatedMovieGroup
+    {slug, ring_class} = case assigns.event do
+      %AggregatedMovieGroup{movie_slug: movie_slug} ->
+        {movie_slug, "ring-2 ring-blue-500 ring-offset-2"}
+      %PublicEvent{} = event ->
+        {event.slug, if(PublicEvent.recurring?(event), do: "ring-2 ring-green-500 ring-offset-2", else: "")}
+      %{slug: slug} ->
+        {slug, ""}
+      _ ->
+        {nil, ""}
+    end
+
+    assigns = assigns
+      |> assign(:slug, slug)
+      |> assign(:ring_class, ring_class)
 
     ~H"""
-    <.link navigate={~p"/activities/#{@event.slug}"} class="block">
-      <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{if PublicEvent.recurring?(@event), do: "ring-2 ring-green-500 ring-offset-2", else: ""}"}>
+    <.link navigate={~p"/activities/#{@slug}"} class="block">
+      <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{@ring_class}"}>
         <!-- Event Image -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
           <%= if Map.get(@event, :cover_image_url) do %>
@@ -1132,9 +1153,68 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   # Helper to check if item is an AggregatedEventGroup
   defp is_aggregated?(%EventasaurusDiscovery.PublicEvents.AggregatedEventGroup{}), do: true
+  defp is_aggregated?(%EventasaurusDiscovery.Movies.AggregatedMovieGroup{}), do: true
   defp is_aggregated?(_), do: false
 
   # Component: Aggregated Event Group Card (Grid View)
+  defp aggregated_card(%{group: %EventasaurusDiscovery.Movies.AggregatedMovieGroup{}} = assigns) do
+    alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
+
+    ~H"""
+    <.link navigate={AggregatedMovieGroup.path(@group)} class="block">
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ring-2 ring-blue-500 ring-offset-2">
+        <!-- Movie Backdrop/Poster -->
+        <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
+          <%= if @group.movie_backdrop_url do %>
+            <img src={@group.movie_backdrop_url} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy">
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <Heroicons.film class="w-12 h-12 text-gray-400" />
+            </div>
+          <% end %>
+
+          <%= if @group.categories && @group.categories != [] do %>
+            <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
+            <%= if category do %>
+              <div class="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
+                <%= category.name %>
+              </div>
+            <% end %>
+          <% end %>
+
+          <!-- Movie Badge -->
+          <div class="absolute top-3 right-3 bg-blue-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
+            <Heroicons.film class="w-3 h-3 mr-1" />
+            <%= @group.screening_count %> screenings
+          </div>
+        </div>
+
+        <!-- Movie Details -->
+        <div class="p-4">
+          <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
+            <%= AggregatedMovieGroup.title(@group) %>
+          </h3>
+
+          <div class="mt-2 flex items-center text-sm text-blue-600 font-medium">
+            <Heroicons.calendar class="w-4 h-4 mr-1" />
+            Movie Screenings
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.building_storefront class="w-4 h-4 mr-1" />
+            <%= AggregatedMovieGroup.description(@group) %>
+          </div>
+
+          <div class="mt-1 flex items-center text-sm text-gray-600">
+            <Heroicons.map_pin class="w-4 h-4 mr-1" />
+            <%= @group.city.name %>
+          </div>
+        </div>
+      </div>
+    </.link>
+    """
+  end
+
   defp aggregated_card(assigns) do
     alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
 
@@ -1201,6 +1281,61 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   # Component: Aggregated Event Group List Item (List View)
+  defp aggregated_list_item(%{group: %EventasaurusDiscovery.Movies.AggregatedMovieGroup{}} = assigns) do
+    alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
+
+    ~H"""
+    <.link navigate={AggregatedMovieGroup.path(@group)} class="block">
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 flex gap-4 ring-2 ring-blue-500 ring-offset-2">
+        <!-- Movie Backdrop -->
+        <div class="flex-shrink-0 w-48 h-32 bg-gray-200 rounded relative overflow-hidden">
+          <%= if @group.movie_backdrop_url do %>
+            <img src={@group.movie_backdrop_url} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy">
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <Heroicons.film class="w-12 h-12 text-gray-400" />
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Movie Details -->
+        <div class="flex-grow">
+          <div class="flex items-start justify-between">
+            <div>
+              <h3 class="font-semibold text-lg text-gray-900">
+                <%= AggregatedMovieGroup.title(@group) %>
+              </h3>
+
+              <div class="mt-1 flex items-center text-sm text-blue-600 font-medium">
+                <Heroicons.calendar class="w-4 h-4 mr-1" />
+                Movie Screenings
+              </div>
+
+              <div class="mt-1 flex items-center text-sm text-gray-600">
+                <Heroicons.building_storefront class="w-4 h-4 mr-1" />
+                <%= AggregatedMovieGroup.description(@group) %>
+              </div>
+
+              <div class="mt-1 flex items-center text-sm text-gray-600">
+                <Heroicons.map_pin class="w-4 h-4 mr-1" />
+                <%= @group.city.name %>
+              </div>
+            </div>
+
+            <!-- Badge -->
+            <div class="flex-shrink-0">
+              <div class="bg-blue-500 text-white px-3 py-1 rounded-md text-xs font-medium flex items-center">
+                <Heroicons.film class="w-3 h-3 mr-1" />
+                <%= @group.screening_count %> screenings
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.link>
+    """
+  end
+
   defp aggregated_list_item(assigns) do
     alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
 

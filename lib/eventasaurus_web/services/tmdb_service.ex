@@ -88,6 +88,52 @@ defmodule EventasaurusWeb.Services.TmdbService do
     end
   end
 
+  @doc """
+  Get movies currently in theaters for a specific region.
+  Returns list of movies with basic info (no full details).
+
+  ## Examples
+
+      iex> get_now_playing("PL", 1)
+      {:ok, [%{"id" => 76600, "title" => "Avatar: The Way of Water", ...}]}
+  """
+  @impl EventasaurusWeb.Services.TmdbServiceBehaviour
+  def get_now_playing(region \\ "PL", page \\ 1) do
+    with :ok <- check_rate_limit(),
+         {:ok, api_key} <- get_api_key() do
+      fetch_now_playing(region, page, api_key)
+    else
+      {:error, :rate_limited} ->
+        {:error, "Rate limit exceeded, please try again later"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Get all available translations for a movie.
+  Returns map of translations keyed by ISO 639-1 language code.
+
+  ## Examples
+
+      iex> get_movie_translations(76600)
+      {:ok, %{"pl" => %{"title" => "Avatar: Istota wody", ...}}}
+  """
+  @impl EventasaurusWeb.Services.TmdbServiceBehaviour
+  def get_movie_translations(movie_id) do
+    with :ok <- check_rate_limit(),
+         {:ok, api_key} <- get_api_key() do
+      fetch_translations(movie_id, api_key)
+    else
+      {:error, :rate_limited} ->
+        {:error, "Rate limit exceeded, please try again later"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   @impl EventasaurusWeb.Services.TmdbServiceBehaviour
   def search_multi(query, page \\ 1) do
     # Handle nil or empty queries
@@ -653,5 +699,78 @@ defmodule EventasaurusWeb.Services.TmdbService do
         else: links
 
     links
+  end
+
+  defp fetch_now_playing(region, page, api_key) do
+    url = "#{@base_url}/movie/now_playing?api_key=#{api_key}&region=#{region}&page=#{page}"
+    headers = [{"Accept", "application/json"}]
+
+    Logger.debug(
+      "TMDB now playing URL: #{@base_url}/movie/now_playing?region=#{region}&page=#{page}"
+    )
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"results" => movies}} ->
+            {:ok, movies}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode TMDB now playing response: #{inspect(decode_error)}")
+            {:error, "Failed to decode now playing data"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+        Logger.error("TMDB now playing error: #{code} - #{body}")
+        {:error, "TMDB API error: #{code}"}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("TMDB now playing HTTP error: #{inspect(reason)}")
+        {:error, "Network error: #{inspect(reason)}"}
+    end
+  end
+
+  defp fetch_translations(movie_id, api_key) do
+    url = "#{@base_url}/movie/#{movie_id}/translations?api_key=#{api_key}"
+    headers = [{"Accept", "application/json"}]
+
+    Logger.debug("TMDB translations URL: #{@base_url}/movie/#{movie_id}/translations")
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"translations" => translations}} ->
+            # Convert to map keyed by language code, filter out empty titles
+            trans_map =
+              translations
+              |> Enum.filter(fn t ->
+                is_map(t["data"]) && t["data"]["title"] && t["data"]["title"] != ""
+              end)
+              |> Enum.map(fn t ->
+                {t["iso_639_1"], %{
+                  "title" => t["data"]["title"],
+                  "overview" => t["data"]["overview"] || ""
+                }}
+              end)
+              |> Enum.into(%{})
+
+            {:ok, trans_map}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode TMDB translations response: #{inspect(decode_error)}")
+            {:error, "Failed to decode translations"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        {:error, "Movie not found"}
+
+      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+        Logger.error("TMDB translations error: #{code} - #{body}")
+        {:error, "TMDB API error: #{code}"}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("TMDB translations HTTP error: #{inspect(reason)}")
+        {:error, "Network error: #{inspect(reason)}"}
+    end
   end
 end

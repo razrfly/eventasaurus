@@ -118,17 +118,33 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.MovieExtractor do
   end
 
   # Extract release year
-  # Look for "Produkcja:" section which contains country and year like "USA / Wielka Brytania, 2014"
+  # Kino Krakow has two formats:
+  # 1. Old movies: "Produkcja: Country, YEAR" (e.g., "USA, 1995")
+  # 2. New movies: "Premiera: DD month YYYY" (e.g., "10 października 2025")
   defp extract_year(doc) do
     html = Floki.raw_html(doc)
 
+    # Try format 1: Produkcja with year
     case Regex.run(
            ~r/Produkcja:\s*<\/strong>\s*[^,]+,\s*(\d{4})/,
            html,
            capture: :all_but_first
          ) do
-      [year] -> String.to_integer(year)
-      _ -> nil
+      [year] ->
+        String.to_integer(year)
+
+      _ ->
+        # Try format 2: Premiera (premiere date)
+        # Format: <strong>\n Premiera:\n </strong>\n DD month YYYY
+        # Note: \w doesn't match Polish chars, use .+? for month name
+        case Regex.run(
+               ~r/Premiera:.*?(\d+)\s+.+?\s+(\d{4})/s,
+               html,
+               capture: :all_but_first
+             ) do
+          [_day, year] -> String.to_integer(year)
+          _ -> nil
+        end
     end
   end
 
