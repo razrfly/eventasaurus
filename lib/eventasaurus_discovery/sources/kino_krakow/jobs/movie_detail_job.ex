@@ -6,9 +6,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
   and stores the movie in the database.
 
   This job provides granular visibility into TMDB matching success/failure:
-  - High confidence (≥80%): Auto-matched, returns {:ok, %{status: :matched}}
-  - Medium confidence (60-79%): Needs review, returns {:ok, %{status: :needs_review}}
-  - Low confidence (<60%): No match, returns {:ok, %{status: :no_match}}
+  - High confidence (≥70%): Auto-matched, returns {:ok, %{status: :matched}}
+  - Medium confidence (50-69%): Needs review, returns {:ok, %{status: :needs_review}}
+  - Low confidence (<50%): No match, returns {:ok, %{status: :no_match}}
   - HTTP/API errors: Returns {:error, reason} which triggers Oban retry
 
   Each movie's matching status is visible in the Oban dashboard.
@@ -64,11 +64,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
 
     # Match to TMDB
     case TmdbMatcher.match_movie(movie_data) do
-      {:ok, tmdb_id, confidence} when confidence >= 0.80 ->
-        # High confidence match - auto-accept
+      {:ok, tmdb_id, confidence} when confidence >= 0.60 ->
+        # High confidence match (≥70%) or Now Playing fallback match (60-70%) - auto-accept
+        match_type = if confidence >= 0.70, do: "standard", else: "now_playing_fallback"
+
         case TmdbMatcher.find_or_create_movie(tmdb_id) do
           {:ok, movie} ->
-            Logger.info("✅ Auto-matched: #{movie.title} (#{trunc(confidence * 100)}% confidence)")
+            Logger.info("✅ Auto-matched (#{match_type}): #{movie.title} (#{trunc(confidence * 100)}% confidence)")
 
             # Store Kino Krakow slug in movie metadata for later lookups
             store_kino_krakow_slug(movie, movie_slug)
@@ -78,7 +80,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
               confidence: confidence,
               movie_id: movie.id,
               movie_slug: movie_slug,
-              tmdb_id: tmdb_id
+              tmdb_id: tmdb_id,
+              match_type: match_type
             }}
 
           {:error, reason} ->
@@ -87,29 +90,29 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
         end
 
       {:needs_review, _movie_data, _candidates} ->
-        # Medium confidence (60-79%) - needs manual review
+        # Medium confidence (50-69%) - needs manual review
         # Return ERROR so Oban marks as failed and visible in dashboard
-        Logger.error("❌ TMDB matching failed - needs review: #{movie_data.polish_title || movie_data.original_title} (60-79% confidence)")
+        Logger.error("❌ TMDB matching failed - needs review: #{movie_data.polish_title || movie_data.original_title} (50-69% confidence)")
 
         {:error, %{
           reason: :tmdb_needs_review,
           movie_slug: movie_slug,
           polish_title: movie_data.polish_title,
           original_title: movie_data.original_title,
-          confidence_range: "60-79%"
+          confidence_range: "50-69%"
         }}
 
       {:error, :low_confidence} ->
-        # Low confidence (<60%) - no reliable match
+        # Low confidence (<50%) - no reliable match
         # Return ERROR so Oban marks as failed and visible in dashboard
-        Logger.error("❌ TMDB matching failed - low confidence: #{movie_data.polish_title || movie_data.original_title} (<60%)")
+        Logger.error("❌ TMDB matching failed - low confidence: #{movie_data.polish_title || movie_data.original_title} (<50%)")
 
         {:error, %{
           reason: :tmdb_low_confidence,
           movie_slug: movie_slug,
           polish_title: movie_data.polish_title,
           original_title: movie_data.original_title,
-          confidence_range: "<60%"
+          confidence_range: "<50%"
         }}
 
       {:error, :missing_title} ->

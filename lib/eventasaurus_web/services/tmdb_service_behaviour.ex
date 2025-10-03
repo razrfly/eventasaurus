@@ -33,4 +33,16 @@ defmodule EventasaurusWeb.Services.TmdbServiceBehaviour do
   """
   @callback get_popular_movies(integer()) ::
               {:ok, list()} | {:error, any()}
+
+  @doc """
+  Get movies currently in theaters for a specific region.
+  """
+  @callback get_now_playing(String.t(), integer()) ::
+              {:ok, list()} | {:error, any()}
+
+  @doc """
+  Get all available translations for a movie by TMDB ID.
+  """
+  @callback get_movie_translations(integer()) ::
+              {:ok, map()} | {:error, any()}
 end
