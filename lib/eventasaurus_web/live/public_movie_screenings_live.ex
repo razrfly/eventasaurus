@@ -43,7 +43,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
          |> redirect(to: ~p"/activities")}
 
       {city, movie} ->
-        # Fetch all screenings for this movie in this city
+        # Fetch upcoming screenings for this movie in this city
+        now = DateTime.utc_now()
+
         screenings =
           from(pe in PublicEvent,
             join: em in "event_movies",
@@ -51,6 +53,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             join: v in assoc(pe, :venue),
             on: v.city_id == ^city.id,
             where: em.movie_id == ^movie.id,
+            where: pe.starts_at >= ^now,
             order_by: [asc: pe.starts_at],
             preload: [:categories, :performers, venue: :city_ref, sources: :source]
           )
@@ -160,7 +163,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             <% end %>
 
             <!-- External Links -->
-            <div class="flex gap-4">
+            <div :if={@movie.tmdb_id} class="flex gap-4">
               <a
                 href={"https://www.themoviedb.org/movie/#{@movie.tmdb_id}"}
                 target="_blank"
