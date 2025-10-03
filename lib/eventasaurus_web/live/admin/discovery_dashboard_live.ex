@@ -267,6 +267,32 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("sync_now_playing", params, socket) do
+    region = params["region"] || "PL"
+    pages = parse_int(params["pages"] || "3", 3)
+
+    job_args = %{
+      "region" => region,
+      "pages" => pages
+    }
+
+    case EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob.new(job_args) |> Oban.insert() do
+      {:ok, job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Queued TMDB Now Playing sync job ##{job.id} for region #{region} (#{pages} pages)")
+          |> assign(:import_running, true)
+          |> assign(:import_progress, "Syncing TMDB movies...")
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to queue TMDB sync: #{inspect(reason)}")
+        {:noreply, socket}
+    end
+  end
+
   defp load_data(socket) do
     # Get overall statistics
     stats = %{

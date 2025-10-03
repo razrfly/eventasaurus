@@ -148,7 +148,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
       from j in Oban.Job,
         where: j.worker == "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob",
         where: fragment("args->>'movie_slug' = ?", ^movie_slug),
-        select: %{state: j.state, id: j.id}
+        select: %{state: j.state, id: j.id},
+        order_by: [desc: j.id],
+        limit: 1
 
     case Repo.one(query) do
       nil ->
