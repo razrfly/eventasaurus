@@ -31,7 +31,11 @@ IO.puts("")
 
 # Prompt for confirmation
 IO.write("Continue? (y/n): ")
-response = IO.gets("") |> String.trim() |> String.downcase()
+response =
+  case IO.gets("") do
+    nil -> ""
+    input -> input |> String.trim() |> String.downcase()
+  end
 
 if response != "y" do
   IO.puts("\nAborted.")
