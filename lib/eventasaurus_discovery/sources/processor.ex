@@ -172,8 +172,9 @@ defmodule EventasaurusDiscovery.Sources.Processor do
 
     event_with_performers = Map.put(event_with_venue, :performer_names, performer_names)
 
-    # EventProcessor expects source_id, not the source struct
+    # EventProcessor expects source_id and source_priority
     source_id = if is_struct(source), do: source.id, else: source
-    EventProcessor.process_event(event_with_performers, source_id)
+    source_priority = if is_struct(source), do: source.priority, else: 10
+    EventProcessor.process_event(event_with_performers, source_id, source_priority)
   end
 end

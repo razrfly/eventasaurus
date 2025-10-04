@@ -123,22 +123,18 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
 
     scheduled_jobs =
       film_ids
-      |> Enum.with_index()
-      |> Enum.map(fn {film_id, index} ->
+      |> Enum.map(fn film_id ->
         film_data = Map.get(films_map, film_id)
 
-        # Stagger job execution with rate limiting
-        delay_seconds = index * Config.rate_limit()
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
-
+        # REMOVED scheduled_at staggering to allow Oban unique constraints to work
+        # Oban's queue concurrency limits will naturally throttle execution
         EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob.new(
           %{
             "cinema_city_film_id" => film_id,
             "film_data" => film_data,
             "source_id" => source_id
           },
-          queue: :scraper_detail,
-          scheduled_at: scheduled_at
+          queue: :scraper_detail
         )
         |> Oban.insert()
       end)
@@ -170,8 +166,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
 
     scheduled_jobs =
       showtimes
-      |> Enum.with_index()
-      |> Enum.map(fn {%{film: film, event: event}, index} ->
+      |> Enum.map(fn %{film: film, event: event} ->
+        # Extract event_id BEFORE putting event into showtime_data
+        # event is a map with atom keys from EventExtractor
+        cinema_city_event_id = event[:cinema_city_event_id]
+
         # Combine film and event data for ShowtimeProcessJob
         showtime_data = %{
           "film" => film,
@@ -181,17 +180,15 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
           "date" => date
         }
 
-        # Stagger job execution (2 seconds between showtimes)
-        delay_seconds = base_delay + index * 2
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
-
+        # REMOVED scheduled_at staggering to allow Oban unique constraints to work
+        # Oban's queue concurrency limits will naturally throttle execution
         EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob.new(
           %{
+            "cinema_city_event_id" => cinema_city_event_id,
             "showtime" => showtime_data,
             "source_id" => source_id
           },
-          queue: :scraper,
-          scheduled_at: scheduled_at
+          queue: :scraper
         )
         |> Oban.insert()
       end)
