@@ -46,8 +46,12 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
   # Parse the ADMIN_EMAILS environment variable into a list
   defp get_admin_emails do
     case System.get_env("ADMIN_EMAILS") do
-      nil -> []
-      "" -> []
+      nil ->
+        []
+
+      "" ->
+        []
+
       emails ->
         emails
         |> String.split(",")
@@ -66,11 +70,12 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
       is_nil(admin_password) or admin_password == "" ->
         admin_emails = get_admin_emails()
 
-        error_message = if admin_emails == [] do
-          "Admin access is not configured. Please set either ADMIN_EMAILS or OBAN_PASSWORD environment variable."
-        else
-          "Access denied. Your email is not authorized for admin access."
-        end
+        error_message =
+          if admin_emails == [] do
+            "Admin access is not configured. Please set either ADMIN_EMAILS or OBAN_PASSWORD environment variable."
+          else
+            "Access denied. Your email is not authorized for admin access."
+          end
 
         Logger.warning("Oban Web UI access denied: #{error_message}")
 

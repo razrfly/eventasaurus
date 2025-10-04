@@ -19,13 +19,14 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.IntegrationTest do
   @moduletag timeout: 30_000
 
   describe "Live website scraping" do
-    @tag :skip  # Remove this to enable
+    # Remove this to enable
+    @tag :skip
     test "fetches and parses showtimes from live website" do
       url = Config.showtimes_url()
       headers = [{"User-Agent", Config.user_agent()}]
 
       assert {:ok, %{status_code: 200, body: html}} =
-        HTTPoison.get(url, headers, timeout: Config.timeout())
+               HTTPoison.get(url, headers, timeout: Config.timeout())
 
       assert is_binary(html)
       assert String.contains?(html, "Repertuar")
@@ -44,7 +45,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.IntegrationTest do
       assert %DateTime{} = first.datetime
     end
 
-    @tag :skip  # Remove this to enable
+    # Remove this to enable
+    @tag :skip
     test "fetches and parses movie detail page" do
       # This would need a real movie slug from the site
       # Example: "deadpool-wolverine"
@@ -69,7 +71,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.IntegrationTest do
       end
     end
 
-    @tag :skip  # Remove this to enable
+    # Remove this to enable
+    @tag :skip
     test "fetches and parses cinema info page" do
       # This would need a real cinema slug
       # Example: "kino-pod-baranami"

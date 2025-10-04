@@ -49,13 +49,17 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
         # Get official languages from the country data
         languages =
           case country.languages_official do
-            nil -> []
+            nil ->
+              []
+
             langs when is_binary(langs) ->
               # Split by comma if multiple languages
               langs
               |> String.split(",")
               |> Enum.map(&String.trim/1)
-            _ -> []
+
+            _ ->
+              []
           end
 
         # Convert language codes to Ticketmaster locale format

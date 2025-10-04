@@ -45,7 +45,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     # Set the day and fetch showtimes
     with {:ok, html} <- fetch_day_showtimes(day_offset, cookies),
          showtimes <- extract_showtimes(html, day_offset) do
-
       # Find unique movies from this day's showtimes
       unique_movies =
         showtimes
@@ -64,15 +63,17 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
       # Schedule ShowtimeProcessJobs for each showtime
       # These will wait for MovieDetailJobs to complete via caching mechanism
       # Pass unique_movies count to calculate appropriate delay
-      showtimes_scheduled = schedule_showtime_jobs(showtimes, source_id, day_offset, length(unique_movies))
+      showtimes_scheduled =
+        schedule_showtime_jobs(showtimes, source_id, day_offset, length(unique_movies))
 
-      {:ok, %{
-        day: day_offset,
-        showtimes_count: length(showtimes),
-        unique_movies: length(unique_movies),
-        movies_scheduled: movies_scheduled,
-        showtimes_scheduled: showtimes_scheduled
-      }}
+      {:ok,
+       %{
+         day: day_offset,
+         showtimes_count: length(showtimes),
+         unique_movies: length(unique_movies),
+         movies_scheduled: movies_scheduled,
+         showtimes_scheduled: showtimes_scheduled
+       }}
     else
       {:error, reason} ->
         Logger.error("❌ Failed to process day #{day_offset}: #{inspect(reason)}")
@@ -163,7 +164,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     # Last movie starts at: (movie_count - 1) * rate_limit
     # Add buffer for movie processing time (fetch + TMDB matching): ~30 seconds
     rate_limit = Config.rate_limit()
-    base_delay = (movie_count * rate_limit) + 30  # Ensure all movies are cached before showtimes process
+    # Ensure all movies are cached before showtimes process
+    base_delay = movie_count * rate_limit + 30
 
     scheduled_jobs =
       showtimes
@@ -173,7 +175,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
         showtime_map = if is_struct(showtime), do: Map.from_struct(showtime), else: showtime
 
         # Stagger job execution
-        delay_seconds = base_delay + (index * 2)  # 2 seconds between showtimes
+        # 2 seconds between showtimes
+        delay_seconds = base_delay + index * 2
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob.new(

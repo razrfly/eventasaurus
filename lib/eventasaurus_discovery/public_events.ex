@@ -617,26 +617,32 @@ defmodule EventasaurusDiscovery.PublicEvents do
     current_event = Repo.preload(current_event, [:venue])
 
     case current_event.venue do
-      %Venue{latitude: nil} -> []
-      %Venue{longitude: nil} -> []
+      %Venue{latitude: nil} ->
+        []
+
+      %Venue{longitude: nil} ->
+        []
+
       %Venue{latitude: lat, longitude: lng} ->
         lat_f = if match?(%Decimal{}, lat), do: Decimal.to_float(lat), else: lat
         lng_f = if match?(%Decimal{}, lng), do: Decimal.to_float(lng), else: lng
+
         nearby =
-          EventasaurusDiscovery.PublicEventsEnhanced.list_events([
+          EventasaurusDiscovery.PublicEventsEnhanced.list_events(
             center_lat: lat_f,
             center_lng: lng_f,
             radius_km: radius_km,
             page_size: pool_size + 1,
             show_past: false,
             language: language
-          ])
+          )
 
         nearby
         |> Enum.reject(&(&1.id == current_event.id))
         |> Enum.shuffle()
         |> Enum.take(display_count)
         |> Repo.preload([:venue, :categories, :performers, sources: :source])
+
       _ ->
         []
     end
@@ -662,11 +668,12 @@ defmodule EventasaurusDiscovery.PublicEvents do
     language = Keyword.get(opts, :language, "en")
 
     # Try initial radius
-    nearby = get_nearby_activities(current_event, [
-      radius_km: initial_radius,
-      display_count: display_count,
-      language: language
-    ])
+    nearby =
+      get_nearby_activities(current_event,
+        radius_km: initial_radius,
+        display_count: display_count,
+        language: language
+      )
 
     cond do
       # Found enough events
@@ -675,11 +682,12 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
       # Try expanded radius
       initial_radius < max_radius ->
-        expanded = get_nearby_activities(current_event, [
-          radius_km: max_radius,
-          display_count: display_count,
-          language: language
-        ])
+        expanded =
+          get_nearby_activities(current_event,
+            radius_km: max_radius,
+            display_count: display_count,
+            language: language
+          )
 
         if length(expanded) > length(nearby) do
           expanded
@@ -699,11 +707,12 @@ defmodule EventasaurusDiscovery.PublicEvents do
     category_ids = Enum.map(current_event.categories || [], & &1.id)
 
     # Get upcoming events from same categories or just popular upcoming events
-    opts = if length(category_ids) > 0 do
-      [categories: category_ids, page_size: display_count * 2, language: language]
-    else
-      [page_size: display_count * 2, language: language]
-    end
+    opts =
+      if length(category_ids) > 0 do
+        [categories: category_ids, page_size: display_count * 2, language: language]
+      else
+        [page_size: display_count * 2, language: language]
+      end
 
     EventasaurusDiscovery.PublicEventsEnhanced.list_events(opts)
     |> Enum.reject(&(&1.id == current_event.id))

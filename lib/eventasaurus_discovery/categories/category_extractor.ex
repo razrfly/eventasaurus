@@ -189,9 +189,15 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   def assign_categories_to_event(event_id, source, external_data) do
     categories =
       case source do
-        "ticketmaster" -> extract_ticketmaster_categories(external_data)
-        "karnet" -> extract_karnet_categories(external_data)
-        "bandsintown" -> extract_bandsintown_categories(external_data)
+        "ticketmaster" ->
+          extract_ticketmaster_categories(external_data)
+
+        "karnet" ->
+          extract_karnet_categories(external_data)
+
+        "bandsintown" ->
+          extract_bandsintown_categories(external_data)
+
         # For other sources (like PubQuiz), try to extract from generic category field
         _ ->
           classifications = extract_generic_categories(external_data)

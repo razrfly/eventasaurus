@@ -71,7 +71,10 @@ defmodule EventasaurusDiscovery.Sources.Processor do
 
         {_successful, failed} ->
           # Partial success - return error so Oban can retry
-          Logger.warning("Partial failure: #{length(failed)} failed out of #{length(events)} total events")
+          Logger.warning(
+            "Partial failure: #{length(failed)} failed out of #{length(events)} total events"
+          )
+
           {:error, {:partial_failure, length(failed), length(events)}}
       end
     end
@@ -162,9 +165,11 @@ defmodule EventasaurusDiscovery.Sources.Processor do
 
     # EventProcessor expects performer_names as a list of strings
     # Clean UTF-8 from performer names to prevent Slug library crashes
-    performer_names = Enum.map(performers, fn p ->
-      EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(p.name)
-    end)
+    performer_names =
+      Enum.map(performers, fn p ->
+        EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(p.name)
+      end)
+
     event_with_performers = Map.put(event_with_venue, :performer_names, performer_names)
 
     # EventProcessor expects source_id, not the source struct

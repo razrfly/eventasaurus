@@ -137,7 +137,16 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
   def fetch_all_events_by_city(latitude, longitude, city_name, options \\ %{}) do
     max_pages = options[:max_pages] || 10
     locale = options[:locale] || options["locale"]
-    fetch_all_pages(latitude, longitude, city_name, 0, max_pages, [], Map.put(options, :locale, locale))
+
+    fetch_all_pages(
+      latitude,
+      longitude,
+      city_name,
+      0,
+      max_pages,
+      [],
+      Map.put(options, :locale, locale)
+    )
   end
 
   defp fetch_all_pages(latitude, longitude, city_name, current_page, max_pages, acc, options)
@@ -221,7 +230,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
             case Jason.decode(clean_body) do
               {:ok, decoded_body} ->
                 # 3. Clean decoded data - JSON decoder can create invalid UTF-8 strings
-                clean_decoded = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(decoded_body)
+                clean_decoded =
+                  EventasaurusDiscovery.Utils.UTF8.validate_map_strings(decoded_body)
 
                 case validate_response(clean_decoded) do
                   :ok -> {:ok, clean_decoded}
@@ -236,6 +246,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
           is_map(body) ->
             # Middleware already decoded the response
             clean_decoded = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(body)
+
             case validate_response(clean_decoded) do
               :ok -> {:ok, clean_decoded}
               error -> error
@@ -260,11 +271,14 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
           case body do
             raw when is_binary(raw) ->
               clean = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(raw)
+
               case Jason.decode(clean) do
                 {:ok, decoded} -> decoded
                 _ -> nil
               end
-            other -> other
+
+            other ->
+              other
           end
 
         error_msg =
@@ -272,13 +286,16 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
             is_map(decoded_body) && get_in(decoded_body, ["fault", "faultstring"]) ->
               get_in(decoded_body, ["fault", "faultstring"])
 
-            is_map(decoded_body) && is_list(decoded_body["errors"]) && decoded_body["errors"] != [] ->
-              errors = decoded_body["errors"]
-              |> Enum.map(fn
-                %{"message" => msg} -> msg
-                error -> inspect(error)
-              end)
-              |> Enum.join(", ")
+            is_map(decoded_body) && is_list(decoded_body["errors"]) &&
+                decoded_body["errors"] != [] ->
+              errors =
+                decoded_body["errors"]
+                |> Enum.map(fn
+                  %{"message" => msg} -> msg
+                  error -> inspect(error)
+                end)
+                |> Enum.join(", ")
+
               "Ticketmaster errors: #{errors}"
 
             true ->

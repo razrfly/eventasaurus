@@ -39,11 +39,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         Max pages: #{max_pages}
         """)
 
-        result = schedule_async_sync(city,
-          source: get_or_create_bandsintown_source(),
-          limit: limit,
-          max_pages: max_pages
-        )
+        result =
+          schedule_async_sync(city,
+            source: get_or_create_bandsintown_source(),
+            limit: limit,
+            max_pages: max_pages
+          )
 
         # Schedule coordinate recalculation after successful sync
         case result do
@@ -51,6 +52,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
             schedule_coordinate_update(city_id)
             Logger.info("🗺️ Scheduled coordinate update for city #{city_id}")
             success
+
           other ->
             other
         end
@@ -75,25 +77,27 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         Logger.info("📚 Found #{total_pages} API pages to process")
 
         # Calculate how many pages we actually need for the limit
-        pages_to_schedule = if limit do
-          pages_needed = calculate_max_pages(limit)
-          min(total_pages, pages_needed)
-        else
-          total_pages
-        end
+        pages_to_schedule =
+          if limit do
+            pages_needed = calculate_max_pages(limit)
+            min(total_pages, pages_needed)
+          else
+            total_pages
+          end
 
         Logger.info("📋 Scheduling #{pages_to_schedule} pages (limit: #{limit || "none"})")
 
         # Schedule IndexPageJobs for each page
-        scheduled_count = schedule_index_page_jobs(
-          pages_to_schedule,
-          latitude,
-          longitude,
-          source.id,
-          city.id,
-          city.name,
-          limit
-        )
+        scheduled_count =
+          schedule_index_page_jobs(
+            pages_to_schedule,
+            latitude,
+            longitude,
+            source.id,
+            city.id,
+            city.name,
+            limit
+          )
 
         Logger.info("""
         ✅ Bandsintown sync job completed (asynchronous mode)
@@ -103,12 +107,13 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         Events will be processed asynchronously
         """)
 
-        {:ok, %{
-          pages_found: total_pages,
-          pages_scheduled: pages_to_schedule,
-          jobs_scheduled: scheduled_count,
-          mode: "asynchronous"
-        }}
+        {:ok,
+         %{
+           pages_found: total_pages,
+           pages_scheduled: pages_to_schedule,
+           jobs_scheduled: scheduled_count,
+           mode: "asynchronous"
+         }}
 
       {:ok, 0} ->
         Logger.warning("⚠️ No pages found to process")
@@ -169,7 +174,15 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     end
   end
 
-  defp schedule_index_page_jobs(total_pages, latitude, longitude, source_id, city_id, city_name, limit) do
+  defp schedule_index_page_jobs(
+         total_pages,
+         latitude,
+         longitude,
+         source_id,
+         city_id,
+         city_name,
+         limit
+       ) do
     Logger.info("📅 Scheduling #{total_pages} index page jobs")
 
     # Schedule IndexPageJobs for each page
@@ -178,7 +191,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
       |> Enum.map(fn page_num ->
         # Stagger the jobs slightly to avoid thundering herd
         # But allow some concurrency (pages can be processed in parallel)
-        delay_seconds = div(page_num - 1, 3) * 3  # 3 seconds rate limit
+        # 3 seconds rate limit
+        delay_seconds = div(page_num - 1, 3) * 3
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         job_args = %{
@@ -260,7 +274,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     |> Enum.map(fn {:ok, event} -> event end)
   end
 
-
   # Required by BaseJob for source configuration
   def source_config do
     Config.source_config()
@@ -273,5 +286,4 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     pages = div(limit, 20)
     if rem(limit, 20) > 0, do: pages + 1, else: pages
   end
-
 end

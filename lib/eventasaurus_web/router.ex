@@ -117,9 +117,11 @@ defmodule EventasaurusWeb.Router do
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+
     if Mix.env() == :dev do
       plug EventasaurusWeb.Dev.DevAuthPlug
     end
+
     plug :fetch_auth_user
     plug :assign_user_struct
     plug EventasaurusWeb.Plugs.LanguagePlug

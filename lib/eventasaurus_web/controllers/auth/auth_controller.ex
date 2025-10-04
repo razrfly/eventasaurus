@@ -407,7 +407,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def callback(conn, params) do
     require Logger
-    Logger.info("Auth callback received - type: #{params["type"] || "oauth"}, provider: #{params["provider"] || "unknown"}")
+
+    Logger.info(
+      "Auth callback received - type: #{params["type"] || "oauth"}, provider: #{params["provider"] || "unknown"}"
+    )
 
     case params do
       # NEW: Server-side authorization code for password recovery

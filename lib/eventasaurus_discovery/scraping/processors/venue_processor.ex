@@ -199,13 +199,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Normalize the venue name and clean UTF-8 after normalization
     # Normalizer.normalize_text can corrupt UTF-8 with its regex operations
     raw_name = data[:name] || data["name"]
-    normalized_name = if raw_name do
-      raw_name
-      |> Normalizer.normalize_text()
-      |> EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8()
-    else
-      nil
-    end
+
+    normalized_name =
+      if raw_name do
+        raw_name
+        |> Normalizer.normalize_text()
+        |> EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8()
+      else
+        nil
+      end
 
     normalized = %{
       name: normalized_name,
@@ -243,7 +245,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
     # If we couldn't resolve the country, we can't proceed
     if country == nil do
-      {:error, "Cannot process city '#{city_name}' without a valid country. Unknown country: '#{country_name}'"}
+      {:error,
+       "Cannot process city '#{city_name}' without a valid country. Unknown country: '#{country_name}'"}
     else
       # First try to find by exact name match
       city =
@@ -278,11 +281,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     code = derive_country_code(country_name)
 
     # First try to find existing country by code (most reliable)
-    existing_country = if code do
-      Repo.get_by(Country, code: code)
-    else
-      nil
-    end
+    existing_country =
+      if code do
+        Repo.get_by(Country, code: code)
+      else
+        nil
+      end
 
     # If not found by code, try by slug
     existing_country = existing_country || Repo.get_by(Country, slug: slug)
@@ -325,7 +329,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp derive_country_code(_), do: nil
-
 
   defp create_city(name, country, data) do
     attrs = %{
@@ -413,9 +416,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         {nil, nil, nil, nil}
 
       error ->
-        Logger.error(
-          "🗺️ ❌ Unexpected error looking up venue via Google Places: #{inspect(error)}"
-        )
+        Logger.error("🗺️ ❌ Unexpected error looking up venue via Google Places: #{inspect(error)}")
 
         {nil, nil, nil, nil}
     end
@@ -473,7 +474,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
       {:error, changeset} ->
         errors = format_changeset_errors(changeset)
-        Logger.error("❌ Failed to create venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}")
+
+        Logger.error(
+          "❌ Failed to create venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}"
+        )
 
         # If it's specifically a GPS coordinate error, provide clear message for Oban
         if has_coordinate_errors?(changeset) do

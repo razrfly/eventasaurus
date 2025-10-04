@@ -33,12 +33,16 @@ test_cases = [
   "Môtley Crüe",
   "Café Del Mar",
   "François Pérusse",
-  "東京事変",  # Japanese
-  "Александр Пушкин",  # Russian
-  <<84, 101, 115, 116, 226, 32, 83>>,  # Broken UTF-8
+  # Japanese
+  "東京事変",
+  # Russian
+  "Александр Пушкин",
+  # Broken UTF-8
+  <<84, 101, 115, 116, 226, 32, 83>>
 ]
 
 IO.puts("Test 2: Various UTF-8 cases:")
+
 for name <- test_cases do
   case name do
     binary when is_binary(binary) ->
@@ -66,6 +70,7 @@ tm_attraction = %{
 
 # This simulates what happens in transform_performer
 clean_name = UTF8.ensure_valid_utf8(tm_attraction["name"])
+
 performer_data = %{
   "external_id" => "tm_performer_#{tm_attraction["id"]}",
   "name" => clean_name

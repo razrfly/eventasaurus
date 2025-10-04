@@ -18,6 +18,7 @@ IO.puts("=" <> String.duplicate("=", 60))
 
 # Verify the categories module has the fix
 categories_source = File.read!("lib/eventasaurus_discovery/categories.ex")
+
 if String.contains?(categories_source, "{:replace, [:confidence, :source, :is_primary]}") do
   IO.puts("  ✅ Categories module correctly includes :is_primary in replace list")
 else
@@ -28,8 +29,13 @@ end
 IO.puts("\nTest 2: Nil Performer Filtering")
 IO.puts("=" <> String.duplicate("=", 60))
 
-event_processor_source = File.read!("lib/eventasaurus_discovery/scraping/processors/event_processor.ex")
-if String.contains?(event_processor_source, "|> Enum.reject(&is_nil/1)  # Filter out any nil results from invalid names") do
+event_processor_source =
+  File.read!("lib/eventasaurus_discovery/scraping/processors/event_processor.ex")
+
+if String.contains?(
+     event_processor_source,
+     "|> Enum.reject(&is_nil/1)  # Filter out any nil results from invalid names"
+   ) do
   IO.puts("  ✅ Event processor filters nil performers before associations")
 else
   IO.puts("  ❌ Event processor does not filter nil performers")
@@ -40,9 +46,10 @@ IO.puts("\nTest 3: Ticketmaster Client Body Handling")
 IO.puts("=" <> String.duplicate("=", 60))
 
 client_source = File.read!("lib/eventasaurus_discovery/sources/ticketmaster/client.ex")
+
 if String.contains?(client_source, "cond do") and
-   String.contains?(client_source, "is_binary(body) ->") and
-   String.contains?(client_source, "is_map(body) ->") do
+     String.contains?(client_source, "is_binary(body) ->") and
+     String.contains?(client_source, "is_map(body) ->") do
   IO.puts("  ✅ Client handles both binary and map response bodies")
 else
   IO.puts("  ❌ Client doesn't properly handle different body types")
@@ -63,11 +70,13 @@ IO.puts("\nTest 5: UTF8 Module Safe Fallback")
 IO.puts("=" <> String.duplicate("=", 60))
 
 utf8_source = File.read!("lib/eventasaurus_discovery/utils/utf8.ex")
+
 if String.contains?(utf8_source, "for <<cp::utf8 <- fixed>>, into: \"\", do: <<cp::utf8>>") do
   IO.puts("  ✅ UTF8 module uses safe bitstring comprehension fallback")
 
   # Test it actually works
-  corrupt = <<0xe2, 0x20, 0x46, 0xc3, 0xa9>>  # Mix of invalid and valid
+  # Mix of invalid and valid
+  corrupt = <<0xE2, 0x20, 0x46, 0xC3, 0xA9>>
   result = UTF8.ensure_valid_utf8(corrupt)
   IO.puts("  Testing corrupt input: #{inspect(:binary.bin_to_list(corrupt))}")
   IO.puts("  Result: #{inspect(result)} - Valid? #{String.valid?(result)}")
@@ -80,8 +89,9 @@ IO.puts("\nTest 6: N+1 Query Fix in Search")
 IO.puts("=" <> String.duplicate("=", 60))
 
 search_source = File.read!("lib/eventasaurus_web/live/city_live/search.ex")
+
 if String.contains?(search_source, "fetch_primary_category_ids") and
-   String.contains?(search_source, "where: pec.event_id in ^event_ids") do
+     String.contains?(search_source, "where: pec.event_id in ^event_ids") do
   IO.puts("  ✅ Search uses batch fetch for primary categories")
 else
   IO.puts("  ❌ Search still has N+1 query for primary categories")
@@ -94,27 +104,32 @@ IO.puts("=" <> String.duplicate("=", 60))
 # Test with various invalid inputs
 test_names = [
   "",
-  "   ",  # Just spaces
-  <<0xe2>>,  # Just invalid UTF-8
+  # Just spaces
+  "   ",
+  # Just invalid UTF-8
+  <<0xE2>>,
   nil
 ]
 
 IO.puts("  Testing find_or_create_performer with invalid inputs:")
+
 for name <- test_names do
   # This would normally be called internally, but we can test the UTF-8 cleaning
   clean = UTF8.ensure_valid_utf8(name || "")
   # Just simulate the normalization that would happen
-  normalized = if is_binary(clean) do
-    clean |> String.trim() |> String.downcase()
-  else
-    nil
-  end
+  normalized =
+    if is_binary(clean) do
+      clean |> String.trim() |> String.downcase()
+    else
+      nil
+    end
 
-  result = if is_nil(normalized) or normalized == "" do
-    "nil (filtered)"
-  else
-    "would create: '#{normalized}'"
-  end
+  result =
+    if is_nil(normalized) or normalized == "" do
+      "nil (filtered)"
+    else
+      "would create: '#{normalized}'"
+    end
 
   IO.puts("    Input: #{inspect(name, limit: 20)} → #{result}")
 end

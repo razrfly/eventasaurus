@@ -276,18 +276,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       join: v in Venue,
       on: pe.venue_id == v.id,
       where: not is_nil(v.latitude) and not is_nil(v.longitude),
-      where: fragment(
-        "ST_DWithin(
+      where:
+        fragment(
+          "ST_DWithin(
           ST_MakePoint(?::float, ?::float)::geography,
           ST_MakePoint(?::float, ?::float)::geography,
           ?
         )",
-        ^center_lng,
-        ^center_lat,
-        v.longitude,
-        v.latitude,
-        ^radius_meters
-      )
+          ^center_lng,
+          ^center_lat,
+          v.longitude,
+          v.latitude,
+          ^radius_meters
+        )
     )
   end
 
@@ -320,7 +321,6 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   defp apply_sorting(query, :starts_at, order) when order in [:asc, :desc] do
     from(pe in query, order_by: [{^order, pe.starts_at}])
   end
-
 
   defp apply_sorting(query, :title, order) when order in [:asc, :desc] do
     from(pe in query, order_by: [{^order, pe.title}])
@@ -511,11 +511,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     base_query = from(pe in PublicEvent, select: count(pe.id))
 
     # Apply geographic filter if coordinates are provided
-    query = if opts[:center_lat] && opts[:center_lng] && opts[:radius_km] do
-      filter_by_radius(base_query, opts[:center_lat], opts[:center_lng], opts[:radius_km])
-    else
-      base_query
-    end
+    query =
+      if opts[:center_lat] && opts[:center_lng] && opts[:radius_km] do
+        filter_by_radius(base_query, opts[:center_lat], opts[:center_lng], opts[:radius_km])
+      else
+        base_query
+      end
 
     query
     |> filter_past_events(opts[:show_past])
@@ -608,7 +609,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # Apply any base filters that should affect facet counts
     # IMPORTANT: Must include show_past: true to get accurate counts
     query
-    |> filter_past_events(true)  # Always show all events for counts
+    # Always show all events for counts
+    |> filter_past_events(true)
     |> filter_by_categories(filters[:categories])
     |> apply_search(filters[:search])
   end
@@ -707,11 +709,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       {start_date, end_date} = calculate_date_range(range_type)
 
       # Build count options with date range and all other filters (including geographic)
-      count_opts = filters
+      count_opts =
+        filters
         |> Enum.into(%{})
         |> Map.put(:start_date, start_date)
         |> Map.put(:end_date, end_date)
-        |> Map.put(:show_past, true)  # Always show all events in range for counts
+        # Always show all events in range for counts
+        |> Map.put(:show_past, true)
 
       count = count_events(count_opts)
 
@@ -774,13 +778,16 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     now = DateTime.utc_now()
 
     case event.starts_at do
-      nil -> nil
+      nil ->
+        nil
+
       starts_at ->
         hours_until = DateTime.diff(starts_at, now, :hour)
         days_until = div(hours_until, 24)
 
         cond do
-          hours_until < 0 -> nil  # Event has passed
+          # Event has passed
+          hours_until < 0 -> nil
           hours_until < 24 -> %{type: :last_chance, label: "🔥 Last Chance", emoji: "🔥"}
           days_until <= 7 -> %{type: :this_week, label: "⚡ This Week", emoji: "⚡"}
           days_until <= 30 -> %{type: :upcoming, label: "📅 Upcoming", emoji: "📅"}
@@ -824,8 +831,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   def list_events_with_aggregation(opts \\ []) do
     if opts[:aggregate] do
       # Extract & sanitize pagination params
-      page = max((opts[:page] || 1), 1)
-      page_size = min((opts[:page_size] || @default_limit), @max_limit)
+      page = max(opts[:page] || 1, 1)
+      page_size = min(opts[:page_size] || @default_limit, @max_limit)
 
       # Fetch window sized to requested page (cap at @max_limit)
       # Use 3x multiplier to account for aggregation reducing result count
@@ -858,7 +865,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def aggregate_events(events, _opts \\ []) do
     # Preload sources, movies, and venue.city_ref for all events
-    events_with_sources = Repo.preload(events, [sources: :source, venue: :city_ref, movies: []])
+    events_with_sources = Repo.preload(events, sources: :source, venue: :city_ref, movies: [])
 
     # Separate movie events from other events
     {movie_events, other_events} = Enum.split_with(events_with_sources, &has_movie?/1)
@@ -893,10 +900,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end)
 
     # Combine all types and sort by starts_at (for groups, use first event's date)
-    (source_aggregated_groups ++ movie_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
+    (source_aggregated_groups ++
+       movie_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
     |> Enum.sort_by(fn
-      %AggregatedEventGroup{} -> DateTime.utc_now()  # Groups sort to top
-      %AggregatedMovieGroup{} -> DateTime.utc_now()  # Movie groups sort to top
+      # Groups sort to top
+      %AggregatedEventGroup{} -> DateTime.utc_now()
+      # Movie groups sort to top
+      %AggregatedMovieGroup{} -> DateTime.utc_now()
       %PublicEvent{starts_at: starts_at} -> starts_at || DateTime.utc_now()
     end)
   end
@@ -950,7 +960,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Check if an event has an associated movie
-  defp has_movie?(%PublicEvent{movies: movies}) when is_list(movies) and length(movies) > 0, do: true
+  defp has_movie?(%PublicEvent{movies: movies}) when is_list(movies) and length(movies) > 0,
+    do: true
+
   defp has_movie?(_), do: false
 
   # Check if an event should be aggregated
@@ -959,6 +971,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       es.source && es.source.aggregate_on_index == true
     end)
   end
+
   defp event_aggregatable?(_), do: false
 
   # Get the source for an event (first one with aggregate_on_index=true)
@@ -981,7 +994,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       # Get all categories from events
       all_categories =
         events
-        |> Enum.flat_map(& &1.categories || [])
+        |> Enum.flat_map(&(&1.categories || []))
         |> Enum.uniq_by(& &1.id)
 
       # Use first event's cover image
@@ -1020,7 +1033,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       # Get all categories from events
       all_categories =
         events
-        |> Enum.flat_map(& &1.categories || [])
+        |> Enum.flat_map(&(&1.categories || []))
         |> Enum.uniq_by(& &1.id)
 
       %AggregatedMovieGroup{

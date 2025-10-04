@@ -25,6 +25,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
+
   alias EventasaurusDiscovery.Sources.KinoKrakow.{
     Config,
     Jobs.DayPageJob
@@ -52,10 +53,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
         Events will be processed asynchronously
         """)
 
-        {:ok, %{
-          mode: "distributed",
-          day_jobs_scheduled: scheduled_count
-        }}
+        {:ok,
+         %{
+           mode: "distributed",
+           day_jobs_scheduled: scheduled_count
+         }}
 
       {:error, reason} ->
         Logger.error("❌ Failed to establish session: #{inspect(reason)}")
@@ -134,8 +136,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
   defp schedule_day_jobs(cookies, source_id) do
     # TEMPORARY: Only schedule day 0 (current day) until multi-day is implemented
     # Future: Change [0] to 0..6 when ready for multi-day support
+    # Only current day for now
     scheduled_jobs =
-      [0]  # Only current day for now
+      [0]
       |> Enum.map(fn day_offset ->
         # Stagger jobs slightly to avoid thundering herd
         delay_seconds = day_offset * Config.rate_limit()

@@ -125,7 +125,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
 
   # Calculate end time based on movie runtime
   defp calculate_end_time(event) do
-    runtime = event[:runtime] || event["runtime"] || 120  # Default 2 hours if unknown
+    # Default 2 hours if unknown
+    runtime = event[:runtime] || event["runtime"] || 120
     datetime = event[:datetime] || event["datetime"]
 
     DateTime.add(datetime, runtime * 60, :second)

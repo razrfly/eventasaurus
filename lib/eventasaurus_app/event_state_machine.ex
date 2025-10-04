@@ -123,7 +123,9 @@ defmodule EventasaurusApp.EventStateMachine do
           rescue
             ArgumentError -> :__invalid__
           end
-        s -> s
+
+        s ->
+          s
       end
 
     inferred_status = infer_status(attrs)

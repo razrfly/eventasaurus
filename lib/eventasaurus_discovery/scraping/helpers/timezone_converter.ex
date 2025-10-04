@@ -187,9 +187,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter do
         timezone
 
       {:error, :time_zone_not_found} ->
-        Logger.info(
-          "No timezone found for coordinates (#{latitude}, #{longitude}), using UTC"
-        )
+        Logger.info("No timezone found for coordinates (#{latitude}, #{longitude}), using UTC")
 
         "Etc/UTC"
 

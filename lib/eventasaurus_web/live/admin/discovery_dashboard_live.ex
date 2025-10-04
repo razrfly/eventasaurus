@@ -106,7 +106,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       end
 
     # Validate: source is required, city is required only for non-country-wide and non-city-specific sources
-    city_required = source not in @country_wide_sources and not Map.has_key?(@city_specific_sources, source)
+    city_required =
+      source not in @country_wide_sources and not Map.has_key?(@city_specific_sources, source)
+
     missing_city = city_required and (is_nil(city_id_or_slug) or city_id_or_slug == "")
 
     if is_nil(source) or source == "" or missing_city do
@@ -125,10 +127,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       city_id_result =
         if Map.has_key?(@city_specific_sources, source) do
           city_slug = @city_specific_sources[source]
+
           case Repo.one(from(c in City, where: c.slug == ^city_slug, select: c.id)) do
             nil ->
               Logger.error("City not found for slug: #{city_slug}, source: #{source}")
               {:error, "City '#{city_slug}' not found in database. Please add it first."}
+
             id ->
               {:ok, id}
           end
@@ -281,7 +285,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       {:ok, job} ->
         socket =
           socket
-          |> put_flash(:info, "Queued TMDB Now Playing sync job ##{job.id} for region #{region} (#{pages} pages)")
+          |> put_flash(
+            :info,
+            "Queued TMDB Now Playing sync job ##{job.id} for region #{region} (#{pages} pages)"
+          )
           |> assign(:import_running, true)
           |> assign(:import_progress, "Syncing TMDB movies...")
 

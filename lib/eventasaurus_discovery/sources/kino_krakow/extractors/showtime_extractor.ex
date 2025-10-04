@@ -130,7 +130,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
   end
 
   # Extract all showtimes from a cinema row
-  defp extract_showtimes_from_row(row, film, date_str) when not is_nil(film) and not is_nil(date_str) do
+  defp extract_showtimes_from_row(row, film, date_str)
+       when not is_nil(film) and not is_nil(date_str) do
     # Get cinema info
     cinema_link =
       row
@@ -160,6 +161,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
         {_, attrs, _} ->
           href = Enum.find_value(attrs, fn {k, v} -> k == "href" && v end)
           String.contains?(href || "", "/by_cinema/")
+
         _ ->
           false
       end)

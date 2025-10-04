@@ -44,12 +44,15 @@ IO.puts("=" <> String.duplicate("=", 60))
 # Test the exact query that's failing
 test_query = fn name ->
   try do
-    result = Repo.one(
-      from p in "performers",
-      where: fragment("lower(?) = lower(?)", p.name, ^name),
-      limit: 1,
-      select: p.name
-    )
+    result =
+      Repo.one(
+        from(p in "performers",
+          where: fragment("lower(?) = lower(?)", p.name, ^name),
+          limit: 1,
+          select: p.name
+        )
+      )
+
     {:ok, result}
   rescue
     e in Postgrex.Error ->
@@ -59,6 +62,7 @@ end
 
 # Try with original (should fail)
 IO.puts("  Query with original name:")
+
 case test_query.(problem_name) do
   {:ok, result} -> IO.puts("    ✅ Success: #{inspect(result)}")
   {:error, msg} -> IO.puts("    ❌ Error: #{msg}")
@@ -66,6 +70,7 @@ end
 
 # Try with cleaned name
 IO.puts("\n  Query with cleaned name:")
+
 case test_query.(final_clean) do
   {:ok, result} -> IO.puts("    ✅ Success: #{inspect(result)}")
   {:error, msg} -> IO.puts("    ❌ Error: #{msg}")

@@ -4,18 +4,19 @@ alias EventasaurusDiscovery.PublicEvents.PublicEvent
 alias EventasaurusDiscovery.PublicEvents.PublicEvent.Slug
 alias EventasaurusDiscovery.Utils.UTF8
 
-IO.puts """
+IO.puts("""
 ========================================
 Testing Universal UTF-8 Protection
 ========================================
-"""
+""")
 
 # Test 1: Slug generation with error tuple (Ticketmaster issue)
-IO.puts "\n1. Testing slug generation with error tuple:"
-IO.puts "   (This simulates the Ticketmaster error)"
+IO.puts("\n1. Testing slug generation with error tuple:")
+IO.puts("   (This simulates the Ticketmaster error)")
 
 # Create a mock changeset with an error tuple as title
 error_tuple = {:error, "", <<226>>}
+
 attrs = %{
   "title" => error_tuple,
   "starts_at" => DateTime.utc_now(),
@@ -26,28 +27,30 @@ try do
   changeset = PublicEvent.changeset(%PublicEvent{}, attrs)
 
   if changeset.valid? do
-    IO.puts "   ✅ Changeset is valid despite error tuple"
+    IO.puts("   ✅ Changeset is valid despite error tuple")
   else
-    IO.puts "   ⚠️  Changeset has errors: #{inspect(changeset.errors)}"
+    IO.puts("   ⚠️  Changeset has errors: #{inspect(changeset.errors)}")
   end
 
   # Check if slug was generated
   slug = Ecto.Changeset.get_field(changeset, :slug)
+
   if slug do
-    IO.puts "   ✅ Slug generated: #{slug}"
+    IO.puts("   ✅ Slug generated: #{slug}")
   else
-    IO.puts "   ❌ No slug generated"
+    IO.puts("   ❌ No slug generated")
   end
 rescue
   e ->
-    IO.puts "   ❌ Error: #{inspect(e)}"
+    IO.puts("   ❌ Error: #{inspect(e)}")
 end
 
 # Test 2: Event with broken UTF-8 (Karnet issue)
-IO.puts "\n2. Testing event with broken UTF-8 string:"
-IO.puts "   (This simulates the Karnet error)"
+IO.puts("\n2. Testing event with broken UTF-8 string:")
+IO.puts("   (This simulates the Karnet error)")
 
-broken_title = "Concert " <> <<0xe2, 0x20, 0x53>> <> "pecial"
+broken_title = "Concert " <> <<0xE2, 0x20, 0x53>> <> "pecial"
+
 attrs = %{
   "title" => broken_title,
   "starts_at" => DateTime.utc_now(),
@@ -58,14 +61,14 @@ changeset = PublicEvent.changeset(%PublicEvent{}, attrs)
 
 if changeset.valid? do
   title = Ecto.Changeset.get_field(changeset, :title)
-  IO.puts "   ✅ Changeset valid with cleaned title: #{inspect(title)}"
-  IO.puts "   ✅ Title is valid UTF-8: #{String.valid?(title)}"
+  IO.puts("   ✅ Changeset valid with cleaned title: #{inspect(title)}")
+  IO.puts("   ✅ Title is valid UTF-8: #{String.valid?(title)}")
 else
-  IO.puts "   ⚠️  Changeset errors: #{inspect(changeset.errors)}"
+  IO.puts("   ⚠️  Changeset errors: #{inspect(changeset.errors)}")
 end
 
 # Test 3: Valid UTF-8 with special characters
-IO.puts "\n3. Testing valid UTF-8 with special characters:"
+IO.puts("\n3. Testing valid UTF-8 with special characters:")
 
 valid_titles = [
   "Teatr Ludowy – Scena Pod Ratuszem",
@@ -85,49 +88,49 @@ Enum.each(valid_titles, fn title ->
   saved_title = Ecto.Changeset.get_field(changeset, :title)
 
   if saved_title == title do
-    IO.puts "   ✅ Preserved: #{title}"
+    IO.puts("   ✅ Preserved: #{title}")
   else
-    IO.puts "   ❌ Changed: #{title} -> #{saved_title}"
+    IO.puts("   ❌ Changed: #{title} -> #{saved_title}")
   end
 end)
 
 # Test 4: Venue data with UTF-8 issues
-IO.puts "\n4. Testing venue data sanitization:"
+IO.puts("\n4. Testing venue data sanitization:")
 
 venue_data = %{
-  name: "Venue " <> <<0xe2, 0x20, 0x53>> <> "pecial",
+  name: "Venue " <> <<0xE2, 0x20, 0x53>> <> "pecial",
   address: "Valid Address",
   city: "Kraków"
 }
 
 cleaned_venue = UTF8.validate_map_strings(venue_data)
 
-IO.puts "   Original name invalid UTF-8: #{!String.valid?(venue_data.name)}"
-IO.puts "   Cleaned name valid UTF-8: #{String.valid?(cleaned_venue.name)}"
-IO.puts "   ✅ Venue data sanitized successfully"
+IO.puts("   Original name invalid UTF-8: #{!String.valid?(venue_data.name)}")
+IO.puts("   Cleaned name valid UTF-8: #{String.valid?(cleaned_venue.name)}")
+IO.puts("   ✅ Venue data sanitized successfully")
 
 # Test 5: Event data with nested maps
-IO.puts "\n5. Testing nested map sanitization:"
+IO.puts("\n5. Testing nested map sanitization:")
 
 event_data = %{
-  "title" => "Concert " <> <<0xe2, 0x20, 0x53>>,
+  "title" => "Concert " <> <<0xE2, 0x20, 0x53>>,
   "venue_data" => %{
-    "name" => "Venue " <> <<0xe2, 0x20, 0x53>>,
+    "name" => "Venue " <> <<0xE2, 0x20, 0x53>>,
     "address" => "123 Main St"
   },
   "metadata" => %{
-    "tags" => ["tag1", "broken" <> <<0xe2, 0x20, 0x53>>]
+    "tags" => ["tag1", "broken" <> <<0xE2, 0x20, 0x53>>]
   }
 }
 
 cleaned = UTF8.validate_map_strings(event_data)
 
-IO.puts "   Title cleaned: #{String.valid?(cleaned["title"])}"
-IO.puts "   Venue name cleaned: #{String.valid?(cleaned["venue_data"]["name"])}"
-IO.puts "   Tag cleaned: #{String.valid?(Enum.at(cleaned["metadata"]["tags"], 1))}"
-IO.puts "   ✅ Nested data sanitized successfully"
+IO.puts("   Title cleaned: #{String.valid?(cleaned["title"])}")
+IO.puts("   Venue name cleaned: #{String.valid?(cleaned["venue_data"]["name"])}")
+IO.puts("   Tag cleaned: #{String.valid?(Enum.at(cleaned["metadata"]["tags"], 1))}")
+IO.puts("   ✅ Nested data sanitized successfully")
 
-IO.puts """
+IO.puts("""
 
 ========================================
 Universal UTF-8 Protection Test Results
@@ -150,4 +153,4 @@ This single solution protects:
 - Ticketmaster scraper
 - Bandsintown scraper
 - Any future scrapers
-"""
+""")

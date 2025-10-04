@@ -747,10 +747,11 @@ defmodule EventasaurusWeb.Services.TmdbService do
                 is_map(t["data"]) && t["data"]["title"] && t["data"]["title"] != ""
               end)
               |> Enum.map(fn t ->
-                {t["iso_639_1"], %{
-                  "title" => t["data"]["title"],
-                  "overview" => t["data"]["overview"] || ""
-                }}
+                {t["iso_639_1"],
+                 %{
+                   "title" => t["data"]["title"],
+                   "overview" => t["data"]["overview"] || ""
+                 }}
               end)
               |> Enum.into(%{})
 

@@ -21,6 +21,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
+
   alias EventasaurusDiscovery.Sources.KinoKrakow.{
     Extractors.CinemaExtractor,
     Transformer
@@ -57,7 +58,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
           :not_found_or_pending ->
             # MovieDetailJob hasn't completed yet - retry
-            Logger.warning("⏳ Movie not found in database yet, will retry: #{showtime["movie_slug"]}")
+            Logger.warning(
+              "⏳ Movie not found in database yet, will retry: #{showtime["movie_slug"]}"
+            )
+
             {:error, :movie_not_ready}
         end
     end
@@ -118,14 +122,18 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
   # Parse datetime from string or return as-is if already DateTime
   defp parse_datetime(%DateTime{} = datetime), do: datetime
+
   defp parse_datetime(datetime_string) when is_binary(datetime_string) do
     case DateTime.from_iso8601(datetime_string) do
-      {:ok, datetime, _offset} -> datetime
+      {:ok, datetime, _offset} ->
+        datetime
+
       {:error, _} ->
         Logger.error("Failed to parse datetime: #{datetime_string}")
         DateTime.utc_now()
     end
   end
+
   defp parse_datetime(_), do: DateTime.utc_now()
 
   # Get movie from database by Kino Krakow slug
@@ -133,8 +141,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     # Query movie from database using metadata search
     # MovieDetailJob stores the Kino Krakow slug in movie.metadata
     query =
-      from m in EventasaurusDiscovery.Movies.Movie,
+      from(m in EventasaurusDiscovery.Movies.Movie,
         where: fragment("?->>'kino_krakow_slug' = ?", m.metadata, ^movie_slug)
+      )
 
     case Repo.one(query) do
       nil -> {:error, :not_found}
@@ -145,12 +154,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   # Check if MovieDetailJob completed for this movie slug
   defp check_movie_detail_job_status(movie_slug) do
     query =
-      from j in Oban.Job,
+      from(j in Oban.Job,
         where: j.worker == "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob",
         where: fragment("args->>'movie_slug' = ?", ^movie_slug),
         select: %{state: j.state, id: j.id},
         order_by: [desc: j.id],
         limit: 1
+      )
 
     case Repo.one(query) do
       nil ->

@@ -95,4 +95,5 @@ config :wallaby,
 config :eventasaurus, :event_discovery,
   # Universal event freshness threshold for all scrapers (in hours)
   # Events seen within this window will NOT be re-scraped
-  freshness_threshold_hours: 168  # 7 days
+  # 7 days
+  freshness_threshold_hours: 168

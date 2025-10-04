@@ -49,7 +49,13 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:meta_description, meta_description(city))
            |> assign(:categories, Categories.list_categories())
            |> assign(:events, [])
-           |> assign(:pagination, %Pagination{entries: [], page_number: 1, page_size: 60, total_entries: 0, total_pages: 0})
+           |> assign(:pagination, %Pagination{
+             entries: [],
+             page_number: 1,
+             page_size: 60,
+             total_entries: 0,
+             total_pages: 0
+           })
            |> assign(:active_date_range, nil)
            |> assign(:date_range_counts, %{})
            |> fetch_events()
@@ -533,7 +539,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     """
   end
 
-
   # Component: Pagination - EXACT same from Activities page
   defp pagination(assigns) do
     ~H"""
@@ -592,41 +597,54 @@ defmodule EventasaurusWeb.CityLive.Index do
     lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
     # Build query filters with geographic filtering at database level
-    query_filters = Map.merge(filters, %{
-      language: language,
-      sort_order: filters[:sort_order] || :asc,
-      page_size: filters[:page_size] || 60,  # Use filter's page_size, default to 60 (divisible by 3)
-      page: filters[:page] || 1,
-      # Add geographic filtering parameters
-      center_lat: lat,
-      center_lng: lng,
-      radius_km: filters[:radius_km] || @default_radius_km
-    })
+    query_filters =
+      Map.merge(filters, %{
+        language: language,
+        sort_order: filters[:sort_order] || :asc,
+        # Use filter's page_size, default to 60 (divisible by 3)
+        page_size: filters[:page_size] || 60,
+        page: filters[:page] || 1,
+        # Add geographic filtering parameters
+        center_lat: lat,
+        center_lng: lng,
+        radius_km: filters[:radius_km] || @default_radius_km
+      })
 
     # Get events with geographic filtering done at database level
-    {geographic_events, total_count, all_events_count, date_range_counts} = if lat && lng do
-      # Get the paginated events with aggregation enabled
-      events = PublicEventsEnhanced.list_events_with_aggregation(Map.put(query_filters, :aggregate, true))
+    {geographic_events, total_count, all_events_count, date_range_counts} =
+      if lat && lng do
+        # Get the paginated events with aggregation enabled
+        events =
+          PublicEventsEnhanced.list_events_with_aggregation(
+            Map.put(query_filters, :aggregate, true)
+          )
 
-      # Get the total count without pagination
-      # Use count_events_with_aggregation to get accurate count of aggregated results
-      count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
-      total = PublicEventsEnhanced.count_events_with_aggregation(Map.put(count_filters, :aggregate, true))
+        # Get the total count without pagination
+        # Use count_events_with_aggregation to get accurate count of aggregated results
+        count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
 
-      # Get date range counts with geographic filtering, but without existing date filters
-      # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
-      date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
-      date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+        total =
+          PublicEventsEnhanced.count_events_with_aggregation(
+            Map.put(count_filters, :aggregate, true)
+          )
 
-      # Get the count of ALL events (no date filters) for the "All Events" button
-      # Use aggregation-aware count here as well
-      all_events = PublicEventsEnhanced.count_events_with_aggregation(Map.put(date_range_count_filters, :aggregate, true))
+        # Get date range counts with geographic filtering, but without existing date filters
+        # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
+        date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
+        date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
 
-      {events, total, all_events, date_counts}
-    else
-      # No coordinates, fallback to empty list
-      {[], 0, 0, %{}}
-    end
+        # Get the count of ALL events (no date filters) for the "All Events" button
+        # Use aggregation-aware count here as well
+        all_events =
+          PublicEventsEnhanced.count_events_with_aggregation(
+            Map.put(date_range_count_filters, :aggregate, true)
+          )
+
+        {events, total, all_events, date_counts}
+      else
+        # No coordinates, fallback to empty list
+        {[], 0, 0, %{}}
+      end
 
     # Use actual counts for pagination
     page = filters[:page] || 1
@@ -645,8 +663,10 @@ defmodule EventasaurusWeb.CityLive.Index do
     socket
     |> assign(:events, geographic_events)
     |> assign(:pagination, pagination)
-    |> assign(:total_events, total_entries)  # Use the total from pagination, not current page length
-    |> assign(:all_events_count, all_events_count)  # Count of all events (no date filter)
+    # Use the total from pagination, not current page length
+    |> assign(:total_events, total_entries)
+    # Count of all events (no date filter)
+    |> assign(:all_events_count, all_events_count)
     |> assign(:date_range_counts, date_range_counts)
     |> assign(:loading, false)
   end
@@ -655,7 +675,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     # No longer showing nearby cities
     socket
   end
-
 
   defp page_title(city) do
     "Events in #{city.name}, #{city.country.name} | Eventasaurus"
@@ -667,21 +686,27 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   defp parse_id_list(nil), do: []
   defp parse_id_list([]), do: []
+
   defp parse_id_list(ids) when is_list(ids) do
     ids
     |> Enum.map(fn id ->
       case id do
-        id when is_integer(id) -> id
+        id when is_integer(id) ->
+          id
+
         id when is_binary(id) ->
           case Integer.parse(id) do
             {num, _} -> num
             _ -> nil
           end
-        _ -> nil
+
+        _ ->
+          nil
       end
     end)
     |> Enum.reject(&is_nil/1)
   end
+
   defp parse_id_list(ids) when is_binary(ids) do
     ids
     |> String.split(",")
@@ -728,7 +753,8 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_by: :starts_at,
       sort_order: :asc,
       page: 1,
-      page_size: 60,  # Divisible by 3 for grid layout
+      # Divisible by 3 for grid layout
+      page_size: 60,
       show_past: true
     }
   end
@@ -759,15 +785,27 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   defp build_filter_params(filters) do
     filters
-    |> Map.take([:search, :categories, :start_date, :end_date, :radius_km, :sort_by, :page, :show_past])
+    |> Map.take([
+      :search,
+      :categories,
+      :start_date,
+      :end_date,
+      :radius_km,
+      :sort_by,
+      :page,
+      :show_past
+    ])
     |> Enum.reject(fn
       {_k, nil} -> true
       {_k, ""} -> true
-      {_k, []} -> true  # Empty categories list
+      # Empty categories list
+      {_k, []} -> true
       {:page, 1} -> true
-      {:radius_km, @default_radius_km} -> true  # Don't include default radius
+      # Don't include default radius
+      {:radius_km, @default_radius_km} -> true
       {:sort_by, :starts_at} -> true
-      {:show_past, false} -> true  # Don't include default
+      # Don't include default
+      {:show_past, false} -> true
       _ -> false
     end)
     |> Enum.map(fn
@@ -783,9 +821,9 @@ defmodule EventasaurusWeb.CityLive.Index do
     |> Enum.into(%{})
   end
 
-
   defp parse_integer(nil), do: nil
   defp parse_integer(""), do: nil
+
   defp parse_integer(val) when is_binary(val) do
     case Integer.parse(val) do
       {num, _} -> num
