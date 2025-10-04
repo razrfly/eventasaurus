@@ -3,7 +3,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
   Simplified venue matcher for Kraków venues from Karnet.
 
   Provides venue name normalization and basic address extraction.
-  Coordinates are obtained through VenueGeocoder using Google Maps API.
+  Coordinates are obtained through VenueProcessor using Google Places API.
   """
 
   require Logger
@@ -109,8 +109,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
   @doc """
   Process venue data for integration with VenueProcessor.
 
-  Returns venue data with nil coordinates to trigger automatic geocoding
-  via VenueGeocoder using Google Maps API.
+  Returns venue data with nil coordinates to trigger automatic lookup
+  via Google Places API through VenueProcessor.
   """
   def prepare_venue_for_processor(venue_data) when is_map(venue_data) do
     # Ensure required fields for VenueProcessor
@@ -118,7 +118,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
       name: venue_data[:name] || venue_data["name"],
       city: venue_data[:city] || venue_data["city"] || "Kraków",
       country: venue_data[:country] || venue_data["country"] || "Poland",
-      # Set coordinates to nil to trigger VenueGeocoder
+      # Set coordinates to nil to trigger Google Places lookup
       latitude: nil,
       longitude: nil
     }
