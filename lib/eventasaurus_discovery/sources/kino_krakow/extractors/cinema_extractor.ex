@@ -40,9 +40,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.CinemaExtractor do
   end
 
   # Format cinema name from slug (e.g., "kino-pod-baranami" -> "Kino Pod Baranami")
+  # Also handles slashes: "cinema-city/kazimierz" -> "Cinema City Kazimierz"
   defp format_name_from_slug(slug) do
     slug
     |> String.replace("-", " ")
+    |> String.replace("/", " ")
     |> String.split()
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
