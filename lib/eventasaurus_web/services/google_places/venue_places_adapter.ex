@@ -53,8 +53,8 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenuePlacesAdapter do
     %{
       name: extract_name(place_data),
       address: extract_address(place_data),
-      city: extract_city(address_components),
-      country: extract_country(address_components),
+      city_name: extract_city(address_components),
+      country_code: extract_country_code(address_components),
       latitude: latitude,
       longitude: longitude,
       place_id: Map.get(place_data, "place_id"),
@@ -98,14 +98,15 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenuePlacesAdapter do
 
   defp extract_city(_), do: nil
 
-  # Extract country from address components
-  defp extract_country(address_components) when is_list(address_components) do
-    find_component(address_components, "country")
+  # Extract country code (short_name) from address components
+  # Returns ISO country code like "US", "GB", "PL" for VenueStore.ensure_city_id
+  defp extract_country_code(address_components) when is_list(address_components) do
+    find_country_code(address_components, "country")
   end
 
-  defp extract_country(_), do: nil
+  defp extract_country_code(_), do: nil
 
-  # Find address component by type
+  # Find address component by type (returns long_name for city)
   defp find_component(components, type) do
     components
     |> Enum.find(fn component ->
@@ -114,6 +115,19 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenuePlacesAdapter do
     end)
     |> case do
       %{"long_name" => name} -> name
+      _ -> nil
+    end
+  end
+
+  # Find country code (returns short_name for ISO country code)
+  defp find_country_code(components, type) do
+    components
+    |> Enum.find(fn component ->
+      types = Map.get(component, "types", [])
+      type in types
+    end)
+    |> case do
+      %{"short_name" => code} -> code
       _ -> nil
     end
   end
