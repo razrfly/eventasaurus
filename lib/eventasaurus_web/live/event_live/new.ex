@@ -703,12 +703,11 @@ defmodule EventasaurusWeb.EventLive.New do
             if (!is_virtual and venue_name) && venue_name != "" do
               # Try to find existing venue or create new one
               venue_attrs = %{
-                "name" => venue_name,
-                "address" => venue_address,
-                "city" => Map.get(form_data, "venue_city"),
-                "state" => Map.get(form_data, "venue_state"),
-                "country" => Map.get(form_data, "venue_country"),
-                "latitude" =>
+                name: venue_name,
+                address: venue_address,
+                city_name: Map.get(form_data, "venue_city"),
+                country_code: Map.get(form_data, "venue_country"),
+                latitude:
                   case Map.get(form_data, "venue_latitude") do
                     lat when is_binary(lat) ->
                       case Float.parse(lat) do
@@ -719,7 +718,7 @@ defmodule EventasaurusWeb.EventLive.New do
                     lat ->
                       lat
                   end,
-                "longitude" =>
+                longitude:
                   case Map.get(form_data, "venue_longitude") do
                     lng when is_binary(lng) ->
                       case Float.parse(lng) do
@@ -730,10 +729,10 @@ defmodule EventasaurusWeb.EventLive.New do
                     lng ->
                       lng
                   end,
-                "venue_type" => Map.get(form_data, "venue_type", "venue"),
+                venue_type: Map.get(form_data, "venue_type", "venue"),
                 # Include Google Places ID
-                "place_id" => Map.get(form_data, "venue_place_id"),
-                "source" =>
+                place_id: Map.get(form_data, "venue_place_id"),
+                source:
                   case Map.get(form_data, "venue_place_id") do
                     nil -> "user"
                     "" -> "user"
@@ -744,11 +743,14 @@ defmodule EventasaurusWeb.EventLive.New do
               # Try to find existing venue by address first
               case EventasaurusApp.Venues.find_venue_by_address(venue_address) do
                 nil ->
-                  # Create new venue
-                  case EventasaurusApp.Venues.create_venue(venue_attrs) do
+                  # Create new venue using VenueStore for proper city_id lookup
+                  case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_attrs) do
                     {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
                     # Fall back to creating without venue
-                    {:error, _} -> event_params
+                    {:error, reason} ->
+                      require Logger
+                      Logger.error("Failed to create venue: #{inspect(reason)}")
+                      event_params
                   end
 
                 venue ->
