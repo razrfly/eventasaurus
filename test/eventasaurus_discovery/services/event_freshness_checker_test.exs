@@ -14,6 +14,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
     test "filters out events seen within threshold", %{source: source} do
       # Create an event source seen 1 hour ago (within 7 day threshold)
       recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
       insert(:public_event_source,
         source_id: source.id,
         external_id: "test_123",
@@ -22,8 +23,10 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
 
       # Create events to check
       events = [
-        %{"external_id" => "test_123"},  # Should be filtered out (recent)
-        %{"external_id" => "test_456"}   # Should be included (not seen)
+        # Should be filtered out (recent)
+        %{"external_id" => "test_123"},
+        # Should be included (not seen)
+        %{"external_id" => "test_456"}
       ]
 
       result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
@@ -35,6 +38,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
     test "includes events seen outside threshold", %{source: source} do
       # Create an event source seen 8 days ago (outside 7 day threshold)
       old_datetime = DateTime.add(DateTime.utc_now(), -8 * 24, :hour)
+
       insert(:public_event_source,
         source_id: source.id,
         external_id: "test_old",
@@ -71,6 +75,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
     test "works with atom key external_id", %{source: source} do
       # Create event source
       recent_datetime = DateTime.add(DateTime.utc_now(), -1, :hour)
+
       insert(:public_event_source,
         source_id: source.id,
         external_id: "test_atom",
@@ -78,8 +83,10 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
       )
 
       events = [
-        %{external_id: "test_atom"},     # Atom key - should be filtered
-        %{external_id: "test_new"}       # Atom key - should be included
+        # Atom key - should be filtered
+        %{external_id: "test_atom"},
+        # Atom key - should be included
+        %{external_id: "test_new"}
       ]
 
       result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
@@ -91,6 +98,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
     test "respects custom threshold override", %{source: source} do
       # Create event source seen 2 hours ago
       datetime = DateTime.add(DateTime.utc_now(), -2, :hour)
+
       insert(:public_event_source,
         source_id: source.id,
         external_id: "test_custom",
@@ -101,11 +109,13 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
 
       # With 1 hour threshold, should filter out (2 hours < default)
       result_short = EventFreshnessChecker.filter_events_needing_processing(events, source.id, 1)
-      assert length(result_short) == 1  # Included because 2h > 1h threshold
+      # Included because 2h > 1h threshold
+      assert length(result_short) == 1
 
       # With 3 hour threshold, should filter out (2 hours < 3)
       result_long = EventFreshnessChecker.filter_events_needing_processing(events, source.id, 3)
-      assert length(result_long) == 0  # Filtered because 2h < 3h threshold
+      # Filtered because 2h < 3h threshold
+      assert length(result_long) == 0
     end
 
     test "handles batch of mixed events", %{source: source} do
@@ -126,10 +136,14 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
       )
 
       events = [
-        %{"external_id" => "recent_1"},  # Filter out
-        %{"external_id" => "old_1"},     # Include
-        %{"external_id" => "new_1"},     # Include (never seen)
-        %{"title" => "no_id"}            # Include (no external_id)
+        # Filter out
+        %{"external_id" => "recent_1"},
+        # Include
+        %{"external_id" => "old_1"},
+        # Include (never seen)
+        %{"external_id" => "new_1"},
+        # Include (no external_id)
+        %{"title" => "no_id"}
       ]
 
       result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)

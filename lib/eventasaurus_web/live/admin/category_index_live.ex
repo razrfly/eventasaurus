@@ -36,9 +36,12 @@ defmodule EventasaurusWeb.Admin.CategoryIndexLive do
     case Categories.update_category(category, %{is_active: !category.is_active}) do
       {:ok, _category} ->
         {:noreply,
-          socket
-          |> put_flash(:info, "Category #{if category.is_active, do: "deactivated", else: "activated"} successfully")
-          |> load_categories()}
+         socket
+         |> put_flash(
+           :info,
+           "Category #{if category.is_active, do: "deactivated", else: "activated"} successfully"
+         )
+         |> load_categories()}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to update category")}
@@ -52,28 +55,31 @@ defmodule EventasaurusWeb.Admin.CategoryIndexLive do
     case Categories.delete_category(category) do
       {:ok, _category} ->
         {:noreply,
-          socket
-          |> put_flash(:info, "Category deleted successfully")
-          |> load_categories()}
+         socket
+         |> put_flash(:info, "Category deleted successfully")
+         |> load_categories()}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete category. It may be in use by events.")}
+        {:noreply,
+         put_flash(socket, :error, "Failed to delete category. It may be in use by events.")}
     end
   end
 
   defp load_categories(socket) do
-    categories = Categories.list_categories_with_counts(
-      active_only: false,
-      locale: "en"
-    )
+    categories =
+      Categories.list_categories_with_counts(
+        active_only: false,
+        locale: "en"
+      )
 
     # Apply search filter
     categories =
       if socket.assigns.search_query != "" do
         query = String.downcase(socket.assigns.search_query)
+
         Enum.filter(categories, fn cat ->
           String.contains?(String.downcase(cat.name), query) ||
-          String.contains?(String.downcase(cat.slug), query)
+            String.contains?(String.downcase(cat.slug), query)
         end)
       else
         categories

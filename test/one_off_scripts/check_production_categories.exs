@@ -11,7 +11,11 @@ IO.puts("\n=== Production vs Local Category Diagnosis ===\n")
 
 IO.puts("Key things to check in production:")
 IO.puts("1. Check if categories table has color values: SELECT id, name, color FROM categories;")
-IO.puts("2. Check if event_categories associations exist: SELECT COUNT(*) FROM public_event_categories;")
+
+IO.puts(
+  "2. Check if event_categories associations exist: SELECT COUNT(*) FROM public_event_categories;"
+)
+
 IO.puts("3. Check if CategoryHelpers module is deployed")
 IO.puts("4. Check if the preload_with_sources function includes :categories")
 IO.puts("5. Check production logs for any errors when loading categories")

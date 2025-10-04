@@ -58,7 +58,8 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
 
   def apply_quick_date_filter(filters, range_atom) do
     # Delegate to PublicEventsEnhanced for date calculation
-    {start_date, end_date} = EventasaurusDiscovery.PublicEventsEnhanced.calculate_date_range(range_atom)
+    {start_date, end_date} =
+      EventasaurusDiscovery.PublicEventsEnhanced.calculate_date_range(range_atom)
 
     filters
     |> Map.put(:start_date, start_date)
@@ -98,11 +99,12 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
     count = if filters[:search] && filters[:search] != "", do: count + 1, else: count
 
     # Only count radius if it differs from default
-    count = if default_radius && filters[:radius_km] && filters[:radius_km] != default_radius do
-      count + 1
-    else
-      count
-    end
+    count =
+      if default_radius && filters[:radius_km] && filters[:radius_km] != default_radius do
+        count + 1
+      else
+        count
+      end
 
     count = count + length(filters[:categories] || [])
 

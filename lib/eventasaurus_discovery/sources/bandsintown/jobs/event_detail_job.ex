@@ -61,7 +61,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
          {:ok, transformed_event} <- transform_event(enriched_event_data, city),
          # Process through unified Processor for venue validation
          {:ok, result} <- process_event(transformed_event, source) do
-
       case result do
         event when is_struct(event) ->
           # Successfully processed and created/updated event
@@ -194,6 +193,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
             Title: #{processed_event.title}
             Venue: #{if processed_event.venue, do: processed_event.venue.name, else: "Unknown"}
             """)
+
             {:ok, processed_event}
 
           [] ->
@@ -216,6 +216,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
       #{inspect(error)}
       #{inspect(__STACKTRACE__)}
       """)
+
       {:error, {:exception, error}}
   end
 end

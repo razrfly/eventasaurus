@@ -24,8 +24,10 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       |> assign(:categories, Categories.list_categories())
       |> assign(:filter_facets, %{})
       |> assign(:date_range_counts, %{})
-      |> assign(:active_date_range, nil)  # Default: no date filter (show all events)
-      |> assign(:all_events_count, 0)  # Total events without date filter
+      # Default: no date filter (show all events)
+      |> assign(:active_date_range, nil)
+      # Total events without date filter
+      |> assign(:all_events_count, 0)
       |> assign(:show_filters, false)
       |> assign(:loading, false)
       |> assign(:group_by_date, false)
@@ -248,7 +250,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
       Map.merge(filters, %{
         language: language,
         sort_order: filters[:sort_order] || :asc,
-        aggregate: true  # Enable aggregation on index
+        # Enable aggregation on index
+        aggregate: true
       })
 
     events = PublicEventsEnhanced.list_events_with_aggregation(query_filters)
@@ -1032,7 +1035,9 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   # end
 
   # Component: Aggregated Event Group List Item (List View)
-  defp aggregated_list_item(%{group: %EventasaurusDiscovery.Movies.AggregatedMovieGroup{}} = assigns) do
+  defp aggregated_list_item(
+         %{group: %EventasaurusDiscovery.Movies.AggregatedMovieGroup{}} = assigns
+       ) do
     alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
 
     ~H"""

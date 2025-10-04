@@ -25,9 +25,11 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
       # First try fuzzy matching to find existing performer
       # Scope by source_id if provided to avoid cross-source matches
       fuzzy_opts = [threshold: 0.85]
-      fuzzy_opts = if normalized_attrs[:source_id],
-        do: Keyword.put(fuzzy_opts, :source_id, normalized_attrs[:source_id]),
-        else: fuzzy_opts
+
+      fuzzy_opts =
+        if normalized_attrs[:source_id],
+          do: Keyword.put(fuzzy_opts, :source_id, normalized_attrs[:source_id]),
+          else: fuzzy_opts
 
       case find_by_name(normalized_attrs.name, fuzzy_opts) do
         [existing | _] ->
@@ -96,24 +98,30 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
 
   defp normalize_performer_attrs(attrs) do
     # Convert to string keys first to ensure consistency
-    string_attrs = for {key, value} <- attrs, into: %{} do
-      {to_string(key), value}
-    end
+    string_attrs =
+      for {key, value} <- attrs, into: %{} do
+        {to_string(key), value}
+      end
 
     # Now work with string keys consistently
     string_attrs
     |> Map.update("name", nil, fn
-      nil -> nil
+      nil ->
+        nil
+
       name when is_binary(name) ->
         # Clean UTF-8 before any string operations
         clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
+
         case String.trim(clean_name) do
           "" -> nil
           trimmed -> trimmed
         end
+
       other ->
         # Convert to string and clean UTF-8
         clean_other = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(to_string(other))
+
         case String.trim(clean_other) do
           "" -> nil
           trimmed -> trimmed
@@ -133,7 +141,6 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
       |> Map.new()
     end)
   end
-
 
   defp has_unique_violation?(changeset) do
     Enum.any?(changeset.errors, fn {_field, {_msg, opts}} ->

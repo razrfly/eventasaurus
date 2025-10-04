@@ -47,7 +47,8 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
              {:ok, source} <- get_or_create_source(),
              {:ok, raw_events} <- fetch_events(city, limit, options),
              # Pass city context through transformation
-             transformed_events <- transform_events_with_options(raw_events, Map.put(options, "city", city)),
+             transformed_events <-
+               transform_events_with_options(raw_events, Map.put(options, "city", city)),
              result <- process_events(transformed_events, source) do
           case result do
             {:ok, processed} ->
@@ -111,8 +112,12 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
         :ok
       rescue
         error ->
-          Logger.warning("Failed to schedule coordinate update for city #{city_id}: #{inspect(error)}")
-          :ok  # Don't fail the main job if coordinate update scheduling fails
+          Logger.warning(
+            "Failed to schedule coordinate update for city #{city_id}: #{inspect(error)}"
+          )
+
+          # Don't fail the main job if coordinate update scheduling fails
+          :ok
       end
 
       # Sources must implement source_config/0

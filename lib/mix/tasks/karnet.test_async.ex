@@ -19,10 +19,11 @@ defmodule Mix.Tasks.Karnet.TestAsync do
     Mix.Task.run("app.start")
 
     # Parse arguments
-    {opts, _, _} = OptionParser.parse(args,
-      strict: [limit: :integer, max_pages: :integer],
-      aliases: [l: :limit, p: :max_pages]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [limit: :integer, max_pages: :integer],
+        aliases: [l: :limit, p: :max_pages]
+      )
 
     limit = opts[:limit] || 10
     max_pages = opts[:max_pages] || 2
@@ -119,9 +120,11 @@ defmodule Mix.Tasks.Karnet.TestAsync do
     import Ecto.Query
 
     # Count jobs by state and queue
-    query = from j in Oban.Job,
-      group_by: [j.state, j.queue],
-      select: {j.state, j.queue, count(j.id)}
+    query =
+      from(j in Oban.Job,
+        group_by: [j.state, j.queue],
+        select: {j.state, j.queue, count(j.id)}
+      )
 
     results = Repo.all(query)
 
@@ -135,6 +138,7 @@ defmodule Mix.Tasks.Karnet.TestAsync do
     |> Enum.group_by(fn {state, _, _} -> state end)
     |> Enum.each(fn {state, jobs} ->
       Logger.info("#{String.upcase(to_string(state))}:")
+
       Enum.each(jobs, fn {_, queue, count} ->
         Logger.info("  #{queue}: #{count} jobs")
       end)

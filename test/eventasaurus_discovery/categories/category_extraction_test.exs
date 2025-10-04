@@ -10,12 +10,6 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractionTest do
   alias EventasaurusApp.Repo
   import Ecto.Query
 
-  setup do
-    # Ensure we have categories and mappings
-    Categories.seed_initial_mappings()
-    :ok
-  end
-
   describe "Ticketmaster category extraction" do
     test "extracts categories from music concert event" do
       tm_event = %{

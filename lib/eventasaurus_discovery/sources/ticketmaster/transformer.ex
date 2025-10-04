@@ -103,18 +103,20 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   """
   def transform_venue(tm_venue, city \\ nil) when is_map(tm_venue) do
     # Use the KNOWN country from city context, not the unreliable API response
-    country = if city && city.country do
-      city.country.name
-    else
-      # Fallback to API data only if no context (shouldn't happen)
-      get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"])
-    end
+    country =
+      if city && city.country do
+        city.country.name
+      else
+        # Fallback to API data only if no context (shouldn't happen)
+        get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"])
+      end
 
     # Trim city name to avoid trailing spaces that cause slug conflicts
-    city_name = case get_in(tm_venue, ["city", "name"]) do
-      nil -> nil
-      name -> String.trim(name)
-    end
+    city_name =
+      case get_in(tm_venue, ["city", "name"]) do
+        nil -> nil
+        name -> String.trim(name)
+      end
 
     %{
       external_id: "tm_venue_#{tm_venue["id"]}",
@@ -147,7 +149,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   # Private helper functions
 
-  defp extract_title_translations(title, lang_key) when is_binary(title) and is_binary(lang_key) do
+  defp extract_title_translations(title, lang_key)
+       when is_binary(title) and is_binary(lang_key) do
     # We explicitly requested this locale, so we know what language we got back
     # Ticketmaster returns content in the language we requested via the locale parameter
     %{lang_key => title}
@@ -161,7 +164,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   defp extract_title_translations(_, _), do: nil
 
-  defp extract_description_translations(description, lang_key) when is_binary(description) and is_binary(lang_key) do
+  defp extract_description_translations(description, lang_key)
+       when is_binary(description) and is_binary(lang_key) do
     # Same as titles - we know what language we requested
     %{lang_key => description}
   end
@@ -175,6 +179,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
 
   # Convert locale format (e.g., "pl-pl", "en-us") to language key (e.g., "pl", "en")
   defp locale_to_language_key(nil), do: nil
+
   defp locale_to_language_key(locale) when is_binary(locale) do
     # Take the first part of the locale (language code)
     locale
@@ -182,6 +187,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     |> String.split("-")
     |> List.first()
   end
+
   defp locale_to_language_key(_), do: nil
 
   # Extract stable ID from the event URL
@@ -200,6 +206,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           [_, numeric_id] ->
             # Use the URL ID as the stable identifier
             "tm_url_#{numeric_id}"
+
           _ ->
             # If we can't extract the URL ID, fall back to the event ID
             Logger.warning("Could not extract URL ID from: #{url}, using event ID")
@@ -211,7 +218,6 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         "tm_#{tm_event["id"]}"
     end
   end
-
 
   defp extract_description(event) do
     cond do
@@ -410,13 +416,15 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       place = event["place"] ->
         Logger.info("🔄 Attempting to build venue from place data")
         # Trim city name to avoid trailing spaces
-        city_name = case get_in(place, ["city", "name"]) || place["city"] do
-          nil -> nil
-          name -> String.trim(name)
-        end
+        city_name =
+          case get_in(place, ["city", "name"]) || place["city"] do
+            nil -> nil
+            name -> String.trim(name)
+          end
 
         %{
-          external_id: "tm_place_#{place["id"] || :crypto.hash(:md5, inspect(place)) |> Base.encode16()}",
+          external_id:
+            "tm_place_#{place["id"] || :crypto.hash(:md5, inspect(place)) |> Base.encode16()}",
           name: place["name"] || "Unknown Venue",
           address: place["address"] || place["line1"],
           city: city_name,
@@ -432,6 +440,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       # Check for location in event root
       location = event["location"] ->
         Logger.info("🔄 Attempting to build venue from location data")
+
         %{
           external_id: "tm_location_#{:crypto.hash(:md5, inspect(location)) |> Base.encode16()}",
           name: location["name"] || "Unknown Venue",
@@ -484,7 +493,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           state: nil,
           country: "Poland",
           postal_code: nil,
-          latitude: 50.0647,  # Kraków center
+          # Kraków center
+          latitude: 50.0647,
           longitude: 19.9450,
           timezone: "Europe/Warsaw",
           metadata: %{placeholder: true, needs_update: true}
@@ -493,6 +503,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   end
 
   defp infer_location_from_timezone(nil), do: {nil, nil, nil, nil}
+
   defp infer_location_from_timezone(timezone) do
     # Map common timezones to cities
     case timezone do
@@ -644,10 +655,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     # Get the first suitable image from the attraction
     images = attraction["images"] || []
 
-    image = Enum.find(images, fn img ->
-      # Prefer 16:9 ratio images, or take the first one
-      img["ratio"] == "16_9" || img["ratio"] == "4_3"
-    end) || List.first(images)
+    image =
+      Enum.find(images, fn img ->
+        # Prefer 16:9 ratio images, or take the first one
+        img["ratio"] == "16_9" || img["ratio"] == "4_3"
+      end) || List.first(images)
 
     if image, do: image["url"], else: nil
   end
@@ -725,24 +737,28 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   defp extract_price_info(event) do
     case event["priceRanges"] do
       nil ->
-        {nil, nil, nil, false}  # No price data, not confirmed free
+        # No price data, not confirmed free
+        {nil, nil, nil, false}
 
       [] ->
-        {nil, nil, nil, false}  # Empty price ranges, not confirmed free
+        # Empty price ranges, not confirmed free
+        {nil, nil, nil, false}
 
       price_ranges when is_list(price_ranges) ->
         # Get all min and max prices
-        all_prices = price_ranges
-        |> Enum.flat_map(fn range ->
-          prices = []
-          prices = if range["min"], do: [range["min"] | prices], else: prices
-          prices = if range["max"], do: [range["max"] | prices], else: prices
-          prices
-        end)
-        |> Enum.filter(&is_number/1)
+        all_prices =
+          price_ranges
+          |> Enum.flat_map(fn range ->
+            prices = []
+            prices = if range["min"], do: [range["min"] | prices], else: prices
+            prices = if range["max"], do: [range["max"] | prices], else: prices
+            prices
+          end)
+          |> Enum.filter(&is_number/1)
 
         if Enum.empty?(all_prices) do
-          {nil, nil, nil, false}  # No numeric prices found
+          # No numeric prices found
+          {nil, nil, nil, false}
         else
           # Get the absolute min and max across all price tiers
           min_price = Enum.min(all_prices)
@@ -752,12 +768,14 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           is_free = min_price == 0 && max_price == 0
 
           # Get currency from first price range that has it
-          currency = price_ranges
-          |> Enum.find_value(fn r -> r["currency"] end)
-          |> case do
-            curr when is_binary(curr) and byte_size(curr) > 0 -> String.upcase(curr)
-            _ -> nil  # Don't assume currency when not provided
-          end
+          currency =
+            price_ranges
+            |> Enum.find_value(fn r -> r["currency"] end)
+            |> case do
+              curr when is_binary(curr) and byte_size(curr) > 0 -> String.upcase(curr)
+              # Don't assume currency when not provided
+              _ -> nil
+            end
 
           # Return nil prices when free to comply with DB constraint
           if is_free do

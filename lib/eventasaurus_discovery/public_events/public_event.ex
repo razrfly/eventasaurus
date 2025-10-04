@@ -40,6 +40,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
         Error tuple: #{inspect(value)}
         Invalid bytes: #{inspect(invalid_bytes, limit: 50)}
         """)
+
         ""
 
       # Handle valid binary strings
@@ -135,7 +136,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     |> validate_required([:title, :starts_at, :venue_id],
       message: "Public events must have a venue for proper location and collision detection"
     )
-    |> sanitize_utf8()  # PostgreSQL boundary protection
+    # PostgreSQL boundary protection
+    |> sanitize_utf8()
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
@@ -148,7 +150,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   defp sanitize_utf8(changeset) do
     changeset
     |> update_change(:title, &EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8/1)
-    |> update_change(:title_translations, &EventasaurusDiscovery.Utils.UTF8.validate_map_strings/1)
+    |> update_change(
+      :title_translations,
+      &EventasaurusDiscovery.Utils.UTF8.validate_map_strings/1
+    )
     |> update_change(:occurrences, &EventasaurusDiscovery.Utils.UTF8.validate_map_strings/1)
   end
 

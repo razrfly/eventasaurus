@@ -32,7 +32,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
          {:ok, source_id} <- validate_integer(args["source_id"], "source_id"),
          true <- page_number >= 1 || {:error, "page_number", "must be >= 1"},
          true <- source_id > 0 || {:error, "source_id", "must be > 0"} do
-
       # Optional arguments with defaults
       chunk_budget = validate_optional_integer(args["chunk_budget"])
       total_pages = validate_optional_integer(args["total_pages"])
@@ -55,7 +54,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   end
 
   defp process_page(page_number, source_id, chunk_budget, _total_pages, skip_in_first) do
-
     # Build URL for this specific page
     url = Config.build_events_url(page_number)
 
@@ -77,23 +75,29 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   # Validation helpers
   defp validate_integer(nil, field), do: {:error, field, "is required"}
   defp validate_integer(value, _field) when is_integer(value), do: {:ok, value}
+
   defp validate_integer(value, field) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} -> {:ok, int}
       _ -> {:error, field, "invalid integer: #{inspect(value)}"}
     end
   end
-  defp validate_integer(value, field), do: {:error, field, "expected integer, got: #{inspect(value)}"}
+
+  defp validate_integer(value, field),
+    do: {:error, field, "expected integer, got: #{inspect(value)}"}
 
   defp validate_optional_integer(nil), do: nil
   defp validate_optional_integer(value) when is_integer(value) and value > 0, do: value
-  defp validate_optional_integer(value) when is_integer(value), do: nil  # Reject non-positive
+  # Reject non-positive
+  defp validate_optional_integer(value) when is_integer(value), do: nil
+
   defp validate_optional_integer(value) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int > 0 -> int
       _ -> nil
     end
   end
+
   defp validate_optional_integer(_), do: nil
 
   defp process_index_page(html, page_number, source_id, chunk_budget, skip_in_first) do
@@ -103,23 +107,27 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       events = IndexExtractor.extract_events_from_page({page_number, html})
 
       # Apply skip_in_first for chunked processing
-      events_after_skip = if skip_in_first > 0 do
-        Logger.info("⏭️ Skipping first #{skip_in_first} events for chunk offset")
-        Enum.drop(events, skip_in_first)
-      else
-        events
-      end
+      events_after_skip =
+        if skip_in_first > 0 do
+          Logger.info("⏭️ Skipping first #{skip_in_first} events for chunk offset")
+          Enum.drop(events, skip_in_first)
+        else
+          events
+        end
 
-      Logger.info("📋 Extracted #{length(events)} events from page #{page_number} (#{length(events_after_skip)} after skip)")
+      Logger.info(
+        "📋 Extracted #{length(events)} events from page #{page_number} (#{length(events_after_skip)} after skip)"
+      )
 
       # Apply chunk budget to prevent overshooting
-      events_to_process = if chunk_budget do
-        Logger.info("💰 Applying chunk budget: #{chunk_budget} events")
-        Enum.take(events_after_skip, chunk_budget)
-      else
-        # No budget limit - process all events (for backward compatibility)
-        events_after_skip
-      end
+      events_to_process =
+        if chunk_budget do
+          Logger.info("💰 Applying chunk budget: #{chunk_budget} events")
+          Enum.take(events_after_skip, chunk_budget)
+        else
+          # No budget limit - process all events (for backward compatibility)
+          events_after_skip
+        end
 
       # Schedule detail jobs for each event
       scheduled_count = schedule_detail_jobs(events_to_process, source_id, page_number)
@@ -130,11 +138,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       Detail jobs scheduled: #{scheduled_count}
       """)
 
-      {:ok, %{
-        page: page_number,
-        events_found: length(events),
-        jobs_scheduled: scheduled_count
-      }}
+      {:ok,
+       %{
+         page: page_number,
+         events_found: length(events),
+         jobs_scheduled: scheduled_count
+       }}
     else
       Logger.info("📭 No events on page #{page_number}")
       {:ok, :no_events}
@@ -146,21 +155,25 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
 
     # Extract external_ids for all events (adds "karnet_" prefix automatically)
     # This allows us to check freshness before scheduling detail jobs
-    events_with_ids = Enum.map(events, fn event ->
-      external_id = extract_external_id_from_url(event.url)
-      Map.put(event, :external_id, external_id)
-    end)
+    events_with_ids =
+      Enum.map(events, fn event ->
+        external_id = extract_external_id_from_url(event.url)
+        Map.put(event, :external_id, external_id)
+      end)
 
     # Filter to events needing processing based on freshness
-    events_to_process = EventFreshnessChecker.filter_events_needing_processing(
-      events_with_ids,
-      source_id
-    )
+    events_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        events_with_ids,
+        source_id
+      )
 
     skipped = length(events) - length(events_to_process)
     threshold = EventFreshnessChecker.get_threshold()
 
-    Logger.info("📋 Karnet page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)")
+    Logger.info(
+      "📋 Karnet page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)"
+    )
 
     # Calculate base delay for this page to distribute load
     # Use consistent page offset (30s per page) to prevent scheduling collisions
@@ -172,19 +185,20 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
-        delay_seconds = base_delay + (index * Config.rate_limit())
+        delay_seconds = base_delay + index * Config.rate_limit()
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         # Clean UTF-8 before storing in database
-        job_args = %{
-          "url" => event.url,
-          "source_id" => source_id,
-          "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
-          # Reuse the external_id we already extracted (already has "karnet_" prefix)
-          "external_id" => event.external_id,
-          "from_page" => page_number
-        }
-        |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
+        job_args =
+          %{
+            "url" => event.url,
+            "source_id" => source_id,
+            "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category]),
+            # Reuse the external_id we already extracted (already has "karnet_" prefix)
+            "external_id" => event.external_id,
+            "from_page" => page_number
+          }
+          |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
 
         # Schedule the detail job
         EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob.new(
@@ -211,6 +225,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   end
 
   defp extract_external_id_from_url(nil), do: nil
+
   defp extract_external_id_from_url(url) when is_binary(url) do
     # Extract the event ID from the URL
     # Format: /60682-krakow-event-name
@@ -219,5 +234,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       _ -> nil
     end
   end
+
   defp extract_external_id_from_url(_), do: nil
 end

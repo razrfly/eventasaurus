@@ -32,41 +32,44 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   # Extract JSON-LD structured data (contains GPS coordinates!)
   defp extract_json_ld_event(html) do
     # Look for ALL JSON-LD script tags - there can be multiple
-    matches = Regex.scan(~r/<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/s, html)
+    matches =
+      Regex.scan(~r/<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/s, html)
 
     if matches == [] do
       {:error, "No JSON-LD script tag found"}
     else
       # Try to find an Event type in any of the JSON-LD blocks
-      event_data = Enum.reduce_while(matches, nil, fn [_, json_str], _acc ->
-        json_str = String.trim(json_str)
+      event_data =
+        Enum.reduce_while(matches, nil, fn [_, json_str], _acc ->
+          json_str = String.trim(json_str)
 
-        case Jason.decode(json_str) do
-          {:ok, data} when is_map(data) ->
-            # Check if this is an Event type
-            if Map.get(data, "@type") in ["Event", "MusicEvent", "Concert"] do
-              {:halt, data}
-            else
+          case Jason.decode(json_str) do
+            {:ok, data} when is_map(data) ->
+              # Check if this is an Event type
+              if Map.get(data, "@type") in ["Event", "MusicEvent", "Concert"] do
+                {:halt, data}
+              else
+                {:cont, nil}
+              end
+
+            {:ok, data} when is_list(data) ->
+              # Sometimes there are multiple items in one JSON-LD block
+              event =
+                Enum.find(data, fn item ->
+                  is_map(item) && Map.get(item, "@type") in ["Event", "MusicEvent", "Concert"]
+                end)
+
+              if event do
+                {:halt, event}
+              else
+                {:cont, nil}
+              end
+
+            {:error, _} ->
+              # Skip malformed JSON blocks
               {:cont, nil}
-            end
-
-          {:ok, data} when is_list(data) ->
-            # Sometimes there are multiple items in one JSON-LD block
-            event = Enum.find(data, fn item ->
-              is_map(item) && Map.get(item, "@type") in ["Event", "MusicEvent", "Concert"]
-            end)
-
-            if event do
-              {:halt, event}
-            else
-              {:cont, nil}
-            end
-
-          {:error, _} ->
-            # Skip malformed JSON blocks
-            {:cont, nil}
-        end
-      end)
+          end
+        end)
 
       if event_data do
         {:ok, transform_json_ld_to_event(event_data)}
@@ -127,6 +130,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   # Extract coordinate as float
   defp extract_coordinate(nil), do: nil
   defp extract_coordinate(coord) when is_number(coord), do: coord
+
   defp extract_coordinate(coord) when is_binary(coord) do
     case Float.parse(coord) do
       {float, _} -> float
@@ -139,13 +143,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp extract_performer(performer) when is_map(performer), do: performer
 
   defp extract_image_url(nil), do: nil
+
   defp extract_image_url(image) when is_binary(image) do
     # Validate the URL before returning it
     validate_url(image)
   end
+
   defp extract_image_url(image) when is_map(image) do
     validate_url(image["url"])
   end
+
   defp extract_image_url(images) when is_list(images) do
     case List.first(images) do
       nil -> nil
@@ -156,6 +163,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
 
   defp validate_url(nil), do: nil
   defp validate_url(""), do: nil
+
   defp validate_url(url) when is_binary(url) do
     # Filter out known invalid Bandsintown image URLs
     downcased = String.downcase(url)
@@ -173,16 +181,22 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
       true -> url
     end
   end
+
   defp validate_url(_), do: nil
 
   defp extract_ticket_url([], event), do: event["url"]
   defp extract_ticket_url([offer | _], _event), do: offer["url"]
 
   defp extract_min_price([]), do: nil
+
   defp extract_min_price([offer | _]) do
     case offer["price"] do
-      nil -> nil
-      price when is_number(price) -> price
+      nil ->
+        nil
+
+      price when is_number(price) ->
+        price
+
       price when is_binary(price) ->
         case Float.parse(price) do
           {num, _} -> num
@@ -192,7 +206,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   end
 
   defp extract_max_price(offers) do
-    extract_min_price(offers)  # Often same for Bandsintown
+    # Often same for Bandsintown
+    extract_min_price(offers)
   end
 
   defp extract_currency([]), do: "USD"
@@ -215,6 +230,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
             "has_coordinates" => false
           }
         }
+
         {:ok, event_data}
 
       {:error, reason} ->

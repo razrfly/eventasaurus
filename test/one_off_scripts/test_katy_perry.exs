@@ -5,9 +5,11 @@ import Ecto.Query
 
 # Clear any existing failed jobs for a clean test
 Repo.delete_all(
-  from j in Oban.Job,
-  where: j.worker == "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob"
-    and j.state in ["retryable", "discarded"]
+  from(j in Oban.Job,
+    where:
+      j.worker == "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob" and
+        j.state in ["retryable", "discarded"]
+  )
 )
 
 # Get Kraków city
@@ -32,10 +34,12 @@ if city do
   Process.sleep(15_000)
 
   # Check if Katy Perry event processed successfully
-  katy_event = Repo.one(
-    from pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-    where: ilike(pe.title, "%Katy Perry%")
-  )
+  katy_event =
+    Repo.one(
+      from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        where: ilike(pe.title, "%Katy Perry%")
+      )
+    )
 
   if katy_event do
     IO.puts("\n✅ Katy Perry event processed successfully:")
@@ -48,15 +52,19 @@ if city do
   end
 
   # Check for failed jobs
-  failed_jobs = Repo.all(
-    from j in Oban.Job,
-    where: j.worker == "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob"
-      and j.state in ["discarded", "retryable"],
-    limit: 5
-  )
+  failed_jobs =
+    Repo.all(
+      from(j in Oban.Job,
+        where:
+          j.worker == "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob" and
+            j.state in ["discarded", "retryable"],
+        limit: 5
+      )
+    )
 
   if length(failed_jobs) > 0 do
     IO.puts("\n⚠️  Found #{length(failed_jobs)} failed jobs:")
+
     Enum.each(failed_jobs, fn job ->
       IO.puts("  Job #{job.id}: #{inspect(job.errors)}")
     end)

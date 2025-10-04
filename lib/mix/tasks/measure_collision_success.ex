@@ -223,7 +223,8 @@ defmodule Mix.Tasks.MeasureCollisionSuccess do
           # Clean performer names before jaro_distance to prevent crashes
           clean_name1 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(p1.name),
           clean_name2 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(p2.name),
-          similarity = String.jaro_distance(String.downcase(clean_name1), String.downcase(clean_name2)),
+          similarity =
+            String.jaro_distance(String.downcase(clean_name1), String.downcase(clean_name2)),
           similarity > 0.85 do
         %{
           id1: p1.id,

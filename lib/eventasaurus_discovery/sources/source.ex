@@ -20,7 +20,16 @@ defmodule EventasaurusDiscovery.Sources.Source do
   @doc false
   def changeset(source, attrs) do
     source
-    |> cast(attrs, [:name, :slug, :website_url, :priority, :is_active, :metadata, :aggregate_on_index, :aggregation_type])
+    |> cast(attrs, [
+      :name,
+      :slug,
+      :website_url,
+      :priority,
+      :is_active,
+      :metadata,
+      :aggregate_on_index,
+      :aggregation_type
+    ])
     |> validate_required([:name, :slug])
     |> update_change(:slug, &(&1 && String.downcase(&1)))
     |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i,

@@ -36,6 +36,8 @@ defmodule EventasaurusApp.Events.EventPlan do
     |> foreign_key_constraint(:public_event_id)
     |> foreign_key_constraint(:private_event_id)
     |> foreign_key_constraint(:created_by)
-    |> unique_constraint([:public_event_id, :created_by], name: :unique_user_plan_per_public_event)
+    |> unique_constraint([:public_event_id, :created_by],
+      name: :unique_user_plan_per_public_event
+    )
   end
 end
