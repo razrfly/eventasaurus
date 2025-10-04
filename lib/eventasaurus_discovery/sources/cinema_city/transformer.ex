@@ -50,8 +50,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
           # Optional fields
           description: build_description(raw_event),
 
-          # Source URL - use booking URL for Cinema City (specific showtime page)
-          source_url: fetch(raw_event, :booking_url),
+          # Source URL - use cinema website for general movie listings
+          # This shows all showtimes for the cinema, not a specific booking
+          source_url: fetch(cinema_data, :website),
 
           # Movie images from TMDB
           image_url: fetch(raw_event, :poster_url) || fetch(raw_event, :backdrop_url),
