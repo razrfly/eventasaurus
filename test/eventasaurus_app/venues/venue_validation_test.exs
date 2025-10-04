@@ -4,7 +4,7 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
   alias EventasaurusApp.Repo
 
   describe "GPS coordinate validation" do
-    test "requires both latitude and longitude" do
+    test "requires both latitude and longitude for physical venues" do
       changeset =
         Venue.changeset(%Venue{}, %{
           name: "Test Venue",
@@ -13,8 +13,34 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
         })
 
       refute changeset.valid?
-      assert {:latitude, {"GPS coordinates are required for venues", []}} in changeset.errors
-      assert {:longitude, {"GPS coordinates are required for venues", []}} in changeset.errors
+      assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+      assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+    end
+
+    test "allows online venues without coordinates (application level)" do
+      # Note: While this passes application validation, the database-level
+      # NOT NULL constraint will prevent actual insertion without coordinates
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Online Venue",
+          venue_type: "online",
+          source: "user"
+        })
+
+      assert changeset.valid?
+    end
+
+    test "allows tbd venues without coordinates (application level)" do
+      # Note: While this passes application validation, the database-level
+      # NOT NULL constraint will prevent actual insertion without coordinates
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "TBD Venue",
+          venue_type: "tbd",
+          source: "user"
+        })
+
+      assert changeset.valid?
     end
 
     test "accepts valid coordinates" do
@@ -86,7 +112,7 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
       assert {:latitude, {"is required when longitude is provided", []}} in changeset2.errors
     end
 
-    test "prevents insertion of venue without coordinates" do
+    test "prevents insertion of physical venue without coordinates" do
       {:error, changeset} =
         %Venue{}
         |> Venue.changeset(%{
@@ -98,8 +124,8 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
         |> Repo.insert()
 
       refute changeset.valid?
-      assert {:latitude, {"GPS coordinates are required for venues", []}} in changeset.errors
-      assert {:longitude, {"GPS coordinates are required for venues", []}} in changeset.errors
+      assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+      assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
     end
 
     test "allows insertion of venue with valid coordinates" do
