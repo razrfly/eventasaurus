@@ -402,23 +402,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         "🗺️ ✅ Found venue via Google Places: '#{venue_data.name}' (place_id: #{venue_data.place_id})"
       )
 
-      {venue_data.latitude, venue_data.longitude, venue_data.name, venue_data.place_id}
+      # Return the full details map for metadata storage
+      {venue_data.latitude, venue_data.longitude, venue_data.name, venue_data.place_id, details}
     else
       {:ok, []} ->
         Logger.warning("🗺️ ⚠️ No Google Places results for: #{query}")
-        {nil, nil, nil, nil}
+        {nil, nil, nil, nil, nil}
 
       {:error, reason} ->
         Logger.error(
           "🗺️ ❌ Failed to lookup venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}' via Google Places: #{inspect(reason)}"
         )
 
-        {nil, nil, nil, nil}
+        {nil, nil, nil, nil, nil}
 
       error ->
         Logger.error("🗺️ ❌ Unexpected error looking up venue via Google Places: #{inspect(error)}")
 
-        {nil, nil, nil, nil}
+        {nil, nil, nil, nil, nil}
     end
   end
 
@@ -439,13 +440,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp create_venue(data, city, _source) do
     # Check if we need to lookup venue data from Google Places
-    {latitude, longitude, google_name, google_place_id} =
+    {latitude, longitude, google_name, google_place_id, google_metadata} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
         # Try to get venue data from Google Places API
         lookup_venue_from_google_places(data, city)
       else
         # Use provided coordinates
-        {data.latitude, data.longitude, nil, nil}
+        {data.latitude, data.longitude, nil, nil, nil}
       end
 
     # Prefer Google's official venue name over scraped name when available
@@ -465,7 +466,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       venue_type: "venue",
       place_id: final_place_id,
       source: "scraper",
-      city_id: city.id
+      city_id: city.id,
+      google_places_metadata: google_metadata
     }
 
     case Venue.changeset(%Venue{}, attrs) |> Repo.insert() do
