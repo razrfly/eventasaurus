@@ -23,30 +23,38 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
   def transform_event(raw_event) do
     case validate_required_fields(raw_event) do
       :ok ->
+        # Helper to get value from map with both atom and string keys
+        get_value = fn map, key ->
+          map[key] || map[to_string(key)]
+        end
+
+        movie_slug = get_value.(raw_event, :movie_slug)
+        cinema_slug = get_value.(raw_event, :cinema_slug)
+
         transformed = %{
           # Required fields
           title: build_title(raw_event),
           external_id: build_external_id(raw_event),
-          starts_at: raw_event.datetime,
+          starts_at: get_value.(raw_event, :datetime),
           ends_at: calculate_end_time(raw_event),
 
           # Venue data - REQUIRED
           venue_data: build_venue_data(raw_event),
 
           # Movie data - link to movies table
-          movie_id: raw_event.movie_id,
+          movie_id: get_value.(raw_event, :movie_id),
           movie_data: %{
-            tmdb_id: raw_event.tmdb_id,
-            title: raw_event.movie_title,
-            original_title: raw_event.original_title
+            tmdb_id: get_value.(raw_event, :tmdb_id),
+            title: get_value.(raw_event, :movie_title),
+            original_title: get_value.(raw_event, :original_title)
           },
 
           # Optional fields
-          description: raw_event[:description],
-          ticket_url: raw_event.ticket_url,
+          description: get_value.(raw_event, :description),
+          ticket_url: get_value.(raw_event, :ticket_url),
 
           # Movie images from TMDB
-          image_url: raw_event[:poster_url] || raw_event[:backdrop_url],
+          image_url: get_value.(raw_event, :poster_url) || get_value.(raw_event, :backdrop_url),
 
           # Pricing (usually not available from scraping)
           is_free: false,
@@ -60,11 +68,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
           # Metadata
           metadata: %{
             source: "kino-krakow",
-            cinema_slug: raw_event.cinema_slug,
-            movie_slug: raw_event.movie_slug,
-            confidence_score: raw_event[:tmdb_confidence],
+            cinema_slug: cinema_slug,
+            movie_slug: movie_slug,
+            confidence_score: get_value.(raw_event, :tmdb_confidence),
             # Store movie page URL for source link
-            movie_url: build_movie_url(raw_event.movie_slug)
+            movie_url: build_movie_url(movie_slug)
           }
         }
 
@@ -108,33 +116,37 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
   # Build unique external ID
   defp build_external_id(event) do
     # Combine movie slug, cinema slug, and datetime for uniqueness
-    datetime_str = DateTime.to_iso8601(event.datetime)
-    "#{event.movie_slug}-#{event.cinema_slug}-#{datetime_str}"
+    # Handle both atom and string keys for backward compatibility
+    movie_slug = event[:movie_slug] || event["movie_slug"]
+    cinema_slug = event[:cinema_slug] || event["cinema_slug"]
+    datetime_str = DateTime.to_iso8601(event[:datetime] || event["datetime"])
+    "#{movie_slug}-#{cinema_slug}-#{datetime_str}"
   end
 
   # Calculate end time based on movie runtime
   defp calculate_end_time(event) do
-    runtime = event[:runtime] || 120  # Default 2 hours if unknown
+    runtime = event[:runtime] || event["runtime"] || 120  # Default 2 hours if unknown
+    datetime = event[:datetime] || event["datetime"]
 
-    DateTime.add(event.datetime, runtime * 60, :second)
+    DateTime.add(datetime, runtime * 60, :second)
   end
 
   # Build venue data for processor
   # VenueProcessor will geocode automatically if latitude/longitude are nil
   defp build_venue_data(event) do
-    cinema = event.cinema_data
+    cinema = event[:cinema_data] || event["cinema_data"]
 
     %{
-      name: cinema.name,
-      address: cinema[:address],
-      city: cinema[:city] || "Kraków",
-      country: cinema[:country] || "Poland",
-      latitude: cinema[:latitude],
-      longitude: cinema[:longitude],
-      phone: cinema[:phone],
+      name: cinema[:name] || cinema["name"],
+      address: cinema[:address] || cinema["address"],
+      city: cinema[:city] || cinema["city"] || "Kraków",
+      country: cinema[:country] || cinema["country"] || "Poland",
+      latitude: cinema[:latitude] || cinema["latitude"],
+      longitude: cinema[:longitude] || cinema["longitude"],
+      phone: cinema[:phone] || cinema["phone"],
       metadata: %{
-        cinema_slug: event.cinema_slug,
-        hours: cinema[:hours]
+        cinema_slug: event[:cinema_slug] || event["cinema_slug"],
+        hours: cinema[:hours] || cinema["hours"]
       }
     }
   end
