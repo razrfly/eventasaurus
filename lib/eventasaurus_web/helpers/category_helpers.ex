@@ -105,7 +105,14 @@ defmodule EventasaurusWeb.Helpers.CategoryHelpers do
           nil
         end
 
-      name == "Other" || is_nil(name)
+      # Normalize to lowercase to match get_preferred_category/1 behavior
+      downcased =
+        case name do
+          nil -> nil
+          value -> String.downcase(value)
+        end
+
+      downcased == "other" || is_nil(downcased)
     end)
   end
 end
