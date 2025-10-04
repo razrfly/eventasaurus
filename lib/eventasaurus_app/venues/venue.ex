@@ -67,6 +67,28 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
 end
 
 defmodule EventasaurusApp.Venues.Venue do
+  @moduledoc """
+  Venues represent physical locations where events take place.
+
+  ## Venue Types
+  - "venue": Specific locations (theaters, clubs, arenas)
+  - "city": City-wide events (festivals, marathons)
+  - "region": Regional events (Bay Area, Greater London)
+
+  All venues MUST have GPS coordinates (enforced at database level).
+
+  ## Virtual Events
+  Virtual events do NOT use the Venue table. Instead, they use:
+  - Event.is_virtual = true
+  - Event.virtual_venue_url = "https://zoom.us/..."
+  - Event.venue_id = NULL
+
+  ## Events Without Determined Location
+  Events where location is TBD should have:
+  - Event.is_virtual = false
+  - Event.venue_id = NULL (will be set later)
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
   alias EventasaurusApp.Venues.Venue.Slug
@@ -89,7 +111,7 @@ defmodule EventasaurusApp.Venues.Venue do
     timestamps()
   end
 
-  @valid_venue_types ["venue", "city", "region", "online", "tbd"]
+  @valid_venue_types ["venue", "city", "region"]
 
   @doc false
   def changeset(venue, attrs) do
@@ -123,21 +145,10 @@ defmodule EventasaurusApp.Venues.Venue do
     |> foreign_key_constraint(:city_id)
   end
 
-  # Conditional validation based on venue_type
-  # Online and TBD venues don't need GPS coordinates
-  # Physical venues (venue, city, region) require coordinates
+  # All venues are physical locations requiring GPS coordinates
+  # Virtual events use Event.is_virtual + Event.virtual_venue_url instead
   defp validate_required_by_type(changeset) do
-    venue_type = get_field(changeset, :venue_type)
-
-    case venue_type do
-      type when type in ["online", "tbd"] ->
-        # Online/TBD venues don't need coordinates
-        validate_required(changeset, [:name, :venue_type])
-
-      _ ->
-        # Physical venues need coordinates
-        validate_required(changeset, [:name, :venue_type, :latitude, :longitude])
-    end
+    validate_required(changeset, [:name, :venue_type, :latitude, :longitude])
   end
 
   # Universal UTF-8 sanitization for all venue attributes
@@ -175,15 +186,10 @@ defmodule EventasaurusApp.Venues.Venue do
   end
 
   defp validate_gps_coordinates(changeset) do
-    venue_type = get_field(changeset, :venue_type)
     lat = get_change(changeset, :latitude) || get_field(changeset, :latitude)
     lng = get_change(changeset, :longitude) || get_field(changeset, :longitude)
 
     cond do
-      # Skip coordinate validation for online and TBD venues
-      venue_type in ["online", "tbd"] ->
-        changeset
-
       is_nil(lat) && is_nil(lng) ->
         changeset
         |> add_error(:latitude, "GPS coordinates are required for physical venues")
@@ -235,14 +241,15 @@ defmodule EventasaurusApp.Venues.Venue do
 
   @doc """
   Returns user-friendly labels for venue types.
+
+  Note: All venue types represent physical locations requiring GPS coordinates.
+  Virtual events use Event.is_virtual instead of creating a venue.
   """
   def venue_type_options do
     [
       {"Physical Venue", "venue"},
       {"City", "city"},
-      {"Region", "region"},
-      {"Online", "online"},
-      {"To Be Determined", "tbd"}
+      {"Region", "region"}
     ]
   end
 
