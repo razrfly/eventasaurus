@@ -18,7 +18,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddNotNullToVenueCoordinates do
 
     # Add NOT NULL constraints for latitude and longitude
     # This enforces data integrity at the database level
-    # All venues (including future online/tbd types) will require coordinates
+    # All venues are physical locations and require coordinates
     alter table(:venues) do
       modify :latitude, :float, null: false
       modify :longitude, :float, null: false

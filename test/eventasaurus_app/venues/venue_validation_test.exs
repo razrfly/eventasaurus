@@ -17,32 +17,6 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
       assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
     end
 
-    test "allows online venues without coordinates (application level)" do
-      # Note: While this passes application validation, the database-level
-      # NOT NULL constraint will prevent actual insertion without coordinates
-      changeset =
-        Venue.changeset(%Venue{}, %{
-          name: "Online Venue",
-          venue_type: "online",
-          source: "user"
-        })
-
-      assert changeset.valid?
-    end
-
-    test "allows tbd venues without coordinates (application level)" do
-      # Note: While this passes application validation, the database-level
-      # NOT NULL constraint will prevent actual insertion without coordinates
-      changeset =
-        Venue.changeset(%Venue{}, %{
-          name: "TBD Venue",
-          venue_type: "tbd",
-          source: "user"
-        })
-
-      assert changeset.valid?
-    end
-
     test "accepts valid coordinates" do
       changeset =
         Venue.changeset(%Venue{}, %{
@@ -143,6 +117,66 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
 
       assert venue.latitude == 50.0619
       assert venue.longitude == 19.9368
+    end
+
+    test "city venues require coordinates" do
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "San Francisco",
+          venue_type: "city",
+          source: "user"
+        })
+
+      refute changeset.valid?
+      assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+      assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+    end
+
+    test "region venues require coordinates" do
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Bay Area",
+          venue_type: "region",
+          source: "user"
+        })
+
+      refute changeset.valid?
+      assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+      assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+    end
+
+    test "city venues accept valid coordinates" do
+      {:ok, venue} =
+        %Venue{}
+        |> Venue.changeset(%{
+          name: "San Francisco",
+          venue_type: "city",
+          source: "user",
+          latitude: 37.7749,
+          longitude: -122.4194
+        })
+        |> Repo.insert()
+
+      assert venue.venue_type == "city"
+      assert venue.latitude == 37.7749
+      assert venue.longitude == -122.4194
+    end
+
+    test "region venues accept valid coordinates" do
+      {:ok, venue} =
+        %Venue{}
+        |> Venue.changeset(%{
+          name: "Bay Area",
+          venue_type: "region",
+          source: "user",
+          latitude: 37.8,
+          longitude: -122.4
+        })
+        |> Repo.insert()
+
+      assert venue.venue_type == "region"
+      assert venue.latitude == 37.8
+      assert venue.longitude == -122.4
     end
   end
 end
