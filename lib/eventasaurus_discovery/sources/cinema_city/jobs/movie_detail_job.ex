@@ -21,7 +21,15 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
 
   use Oban.Worker,
     queue: :scraper_detail,
-    max_attempts: 3
+    max_attempts: 3,
+    unique: [
+      period: 300,
+      # Prevent duplicate jobs for the same film_id within 5 minutes
+      # This handles the case where multiple cinemas show the same movie
+      keys: [:cinema_city_film_id],
+      # Keep both states to avoid re-processing discarded matches
+      states: [:available, :scheduled, :executing, :retryable, :completed, :discarded]
+    ]
 
   require Logger
 
