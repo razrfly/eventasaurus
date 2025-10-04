@@ -123,18 +123,23 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
 
     scheduled_jobs =
       film_ids
-      |> Enum.map(fn film_id ->
+      |> Enum.with_index()
+      |> Enum.map(fn {film_id, index} ->
         film_data = Map.get(films_map, film_id)
 
-        # REMOVED scheduled_at staggering to allow Oban unique constraints to work
-        # Oban's queue concurrency limits will naturally throttle execution
+        # Stagger MovieDetailJobs to respect rate limiting
+        # Each job waits index * rate_limit seconds
+        delay_seconds = index * Config.rate_limit()
+        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
+
         EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob.new(
           %{
             "cinema_city_film_id" => film_id,
             "film_data" => film_data,
             "source_id" => source_id
           },
-          queue: :scraper_detail
+          queue: :scraper_detail,
+          scheduled_at: scheduled_at
         )
         |> Oban.insert()
       end)
@@ -166,7 +171,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
 
     scheduled_jobs =
       showtimes
-      |> Enum.map(fn %{film: film, event: event} ->
+      |> Enum.with_index()
+      |> Enum.map(fn {%{film: film, event: event}, index} ->
         # Extract event_id BEFORE putting event into showtime_data
         # event is a map with atom keys from EventExtractor
         cinema_city_event_id = event[:cinema_city_event_id]
@@ -180,15 +186,19 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
           "date" => date
         }
 
-        # REMOVED scheduled_at staggering to allow Oban unique constraints to work
-        # Oban's queue concurrency limits will naturally throttle execution
+        # Schedule with delay to ensure MovieDetailJobs complete first
+        # Stagger showtimes every 2 seconds after base delay
+        delay_seconds = base_delay + index * 2
+        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
+
         EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob.new(
           %{
             "cinema_city_event_id" => cinema_city_event_id,
             "showtime" => showtime_data,
             "source_id" => source_id
           },
-          queue: :scraper
+          queue: :scraper,
+          scheduled_at: scheduled_at
         )
         |> Oban.insert()
       end)
