@@ -17,7 +17,14 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
 
   use Oban.Worker,
     queue: :scraper,
-    max_attempts: 3
+    max_attempts: 3,
+    unique: [
+      period: 300,
+      # Prevent duplicate jobs for the same showtime within 5 minutes
+      # Use cinema_city_event_id as unique key since each showtime has unique ID
+      keys: [:cinema_city_event_id],
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
 
   require Logger
 
