@@ -4,10 +4,12 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
-  alias EventasaurusWeb.Helpers.CategoryHelpers
+  alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
 
   import EventasaurusWeb.EventComponents
+  import EventasaurusWeb.Components.EventCards
 
   @impl true
   def mount(_params, _session, socket) do
@@ -706,10 +708,13 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
             <%= if @view_mode == "grid" do %>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <%= for item <- @events do %>
-                  <%= if is_aggregated?(item) do %>
-                    <.aggregated_card group={item} language={@language} />
-                  <% else %>
-                    <.event_card event={item} language={@language} />
+                  <%= cond do %>
+                    <% match?(%AggregatedMovieGroup{}, item) -> %>
+                      <.aggregated_movie_card group={item} language={@language} show_city={true} />
+                    <% is_aggregated?(item) -> %>
+                      <.aggregated_event_card group={item} language={@language} show_city={true} />
+                    <% true -> %>
+                      <.event_card event={item} language={@language} show_city={true} />
                   <% end %>
                 <% end %>
               </div>
@@ -835,131 +840,6 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
         </div>
       </div>
     </form>
-    """
-  end
-
-  # Component: Event Card
-  defp event_card(%{event: nil} = assigns) do
-    ~H""
-  end
-
-  defp event_card(assigns) do
-    alias EventasaurusDiscovery.PublicEvents.PublicEvent
-    alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
-
-    # Handle both PublicEvent and AggregatedMovieGroup
-    {slug, ring_class} = case assigns.event do
-      %AggregatedMovieGroup{movie_slug: movie_slug} ->
-        {movie_slug, "ring-2 ring-blue-500 ring-offset-2"}
-      %PublicEvent{} = event ->
-        {event.slug, if(PublicEvent.recurring?(event), do: "ring-2 ring-green-500 ring-offset-2", else: "")}
-      %{slug: slug} ->
-        {slug, ""}
-      _ ->
-        {nil, ""}
-    end
-
-    assigns = assigns
-      |> assign(:slug, slug)
-      |> assign(:ring_class, ring_class)
-
-    ~H"""
-    <.link navigate={~p"/activities/#{@slug}"} class="block">
-      <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{@ring_class}"}>
-        <!-- Event Image -->
-        <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
-          <%= if Map.get(@event, :cover_image_url) do %>
-            <img src={Map.get(@event, :cover_image_url)} alt={@event.title} class="w-full h-full object-cover" loading="lazy">
-          <% else %>
-            <div class="w-full h-full flex items-center justify-center">
-              <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
-              </svg>
-            </div>
-          <% end %>
-
-          <%= if @event.categories && @event.categories != [] do %>
-            <% category = CategoryHelpers.get_preferred_category(@event.categories) %>
-            <%= if category && category.color do %>
-              <div
-                class="absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-medium text-white"
-                style={"background-color: #{category.color}"}
-              >
-                <%= category.name %>
-              </div>
-            <% end %>
-          <% end %>
-
-          <!-- Time-Sensitive Badge -->
-          <%= if badge = PublicEventsEnhanced.get_time_sensitive_badge(@event) do %>
-            <div class={[
-              "absolute top-3 right-3 text-white px-2 py-1 rounded-md text-xs font-medium",
-              case badge.type do
-                :last_chance -> "bg-red-500"
-                :this_week -> "bg-orange-500"
-                :upcoming -> "bg-blue-500"
-                _ -> "bg-gray-500"
-              end
-            ]}>
-              <%= badge.label %>
-            </div>
-          <% end %>
-
-          <!-- Recurring Event Badge -->
-          <%= if PublicEvent.recurring?(@event) do %>
-            <div class="absolute bottom-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
-              <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-              </svg>
-              <%= PublicEvent.occurrence_count(@event) %> dates
-            </div>
-          <% end %>
-        </div>
-
-        <!-- Event Details -->
-        <div class="p-4">
-          <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
-            <%= @event.display_title || @event.title %>
-          </h3>
-
-          <div class="mt-2 flex items-center text-sm text-gray-600">
-            <Heroicons.calendar class="w-4 h-4 mr-1" />
-            <%= if PublicEvent.recurring?(@event) do %>
-              <span class="text-green-600 font-medium">
-                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(PublicEvent.next_occurrence_date(@event)) %>
-              </span>
-            <% else %>
-              <%= format_datetime(@event.starts_at) %>
-            <% end %>
-          </div>
-
-          <%= if @event.venue do %>
-            <div class="mt-1 flex items-center text-sm text-gray-600">
-              <Heroicons.map_pin class="w-4 h-4 mr-1" />
-              <%= @event.venue.name %>
-            </div>
-          <% end %>
-
-          <%!-- Price display temporarily hidden - no APIs provide price data
-               Infrastructure retained for future API support
-               See GitHub issue #1281 for details
-          <%= if @event.min_price || @event.max_price do %>
-            <div class="mt-2">
-              <span class="text-sm font-medium text-gray-900">
-                <%= format_price_range(@event) %>
-              </span>
-            </div>
-          <% else %>
-            <div class="mt-2">
-              <span class="text-sm font-medium text-gray-500">
-                <%= gettext("Price not available") %>
-              </span>
-            </div>
-          <% end %>
-          --%>
-        </div>
-      </div>
-    </.link>
     """
   end
 
@@ -1150,135 +1030,6 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   #       "Free"
   #   end
   # end
-
-  # Helper to check if item is an AggregatedEventGroup
-  defp is_aggregated?(%EventasaurusDiscovery.PublicEvents.AggregatedEventGroup{}), do: true
-  defp is_aggregated?(%EventasaurusDiscovery.Movies.AggregatedMovieGroup{}), do: true
-  defp is_aggregated?(_), do: false
-
-  # Component: Aggregated Event Group Card (Grid View)
-  defp aggregated_card(%{group: %EventasaurusDiscovery.Movies.AggregatedMovieGroup{}} = assigns) do
-    alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
-
-    ~H"""
-    <.link navigate={AggregatedMovieGroup.path(@group)} class="block">
-      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ring-2 ring-blue-500 ring-offset-2">
-        <!-- Movie Backdrop/Poster -->
-        <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
-          <%= if @group.movie_backdrop_url do %>
-            <img src={@group.movie_backdrop_url} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy">
-          <% else %>
-            <div class="w-full h-full flex items-center justify-center">
-              <Heroicons.film class="w-12 h-12 text-gray-400" />
-            </div>
-          <% end %>
-
-          <%= if @group.categories && @group.categories != [] do %>
-            <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
-            <%= if category do %>
-              <div class="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
-                <%= category.name %>
-              </div>
-            <% end %>
-          <% end %>
-
-          <!-- Movie Badge -->
-          <div class="absolute top-3 right-3 bg-blue-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
-            <Heroicons.film class="w-3 h-3 mr-1" />
-            <%= @group.screening_count %> screenings
-          </div>
-        </div>
-
-        <!-- Movie Details -->
-        <div class="p-4">
-          <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
-            <%= AggregatedMovieGroup.title(@group) %>
-          </h3>
-
-          <div class="mt-2 flex items-center text-sm text-blue-600 font-medium">
-            <Heroicons.calendar class="w-4 h-4 mr-1" />
-            Movie Screenings
-          </div>
-
-          <div class="mt-1 flex items-center text-sm text-gray-600">
-            <Heroicons.building_storefront class="w-4 h-4 mr-1" />
-            <%= AggregatedMovieGroup.description(@group) %>
-          </div>
-
-          <div class="mt-1 flex items-center text-sm text-gray-600">
-            <Heroicons.map_pin class="w-4 h-4 mr-1" />
-            <%= @group.city.name %>
-          </div>
-        </div>
-      </div>
-    </.link>
-    """
-  end
-
-  defp aggregated_card(assigns) do
-    alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
-
-    ~H"""
-    <.link navigate={AggregatedEventGroup.path(@group)} class="block">
-      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ring-2 ring-green-500 ring-offset-2">
-        <!-- Event Image -->
-        <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
-          <%= if @group.cover_image_url do %>
-            <img src={@group.cover_image_url} alt={@group.source_name} class="w-full h-full object-cover" loading="lazy">
-          <% else %>
-            <div class="w-full h-full flex items-center justify-center">
-              <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
-              </svg>
-            </div>
-          <% end %>
-
-          <%= if @group.categories && @group.categories != [] do %>
-            <% category = CategoryHelpers.get_preferred_category(@group.categories) %>
-            <%= if category && category.color do %>
-              <div
-                class="absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-medium text-white"
-                style={"background-color: #{category.color}"}
-              >
-                <%= category.name %>
-              </div>
-            <% end %>
-          <% end %>
-
-          <!-- Aggregated Badge -->
-          <div class="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
-            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-            </svg>
-            <%= @group.event_count %> events
-          </div>
-        </div>
-
-        <!-- Event Details -->
-        <div class="p-4">
-          <h3 class="font-semibold text-lg text-gray-900 line-clamp-2">
-            <%= AggregatedEventGroup.title(@group) %>
-          </h3>
-
-          <div class="mt-2 flex items-center text-sm text-green-600 font-medium">
-            <Heroicons.calendar class="w-4 h-4 mr-1" />
-            <%= String.capitalize(@group.aggregation_type) %>
-          </div>
-
-          <div class="mt-1 flex items-center text-sm text-gray-600">
-            <Heroicons.building_storefront class="w-4 h-4 mr-1" />
-            <%= AggregatedEventGroup.description(@group) %>
-          </div>
-
-          <div class="mt-1 flex items-center text-sm text-gray-600">
-            <Heroicons.map_pin class="w-4 h-4 mr-1" />
-            <%= @group.city.name %>
-          </div>
-        </div>
-      </div>
-    </.link>
-    """
-  end
 
   # Component: Aggregated Event Group List Item (List View)
   defp aggregated_list_item(%{group: %EventasaurusDiscovery.Movies.AggregatedMovieGroup{}} = assigns) do
