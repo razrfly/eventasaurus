@@ -426,15 +426,16 @@ defmodule DevSeeds.Events do
         venue_params = %{
           name: venue_data["name"],
           address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
-          city: extract_city_from_address(venue_data) || "San Francisco",
-          state: extract_state_from_address(venue_data) || "CA",
-          country: extract_country_from_address(venue_data) || "United States",
+          city_name: extract_city_from_address(venue_data) || "San Francisco",
+          country_code: extract_country_code_from_address(venue_data) || "US",
           latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
           longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
-          venue_type: "venue"
+          venue_type: "venue",
+          source: "user"
         }
-        
-        case Venues.create_venue(venue_params) do
+
+        # Use VenueStore for automatic city_id lookup
+        case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_params) do
           {:ok, venue} -> 
             Helpers.log("Created restaurant venue: #{venue.name}")
             venue
@@ -476,15 +477,16 @@ defmodule DevSeeds.Events do
         venue_params = %{
           name: venue_data["name"],
           address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
-          city: extract_city_from_address(venue_data) || "San Francisco",
-          state: extract_state_from_address(venue_data) || "CA", 
-          country: extract_country_from_address(venue_data) || "United States",
+          city_name: extract_city_from_address(venue_data) || "San Francisco",
+          country_code: extract_country_code_from_address(venue_data) || "US",
           latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
           longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
-          venue_type: "venue"
+          venue_type: "venue",
+          source: "user"
         }
-        
-        case Venues.create_venue(venue_params) do
+
+        # Use VenueStore for automatic city_id lookup
+        case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_params) do
           {:ok, venue} -> 
             Helpers.log("Created theater venue: #{venue.name}")
             venue
@@ -519,15 +521,16 @@ defmodule DevSeeds.Events do
       venue_params = %{
         name: restaurant.name,
         address: restaurant.address,
-        city: "San Francisco", 
-        state: "CA",
-        country: "United States",
+        city_name: "San Francisco",
+        country_code: "US",
         latitude: restaurant.lat,
         longitude: restaurant.lng,
-        venue_type: "venue"
+        venue_type: "venue",
+        source: "user"
       }
-      
-      case Venues.create_venue(venue_params) do
+
+      # Use VenueStore for automatic city_id lookup
+      case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_params) do
         {:ok, venue} -> 
           Helpers.log("Created fallback restaurant: #{venue.name}")
           venue
@@ -559,15 +562,16 @@ defmodule DevSeeds.Events do
       venue_params = %{
         name: theater.name,
         address: theater.address,
-        city: "San Francisco",
-        state: "CA", 
-        country: "United States",
+        city_name: "San Francisco",
+        country_code: "US",
         latitude: theater.lat,
         longitude: theater.lng,
-        venue_type: "venue"
+        venue_type: "venue",
+        source: "user"
       }
-      
-      case Venues.create_venue(venue_params) do
+
+      # Use VenueStore for automatic city_id lookup
+      case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_params) do
         {:ok, venue} -> 
           Helpers.log("Created fallback theater: #{venue.name}")
           venue
@@ -612,11 +616,24 @@ defmodule DevSeeds.Events do
       types = component["types"] || []
       "country" in types
     end)
-    
+
     case country_component do
       %{"long_name" => country} -> country
       _ -> nil
     end
   end
-  
+
+  defp extract_country_code_from_address(venue_data) do
+    address_components = venue_data["address_components"] || []
+    country_component = Enum.find(address_components, fn component ->
+      types = component["types"] || []
+      "country" in types
+    end)
+
+    case country_component do
+      %{"short_name" => code} -> code
+      _ -> nil
+    end
+  end
+
 end

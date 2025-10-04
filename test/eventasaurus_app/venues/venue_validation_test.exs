@@ -3,6 +3,25 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Repo
 
+  # Helper to create a test city for tests that need city_id
+  defp create_test_city do
+    {:ok, country} =
+      EventasaurusDiscovery.Locations.Country.changeset(
+        %EventasaurusDiscovery.Locations.Country{},
+        %{name: "Poland", code: "PL"}
+      )
+      |> Repo.insert()
+
+    {:ok, city} =
+      EventasaurusDiscovery.Locations.City.changeset(
+        %EventasaurusDiscovery.Locations.City{},
+        %{name: "Kraków", slug: "krakow", country_id: country.id}
+      )
+      |> Repo.insert()
+
+    city
+  end
+
   describe "GPS coordinate validation" do
     test "requires both latitude and longitude for physical venues" do
       changeset =
@@ -18,13 +37,16 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
     end
 
     test "accepts valid coordinates" do
+      city = create_test_city()
+
       changeset =
         Venue.changeset(%Venue{}, %{
           name: "Test Venue",
           venue_type: "venue",
           source: "scraper",
           latitude: 50.0619,
-          longitude: 19.9368
+          longitude: 19.9368,
+          city_id: city.id
         })
 
       assert changeset.valid?
@@ -103,6 +125,8 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
     end
 
     test "allows insertion of venue with valid coordinates" do
+      city = create_test_city()
+
       {:ok, venue} =
         %Venue{}
         |> Venue.changeset(%{
@@ -111,7 +135,8 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
           source: "scraper",
           latitude: 50.0619,
           longitude: 19.9368,
-          address: "123 Main St"
+          address: "123 Main St",
+          city_id: city.id
         })
         |> Repo.insert()
 
@@ -146,6 +171,8 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
     end
 
     test "city venues accept valid coordinates" do
+      city = create_test_city()
+
       {:ok, venue} =
         %Venue{}
         |> Venue.changeset(%{
@@ -153,7 +180,8 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
           venue_type: "city",
           source: "user",
           latitude: 37.7749,
-          longitude: -122.4194
+          longitude: -122.4194,
+          city_id: city.id
         })
         |> Repo.insert()
 
@@ -177,6 +205,108 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
       assert venue.venue_type == "region"
       assert venue.latitude == 37.8
       assert venue.longitude == -122.4
+    end
+
+    test "venue type requires city_id" do
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Theater",
+          venue_type: "venue",
+          source: "user",
+          latitude: 37.7749,
+          longitude: -122.4194
+        })
+
+      refute changeset.valid?
+      assert {:city_id, {"can't be blank", [validation: :required]}} in changeset.errors
+    end
+
+    test "city type requires city_id" do
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "San Francisco",
+          venue_type: "city",
+          source: "user",
+          latitude: 37.7749,
+          longitude: -122.4194
+        })
+
+      refute changeset.valid?
+      assert {:city_id, {"can't be blank", [validation: :required]}} in changeset.errors
+    end
+
+    test "region type allows NULL city_id" do
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Bay Area",
+          venue_type: "region",
+          source: "user",
+          latitude: 37.8,
+          longitude: -122.4
+        })
+
+      assert changeset.valid?
+    end
+
+    test "region type with city_id is valid" do
+      # Create a test city
+      {:ok, country} =
+        EventasaurusDiscovery.Locations.Country.changeset(
+          %EventasaurusDiscovery.Locations.Country{},
+          %{name: "United States", code: "US"}
+        )
+        |> Repo.insert()
+
+      {:ok, city} =
+        EventasaurusDiscovery.Locations.City.changeset(
+          %EventasaurusDiscovery.Locations.City{},
+          %{name: "San Francisco", slug: "san-francisco", country_id: country.id}
+        )
+        |> Repo.insert()
+
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Bay Area",
+          venue_type: "region",
+          source: "user",
+          latitude: 37.8,
+          longitude: -122.4,
+          city_id: city.id
+        })
+
+      assert changeset.valid?
+    end
+
+    test "venue with city_id passes validation and db constraint" do
+      # Create a test city
+      {:ok, country} =
+        EventasaurusDiscovery.Locations.Country.changeset(
+          %EventasaurusDiscovery.Locations.Country{},
+          %{name: "Poland", code: "PL"}
+        )
+        |> Repo.insert()
+
+      {:ok, city} =
+        EventasaurusDiscovery.Locations.City.changeset(
+          %EventasaurusDiscovery.Locations.City{},
+          %{name: "Kraków", slug: "krakow", country_id: country.id}
+        )
+        |> Repo.insert()
+
+      {:ok, venue} =
+        %Venue{}
+        |> Venue.changeset(%{
+          name: "Kino Pod Baranami",
+          venue_type: "venue",
+          source: "user",
+          latitude: 50.0619,
+          longitude: 19.9368,
+          city_id: city.id
+        })
+        |> Repo.insert()
+
+      assert venue.city_id == city.id
+      assert venue.venue_type == "venue"
     end
   end
 end
