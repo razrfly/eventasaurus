@@ -223,21 +223,21 @@ export const UnifiedGooglePlaces = {
     let city = '';
     let state = '';
     let country = '';
-    
+
     if (place.address_components) {
       for (const component of place.address_components) {
         const types = component.types || [];
-        
+
         if (types.includes('locality')) {
           city = component.long_name;
         } else if (types.includes('administrative_area_level_1')) {
           state = component.short_name;
         } else if (types.includes('country')) {
-          country = component.long_name;
+          country = component.short_name;
         }
       }
     }
-    
+
     // Build comprehensive place data - matches original format exactly
     return {
       place_id: place.place_id,

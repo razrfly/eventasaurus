@@ -71,11 +71,15 @@ defmodule EventasaurusApp.Venues.Venue do
   Venues represent physical locations where events take place.
 
   ## Venue Types
-  - "venue": Specific locations (theaters, clubs, arenas)
-  - "city": City-wide events (festivals, marathons)
-  - "region": Regional events (Bay Area, Greater London)
+  - "venue": Specific locations (theaters, clubs, arenas) - REQUIRES city_id
+  - "city": City-wide events (festivals, marathons) - REQUIRES city_id
+  - "region": Regional events (Bay Area, Greater London) - city_id OPTIONAL
 
-  All venues MUST have GPS coordinates (enforced at database level).
+  ## Required Fields
+  All venues MUST have:
+  - GPS coordinates (latitude/longitude) - enforced at database level
+  - city_id - required for "venue" and "city" types, optional for "region" type
+    (enforced via CHECK constraint: venue_type = 'region' OR city_id IS NOT NULL)
 
   ## Virtual Events
   Virtual events do NOT use the Venue table. Instead, they use:
@@ -148,7 +152,17 @@ defmodule EventasaurusApp.Venues.Venue do
   # All venues are physical locations requiring GPS coordinates
   # Virtual events use Event.is_virtual + Event.virtual_venue_url instead
   defp validate_required_by_type(changeset) do
-    validate_required(changeset, [:name, :venue_type, :latitude, :longitude])
+    venue_type = get_field(changeset, :venue_type)
+
+    case venue_type do
+      "region" ->
+        # Regional venues span multiple cities, city_id optional
+        validate_required(changeset, [:name, :venue_type, :latitude, :longitude])
+
+      _ ->
+        # Physical venues (venue, city) require city_id
+        validate_required(changeset, [:name, :venue_type, :latitude, :longitude, :city_id])
+    end
   end
 
   # Universal UTF-8 sanitization for all venue attributes

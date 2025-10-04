@@ -385,14 +385,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     params_with_venue =
       if (!is_virtual and venue_name) && venue_name != "" do
-        # Try to find existing venue or create new one
+        # Try to find existing venue or create new one using VenueStore normalization
         venue_attrs = %{
-          "name" => venue_name,
-          "address" => venue_address,
-          "city" => Map.get(event_params, "venue_city"),
-          "state" => Map.get(event_params, "venue_state"),
-          "country" => Map.get(event_params, "venue_country"),
-          "latitude" =>
+          name: venue_name,
+          address: venue_address,
+          city_name: Map.get(event_params, "venue_city"),
+          country_code: Map.get(event_params, "venue_country"),
+          latitude:
             case Map.get(event_params, "venue_latitude") do
               lat when is_binary(lat) and lat != "" ->
                 case Float.parse(lat) do
@@ -403,7 +402,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               lat ->
                 lat
             end,
-          "longitude" =>
+          longitude:
             case Map.get(event_params, "venue_longitude") do
               lng when is_binary(lng) and lng != "" ->
                 case Float.parse(lng) do
@@ -414,22 +413,25 @@ defmodule EventasaurusWeb.EventLive.Edit do
               lng ->
                 lng
             end,
-          "venue_type" => Map.get(event_params, "venue_type", "venue")
+          venue_type: Map.get(event_params, "venue_type", "venue"),
+          place_id: Map.get(event_params, "venue_place_id"),
+          source:
+            if Map.get(event_params, "venue_place_id") do
+              "google"
+            else
+              "user"
+            end
         }
 
-        # Try to find existing venue by address first
-        case EventasaurusApp.Venues.find_venue_by_address(venue_address) do
-          nil ->
-            # Create new venue
-            case EventasaurusApp.Venues.create_venue(venue_attrs) do
-              {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
-              # Fall back to updating without venue
-              {:error, _} -> event_params
-            end
-
-          venue ->
-            # Use existing venue
+        # Use VenueStore for proper city normalization
+        case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_attrs) do
+          {:ok, venue} ->
             Map.put(event_params, "venue_id", venue.id)
+
+          {:error, reason} ->
+            require Logger
+            Logger.error("Failed to create venue in edit: #{inspect(reason)}")
+            event_params
         end
       else
         # Virtual event or no venue data - clear venue_id
@@ -1120,8 +1122,59 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
+  def handle_event("show_recent_places", %{"mode" => _mode}, socket) do
+    # Handle the show_recent_places event from the JavaScript hook
+    # For now, just return without error - we can expand this later to show actual recent places
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("location_cleared", %{"mode" => _mode}, socket) do
+    # Handle the location_cleared event from the JavaScript hook
+    # Clear any location-related state when user clears the location field
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("enable_google_places", _params, socket) do
     {:noreply, push_event(socket, "enable_google_places", %{})}
+  end
+
+  @impl true
+  def handle_event("location_selected", %{"place" => place_data, "mode" => "event"}, socket) do
+    # Handle Google Places selection for events
+    require Logger
+    Logger.info("📍 Location selected from Google Places: #{inspect(place_data)}")
+
+    # Update form data with the selected venue information
+    form_data =
+      (socket.assigns.form_data || %{})
+      |> Map.put("venue_name", place_data["name"] || "")
+      |> Map.put("venue_address", place_data["formatted_address"] || "")
+      |> Map.put("venue_city", place_data["city"] || "")
+      |> Map.put("venue_state", place_data["state"] || "")
+      |> Map.put("venue_country", place_data["country"] || "")
+      |> Map.put("venue_place_id", place_data["place_id"] || "")
+      |> Map.put("venue_latitude", place_data["latitude"])
+      |> Map.put("venue_longitude", place_data["longitude"])
+      |> Map.put("is_virtual", false)
+
+    # Update the changeset
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    # Update the socket with full information
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, place_data["name"])
+      |> assign(:selected_venue_address, place_data["formatted_address"])
+      |> assign(:is_virtual, false)
+
+    {:noreply, socket}
   end
 
   @impl true
