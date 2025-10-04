@@ -108,7 +108,7 @@ defmodule EventasaurusApp.Venues.Venue do
       :source,
       :city_id
     ])
-    |> validate_required([:name, :venue_type, :latitude, :longitude])
+    |> validate_required_by_type()
     |> validate_inclusion(:venue_type, @valid_venue_types,
       message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}"
     )
@@ -121,6 +121,23 @@ defmodule EventasaurusApp.Venues.Venue do
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
     |> foreign_key_constraint(:city_id)
+  end
+
+  # Conditional validation based on venue_type
+  # Online and TBD venues don't need GPS coordinates
+  # Physical venues (venue, city, region) require coordinates
+  defp validate_required_by_type(changeset) do
+    venue_type = get_field(changeset, :venue_type)
+
+    case venue_type do
+      type when type in ["online", "tbd"] ->
+        # Online/TBD venues don't need coordinates
+        validate_required(changeset, [:name, :venue_type])
+
+      _ ->
+        # Physical venues need coordinates
+        validate_required(changeset, [:name, :venue_type, :latitude, :longitude])
+    end
   end
 
   # Universal UTF-8 sanitization for all venue attributes
@@ -158,14 +175,19 @@ defmodule EventasaurusApp.Venues.Venue do
   end
 
   defp validate_gps_coordinates(changeset) do
+    venue_type = get_field(changeset, :venue_type)
     lat = get_change(changeset, :latitude) || get_field(changeset, :latitude)
     lng = get_change(changeset, :longitude) || get_field(changeset, :longitude)
 
     cond do
+      # Skip coordinate validation for online and TBD venues
+      venue_type in ["online", "tbd"] ->
+        changeset
+
       is_nil(lat) && is_nil(lng) ->
         changeset
-        |> add_error(:latitude, "GPS coordinates are required for venues")
-        |> add_error(:longitude, "GPS coordinates are required for venues")
+        |> add_error(:latitude, "GPS coordinates are required for physical venues")
+        |> add_error(:longitude, "GPS coordinates are required for physical venues")
 
       is_nil(lat) ->
         add_error(changeset, :latitude, "is required when longitude is provided")
