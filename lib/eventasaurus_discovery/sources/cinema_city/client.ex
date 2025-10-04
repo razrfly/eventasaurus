@@ -139,11 +139,22 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Client do
 
       {:ok, %HTTPoison.Response{status_code: status_code} = response}
       when status_code in 301..302 ->
-        # Handle redirects
+        # Handle redirects - guard against infinite redirect loops
         case get_redirect_location(response) do
           {:ok, redirect_url} ->
-            Logger.info("↪️ Following redirect: #{redirect_url}")
-            fetch_json(redirect_url, Keyword.put(opts, :skip_rate_limit, true))
+            if attempt >= retries do
+              Logger.error("❌ Max retries exceeded following redirects")
+              {:error, :max_retries_exceeded}
+            else
+              redirect_opts =
+                opts
+                |> Keyword.put(:skip_rate_limit, true)
+                |> Keyword.put(:attempt, attempt + 1)
+                |> Keyword.put_new(:retries, retries)
+
+              Logger.info("↪️ Following redirect (attempt #{attempt + 1}/#{retries}): #{redirect_url}")
+              fetch_json(redirect_url, redirect_opts)
+            end
 
           :error ->
             {:error, :redirect_failed}
