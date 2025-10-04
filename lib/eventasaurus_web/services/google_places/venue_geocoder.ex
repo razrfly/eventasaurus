@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
   @cache_ttl :timer.hours(24)
 
   @doc """
-  Geocodes a venue address to get latitude and longitude coordinates.
+  Geocodes a venue address to get latitude, longitude, and official venue name from Google.
 
   ## Parameters
     - venue_data: Map containing venue information with at least:
@@ -23,8 +23,10 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
       - state: State/province (optional)
 
   ## Returns
-    - {:ok, %{latitude: float, longitude: float}} on success
+    - {:ok, %{latitude: float, longitude: float, name: string, place_id: string}} on success
     - {:error, reason} on failure
+
+  The returned name is Google's official venue name which should be preferred over scraped names.
   """
   def geocode_venue(venue_data) do
     # Build the geocoding query from venue data
@@ -92,14 +94,27 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
           location = get_in(result, ["geometry", "location"])
 
           if location do
+            # Extract Google's official venue name and place_id
+            google_name = extract_venue_name(result)
+            place_id = result["place_id"]
+            original_name = venue_data[:name] || venue_data["name"]
+
             coordinates = %{
               latitude: location["lat"],
-              longitude: location["lng"]
+              longitude: location["lng"],
+              name: google_name,
+              place_id: place_id
             }
 
-            Logger.debug(
-              "Successfully geocoded venue '#{venue_data[:name] || venue_data["name"]}'"
-            )
+            if google_name && google_name != original_name do
+              Logger.info(
+                "🗺️ Geocoded '#{original_name}' → Google name: '#{google_name}' (place_id: #{place_id})"
+              )
+            else
+              Logger.debug(
+                "Successfully geocoded venue '#{original_name}'"
+              )
+            end
 
             {:ok, coordinates}
           else
@@ -149,5 +164,18 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
     is_number(lat) && is_number(lng) &&
       lat >= -90 && lat <= 90 &&
       lng >= -180 && lng <= 180
+  end
+
+  # Extracts venue name from Google Geocoding API result.
+  #
+  # IMPORTANT: Only use if Google provides an actual establishment name.
+  # Following the same pattern as GooglePlacesDataAdapter (line 83-84):
+  #   raw_data["name"] || raw_data["title"] || "Unknown Place"
+  #
+  # Returns nil if no proper establishment name found - caller should keep original scraped name.
+  defp extract_venue_name(result) do
+    # Only use name field if it exists (for actual establishments)
+    # Do NOT fall back to formatted_address - that's just an address string, not a venue name
+    result["name"]
   end
 end

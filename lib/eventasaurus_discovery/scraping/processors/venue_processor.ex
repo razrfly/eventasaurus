@@ -14,7 +14,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.{City, Country, CountryResolver}
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
-  alias EventasaurusWeb.Services.GooglePlaces.VenueGeocoder
+  alias EventasaurusWeb.Services.GooglePlaces.{TextSearch, Details, VenuePlacesAdapter}
 
   import Ecto.Query
   require Logger
@@ -383,40 +383,78 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
+  # Looks up venue data from Google Places API using TextSearch + Details
+  # Returns {latitude, longitude, google_name, google_place_id} tuple
+  defp lookup_venue_from_google_places(data, city) do
+    # Build search query: "Venue Name, City, Country"
+    query = build_google_places_query(data, city)
+
+    Logger.info("🔍 Looking up venue via Google Places: #{query}")
+
+    with {:ok, [first_result | _]} <- TextSearch.search(query),
+         place_id <- Map.get(first_result, "place_id"),
+         {:ok, details} <- Details.fetch(place_id),
+         venue_data <- VenuePlacesAdapter.extract_venue_data(details) do
+      Logger.info(
+        "🗺️ ✅ Found venue via Google Places: '#{venue_data.name}' (place_id: #{venue_data.place_id})"
+      )
+
+      {venue_data.latitude, venue_data.longitude, venue_data.name, venue_data.place_id}
+    else
+      {:ok, []} ->
+        Logger.warning("🗺️ ⚠️ No Google Places results for: #{query}")
+        {nil, nil, nil, nil}
+
+      {:error, reason} ->
+        Logger.error(
+          "🗺️ ❌ Failed to lookup venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}' via Google Places: #{inspect(reason)}"
+        )
+
+        {nil, nil, nil, nil}
+
+      error ->
+        Logger.error(
+          "🗺️ ❌ Unexpected error looking up venue via Google Places: #{inspect(error)}"
+        )
+
+        {nil, nil, nil, nil}
+    end
+  end
+
+  # Builds Google Places search query from venue data
+  defp build_google_places_query(data, city) do
+    parts =
+      [
+        data.name,
+        data.address,
+        city.name,
+        data.country_name
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(", ")
+
+    parts
+  end
+
   defp create_venue(data, city, _source) do
-    # Check if we need to geocode missing coordinates
-    {latitude, longitude} =
+    # Check if we need to lookup venue data from Google Places
+    {latitude, longitude, google_name, google_place_id} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
-        # Try to get coordinates from Google Maps
-        geocoding_data = %{
-          name: data.name,
-          address: data.address,
-          city_name: city.name,
-          state: data.state,
-          country_name: data.country_name
-        }
-
-        case VenueGeocoder.geocode_venue(geocoding_data) do
-          {:ok, %{latitude: lat, longitude: lng}} ->
-            Logger.info("🗺️ Successfully geocoded venue '#{data.name}' using Google Maps fallback")
-            {lat, lng}
-
-          {:error, reason} ->
-            Logger.error(
-              "🗺️❌ Failed to geocode venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{inspect(reason)} - Venue creation will fail due to missing GPS coordinates"
-            )
-
-            {nil, nil}
-        end
+        # Try to get venue data from Google Places API
+        lookup_venue_from_google_places(data, city)
       else
         # Use provided coordinates
-        {data.latitude, data.longitude}
+        {data.latitude, data.longitude, nil, nil}
       end
+
+    # Prefer Google's official venue name over scraped name when available
+    final_name = google_name || data.name
+    final_place_id = google_place_id || data.place_id
 
     # All discovery sources use "scraper" as the venue source
     # Clean UTF-8 for venue name before database insert
     attrs = %{
-      name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name),
+      name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(final_name),
       address: data.address,
       city: city.name,
       state: data.state,
@@ -424,7 +462,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       latitude: latitude,
       longitude: longitude,
       venue_type: "venue",
-      place_id: data.place_id,
+      place_id: final_place_id,
       source: "scraper",
       city_id: city.id
     }
@@ -464,8 +502,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           # Use provided coordinates
           [{:latitude, data.latitude}, {:longitude, data.longitude} | updates]
         else
-          # Try to geocode if we don't have coordinates from either source
-          geocoding_data = %{
+          # Try to lookup from Google Places if we don't have coordinates from either source
+          lookup_data = %{
             name: venue.name,
             address: venue.address || data.address,
             city_name: venue.city,
@@ -473,23 +511,45 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             country_name: venue.country || data.country_name
           }
 
-          case VenueGeocoder.geocode_venue(geocoding_data) do
-            {:ok, %{latitude: lat, longitude: lng}} ->
+          # Create a minimal city struct for the lookup
+          city_for_lookup = %{name: venue.city}
+
+          case lookup_venue_from_google_places(lookup_data, city_for_lookup) do
+            {lat, lng, google_name, google_place_id}
+            when not is_nil(lat) and not is_nil(lng) ->
               Logger.info(
-                "🗺️ Successfully geocoded existing venue '#{venue.name}' using Google Maps fallback"
+                "🗺️ Successfully looked up existing venue '#{venue.name}' via Google Places"
               )
 
-              [{:latitude, lat}, {:longitude, lng} | updates]
+              # Update with coordinates, and prefer Google's official name if available
+              coord_updates = [{:latitude, lat}, {:longitude, lng}]
 
-            {:error, reason} ->
+              coord_updates =
+                if google_name && google_name != venue.name do
+                  Logger.info("🗺️ Updating venue name '#{venue.name}' → '#{google_name}'")
+                  [{:name, google_name} | coord_updates]
+                else
+                  coord_updates
+                end
+
+              coord_updates =
+                if google_place_id && is_nil(venue.place_id) do
+                  [{:place_id, google_place_id} | coord_updates]
+                else
+                  coord_updates
+                end
+
+              coord_updates ++ updates
+
+            _ ->
               Logger.error(
-                "🗺️❌ Cannot update venue '#{venue.name}' without GPS coordinates: #{inspect(reason)}"
+                "🗺️❌ Cannot update venue '#{venue.name}' without GPS coordinates: Google Places lookup failed"
               )
 
               # Return error immediately if we can't get coordinates
               # This will prevent the venue from being updated without required coordinates
               {:error,
-               "GPS coordinates required but unavailable for venue '#{venue.name}'. Geocoding failed: #{inspect(reason)}"}
+               "GPS coordinates required but unavailable for venue '#{venue.name}'. Google Places lookup failed."}
           end
         end
       else

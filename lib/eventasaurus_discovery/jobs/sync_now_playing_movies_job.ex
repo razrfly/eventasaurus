@@ -42,8 +42,8 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    region = normalize_region(args["region"])
-    pages = coerce_pages(args["pages"])
+    region = normalize_region(args["region"] || args[:region])
+    pages = coerce_pages(args["pages"] || args[:pages])
 
     Logger.info("🎬 Starting Now Playing sync for region: #{region} (#{pages} pages)")
 

@@ -244,7 +244,7 @@ defmodule EventasaurusWeb.Components.EventCards do
 
           <div class="mt-2 flex items-center text-sm text-green-600 font-medium">
             <Heroicons.calendar class="w-4 h-4 mr-1" />
-            <%= String.capitalize(@group.aggregation_type) %>
+            <%= @group.aggregation_type |> to_string() |> String.capitalize() %>
           </div>
 
           <div class="mt-1 flex items-center text-sm text-gray-600">
