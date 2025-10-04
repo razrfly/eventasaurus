@@ -5,13 +5,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.CinemaExtractor do
   Since Kino Krakow does not provide individual cinema info pages or GPS coordinates,
   this module returns cinema name formatted from the slug along with city and country.
 
-  VenueProcessor automatically geocodes venues without coordinates using Google Maps API.
+  VenueProcessor automatically looks up venues using Google Places API (TextSearch + Details).
 
   Extracts:
   - Cinema name (formatted from slug)
   - City ("Kraków")
   - Country ("Poland")
-  - Coordinates set to nil (triggers automatic geocoding)
+  - Coordinates set to nil (triggers automatic Google Places lookup)
   """
 
   require Logger
@@ -20,14 +20,14 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.CinemaExtractor do
   Extract cinema venue data from cinema slug.
 
   Note: Kino Krakow website does not provide individual cinema pages or GPS coordinates.
-  Returns cinema name with city/country for automatic geocoding via VenueProcessor.
+  Returns cinema name with city/country for automatic lookup via VenueProcessor.
 
   Returns map with:
   - name: String (formatted from slug)
   - city: String ("Kraków")
   - country: String ("Poland")
-  - latitude: nil (triggers VenueGeocoder to geocode via Google Maps API)
-  - longitude: nil (triggers VenueGeocoder to geocode via Google Maps API)
+  - latitude: nil (triggers Google Places API lookup via VenueProcessor)
+  - longitude: nil (triggers Google Places API lookup via VenueProcessor)
   """
   def extract(_html, cinema_slug) when is_binary(cinema_slug) do
     %{
