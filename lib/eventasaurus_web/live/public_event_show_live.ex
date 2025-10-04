@@ -1187,6 +1187,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
     url =
       cond do
+        # PRIORITY 1: source_url (event-specific URLs)
+        # Cinema City stores booking URL here (specific showtime booking page)
+        # BandsInTown and other scrapers also use this for ticket links
+        source.source_url -> source.source_url
+
+        # PRIORITY 2: metadata-based event URLs (scrapers that store in metadata)
         # Ticketmaster stores URL in ticketmaster_data.url
         url = get_in(md, ["ticketmaster_data", "url"]) -> url
         # Bandsintown might have it in event_url or url
@@ -1196,10 +1202,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         url = md["link"] -> url
         # Kino Krakow stores movie page URL in metadata
         url = md["movie_url"] -> url
-        # Fallback to source_url if it exists (event-specific URL like ticket link)
-        source.source_url -> source.source_url
-        # Fallback to source website URL (general source URL like Kino Krakow homepage)
+
+        # PRIORITY 3: Fallback to source website URL (general homepage, not event-specific)
+        # This is the least useful but better than nothing
         source.source && source.source.website_url -> source.source.website_url
+
         true -> nil
       end
 

@@ -80,9 +80,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Config do
   """
   def krakow_cinemas do
     [
-      %{id: "1088", name: "Kraków - Bonarka", slug: "krakow-bonarka"},
-      %{id: "1089", name: "Kraków - Galeria Kazimierz", slug: "krakow-galeria-kazimierz"},
-      %{id: "1090", name: "Kraków - Zakopianka", slug: "krakow-zakopianka"}
+      %{id: "1090", name: "Kraków - Bonarka", slug: "krakow-bonarka"},
+      %{id: "1076", name: "Kraków - Galeria Kazimierz", slug: "krakow-galeria-kazimierz"},
+      %{id: "1064", name: "Kraków - Zakopianka", slug: "krakow-zakopianka"}
     ]
   end
 end
