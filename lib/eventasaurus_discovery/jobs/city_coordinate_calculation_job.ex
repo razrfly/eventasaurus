@@ -30,19 +30,19 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
          {:ok, :should_update} <- check_update_needed(city, force),
          {:ok, coordinates} <- calculate_coordinates(city),
          {:ok, updated_city} <- update_city_coordinates(city, coordinates) do
-
       Logger.info("""
       ✅ Updated coordinates for #{updated_city.name}
       Lat: #{Decimal.to_float(updated_city.latitude)}, Lng: #{Decimal.to_float(updated_city.longitude)}
       Based on #{coordinates.venue_count} venues
       """)
 
-      {:ok, %{
-        city: updated_city.name,
-        latitude: Decimal.to_float(updated_city.latitude),
-        longitude: Decimal.to_float(updated_city.longitude),
-        venue_count: coordinates.venue_count
-      }}
+      {:ok,
+       %{
+         city: updated_city.name,
+         latitude: Decimal.to_float(updated_city.latitude),
+         longitude: Decimal.to_float(updated_city.longitude),
+         venue_count: coordinates.venue_count
+       }}
     else
       {:ok, :skip} ->
         Logger.debug("Skipping coordinate update for city #{city_id} - recently updated")
@@ -92,7 +92,7 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
     # Calculate average coordinates from all venues in this city
     # that have valid coordinates
     query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: not is_nil(v.latitude) and not is_nil(v.longitude),
         select: %{
@@ -100,10 +100,12 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
           avg_lng: type(avg(v.longitude), :decimal),
           count: count(v.id)
         }
+      )
 
     case Repo.one(query) do
       %{avg_lat: lat, avg_lng: lng, count: count} when not is_nil(lat) and count > 0 ->
         {:ok, %{latitude: lat, longitude: lng, venue_count: count}}
+
       _ ->
         {:error, :no_venues}
     end
@@ -114,11 +116,13 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
     {updated_count, updated_cities} =
       from(c in City, where: c.id == ^city_id, select: c)
       |> Repo.update_all(
-        [set: [
-          latitude: lat,
-          longitude: lng,
-          updated_at: NaiveDateTime.utc_now()
-        ]],
+        [
+          set: [
+            latitude: lat,
+            longitude: lng,
+            updated_at: NaiveDateTime.utc_now()
+          ]
+        ],
         returning: true
       )
 
@@ -142,10 +146,20 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
     unique =
       if force do
         # Allow bypassing the 24h window but dedupe identical forced submissions briefly
-        [fields: [:args, :queue, :worker], keys: [:city_id, :force], period: 0, states: [:available, :scheduled, :executing]]
+        [
+          fields: [:args, :queue, :worker],
+          keys: [:city_id, :force],
+          period: 0,
+          states: [:available, :scheduled, :executing]
+        ]
       else
         # At most one job per city per 24h across relevant states
-        [fields: [:args, :queue, :worker], keys: [:city_id], period: 86_400, states: [:available, :scheduled, :executing]]
+        [
+          fields: [:args, :queue, :worker],
+          keys: [:city_id],
+          period: 86_400,
+          states: [:available, :scheduled, :executing]
+        ]
       end
 
     args

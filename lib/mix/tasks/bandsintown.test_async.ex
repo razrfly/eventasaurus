@@ -19,10 +19,11 @@ defmodule Mix.Tasks.Bandsintown.TestAsync do
     Mix.Task.run("app.start")
 
     # Parse arguments
-    {opts, _, _} = OptionParser.parse(args,
-      strict: [limit: :integer, max_pages: :integer],
-      aliases: [l: :limit, p: :max_pages]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [limit: :integer, max_pages: :integer],
+        aliases: [l: :limit, p: :max_pages]
+      )
 
     limit = opts[:limit] || 10
     max_pages = opts[:max_pages] || 2
@@ -126,9 +127,11 @@ defmodule Mix.Tasks.Bandsintown.TestAsync do
     import Ecto.Query
 
     # Count jobs by state and queue
-    query = from j in Oban.Job,
-      group_by: [j.state, j.queue],
-      select: {j.state, j.queue, count(j.id)}
+    query =
+      from(j in Oban.Job,
+        group_by: [j.state, j.queue],
+        select: {j.state, j.queue, count(j.id)}
+      )
 
     results = Repo.all(query)
 
@@ -142,6 +145,7 @@ defmodule Mix.Tasks.Bandsintown.TestAsync do
     |> Enum.group_by(fn {state, _, _} -> state end)
     |> Enum.each(fn {state, jobs} ->
       Logger.info("#{String.upcase(to_string(state))}:")
+
       Enum.each(jobs, fn {_, queue, count} ->
         Logger.info("  #{queue}: #{count} jobs")
       end)
@@ -176,12 +180,14 @@ defmodule Mix.Tasks.Bandsintown.TestAsync do
     # Check for recently created events from Bandsintown
     recent_cutoff = DateTime.utc_now() |> DateTime.add(-60, :second)
 
-    query = from pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
-      join: s in EventasaurusDiscovery.Sources.Source,
-      on: s.id == pes.source_id,
-      where: s.slug == "bandsintown",
-      where: pes.inserted_at > ^recent_cutoff,
-      select: {pes.external_id, pes.inserted_at}
+    query =
+      from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+        join: s in EventasaurusDiscovery.Sources.Source,
+        on: s.id == pes.source_id,
+        where: s.slug == "bandsintown",
+        where: pes.inserted_at > ^recent_cutoff,
+        select: {pes.external_id, pes.inserted_at}
+      )
 
     results = Repo.all(query)
 

@@ -106,10 +106,12 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
       {fn -> polish_title && search_tmdb(polish_title, year) end, "polish_title+year"},
 
       # Strategy 6: Normalized Polish title + year (handles collections, prefixes)
-      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), year) end, "polish_normalized+year"},
+      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), year) end,
+       "polish_normalized+year"},
 
       # Strategy 7: Normalized Polish title without year (broader search)
-      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), nil) end, "polish_normalized"},
+      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), nil) end,
+       "polish_normalized"},
 
       # Strategy 8: Normalized without year (last resort)
       {fn -> search_tmdb(normalize_title_for_search(primary_title), nil) end, "normalized"},
@@ -122,21 +124,24 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
     ]
 
     # Try each strategy until we find results
-    result = Enum.find_value(strategies, fn {strategy_fn, strategy_name} ->
-      case strategy_fn.() do
-        {:ok, [_|_] = results} ->
-          Logger.info("✅ TMDB match found using strategy: #{strategy_name}")
-          {:ok, results}
-        _ ->
-          nil
-      end
-    end)
+    result =
+      Enum.find_value(strategies, fn {strategy_fn, strategy_name} ->
+        case strategy_fn.() do
+          {:ok, [_ | _] = results} ->
+            Logger.info("✅ TMDB match found using strategy: #{strategy_name}")
+            {:ok, results}
+
+          _ ->
+            nil
+        end
+      end)
 
     result || {:error, :no_results}
   end
 
   # Search TMDB for candidates (uses /search/multi endpoint)
   defp search_tmdb(nil, _year), do: {:ok, []}
+
   defp search_tmdb(title, year) when is_binary(title) do
     # Try search with year first for better results
     case TmdbService.search_multi(title, 1) do
@@ -159,6 +164,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
   # Search using movie-specific endpoint for better ranking
   defp search_movie_only(nil, _year), do: {:ok, []}
+
   defp search_movie_only(title, year) when is_binary(title) do
     api_key = System.get_env("TMDB_API_KEY")
 
@@ -220,29 +226,32 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
       }
 
       # Add year filter if available
-      params = if kino_movie.year do
-        params
-        |> Map.put(:primary_release_year, kino_movie.year)
-        |> Map.put(:"primary_release_date.gte", "#{kino_movie.year}-01-01")
-        |> Map.put(:"primary_release_date.lte", "#{kino_movie.year}-12-31")
-      else
-        params
-      end
+      params =
+        if kino_movie.year do
+          params
+          |> Map.put(:primary_release_year, kino_movie.year)
+          |> Map.put(:"primary_release_date.gte", "#{kino_movie.year}-01-01")
+          |> Map.put(:"primary_release_date.lte", "#{kino_movie.year}-12-31")
+        else
+          params
+        end
 
       # Add runtime filter if available (±10 minutes tolerance)
-      params = if kino_movie.runtime do
-        params
-        |> Map.put(:"with_runtime.gte", max(0, kino_movie.runtime - 10))
-        |> Map.put(:"with_runtime.lte", kino_movie.runtime + 10)
-      else
-        params
-      end
+      params =
+        if kino_movie.runtime do
+          params
+          |> Map.put(:"with_runtime.gte", max(0, kino_movie.runtime - 10))
+          |> Map.put(:"with_runtime.lte", kino_movie.runtime + 10)
+        else
+          params
+        end
 
       # Add language filter if we can detect it from country
-      params = case detect_language_from_country(kino_movie.country) do
-        nil -> params
-        lang -> Map.put(params, :with_original_language, lang)
-      end
+      params =
+        case detect_language_from_country(kino_movie.country) do
+          nil -> params
+          lang -> Map.put(params, :with_original_language, lang)
+        end
 
       # Build URL
       query_string = URI.encode_query(params)
@@ -286,6 +295,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
   # Detect TMDB language code from country name
   defp detect_language_from_country(nil), do: nil
+
   defp detect_language_from_country(country) when is_binary(country) do
     country_lower = String.downcase(country)
 
@@ -305,6 +315,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
   # Normalize title for better TMDB matching
   defp normalize_title_for_search(nil), do: nil
+
   defp normalize_title_for_search(title) do
     title
     |> remove_common_suffixes()
@@ -315,13 +326,19 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   # Normalize Polish-specific title patterns for better matching
   # Handles common Polish title formats that don't exist in TMDB
   defp normalize_polish_title(nil), do: nil
+
   defp normalize_polish_title(title) do
     title
-    |> String.replace(~r/^Kolekcja\s+/i, "")  # Remove "Kolekcja" (Collection) prefix
-    |> String.replace(~r/\s+w\s+kinie:\s+/i, " ")  # "w kinie:" (in cinema) → space
-    |> String.replace(~r/\s+górą!$/i, "")  # Remove Polish exclamations like "górą!"
-    |> String.replace(~r/^Niesamowite przygody\s+/i, "")  # Remove "Niesamowite przygody" (Amazing adventures of)
-    |> String.replace(~r/^Biuro Detektywistyczne\s+/i, "Detective Agency ")  # Translate common prefix
+    # Remove "Kolekcja" (Collection) prefix
+    |> String.replace(~r/^Kolekcja\s+/i, "")
+    # "w kinie:" (in cinema) → space
+    |> String.replace(~r/\s+w\s+kinie:\s+/i, " ")
+    # Remove Polish exclamations like "górą!"
+    |> String.replace(~r/\s+górą!$/i, "")
+    # Remove "Niesamowite przygody" (Amazing adventures of)
+    |> String.replace(~r/^Niesamowite przygody\s+/i, "")
+    # Translate common prefix
+    |> String.replace(~r/^Biuro Detektywistyczne\s+/i, "Detective Agency ")
     |> String.trim()
   end
 
@@ -339,13 +356,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
     words = String.split(title)
 
     case words do
-      [word, word] -> word  # Same word twice
+      # Same word twice
+      [word, word] -> word
       _ -> title
     end
   end
 
   # Extract main title from subtitle format (e.g., "Film: Subtitle" → "Film")
   defp extract_main_title(nil), do: nil
+
   defp extract_main_title(title) do
     case String.split(title, ~r/[:\-–—]/, parts: 2) do
       [main, _subtitle] -> String.trim(main)
@@ -375,13 +394,17 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   # Extract year from TMDB movie result
   defp extract_year_from_movie(movie) do
     case movie[:release_date] do
-      nil -> nil
+      nil ->
+        nil
+
       date_str when is_binary(date_str) ->
         case Date.from_iso8601(date_str) do
           {:ok, date} -> date.year
           _ -> nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -456,7 +479,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
     country_score = country_match(kino_movie.country, tmdb_movie[:original_language]) * 0.10
 
     # Total: 40% title + 25% year + 15% runtime + 10% director + 10% country = 100%
-    original_title_score + localized_title_score + year_score + runtime_score + director_score + country_score
+    original_title_score + localized_title_score + year_score + runtime_score + director_score +
+      country_score
   end
 
   # Calculate title similarity using Jaro distance
@@ -482,38 +506,50 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
   # Calculate year match score
   # Improved tolerance for upcoming releases and release date variations
-  defp year_match(nil, _), do: 0.5  # Give partial credit if year missing
+  # Give partial credit if year missing
+  defp year_match(nil, _), do: 0.5
   defp year_match(_, nil), do: 0.5
 
   defp year_match(year1, year2) when is_integer(year1) and is_integer(year2) do
     diff = abs(year1 - year2)
 
     cond do
-      diff == 0 -> 1.0      # Perfect match
-      diff == 1 -> 0.9      # ±1 year (regional release differences) - increased from 0.8
-      diff == 2 -> 0.7      # ±2 years (festival vs theatrical) - increased from 0.5
-      diff == 3 -> 0.4      # ±3 years (very upcoming releases or re-releases) - new
-      true -> 0.0           # Too far apart
+      # Perfect match
+      diff == 0 -> 1.0
+      # ±1 year (regional release differences) - increased from 0.8
+      diff == 1 -> 0.9
+      # ±2 years (festival vs theatrical) - increased from 0.5
+      diff == 2 -> 0.7
+      # ±3 years (very upcoming releases or re-releases) - new
+      diff == 3 -> 0.4
+      # Too far apart
+      true -> 0.0
     end
   end
 
   # Calculate runtime match score (±5 minutes tolerance)
-  defp runtime_match(nil, _), do: 0.5  # Give partial credit if runtime missing
+  # Give partial credit if runtime missing
+  defp runtime_match(nil, _), do: 0.5
   defp runtime_match(_, nil), do: 0.5
 
   defp runtime_match(runtime1, runtime2) when is_integer(runtime1) and is_integer(runtime2) do
     diff = abs(runtime1 - runtime2)
 
     cond do
-      diff <= 5 -> 1.0    # Within 5 minutes = perfect match
-      diff <= 10 -> 0.8   # Within 10 minutes = good match
-      diff <= 15 -> 0.5   # Within 15 minutes = partial match
-      true -> 0.0         # Too different
+      # Within 5 minutes = perfect match
+      diff <= 5 -> 1.0
+      # Within 10 minutes = good match
+      diff <= 10 -> 0.8
+      # Within 15 minutes = partial match
+      diff <= 15 -> 0.5
+      # Too different
+      true -> 0.0
     end
   end
 
   # Calculate director match score
-  defp director_match(nil, _tmdb_id), do: 0.5  # Give partial credit if director missing
+  # Give partial credit if director missing
+  defp director_match(nil, _tmdb_id), do: 0.5
   defp director_match(_director, nil), do: 0.5
 
   defp director_match(kino_director, tmdb_id) when is_binary(kino_director) do
@@ -531,17 +567,23 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
           similarity = String.jaro_distance(kino_normalized, tmdb_normalized)
 
           cond do
-            similarity >= 0.9 -> 1.0   # Very similar names
-            similarity >= 0.7 -> 0.7   # Fairly similar
-            similarity >= 0.5 -> 0.4   # Somewhat similar
-            true -> 0.0                # Too different
+            # Very similar names
+            similarity >= 0.9 -> 1.0
+            # Fairly similar
+            similarity >= 0.7 -> 0.7
+            # Somewhat similar
+            similarity >= 0.5 -> 0.4
+            # Too different
+            true -> 0.0
           end
         else
-          0.5  # No director in TMDB data
+          # No director in TMDB data
+          0.5
         end
 
       {:error, _} ->
-        0.5  # Error fetching details, give partial credit
+        # Error fetching details, give partial credit
+        0.5
     end
   end
 
@@ -549,14 +591,18 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   defp country_match(nil, _tmdb_language), do: 0.5
   defp country_match(_country, nil), do: 0.5
 
-  defp country_match(kino_country, tmdb_language) when is_binary(kino_country) and is_binary(tmdb_language) do
+  defp country_match(kino_country, tmdb_language)
+       when is_binary(kino_country) and is_binary(tmdb_language) do
     # Map country to expected language code
     expected_language = detect_language_from_country(kino_country)
 
     cond do
-      is_nil(expected_language) -> 0.5  # Unknown country, partial credit
-      expected_language == tmdb_language -> 1.0  # Perfect match
-      true -> 0.0  # Mismatch
+      # Unknown country, partial credit
+      is_nil(expected_language) -> 0.5
+      # Perfect match
+      expected_language == tmdb_language -> 1.0
+      # Mismatch
+      true -> 0.0
     end
   end
 
@@ -602,7 +648,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   defp try_now_playing_fallback(kino_movie, fallback_result) do
     case match_against_now_playing(kino_movie) do
       {:ok, tmdb_id, confidence} ->
-        Logger.info("✨ Matched via Now Playing fallback: #{tmdb_id} (#{trunc(confidence * 100)}%)")
+        Logger.info(
+          "✨ Matched via Now Playing fallback: #{tmdb_id} (#{trunc(confidence * 100)}%)"
+        )
+
         {:ok, tmdb_id, confidence}
 
       _ ->

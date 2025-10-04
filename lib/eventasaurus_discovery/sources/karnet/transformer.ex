@@ -51,7 +51,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
           # Pricing
           is_free: raw_event[:is_free] || false,
-          min_price: nil, # Karnet doesn't provide specific pricing
+          # Karnet doesn't provide specific pricing
+          min_price: nil,
           max_price: nil,
           currency: "PLN",
 
@@ -126,10 +127,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
       nil ->
         # Generate a unique ID from available data
         generate_external_id(event)
+
       url ->
         # Try to extract ID from URL
         case Regex.run(~r/\/(\d+)(?:\/|$)/, url) do
-          [_, id] -> "karnet_#{id}"
+          [_, id] ->
+            "karnet_#{id}"
+
           _ ->
             # Use URL hash as fallback
             "karnet_#{:crypto.hash(:md5, url) |> Base.encode16(case: :lower)}"
@@ -157,7 +161,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
       event[:date_text] ->
         case DateParser.parse_date_string(event[:date_text]) do
-          {:ok, {start_dt, _end_dt}} -> start_dt
+          {:ok, {start_dt, _end_dt}} ->
+            start_dt
+
           _ ->
             Logger.warning("Could not parse date for Karnet event: #{event[:date_text]}")
             # Fallback to 30 days from now
@@ -216,6 +222,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
       # Try to extract venue name from event data
       event[:venue_name] ->
         Logger.info("🔄 Building venue from venue_name field")
+
         %{
           name: event[:venue_name],
           latitude: default_krakow_lat,
@@ -253,11 +260,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
   end
 
   defp build_address(venue_data) do
-    parts = [
-      venue_data[:address],
-      venue_data[:city] || "Kraków",
-      venue_data[:country] || "Poland"
-    ] |> Enum.filter(&(&1 && &1 != ""))
+    parts =
+      [
+        venue_data[:address],
+        venue_data[:city] || "Kraków",
+        venue_data[:country] || "Poland"
+      ]
+      |> Enum.filter(&(&1 && &1 != ""))
 
     if Enum.any?(parts), do: Enum.join(parts, ", "), else: nil
   end
@@ -266,22 +275,25 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
     # Combine Polish and English descriptions if available
     descriptions = []
 
-    descriptions = if event[:description_translations] do
-      desc = descriptions
-      desc = if event[:description_translations]["pl"] do
-        ["PL: " <> event[:description_translations]["pl"] | desc]
-      else
-        desc
-      end
+    descriptions =
+      if event[:description_translations] do
+        desc = descriptions
 
-      if event[:description_translations]["en"] do
-        ["EN: " <> event[:description_translations]["en"] | desc]
+        desc =
+          if event[:description_translations]["pl"] do
+            ["PL: " <> event[:description_translations]["pl"] | desc]
+          else
+            desc
+          end
+
+        if event[:description_translations]["en"] do
+          ["EN: " <> event[:description_translations]["en"] | desc]
+        else
+          desc
+        end
       else
-        desc
+        descriptions
       end
-    else
-      descriptions
-    end
 
     if Enum.any?(descriptions) do
       Enum.join(descriptions, "\n\n")
@@ -298,7 +310,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
         %{
           name: extract_performer_name(first),
-          genres: [],  # Karnet doesn't provide genre info
+          # Karnet doesn't provide genre info
+          genres: [],
           image_url: nil
         }
 
@@ -310,6 +323,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
   defp extract_performer_name(performer) when is_map(performer) do
     performer[:name] || performer["name"]
   end
+
   defp extract_performer_name(name) when is_binary(name), do: name
   defp extract_performer_name(_), do: nil
 

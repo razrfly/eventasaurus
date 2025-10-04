@@ -46,13 +46,15 @@ defmodule EventasaurusDiscovery.VenueRequirementTest do
       # Create a venue for testing
       country = Repo.insert!(%Country{name: "Poland", code: "PL"})
       city = Repo.insert!(%City{name: "Kraków", country_id: country.id})
-      venue = Repo.insert!(%Venue{
-        name: "Test Venue",
-        city_id: city.id,
-        latitude: Decimal.new("50.0647"),
-        longitude: Decimal.new("19.9450"),
-        slug: "test-venue"
-      })
+
+      venue =
+        Repo.insert!(%Venue{
+          name: "Test Venue",
+          city_id: city.id,
+          latitude: Decimal.new("50.0647"),
+          longitude: Decimal.new("19.9450"),
+          slug: "test-venue"
+        })
 
       {:ok, venue: venue}
     end
@@ -101,18 +103,21 @@ defmodule EventasaurusDiscovery.VenueRequirementTest do
     setup do
       # Create test data
       country = Repo.insert!(%Country{name: "Poland", code: "PL"})
-      city = Repo.insert!(%City{
-        name: "Kraków",
-        country_id: country.id,
-        latitude: Decimal.new("50.0647"),
-        longitude: Decimal.new("19.9450")
-      })
 
-      source = Repo.insert!(%Source{
-        name: "Test Source",
-        slug: "test-source",
-        priority: 50
-      })
+      city =
+        Repo.insert!(%City{
+          name: "Kraków",
+          country_id: country.id,
+          latitude: Decimal.new("50.0647"),
+          longitude: Decimal.new("19.9450")
+        })
+
+      source =
+        Repo.insert!(%Source{
+          name: "Test Source",
+          slug: "test-source",
+          priority: 50
+        })
 
       {:ok, city: city, source: source}
     end
@@ -123,7 +128,8 @@ defmodule EventasaurusDiscovery.VenueRequirementTest do
         start_at: ~U[2024-12-01 19:00:00Z],
         external_id: "test-123",
         source_url: "https://example.com/event",
-        venue_data: nil  # No venue data
+        # No venue data
+        venue_data: nil
       }
 
       assert_raise RuntimeError, "Venue is required for all events", fn ->
@@ -265,18 +271,21 @@ defmodule EventasaurusDiscovery.VenueRequirementTest do
     setup do
       # Create test infrastructure
       country = Repo.insert!(%Country{name: "Poland", code: "PL"})
-      city = Repo.insert!(%City{
-        name: "Kraków",
-        country_id: country.id,
-        latitude: Decimal.new("50.0647"),
-        longitude: Decimal.new("19.9450")
-      })
 
-      source = Repo.insert!(%Source{
-        name: "Test Source",
-        slug: "test-source",
-        priority: 50
-      })
+      city =
+        Repo.insert!(%City{
+          name: "Kraków",
+          country_id: country.id,
+          latitude: Decimal.new("50.0647"),
+          longitude: Decimal.new("19.9450")
+        })
+
+      source =
+        Repo.insert!(%Source{
+          name: "Test Source",
+          slug: "test-source",
+          priority: 50
+        })
 
       {:ok, city: city, source: source}
     end

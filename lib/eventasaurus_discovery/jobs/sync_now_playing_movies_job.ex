@@ -100,9 +100,7 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
           trans
 
         {:error, reason} ->
-          Logger.warning(
-            "Failed to fetch translations for movie #{tmdb_id}: #{inspect(reason)}"
-          )
+          Logger.warning("Failed to fetch translations for movie #{tmdb_id}: #{inspect(reason)}")
 
           %{}
       end
@@ -177,6 +175,7 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
   # Normalize region code to uppercase 2-letter ISO code
   defp normalize_region(nil), do: "PL"
+
   defp normalize_region(region) when is_binary(region) do
     region
     |> String.upcase()
@@ -185,19 +184,24 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
       _ -> "PL"
     end
   end
+
   defp normalize_region(_), do: "PL"
 
   # Coerce pages parameter to valid positive integer
   defp coerce_pages(nil), do: 3
   defp coerce_pages(p) when is_integer(p) and p > 0 and p <= 20, do: p
-  defp coerce_pages(p) when is_integer(p) and p > 20, do: 20  # Cap at 20 pages
+  # Cap at 20 pages
+  defp coerce_pages(p) when is_integer(p) and p > 20, do: 20
+
   defp coerce_pages(p) when is_binary(p) do
     case Integer.parse(p) do
       {i, ""} when i > 0 and i <= 20 -> i
-      {i, ""} when i > 20 -> 20  # Cap at 20 pages
+      # Cap at 20 pages
+      {i, ""} when i > 20 -> 20
       _ -> 3
     end
   end
+
   defp coerce_pages(_), do: 3
 
   # Deep merge metadata to preserve existing data
@@ -210,10 +214,12 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
     # Deep merge translations by locale
     existing_translations = Map.get(existing, "translations", %{})
     incoming_translations = Map.get(incoming, "translations", %{})
-    merged_translations = Map.merge(existing_translations, incoming_translations, fn _locale, v1, v2 ->
-      # If both values are maps, merge them; otherwise prefer incoming
-      if is_map(v1) and is_map(v2), do: Map.merge(v1, v2), else: v2
-    end)
+
+    merged_translations =
+      Map.merge(existing_translations, incoming_translations, fn _locale, v1, v2 ->
+        # If both values are maps, merge them; otherwise prefer incoming
+        if is_map(v1) and is_map(v2), do: Map.merge(v1, v2), else: v2
+      end)
 
     # Preserve first_seen_in_theaters if it exists
     existing_first_seen = Map.get(existing, "first_seen_in_theaters")
@@ -226,7 +232,10 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
     end)
     |> Map.put("translations", merged_translations)
     |> Map.put("now_playing_regions", merged_regions)
-    |> Map.put("first_seen_in_theaters", existing_first_seen || Map.get(incoming, "first_seen_in_theaters"))
+    |> Map.put(
+      "first_seen_in_theaters",
+      existing_first_seen || Map.get(incoming, "first_seen_in_theaters")
+    )
     |> Map.put("last_synced_at", DateTime.utc_now() |> DateTime.to_iso8601())
   end
 end

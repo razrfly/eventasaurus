@@ -60,7 +60,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
     # Extract movie metadata
     movie_data = MovieExtractor.extract(html)
 
-    Logger.debug("📋 Extracted movie data: #{movie_data.polish_title || movie_data.original_title}")
+    Logger.debug(
+      "📋 Extracted movie data: #{movie_data.polish_title || movie_data.original_title}"
+    )
 
     # Match to TMDB
     case TmdbMatcher.match_movie(movie_data) do
@@ -70,19 +72,22 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
 
         case TmdbMatcher.find_or_create_movie(tmdb_id) do
           {:ok, movie} ->
-            Logger.info("✅ Auto-matched (#{match_type}): #{movie.title} (#{trunc(confidence * 100)}% confidence)")
+            Logger.info(
+              "✅ Auto-matched (#{match_type}): #{movie.title} (#{trunc(confidence * 100)}% confidence)"
+            )
 
             # Store Kino Krakow slug in movie metadata for later lookups
             store_kino_krakow_slug(movie, movie_slug)
 
-            {:ok, %{
-              status: :matched,
-              confidence: confidence,
-              movie_id: movie.id,
-              movie_slug: movie_slug,
-              tmdb_id: tmdb_id,
-              match_type: match_type
-            }}
+            {:ok,
+             %{
+               status: :matched,
+               confidence: confidence,
+               movie_id: movie.id,
+               movie_slug: movie_slug,
+               tmdb_id: tmdb_id,
+               match_type: match_type
+             }}
 
           {:error, reason} ->
             Logger.error("❌ Failed to create movie #{tmdb_id}: #{inspect(reason)}")
@@ -92,28 +97,34 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
       {:needs_review, _movie_data, _candidates} ->
         # Medium confidence (50-69%) - needs manual review
         # Return ERROR so Oban marks as failed and visible in dashboard
-        Logger.error("❌ TMDB matching failed - needs review: #{movie_data.polish_title || movie_data.original_title} (50-69% confidence)")
+        Logger.error(
+          "❌ TMDB matching failed - needs review: #{movie_data.polish_title || movie_data.original_title} (50-69% confidence)"
+        )
 
-        {:error, %{
-          reason: :tmdb_needs_review,
-          movie_slug: movie_slug,
-          polish_title: movie_data.polish_title,
-          original_title: movie_data.original_title,
-          confidence_range: "50-69%"
-        }}
+        {:error,
+         %{
+           reason: :tmdb_needs_review,
+           movie_slug: movie_slug,
+           polish_title: movie_data.polish_title,
+           original_title: movie_data.original_title,
+           confidence_range: "50-69%"
+         }}
 
       {:error, :low_confidence} ->
         # Low confidence (<50%) - no reliable match
         # Return ERROR so Oban marks as failed and visible in dashboard
-        Logger.error("❌ TMDB matching failed - low confidence: #{movie_data.polish_title || movie_data.original_title} (<50%)")
+        Logger.error(
+          "❌ TMDB matching failed - low confidence: #{movie_data.polish_title || movie_data.original_title} (<50%)"
+        )
 
-        {:error, %{
-          reason: :tmdb_low_confidence,
-          movie_slug: movie_slug,
-          polish_title: movie_data.polish_title,
-          original_title: movie_data.original_title,
-          confidence_range: "<50%"
-        }}
+        {:error,
+         %{
+           reason: :tmdb_low_confidence,
+           movie_slug: movie_slug,
+           polish_title: movie_data.polish_title,
+           original_title: movie_data.original_title,
+           confidence_range: "<50%"
+         }}
 
       {:error, :missing_title} ->
         Logger.error("❌ TMDB matching failed - missing title for movie: #{movie_slug}")
@@ -121,14 +132,17 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
 
       {:error, :no_results} ->
         # Return ERROR so Oban marks as failed and visible in dashboard
-        Logger.error("❌ TMDB matching failed - no results for: #{movie_data.polish_title || movie_data.original_title}")
+        Logger.error(
+          "❌ TMDB matching failed - no results for: #{movie_data.polish_title || movie_data.original_title}"
+        )
 
-        {:error, %{
-          reason: :tmdb_no_results,
-          movie_slug: movie_slug,
-          polish_title: movie_data.polish_title,
-          original_title: movie_data.original_title
-        }}
+        {:error,
+         %{
+           reason: :tmdb_no_results,
+           movie_slug: movie_slug,
+           polish_title: movie_data.polish_title,
+           original_title: movie_data.original_title
+         }}
 
       {:error, reason} ->
         # Transient errors (network, TMDB API) - let Oban retry
@@ -148,7 +162,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
         :ok
 
       {:error, changeset} ->
-        Logger.error("❌ Failed to store Kino Krakow slug in metadata: #{inspect(changeset.errors)}")
+        Logger.error(
+          "❌ Failed to store Kino Krakow slug in metadata: #{inspect(changeset.errors)}"
+        )
+
         :error
     end
   end

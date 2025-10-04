@@ -26,6 +26,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     Please use EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob instead.
     This ensures all events go through the unified Processor with venue requirements.
     """)
+
     {:discard, :deprecated_job}
   end
 end

@@ -108,10 +108,11 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
   describe "parse_datetime_with_timezone/2" do
     test "parses ISO8601 datetime with timezone offset" do
       # Already has timezone offset (-05:00 for EST)
-      utc_dt = TimezoneConverter.parse_datetime_with_timezone(
-        "2025-01-16T20:00:00-05:00",
-        "America/New_York"
-      )
+      utc_dt =
+        TimezoneConverter.parse_datetime_with_timezone(
+          "2025-01-16T20:00:00-05:00",
+          "America/New_York"
+        )
 
       assert utc_dt.day == 17
       assert utc_dt.hour == 1
@@ -120,24 +121,28 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
 
     test "parses ISO8601 datetime without timezone using venue timezone" do
       # No timezone offset, use venue timezone
-      utc_dt = TimezoneConverter.parse_datetime_with_timezone(
-        "2025-01-16T20:00:00",
-        "Europe/Warsaw"
-      )
+      utc_dt =
+        TimezoneConverter.parse_datetime_with_timezone(
+          "2025-01-16T20:00:00",
+          "Europe/Warsaw"
+        )
 
       assert utc_dt.day == 16
-      assert utc_dt.hour == 19  # 8PM CET = 7PM UTC (winter)
+      # 8PM CET = 7PM UTC (winter)
+      assert utc_dt.hour == 19
     end
 
     test "parses date-only string with default time in venue timezone" do
       # Date only, defaults to 8:00 PM in venue timezone
-      utc_dt = TimezoneConverter.parse_datetime_with_timezone(
-        "2025-01-16",
-        "America/New_York"
-      )
+      utc_dt =
+        TimezoneConverter.parse_datetime_with_timezone(
+          "2025-01-16",
+          "America/New_York"
+        )
 
       assert utc_dt.day == 17
-      assert utc_dt.hour == 1  # 8PM EST = 1AM UTC next day
+      # 8PM EST = 1AM UTC next day
+      assert utc_dt.hour == 1
     end
 
     test "handles nil date string" do
@@ -162,7 +167,8 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
 
     test "infers New York timezone from NYC coordinates" do
       # New York City
-      assert TimezoneConverter.infer_timezone_from_location(40.7128, -74.0060) == "America/New_York"
+      assert TimezoneConverter.infer_timezone_from_location(40.7128, -74.0060) ==
+               "America/New_York"
     end
 
     test "infers Los Angeles timezone from LA coordinates" do
@@ -173,7 +179,8 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
 
     test "infers Chicago timezone from Chicago coordinates" do
       # Chicago
-      assert TimezoneConverter.infer_timezone_from_location(41.8781, -87.6298) == "America/Chicago"
+      assert TimezoneConverter.infer_timezone_from_location(41.8781, -87.6298) ==
+               "America/Chicago"
     end
 
     test "infers London timezone from London coordinates" do
@@ -217,7 +224,10 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.TimezoneConverterTest do
   describe "timezone_to_city/1" do
     test "maps timezone to city name" do
       assert TimezoneConverter.timezone_to_city("Europe/Warsaw") == {"Warsaw", "Poland"}
-      assert TimezoneConverter.timezone_to_city("America/New_York") == {"New York", "United States"}
+
+      assert TimezoneConverter.timezone_to_city("America/New_York") ==
+               {"New York", "United States"}
+
       assert TimezoneConverter.timezone_to_city("Europe/London") == {"London", "United Kingdom"}
       assert TimezoneConverter.timezone_to_city("Asia/Tokyo") == {"Tokyo", "Japan"}
     end

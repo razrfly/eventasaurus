@@ -17,14 +17,16 @@ IO.puts("=" <> String.duplicate("=", 60))
 # This is the exact pattern from production
 corrupt_data = %{
   "event_data" => %{
-    "title" => <<87, 79, 82, 76, 68, 32, 72, 69, 88, 32, 84, 79, 85, 82, 32, 50, 48, 50, 53, 32, 226, 32, 70>>,
+    "title" =>
+      <<87, 79, 82, 76, 68, 32, 72, 69, 88, 32, 84, 79, 85, 82, 32, 50, 48, 50, 53, 32, 226, 32,
+        70>>,
     "performers" => [
-      %{"name" => "Artist with" <> <<0xe2, 0x20>> <> "corruption"},
+      %{"name" => "Artist with" <> <<0xE2, 0x20>> <> "corruption"},
       %{"name" => "Normal Artist"},
-      %{"name" => <<0xe2>> <> "Broken"}
+      %{"name" => <<0xE2>> <> "Broken"}
     ],
     "venue" => %{
-      "name" => "Venue" <> <<0xe2, 0x94>> <> "Name"
+      "name" => "Venue" <> <<0xE2, 0x94>> <> "Name"
     }
   }
 }
@@ -35,10 +37,13 @@ clean_data = UTF8.validate_map_strings(corrupt_data)
 # Verify all strings are valid
 all_valid =
   String.valid?(clean_data["event_data"]["title"]) and
-  Enum.all?(clean_data["event_data"]["performers"], fn p -> String.valid?(p["name"]) end) and
-  String.valid?(clean_data["event_data"]["venue"]["name"])
+    Enum.all?(clean_data["event_data"]["performers"], fn p -> String.valid?(p["name"]) end) and
+    String.valid?(clean_data["event_data"]["venue"]["name"])
 
-IO.puts("  Original title bytes: #{inspect(:binary.bin_to_list(corrupt_data["event_data"]["title"]))}")
+IO.puts(
+  "  Original title bytes: #{inspect(:binary.bin_to_list(corrupt_data["event_data"]["title"]))}"
+)
+
 IO.puts("  Cleaned title: #{clean_data["event_data"]["title"]}")
 IO.puts("  All strings valid after cleaning? #{if all_valid, do: "✅", else: "❌"}")
 
@@ -47,13 +52,17 @@ IO.puts("\nTest 2: Performer Name Processing")
 IO.puts("=" <> String.duplicate("=", 60))
 
 corrupt_performer_names = [
-  <<0xe2, 0x20, 0x46>> <> "oo Fighters",  # Corrupted "Foo Fighters"
-  "Kendrick" <> <<0xe2>> <> "Lamar",      # Corrupted dash
-  <<0xe2, 0x94>>,                         # Just corruption
+  # Corrupted "Foo Fighters"
+  <<0xE2, 0x20, 0x46>> <> "oo Fighters",
+  # Corrupted dash
+  "Kendrick" <> <<0xE2>> <> "Lamar",
+  # Just corruption
+  <<0xE2, 0x94>>,
   "Normal Name"
 ]
 
 IO.puts("  Testing performer name cleaning:")
+
 for name <- corrupt_performer_names do
   clean = UTF8.ensure_valid_utf8(name)
   valid = String.valid?(clean)
@@ -68,9 +77,9 @@ IO.puts("=" <> String.duplicate("=", 60))
 job_args = %{
   "event_data" => %{
     "external_id" => "tm_123",
-    "title" => "Concert" <> <<0xe2, 0x20>> <> "2025",
+    "title" => "Concert" <> <<0xE2, 0x20>> <> "2025",
     "performers" => [
-      %{"name" => "Band" <> <<0xe2>>}
+      %{"name" => "Band" <> <<0xE2>>}
     ]
   },
   "source_id" => 1
@@ -88,7 +97,7 @@ final_clean = UTF8.validate_map_strings(decoded)
 
 all_valid_final =
   String.valid?(final_clean["event_data"]["title"]) and
-  Enum.all?(final_clean["event_data"]["performers"], fn p -> String.valid?(p["name"]) end)
+    Enum.all?(final_clean["event_data"]["performers"], fn p -> String.valid?(p["name"]) end)
 
 IO.puts("  Original has corruption: #{not String.valid?(job_args["event_data"]["title"])}")
 IO.puts("  After first clean: #{String.valid?(clean_args["event_data"]["title"])}")
@@ -102,22 +111,24 @@ IO.puts("=" <> String.duplicate("=", 60))
 
 test_pairs = [
   {"Valid String", "Another Valid"},
-  {<<0xe2, 0x20>> <> "Corrupted", "Normal"},
-  {"Normal", <<0xe2>> <> "Corrupted"},
-  {<<0xe2, 0x94>>, <<0xe2, 0x20>>}
+  {<<0xE2, 0x20>> <> "Corrupted", "Normal"},
+  {"Normal", <<0xE2>> <> "Corrupted"},
+  {<<0xE2, 0x94>>, <<0xE2, 0x20>>}
 ]
 
 IO.puts("  Testing jaro_distance with UTF-8 cleaning:")
+
 for {s1, s2} <- test_pairs do
   clean1 = UTF8.ensure_valid_utf8(s1)
   clean2 = UTF8.ensure_valid_utf8(s2)
 
-  result = try do
-    distance = String.jaro_distance(clean1, clean2)
-    "✅ Distance: #{Float.round(distance, 3)}"
-  rescue
-    e -> "❌ Error: #{inspect(e)}"
-  end
+  result =
+    try do
+      distance = String.jaro_distance(clean1, clean2)
+      "✅ Distance: #{Float.round(distance, 3)}"
+    rescue
+      e -> "❌ Error: #{inspect(e)}"
+    end
 
   IO.puts("    #{result} for #{inspect(clean1, limit: 20)} vs #{inspect(clean2, limit: 20)}")
 end
@@ -130,7 +141,7 @@ if Code.ensure_loaded?(EventasaurusDiscovery.Performers.Performer) do
   alias EventasaurusDiscovery.Performers.Performer
 
   corrupt_attrs = %{
-    name: "Artist" <> <<0xe2, 0x20>> <> "Name",
+    name: "Artist" <> <<0xE2, 0x20>> <> "Name",
     source_id: 1
   }
 
@@ -170,6 +181,7 @@ if Enum.empty?(failed_jobs) do
   IO.puts("  ✅ No failed jobs found")
 else
   IO.puts("  Found #{length(failed_jobs)} failed jobs:")
+
   for job <- failed_jobs do
     # Try to detect UTF-8 issues in args using JSON encoding
     has_corruption =
@@ -180,6 +192,7 @@ else
 
     IO.puts("    Job #{job.id}: #{job.worker}")
     IO.puts("      State: #{job.state}, Attempt: #{job.attempt}/#{job.max_attempts}")
+
     if has_corruption do
       IO.puts("      ⚠️  Possible UTF-8 corruption detected")
     end

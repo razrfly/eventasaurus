@@ -59,7 +59,8 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
     # Get event image URL
     image_url = get_event_image_url(assigns.event)
 
-    assigns = assigns
+    assigns =
+      assigns
       |> assign(:distance_text, distance_text)
       |> assign(:display_title, display_title)
       |> assign(:formatted_date, formatted_date)
@@ -130,16 +131,22 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
 
   defp get_localized_title(event, language) do
     case event.title_translations do
-      nil -> event.title
+      nil ->
+        event.title
+
       translations when is_map(translations) ->
         translations[language] || translations["en"] || event.title
-      _ -> event.title
+
+      _ ->
+        event.title
     end
   end
 
   defp format_event_date(event) do
     case event.starts_at do
-      nil -> gettext("Date TBD")
+      nil ->
+        gettext("Date TBD")
+
       date ->
         # Format as "Dec 25, 2024 at 7:00 PM"
         # Note: %I is 12-hour format with leading zeros, we'll trim them
@@ -159,19 +166,25 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   defp get_primary_source(event) do
     # Get primary source based on priority and last_seen_at, similar to PublicEventShowLive
     case event.sources do
-      [] -> nil
+      [] ->
+        nil
+
       sources when is_list(sources) ->
         sources
         |> Enum.sort_by(fn source ->
           priority =
             case source.metadata do
-              %{"priority" => p} when is_integer(p) -> p
+              %{"priority" => p} when is_integer(p) ->
+                p
+
               %{"priority" => p} when is_binary(p) ->
                 case Integer.parse(p) do
                   {num, _} -> num
                   _ -> 10
                 end
-              _ -> 10
+
+              _ ->
+                10
             end
 
           # Newer timestamps first (negative for descending sort)
@@ -184,7 +197,9 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
           {priority, ts}
         end)
         |> List.first()
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -224,9 +239,11 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   end
 
   defp format_currency(amount, currency) when is_nil(amount) or is_nil(currency), do: nil
+
   defp format_currency(amount, currency) do
     dec = to_decimal(amount)
     num = Decimal.to_string(dec, :normal)
+
     case String.upcase(currency) do
       "USD" -> "$" <> num
       "EUR" -> "€" <> num
@@ -241,6 +258,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   defp is_zero?(%Decimal{} = d), do: Decimal.compare(d, 0) == :eq
   defp is_zero?(n) when is_integer(n), do: n == 0
   defp is_zero?(n) when is_float(n), do: n == 0.0
+
   defp is_zero?(s) when is_binary(s) do
     case Decimal.new(s) do
       %Decimal{} = d -> Decimal.compare(d, 0) == :eq
@@ -263,6 +281,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   defp to_decimal(nil), do: nil
   defp to_decimal(n) when is_integer(n), do: Decimal.new(n)
   defp to_decimal(n) when is_float(n), do: Decimal.from_float(n)
+
   defp to_decimal(s) when is_binary(s) do
     Decimal.new(s)
   rescue
@@ -278,7 +297,9 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
         |> Enum.find_value(fn source ->
           # Direct image_url field (most common)
           case source do
-            %{image_url: url} when is_binary(url) and url != "" -> url
+            %{image_url: url} when is_binary(url) and url != "" ->
+              url
+
             _ ->
               # Check metadata for image URLs
               case source.metadata do
@@ -294,5 +315,4 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
         nil
     end
   end
-
 end

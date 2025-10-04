@@ -51,17 +51,20 @@ defmodule Mix.Tasks.Bandsintown.TestFix do
 
     # Transform using Client module
     alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
-    transformed = Client.__info__(:functions)
-    |> Keyword.has_key?(:transform_api_event)
-    |> case do
-      true ->
-        # Access private function through module
-        apply(Client, :transform_api_event, [api_event])
-      false ->
-        # Call through fetch pipeline
-        Logger.warning("Cannot access transform_api_event directly, testing through pipeline")
-        nil
-    end
+
+    transformed =
+      Client.__info__(:functions)
+      |> Keyword.has_key?(:transform_api_event)
+      |> case do
+        true ->
+          # Access private function through module
+          apply(Client, :transform_api_event, [api_event])
+
+        false ->
+          # Call through fetch pipeline
+          Logger.warning("Cannot access transform_api_event directly, testing through pipeline")
+          nil
+      end
 
     if transformed do
       Logger.info("✅ Transformed event data:")
@@ -161,12 +164,14 @@ defmodule Mix.Tasks.Bandsintown.TestFix do
     # Check for recently created events from Bandsintown
     recent_cutoff = DateTime.utc_now() |> DateTime.add(-60, :second)
 
-    query = from pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
-      join: s in EventasaurusDiscovery.Sources.Source,
-      on: s.id == pes.source_id,
-      where: s.slug == "bandsintown",
-      where: pes.inserted_at > ^recent_cutoff,
-      select: {pes.external_id, pes.inserted_at}
+    query =
+      from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+        join: s in EventasaurusDiscovery.Sources.Source,
+        on: s.id == pes.source_id,
+        where: s.slug == "bandsintown",
+        where: pes.inserted_at > ^recent_cutoff,
+        select: {pes.external_id, pes.inserted_at}
+      )
 
     results = Repo.all(query)
 

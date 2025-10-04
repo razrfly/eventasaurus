@@ -6,17 +6,26 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
 
     test "calculates correct chunk count and sizes" do
       test_cases = [
-        {250, 3, [100, 100, 50]},  # 100 + 100 + 50
-        {200, 2, [100, 100]},      # 100 + 100
-        {150, 2, [100, 50]},       # 100 + 50
-        {100, 1, [100]},           # exactly 100 - should chunk into 1
-        {1000, 10, [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]} # 10 chunks of 100 each
+        # 100 + 100 + 50
+        {250, 3, [100, 100, 50]},
+        # 100 + 100
+        {200, 2, [100, 100]},
+        # 100 + 50
+        {150, 2, [100, 50]},
+        # exactly 100 - should chunk into 1
+        {100, 1, [100]},
+        # 10 chunks of 100 each
+        {1000, 10, [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]}
       ]
 
       Enum.each(test_cases, fn {limit, expected_chunks, expected_sizes} ->
         {chunks, sizes} = calculate_chunking(limit)
-        assert chunks == expected_chunks, "Limit #{limit}: expected #{expected_chunks} chunks, got #{chunks}"
-        assert sizes == expected_sizes, "Limit #{limit}: expected sizes #{inspect(expected_sizes)}, got #{inspect(sizes)}"
+
+        assert chunks == expected_chunks,
+               "Limit #{limit}: expected #{expected_chunks} chunks, got #{chunks}"
+
+        assert sizes == expected_sizes,
+               "Limit #{limit}: expected sizes #{inspect(expected_sizes)}, got #{inspect(sizes)}"
       end)
     end
 
@@ -64,15 +73,16 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
     defp calculate_chunking(limit) do
       chunks = div(limit, @chunk_size) + if(rem(limit, @chunk_size) > 0, do: 1, else: 0)
 
-      sizes = Enum.map(0..(chunks - 1), fn chunk_idx ->
-        if chunk_idx == chunks - 1 do
-          # Last chunk might be smaller
-          remaining = rem(limit, @chunk_size)
-          if remaining > 0, do: remaining, else: @chunk_size
-        else
-          @chunk_size
-        end
-      end)
+      sizes =
+        Enum.map(0..(chunks - 1), fn chunk_idx ->
+          if chunk_idx == chunks - 1 do
+            # Last chunk might be smaller
+            remaining = rem(limit, @chunk_size)
+            if remaining > 0, do: remaining, else: @chunk_size
+          else
+            @chunk_size
+          end
+        end)
 
       {chunks, sizes}
     end
@@ -91,10 +101,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
       # Simulate the guard condition from perform/1
       test_cases = [
         # {limit, has_chunk_key, should_trigger_chunking}
-        {150, false, true},   # Large limit, no chunk key -> should chunk
-        {150, true, false},   # Large limit, has chunk key -> shouldn't chunk (already a chunk)
-        {50, false, false},   # Small limit, no chunk key -> shouldn't chunk
-        {50, true, false},    # Small limit, has chunk key -> shouldn't chunk
+        # Large limit, no chunk key -> should chunk
+        {150, false, true},
+        # Large limit, has chunk key -> shouldn't chunk (already a chunk)
+        {150, true, false},
+        # Small limit, no chunk key -> shouldn't chunk
+        {50, false, false},
+        # Small limit, has chunk key -> shouldn't chunk
+        {50, true, false}
       ]
 
       Enum.each(test_cases, fn {limit, has_chunk_key, expected_chunking} ->
@@ -103,7 +117,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
         should_chunk = limit > @chunk_size and not Map.has_key?(args, "chunk")
 
         assert should_chunk == expected_chunking,
-          "Limit #{limit}, chunk_key: #{has_chunk_key} -> expected chunking: #{expected_chunking}, got: #{should_chunk}"
+               "Limit #{limit}, chunk_key: #{has_chunk_key} -> expected chunking: #{expected_chunking}, got: #{should_chunk}"
       end)
     end
   end
@@ -114,20 +128,26 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
     test "enforces exact budget limits per chunk" do
       test_cases = [
         # {chunk_limit, start_page, skip_in_first, expected_pages, expected_total_events}
-        {100, 1, 0, 9, 100},    # Chunk 1: pages 1-9, events 0-99
-        {100, 9, 4, 9, 100},    # Chunk 2: pages 9-17, events 100-199 (skip 4 on page 9)
-        {100, 17, 8, 9, 100},   # Chunk 3: pages 17-25, events 200-299 (skip 8 on page 17)
-        {50, 1, 0, 5, 50},      # Smaller chunk: pages 1-5, events 0-49
+        # Chunk 1: pages 1-9, events 0-99
+        {100, 1, 0, 9, 100},
+        # Chunk 2: pages 9-17, events 100-199 (skip 4 on page 9)
+        {100, 9, 4, 9, 100},
+        # Chunk 3: pages 17-25, events 200-299 (skip 8 on page 17)
+        {100, 17, 8, 9, 100},
+        # Smaller chunk: pages 1-5, events 0-49
+        {50, 1, 0, 5, 50}
       ]
 
-      Enum.each(test_cases, fn {chunk_limit, start_page, skip_in_first, expected_pages, expected_total_events} ->
-        {pages_scheduled, total_budget_used} = simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first)
+      Enum.each(test_cases, fn {chunk_limit, start_page, skip_in_first, expected_pages,
+                                expected_total_events} ->
+        {pages_scheduled, total_budget_used} =
+          simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first)
 
         assert pages_scheduled <= expected_pages,
-          "Chunk #{chunk_limit} at page #{start_page}: scheduled #{pages_scheduled} pages, expected ≤ #{expected_pages}"
+               "Chunk #{chunk_limit} at page #{start_page}: scheduled #{pages_scheduled} pages, expected ≤ #{expected_pages}"
 
         assert total_budget_used == expected_total_events,
-          "Chunk #{chunk_limit} at page #{start_page}: used #{total_budget_used} events, expected #{expected_total_events}"
+               "Chunk #{chunk_limit} at page #{start_page}: used #{total_budget_used} events, expected #{expected_total_events}"
       end)
     end
 
@@ -137,14 +157,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
       start_page = 1
       skip_in_first = 0
 
-      {_pages_scheduled, total_budget_used} = simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first)
+      {_pages_scheduled, total_budget_used} =
+        simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first)
 
       assert total_budget_used == chunk_limit,
-        "Should use exactly #{chunk_limit} events, but used #{total_budget_used}"
+             "Should use exactly #{chunk_limit} events, but used #{total_budget_used}"
     end
 
     defp simulate_chunk_scheduling(chunk_limit, start_page, skip_in_first) do
-      max_pages = div(chunk_limit, @events_per_page) + if(rem(chunk_limit, @events_per_page) > 0, do: 1, else: 0)
+      max_pages =
+        div(chunk_limit, @events_per_page) +
+          if(rem(chunk_limit, @events_per_page) > 0, do: 1, else: 0)
 
       {page_jobs, _remaining} =
         start_page..(start_page + max_pages - 1)
@@ -152,12 +175,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJobChunkedTest do
           if remaining_budget <= 0 do
             {:skip, 0}
           else
-            page_budget = if page_num == start_page do
-              events_available = @events_per_page - skip_in_first
-              min(remaining_budget, events_available)
-            else
-              min(remaining_budget, @events_per_page)
-            end
+            page_budget =
+              if page_num == start_page do
+                events_available = @events_per_page - skip_in_first
+                min(remaining_budget, events_available)
+              else
+                min(remaining_budget, @events_per_page)
+              end
 
             {{page_num, page_budget}, remaining_budget - page_budget}
           end

@@ -10,8 +10,9 @@ IO.puts("\n=== Simulating Production UTF-8 Error (0xc5 0x73) ===\n")
 
 # The actual corrupt bytes from production error
 # 0xc5 is expecting a continuation byte, but 0x73 ('s') is not valid
-corrupt_name = <<82, 111, 99, 107, 45, 83, 101, 114, 119, 105, 115, 32,
-                 80, 105, 111, 116, 114, 32, 75, 111, 0xc5, 0x73, 107, 105>>
+corrupt_name =
+  <<82, 111, 99, 107, 45, 83, 101, 114, 119, 105, 115, 32, 80, 105, 111, 116, 114, 32, 75, 111,
+    0xC5, 0x73, 107, 105>>
 
 IO.puts("Test 1: Corrupt Name Analysis")
 IO.puts("=" <> String.duplicate("=", 60))
@@ -34,10 +35,12 @@ corrupt_attrs = %{
 }
 
 IO.puts("  Testing find_or_create_performer with corrupt name...")
+
 case PerformerStore.find_or_create_performer(corrupt_attrs) do
   {:ok, performer} ->
     IO.puts("  ✅ Success! Created/found performer: #{performer.name}")
     IO.puts("     ID: #{performer.id}, Slug: #{performer.slug}")
+
   {:error, reason} ->
     IO.puts("  ❌ Error: #{inspect(reason)}")
 end
@@ -48,10 +51,11 @@ IO.puts("=" <> String.duplicate("=", 60))
 
 alias EventasaurusDiscovery.Performers.Performer
 
-changeset = Performer.changeset(%Performer{}, %{
-  name: corrupt_name,
-  source_id: 1
-})
+changeset =
+  Performer.changeset(%Performer{}, %{
+    name: corrupt_name,
+    source_id: 1
+  })
 
 if changeset.valid? do
   name = Ecto.Changeset.get_field(changeset, :name)
@@ -73,7 +77,8 @@ job_args = %{
   "event_data" => %{
     "performers" => [
       %{"name" => "Kwoon"},
-      %{"name" => corrupt_name}  # The corrupt one
+      # The corrupt one
+      %{"name" => corrupt_name}
     ]
   },
   "source_id" => 1
@@ -87,6 +92,7 @@ IO.puts("    Valid UTF-8? #{String.valid?(performer2_name)}")
 
 IO.puts("\n  Step 2: Process performers (Sources.Processor)")
 performers_data = clean_args["event_data"]["performers"]
+
 for performer_data <- performers_data do
   name = performer_data["name"]
   IO.puts("    Processing: #{inspect(name, limit: 30)}")
@@ -97,6 +103,7 @@ for performer_data <- performers_data do
   case PerformerStore.find_or_create_performer(attrs_with_source) do
     {:ok, performer} ->
       IO.puts("      ✅ Created/found: #{performer.name} (ID: #{performer.id})")
+
     {:error, reason} ->
       IO.puts("      ❌ Error: #{inspect(reason)}")
   end

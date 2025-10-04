@@ -234,9 +234,9 @@ defmodule EventasaurusApp.Accounts do
         from(u in User,
           where:
             (ilike(u.name, ^search_pattern) or
-             ilike(u.username, ^search_pattern) or
-             ilike(u.email, ^search_pattern)) and
-            (^(exclude_ids == []) or u.id not in ^exclude_ids),
+               ilike(u.username, ^search_pattern) or
+               ilike(u.email, ^search_pattern)) and
+              (^(exclude_ids == []) or u.id not in ^exclude_ids),
           limit: ^limit,
           order_by: [
             # Prioritize exact matches
@@ -247,12 +247,20 @@ defmodule EventasaurusApp.Accounts do
               ELSE 1
             END", u.name, ^search_query, u.username, ^search_query, u.email, ^search_query),
             # Then prioritize starts-with matches
-            fragment("CASE
+            fragment(
+              "CASE
               WHEN lower(?) LIKE lower(?) THEN 0
               WHEN lower(?) LIKE lower(?) THEN 0
               WHEN lower(?) LIKE lower(?) THEN 0
               ELSE 1
-            END", u.name, ^"#{search_query}%", u.username, ^"#{search_query}%", u.email, ^"#{search_query}%"),
+            END",
+              u.name,
+              ^"#{search_query}%",
+              u.username,
+              ^"#{search_query}%",
+              u.email,
+              ^"#{search_query}%"
+            ),
             # Finally order by name
             u.name
           ]

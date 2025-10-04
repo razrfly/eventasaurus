@@ -218,9 +218,9 @@ defmodule EventasaurusApp.GuestInvitations do
     freq = config.frequency_thresholds
 
     unless freq.excellent >= freq.good and
-           freq.good >= freq.moderate and
-           freq.moderate >= freq.some and
-           freq.some >= freq.minimal do
+             freq.good >= freq.moderate and
+             freq.moderate >= freq.some and
+             freq.some >= freq.minimal do
       raise ArgumentError, "Frequency thresholds must be in descending order"
     end
 

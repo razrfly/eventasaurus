@@ -37,7 +37,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
          true <- page_number >= 1 || {:error, "page_number", "must be >= 1"},
          true <- source_id > 0 || {:error, "source_id", "must be > 0"},
          true <- city_id > 0 || {:error, "city_id", "must be > 0"} do
-
       # Optional arguments with defaults
       total_pages = validate_optional_integer(args["total_pages"])
       city_name = args["city_name"] || "Unknown"
@@ -81,34 +80,42 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   # Validation helpers
   defp validate_integer(nil, field), do: {:error, field, "is required"}
   defp validate_integer(value, _field) when is_integer(value), do: {:ok, value}
+
   defp validate_integer(value, field) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} -> {:ok, int}
       _ -> {:error, field, "invalid integer: #{inspect(value)}"}
     end
   end
-  defp validate_integer(value, field), do: {:error, field, "expected integer, got: #{inspect(value)}"}
+
+  defp validate_integer(value, field),
+    do: {:error, field, "expected integer, got: #{inspect(value)}"}
 
   defp validate_float(nil, field), do: {:error, field, "is required"}
   defp validate_float(value, _field) when is_float(value), do: {:ok, value}
   defp validate_float(value, _field) when is_integer(value), do: {:ok, value * 1.0}
+
   defp validate_float(value, field) when is_binary(value) do
     case Float.parse(value) do
       {float, ""} -> {:ok, float}
       _ -> {:error, field, "invalid float: #{inspect(value)}"}
     end
   end
+
   defp validate_float(value, field), do: {:error, field, "expected float, got: #{inspect(value)}"}
 
   defp validate_optional_integer(nil), do: nil
   defp validate_optional_integer(value) when is_integer(value) and value > 0, do: value
-  defp validate_optional_integer(value) when is_integer(value), do: nil  # Reject non-positive
+  # Reject non-positive
+  defp validate_optional_integer(value) when is_integer(value), do: nil
+
   defp validate_optional_integer(value) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int > 0 -> int
       _ -> nil
     end
   end
+
   defp validate_optional_integer(_), do: nil
 
   defp process_api_response(json_data, page_number, source_id, city_id) do
@@ -132,11 +139,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       Detail jobs scheduled: #{scheduled_count}
       """)
 
-      {:ok, %{
-        page: page_number,
-        events_found: length(events),
-        jobs_scheduled: scheduled_count
-      }}
+      {:ok,
+       %{
+         page: page_number,
+         events_found: length(events),
+         jobs_scheduled: scheduled_count
+       }}
     else
       Logger.info("📭 No events on page #{page_number}")
       {:ok, :no_events}
@@ -208,20 +216,24 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
 
     # Add bandsintown_ prefix to external_id for freshness checking
     # This matches the format stored in public_event_sources table
-    events_with_prefixed_ids = Enum.map(events, fn event ->
-      Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
-    end)
+    events_with_prefixed_ids =
+      Enum.map(events, fn event ->
+        Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
+      end)
 
     # Filter to events needing processing based on freshness
-    events_to_process = EventFreshnessChecker.filter_events_needing_processing(
-      events_with_prefixed_ids,
-      source_id
-    )
+    events_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        events_with_prefixed_ids,
+        source_id
+      )
 
     skipped = length(events) - length(events_to_process)
     threshold = EventFreshnessChecker.get_threshold()
 
-    Logger.info("📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)")
+    Logger.info(
+      "📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)"
+    )
 
     # Calculate base delay for this page to distribute load
     # Use consistent page offset (30s per page) to prevent scheduling collisions
@@ -233,19 +245,20 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
-        delay_seconds = base_delay + (index * Config.rate_limit())
+        delay_seconds = base_delay + index * Config.rate_limit()
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         # Clean UTF-8 before storing in database
-        job_args = %{
-          "event_data" => event,
-          "source_id" => source_id,
-          "city_id" => city_id,
-          # external_id already has bandsintown_ prefix from freshness check above
-          "external_id" => event["external_id"],
-          "from_page" => page_number
-        }
-        |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
+        job_args =
+          %{
+            "event_data" => event,
+            "source_id" => source_id,
+            "city_id" => city_id,
+            # external_id already has bandsintown_ prefix from freshness check above
+            "external_id" => event["external_id"],
+            "from_page" => page_number
+          }
+          |> EventasaurusDiscovery.Utils.UTF8.validate_map_strings()
 
         # Schedule the detail job
         EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob.new(

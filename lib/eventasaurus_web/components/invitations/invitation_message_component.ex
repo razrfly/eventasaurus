@@ -8,9 +8,12 @@ defmodule EventasaurusWeb.Components.Invitations.InvitationMessageComponent do
   @max_length 500
   @templates [
     {"Casual", "Hi! I'd love for you to join me at this event. It's going to be fun!"},
-    {"Formal", "You're cordially invited to join us for this special event. We would be delighted to have you attend."},
-    {"Excited", "Hey! I found this amazing event and immediately thought of you. Let's go together!"},
-    {"Group", "Hey everyone! Let's all go to this event together. It'll be a great time to catch up!"}
+    {"Formal",
+     "You're cordially invited to join us for this special event. We would be delighted to have you attend."},
+    {"Excited",
+     "Hey! I found this amazing event and immediately thought of you. Let's go together!"},
+    {"Group",
+     "Hey everyone! Let's all go to this event together. It'll be a great time to catch up!"}
   ]
 
   @impl true

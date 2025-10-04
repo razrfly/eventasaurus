@@ -26,7 +26,8 @@ defmodule EventasaurusWeb.CityLive.Search do
       |> assign(:filter_facets, %{})
       |> assign(:show_filters, false)
       |> assign(:loading, false)
-      |> assign(:search_focused, true)  # Flag to auto-focus search on load
+      # Flag to auto-focus search on load
+      |> assign(:search_focused, true)
 
     {:ok, socket}
   end
@@ -137,17 +138,18 @@ defmodule EventasaurusWeb.CityLive.Search do
       sort_order: :asc,
       search: nil,
       page: 1,
-      page_size: 60  # Divisible by 3 for grid layout
+      # Divisible by 3 for grid layout
+      page_size: 60
     }
   end
 
   defp apply_params_to_filters(socket, params) do
     filters = %{
-      socket.assigns.filters |
-      search: params["search"] || socket.assigns.filters.search,
-      page: parse_integer(params["page"]) || socket.assigns.filters.page,
-      radius_km: parse_integer(params["radius"]) || socket.assigns.filters.radius_km,
-      sort_by: parse_sort(params["sort"]) || socket.assigns.filters.sort_by
+      socket.assigns.filters
+      | search: params["search"] || socket.assigns.filters.search,
+        page: parse_integer(params["page"]) || socket.assigns.filters.page,
+        radius_km: parse_integer(params["radius"]) || socket.assigns.filters.radius_km,
+        sort_by: parse_sort(params["sort"]) || socket.assigns.filters.sort_by
     }
 
     assign(socket, :filters, filters)
@@ -163,36 +165,38 @@ defmodule EventasaurusWeb.CityLive.Search do
     lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
     # Build query filters using PublicEventsEnhanced for consistency
-    query_filters = Map.merge(filters, %{
-      language: language,
-      center_lat: lat,
-      center_lng: lng,
-      radius_km: filters[:radius_km] || 50,
-      search: filters[:search],
-      categories: filters[:categories],
-      sort_by: filters[:sort_by],
-      sort_order: :asc,
-      page: filters[:page] || 1,
-      page_size: filters[:page_size] || 60
-    })
+    query_filters =
+      Map.merge(filters, %{
+        language: language,
+        center_lat: lat,
+        center_lng: lng,
+        radius_km: filters[:radius_km] || 50,
+        search: filters[:search],
+        categories: filters[:categories],
+        sort_by: filters[:sort_by],
+        sort_order: :asc,
+        page: filters[:page] || 1,
+        page_size: filters[:page_size] || 60
+      })
 
     alias EventasaurusDiscovery.PublicEventsEnhanced
 
     # Use PublicEventsEnhanced to get events with all filters applied at DB level
-    events = if lat && lng do
-      events = PublicEventsEnhanced.list_events(query_filters)
+    events =
+      if lat && lng do
+        events = PublicEventsEnhanced.list_events(query_filters)
 
-      # Batch fetch primary categories to avoid N+1 queries
-      event_ids = Enum.map(events, & &1.id)
-      primary_category_map = fetch_primary_category_ids(event_ids)
+        # Batch fetch primary categories to avoid N+1 queries
+        event_ids = Enum.map(events, & &1.id)
+        primary_category_map = fetch_primary_category_ids(event_ids)
 
-      # Add primary_category_id to each event for category display
-      Enum.map(events, fn event ->
-        Map.put(event, :primary_category_id, Map.get(primary_category_map, event.id))
-      end)
-    else
-      []
-    end
+        # Add primary_category_id to each event for category display
+        Enum.map(events, fn event ->
+          Map.put(event, :primary_category_id, Map.get(primary_category_map, event.id))
+        end)
+      else
+        []
+      end
 
     # Build pagination metadata
     page = filters[:page] || 1
@@ -200,13 +204,14 @@ defmodule EventasaurusWeb.CityLive.Search do
     has_next = length(events) == page_size
 
     # Estimate total entries based on current page
-    total_entries = if has_next do
-      # Estimate based on current page having full results
-      page * page_size + 1
-    else
-      # Current page is the last page
-      (page - 1) * page_size + length(events)
-    end
+    total_entries =
+      if has_next do
+        # Estimate based on current page having full results
+        page * page_size + 1
+      else
+        # Current page is the last page
+        (page - 1) * page_size + length(events)
+      end
 
     total_pages = ceil(total_entries / page_size)
 
@@ -232,32 +237,49 @@ defmodule EventasaurusWeb.CityLive.Search do
     city = socket.assigns.city
 
     query_params = []
-    query_params = if filters.search, do: [{"search", filters.search} | query_params], else: query_params
-    query_params = if filters.page > 1, do: [{"page", filters.page} | query_params], else: query_params
-    query_params = if filters.radius_km != 25, do: [{"radius", filters.radius_km} | query_params], else: query_params
-    query_params = if filters.sort_by != :date, do: [{"sort", Atom.to_string(filters.sort_by)} | query_params], else: query_params
+
+    query_params =
+      if filters.search, do: [{"search", filters.search} | query_params], else: query_params
+
+    query_params =
+      if filters.page > 1, do: [{"page", filters.page} | query_params], else: query_params
+
+    query_params =
+      if filters.radius_km != 25,
+        do: [{"radius", filters.radius_km} | query_params],
+        else: query_params
+
+    query_params =
+      if filters.sort_by != :date,
+        do: [{"sort", Atom.to_string(filters.sort_by)} | query_params],
+        else: query_params
 
     ~p"/c/#{city.slug}/search?#{query_params}"
   end
 
   defp parse_integer(nil), do: nil
+
   defp parse_integer(value) when is_binary(value) do
     case Integer.parse(value) do
       {int, _} -> int
       _ -> nil
     end
   end
+
   defp parse_integer(value) when is_integer(value), do: value
 
   defp parse_id_list(nil), do: []
+
   defp parse_id_list(ids) when is_binary(ids) do
     ids
     |> String.split(",", trim: true)
     |> Enum.map(&String.to_integer/1)
   end
+
   defp parse_id_list(ids) when is_list(ids), do: ids
 
   defp parse_date(nil), do: nil
+
   defp parse_date(date_string) when is_binary(date_string) do
     case Date.from_iso8601(date_string) do
       {:ok, date} -> date
@@ -266,6 +288,7 @@ defmodule EventasaurusWeb.CityLive.Search do
   end
 
   defp parse_decimal(nil), do: nil
+
   defp parse_decimal(value) when is_binary(value) do
     case Decimal.parse(value) do
       {decimal, _} -> decimal
@@ -274,6 +297,7 @@ defmodule EventasaurusWeb.CityLive.Search do
   end
 
   defp parse_sort(nil), do: :starts_at
+
   defp parse_sort(value) when is_binary(value) do
     case value do
       "starts_at" -> :starts_at
@@ -283,16 +307,21 @@ defmodule EventasaurusWeb.CityLive.Search do
       _ -> :starts_at
     end
   end
+
   defp parse_sort(value) when is_atom(value), do: value
 
   defp has_ticket_url?(event) do
     case event.sources do
-      [] -> false
+      [] ->
+        false
+
       sources when is_list(sources) ->
         Enum.any?(sources, fn source ->
           source.source_url && source.source_url != ""
         end)
-      _ -> false
+
+      _ ->
+        false
     end
   end
 
@@ -309,9 +338,10 @@ defmodule EventasaurusWeb.CityLive.Search do
     alias EventasaurusApp.Repo
 
     Repo.all(
-      from pec in "public_event_categories",
-      where: pec.event_id in ^event_ids and pec.is_primary == true,
-      select: {pec.event_id, pec.category_id}
+      from(pec in "public_event_categories",
+        where: pec.event_id in ^event_ids and pec.is_primary == true,
+        select: {pec.event_id, pec.category_id}
+      )
     )
     |> Map.new()
   end
