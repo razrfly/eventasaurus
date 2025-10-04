@@ -6,7 +6,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.City
   import Ecto.Query
-  import EventasaurusWeb.Gettext
 
   @impl true
   def mount(_params, _session, socket) do

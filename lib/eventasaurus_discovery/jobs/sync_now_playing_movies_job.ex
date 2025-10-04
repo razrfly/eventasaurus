@@ -42,8 +42,8 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    region = args["region"] || "PL"
-    pages = args["pages"] || 3
+    region = normalize_region(args["region"])
+    pages = coerce_pages(args["pages"])
 
     Logger.info("🎬 Starting Now Playing sync for region: #{region} (#{pages} pages)")
 
@@ -114,8 +114,8 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
     # This handles the upsert logic and slug generation
     case TmdbMatcher.find_or_create_movie(tmdb_id) do
       {:ok, movie} ->
-        # Update metadata with now_playing info
-        updated_metadata = Map.merge(movie.metadata || %{}, metadata)
+        # Deep merge metadata to preserve existing translations and regions
+        updated_metadata = deep_merge_metadata(movie.metadata || %{}, metadata)
 
         case EventasaurusDiscovery.Movies.MovieStore.update_movie(movie, %{
                metadata: updated_metadata
@@ -173,5 +173,60 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
       "backdrop_path" => movie_data["backdrop_path"],
       "poster_path" => movie_data["poster_path"]
     }
+  end
+
+  # Normalize region code to uppercase 2-letter ISO code
+  defp normalize_region(nil), do: "PL"
+  defp normalize_region(region) when is_binary(region) do
+    region
+    |> String.upcase()
+    |> case do
+      <<a, b>> when a in ?A..?Z and b in ?A..?Z -> <<a, b>>
+      _ -> "PL"
+    end
+  end
+  defp normalize_region(_), do: "PL"
+
+  # Coerce pages parameter to valid positive integer
+  defp coerce_pages(nil), do: 3
+  defp coerce_pages(p) when is_integer(p) and p > 0 and p <= 20, do: p
+  defp coerce_pages(p) when is_integer(p) and p > 20, do: 20  # Cap at 20 pages
+  defp coerce_pages(p) when is_binary(p) do
+    case Integer.parse(p) do
+      {i, ""} when i > 0 and i <= 20 -> i
+      {i, ""} when i > 20 -> 20  # Cap at 20 pages
+      _ -> 3
+    end
+  end
+  defp coerce_pages(_), do: 3
+
+  # Deep merge metadata to preserve existing data
+  defp deep_merge_metadata(existing, incoming) do
+    # Union now_playing_regions (deduplicated)
+    existing_regions = Map.get(existing, "now_playing_regions", [])
+    incoming_regions = Map.get(incoming, "now_playing_regions", [])
+    merged_regions = Enum.uniq(existing_regions ++ incoming_regions)
+
+    # Deep merge translations by locale
+    existing_translations = Map.get(existing, "translations", %{})
+    incoming_translations = Map.get(incoming, "translations", %{})
+    merged_translations = Map.merge(existing_translations, incoming_translations, fn _locale, v1, v2 ->
+      # If both values are maps, merge them; otherwise prefer incoming
+      if is_map(v1) and is_map(v2), do: Map.merge(v1, v2), else: v2
+    end)
+
+    # Preserve first_seen_in_theaters if it exists
+    existing_first_seen = Map.get(existing, "first_seen_in_theaters")
+
+    # Merge base metadata, preserving nested maps
+    existing
+    |> Map.merge(incoming, fn
+      "tmdb_data", v1, v2 when is_map(v1) and is_map(v2) -> Map.merge(v1, v2)
+      _key, _v1, v2 -> v2
+    end)
+    |> Map.put("translations", merged_translations)
+    |> Map.put("now_playing_regions", merged_regions)
+    |> Map.put("first_seen_in_theaters", existing_first_seen || Map.get(incoming, "first_seen_in_theaters"))
+    |> Map.put("last_synced_at", DateTime.utc_now() |> DateTime.to_iso8601())
   end
 end
