@@ -231,5 +231,7 @@ defmodule EventasaurusDiscovery.Utils.UTF8 do
   end
 
   def ensure_valid_utf8_with_logging(nil, _context), do: nil
-  def ensure_valid_utf8_with_logging(other, context), do: to_string(other) |> ensure_valid_utf8_with_logging(context)
+
+  def ensure_valid_utf8_with_logging(other, context),
+    do: to_string(other) |> ensure_valid_utf8_with_logging(context)
 end

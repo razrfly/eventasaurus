@@ -6,7 +6,11 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusWeb.Helpers.CategoryHelpers
 
   @impl true
-  def mount(%{"city_slug" => city_slug, "content_type" => content_type, "identifier" => identifier}, _session, socket) do
+  def mount(
+        %{"city_slug" => city_slug, "content_type" => content_type, "identifier" => identifier},
+        _session,
+        socket
+      ) do
     # Look up city
     case Locations.get_city_by_slug(city_slug) do
       nil ->
@@ -78,6 +82,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
   defp event_card(assigns) do
     alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
     ~H"""
     <.link navigate={~p"/activities/#{@event.slug}"} class="block">
       <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{if PublicEvent.recurring?(@event), do: "ring-2 ring-green-500 ring-offset-2", else: ""}"}>

@@ -32,7 +32,9 @@ defmodule EventasaurusWeb.Plugs.ValidateCity do
           conn
           |> put_status(:service_unavailable)
           |> put_view(html: EventasaurusWeb.ErrorHTML)
-          |> render(:"503", message: "City location data is being processed. Please try again later.")
+          |> render(:"503",
+            message: "City location data is being processed. Please try again later."
+          )
           |> halt()
         end
     end

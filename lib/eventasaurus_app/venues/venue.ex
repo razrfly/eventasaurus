@@ -37,6 +37,7 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
         Error tuple: #{inspect(value)}
         Invalid bytes: #{inspect(invalid_bytes, limit: 50)}
         """)
+
         ""
 
       # Handle valid binary strings

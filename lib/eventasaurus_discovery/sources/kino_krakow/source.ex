@@ -26,7 +26,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Source do
       name: name(),
       priority: priority(),
       website_url: Config.base_url(),
-
       base_url: Config.base_url(),
       rate_limit_ms: Config.rate_limit() * 1000,
       rate_limit: Config.rate_limit(),

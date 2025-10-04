@@ -325,7 +325,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
       "venue_name" => Map.get(event, "venueName", ""),
       "date" => Map.get(event, "startsAt", ""),
       "description" => Map.get(event, "title", ""),
-      "image_url" => Map.get(event, "artistImageSrc", "") || Map.get(event, "fallbackImageUrl", ""),
+      "image_url" =>
+        Map.get(event, "artistImageSrc", "") || Map.get(event, "fallbackImageUrl", ""),
       "external_id" => external_id
     }
   end

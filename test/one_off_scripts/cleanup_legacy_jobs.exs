@@ -17,10 +17,11 @@ jobs_query =
   from(j in Oban.Job,
     where: j.state in ["retryable", "scheduled", "available"],
     where: j.queue in ["scraper_detail", "discovery"],
-    where: j.worker in [
-      "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob",
-      "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob"
-    ],
+    where:
+      j.worker in [
+        "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob",
+        "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob"
+      ],
     order_by: [asc: j.id]
   )
 
@@ -41,13 +42,14 @@ stats = %{
 updated_stats =
   Enum.reduce(jobs, stats, fn job, acc ->
     # Check if job has UTF-8 corruption
-    has_corruption = try do
-      # Try to encode to JSON - this will fail if there's invalid UTF-8
-      Jason.encode!(job.args)
-      false
-    rescue
-      _ -> true
-    end
+    has_corruption =
+      try do
+        # Try to encode to JSON - this will fail if there's invalid UTF-8
+        Jason.encode!(job.args)
+        false
+      rescue
+        _ -> true
+      end
 
     if has_corruption do
       IO.puts("Job #{job.id} (#{job.worker}):")
@@ -72,6 +74,7 @@ updated_stats =
                 queue: job.queue,
                 max_attempts: job.max_attempts
               )
+
             "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob" ->
               EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(
                 clean_args,
@@ -83,10 +86,11 @@ updated_stats =
         case Oban.insert(new_job) do
           {:ok, new} ->
             IO.puts("  ✅ Cancelled corrupted job #{job.id}, created clean job #{new.id}")
-            Map.update!(acc, :cleaned, & &1 + 1)
+            Map.update!(acc, :cleaned, &(&1 + 1))
+
           {:error, reason} ->
             IO.puts("  ❌ Failed to create replacement job: #{inspect(reason)}")
-            Map.update!(acc, :failed, & &1 + 1)
+            Map.update!(acc, :failed, &(&1 + 1))
         end
       rescue
         e ->
@@ -94,9 +98,9 @@ updated_stats =
           IO.puts("  ⚠️  Cannot clean job args: #{inspect(e)}")
           {:ok, _} = Oban.cancel_job(job.id)
           IO.puts("  🚫 Cancelled uncleanable job #{job.id}")
-          Map.update!(acc, :cancelled, & &1 + 1)
+          Map.update!(acc, :cancelled, &(&1 + 1))
       end
-      |> Map.update!(:corrupted, & &1 + 1)
+      |> Map.update!(:corrupted, &(&1 + 1))
     else
       acc
     end

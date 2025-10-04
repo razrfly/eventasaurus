@@ -57,18 +57,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   """
   def is_error_page?(html) when is_binary(html) do
     # Check for common error page indicators
-    String.contains?(html, "Error 404") ||
-    String.contains?(html, "404 - ") ||
-    String.contains?(html, "Page not found") ||
-    String.contains?(html, "Nie znaleziono strony") ||
-    String.contains?(html, "Strona nie została znaleziona") ||
-    String.contains?(html, "No such page") ||
-    String.contains?(html, "class=\"error-404\"") ||
-    String.contains?(html, "id=\"error-404\"") ||
     # Check if the title contains Error followed by a number
-    Regex.match?(~r/<title>[^<]*Error\s+\d{3}/i, html) ||
     # Check for h1 with Error text
-    Regex.match?(~r/<h1[^>]*>Error\s+\d{3}/i, html)
+    String.contains?(html, "Error 404") ||
+      String.contains?(html, "404 - ") ||
+      String.contains?(html, "Page not found") ||
+      String.contains?(html, "Nie znaleziono strony") ||
+      String.contains?(html, "Strona nie została znaleziona") ||
+      String.contains?(html, "No such page") ||
+      String.contains?(html, "class=\"error-404\"") ||
+      String.contains?(html, "id=\"error-404\"") ||
+      Regex.match?(~r/<title>[^<]*Error\s+\d{3}/i, html) ||
+      Regex.match?(~r/<h1[^>]*>Error\s+\d{3}/i, html)
   end
 
   defp extract_title(document) do
@@ -124,7 +124,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   defp extract_description(document) do
     # Look for main description content with Polish-specific selectors
     selectors = [
-      ".article-content",  # Primary selector for Karnet pages
+      # Primary selector for Karnet pages
+      ".article-content",
       ".event-description",
       ".description",
       ".content article",

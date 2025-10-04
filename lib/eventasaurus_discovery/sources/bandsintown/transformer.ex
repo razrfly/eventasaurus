@@ -41,39 +41,41 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       case validate_venue(venue_data) do
         :ok ->
           transformed = %{
-          # Required fields
-          title: extract_title(raw_event),
-          external_id: extract_external_id(raw_event),
-          starts_at: extract_starts_at(raw_event),
-          ends_at: extract_ends_at(raw_event),
+            # Required fields
+            title: extract_title(raw_event),
+            external_id: extract_external_id(raw_event),
+            starts_at: extract_starts_at(raw_event),
+            ends_at: extract_ends_at(raw_event),
 
-          # Venue data - REQUIRED and validated
-          venue_data: venue_data,
+            # Venue data - REQUIRED and validated
+            venue_data: venue_data,
 
-          # Optional fields
-          description: extract_description(raw_event),
-          ticket_url: raw_event["ticket_url"] || raw_event["url"],
-          min_price: parse_price(raw_event["min_price"]),
-          max_price: parse_price(raw_event["max_price"]),
-          currency: "USD",  # Bandsintown typically uses USD
+            # Optional fields
+            description: extract_description(raw_event),
+            ticket_url: raw_event["ticket_url"] || raw_event["url"],
+            min_price: parse_price(raw_event["min_price"]),
+            max_price: parse_price(raw_event["max_price"]),
+            # Bandsintown typically uses USD
+            currency: "USD",
 
-          # Image URL - extract from the event data and validate
-          image_url: validate_image_url(raw_event["image_url"] || raw_event["artist_image_url"]),
+            # Image URL - extract from the event data and validate
+            image_url:
+              validate_image_url(raw_event["image_url"] || raw_event["artist_image_url"]),
 
-          # Performer data
-          performer: extract_performer(raw_event),
+            # Performer data
+            performer: extract_performer(raw_event),
 
-          # Categories and tags
-          tags: extract_tags(raw_event),
+            # Categories and tags
+            tags: extract_tags(raw_event),
 
-          # Original URL for reference
-          source_url: raw_event["url"],
+            # Original URL for reference
+            source_url: raw_event["url"],
 
-          # Raw data for debugging
-          raw_data: raw_event
-        }
+            # Raw data for debugging
+            raw_data: raw_event
+          }
 
-        {:ok, transformed}
+          {:ok, transformed}
 
         {:error, reason} ->
           Logger.error("""
@@ -128,7 +130,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       if venue_city_normalized != "" && city_name_normalized != "" do
         # Check if it's a completely different city
         # Note: We're keeping events without venue_city since we'll get GPS from detail page
-        false  # For now, don't filter - we'll rely on GPS coordinates
+        # For now, don't filter - we'll rely on GPS coordinates
+        false
       else
         false
       end
@@ -148,6 +151,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       nil ->
         # Generate a unique ID from available data
         generate_external_id(event)
+
       url ->
         # Extract ID from URL pattern: /e/:id-slug
         case Regex.run(~r/\/e\/(\d+)-/, url) do
@@ -175,9 +179,13 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
     case DateParser.parse_start_date(event["date"], venue_timezone) do
       nil ->
-        Logger.warning("No valid start date found for Bandsintown event: #{inspect(event["title"] || event["artist_name"])}")
+        Logger.warning(
+          "No valid start date found for Bandsintown event: #{inspect(event["title"] || event["artist_name"])}"
+        )
+
         # Default to tomorrow if no date available
         DateTime.utc_now() |> DateTime.add(86400, :second)
+
       date ->
         date
     end
@@ -202,7 +210,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         lng = parse_coordinate(event["venue_longitude"])
 
         if lat && lng do
-          EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.infer_timezone_from_location(lat, lng)
+          EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.infer_timezone_from_location(
+            lat,
+            lng
+          )
         else
           "Etc/UTC"
         end
@@ -227,12 +238,14 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
     longitude = parse_coordinate(event["venue_longitude"])
 
     # Build address components
-    address_parts = [
-      event["venue_address"],
-      event["venue_city"],
-      event["venue_state"],
-      known_country || event["venue_country"]
-    ] |> Enum.filter(&(&1 && &1 != ""))
+    address_parts =
+      [
+        event["venue_address"],
+        event["venue_city"],
+        event["venue_state"],
+        known_country || event["venue_country"]
+      ]
+      |> Enum.filter(&(&1 && &1 != ""))
 
     address = if Enum.any?(address_parts), do: Enum.join(address_parts, ", "), else: nil
 
@@ -253,17 +266,19 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       # We have venue name but missing coordinates - use city location
       venue_name && (event["venue_city"] || city) ->
         # Use city context if available, otherwise use event's venue_city
-        actual_city_name = if city && city.name do
-          city.name
-        else
-          event["venue_city"] || "Unknown City"
-        end
+        actual_city_name =
+          if city && city.name do
+            city.name
+          else
+            event["venue_city"] || "Unknown City"
+          end
 
-        actual_country_name = if city && city.country do
-          city.country.name
-        else
-          known_country || event["venue_country"]
-        end
+        actual_country_name =
+          if city && city.country do
+            city.country.name
+          else
+            known_country || event["venue_country"]
+          end
 
         Logger.warning("""
         ⚠️ Missing coordinates for Bandsintown venue, using city center:
@@ -272,11 +287,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         """)
 
         # Try to get coordinates from city context first
-        {lat, lng} = if city && city.latitude && city.longitude do
-          {Decimal.to_float(city.latitude), Decimal.to_float(city.longitude)}
-        else
-          get_city_coordinates(actual_city_name, actual_country_name)
-        end
+        {lat, lng} =
+          if city && city.latitude && city.longitude do
+            {Decimal.to_float(city.latitude), Decimal.to_float(city.longitude)}
+          else
+            get_city_coordinates(actual_city_name, actual_country_name)
+          end
 
         %{
           name: venue_name,
@@ -299,28 +315,30 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
         """)
 
         # Use the city context if provided, otherwise fall back to event data or defaults
-        {city_name, country_name, lat, lng} = if city && city.name do
-          # We have city context - use it!
-          city_name = city.name
-          country_name = if city.country, do: city.country.name, else: known_country
-          lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
-          lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
+        {city_name, country_name, lat, lng} =
+          if city && city.name do
+            # We have city context - use it!
+            city_name = city.name
+            country_name = if city.country, do: city.country.name, else: known_country
+            lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+            lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
-          # If city doesn't have coordinates, try to get them
-          {lat, lng} = if lat && lng do
-            {lat, lng}
+            # If city doesn't have coordinates, try to get them
+            {lat, lng} =
+              if lat && lng do
+                {lat, lng}
+              else
+                get_city_coordinates(city_name, country_name)
+              end
+
+            {city_name, country_name, lat, lng}
           else
-            get_city_coordinates(city_name, country_name)
+            # No city context - use event data if available
+            city_name = event["venue_city"] || "New York"
+            country_name = known_country || event["venue_country"] || "United States"
+            {lat, lng} = get_city_coordinates(city_name, country_name)
+            {city_name, country_name, lat, lng}
           end
-
-          {city_name, country_name, lat, lng}
-        else
-          # No city context - use event data if available
-          city_name = event["venue_city"] || "New York"
-          country_name = known_country || event["venue_country"] || "United States"
-          {lat, lng} = get_city_coordinates(city_name, country_name)
-          {city_name, country_name, lat, lng}
-        end
 
         %{
           name: "Venue TBD - #{event["artist_name"] || "Unknown Artist"}",
@@ -339,15 +357,33 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   defp get_city_coordinates(city, country) do
     # Common city coordinates for fallback
     case {String.downcase(city || ""), String.downcase(country || "")} do
-      {"kraków", _} -> {50.0647, 19.9450}
-      {"krakow", _} -> {50.0647, 19.9450}
-      {"warsaw", _} -> {52.2297, 21.0122}
-      {"warszawa", _} -> {52.2297, 21.0122}
-      {"new york", _} -> {40.7128, -74.0060}
-      {"los angeles", _} -> {34.0522, -118.2437}
-      {"london", _} -> {51.5074, -0.1278}
-      {"paris", _} -> {48.8566, 2.3522}
-      {"berlin", _} -> {52.5200, 13.4050}
+      {"kraków", _} ->
+        {50.0647, 19.9450}
+
+      {"krakow", _} ->
+        {50.0647, 19.9450}
+
+      {"warsaw", _} ->
+        {52.2297, 21.0122}
+
+      {"warszawa", _} ->
+        {52.2297, 21.0122}
+
+      {"new york", _} ->
+        {40.7128, -74.0060}
+
+      {"los angeles", _} ->
+        {34.0522, -118.2437}
+
+      {"london", _} ->
+        {51.5074, -0.1278}
+
+      {"paris", _} ->
+        {48.8566, 2.3522}
+
+      {"berlin", _} ->
+        {52.5200, 13.4050}
+
       _ ->
         # Default to NYC for unknown cities
         {40.7128, -74.0060}
@@ -356,6 +392,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
   defp parse_coordinate(nil), do: nil
   defp parse_coordinate(coord) when is_number(coord), do: coord
+
   defp parse_coordinate(coord) when is_binary(coord) do
     case Float.parse(coord) do
       {float, _} -> float
@@ -365,11 +402,13 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
   defp extract_description(event) do
     # Combine available description fields
-    parts = [
-      event["description"],
-      event["lineup_description"],
-      event["bio"]
-    ] |> Enum.filter(&(&1 && &1 != ""))
+    parts =
+      [
+        event["description"],
+        event["lineup_description"],
+        event["bio"]
+      ]
+      |> Enum.filter(&(&1 && &1 != ""))
 
     if Enum.any?(parts), do: Enum.join(parts, "\n\n"), else: nil
   end
@@ -405,6 +444,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
   defp parse_price(nil), do: nil
   defp parse_price(""), do: nil
+
   defp parse_price(price) when is_binary(price) do
     # Remove currency symbols and parse
     price
@@ -413,6 +453,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   rescue
     _ -> nil
   end
+
   defp parse_price(price) when is_number(price) do
     Decimal.new(price)
   end
@@ -420,6 +461,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   # Validate image URLs - filter out null/invalid Bandsintown placeholder images
   defp validate_image_url(nil), do: nil
   defp validate_image_url(""), do: nil
+
   defp validate_image_url(url) when is_binary(url) do
     # Check for known invalid Bandsintown image URLs
     downcased = String.downcase(url)
@@ -438,5 +480,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       true -> url
     end
   end
+
   defp validate_image_url(_), do: nil
 end

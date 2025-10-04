@@ -198,6 +198,7 @@ defmodule EventasaurusDiscovery.Locations.CountryResolver do
             nil ->
               # Fall back to Countries library name search
               find_by_name(name)
+
             country ->
               # It was already a valid ISO code
               country
@@ -209,9 +210,11 @@ defmodule EventasaurusDiscovery.Locations.CountryResolver do
 
       code ->
         country = Countries.get(code)
+
         if country do
           Logger.debug("CountryResolver: Translated '#{name}' to #{code} (#{country.name})")
         end
+
         country
     end
   end
@@ -245,18 +248,25 @@ defmodule EventasaurusDiscovery.Locations.CountryResolver do
   defp find_by_name(name) do
     # Try exact match first
     case Countries.filter_by(:name, name) do
-      [country | _] -> country
+      [country | _] ->
+        country
+
       [] ->
         # Try unofficial names
         case Countries.filter_by(:unofficial_names, name) do
-          [country | _] -> country
+          [country | _] ->
+            country
+
           [] ->
             # Try partial match on name
             Countries.all()
             |> Enum.find(fn country ->
               String.downcase(country.name) == String.downcase(name) ||
-              (country.unofficial_names &&
-               Enum.any?(country.unofficial_names, &(String.downcase(&1) == String.downcase(name))))
+                (country.unofficial_names &&
+                   Enum.any?(
+                     country.unofficial_names,
+                     &(String.downcase(&1) == String.downcase(name))
+                   ))
             end)
         end
     end

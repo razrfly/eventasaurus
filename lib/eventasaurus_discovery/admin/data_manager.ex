@@ -233,7 +233,16 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
               "EventasaurusDiscovery.Scraping.Scrapers.Ticketmaster.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Admin.DiscoverySyncJob"
-            ] and j.state in ["completed", "discarded", "cancelled", "retryable", "scheduled", "available", "executing"]
+            ] and
+              j.state in [
+                "completed",
+                "discarded",
+                "cancelled",
+                "retryable",
+                "scheduled",
+                "available",
+                "executing"
+              ]
         )
       )
 

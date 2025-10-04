@@ -70,7 +70,8 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
 
       # For new events (external_id not yet in DB), predict which event they'll merge into
       # by looking at title + venue similarity
-      predicted_event_ids = predict_recurring_event_ids(events, external_id_to_event_id, source_id)
+      predicted_event_ids =
+        predict_recurring_event_ids(events, external_id_to_event_id, source_id)
 
       # Return events NOT in fresh set
       # An event is fresh if EITHER:
@@ -150,7 +151,9 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
         external_id && !Map.has_key?(existing_mappings, external_id)
       end)
 
-    Logger.debug("🔮 Recurring prediction: #{length(new_events)} new events to check out of #{length(events)} total")
+    Logger.debug(
+      "🔮 Recurring prediction: #{length(new_events)} new events to check out of #{length(events)} total"
+    )
 
     if Enum.empty?(new_events) do
       %{}
@@ -210,12 +213,18 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
                   mappings
 
                 [] ->
-                  Logger.debug("🔮 No existing event found for '#{normalized_title}', will create new")
+                  Logger.debug(
+                    "🔮 No existing event found for '#{normalized_title}', will create new"
+                  )
+
                   # No parent found, won't merge
                   []
               end
             else
-              Logger.debug("🔮 No venue name found for group '#{normalized_title}', skipping prediction")
+              Logger.debug(
+                "🔮 No venue name found for group '#{normalized_title}', skipping prediction"
+              )
+
               []
             end
           else
@@ -225,7 +234,11 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
         |> Map.new()
 
       Logger.info("🔮 Predicted #{map_size(predictions)} events will merge into existing events")
-      Logger.debug("🔮 Prediction map size: #{map_size(predictions)}, sample: #{inspect(Enum.take(predictions, 3))}")
+
+      Logger.debug(
+        "🔮 Prediction map size: #{map_size(predictions)}, sample: #{inspect(Enum.take(predictions, 3))}"
+      )
+
       predictions
     end
   end

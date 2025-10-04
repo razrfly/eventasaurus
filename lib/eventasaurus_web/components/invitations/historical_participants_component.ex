@@ -15,7 +15,8 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
      |> assign(:loading, false)
      |> assign(:expanded, false)
      |> assign(:selected_ids, MapSet.new())
-     |> assign(:display_mode, "grid")}  # "grid" or "list"
+     # "grid" or "list"
+     |> assign(:display_mode, "grid")}
   end
 
   @impl true
@@ -37,7 +38,8 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
 
     # Load participants synchronously if we have an organizer and haven't loaded yet
     socket =
-      if assigns[:organizer] && Enum.empty?(socket.assigns.participants) && !socket.assigns.loading do
+      if assigns[:organizer] && Enum.empty?(socket.assigns.participants) &&
+           !socket.assigns.loading do
         exclude_event_ids = assigns[:exclude_event_ids] || []
         exclude_user_ids = MapSet.to_list(selected_ids)
 
@@ -59,7 +61,9 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
         |> assign(:loading, false)
       else
         # If we already have participants, filter out any that are now selected
-        filtered_participants = filter_selected_participants(socket.assigns.participants, selected_ids)
+        filtered_participants =
+          filter_selected_participants(socket.assigns.participants, selected_ids)
+
         socket
         |> assign(:participants, filtered_participants)
       end
@@ -233,6 +237,7 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
         username: participant.username,
         avatar_url: Map.get(participant, :avatar_url)
       }
+
       send(self(), {:user_selected, user})
     end
 
@@ -270,6 +275,7 @@ defmodule EventasaurusWeb.Components.Invitations.HistoricalParticipantsComponent
     case last_participation do
       %DateTime{} = dt ->
         DateTime.diff(DateTime.utc_now(), dt, :day)
+
       _ ->
         nil
     end

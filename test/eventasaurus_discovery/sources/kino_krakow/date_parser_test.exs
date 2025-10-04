@@ -116,7 +116,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DateParserTest do
 
     test "handles complete workflow with Polish date" do
       # Real-world example
-      date_str = "piątek, 15 marca 2025"  # Friday, March 15
+      # Friday, March 15
+      date_str = "piątek, 15 marca 2025"
       time_str = "19:45"
 
       datetime = DateParser.parse_datetime(date_str, time_str)

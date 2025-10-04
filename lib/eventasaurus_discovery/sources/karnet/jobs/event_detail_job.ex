@@ -35,7 +35,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Check if we can extract event ID for bilingual processing
     case extract_event_id_from_external_id(external_id) do
       nil ->
-        Logger.warning("Cannot extract event ID from external_id: #{external_id}, falling back to single language")
+        Logger.warning(
+          "Cannot extract event ID from external_id: #{external_id}, falling back to single language"
+        )
+
         fallback_to_single_language(url, source_id, event_metadata)
 
       event_id ->
@@ -274,12 +277,15 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Extract slug from original URL
     # Original: https://karnet.krakowculture.pl/60671-krakow-brncui-sculpting-with-light
     # Extract: 60671-krakow-brncui-sculpting-with-light
-    slug = case Regex.run(~r/\/(\d+-krakow-.+)$/, original_url) do
-      [_, slug] -> slug
-      _ ->
-        # Fallback: extract everything after the last slash
-        original_url |> String.split("/") |> List.last() || ""
-    end
+    slug =
+      case Regex.run(~r/\/(\d+-krakow-.+)$/, original_url) do
+        [_, slug] ->
+          slug
+
+        _ ->
+          # Fallback: extract everything after the last slash
+          original_url |> String.split("/") |> List.last() || ""
+      end
 
     %{
       polish: "https://karnet.krakowculture.pl/pl/#{slug}",
@@ -291,39 +297,49 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     Logger.debug("🌐 Fetching bilingual content - PL: #{urls.polish}, EN: #{urls.english}")
 
     # Fetch Polish version (should always exist)
-    polish_result = case Client.fetch_page(urls.polish) do
-      {:ok, html} ->
-        Logger.debug("✅ Polish content fetched successfully")
-        case DetailExtractor.extract_event_details(html, urls.polish) do
-          {:error, :error_page} ->
-            Logger.warning("⚠️ Polish URL returned an error page: #{urls.polish}")
-            {:error, :error_page}
-          result ->
-            result
-        end
-      {:error, reason} ->
-        Logger.warning("❌ Failed to fetch Polish version: #{inspect(reason)}")
-        {:error, reason}
-    end
+    polish_result =
+      case Client.fetch_page(urls.polish) do
+        {:ok, html} ->
+          Logger.debug("✅ Polish content fetched successfully")
+
+          case DetailExtractor.extract_event_details(html, urls.polish) do
+            {:error, :error_page} ->
+              Logger.warning("⚠️ Polish URL returned an error page: #{urls.polish}")
+              {:error, :error_page}
+
+            result ->
+              result
+          end
+
+        {:error, reason} ->
+          Logger.warning("❌ Failed to fetch Polish version: #{inspect(reason)}")
+          {:error, reason}
+      end
 
     # Fetch English version (may not exist)
-    english_result = case Client.fetch_page(urls.english) do
-      {:ok, html} ->
-        Logger.debug("✅ English content fetched successfully")
-        case DetailExtractor.extract_event_details(html, urls.english) do
-          {:error, :error_page} ->
-            Logger.info("ℹ️ English version returned error page (404 likely): #{urls.english}")
-            {:ok, nil}  # Treat error page as missing English version
-          result ->
-            result
-        end
-      {:error, :not_found} ->
-        Logger.info("ℹ️ English version not available: #{urls.english}")
-        {:ok, nil}
-      {:error, reason} ->
-        Logger.warning("⚠️ Failed to fetch English version: #{inspect(reason)}")
-        {:ok, nil}
-    end
+    english_result =
+      case Client.fetch_page(urls.english) do
+        {:ok, html} ->
+          Logger.debug("✅ English content fetched successfully")
+
+          case DetailExtractor.extract_event_details(html, urls.english) do
+            {:error, :error_page} ->
+              Logger.info("ℹ️ English version returned error page (404 likely): #{urls.english}")
+              # Treat error page as missing English version
+              {:ok, nil}
+
+            result ->
+              result
+          end
+
+        {:error, :not_found} ->
+          Logger.info("ℹ️ English version not available: #{urls.english}")
+          {:ok, nil}
+
+        {:error, reason} ->
+          Logger.warning("⚠️ Failed to fetch English version: #{inspect(reason)}")
+          {:ok, nil}
+      end
 
     {polish_result, english_result}
   end
@@ -341,10 +357,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
         # Add Polish translation when there's no English version
         pl_desc = get_description_text(polish_data)
         desc_tx = if pl_desc && pl_desc != "", do: %{"pl" => pl_desc}, else: nil
+
         enriched_data =
           enriched_data
           |> Map.put(:title_translations, %{"pl" => polish_data[:title]})
           |> Map.put(:description_translations, desc_tx)
+
         {:ok, enriched_data}
 
       {{:ok, polish_data}, {:error, _}} ->
@@ -353,10 +371,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
         # Add Polish translation when English extraction failed
         pl_desc = get_description_text(polish_data)
         desc_tx = if pl_desc && pl_desc != "", do: %{"pl" => pl_desc}, else: nil
+
         enriched_data =
           enriched_data
           |> Map.put(:title_translations, %{"pl" => polish_data[:title]})
           |> Map.put(:description_translations, desc_tx)
+
         {:ok, enriched_data}
 
       {{:error, reason}, _} ->
@@ -375,7 +395,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
     # Validate that the English content is actually for the same event
     if english_title && !validate_translation_match(polish_data, english_data) do
-      Logger.warning("⚠️ English translation seems unrelated to Polish event, skipping English data")
+      Logger.warning(
+        "⚠️ English translation seems unrelated to Polish event, skipping English data"
+      )
+
       Logger.warning("  Polish: #{inspect(polish_title)}")
       Logger.warning("  English: #{inspect(english_title)}")
 
@@ -386,30 +409,49 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       base_data
       |> Map.put(:title_translations, title_translations)
       |> Map.put(:description_translations, description_translations)
-      |> Map.put(:title, polish_title || base_data[:title])  # Keep original title
+      # Keep original title
+      |> Map.put(:title, polish_title || base_data[:title])
     else
       # Normal flow - merge both languages
       title_translations = %{}
-      title_translations = if polish_title, do: Map.put(title_translations, "pl", polish_title), else: title_translations
-      title_translations = if english_title, do: Map.put(title_translations, "en", english_title), else: title_translations
+
+      title_translations =
+        if polish_title,
+          do: Map.put(title_translations, "pl", polish_title),
+          else: title_translations
+
+      title_translations =
+        if english_title,
+          do: Map.put(title_translations, "en", english_title),
+          else: title_translations
 
       # Merge description translations
       polish_desc = get_description_text(polish_data)
       english_desc = get_description_text(english_data)
 
       description_translations = %{}
-      description_translations = if polish_desc, do: Map.put(description_translations, "pl", polish_desc), else: description_translations
-      description_translations = if english_desc, do: Map.put(description_translations, "en", english_desc), else: description_translations
+
+      description_translations =
+        if polish_desc,
+          do: Map.put(description_translations, "pl", polish_desc),
+          else: description_translations
+
+      description_translations =
+        if english_desc,
+          do: Map.put(description_translations, "en", english_desc),
+          else: description_translations
 
       # Merge the translation data
       base_data
       |> Map.put(:title_translations, title_translations)
       |> Map.put(:description_translations, description_translations)
-      |> Map.put(:title, polish_title || english_title)  # Fallback to available title
+      # Fallback to available title
+      |> Map.put(:title, polish_title || english_title)
     end
   end
 
   defp get_description_text(nil), do: nil
+
   defp get_description_text(data) do
     sources = [
       case data[:description_translations] do
@@ -425,7 +467,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       s when is_binary(s) ->
         trimmed = String.trim(s)
         if trimmed != "", do: trimmed, else: nil
-      _ -> nil
+
+      _ ->
+        nil
     end)
   end
 
@@ -441,13 +485,16 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     dates_match = polish_date && english_date && polish_date == english_date
 
     # If both have venue names and they're similar, it's the same event
-    venues_match = case {polish_venue, english_venue} do
-      {%{name: pv}, %{name: ev}} when is_binary(pv) and is_binary(ev) ->
-        String.downcase(pv) == String.downcase(ev) ||
-        String.contains?(String.downcase(pv), String.downcase(ev)) ||
-        String.contains?(String.downcase(ev), String.downcase(pv))
-      _ -> false
-    end
+    venues_match =
+      case {polish_venue, english_venue} do
+        {%{name: pv}, %{name: ev}} when is_binary(pv) and is_binary(ev) ->
+          String.downcase(pv) == String.downcase(ev) ||
+            String.contains?(String.downcase(pv), String.downcase(ev)) ||
+            String.contains?(String.downcase(ev), String.downcase(pv))
+
+        _ ->
+          false
+      end
 
     # If we have evidence it's the same event, return true
     # Otherwise, check if titles are suspiciously different
@@ -463,8 +510,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       english_numbers = Regex.scan(~r/\d+/, english_title) |> List.flatten()
 
       # If they share numbers, they might be related
-      numbers_match = length(polish_numbers) > 0 && length(english_numbers) > 0 &&
-                     Enum.any?(polish_numbers, &(&1 in english_numbers))
+      numbers_match =
+        length(polish_numbers) > 0 && length(english_numbers) > 0 &&
+          Enum.any?(polish_numbers, &(&1 in english_numbers))
 
       # Default to true unless we're sure they're different
       numbers_match || (polish_title == "" || english_title == "")

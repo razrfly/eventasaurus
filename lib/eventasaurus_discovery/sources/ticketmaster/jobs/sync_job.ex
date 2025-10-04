@@ -26,17 +26,18 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
          {:ok, source} <- get_or_create_source(),
          {:ok, raw_events} <- fetch_events(city, limit, options),
          # Pass city context through transformation
-         transformed_events <- transform_events_with_options(raw_events, Map.put(options, "city", city)) do
-
+         transformed_events <-
+           transform_events_with_options(raw_events, Map.put(options, "city", city)) do
       # Schedule individual jobs for each transformed event
       %{enqueued: enqueued_count, stale: stale_count, fresh: fresh_count} =
         schedule_event_jobs(transformed_events, source.id)
 
-      efficiency = if length(transformed_events) > 0 do
-        Float.round(enqueued_count / length(transformed_events) * 100, 1)
-      else
-        0.0
-      end
+      efficiency =
+        if length(transformed_events) > 0 do
+          Float.round(enqueued_count / length(transformed_events) * 100, 1)
+        else
+          0.0
+        end
 
       Logger.info("""
       ✅ Ticketmaster sync completed
@@ -52,12 +53,13 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
       # Schedule coordinate recalculation after successful sync
       schedule_coordinate_update(city_id)
 
-      {:ok, %{
-        city: city.name,
-        found: length(raw_events),
-        transformed: length(transformed_events),
-        enqueued: enqueued_count
-      }}
+      {:ok,
+       %{
+         city: city.name,
+         found: length(raw_events),
+         transformed: length(transformed_events),
+         enqueued: enqueued_count
+       }}
     else
       {:discard, reason} ->
         Logger.error("Job discarded: #{reason}")
@@ -69,7 +71,6 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     end
   end
 
-
   defp schedule_event_jobs(events, source_id) do
     alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
@@ -80,10 +81,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
     # Filter to events needing processing based on freshness
     # EventFreshnessChecker already supports both string and atom keys
-    events_needing_processing = EventFreshnessChecker.filter_events_needing_processing(
-      events,
-      source_id
-    )
+    events_needing_processing =
+      EventFreshnessChecker.filter_events_needing_processing(
+        events,
+        source_id
+      )
 
     Logger.info("🔍 DEBUG: Events after freshness filter: #{length(events_needing_processing)}")
 
@@ -91,7 +93,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     fresh_count = length(events) - stale_count
     threshold = EventFreshnessChecker.get_threshold()
 
-    Logger.info("🔍 Freshness check: #{stale_count} stale, #{fresh_count} fresh (threshold: #{threshold}h)")
+    Logger.info(
+      "🔍 Freshness check: #{stale_count} stale, #{fresh_count} fresh (threshold: #{threshold}h)"
+    )
 
     # Schedule individual EventProcessorJob for each event needing processing
     # Following the same pattern as Karnet's schedule_detail_jobs
@@ -125,7 +129,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         _ -> false
       end)
 
-    Logger.info("📋 Scheduled #{successful_count}/#{length(events)} Ticketmaster event processing jobs (#{fresh_count} skipped as fresh)")
+    Logger.info(
+      "📋 Scheduled #{successful_count}/#{length(events)} Ticketmaster event processing jobs (#{fresh_count} skipped as fresh)"
+    )
 
     %{
       enqueued: successful_count,
@@ -163,6 +169,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
           {:ok, events} ->
             # Tag each event with its locale for transformation
             Enum.map(events, &Map.put(&1, "_locale", locale))
+
           {:error, reason} ->
             Logger.warning("Failed to fetch events for locale #{locale}: #{inspect(reason)}")
             []
@@ -170,7 +177,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
       end)
       # Don't deduplicate here - we want all language versions!
       # The EventProcessor will merge translations for the same external_id
-      |> Enum.take(limit * length(locales))  # Take more since we have duplicates
+      # Take more since we have duplicates
+      |> Enum.take(limit * length(locales))
 
     {:ok, all_events}
   end
@@ -182,14 +190,15 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         # No explicit locale, use country-based detection with safe fallback
         case Config.country_locales(city.country.code) do
           locales when is_list(locales) and locales != [] -> locales
-          _ -> ["en-us"]  # safe fallback if country detection fails
+          # safe fallback if country detection fails
+          _ -> ["en-us"]
         end
+
       locale ->
         # Explicit locale provided, use only that one
         [locale]
     end
   end
-
 
   # Keep @impl on the 1-arity variant to satisfy BaseJob behaviour
   @impl EventasaurusDiscovery.Sources.BaseJob
@@ -213,6 +222,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
       case Transformer.transform_event(event_data, locale, city) do
         {:ok, event} ->
           [event]
+
         {:error, reason} ->
           Logger.debug("Ticketmaster event transformation failed: #{reason}")
           []

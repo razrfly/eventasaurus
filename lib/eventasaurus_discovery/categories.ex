@@ -5,7 +5,7 @@ defmodule EventasaurusDiscovery.Categories do
 
   import Ecto.Query, warn: false
   alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.Categories.{Category, PublicEventCategory, CategoryMapping}
+  alias EventasaurusDiscovery.Categories.{Category, PublicEventCategory}
 
   @doc """
   Lists only active categories for display.
@@ -261,32 +261,16 @@ defmodule EventasaurusDiscovery.Categories do
       {:error, :delete_old_primary, _, _} ->
         # Race condition - another process already updated
         # Just return success since categories are assigned
-        Logger.warning("Category assignment race condition detected for event #{event_id}, retrying...")
+        Logger.warning(
+          "Category assignment race condition detected for event #{event_id}, retrying..."
+        )
+
         {:ok, []}
 
       {:error, step, reason, _changes} ->
         Logger.warning("Category assignment failed at #{step}: #{inspect(reason)}")
         {:error, reason}
     end
-  end
-
-  @doc """
-  Maps external categories to internal categories using the mapping table.
-
-  ## Examples
-
-      iex> map_external_categories("ticketmaster", [{"segment", "Music"}, {"genre", "Rock"}])
-      [%Category{slug: "music"}, %Category{slug: "concerts"}]
-
-  """
-  def map_external_categories(source, classifications) when is_list(classifications) do
-    formatted_classifications =
-      Enum.map(classifications, fn
-        {type, value} -> {source, type, value}
-        {type, value, _locale} -> {source, type, value}
-      end)
-
-    CategoryMapping.find_categories(Repo, formatted_classifications)
   end
 
   @doc """
@@ -367,138 +351,5 @@ defmodule EventasaurusDiscovery.Categories do
     category
     |> Map.put(:localized_name, localized_name)
     |> Map.put(:localized_description, localized_description)
-  end
-
-  @doc """
-  Create initial category mappings for Ticketmaster and Karnet.
-  This is used during initial setup.
-  """
-  def seed_initial_mappings do
-    mappings = [
-      # Ticketmaster mappings
-      %{
-        external_source: "ticketmaster",
-        external_type: "segment",
-        external_value: "Music",
-        category_slug: "music",
-        priority: 10
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "genre",
-        external_value: "Rock",
-        category_slug: "concerts",
-        priority: 5
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "genre",
-        external_value: "Pop",
-        category_slug: "concerts",
-        priority: 5
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "genre",
-        external_value: "Classical",
-        category_slug: "concerts",
-        priority: 5
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "genre",
-        external_value: "Jazz",
-        category_slug: "concerts",
-        priority: 5
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "segment",
-        external_value: "Arts & Theatre",
-        category_slug: "performances",
-        priority: 10
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "genre",
-        external_value: "Theatre",
-        category_slug: "performances",
-        priority: 5
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "segment",
-        external_value: "Film",
-        category_slug: "film",
-        priority: 10
-      },
-      %{
-        external_source: "ticketmaster",
-        external_type: "segment",
-        external_value: "Sports",
-        category_slug: "concerts",
-        priority: 3
-      },
-
-      # Karnet mappings (Polish)
-      %{
-        external_source: "karnet",
-        external_type: nil,
-        external_value: "koncerty",
-        category_slug: "concerts",
-        priority: 10
-      },
-      %{
-        external_source: "karnet",
-        external_type: nil,
-        external_value: "festiwale",
-        category_slug: "festivals",
-        priority: 10
-      },
-      %{
-        external_source: "karnet",
-        external_type: nil,
-        external_value: "spektakle",
-        category_slug: "performances",
-        priority: 10
-      },
-      %{
-        external_source: "karnet",
-        external_type: nil,
-        external_value: "wystawy",
-        category_slug: "exhibitions",
-        priority: 10
-      },
-      %{
-        external_source: "karnet",
-        external_type: nil,
-        external_value: "literatura",
-        category_slug: "literature",
-        priority: 10
-      },
-      %{
-        external_source: "karnet",
-        external_type: nil,
-        external_value: "film",
-        category_slug: "film",
-        priority: 10
-      }
-    ]
-
-    Enum.each(mappings, fn mapping ->
-      category = Repo.get_by(Category, slug: mapping.category_slug)
-
-      if category do
-        %CategoryMapping{}
-        |> CategoryMapping.changeset(%{
-          external_source: mapping.external_source,
-          external_type: mapping.external_type,
-          external_value: mapping.external_value,
-          category_id: category.id,
-          priority: mapping.priority
-        })
-        |> Repo.insert(on_conflict: :nothing)
-      end
-    end)
   end
 end

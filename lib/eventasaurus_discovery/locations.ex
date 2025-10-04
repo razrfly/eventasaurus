@@ -24,9 +24,10 @@ defmodule EventasaurusDiscovery.Locations do
   """
   def get_city_by_slug(slug) when is_binary(slug) do
     Repo.one(
-      from c in City,
-      where: c.slug == ^slug,
-      preload: [:country]
+      from(c in City,
+        where: c.slug == ^slug,
+        preload: [:country]
+      )
     )
   end
 
@@ -78,7 +79,8 @@ defmodule EventasaurusDiscovery.Locations do
       enhanced_opts = [
         show_past: not upcoming_only,
         page: 1,
-        page_size: limit,  # Use page_size instead of limit
+        # Use page_size instead of limit
+        page_size: limit,
         language: language,
         # Add geographic filtering parameters
         center_lat: lat,
@@ -92,7 +94,6 @@ defmodule EventasaurusDiscovery.Locations do
       []
     end
   end
-
 
   @doc """
   Get nearby cities based on coordinates.
@@ -112,24 +113,31 @@ defmodule EventasaurusDiscovery.Locations do
 
     from(c in City,
       where: not is_nil(c.latitude) and not is_nil(c.longitude),
-      where: fragment(
-        "ST_DWithin(
+      where:
+        fragment(
+          "ST_DWithin(
           ST_MakePoint(?::float, ?::float)::geography,
           ST_MakePoint(?::float, ?::float)::geography,
           ?
         )",
-        ^lng, ^lat,
-        c.longitude, c.latitude,
-        ^(radius_km * 1000)  # Convert to meters
-      ),
-      order_by: fragment(
-        "ST_Distance(
+          ^lng,
+          ^lat,
+          c.longitude,
+          c.latitude,
+          # Convert to meters
+          ^(radius_km * 1000)
+        ),
+      order_by:
+        fragment(
+          "ST_Distance(
           ST_MakePoint(?::float, ?::float)::geography,
           ST_MakePoint(?::float, ?::float)::geography
         )",
-        ^lng, ^lat,
-        c.longitude, c.latitude
-      ),
+          ^lng,
+          ^lat,
+          c.longitude,
+          c.latitude
+        ),
       limit: ^limit,
       preload: [:country]
     )
@@ -151,16 +159,19 @@ defmodule EventasaurusDiscovery.Locations do
   def list_cities_with_coordinates(opts \\ []) do
     limit = Keyword.get(opts, :limit, 100)
 
-    query = from c in City,
-      where: not is_nil(c.latitude) and not is_nil(c.longitude),
-      order_by: [asc: c.name],
-      limit: ^limit,
-      preload: [:country]
+    query =
+      from(c in City,
+        where: not is_nil(c.latitude) and not is_nil(c.longitude),
+        order_by: [asc: c.name],
+        limit: ^limit,
+        preload: [:country]
+      )
 
-    query = case Keyword.get(opts, :country_id) do
-      nil -> query
-      country_id -> where(query, [c], c.country_id == ^country_id)
-    end
+    query =
+      case Keyword.get(opts, :country_id) do
+        nil -> query
+        country_id -> where(query, [c], c.country_id == ^country_id)
+      end
 
     Repo.all(query)
   end
@@ -175,7 +186,6 @@ defmodule EventasaurusDiscovery.Locations do
   """
   def calculate_distance(lat1, lng1, lat2, lng2)
       when is_number(lat1) and is_number(lng1) and is_number(lat2) and is_number(lng2) do
-
     query = """
     SELECT ST_Distance(
       ST_MakePoint($1::float, $2::float)::geography,

@@ -30,15 +30,17 @@ if city do
   # Check job status
   import Ecto.Query
 
-  jobs = Repo.all(
-    from j in Oban.Job,
-    where: j.worker == "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob",
-    order_by: [desc: j.inserted_at],
-    limit: 20
-  )
+  jobs =
+    Repo.all(
+      from(j in Oban.Job,
+        where: j.worker == "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob",
+        order_by: [desc: j.inserted_at],
+        limit: 20
+      )
+    )
 
-  completed = Enum.count(jobs, & &1.state == "completed")
-  failed = Enum.count(jobs, & &1.state in ["discarded", "retryable"])
+  completed = Enum.count(jobs, &(&1.state == "completed"))
+  failed = Enum.count(jobs, &(&1.state in ["discarded", "retryable"]))
 
   IO.puts("\n=== Job Summary ===")
   IO.puts("Total jobs: #{length(jobs)}")
@@ -47,8 +49,9 @@ if city do
 
   if failed > 0 do
     IO.puts("\n=== Failed Jobs ===")
+
     jobs
-    |> Enum.filter(& &1.state in ["discarded", "retryable"])
+    |> Enum.filter(&(&1.state in ["discarded", "retryable"]))
     |> Enum.each(fn job ->
       IO.puts("Job #{job.id}: #{inspect(job.errors)}")
     end)
