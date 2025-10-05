@@ -297,11 +297,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   @impl true
   def handle_event("select_showtime_date", %{"date" => date_string}, socket) do
-    # Parse the date string and update the selected showtime date
-    # This allows the showtime selector component to filter and display
-    # only the showtimes for the selected date
-    selected_date = Date.from_iso8601!(date_string)
-    {:noreply, assign(socket, :selected_showtime_date, selected_date)}
+    case Date.from_iso8601(date_string) do
+      {:ok, selected_date} ->
+        {:noreply, assign(socket, :selected_showtime_date, selected_date)}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @impl true

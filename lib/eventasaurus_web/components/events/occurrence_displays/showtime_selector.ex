@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
   attr :event, :map, required: true
   attr :occurrence_list, :list, required: true
   attr :selected_occurrence, :map, default: nil
-  attr :selected_showtime_date, Date, default: nil
+  attr :selected_showtime_date, :any, default: nil
 
   def showtime_selector(assigns) do
     # Group showtimes by date
@@ -24,6 +24,13 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
     assigns = assign(assigns, :available_dates, get_available_dates(assigns.showtimes_by_date))
     # Set selected date (default to today or first available)
     assigns = assign(assigns, :selected_date, get_selected_date(assigns))
+    # Get the index of the selected occurrence for highlighting
+    assigns =
+      assign(
+        assigns,
+        :selected_index,
+        selected_occurrence_index(assigns.occurrence_list, assigns.selected_occurrence)
+      )
 
     ~H"""
     <div class="showtime-selector">
@@ -123,7 +130,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
             <.showtime_button
               showtime={showtime}
               index={showtime.index}
-              selected={@selected_occurrence == showtime}
+              selected={not is_nil(@selected_index) and @selected_index == showtime.index}
             />
           <% end %>
         </div>
@@ -181,7 +188,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
       Date.compare(date, today) != :lt &&
         Date.diff(date, today) < 7
     end)
-    |> Enum.sort(Date)
+    |> Enum.sort_by(& &1, Date)
     |> Enum.take(7)
     |> case do
       [] ->
@@ -189,7 +196,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
         showtimes_by_date
         |> Map.keys()
         |> Enum.filter(fn date -> Date.diff(date, today) < 14 end)
-        |> Enum.sort(Date)
+        |> Enum.sort_by(& &1, Date)
         |> Enum.take(7)
 
       dates ->
@@ -285,4 +292,10 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
   defp is_past_showtime?(%{datetime: datetime}) do
     DateTime.compare(datetime, DateTime.utc_now()) == :lt
   end
+
+  defp selected_occurrence_index(list, selected) when is_list(list) and is_map(selected) do
+    Enum.find_index(list, &(&1 == selected))
+  end
+
+  defp selected_occurrence_index(_list, _selected), do: nil
 end
