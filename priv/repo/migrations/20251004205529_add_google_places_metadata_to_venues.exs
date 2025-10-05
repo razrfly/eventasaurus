@@ -1,9 +1,9 @@
-defmodule EventasaurusApp.Repo.Migrations.AddGooglePlacesMetadataToVenues do
+defmodule EventasaurusApp.Repo.Migrations.AddMetadataToVenues do
   use Ecto.Migration
 
   def change do
     alter table(:venues) do
-      add :google_places_metadata, :map
+      add :metadata, :map
     end
   end
 end
