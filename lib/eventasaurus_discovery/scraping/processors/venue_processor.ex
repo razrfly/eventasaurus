@@ -19,6 +19,31 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   import Ecto.Query
   require Logger
 
+  # ========================================
+  # Venue Matching Configuration
+  # ========================================
+  # These thresholds control how aggressively we match venues to prevent duplicates.
+  # Higher GPS radius and lower similarity thresholds = more aggressive matching (fewer duplicates, more false positives)
+  # Lower GPS radius and higher similarity thresholds = less aggressive matching (more duplicates, fewer false positives)
+
+  # GPS-based matching thresholds (in meters)
+  @gps_tight_radius_meters 50
+  @gps_broad_radius_meters 200  # Increased from 100m to catch venues across street
+
+  # Name similarity thresholds (0.0 = completely different, 1.0 = identical)
+  # Uses Jaro distance algorithm: https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance
+  @name_similarity_tight_gps 0.2   # Very low threshold for tight GPS matches (venues at same coords)
+  @name_similarity_broad_gps 0.5   # Medium threshold for broader GPS matches (within 200m)
+
+  # PostgreSQL similarity() function threshold (uses trigram matching)
+  # This is different from Jaro distance - uses character n-grams
+  # Lowered from 0.7 to 0.6 to catch more variants (e.g., "Kino Cinema" vs "Cinema Hall")
+  @postgres_similarity_threshold 0.6
+
+  # ========================================
+  # End Configuration
+  # ========================================
+
   @doc """
   Processes venue data and returns a venue record.
   Creates or finds existing venue, city, and country as needed.
@@ -47,21 +72,21 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   # GPS-based matching with relaxed name similarity
   def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id, name: name})
       when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) and not is_nil(name) do
-    # First try tight GPS matching (within 50 meters)
-    gps_match = find_venue_by_coordinates(lat, lng, city_id, 50)
+    # First try tight GPS matching
+    gps_match = find_venue_by_coordinates(lat, lng, city_id, @gps_tight_radius_meters)
 
     case gps_match do
       nil ->
-        # No GPS match, try broader search (100m) then fall back to name-based
-        broader_match = find_venue_by_coordinates(lat, lng, city_id, 100)
+        # No GPS match, try broader search then fall back to name-based
+        broader_match = find_venue_by_coordinates(lat, lng, city_id, @gps_broad_radius_meters)
 
         if broader_match do
           # Check name similarity for broader GPS match
           similarity = calculate_similarity(broader_match.name, name)
 
-          if similarity > 0.5 do
+          if similarity > @name_similarity_broad_gps do
             Logger.info(
-              "🏛️📍 Found venue by GPS (100m): '#{broader_match.name}' for '#{name}' (similarity: #{similarity})"
+              "🏛️📍 Found venue by GPS (#{@gps_broad_radius_meters}m): '#{broader_match.name}' for '#{name}' (similarity: #{similarity})"
             )
 
             broader_match
@@ -75,12 +100,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         end
 
       venue ->
-        # Found within 50 meters - verify with very relaxed name similarity (20%)
+        # Found within tight radius - verify with very relaxed name similarity
         similarity = calculate_similarity(venue.name, name)
 
-        if similarity > 0.2 do
+        if similarity > @name_similarity_tight_gps do
           Logger.info(
-            "🏛️📍 Found venue by GPS (50m): '#{venue.name}' for '#{name}' (GPS match, similarity: #{similarity})"
+            "🏛️📍 Found venue by GPS (#{@gps_tight_radius_meters}m): '#{venue.name}' for '#{name}' (GPS match, similarity: #{similarity})"
           )
 
           venue
@@ -99,10 +124,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   # Fallback to coordinates without name
   def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id} = attrs)
       when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
-    # Try coordinates (within 50 meters preferred, 100 meters fallback)
+    # Try coordinates (tight radius preferred, broad radius fallback)
     venue =
-      find_venue_by_coordinates(lat, lng, city_id, 50) ||
-        find_venue_by_coordinates(lat, lng, city_id, 100)
+      find_venue_by_coordinates(lat, lng, city_id, @gps_tight_radius_meters) ||
+        find_venue_by_coordinates(lat, lng, city_id, @gps_broad_radius_meters)
 
     # If no coordinate match, try by name if available
     if is_nil(venue) and Map.has_key?(attrs, :name) do
@@ -124,12 +149,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       )
       |> Repo.one()
 
-    # If no exact match, try fuzzy match
+    # If no exact match, try fuzzy match using PostgreSQL similarity
     if is_nil(exact_match) do
       fuzzy_match =
         from(v in Venue,
           where: v.city_id == ^city_id,
-          where: fragment("similarity(?, ?) > ?", v.name, ^clean_name, 0.7),
+          where: fragment("similarity(?, ?) > ?", v.name, ^clean_name, ^@postgres_similarity_threshold),
           order_by: [desc: fragment("similarity(?, ?)", v.name, ^clean_name)],
           limit: 1
         )
@@ -137,7 +162,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
       if fuzzy_match do
         Logger.info(
-          "🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{clean_name}' (similarity: #{calculate_similarity(fuzzy_match.name, clean_name)})"
+          "🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{clean_name}' (PostgreSQL similarity > #{@postgres_similarity_threshold}, Jaro: #{calculate_similarity(fuzzy_match.name, clean_name)})"
         )
 
         fuzzy_match
@@ -157,6 +182,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     clean_name1 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name1)
     clean_name2 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name2)
     Float.round(String.jaro_distance(clean_name1, clean_name2), 2)
+  end
+
+  # Detects if a changeset error is due to unique constraint violation on place_id
+  # Used to handle TOCTOU race conditions where multiple workers try to insert the same venue
+  defp has_place_id_constraint_error?(changeset) do
+    Enum.any?(changeset.errors, fn
+      {:place_id, {_msg, [constraint: :unique, constraint_name: "venues_place_id_unique_index"]}} ->
+        true
+
+      _ ->
+        false
+    end)
   end
 
   defp find_venue_by_coordinates(lat, lng, city_id, radius_meters) do
@@ -459,7 +496,37 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       case find_existing_venue(%{place_id: final_place_id}) do
         nil ->
           # Safe to insert, no existing venue with this place_id
-          insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata)
+          # However, another worker could still insert between the check and insert (TOCTOU gap)
+          # The database unique constraint will catch this, so we handle constraint violations
+          case insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata) do
+            {:ok, venue} ->
+              {:ok, venue}
+
+            {:error, changeset} ->
+              # Check if it's a unique constraint violation on place_id
+              if has_place_id_constraint_error?(changeset) do
+                # Another worker beat us to the insert, fetch and return the existing venue
+                case find_existing_venue(%{place_id: final_place_id}) do
+                  nil ->
+                    # Unlikely: constraint fired but we can't find the venue
+                    Logger.error(
+                      "🏛️ ❌ Unique constraint violation but venue not found: place_id=#{final_place_id}"
+                    )
+
+                    {:error, changeset}
+
+                  existing ->
+                    Logger.info(
+                      "🏛️ ✅ Resolved race condition via constraint: '#{existing.name}' (place_id: #{final_place_id})"
+                    )
+
+                    {:ok, existing}
+                end
+              else
+                # Some other error, propagate it
+                {:error, changeset}
+              end
+          end
 
         existing ->
           # Another worker just created it, return existing venue
