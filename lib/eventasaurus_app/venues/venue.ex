@@ -107,7 +107,7 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:venue_type, :string, default: "venue")
     field(:place_id, :string)
     field(:source, :string, default: "user")
-    field(:google_places_metadata, :map)
+    field(:metadata, :map)
 
     belongs_to(:city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id)
     has_many(:events, EventasaurusApp.Events.Event)
@@ -134,7 +134,7 @@ defmodule EventasaurusApp.Venues.Venue do
       :place_id,
       :source,
       :city_id,
-      :google_places_metadata
+      :metadata
     ])
     |> validate_required_by_type()
     |> validate_inclusion(:venue_type, @valid_venue_types,

@@ -467,7 +467,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       place_id: final_place_id,
       source: "scraper",
       city_id: city.id,
-      google_places_metadata: google_metadata
+      metadata: google_metadata
     }
 
     case Venue.changeset(%Venue{}, attrs) |> Repo.insert() do
