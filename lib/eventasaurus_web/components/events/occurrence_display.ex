@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   attr :event, :map, required: true
   attr :occurrence_list, :list, required: true
   attr :selected_occurrence, :map, default: nil
-  attr :selected_showtime_date, Date, default: nil
+  attr :selected_showtime_date, :any, default: nil
   attr :is_movie_screening, :boolean, default: false
 
   def occurrence_display(assigns) do
@@ -71,13 +71,15 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   defp recurring_pattern_display(assigns) do
     ~H"""
     <div class="mb-4">
-      <%= if List.first(@occurrence_list).pattern do %>
-        <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <div class="flex items-center text-green-800">
-            <Heroicons.arrow_path class="w-5 h-5 mr-2 flex-shrink-0" />
-            <span class="font-semibold text-lg"><%= List.first(@occurrence_list).pattern %></span>
+      <% case List.first(@occurrence_list) do %>
+        <% %{pattern: pattern} when not is_nil(pattern) -> %>
+          <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div class="flex items-center text-green-800">
+              <Heroicons.arrow_path class="w-5 h-5 mr-2 flex-shrink-0" />
+              <span class="font-semibold text-lg"><%= pattern %></span>
+            </div>
           </div>
-        </div>
+        <% _ -> %>
       <% end %>
 
       <p class="text-sm text-gray-600 mb-4">
