@@ -453,6 +453,29 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     final_name = google_name || data.name
     final_place_id = google_place_id || data.place_id
 
+    # RACE CONDITION FIX: Re-check if place_id now exists after Google Places lookup
+    # This prevents duplicates when multiple Oban workers lookup the same venue in parallel
+    if final_place_id do
+      case find_existing_venue(%{place_id: final_place_id}) do
+        nil ->
+          # Safe to insert, no existing venue with this place_id
+          insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata)
+
+        existing ->
+          # Another worker just created it, return existing venue
+          Logger.info(
+            "🏛️ ✅ Found existing venue after Google Places lookup: '#{existing.name}' (place_id: #{final_place_id})"
+          )
+
+          {:ok, existing}
+      end
+    else
+      # No place_id, proceed with normal insert
+      insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata)
+    end
+  end
+
+  defp insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata) do
     # All discovery sources use "scraper" as the venue source
     # Clean UTF-8 for venue name before database insert
     attrs = %{
