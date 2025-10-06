@@ -143,7 +143,7 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
       occurrences
       |> Enum.map(& &1.date)
       |> Enum.uniq()
-      |> Enum.sort(Date)
+      |> Enum.sort()
 
     date_range =
       if length(unique_dates) > 0 do

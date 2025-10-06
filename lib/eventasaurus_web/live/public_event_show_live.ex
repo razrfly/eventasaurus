@@ -676,15 +676,17 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
             <!-- Event Header -->
             <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-              <!-- Cover Image - use movie backdrop for screenings, otherwise event cover -->
-              <%= if @is_movie_screening && @movie && @movie.backdrop_url do %>
-                <div class="h-96 relative">
-                  <img
-                    src={@movie.backdrop_url}
-                    alt={@movie.title}
-                    class="w-full h-full object-cover"
-                  />
-                </div>
+              <!-- Cover Image - for movie screenings, only use movie backdrop; for other events, use event cover -->
+              <%= if @is_movie_screening do %>
+                <%= if @movie && @movie.backdrop_url do %>
+                  <div class="h-96 relative">
+                    <img
+                      src={@movie.backdrop_url}
+                      alt={@movie.title}
+                      class="w-full h-full object-cover"
+                    />
+                  </div>
+                <% end %>
               <% else %>
                 <%= if @event.cover_image_url do %>
                   <div class="h-96 relative">
@@ -1438,13 +1440,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     Enum.any?(occurrences, fn occ -> occ.date == date end)
   end
 
-  # Occurrence formatting - still used in other parts of the page
-  defp format_occurrence_datetime(nil), do: gettext("Select a date")
-
-  defp format_occurrence_datetime(%{datetime: datetime}) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
-  end
-
   defp event_is_past?(%{starts_at: nil}), do: false
 
   defp event_is_past?(%{ends_at: ends_at}) when not is_nil(ends_at) do
@@ -1584,13 +1579,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
+  defp parse_date_slug(_), do: :error
+
   # Parse new format: "oct-10"
   # Handles year boundary intelligently: if date is in the past, try next year
   defp parse_month_day_slug(slug) do
     case Regex.run(~r/^(\w{3})-(\d+)$/, slug) do
       [_, month_abbr, day_str] ->
         with {day, ""} <- Integer.parse(day_str),
-             month_num <- parse_month_abbr(month_abbr) do
+             month_num when is_integer(month_num) <- parse_month_abbr(month_abbr) do
           # Try current year first
           current_year = Date.utc_today().year
           today = Date.utc_today()
@@ -1656,8 +1653,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         :error
     end
   end
-
-  defp parse_date_slug(_), do: :error
 
   # Map month abbreviations to numbers using standard library month names
   defp parse_month_abbr(month_abbr) do
