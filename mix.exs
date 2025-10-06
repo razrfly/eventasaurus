@@ -139,7 +139,10 @@ defmodule Eventasaurus.MixProject do
       {:tz_world, "~> 1.3"},
 
       # YAML parsing for category mappings
-      {:yaml_elixir, "~> 2.11"}
+      {:yaml_elixir, "~> 2.11"},
+
+      # XML Sitemap generation for SEO
+      {:sitemapper, "~> 0.10"}
     ]
   end
 
