@@ -115,10 +115,11 @@ defmodule EventasaurusWeb.Components.EventCards do
             </div>
           <% end %>
 
-          <%= if @show_city && @event.venue && Map.get(@event.venue, :city) do %>
+          <% city = if @event.venue, do: Map.get(@event.venue, :city) %>
+          <%= if @show_city && city && not match?(%Ecto.Association.NotLoaded{}, city) do %>
             <div class="mt-1 flex items-center text-sm text-gray-600">
               <Heroicons.building_office class="w-4 h-4 mr-1" />
-              <%= @event.venue.city.name %>
+              <%= city.name %>
             </div>
           <% end %>
         </div>
