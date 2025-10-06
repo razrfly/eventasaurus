@@ -21,6 +21,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEventContainers do
     # Create public_event_containers table
     create table(:public_event_containers) do
       add :title, :string, null: false
+      add :slug, :string, null: false
       add :container_type, :container_type, null: false, default: "unknown"
       add :description, :text
 
@@ -43,6 +44,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEventContainers do
     end
 
     # Indexes for performance
+    create unique_index(:public_event_containers, [:slug])
     create index(:public_event_containers, [:title_pattern])
     create index(:public_event_containers, [:start_date, :end_date])
     create index(:public_event_containers, [:container_type])

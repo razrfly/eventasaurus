@@ -436,6 +436,22 @@ defmodule EventasaurusWeb.Router do
       # City search
       live "/:city_slug/search", CityLive.Search, :index
 
+      # Container type index pages (list all festivals, conferences, etc. in a city)
+      live "/:city_slug/festivals", CityLive.Events, :festivals
+      live "/:city_slug/conferences", CityLive.Events, :conferences
+      live "/:city_slug/tours", CityLive.Events, :tours
+      live "/:city_slug/series", CityLive.Events, :series
+      live "/:city_slug/exhibitions", CityLive.Events, :exhibitions
+      live "/:city_slug/tournaments", CityLive.Events, :tournaments
+
+      # Container detail pages (individual festival, conference, etc.)
+      live "/:city_slug/festivals/:container_slug", CityLive.ContainerDetailLive, :show
+      live "/:city_slug/conferences/:container_slug", CityLive.ContainerDetailLive, :show
+      live "/:city_slug/tours/:container_slug", CityLive.ContainerDetailLive, :show
+      live "/:city_slug/series/:container_slug", CityLive.ContainerDetailLive, :show
+      live "/:city_slug/exhibitions/:container_slug", CityLive.ContainerDetailLive, :show
+      live "/:city_slug/tournaments/:container_slug", CityLive.ContainerDetailLive, :show
+
       # Movie screenings aggregation (must be before catch-all aggregated content)
       live "/:city_slug/movies/:movie_slug", PublicMovieScreeningsLive, :show
 

@@ -155,12 +155,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
   # Calculate start date from sub-events, or use umbrella date if no sub-events yet
   defp calculate_start_date([], festival), do: festival.start_date
 
-  defp calculate_start_date(sub_events, _festival) do
+  defp calculate_start_date(sub_events, festival) do
     sub_events
     |> Enum.map(fn raw_event -> parse_date(raw_event["event"]["date"]) end)
     |> Enum.reject(&is_nil/1)
     |> case do
-      [] -> Date.utc_today()
+      [] -> festival.start_date
       dates -> Enum.min(dates, Date)
     end
   end
@@ -168,12 +168,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
   # Calculate end date from sub-events, or use umbrella date if no sub-events yet
   defp calculate_end_date([], festival), do: festival.start_date
 
-  defp calculate_end_date(sub_events, _festival) do
+  defp calculate_end_date(sub_events, festival) do
     sub_events
     |> Enum.map(fn raw_event -> parse_date(raw_event["event"]["date"]) end)
     |> Enum.reject(&is_nil/1)
     |> case do
-      [] -> Date.utc_today()
+      [] -> festival.start_date
       dates -> Enum.max(dates, Date)
     end
   end
@@ -183,7 +183,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
   defp parse_date(date_string) when is_binary(date_string) do
     case Date.from_iso8601(date_string) do
       {:ok, date} -> date
-      _ -> nil
+      _ ->
+        with {:ok, dt, _offset} <- DateTime.from_iso8601(date_string) do
+          DateTime.to_date(dt)
+        else
+          _ -> nil
+        end
     end
   end
 

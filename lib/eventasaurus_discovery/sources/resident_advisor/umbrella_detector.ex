@@ -77,11 +77,11 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.UmbrellaDetector do
 
   # Check for multi-day pattern
   defp check_multi_day_pattern(event) do
-    date = event["date"]
+    start_time = event["startTime"] || event["date"]
     end_time = event["endTime"]
 
-    with true <- is_binary(date) and is_binary(end_time),
-         {:ok, event_date, _} <- DateTime.from_iso8601(date),
+    with true <- is_binary(start_time) and is_binary(end_time),
+         {:ok, event_date, _} <- DateTime.from_iso8601(start_time),
          {:ok, event_end, _} <- DateTime.from_iso8601(end_time),
          true <- DateTime.diff(event_end, event_date, :day) >= 3 do
       {:umbrella, %{reason: :multi_day_pattern, days: DateTime.diff(event_end, event_date, :day)}}
