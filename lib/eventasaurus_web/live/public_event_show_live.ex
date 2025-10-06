@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusApp.Events.EventPlans
   alias EventasaurusWeb.Components.PublicPlanWithFriendsModal
   alias EventasaurusWeb.Components.Events.OccurrenceDisplay
+  alias EventasaurusWeb.Components.Events.EventScheduleDisplay
   alias EventasaurusWeb.StaticMapComponent
   import Ecto.Query
 
@@ -65,7 +66,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   @impl true
   def handle_params(%{"slug" => slug, "date_slug" => date_slug}, _url, socket) do
-    # Handle URL with specific date: /activities/slug/friday-october-10-2025
+    # Handle URL with specific date: /activities/slug/oct-10
     socket =
       socket
       |> fetch_event(slug)
@@ -74,8 +75,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     socket =
       case parse_date_slug(date_slug) do
         {:ok, date} ->
-          # Successfully parsed date from URL
-          assign(socket, :selected_showtime_date, date)
+          # Successfully parsed date from URL, verify it exists in occurrences
+          if has_occurrence_on_date?(socket.assigns.event, date) do
+            assign(socket, :selected_showtime_date, date)
+          else
+            socket
+            |> put_flash(:error, gettext("No events scheduled for this date"))
+            |> push_patch(to: ~p"/activities/#{slug}")
+          end
 
         :error ->
           # Invalid date slug, show error and redirect to base URL
@@ -858,26 +865,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
                 <!-- Key Details Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <!-- Date & Time -->
-                  <div>
-                    <div class="flex items-center text-gray-600 mb-1">
-                      <Heroicons.calendar class="w-5 h-5 mr-2" />
-                      <span class="font-medium"><%= gettext("Date & Time") %></span>
-                    </div>
-                    <p class="text-gray-900">
-                      <%= if @selected_occurrence do %>
-                        <%= format_occurrence_datetime(@selected_occurrence) %>
-                      <% else %>
-                        <%= format_event_datetime(@event.starts_at) %>
-                        <%= if @event.ends_at do %>
-                          <br />
-                          <span class="text-sm text-gray-600">
-                            <%= gettext("Until") %> <%= format_event_datetime(@event.ends_at) %>
-                          </span>
-                        <% end %>
-                      <% end %>
-                    </p>
-                  </div>
+                  <!-- Event Schedule (Date & Time or Screening Schedule) -->
+                  <EventScheduleDisplay.event_schedule_display
+                    event={@event}
+                    occurrence_list={@event.occurrence_list || []}
+                    selected_occurrence={@selected_occurrence}
+                    is_movie_screening={@is_movie_screening}
+                  />
 
                   <!-- Venue -->
                   <%= if @event.venue do %>
@@ -1436,6 +1430,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end)
   end
 
+  # Check if event has an occurrence on the specified date
+  defp has_occurrence_on_date?(%{occurrence_list: nil}, _date), do: false
+  defp has_occurrence_on_date?(%{occurrence_list: []}, _date), do: false
+
+  defp has_occurrence_on_date?(%{occurrence_list: occurrences}, date) do
+    Enum.any?(occurrences, fn occ -> occ.date == date end)
+  end
+
   # Occurrence formatting - still used in other parts of the page
   defp format_occurrence_datetime(nil), do: gettext("Select a date")
 
@@ -1583,14 +1585,32 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   # Parse new format: "oct-10"
+  # Handles year boundary intelligently: if date is in the past, try next year
   defp parse_month_day_slug(slug) do
     case Regex.run(~r/^(\w{3})-(\d+)$/, slug) do
       [_, month_abbr, day_str] ->
         with {day, ""} <- Integer.parse(day_str),
-             month_num <- parse_month_abbr(month_abbr),
-             year <- Date.utc_today().year,
-             {:ok, date} <- Date.new(year, month_num, day) do
-          {:ok, date}
+             month_num <- parse_month_abbr(month_abbr) do
+          # Try current year first
+          current_year = Date.utc_today().year
+          today = Date.utc_today()
+
+          case Date.new(current_year, month_num, day) do
+            {:ok, date} ->
+              # If date is more than 30 days in the past, try next year
+              # This handles year boundaries gracefully (e.g., jan-15 accessed in December)
+              if Date.diff(today, date) > 30 do
+                case Date.new(current_year + 1, month_num, day) do
+                  {:ok, next_year_date} -> {:ok, next_year_date}
+                  _ -> {:ok, date}
+                end
+              else
+                {:ok, date}
+              end
+
+            _ ->
+              :error
+          end
         else
           _ -> :error
         end
