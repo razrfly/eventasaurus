@@ -151,17 +151,17 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
       is_pattern_occurrence?(occurrences) ->
         :recurring_pattern
 
-      # Movies with many showtimes - use showtime selector
-      is_movie_screening && length(occurrences) > 10 ->
+      # All on same day - time selection
+      all_same_day?(occurrences) ->
+        :same_day_multiple
+
+      # Movies spanning multiple days - use showtime selector
+      is_movie_screening && !all_same_day?(occurrences) ->
         :daily_show
 
       # More than 20 dates for any event - daily show
       length(occurrences) > 20 ->
         :daily_show
-
-      # All on same day - time selection
-      all_same_day?(occurrences) ->
-        :same_day_multiple
 
       # Default - multi day
       true ->
