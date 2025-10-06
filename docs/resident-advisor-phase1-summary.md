@@ -121,7 +121,7 @@ end
 - Los Angeles, USA
 
 **Method:**
-1. Open https://ra.co/events/pl/warsaw in Chrome
+1. Open <https://ra.co/events/pl/warsaw> in Chrome
 2. DevTools → Network → Filter "graphql"
 3. Scroll page to trigger event listing query
 4. Inspect request payload
@@ -138,7 +138,7 @@ end
 
 | Task | Status | Notes |
 |------|--------|-------|
-| GraphQL endpoint identified | ✅ Complete | https://ra.co/graphql |
+| GraphQL endpoint identified | ✅ Complete | <https://ra.co/graphql> |
 | Authentication requirements | ✅ Complete | None required |
 | Query structure documented | ✅ Complete | See research doc |
 | Data fields cataloged | ✅ Complete | Event, venue, artist |

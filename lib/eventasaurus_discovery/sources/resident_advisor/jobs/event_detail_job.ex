@@ -27,9 +27,26 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
     source_id = args["source_id"]
     external_id = Map.get(event_data, "external_id") || Map.get(event_data, :external_id)
 
-    # CRITICAL: Mark event as seen BEFORE processing
-    # This ensures last_seen_at is updated even if processing fails
-    EventProcessor.mark_event_as_seen(external_id, source_id)
+    # CRITICAL: Guard against nil identifiers before marking as seen
+    # Prevents bogus "seen" records if job payload is malformed
+    cond do
+      is_nil(source_id) ->
+        Logger.error("🚫 Discarding RA event: missing source_id in args")
+        {:discard, :missing_source_id}
+
+      is_nil(external_id) ->
+        Logger.error("🚫 Discarding RA event for source #{source_id}: missing external_id")
+        {:discard, :missing_external_id}
+
+      true ->
+        # CRITICAL: Mark event as seen BEFORE processing
+        # This ensures last_seen_at is updated even if processing fails
+        EventProcessor.mark_event_as_seen(external_id, source_id)
+        process_event(event_data, source_id, external_id)
+    end
+  end
+
+  defp process_event(event_data, source_id, external_id) do
 
     Logger.info("🎵 Processing RA event: #{external_id}")
 
