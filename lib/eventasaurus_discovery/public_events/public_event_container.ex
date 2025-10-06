@@ -137,8 +137,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
   def container_type_label(%__MODULE__{container_type: :series}), do: "Event Series"
   def container_type_label(%__MODULE__{container_type: :exhibition}), do: "Exhibition"
   def container_type_label(%__MODULE__{container_type: :tournament}), do: "Tournament"
-  def container_type_label(%__MODULE__{container_type: :unknown}), do: "Event Series"
-  def container_type_label(_), do: "Event Series"
+  def container_type_label(%__MODULE__{container_type: :unknown}), do: "Unknown"
+  def container_type_label(_), do: "Unknown"
 
   @doc """
   Check if container is active (current or upcoming).
