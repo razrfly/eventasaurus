@@ -20,6 +20,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -53,8 +54,13 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
     # Get the source
     with {:ok, source} <- get_source(source_id),
          # Process the single event
-         {:ok, _processed_event} <- process_single_event(event_data, source) do
+         {:ok, processed_event} <- process_single_event(event_data, source) do
       Logger.info("✅ Successfully processed RA event: #{external_id}")
+
+      # Check for prospective container associations
+      # This allows sub-events imported before umbrella to be associated retroactively
+      PublicEventContainers.check_for_container_match(processed_event)
+
       {:ok, %{event_id: external_id, status: "processed"}}
     else
       {:error, :source_not_found} ->

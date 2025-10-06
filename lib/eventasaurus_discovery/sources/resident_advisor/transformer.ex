@@ -10,7 +10,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.ResidentAdvisor.{VenueEnricher, Config}
+  alias EventasaurusDiscovery.Sources.ResidentAdvisor.{VenueEnricher, Config, UmbrellaDetector}
   alias EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser
 
   @doc """
@@ -36,6 +36,20 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
     # Extract event from wrapper (RA returns {id, listingDate, event})
     event = extract_event_data(raw_event)
 
+    # Check if this is an umbrella/festival container event
+    case UmbrellaDetector.is_umbrella_event?(event, city_context) do
+      {:umbrella, metadata} ->
+        # This is an umbrella event - return special marker for container creation
+        UmbrellaDetector.log_detection(event, {:umbrella, metadata})
+        {:umbrella, build_umbrella_event_data(raw_event, event, metadata, city_context)}
+
+      :not_umbrella ->
+        # Normal event - proceed with standard transformation
+        transform_regular_event(raw_event, event, city_context)
+    end
+  end
+
+  defp transform_regular_event(raw_event, event, city_context) do
     # Extract and validate venue first since it's critical
     venue_data = extract_venue(event, city_context)
 
@@ -76,8 +90,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
           # Original URL for reference
           source_url: Config.build_event_url(event["contentUrl"]),
 
-          # Raw data for debugging
-          raw_data: raw_event
+          # Raw data for debugging (including promoter info for container grouping)
+          raw_data: Map.merge(raw_event, extract_promoter_data(event))
         }
 
         {:ok, transformed}
@@ -296,5 +310,33 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
       tags
     end
     |> Enum.uniq()
+  end
+
+  # Build umbrella event data for container creation.
+  # Returns event data in a format suitable for PublicEventContainers.create_from_umbrella_event/2
+  defp build_umbrella_event_data(raw_event, event, metadata, city_context) do
+    %{
+      title: extract_title(event),
+      external_id: extract_external_id(event),
+      starts_at: extract_starts_at(event, city_context),
+      ends_at: extract_ends_at(event, city_context),
+      description: extract_description(event),
+      image_url: extract_image_url(event),
+      raw_data: Map.merge(raw_event, extract_promoter_data(event)),
+      umbrella_metadata: metadata,
+      tags: ["festival", "resident-advisor"]
+    }
+  end
+
+  # Extract promoter information from event data for container grouping.
+  # This data is used by ContainerGrouper to group events by promoter ID.
+  defp extract_promoter_data(event) do
+    case event["promoters"] do
+      [%{"id" => id, "name" => name} | _] ->
+        %{"promoter_id" => id, "promoter_name" => name}
+
+      _ ->
+        %{"promoter_id" => nil, "promoter_name" => nil}
+    end
   end
 end
