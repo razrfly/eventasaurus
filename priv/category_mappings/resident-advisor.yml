@@ -1,0 +1,42 @@
+# Resident Advisor Category Mappings
+# Resident Advisor is focused on electronic music events, club nights, and festivals
+
+mappings:
+  # Primary categories - all RA events are electronic music concerts
+  concert: concerts
+  concerts: concerts
+  nightlife: nightlife
+
+  # Secondary categories for large events
+  festival: festivals
+  festivals: festivals
+
+  # Electronic music specific
+  electronic: concerts
+  techno: concerts
+  house: concerts
+  trance: concerts
+  drum and bass: concerts
+  dubstep: concerts
+
+  # Venue types
+  club: nightlife
+  clubs: nightlife
+
+  # Event types
+  party: nightlife
+  rave: nightlife
+
+# RA-specific patterns
+patterns:
+  # Electronic music genres
+  - match: "electronic|techno|house|trance|drum.?and.?bass|dubstep|minimal|ambient"
+    categories: [concerts, nightlife]
+
+  # Large events and festivals
+  - match: "festival|fest|outdoor|open.?air"
+    categories: [festivals, concerts, nightlife]
+
+  # Club nights
+  - match: "club|night|party|rave"
+    categories: [nightlife, concerts]
