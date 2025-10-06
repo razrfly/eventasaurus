@@ -71,7 +71,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   defp recurring_pattern_display(assigns) do
     ~H"""
     <div class="mb-4">
-      <% case List.first(@occurrence_list) do %>
+      <%= case List.first(@occurrence_list) do %>
         <% %{pattern: pattern} when not is_nil(pattern) -> %>
           <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
             <div class="flex items-center text-green-800">
