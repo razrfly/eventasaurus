@@ -23,8 +23,34 @@ poland = case Repo.get_by(Country, code: "PL") do
     existing
 end
 
+# Ensure we have United Kingdom as a country
+uk = case Repo.get_by(Country, code: "GB") do
+  nil ->
+    %Country{}
+    |> Country.changeset(%{
+      name: "United Kingdom",
+      code: "GB",
+      slug: "united-kingdom"
+    })
+    |> Repo.insert!()
+    |> tap(fn _ -> IO.puts("  ✅ Created country: United Kingdom") end)
+
+  existing ->
+    IO.puts("  ℹ️  Country already exists: United Kingdom")
+    existing
+end
+
 # Define cities with their coordinates
 cities_data = [
+  # United Kingdom
+  %{
+    name: "London",
+    slug: "london",
+    latitude: 51.5074,
+    longitude: -0.1278,
+    country_id: uk.id
+  },
+  # Poland
   %{
     name: "Kraków",
     slug: "krakow",

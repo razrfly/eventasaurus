@@ -327,6 +327,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     sources = [
       "ticketmaster",
       "bandsintown",
+      "resident-advisor",
       "karnet",
       "kino-krakow",
       "cinema-city",
