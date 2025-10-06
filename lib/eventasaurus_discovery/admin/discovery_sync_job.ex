@@ -13,6 +13,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   @sources %{
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
+    "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
     "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
@@ -178,6 +179,32 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     %{
       radius: args["radius"] || 50
     }
+  end
+
+  defp build_source_options("resident-advisor", %{"city_id" => city_id} = args) do
+    # RA requires area_id mapping
+    # Look up area_id from city using AreaMapper
+    area_id =
+      case Repo.get(City, city_id) |> Repo.preload(:country) do
+        nil ->
+          Logger.warning("⚠️ City not found for area_id lookup: #{city_id}")
+          nil
+
+        city ->
+          case EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.AreaMapper.get_area_id(
+                 city
+               ) do
+            {:ok, area_id} ->
+              Logger.info("✅ Found RA area_id #{area_id} for #{city.name}")
+              area_id
+
+            {:error, :area_not_found} ->
+              Logger.warning("⚠️ No area_id mapping for #{city.name}, #{city.country.name}")
+              nil
+          end
+      end
+
+    %{area_id: area_id || args["area_id"]}
   end
 
   defp build_source_options(_source, _args), do: %{}

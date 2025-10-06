@@ -16,6 +16,18 @@ sources = [
     }
   },
   %{
+    name: "Resident Advisor",
+    slug: "resident-advisor",
+    website_url: "https://ra.co",
+    priority: 75,
+    metadata: %{
+      "rate_limit_seconds" => 0.5,
+      "max_requests_per_hour" => 7200,
+      "api_type" => "graphql",
+      "supports_pagination" => true
+    }
+  },
+  %{
     name: "Ticketmaster",
     slug: "ticketmaster",
     website_url: "https://www.ticketmaster.com",
