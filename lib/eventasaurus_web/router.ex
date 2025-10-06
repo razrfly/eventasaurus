@@ -457,6 +457,7 @@ defmodule EventasaurusWeb.Router do
       live "/activities/search", PublicEventsIndexLive, :search
       live "/activities/category/:category", PublicEventsIndexLive, :category
       live "/activities/:slug", PublicEventShowLive, :show
+      live "/activities/:slug/:date_slug", PublicEventShowLive, :show
 
       # Guest-accessible checkout
       live "/events/:slug/checkout", CheckoutLive
