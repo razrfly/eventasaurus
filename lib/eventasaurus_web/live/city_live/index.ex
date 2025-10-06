@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
+  alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
 
   import EventasaurusWeb.EventComponents
@@ -435,6 +436,8 @@ defmodule EventasaurusWeb.CityLive.Index do
                   <%= cond do %>
                     <% match?(%AggregatedMovieGroup{}, item) -> %>
                       <.aggregated_movie_card group={item} language={@language} show_city={false} />
+                    <% match?(%AggregatedContainerGroup{}, item) -> %>
+                      <.aggregated_container_card group={item} language={@language} show_city={false} />
                     <% is_aggregated?(item) -> %>
                       <.aggregated_event_card group={item} language={@language} show_city={false} />
                     <% true -> %>
@@ -448,6 +451,8 @@ defmodule EventasaurusWeb.CityLive.Index do
                   <%= cond do %>
                     <% match?(%AggregatedMovieGroup{}, item) -> %>
                       <.aggregated_movie_card group={item} language={@language} show_city={false} />
+                    <% match?(%AggregatedContainerGroup{}, item) -> %>
+                      <.aggregated_container_card group={item} language={@language} show_city={false} />
                     <% is_aggregated?(item) -> %>
                       <.aggregated_event_card group={item} language={@language} show_city={false} />
                     <% true -> %>

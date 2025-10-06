@@ -59,6 +59,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
 
     query
     |> order_by([c], desc: c.start_date)
+    |> preload([:source, source_event: :sources])
     |> Repo.all()
   end
 
@@ -490,7 +491,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
     |> join(:inner, [e], m in PublicEventContainerMembership, on: m.event_id == e.id)
     |> where([e, m], m.container_id == ^container.id)
     |> order_by([e, m], [asc: e.starts_at, desc: m.confidence_score])
-    |> preload(:venue)
+    |> preload([:venue, :sources])
     |> Repo.all()
   end
 

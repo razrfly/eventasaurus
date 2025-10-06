@@ -4,7 +4,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
-  alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.PublicEvents.{AggregatedEventGroup, AggregatedContainerGroup}
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
 
@@ -714,6 +714,8 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
                   <%= cond do %>
                     <% match?(%AggregatedMovieGroup{}, item) -> %>
                       <.aggregated_movie_card group={item} language={@language} show_city={true} />
+                    <% match?(%AggregatedContainerGroup{}, item) -> %>
+                      <.aggregated_container_card group={item} language={@language} show_city={true} />
                     <% is_aggregated?(item) -> %>
                       <.aggregated_event_card group={item} language={@language} show_city={true} />
                     <% true -> %>

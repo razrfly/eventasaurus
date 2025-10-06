@@ -336,28 +336,22 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
   end
 
   defp count_orphaned_containers do
-    Repo.one(
-      from(c in PublicEventContainer,
-        left_join: m in PublicEventContainerMembership,
-        on: m.container_id == c.id,
-        group_by: c.id,
-        having: count(m.id) == 0,
-        select: count(c.id)
-      )
-    ) || 0
+    from(c in PublicEventContainer,
+      left_join: m in PublicEventContainerMembership,
+      on: m.container_id == c.id,
+      where: is_nil(m.id)
+    )
+    |> Repo.aggregate(:count, :id)
   end
 
   defp count_orphaned_containers_by_source(source_id) do
-    Repo.one(
-      from(c in PublicEventContainer,
-        left_join: m in PublicEventContainerMembership,
-        on: m.container_id == c.id,
-        where: c.source_id == ^source_id,
-        group_by: c.id,
-        having: count(m.id) == 0,
-        select: count(c.id)
-      )
-    ) || 0
+    from(c in PublicEventContainer,
+      left_join: m in PublicEventContainerMembership,
+      on: m.container_id == c.id,
+      where: c.source_id == ^source_id,
+      where: is_nil(m.id)
+    )
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
