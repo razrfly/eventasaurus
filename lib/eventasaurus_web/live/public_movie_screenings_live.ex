@@ -58,24 +58,60 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           )
           |> Repo.all()
 
-        # Group by venue and count showtimes
-        venues_with_counts =
+        # Group by venue and extract detailed information from ALL occurrences
+        venues_with_info =
           screenings
           |> Enum.group_by(& &1.venue.id)
           |> Enum.map(fn {_venue_id, events} ->
             first_event = List.first(events)
-            {first_event.venue, length(events), first_event.slug}
-          end)
-          |> Enum.sort_by(fn {venue, _count, _slug} -> venue.name end)
 
-        total_showtimes = length(screenings)
+            # Extract ALL occurrences from ALL events for this venue
+            all_occurrences = extract_all_occurrences(events)
+
+            # Count actual showtimes (occurrences), not events
+            showtime_count = length(all_occurrences)
+
+            # Get date range from occurrences
+            date_range =
+              if length(all_occurrences) > 0 do
+                extract_occurrence_date_range(all_occurrences)
+              else
+                format_date_short(Date.utc_today())
+              end
+
+            # Extract unique formats from occurrence labels
+            formats = extract_occurrence_formats(all_occurrences)
+
+            # Extract unique dates for optional display
+            unique_dates =
+              all_occurrences
+              |> Enum.map(& &1.date)
+              |> Enum.uniq()
+              |> Enum.sort(Date)
+
+            {first_event.venue,
+             %{
+               count: showtime_count,
+               slug: first_event.slug,
+               date_range: date_range,
+               formats: formats,
+               dates: unique_dates
+             }}
+          end)
+          |> Enum.sort_by(fn {venue, _info} -> venue.name end)
+
+        # Sum up all showtime counts from all venues
+        total_showtimes =
+          venues_with_info
+          |> Enum.map(fn {_venue, info} -> info.count end)
+          |> Enum.sum()
 
         {:noreply,
          socket
          |> assign(:page_title, "#{movie.title} - #{city.name}")
          |> assign(:city, city)
          |> assign(:movie, movie)
-         |> assign(:venues_with_counts, venues_with_counts)
+         |> assign(:venues_with_info, venues_with_info)
          |> assign(:total_showtimes, total_showtimes)}
     end
   end
@@ -199,7 +235,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             </span>
           </h2>
 
-          <%= if @venues_with_counts == [] do %>
+          <%= if @venues_with_info == [] do %>
             <div class="text-center py-12">
               <Heroicons.film class="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <p class="text-gray-600 text-lg">
@@ -208,9 +244,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             </div>
           <% else %>
             <div class="space-y-4">
-              <%= for {venue, count, slug} <- @venues_with_counts do %>
+              <%= for {venue, info} <- @venues_with_info do %>
                 <.link
-                  navigate={~p"/activities/#{slug}"}
+                  navigate={~p"/activities/#{info.slug}"}
                   class="block p-6 border border-gray-200 rounded-lg hover:border-blue-400 hover:shadow-md transition"
                 >
                   <div class="flex justify-between items-start">
@@ -218,19 +254,47 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
                       <h3 class="text-lg font-semibold text-gray-900 mb-2">
                         <%= venue.name %>
                       </h3>
+
                       <%= if venue.address do %>
                         <p class="text-sm text-gray-600 mb-3">
                           <Heroicons.map_pin class="w-4 h-4 inline mr-1" />
                           <%= venue.address %>
                         </p>
                       <% end %>
-                      <div class="flex items-center text-gray-700">
-                        <Heroicons.clock class="w-5 h-5 mr-2" />
+
+                      <!-- Date range and showtime count -->
+                      <div class="flex items-center text-gray-700 mb-2">
+                        <Heroicons.calendar_days class="w-5 h-5 mr-2 flex-shrink-0" />
                         <span class="font-medium">
-                          <%= ngettext("1 showtime", "%{count} showtimes", count) %>
+                          <%= info.date_range %> • <%= ngettext("1 showtime", "%{count} showtimes", info.count) %>
                         </span>
                       </div>
+
+                      <!-- Format badges -->
+                      <%= if length(info.formats) > 0 do %>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                          <%= for format <- info.formats do %>
+                            <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold">
+                              <%= format %>
+                            </span>
+                          <% end %>
+                        </div>
+                      <% end %>
+
+                      <!-- Specific dates (if limited) -->
+                      <%= if length(info.dates) <= 7 do %>
+                        <div class="text-sm text-gray-600">
+                          <%= info.dates
+                              |> Enum.take(4)
+                              |> Enum.map(&format_date_label/1)
+                              |> Enum.join(", ") %>
+                          <%= if length(info.dates) > 4 do %>
+                            <span class="text-gray-500">+<%= length(info.dates) - 4 %> more</span>
+                          <% end %>
+                        </div>
+                      <% end %>
                     </div>
+
                     <div class="ml-4">
                       <div class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                         <%= gettext("View Showtimes") %>
@@ -265,4 +329,119 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   defp format_movie_runtime(_), do: nil
+
+  # Extract ALL occurrences from all events and parse them into structured data
+  defp extract_all_occurrences(events) do
+    now = DateTime.utc_now()
+
+    events
+    |> Enum.flat_map(fn event ->
+      case get_in(event.occurrences, ["dates"]) do
+        dates when is_list(dates) ->
+          dates
+          |> Enum.map(fn date_info ->
+            with {:ok, date} <- Date.from_iso8601(date_info["date"]),
+                 {:ok, time} <- parse_time_string(date_info["time"]) do
+              # Create datetime in UTC
+              utc_datetime = DateTime.new!(date, time, "Etc/UTC")
+
+              # Only include future occurrences
+              if DateTime.compare(utc_datetime, now) == :gt do
+                %{
+                  date: date,
+                  datetime: utc_datetime,
+                  label: date_info["label"]
+                }
+              else
+                nil
+              end
+            else
+              _ -> nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        _ ->
+          []
+      end
+    end)
+    |> Enum.sort_by(& &1.datetime, DateTime)
+  end
+
+  # Parse time string to Time struct
+  defp parse_time_string(time_str) when is_binary(time_str) do
+    case String.split(time_str, ":") do
+      [hour_str, minute_str] ->
+        with {hour, ""} <- Integer.parse(hour_str),
+             {minute, ""} <- Integer.parse(minute_str) do
+          Time.new(hour, minute, 0)
+        else
+          _ -> {:ok, ~T[20:00:00]}
+        end
+
+      _ ->
+        {:ok, ~T[20:00:00]}
+    end
+  end
+
+  defp parse_time_string(_), do: {:ok, ~T[20:00:00]}
+
+  # Extract date range from list of occurrences
+  defp extract_occurrence_date_range([]), do: ""
+
+  defp extract_occurrence_date_range(occurrences) do
+    first_date = List.first(occurrences).date
+    last_date = List.last(occurrences).date
+
+    if Date.compare(first_date, last_date) == :eq do
+      format_date_short(first_date)
+    else
+      "#{format_date_short(first_date)}-#{format_date_short(last_date)}"
+    end
+  end
+
+  # Extract unique formats from occurrence labels
+  defp extract_occurrence_formats(occurrences) do
+    occurrences
+    |> Enum.map(& &1.label)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.flat_map(&parse_formats_from_label/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  # Parse format information from label strings
+  defp parse_formats_from_label(label) when is_binary(label) do
+    label_lower = String.downcase(label)
+
+    formats = []
+    formats = if String.contains?(label_lower, "imax"), do: ["IMAX" | formats], else: formats
+    formats = if String.contains?(label_lower, "4dx"), do: ["4DX" | formats], else: formats
+    formats = if String.contains?(label_lower, "3d"), do: ["3D" | formats], else: formats
+
+    formats =
+      if String.contains?(label_lower, ["2d", "standard"]), do: ["2D" | formats], else: formats
+
+    formats
+  end
+
+  defp parse_formats_from_label(_), do: []
+
+  # Format date in short form: "oct 5"
+  defp format_date_short(date) do
+    month_abbr = Calendar.strftime(date, "%b") |> String.capitalize()
+    "#{month_abbr} #{date.day}"
+  end
+
+  # Format date with Today/Tomorrow labels
+  defp format_date_label(date) do
+    today = Date.utc_today()
+    tomorrow = Date.add(today, 1)
+
+    case date do
+      ^today -> gettext("Today")
+      ^tomorrow -> gettext("Tomorrow")
+      _ -> format_date_short(date)
+    end
+  end
 end
