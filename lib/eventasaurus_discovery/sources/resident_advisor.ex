@@ -129,17 +129,23 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor do
 
   Checks if event exists from higher-priority sources (Ticketmaster, Bandsintown).
   Validates event quality before processing.
+  Detects umbrella events and creates containers instead of regular events.
 
   Returns:
   - `{:unique, event_data}` - Event is unique, proceed with import
   - `{:duplicate, existing}` - Event exists from higher-priority source
   - `{:enriched, event_data}` - Event enriched with additional data
+  - `{:container, container}` - Umbrella event created as container
   - `{:error, reason}` - Event validation failed
   """
   def deduplicate_event(event_data) do
     case DedupHandler.validate_event_quality(event_data) do
       {:ok, validated} ->
         DedupHandler.check_duplicate(validated)
+
+      {:container, container} ->
+        # Umbrella event was created as container, don't import as regular event
+        {:container, container}
 
       {:error, reason} ->
         {:error, reason}

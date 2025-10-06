@@ -33,6 +33,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
   require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.Event
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
 
   @doc """
   Validate event quality before processing.
@@ -43,12 +44,20 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
   - Has unique external ID
   - Has title
 
+  Special handling:
+  - Detects umbrella events (festivals, conferences) and creates containers instead
+
   Returns:
   - `{:ok, validated_event}` - Event passes quality checks
   - `{:error, reason}` - Event fails validation
+  - `{:container, container}` - Umbrella event created as container
   """
   def validate_event_quality(event_data) do
     cond do
+      # Check for umbrella event FIRST (before other validations)
+      is_umbrella_event?(event_data[:raw_data]) ->
+        handle_umbrella_event(event_data)
+
       is_nil(event_data[:title]) || event_data[:title] == "" ->
         {:error, "Event missing title"}
 
@@ -361,5 +370,87 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
       })
 
     Map.merge(existing, enrichments)
+  end
+
+  # Umbrella Event Detection
+  # Based on analysis from issue #1512 and /tmp/ra_festival_analysis.md
+
+  @umbrella_venue_ids ["267425"]
+  # Various venues - Kraków
+
+  # Detect if RA event is an umbrella event (festival, conference, tour).
+  #
+  # Detection signals (95% accuracy):
+  # 1. Venue ID 267425 ("Various venues - Kraków")
+  # 2. Venue name contains "Various venues"
+  # 3. Multi-day span (5+ days) + generic times (12:00 start, 23:59 end)
+  # 4. High artist count (>30 artists)
+  # 5. High attending count (>500 people)
+  #
+  # Primary signal: Venue ID (most reliable)
+  # Secondary signals: Used for venues outside Kraków
+  defp is_umbrella_event?(raw_event) when is_map(raw_event) do
+    venue_id = get_in(raw_event, ["event", "venue", "id"])
+    venue_name = get_in(raw_event, ["event", "venue", "name"]) || ""
+
+    # Primary check: Known umbrella venue IDs
+    cond do
+      venue_id in @umbrella_venue_ids ->
+        true
+
+      # Secondary check: Venue name pattern
+      String.contains?(String.downcase(venue_name), "various venues") ->
+        true
+
+      # Tertiary check: Multi-signal heuristics
+      check_umbrella_heuristics(raw_event) ->
+        true
+
+      true ->
+        false
+    end
+  end
+
+  defp is_umbrella_event?(_), do: false
+
+  defp check_umbrella_heuristics(raw_event) do
+    event = raw_event["event"] || %{}
+
+    # Extract signals
+    start_time = get_in(event, ["startTime"])
+    end_time = get_in(event, ["endTime"])
+    artist_count = length(event["artists"] || [])
+    attending_count = event["attending"] || 0
+
+    # Multi-day event with generic times
+    has_generic_times =
+      start_time == "12:00" && end_time == "23:59"
+
+    # High artist count (festivals typically have many artists)
+    high_artist_count = artist_count > 30
+
+    # High attendance (festivals attract large crowds)
+    high_attendance = attending_count > 500
+
+    # Combine signals (require at least 2 of 3)
+    signals = [has_generic_times, high_artist_count, high_attendance]
+    true_count = Enum.count(signals, & &1)
+
+    true_count >= 2
+  end
+
+  defp handle_umbrella_event(event_data) do
+    Logger.info("🎪 Detected umbrella event: #{event_data[:title]}")
+
+    # Create container from umbrella event
+    case PublicEventContainers.create_from_umbrella_event(event_data, event_data[:source_id]) do
+      {:ok, container} ->
+        Logger.info("✅ Created event container: #{container.title} (#{container.container_type})")
+        {:container, container}
+
+      {:error, changeset} ->
+        Logger.error("❌ Failed to create container: #{inspect(changeset.errors)}")
+        {:error, "Failed to create container: #{inspect(changeset.errors)}"}
+    end
   end
 end
