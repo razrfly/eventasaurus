@@ -116,6 +116,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       category_id: data[:category_id] || data["category_id"],
       # Add raw data for category extraction
       raw_event_data: data[:raw_event_data] || data["raw_event_data"],
+      # Add raw_data for debugging (RA, Bandsintown, Karnet pattern)
+      raw_data: data[:raw_data] || data["raw_data"],
       # Karnet category
       category: data[:category] || data["category"],
       # Recurring event pattern (for weekly/monthly events like PubQuiz)
@@ -452,6 +454,31 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Store priority in metadata if provided
     base = data.metadata || %{}
+
+    # DEBUG: Log what data fields we have
+    Logger.debug("🔍 Metadata storage - data keys: #{inspect(Map.keys(data))}")
+    Logger.debug("🔍 data.raw_data present: #{inspect(Map.has_key?(data, :raw_data))}")
+
+    # CRITICAL FIX: Merge raw_data from transformer for debugging
+    # This preserves the complete API/scraping response for analysis
+    base =
+      if data[:raw_data] || data["raw_data"] do
+        raw = data[:raw_data] || data["raw_data"]
+        Logger.debug("✅ Storing raw_data in metadata!")
+        Map.put(base, "raw_data", raw)
+      else
+        Logger.debug("❌ No raw_data found in data")
+        base
+      end
+
+    # Also support raw_event_data pattern (used by Ticketmaster)
+    base =
+      if data[:raw_event_data] || data["raw_event_data"] do
+        raw = data[:raw_event_data] || data["raw_event_data"]
+        Map.put(base, "raw_event_data", raw)
+      else
+        base
+      end
 
     metadata =
       case priority do
