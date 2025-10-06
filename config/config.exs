@@ -125,7 +125,13 @@ config :eventasaurus, Oban,
     # Reindex daily for performance
     {Oban.Plugins.Reindexer, schedule: "@daily"},
     # Recover orphaned jobs after 60 seconds
-    {Oban.Plugins.Lifeline, rescue_after: 60}
+    {Oban.Plugins.Lifeline, rescue_after: 60},
+    # Scheduled cron jobs
+    {Oban.Plugins.Cron,
+     crontab: [
+       # Daily sitemap generation at 2 AM UTC
+       {"0 2 * * *", Eventasaurus.Workers.SitemapWorker}
+     ]}
   ]
 
 # Avatar configuration
