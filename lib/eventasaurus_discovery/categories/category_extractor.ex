@@ -132,6 +132,38 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   end
 
   @doc """
+  Extract categories from Resident Advisor event data.
+  All Resident Advisor events are electronic music concerts/club events.
+  """
+  def extract_resident_advisor_categories(event_data) when is_map(event_data) do
+    # RA events are all electronic music concerts/club events
+    # Base categories: concert + nightlife
+    category_values = [
+      {"resident-advisor", nil, "concert"},
+      {"resident-advisor", nil, "nightlife"}
+    ]
+
+    # Check tags for additional context
+    category_values =
+      if tags = event_data[:tags] || event_data["tags"] do
+        # Add festival if it's a large event
+        additional_values =
+          if "popular" in tags or "high-demand" in tags do
+            [{"resident-advisor", nil, "festival"}]
+          else
+            []
+          end
+
+        category_values ++ additional_values
+      else
+        category_values
+      end
+
+    # Map to internal categories
+    map_to_categories("resident-advisor", category_values)
+  end
+
+  @doc """
   Extract categories from generic event data with a category string field.
   Used for sources like PubQuiz that provide a simple category string.
   """
@@ -197,6 +229,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
         "bandsintown" ->
           extract_bandsintown_categories(external_data)
+
+        "resident-advisor" ->
+          extract_resident_advisor_categories(external_data)
 
         # For other sources (like PubQuiz), try to extract from generic category field
         _ ->
