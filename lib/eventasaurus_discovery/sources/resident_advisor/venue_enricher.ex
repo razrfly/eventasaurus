@@ -76,11 +76,17 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.VenueEnricher do
 
   defp to_float(value) when is_float(value), do: value
   defp to_float(value) when is_integer(value), do: value / 1.0
+
   defp to_float(value) when is_binary(value) do
     case Float.parse(value) do
       {float, _} -> float
-      :error -> 0.0
+      # Return nil instead of 0.0 for invalid coordinates
+      # 0.0 is a valid coordinate (Gulf of Guinea) and shouldn't be a fallback
+      :error -> nil
     end
   end
-  defp to_float(_), do: 0.0
+
+  # Return nil instead of 0.0 for non-numeric values
+  # Prevents treating invalid data as valid coordinates
+  defp to_float(_), do: nil
 end

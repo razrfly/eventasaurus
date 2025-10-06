@@ -64,11 +64,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
       is_nil(event_data[:venue_data]) ->
         {:error, "Event missing venue_data"}
 
-      is_nil(event_data[:venue_data][:latitude]) ->
-        {:error, "Event venue missing latitude"}
-
-      is_nil(event_data[:venue_data][:longitude]) ->
-        {:error, "Event venue missing longitude"}
+      # NOTE: Do NOT validate latitude/longitude here
+      # RA events rarely have coordinates at this stage
+      # VenueProcessor will geocode after this validation passes
 
       not is_date_sane?(event_data[:starts_at]) ->
         {:error, "Event date is not sane (past or >2 years future)"}
@@ -103,7 +101,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
   defp is_date_sane?(datetime) do
     now = DateTime.utc_now()
-    two_years_future = DateTime.add(now, 365 * 2, :day)
+    # DateTime.add only accepts :second unit - convert 2 years to seconds
+    two_years_in_seconds = 2 * 365 * 24 * 60 * 60
+    two_years_future = DateTime.add(now, two_years_in_seconds, :second)
 
     # Event should be in future but not more than 2 years out
     DateTime.compare(datetime, now) in [:gt, :eq] &&

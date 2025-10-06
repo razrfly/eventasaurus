@@ -28,7 +28,13 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser do
   def parse_start_datetime(date_str, time_str, timezone \\ "Etc/UTC")
 
   def parse_start_datetime(nil, _, _), do: nil
-  def parse_start_datetime(_, nil, _), do: nil
+
+  # IMPORTANT: Fallback for nil time MUST come before the string match
+  # Otherwise events without startTime get nil instead of 20:00 default
+  def parse_start_datetime(date_str, nil, timezone) when is_binary(date_str) do
+    # If no time provided, default to 20:00 (common event start time)
+    parse_start_datetime(date_str, "20:00", timezone)
+  end
 
   def parse_start_datetime(date_str, time_str, timezone)
       when is_binary(date_str) and is_binary(time_str) do
@@ -54,11 +60,6 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser do
 
         nil
     end
-  end
-
-  def parse_start_datetime(date_str, nil, timezone) do
-    # If no time provided, default to 20:00 (common event start time)
-    parse_start_datetime(date_str, "20:00", timezone)
   end
 
   @doc """

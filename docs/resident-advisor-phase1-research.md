@@ -32,7 +32,7 @@ User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 F
 - **Strategy:** Exponential backoff on errors
 - **No explicit rate limit headers documented**
 
-###GraphQL Query Structure
+### GraphQL Query Structure
 
 **Operation Name:** `GET_EVENT_LISTINGS`
 
