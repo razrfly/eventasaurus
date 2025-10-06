@@ -64,7 +64,31 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
+  def handle_params(%{"slug" => slug, "date_slug" => date_slug}, _url, socket) do
+    # Handle URL with specific date: /activities/slug/friday-october-10-2025
+    socket =
+      socket
+      |> fetch_event(slug)
+      |> assign(:loading, false)
+
+    socket =
+      case parse_date_slug(date_slug) do
+        {:ok, date} ->
+          # Successfully parsed date from URL
+          assign(socket, :selected_showtime_date, date)
+
+        :error ->
+          # Invalid date slug, show error and redirect to base URL
+          socket
+          |> put_flash(:error, gettext("Invalid date in URL"))
+          |> push_patch(to: ~p"/activities/#{slug}")
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_params(%{"slug" => slug}, _url, socket) do
+    # Handle base URL without date: /activities/slug
     socket =
       socket
       |> fetch_event(slug)
@@ -299,7 +323,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   def handle_event("select_showtime_date", %{"date" => date_string}, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, selected_date} ->
-        {:noreply, assign(socket, :selected_showtime_date, selected_date)}
+        # Update URL to include date slug
+        date_slug = date_to_url_slug(selected_date)
+        event_slug = socket.assigns.event.slug
+        path = ~p"/activities/#{event_slug}/#{date_slug}"
+        {:noreply, push_patch(socket, to: path)}
 
       _ ->
         {:noreply, socket}
@@ -1535,4 +1563,117 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp format_movie_runtime(_), do: nil
+
+  # URL slug helper functions for shareable day URLs
+  defp date_to_url_slug(%Date{} = date) do
+    # Format: "oct-10" using Calendar.strftime for library-based formatting
+    month_abbr = Calendar.strftime(date, "%b") |> String.downcase()
+    "#{month_abbr}-#{date.day}"
+  end
+
+  defp parse_date_slug(slug) when is_binary(slug) do
+    # Try parsing formats in order:
+    # 1. New format: "oct-10" (month-day only)
+    # 2. Old short format: "fri-oct-10-25" (day-month-day-year)
+    # 3. Old long format: "sunday-october-10-2025" (full names)
+    with :error <- parse_month_day_slug(slug),
+         :error <- parse_short_date_slug(slug) do
+      parse_long_date_slug(slug)
+    end
+  end
+
+  # Parse new format: "oct-10"
+  defp parse_month_day_slug(slug) do
+    case Regex.run(~r/^(\w{3})-(\d+)$/, slug) do
+      [_, month_abbr, day_str] ->
+        with {day, ""} <- Integer.parse(day_str),
+             month_num <- parse_month_abbr(month_abbr),
+             year <- Date.utc_today().year,
+             {:ok, date} <- Date.new(year, month_num, day) do
+          {:ok, date}
+        else
+          _ -> :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  # Parse old short format: "fri-oct-10-25"
+  defp parse_short_date_slug(slug) do
+    case Regex.run(~r/^(\w{3})-(\w{3})-(\d+)-(\d{2})$/, slug) do
+      [_, _day_abbr, month_abbr, day_str, year_str] ->
+        with {day, ""} <- Integer.parse(day_str),
+             {year_short, ""} <- Integer.parse(year_str),
+             year <- if(year_short < 50, do: 2000 + year_short, else: 1900 + year_short),
+             month_num <- parse_month_abbr(month_abbr),
+             {:ok, date} <- Date.new(year, month_num, day) do
+          {:ok, date}
+        else
+          _ -> :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  # Parse old long format: "sunday-october-5-2025"
+  defp parse_long_date_slug(slug) do
+    case Regex.run(~r/^(\w+)-(\w+)-(\d+)-(\d{4})$/, slug) do
+      [_, _day_name, month_name, day_str, year_str] ->
+        with {day, ""} <- Integer.parse(day_str),
+             {year, ""} <- Integer.parse(year_str),
+             month_num <- parse_full_month_name(month_name),
+             {:ok, date} <- Date.new(year, month_num, day) do
+          {:ok, date}
+        else
+          _ -> :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp parse_date_slug(_), do: :error
+
+  # Map month abbreviations to numbers using standard library month names
+  defp parse_month_abbr(month_abbr) do
+    case String.downcase(month_abbr) do
+      "jan" -> 1
+      "feb" -> 2
+      "mar" -> 3
+      "apr" -> 4
+      "may" -> 5
+      "jun" -> 6
+      "jul" -> 7
+      "aug" -> 8
+      "sep" -> 9
+      "oct" -> 10
+      "nov" -> 11
+      "dec" -> 12
+      _ -> nil
+    end
+  end
+
+  # Map full month names to numbers (for backward compatibility with old URL format)
+  defp parse_full_month_name(month_name) do
+    case String.downcase(month_name) do
+      "january" -> 1
+      "february" -> 2
+      "march" -> 3
+      "april" -> 4
+      "may" -> 5
+      "june" -> 6
+      "july" -> 7
+      "august" -> 8
+      "september" -> 9
+      "october" -> 10
+      "november" -> 11
+      "december" -> 12
+      _ -> nil
+    end
+  end
 end
