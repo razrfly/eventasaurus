@@ -87,7 +87,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
               all_occurrences
               |> Enum.map(& &1.date)
               |> Enum.uniq()
-              |> Enum.sort(Date)
+              |> Enum.sort()
 
             {first_event.venue,
              %{
@@ -365,7 +365,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           []
       end
     end)
-    |> Enum.sort_by(& &1.datetime, DateTime)
+    |> Enum.sort_by(& &1.datetime, {:asc, DateTime})
   end
 
   # Parse time string to Time struct
