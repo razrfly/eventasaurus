@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor, DateParser}
+  alias EventasaurusDiscovery.Sources.Karnet
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -188,8 +189,80 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Transform data to match processor expectations
     processor_data = transform_for_processor(event_data)
 
-    # Process through unified pipeline
-    Processor.process_single_event(processor_data, source)
+    # Check for duplicates from higher-priority sources
+    case check_deduplication(processor_data) do
+      {:ok, :unique} ->
+        # Process through unified pipeline
+        Processor.process_single_event(processor_data, source)
+
+      {:ok, :skip_duplicate} ->
+        # Event exists from higher priority source, but still create source entry
+        Logger.info("⏭️ Event exists from higher-priority source, creating source link")
+        Processor.process_single_event(processor_data, source)
+
+      {:ok, {:enriched, _enriched_data}} ->
+        # Event exists but can be enriched
+        Logger.info("✨ Processing event with enrichment data")
+        Processor.process_single_event(processor_data, source)
+
+      {:ok, :validation_failed} ->
+        # Validation failed but continue anyway
+        Logger.warning("⚠️ Deduplication validation failed, processing anyway")
+        Processor.process_single_event(processor_data, source)
+    end
+  end
+
+  defp check_deduplication(event_data) do
+    # Convert string keys to atom keys for dedup handler
+    event_with_atom_keys = atomize_event_data(event_data)
+
+    case Karnet.deduplicate_event(event_with_atom_keys) do
+      {:unique, _} ->
+        {:ok, :unique}
+
+      {:duplicate, existing} ->
+        Logger.info("""
+        ⏭️  Skipping duplicate event from higher-priority source
+        Karnet: #{event_data[:title] || event_data["title"]}
+        Existing: #{existing.title} (source priority: #{get_source_priority(existing)})
+        """)
+
+        {:ok, :skip_duplicate}
+
+      {:enriched, enriched_data} ->
+        Logger.info("✨ Karnet event can enrich existing event")
+        {:ok, {:enriched, enriched_data}}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        # Continue with processing even if dedup fails
+        {:ok, :validation_failed}
+    end
+  end
+
+  defp atomize_event_data(event_data) when is_map(event_data) do
+    event_data
+    |> Enum.map(fn
+      {k, v} when is_binary(k) ->
+        try do
+          {String.to_existing_atom(k), v}
+        rescue
+          ArgumentError -> {k, v}
+        end
+
+      {k, v} ->
+        {k, v}
+    end)
+    |> Map.new()
+  rescue
+    _ -> event_data
+  end
+
+  defp get_source_priority(event) do
+    case Repo.preload(event, :sources) do
+      %{sources: [source | _]} when not is_nil(source) -> source.priority
+      _ -> "unknown"
+    end
   end
 
   defp transform_for_processor(event_data) do

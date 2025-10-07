@@ -19,6 +19,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
+  alias EventasaurusDiscovery.Sources.ResidentAdvisor
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
 
@@ -52,13 +53,17 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
 
     # Get the source
     with {:ok, source} <- get_source(source_id),
-         # Process the single event
-         {:ok, processed_event} <- process_single_event(event_data, source) do
+         # Check for duplicates from higher-priority sources
+         {:ok, dedup_result} <- check_deduplication(event_data),
+         # Process the event if unique
+         {:ok, processed_event} <- process_event_if_unique(event_data, source, dedup_result) do
       Logger.info("✅ Successfully processed RA event: #{external_id}")
 
       # Check for prospective container associations
       # This allows sub-events imported before umbrella to be associated retroactively
-      PublicEventContainers.check_for_container_match(processed_event)
+      if processed_event != :skipped_duplicate do
+        PublicEventContainers.check_for_container_match(processed_event)
+      end
 
       {:ok, %{event_id: external_id, status: "processed"}}
     else
@@ -82,6 +87,80 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
     case Repo.get(Source, source_id) do
       nil -> {:error, :source_not_found}
       source -> {:ok, source}
+    end
+  end
+
+  defp check_deduplication(event_data) do
+    # Convert string keys to atom keys for dedup handler
+    event_with_atom_keys = atomize_event_data(event_data)
+
+    case ResidentAdvisor.deduplicate_event(event_with_atom_keys) do
+      {:unique, _} ->
+        {:ok, :unique}
+
+      {:duplicate, existing} ->
+        Logger.info("""
+        ⏭️  Skipping duplicate event from higher-priority source
+        RA: #{event_data["title"] || event_data[:title]}
+        Existing: #{existing.title} (source priority: #{get_source_priority(existing)})
+        """)
+
+        {:ok, :skip_duplicate}
+
+      {:enriched, enriched_data} ->
+        Logger.info("✨ RA event can enrich existing event")
+        {:ok, {:enriched, enriched_data}}
+
+      {:container, _container} ->
+        # Event was created as a container (umbrella event)
+        Logger.info("🎪 Event created as container (umbrella event)")
+        {:ok, :container_created}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        # Continue with processing even if dedup fails
+        {:ok, :validation_failed}
+    end
+  end
+
+  defp atomize_event_data(event_data) when is_map(event_data) do
+    event_data
+    |> Enum.map(fn
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
+      {k, v} -> {k, v}
+    end)
+    |> Map.new()
+  rescue
+    _ -> event_data
+  end
+
+  defp get_source_priority(event) do
+    case Repo.preload(event, :source) do
+      %{source: %{priority: priority}} -> priority
+      _ -> "unknown"
+    end
+  end
+
+  defp process_event_if_unique(event_data, source, dedup_result) do
+    case dedup_result do
+      :unique ->
+        process_single_event(event_data, source)
+
+      :skip_duplicate ->
+        {:ok, :skipped_duplicate}
+
+      {:enriched, _enriched_data} ->
+        # TODO: Implement enrichment logic
+        # For now, skip the event since it already exists
+        {:ok, :skipped_duplicate}
+
+      :container_created ->
+        # Container was already created, don't process as regular event
+        {:ok, :skipped_duplicate}
+
+      :validation_failed ->
+        # Process anyway if validation failed
+        process_single_event(event_data, source)
     end
   end
 

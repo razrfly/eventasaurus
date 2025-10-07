@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
+  alias EventasaurusDiscovery.Sources.Pubquiz
 
   alias EventasaurusDiscovery.Sources.Pubquiz.{
     Client,
@@ -129,13 +130,61 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
 
     # Only process if we have dates
     if event_map.starts_at do
-      Logger.info("✅ Processing recurring event: #{event_map.title}")
-      Processor.process_single_event(event_map, source)
+      # Check for duplicates before processing
+      case check_deduplication(event_map) do
+        {:ok, :unique} ->
+          Logger.info("✅ Processing unique recurring event: #{event_map.title}")
+          Processor.process_single_event(event_map, source)
+
+        {:ok, :skip_duplicate} ->
+          Logger.info("⏭️  Skipping duplicate recurring event: #{event_map.title}")
+          # Still process through Processor to create/update PublicEventSource entry
+          Processor.process_single_event(event_map, source)
+
+        {:ok, :validation_failed} ->
+          Logger.warning("⚠️ Validation failed, processing anyway: #{event_map.title}")
+          Processor.process_single_event(event_map, source)
+      end
     else
       Logger.warning("⚠️ Skipping venue without valid schedule: #{venue_data["venue_name"]}")
 
       {:discard, :no_valid_schedule}
     end
+  end
+
+  defp check_deduplication(event_data) do
+    # Convert string keys to atom keys for dedup handler
+    event_with_atom_keys = atomize_event_data(event_data)
+
+    case Pubquiz.deduplicate_event(event_with_atom_keys) do
+      {:unique, _} ->
+        {:ok, :unique}
+
+      {:duplicate, existing} ->
+        Logger.info("""
+        ⏭️  Skipping duplicate PubQuiz event
+        New: #{event_data[:title] || event_data["title"]}
+        Existing: #{existing.title} (ID: #{existing.id})
+        """)
+
+        {:ok, :skip_duplicate}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        # Continue with processing even if dedup fails
+        {:ok, :validation_failed}
+    end
+  end
+
+  defp atomize_event_data(event_data) when is_map(event_data) do
+    event_data
+    |> Enum.map(fn
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
+      {k, v} -> {k, v}
+    end)
+    |> Map.new()
+  rescue
+    _ -> event_data
   end
 
   defp extract_external_id(url) do
