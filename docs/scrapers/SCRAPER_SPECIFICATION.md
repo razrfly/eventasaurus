@@ -286,6 +286,71 @@ EventProcessor → process_event
 
 ## Deduplication Strategy
 
+### Freshness-Based Deduplication (CRITICAL - Required for All Sources)
+
+**All scrapers MUST use `EventFreshnessChecker` to avoid re-processing recently updated events.**
+
+The system maintains a 7-day (168 hours) freshness window tracked via `last_seen_at` timestamps. Events processed within this window should be skipped to prevent unnecessary work.
+
+**When to Apply**: In index jobs or sync jobs, BEFORE scheduling detail jobs for individual events.
+
+**Implementation** (in IndexPageJob or SyncJob):
+
+```elixir
+defp schedule_detail_jobs(events, source_id) do
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
+  # 1. Ensure events have external_id field (with source prefix)
+  events_with_ids = Enum.map(events, fn event ->
+    Map.put(event, :external_id, "#{source_slug}_#{extract_id(event)}")
+  end)
+
+  # 2. Filter to only stale events needing re-processing
+  events_to_process = EventFreshnessChecker.filter_events_needing_processing(
+    events_with_ids,
+    source_id
+  )
+
+  # 3. Log efficiency metrics
+  skipped = length(events) - length(events_to_process)
+  threshold = EventFreshnessChecker.get_threshold()
+
+  Logger.info("""
+  📋 #{source_name}: Processing #{length(events_to_process)}/#{length(events)} events
+  Skipped: #{skipped} (fresh within #{threshold}h)
+  """)
+
+  # 4. Schedule detail jobs ONLY for stale events
+  Enum.each(events_to_process, fn event ->
+    DetailJob.new(%{"event_data" => event, "source_id" => source_id})
+    |> Oban.insert()
+  end)
+end
+```
+
+**Key Benefits**:
+- ✅ Reduces API calls by 80-90% for recurring events (e.g., daily movie showtimes)
+- ✅ Lowers database write load significantly
+- ✅ Improves scraper run times
+- ✅ Prevents rate limiting issues
+- ✅ Automatically handles recurring events (movies, weekly trivia, etc.)
+
+**Configuration**:
+```elixir
+# config/dev.exs, config/runtime.exs
+config :eventasaurus, :event_discovery,
+  freshness_threshold_hours: 168  # 7 days (configurable)
+```
+
+**Timestamp Updates**: The `EventProcessor.update_event_source/4` function automatically updates `last_seen_at` when processing events, ensuring the freshness system works correctly.
+
+**Reference Implementations**:
+- ✅ Bandsintown: `lib/eventasaurus_discovery/sources/bandsintown/jobs/index_page_job.ex:213-228`
+- ✅ Karnet: `lib/eventasaurus_discovery/sources/karnet/jobs/index_page_job.ex:153-177`
+- ✅ Ticketmaster: `lib/eventasaurus_discovery/sources/ticketmaster/jobs/sync_job.ex:74-141`
+
+**Related Issue**: See GitHub issue #1556 for audit findings and migration guide.
+
 ### Venue Deduplication
 
 **VenueProcessor handles deduplication automatically**. Transformers should:
@@ -707,10 +772,12 @@ When updating an existing scraper to match this spec:
 - [ ] Update `transformer.ex` to return unified format
 - [ ] Use `BaseJob` for all Oban workers
 - [ ] Remove manual geocoding (let VenueProcessor handle it)
+- [ ] **Add `EventFreshnessChecker` filtering in index/sync jobs (CRITICAL)**
+- [ ] **Verify `EventProcessor.process_event()` updates `last_seen_at` timestamp**
 - [ ] Add `dedup_handler.ex` for complex sources
-- [ ] Update external_id generation to be stable
-- [ ] Ensure jobs are idempotent (can run daily)
-- [ ] Add comprehensive logging
+- [ ] Update external_id generation to be stable (with source prefix)
+- [ ] Ensure jobs are idempotent (can run daily without duplicates)
+- [ ] Add comprehensive logging with freshness metrics
 - [ ] Write unit tests for transformer
 - [ ] Update documentation (README.md)
 

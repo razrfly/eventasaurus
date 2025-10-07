@@ -422,6 +422,56 @@ end
 
 ## 🔍 Deduplication
 
+### Freshness-Based Deduplication (REQUIRED)
+
+**All scrapers MUST use `EventFreshnessChecker` to avoid re-scraping recently updated events.**
+
+The system uses a 7-day (168 hours) freshness window. Events that were `last_seen_at` within this window should NOT be re-scraped.
+
+**Implementation Pattern** (in IndexPageJob or SyncJob):
+
+```elixir
+defp schedule_detail_jobs(events, source_id, page_number) do
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
+  # 1. Add external_ids to events (with source prefix)
+  events_with_ids = Enum.map(events, fn event ->
+    Map.put(event, :external_id, "#{source_slug}_#{event.id}")
+  end)
+
+  # 2. Filter to events needing processing based on freshness
+  events_to_process = EventFreshnessChecker.filter_events_needing_processing(
+    events_with_ids,
+    source_id
+  )
+
+  # 3. Log metrics
+  skipped = length(events) - length(events_to_process)
+  threshold = EventFreshnessChecker.get_threshold()
+
+  Logger.info(
+    "📋 Processing #{length(events_to_process)}/#{length(events)} events " <>
+    "(#{skipped} skipped, threshold: #{threshold}h)"
+  )
+
+  # 4. Schedule only stale events
+  Enum.each(events_to_process, fn event ->
+    # Schedule detail job
+  end)
+end
+```
+
+**Freshness Checking:**
+- ✅ Configured globally via `config :eventasaurus, :event_discovery, freshness_threshold_hours: 168`
+- ✅ Prevents unnecessary API calls and database writes
+- ✅ Automatically handles recurring events (e.g., daily movie showtimes)
+- ✅ Updates `last_seen_at` timestamp via `EventProcessor.update_event_source()`
+
+**Reference Implementations:**
+- `lib/eventasaurus_discovery/sources/bandsintown/jobs/index_page_job.ex:213-228`
+- `lib/eventasaurus_discovery/sources/karnet/jobs/index_page_job.ex:153-177`
+- `lib/eventasaurus_discovery/sources/ticketmaster/jobs/sync_job.ex:74-141`
+
 ### Priority-Based Deduplication
 
 Lower-priority sources check against higher-priority sources:
@@ -590,12 +640,14 @@ Before merging a new scraper:
 - [ ] Implements `SourceConfig` behaviour
 - [ ] Validates venue with `validate_venue/1`
 - [ ] Rejects events without valid venue
+- [ ] **Uses `EventFreshnessChecker` to filter events before scheduling detail jobs**
+- [ ] **Updates `last_seen_at` timestamp via `EventProcessor.process_event()`**
 - [ ] Logs detailed errors for debugging
 - [ ] Respects rate limits
 - [ ] Has async job pipeline (Sync → Index → Detail)
 - [ ] Handles pagination correctly
 - [ ] Transforms dates to UTC DateTime
-- [ ] Generates unique external_id
+- [ ] Generates unique external_id (with source prefix)
 - [ ] Includes source_url for reference
 - [ ] Has Mix task for testing
 - [ ] Has unit tests for transformer
