@@ -6,7 +6,7 @@ defmodule Mix.Tasks.Test.DateParsing do
   use Mix.Task
   require Logger
 
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser
+  alias EventasaurusDiscovery.Sources.Bandsintown.DateParser
 
   @shortdoc "Test date parsing with various formats"
 

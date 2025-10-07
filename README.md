@@ -258,24 +258,98 @@ mix assets.deploy
 mix assets.watch
 ```
 
+## Event Discovery & Scrapers
+
+Eventasaurus includes a powerful event discovery system that aggregates events from multiple sources using scrapers and APIs.
+
+### 📚 Scraper Documentation
+
+**IMPORTANT**: All event scrapers follow a unified specification. Please read these documents before working with scrapers:
+
+- **[Scraper Specification](docs/scrapers/SCRAPER_SPECIFICATION.md)** - ⭐ **Required reading** - The source of truth for building and maintaining scrapers
+- **[Audit Report](docs/scrapers/SCRAPER_AUDIT_REPORT.md)** - Current state analysis and grading of all scrapers
+- **[Implementation Guide](docs/scrapers/SCRAPER_DOCUMENTATION_SUMMARY.md)** - 3-phase improvement plan and best practices
+- **[Quick Reference](docs/scrapers/SCRAPER_QUICK_REFERENCE.md)** - Developer cheat sheet for common patterns
+
+### Active Event Sources
+
+| Source | Priority | Type | Status |
+|--------|----------|------|--------|
+| **Ticketmaster** | 90 | API | ✅ Production |
+| **Resident Advisor** | 75 | GraphQL | ✅ Production |
+| **Karnet Kraków** | 30 | Scraper | ⚠️ Needs Tests |
+| **Bandsintown** | 80 | API | ⚠️ Needs Consolidation |
+| **Cinema City** | 50 | API | ⚠️ Needs Validation |
+| **Kino Krakow** | 50 | Scraper | ⚠️ Needs Validation |
+| **PubQuiz PL** | 40 | Scraper | ⚠️ Needs Refactoring |
+
+**Priority Scale**: Higher number = more trusted source (wins deduplication conflicts)
+
+### Running Scrapers
+
+```bash
+# Run discovery sync for a specific city
+mix discovery.sync --city krakow --source ticketmaster
+
+# Sync all sources for a city
+mix discovery.sync --city krakow --source all
+
+# Sync specific source with custom limit
+mix discovery.sync --city krakow --source resident-advisor --limit 50
+```
+
+### Adding a New Scraper
+
+1. **Read the specification**: Start with `docs/scrapers/SCRAPER_SPECIFICATION.md`
+2. **Copy reference implementation**: Use `sources/resident_advisor/` as template
+3. **Follow the structure**: All scrapers live in `lib/eventasaurus_discovery/sources/{name}/`
+4. **Test thoroughly**: Must handle daily runs without creating duplicates
+5. **Document**: Create README with setup and configuration
+
+**Required Files**:
+- `source.ex` - Configuration and metadata
+- `config.ex` - Runtime settings
+- `transformer.ex` - Data transformation to unified format
+- `jobs/sync_job.ex` - Main synchronization job
+- `README.md` - Setup and usage documentation
+
+See [Quick Reference](docs/scrapers/SCRAPER_QUICK_REFERENCE.md) for code examples and patterns.
+
+### Key Features
+
+- **Automatic Deduplication**: Venues matched by GPS coordinates (50m/200m radius), events by external_id
+- **GPS Geocoding**: Automatic Google Places API integration when coordinates missing
+- **Priority System**: Higher-priority sources win deduplication conflicts
+- **Daily Operation**: All scrapers designed to run daily without duplicates
+- **Unified Format**: All sources transform data into standard format for processing
+
+---
+
 ## Project Structure
 
 ```
 eventasaurus/
 ├── assets/              # JavaScript, CSS, and static assets
 ├── config/              # Configuration files
+├── docs/
+│   └── scrapers/        # ⭐ Scraper documentation (READ FIRST!)
 ├── lib/
 │   ├── eventasaurus/    # Business logic
 │   │   ├── accounts/    # User management
 │   │   ├── events/      # Event, polls, activities
 │   │   ├── groups/      # Group management
 │   │   └── venues/      # Venue management
+│   ├── eventasaurus_discovery/  # Event discovery system
+│   │   ├── sources/     # Event scrapers and APIs
+│   │   ├── scraping/    # Shared scraping infrastructure
+│   │   ├── locations/   # Cities, countries, geocoding
+│   │   └── performers/  # Artist/performer management
 │   ├── eventasaurus_web/ # Web layer
 │   │   ├── components/  # Reusable LiveView components
 │   │   ├── live/        # LiveView modules
 │   │   └── controllers/ # Traditional controllers
 │   └── mix/
-│       └── tasks/       # Custom mix tasks (seed.dev, etc.)
+│       └── tasks/       # Custom mix tasks (seed.dev, discovery.sync, etc.)
 ├── priv/
 │   ├── repo/
 │   │   ├── migrations/  # Database migrations
