@@ -31,6 +31,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
     Extractors.EventExtractor
   }
 
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     cinema_data = args["cinema_data"]
@@ -169,8 +171,34 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
         end)
       end)
 
+    # Add external_ids to showtimes for freshness checking
+    showtimes_with_ids =
+      Enum.map(showtimes, fn %{film: film, event: event} ->
+        cinema_city_event_id = event[:cinema_city_event_id]
+        external_id = "cinema_city_#{cinema_city_id}_#{cinema_city_event_id}"
+
+        Map.put(%{film: film, event: event}, :external_id, external_id)
+      end)
+
+    # Filter out fresh showtimes (seen within threshold)
+    showtimes_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        showtimes_with_ids,
+        source_id
+      )
+
+    # Log efficiency metrics
+    total_showtimes = length(showtimes)
+    skipped = total_showtimes - length(showtimes_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("""
+    🔄 Cinema City Freshness Check: #{cinema_data["name"]} on #{date}
+    Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes (#{skipped} fresh, threshold: #{threshold}h)
+    """)
+
     scheduled_jobs =
-      showtimes
+      showtimes_to_process
       |> Enum.with_index()
       |> Enum.map(fn {%{film: film, event: event}, index} ->
         # Extract event_id BEFORE putting event into showtime_data
