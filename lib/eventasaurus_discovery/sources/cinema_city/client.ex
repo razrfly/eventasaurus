@@ -152,7 +152,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Client do
                 |> Keyword.put(:attempt, attempt + 1)
                 |> Keyword.put_new(:retries, retries)
 
-              Logger.info("↪️ Following redirect (attempt #{attempt + 1}/#{retries}): #{redirect_url}")
+              Logger.info(
+                "↪️ Following redirect (attempt #{attempt + 1}/#{retries}): #{redirect_url}"
+              )
+
               fetch_json(redirect_url, redirect_opts)
             end
 
@@ -172,7 +175,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Client do
         retry_request(url, opts, retries, attempt)
 
       {:ok, %HTTPoison.Response{status_code: status_code, body: body}} ->
-        Logger.error("❌ Unexpected status code: #{status_code}, body: #{String.slice(body, 0, 200)}")
+        Logger.error(
+          "❌ Unexpected status code: #{status_code}, body: #{String.slice(body, 0, 200)}"
+        )
+
         {:error, {:unexpected_status, status_code}}
 
       {:error, %HTTPoison.Error{reason: :timeout}} ->

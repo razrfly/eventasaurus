@@ -918,7 +918,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     # Combine all types and sort by starts_at (for groups, use first event's date)
     (source_aggregated_groups ++
-       movie_aggregated_groups ++ container_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
+       movie_aggregated_groups ++
+       container_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
     |> Enum.sort_by(fn
       # Groups sort to top
       %AggregatedEventGroup{} -> DateTime.utc_now()

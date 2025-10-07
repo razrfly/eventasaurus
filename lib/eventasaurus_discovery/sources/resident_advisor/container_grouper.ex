@@ -65,6 +65,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
       events
       |> Enum.filter(&is_umbrella_event?/1)
       |> Enum.map(&extract_festival_metadata/1)
+      # Deduplicate by event ID
+      |> Enum.uniq_by(& &1.umbrella_event_id)
 
     regular_events = Enum.reject(events, &is_umbrella_event?/1)
 
@@ -82,7 +84,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
       promoter_id: get_in(event, ["promoters", Access.at(0), "id"]),
       promoter_name: get_in(event, ["promoters", Access.at(0), "name"]),
       title_prefix: extract_title_prefix(event["title"]),
-      start_date: parse_date(event["date"]),
+      start_date: parse_date(event["startTime"] || event["date"]),
+      end_date: parse_date(event["endTime"]),
       umbrella_event_id: event["id"]
     }
   end
@@ -121,7 +124,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
   defp calculate_confidence_scores(festival, sub_events) do
     Enum.map(sub_events, fn raw_event ->
       event = raw_event["event"]
-      base_confidence = 1.0  # Promoter match
+      # Promoter match
+      base_confidence = 1.0
 
       # Boost if title also matches (validates grouping decision)
       title_boost = if title_matches?(event, festival), do: 0.05, else: 0.0
@@ -142,7 +146,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
   defp extract_title_prefix(title) when is_binary(title) do
     case Regex.run(~r/^(.+?):\s+/, title) do
       [_full, prefix] -> prefix
-      nil -> title  # No colon, use full title
+      # No colon, use full title
+      nil -> title
     end
   end
 
@@ -165,16 +170,30 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
     end
   end
 
-  # Calculate end date from sub-events, or use umbrella date if no sub-events yet
-  defp calculate_end_date([], festival), do: festival.start_date
+  # Calculate end date from sub-events, or use umbrella endTime if no sub-events yet
+  defp calculate_end_date([], festival) do
+    # Use umbrella's endTime if available, otherwise use start_date
+    festival.end_date || festival.start_date
+  end
 
   defp calculate_end_date(sub_events, festival) do
-    sub_events
-    |> Enum.map(fn raw_event -> parse_date(raw_event["event"]["date"]) end)
-    |> Enum.reject(&is_nil/1)
-    |> case do
-      [] -> festival.start_date
-      dates -> Enum.max(dates, Date)
+    calculated_end =
+      sub_events
+      |> Enum.map(fn raw_event -> parse_date(raw_event["event"]["date"]) end)
+      |> Enum.reject(&is_nil/1)
+      |> case do
+        [] -> festival.start_date
+        dates -> Enum.max(dates, Date)
+      end
+
+    # Validation: Ensure umbrella endTime isn't before calculated end
+    # If umbrella endTime is valid and >= calculated end, use it
+    # Otherwise use calculated end (more accurate)
+    case {festival.end_date, calculated_end} do
+      {nil, calculated} -> calculated
+      {umbrella_end, calculated} when umbrella_end >= calculated -> umbrella_end
+      # Umbrella data conflicts, use calculated
+      {_umbrella_end, calculated} -> calculated
     end
   end
 
@@ -182,12 +201,21 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
 
   defp parse_date(date_string) when is_binary(date_string) do
     case Date.from_iso8601(date_string) do
-      {:ok, date} -> date
+      {:ok, date} ->
+        date
+
       _ ->
+        # Try DateTime.from_iso8601 first (handles "2025-10-07T12:00:00.000Z")
         with {:ok, dt, _offset} <- DateTime.from_iso8601(date_string) do
           DateTime.to_date(dt)
         else
-          _ -> nil
+          _ ->
+            # If that fails, try NaiveDateTime (handles "2025-10-07T12:00:00.000" without timezone)
+            with {:ok, naive_dt} <- NaiveDateTime.from_iso8601(date_string) do
+              NaiveDateTime.to_date(naive_dt)
+            else
+              _ -> nil
+            end
         end
     end
   end

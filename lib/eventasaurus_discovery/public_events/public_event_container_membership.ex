@@ -30,16 +30,23 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainerMembership do
 
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventContainer}
 
-  @association_methods [:explicit, :title_match, :date_range, :artist_overlap, :venue_pattern, :manual]
+  @association_methods [
+    :explicit,
+    :title_match,
+    :date_range,
+    :artist_overlap,
+    :venue_pattern,
+    :manual
+  ]
   @required_fields ~w(container_id event_id association_method)a
   @optional_fields ~w(confidence_score)a
 
   schema "public_event_container_memberships" do
-    field :association_method, Ecto.Enum, values: @association_methods
-    field :confidence_score, :decimal, default: Decimal.new("1.00")
+    field(:association_method, Ecto.Enum, values: @association_methods)
+    field(:confidence_score, :decimal, default: Decimal.new("1.00"))
 
-    belongs_to :container, PublicEventContainer
-    belongs_to :event, PublicEvent
+    belongs_to(:container, PublicEventContainer)
+    belongs_to(:event, PublicEvent)
 
     timestamps()
   end
@@ -52,10 +59,15 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainerMembership do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_inclusion(:association_method, @association_methods)
-    |> validate_number(:confidence_score, greater_than_or_equal_to: Decimal.new("0"), less_than_or_equal_to: Decimal.new("1"))
+    |> validate_number(:confidence_score,
+      greater_than_or_equal_to: Decimal.new("0"),
+      less_than_or_equal_to: Decimal.new("1")
+    )
     |> foreign_key_constraint(:container_id)
     |> foreign_key_constraint(:event_id)
-    |> unique_constraint([:container_id, :event_id], name: :public_event_container_memberships_container_id_event_id_index)
+    |> unique_constraint([:container_id, :event_id],
+      name: :public_event_container_memberships_container_id_event_id_index
+    )
   end
 
   @doc """

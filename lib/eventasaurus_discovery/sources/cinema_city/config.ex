@@ -63,7 +63,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Config do
 
   # Target cities for initial implementation
   # Can be expanded to other Polish cities in the future
-  def target_cities, do: Application.get_env(:eventasaurus_discovery, :cinema_city_cities, ["Kraków"])
+  def target_cities,
+    do: Application.get_env(:eventasaurus_discovery, :cinema_city_cities, ["Kraków"])
 
   # HTTP headers for API requests
   def headers do

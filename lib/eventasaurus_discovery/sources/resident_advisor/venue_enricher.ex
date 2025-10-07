@@ -47,7 +47,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.VenueEnricher do
         # RA doesn't provide coordinates
         # Return nil and let VenueProcessor handle Google Places lookup
         # This follows the same pattern as Cinema City scraper
-        Logger.debug("RA doesn't provide coordinates for #{venue_name}, deferring to VenueProcessor")
+        Logger.debug(
+          "RA doesn't provide coordinates for #{venue_name}, deferring to VenueProcessor"
+        )
+
         {nil, nil, false}
     end
   end
