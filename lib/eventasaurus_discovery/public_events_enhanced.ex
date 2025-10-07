@@ -1083,6 +1083,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       []
     else
       # Query all containers with their event counts for these events
+      # Note: We get TOTAL counts for the container, not just filtered events
       container_data =
         from(c in PublicEventContainer,
           join: m in PublicEventContainerMembership,
@@ -1098,7 +1099,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
             start_date: c.start_date,
             end_date: c.end_date,
             metadata: c.metadata,
-            event_ids: fragment("array_agg(?)", m.event_id)
+            event_ids: fragment("array_agg(?)", m.event_id),
+            # Get TOTAL event count for this container (constant, unfiltered)
+            total_event_count:
+              fragment(
+                "(SELECT COUNT(DISTINCT event_id) FROM public_event_container_memberships WHERE container_id = ?)",
+                c.id
+              ),
+            # Get ALL unique venue IDs for this container (constant, unfiltered)
+            total_venue_ids:
+              fragment(
+                "(SELECT array_agg(DISTINCT venue_id) FROM public_events WHERE id IN (SELECT event_id FROM public_event_container_memberships WHERE container_id = ?))",
+                c.id
+              )
           }
         )
         |> Repo.all()
@@ -1123,8 +1136,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     first_event = List.first(events)
 
     if first_event && first_event.venue && first_event.venue.city_ref do
-      # Get unique venue info
-      venue_ids = events |> Enum.map(& &1.venue_id) |> Enum.uniq()
+      # Get venue names from filtered events (for display purposes)
       venue_names = events |> Enum.map(& &1.venue.name) |> Enum.uniq()
 
       # Get cover image from first event (or could be from container metadata)
@@ -1140,8 +1152,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         end_date: container.end_date,
         city_id: first_event.venue.city_id,
         city: first_event.venue.city_ref,
-        event_count: length(events),
-        venue_ids: venue_ids,
+        # Use TOTAL counts from container query (constant, regardless of filtering)
+        event_count: container.total_event_count,
+        venue_ids: container.total_venue_ids || [],
         venue_names: venue_names,
         cover_image_url: cover_image,
         metadata: container.metadata || %{}

@@ -42,16 +42,31 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     source_id = args["source_id"]
 
     film = showtime["film"]
-    event = showtime["event"]
     cinema_data = showtime["cinema_data"]
     cinema_city_film_id = film["cinema_city_film_id"]
 
-    # Generate external_id for this showtime
-    external_id = generate_external_id(event, cinema_data)
+    # CRITICAL: external_id MUST be set by CinemaDateJob
+    # We do NOT generate it here to avoid drift (BandsInTown A+ pattern)
+    external_id = showtime["external_id"]
 
-    # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
-    # This ensures last_seen_at is updated even if processing fails
-    EventProcessor.mark_event_as_seen(external_id, source_id)
+    if is_nil(external_id) do
+      Logger.error("""
+      🚨 CRITICAL: Missing external_id in showtime job args.
+      This indicates a bug in CinemaDateJob or job serialization.
+      Film: #{film["polish_title"]} at #{cinema_data["name"]}
+      """)
+
+      {:error, :missing_external_id}
+    else
+      # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
+      # This ensures last_seen_at is updated even if processing fails
+      EventProcessor.mark_event_as_seen(external_id, source_id)
+
+      process_showtime(showtime, source_id, film, cinema_city_film_id, cinema_data)
+    end
+  end
+
+  defp process_showtime(showtime, source_id, film, cinema_city_film_id, cinema_data) do
 
     Logger.debug("🎫 Processing showtime: #{film["polish_title"]} at #{cinema_data["name"]}")
 
@@ -185,7 +200,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
 
     %{
       # Event-specific data
-      external_id: generate_external_id(event, cinema_data),
+      # CRITICAL: Reuse external_id from job args (BandsInTown A+ pattern)
+      external_id: showtime["external_id"],
       showtime: showtime_dt,
       auditorium: event["auditorium"],
       booking_url: event["booking_url"],
@@ -273,13 +289,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     end
   end
 
-  # Generate external_id for showtime
-  defp generate_external_id(event, cinema_data) do
-    # Use cinema_city_event_id + cinema_city_id for unique ID
-    event_id = event["cinema_city_event_id"]
-    cinema_id = cinema_data["cinema_city_id"]
-
-    "cinema_city_#{cinema_id}_#{event_id}"
-    |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
-  end
+  # NOTE: generate_external_id removed - now handled exclusively in CinemaDateJob
+  # This ensures consistency and prevents external_id drift (BandsInTown A+ pattern)
+  # If you need to generate external_id, use:
+  #   EventasaurusDiscovery.Sources.CinemaCity.DedupHandler.generate_external_id(event_data)
 end

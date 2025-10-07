@@ -27,6 +27,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     event_metadata = clean_args["event_metadata"] || %{}
     external_id = clean_args["external_id"] || extract_external_id(url)
 
+    # CRITICAL: Add external_id to event_metadata so it flows through pipeline
+    # This ensures consistency (BandsInTown A+ pattern)
+    event_metadata = Map.put(event_metadata, :external_id, external_id)
+
     # CRITICAL: Mark event as seen BEFORE processing
     # This ensures last_seen_at is updated even if processing fails
     EventProcessor.mark_event_as_seen(external_id, source_id)
@@ -305,7 +309,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       is_festival: event_data[:is_festival] || false,
 
       # Metadata
-      external_id: extract_external_id(event_data[:url]),
+      # CRITICAL: Reuse external_id from event_data (BandsInTown A+ pattern)
+      # External_id is already set in perform/1 and passed through pipeline
+      external_id: event_data[:external_id],
       metadata: %{
         "url" => event_data[:url],
         "category" => event_data[:category],
