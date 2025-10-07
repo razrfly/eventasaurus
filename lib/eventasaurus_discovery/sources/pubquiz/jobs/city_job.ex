@@ -107,12 +107,15 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
       delay_seconds = index * 3
       scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
+      # CRITICAL: Pass external_id in job args (BandsInTown A+ pattern)
+      # This prevents drift and ensures consistency
       job_args = %{
         "venue_url" => venue.url,
         "venue_name" => venue.name,
         "venue_image_url" => venue.image_url,
         "source_id" => source_id,
-        "city_name" => city_name
+        "city_name" => city_name,
+        "external_id" => venue.external_id
       }
 
       VenueDetailJob.new(job_args, scheduled_at: scheduled_at)

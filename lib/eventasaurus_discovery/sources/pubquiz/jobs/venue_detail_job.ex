@@ -31,7 +31,17 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
     # Now a string, not ID!
     city_name = args["city_name"]
 
-    external_id = extract_external_id(venue_url)
+    # CRITICAL: Reuse external_id from job args (BandsInTown A+ pattern)
+    # CityJob generates it once, we reuse it here
+    external_id = args["external_id"] || extract_external_id(venue_url)
+
+    if is_nil(args["external_id"]) do
+      Logger.warning("""
+      ⚠️  Missing external_id in job args for venue: #{venue_name}
+      This indicates CityJob is not passing external_id correctly.
+      Falling back to extraction, but this may cause drift.
+      """)
+    end
 
     # Mark as seen first (follows Karnet/BandsInTown pattern)
     EventProcessor.mark_event_as_seen(external_id, source_id)
@@ -199,6 +209,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
 
   defp atomize_event_data(value), do: value
 
+  # FALLBACK: Only used if CityJob didn't pass external_id in job args
+  # Normally, external_id is generated once in CityJob and passed through (BandsInTown A+ pattern)
+  # This fallback exists for backwards compatibility with old jobs
   defp extract_external_id(url) do
     # Create a stable ID from the URL
     # Format: pubquiz_warszawa_centrum
