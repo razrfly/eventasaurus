@@ -128,7 +128,21 @@ defp schedule_detail_jobs(events, source_id) do
 end
 ```
 
-**Why?** Prevents re-scraping events updated within 7 days. Saves 80-90% API calls for recurring events.
+**Why?** Prevents re-scraping events updated within threshold window (default 7 days, configurable per source). Saves 80-90% API calls for recurring events.
+
+**Source-Specific Thresholds**: Some sources need different scraping frequencies:
+
+```elixir
+# config/dev.exs, config/test.exs, config/runtime.exs
+config :eventasaurus, :event_discovery,
+  freshness_threshold_hours: 168,  # Default: 7 days
+  source_freshness_overrides: %{
+    "kino-krakow" => 24,    # Daily scraping
+    "cinema-city" => 48      # Every 2 days
+  }
+```
+
+EventFreshnessChecker automatically uses source-specific thresholds when available. No code changes needed in scrapers - just add override to config.
 
 ---
 
