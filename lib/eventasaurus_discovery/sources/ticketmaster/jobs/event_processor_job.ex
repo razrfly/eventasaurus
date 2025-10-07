@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
+  alias EventasaurusDiscovery.Sources.Ticketmaster
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Utils.ObanHelpers
 
@@ -41,8 +42,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
     # Get the source
     with {:ok, source} <- get_source(source_id),
-         # Process the single event
-         {:ok, _processed_event} <- process_single_event(event_data, source) do
+         # Check for duplicates (within Ticketmaster itself)
+         {:ok, dedup_result} <- check_deduplication(event_data),
+         # Process the event if unique
+         {:ok, _processed_event} <- process_event_if_unique(event_data, source, dedup_result) do
       Logger.info("✅ Successfully processed Ticketmaster event: #{external_id}")
       {:ok, %{event_id: external_id, status: "processed"}}
     else
@@ -68,6 +71,55 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
     case Repo.get(Source, source_id) do
       nil -> {:error, :source_not_found}
       source -> {:ok, source}
+    end
+  end
+
+  defp check_deduplication(event_data) do
+    # Convert string keys to atom keys for dedup handler
+    event_with_atom_keys = atomize_event_data(event_data)
+
+    case Ticketmaster.deduplicate_event(event_with_atom_keys) do
+      {:unique, _} ->
+        {:ok, :unique}
+
+      {:duplicate, existing} ->
+        Logger.info("""
+        ⏭️  Skipping duplicate Ticketmaster event
+        New: #{event_data["title"] || event_data[:title]}
+        Existing: #{existing.title} (ID: #{existing.id})
+        """)
+
+        {:ok, :skip_duplicate}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        # Continue with processing even if dedup fails
+        {:ok, :validation_failed}
+    end
+  end
+
+  defp atomize_event_data(event_data) when is_map(event_data) do
+    event_data
+    |> Enum.map(fn
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
+      {k, v} -> {k, v}
+    end)
+    |> Map.new()
+  rescue
+    _ -> event_data
+  end
+
+  defp process_event_if_unique(event_data, source, dedup_result) do
+    case dedup_result do
+      :unique ->
+        process_single_event(event_data, source)
+
+      :skip_duplicate ->
+        {:ok, :skipped_duplicate}
+
+      :validation_failed ->
+        # Process anyway if validation failed
+        process_single_event(event_data, source)
     end
   end
 

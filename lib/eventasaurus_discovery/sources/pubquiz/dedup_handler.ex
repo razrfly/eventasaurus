@@ -6,117 +6,289 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
   recurring weekly events. This handler ensures we don't create duplicates
   when updating recurring event schedules.
 
+  ## Priority System
+
+  PubQuiz has priority 50, so it should defer to:
+  - Ticketmaster (90) - International ticketing platform
+  - Bandsintown (80) - Artist tour tracking platform
+  - Resident Advisor (75) - Electronic music events
+  - Karnet (60) - Kraków cultural events
+
   ## Deduplication Strategy
 
-  1. **Venue + Recurrence Pattern**: Primary deduplication
-  2. **GPS Coordinates**: Venue proximity matching
-  3. **Schedule Matching**: Same day of week + time
+  1. **External ID Lookup**: Check if PubQuiz event already imported
+  2. **Venue + Recurrence Pattern**: Primary deduplication for recurring events
+  3. **GPS Coordinates**: Venue proximity matching within 50m
+  4. **Schedule Matching**: Same day of week + time
 
   ## Recurring Events Handling
 
   PubQuiz events are recurring (weekly trivia nights). We need to:
   - Detect if a recurrence rule already exists for this venue
-  - Update next_occurrence without creating new events
+  - Check against higher-priority sources
   - Handle schedule changes (day/time updates)
   """
 
   require Logger
 
-  @doc """
-  Check if a recurring trivia event already exists for this venue.
-  Uses venue matching and recurrence pattern comparison.
+  alias EventasaurusApp.Repo
+  alias EventasaurusApp.Events.Event
+  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Geo.City
+  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.Sources.Source
+  import Ecto.Query
 
-  Returns {:duplicate, existing_event} or {:unique, nil}
+  @doc """
+  Validate event quality before processing.
+
+  Ensures event meets minimum requirements:
+  - Has valid external ID
+  - Has valid start date/time
+  - Has title
+  - Has venue data
+  - Has recurrence rule
+
+  Returns:
+  - `{:ok, validated_event}` - Event passes quality checks
+  - `{:error, reason}` - Event fails validation
+  """
+  def validate_event_quality(event_data) do
+    cond do
+      is_nil(event_data[:title]) || event_data[:title] == "" ->
+        {:error, "Event missing title"}
+
+      is_nil(event_data[:external_id]) || event_data[:external_id] == "" ->
+        {:error, "Event missing external_id"}
+
+      is_nil(event_data[:starts_at]) ->
+        {:error, "Event missing starts_at"}
+
+      not is_struct(event_data[:starts_at], DateTime) ->
+        {:error, "starts_at must be DateTime"}
+
+      is_nil(event_data[:venue_data]) ->
+        {:error, "Event missing venue_data"}
+
+      is_nil(event_data[:recurrence_rule]) ->
+        {:error, "Event missing recurrence_rule"}
+
+      not is_date_sane?(event_data[:starts_at]) ->
+        {:error, "Event date is not sane (past or >2 years future)"}
+
+      true ->
+        {:ok, event_data}
+    end
+  end
+
+  @doc """
+  Check if event is a duplicate of existing higher-priority source.
+
+  ## Returns
+  - `{:unique, event_data}` - Event is unique, safe to import
+  - `{:duplicate, existing_event}` - Event exists from higher priority source
   """
   def check_duplicate(event_data) do
-    # Extract key fields for matching
-    venue_name = get_in(event_data, [:venue_data, :name])
-    recurrence_rule = event_data[:recurrence_rule]
-    latitude = get_in(event_data, [:venue_data, :latitude])
-    longitude = get_in(event_data, [:venue_data, :longitude])
+    # First check by external_id (exact match)
+    case find_by_external_id(event_data[:external_id]) do
+      %Event{} = existing ->
+        Logger.info("🔍 Found existing PubQuiz event by external_id")
+        {:duplicate, existing}
 
-    # Look for existing recurring events at this venue
-    case find_similar_recurring_event(venue_name, recurrence_rule, latitude, longitude) do
       nil ->
-        {:unique, nil}
+        # Check by venue + recurrence pattern (for recurring events)
+        check_fuzzy_duplicate(event_data)
+    end
+  end
 
-      existing ->
-        confidence = calculate_match_confidence(event_data, existing)
+  # Private functions
 
-        if confidence > 0.8 do
-          Logger.info("🔍 Found existing recurring trivia event at venue: #{venue_name}")
-          {:duplicate, existing}
-        else
-          {:unique, nil}
+  defp is_date_sane?(datetime) do
+    now = DateTime.utc_now()
+    two_years_in_seconds = 2 * 365 * 24 * 60 * 60
+    two_years_future = DateTime.add(now, two_years_in_seconds, :second)
+
+    # Event should be in future but not more than 2 years out
+    DateTime.compare(datetime, now) in [:gt, :eq] &&
+      DateTime.compare(datetime, two_years_future) == :lt
+  end
+
+  defp find_by_external_id(external_id) when is_binary(external_id) do
+    # Query through public_event_sources join table
+    query =
+      from(e in Event,
+        join: es in PublicEventSource,
+        on: es.event_id == e.id,
+        where: es.external_id == ^external_id and is_nil(e.deleted_at),
+        limit: 1
+      )
+
+    Repo.one(query)
+  end
+
+  defp find_by_external_id(_), do: nil
+
+  defp check_fuzzy_duplicate(event_data) do
+    venue_name = get_in(event_data, [:venue_data, :name])
+    city_name = get_in(event_data, [:venue_data, :city])
+    venue_lat = get_in(event_data, [:venue_data, :latitude])
+    venue_lng = get_in(event_data, [:venue_data, :longitude])
+
+    # Try to find existing venue by name+city to get coordinates
+    # This handles the 95% case where venue already exists in database
+    {final_lat, final_lng} =
+      if is_nil(venue_lat) or is_nil(venue_lng) do
+        case find_existing_venue_coordinates(venue_name, city_name) do
+          {lat, lng} when not is_nil(lat) and not is_nil(lng) ->
+            Logger.debug("Using coordinates from existing venue in database")
+            {lat, lng}
+
+          _ ->
+            Logger.debug("Skipping fuzzy duplicate check - venue not geocoded yet")
+            {nil, nil}
         end
+      else
+        {venue_lat, venue_lng}
+      end
+
+    # Skip fuzzy matching if we still don't have coordinates
+    if is_nil(final_lat) or is_nil(final_lng) do
+      {:unique, event_data}
+    else
+      case find_matching_recurring_events(venue_name, final_lat, final_lng) do
+        [] ->
+          {:unique, event_data}
+
+        matches ->
+          # Filter to higher priority sources only
+          # PubQuiz priority is 50, so check if existing source is higher
+          higher_priority_match =
+            Enum.find(matches, fn %{event: _event, source: source} ->
+              source.priority > 50
+            end)
+
+          case higher_priority_match do
+            nil ->
+              # No higher priority matches, PubQuiz event is unique
+              {:unique, event_data}
+
+            %{event: existing, source: source} ->
+              # Found higher priority duplicate
+              confidence = calculate_match_confidence(event_data, existing)
+
+              if confidence > 0.8 do
+                Logger.info("""
+                🔍 Found likely duplicate from higher-priority source
+                PubQuiz Event: #{event_data[:title]}
+                Existing: #{existing.title} (source: #{source.name}, priority: #{source.priority})
+                Confidence: #{Float.round(confidence, 2)}
+                """)
+
+                {:duplicate, existing}
+              else
+                {:unique, event_data}
+              end
+          end
+      end
     end
   end
 
-  @doc """
-  Handle recurring event updates.
-  For PubQuiz, we want to update the next_occurrence rather than
-  create duplicate recurring events.
-  """
-  def enrich_event_data(event_data) do
-    case check_duplicate(event_data) do
-      {:duplicate, existing} ->
-        # Update the existing recurring event's next_occurrence
-        handle_recurring_update(event_data, existing)
+  defp find_existing_venue_coordinates(venue_name, city_name) do
+    # Look up venue by name and city to get GPS coordinates
+    # This handles the common case where venue already exists in database
+    query =
+      from(v in Venue,
+        join: c in City,
+        on: v.city_id == c.id,
+        where:
+          fragment("LOWER(?) = LOWER(?)", v.name, ^venue_name) and
+            fragment("LOWER(?) = LOWER(?)", c.name, ^city_name) and
+            not is_nil(v.latitude) and
+            not is_nil(v.longitude),
+        select: {v.latitude, v.longitude},
+        limit: 1
+      )
 
-      {:unique, _} ->
-        # New recurring event, enrich with venue data
-        enrich_with_venue_data(event_data)
+    case Repo.one(query) do
+      {lat, lng} ->
+        # Convert Decimal to float if needed
+        lat_f = if is_struct(lat, Decimal), do: Decimal.to_float(lat), else: lat
+        lng_f = if is_struct(lng, Decimal), do: Decimal.to_float(lng), else: lng
+        {lat_f, lng_f}
+
+      nil ->
+        {nil, nil}
     end
+  rescue
+    _e ->
+      {nil, nil}
   end
 
-  defp find_similar_recurring_event(venue_name, recurrence_rule, latitude, longitude) do
-    # TODO: Implement actual recurring event lookup
-    # For now, venue_id + recurrence_rule uniqueness is handled by database
+  defp find_matching_recurring_events(venue_name, venue_lat, venue_lng) do
+    # Query events with nearby venue (50m radius)
+    # Uses PostGIS earth_distance like other sources (Karnet, RA, Ticketmaster)
+    query =
+      from(e in Event,
+        join: v in assoc(e, :venue),
+        join: es in PublicEventSource,
+        on: es.event_id == e.id,
+        join: s in Source,
+        on: s.id == es.source_id,
+        where:
+          is_nil(e.deleted_at) and
+            fragment(
+              "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < 50",
+              v.latitude,
+              v.longitude,
+              ^venue_lat,
+              ^venue_lng
+            ),
+        preload: [venue: v],
+        select: %{event: e, source: s}
+      )
 
-    # recurring_events = Events.list_recurring_events_by_venue(venue_name)
+    candidates = Repo.all(query)
 
-    # Temporary - no cross-run deduplication until we have proper event lookup
-    events = []
-
-    Enum.find(events, fn event ->
-      venue_match = similar_venue?(venue_name, event.venue_name)
-      location_match = latitude && longitude && nearby_location?(latitude, longitude, event)
-      schedule_match = similar_schedule?(recurrence_rule, event.recurrence_rule)
-
-      (venue_match || location_match) && schedule_match
+    # Filter by venue name similarity
+    # For recurring trivia events, venue match is the primary deduplication signal
+    Enum.filter(candidates, fn %{event: event, source: _source} ->
+      similar_venue?(venue_name, event.venue.name)
     end)
   rescue
-    _ -> nil
+    e ->
+      Logger.error("Error finding matching recurring events: #{inspect(e)}")
+      []
   end
 
   defp calculate_match_confidence(pubquiz_event, existing_event) do
     scores = []
 
-    # Venue name similarity (40% weight)
+    # Venue name similarity (50% weight) - Primary signal for recurring events
     venue_name = get_in(pubquiz_event, [:venue_data, :name])
 
     scores =
-      if venue_name && similar_venue?(venue_name, existing_event.venue_name) do
+      if venue_name && similar_venue?(venue_name, existing_event.venue.name) do
+        [0.5 | scores]
+      else
+        scores
+      end
+
+    # GPS proximity match (40% weight) - Strong signal for same venue
+    latitude = get_in(pubquiz_event, [:venue_data, :latitude])
+    longitude = get_in(pubquiz_event, [:venue_data, :longitude])
+
+    scores =
+      if latitude && longitude && nearby_location?(latitude, longitude, existing_event.venue) do
         [0.4 | scores]
       else
         scores
       end
 
-    # GPS proximity match (30% weight)
-    latitude = get_in(pubquiz_event, [:venue_data, :latitude])
-    longitude = get_in(pubquiz_event, [:venue_data, :longitude])
-
+    # Title similarity (10% weight) - All PubQuiz events are "Weekly Trivia Night"
+    # This is a weak signal but helps confirm it's the same type of event
     scores =
-      if latitude && longitude && nearby_location?(latitude, longitude, existing_event) do
-        [0.3 | scores]
-      else
-        scores
-      end
-
-    # Recurrence pattern match (30% weight)
-    scores =
-      if similar_schedule?(pubquiz_event[:recurrence_rule], existing_event.recurrence_rule) do
-        [0.3 | scores]
+      if similar_title?(pubquiz_event[:title], existing_event.title) do
+        [0.1 | scores]
       else
         scores
       end
@@ -124,34 +296,24 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
     Enum.sum(scores)
   end
 
-  defp handle_recurring_update(pubquiz_data, existing) do
-    # Check if schedule changed
-    schedule_changed = !similar_schedule?(pubquiz_data[:recurrence_rule], existing.recurrence_rule)
+  defp similar_title?(title1, title2) do
+    normalized1 = normalize_title(title1 || "")
+    normalized2 = normalize_title(title2 || "")
 
-    if schedule_changed do
-      # Schedule changed (different day or time)
-      %{
-        id: existing.id,
-        action: :update,
-        reason: "Recurring event schedule updated",
-        updates: %{
-          recurrence_rule: pubquiz_data[:recurrence_rule],
-          starts_at: pubquiz_data[:starts_at]
-        }
-      }
-    else
-      # Same schedule, just skip
-      %{
-        id: existing.id,
-        action: :skip,
-        reason: "Recurring event already exists with same schedule",
-        pubquiz_metadata: %{
-          "pubquiz_schedule" => get_in(pubquiz_data, [:source_metadata, "schedule_text"]),
-          "host" => get_in(pubquiz_data, [:source_metadata, "host"])
-        }
-      }
-    end
+    normalized1 == normalized2 ||
+      String.contains?(normalized1, normalized2) ||
+      String.contains?(normalized2, normalized1)
   end
+
+  defp normalize_title(nil), do: ""
+
+  defp normalize_title(title) do
+    title
+    |> String.downcase()
+    |> String.replace(~r/[^\w\s]/u, "")
+    |> String.trim()
+  end
+
 
   defp similar_venue?(venue1, venue2) do
     cond do
@@ -177,42 +339,19 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
     |> String.trim()
   end
 
-  defp similar_schedule?(rule1, rule2) do
+
+  defp nearby_location?(lat1, lon1, venue) do
     cond do
-      is_nil(rule1) || is_nil(rule2) ->
+      is_nil(venue) || is_nil(venue.latitude) || is_nil(venue.longitude) ->
         false
 
       true ->
-        # Compare frequency, day of week, and time
-        same_frequency?(rule1, rule2) &&
-          same_days?(rule1, rule2) &&
-          same_time?(rule1, rule2)
-    end
-  end
+        # Convert Decimal to float if needed
+        venue_lat = if is_struct(venue.latitude, Decimal), do: Decimal.to_float(venue.latitude), else: venue.latitude
+        venue_lng = if is_struct(venue.longitude, Decimal), do: Decimal.to_float(venue.longitude), else: venue.longitude
 
-  defp same_frequency?(rule1, rule2) do
-    rule1["frequency"] == rule2["frequency"]
-  end
-
-  defp same_days?(rule1, rule2) do
-    days1 = rule1["days_of_week"] || []
-    days2 = rule2["days_of_week"] || []
-
-    MapSet.equal?(MapSet.new(days1), MapSet.new(days2))
-  end
-
-  defp same_time?(rule1, rule2) do
-    rule1["time"] == rule2["time"]
-  end
-
-  defp nearby_location?(lat1, lon1, event) do
-    cond do
-      is_nil(event.latitude) || is_nil(event.longitude) ->
-        false
-
-      true ->
         # Calculate distance using Haversine formula
-        distance_meters = calculate_distance(lat1, lon1, event.latitude, event.longitude)
+        distance_meters = calculate_distance(lat1, lon1, venue_lat, venue_lng)
 
         # Consider venues within 50m as the same location (tighter for recurring events)
         distance_meters < 50
@@ -238,88 +377,4 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
     r * c
   end
 
-  defp enrich_with_venue_data(event_data) do
-    # For unique recurring events, ensure venue data is complete
-
-    enriched = event_data
-
-    if venue_data = event_data[:venue_data] do
-      # PubQuiz events are in Poland, add timezone if missing
-      venue_data =
-        Map.merge(
-          %{
-            country: "Poland",
-            timezone: "Europe/Warsaw",
-            # Will be geocoded if coordinates missing
-            needs_geocoding: is_nil(venue_data[:latitude]) || is_nil(venue_data[:longitude])
-          },
-          venue_data
-        )
-
-      Map.put(enriched, :venue_data, venue_data)
-    else
-      enriched
-    end
-  end
-
-  @doc """
-  Validate recurring event data quality before processing.
-  Returns {:ok, event_data} or {:error, reason}
-  """
-  def validate_event_quality(event_data) do
-    with :ok <- validate_required_fields(event_data),
-         :ok <- validate_recurrence_rule(event_data),
-         :ok <- validate_venue_data(event_data) do
-      {:ok, event_data}
-    else
-      {:error, reason} ->
-        Logger.warning("⚠️ Recurring event quality validation failed: #{reason}")
-        {:error, reason}
-    end
-  end
-
-  defp validate_required_fields(event_data) do
-    required = [:title, :venue_id, :recurrence_rule, :starts_at]
-
-    missing =
-      Enum.filter(required, fn field ->
-        is_nil(event_data[field]) || event_data[field] == ""
-      end)
-
-    if Enum.empty?(missing) do
-      :ok
-    else
-      {:error, "Missing required fields: #{inspect(missing)}"}
-    end
-  end
-
-  defp validate_recurrence_rule(event_data) do
-    rule = event_data[:recurrence_rule]
-
-    cond do
-      is_nil(rule) ->
-        {:error, "Missing recurrence_rule"}
-
-      !is_map(rule) ->
-        {:error, "recurrence_rule must be a map"}
-
-      !rule["frequency"] || !rule["days_of_week"] || !rule["time"] ->
-        {:error, "recurrence_rule missing required fields"}
-
-      rule["frequency"] != "weekly" ->
-        {:error, "Only weekly frequency supported for PubQuiz"}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp validate_venue_data(event_data) do
-    # Must have venue_id (from VenueProcessor)
-    if event_data[:venue_id] do
-      :ok
-    else
-      {:error, "Missing venue_id (event must be processed through VenueProcessor first)"}
-    end
-  end
 end
