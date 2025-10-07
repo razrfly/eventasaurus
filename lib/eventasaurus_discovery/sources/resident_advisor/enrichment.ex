@@ -34,11 +34,19 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
 
       performer ->
         if has_ra_artist_id?(performer) do
-          %{performer_id: performer.id}
-          |> ArtistEnrichmentJob.new()
-          |> Oban.insert()
+          with {:ok, _job} <-
+                 %{performer_id: performer.id}
+                 |> ArtistEnrichmentJob.new()
+                 |> Oban.insert() do
+            {:ok, :scheduled}
+          else
+            {:error, changeset} ->
+              Logger.error(
+                "Failed to enqueue enrichment for performer #{performer.id}: #{inspect(changeset.errors)}"
+              )
 
-          {:ok, :scheduled}
+              {:error, :enqueue_failed}
+          end
         else
           {:error, :no_ra_artist_id}
         end
@@ -61,17 +69,27 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
         select: p
 
     performers = Repo.all(query)
-    count = length(performers)
 
-    Logger.info("Scheduling enrichment for #{count} performers from event #{event_id}")
+    result =
+      Enum.reduce_while(performers, {:ok, 0}, fn performer, {:ok, acc} ->
+        case %{performer_id: performer.id} |> ArtistEnrichmentJob.new() |> Oban.insert() do
+          {:ok, _job} -> {:cont, {:ok, acc + 1}}
+          {:error, changeset} -> {:halt, {:error, {performer.id, changeset}}}
+        end
+      end)
 
-    Enum.each(performers, fn performer ->
-      %{performer_id: performer.id}
-      |> ArtistEnrichmentJob.new()
-      |> Oban.insert()
-    end)
+    case result do
+      {:ok, scheduled} ->
+        Logger.info("Scheduled enrichment for #{scheduled} performers from event #{event_id}")
+        {:ok, scheduled}
 
-    {:ok, count}
+      {:error, {performer_id, changeset}} ->
+        Logger.error(
+          "Failed to enqueue enrichment for performer #{performer_id}: #{inspect(changeset.errors)}"
+        )
+
+        {:error, :enqueue_failed}
+    end
   end
 
   @doc """
@@ -143,16 +161,28 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
           limit: ^limit
       )
 
-    count = length(performers)
-    Logger.info("Scheduling high-priority enrichment for #{count} performers")
+    result =
+      Enum.reduce_while(performers, {:ok, 0}, fn performer, {:ok, acc} ->
+        case %{performer_id: performer.id}
+             |> ArtistEnrichmentJob.new(priority: 1)
+             |> Oban.insert() do
+          {:ok, _job} -> {:cont, {:ok, acc + 1}}
+          {:error, changeset} -> {:halt, {:error, {performer.id, changeset}}}
+        end
+      end)
 
-    Enum.each(performers, fn performer ->
-      %{performer_id: performer.id}
-      |> ArtistEnrichmentJob.new(priority: 1)
-      |> Oban.insert()
-    end)
+    case result do
+      {:ok, scheduled} ->
+        Logger.info("Scheduled high-priority enrichment for #{scheduled} performers")
+        {:ok, scheduled}
 
-    {:ok, count}
+      {:error, {performer_id, changeset}} ->
+        Logger.error(
+          "Failed to enqueue high-priority enrichment for performer #{performer_id}: #{inspect(changeset.errors)}"
+        )
+
+        {:error, :enqueue_failed}
+    end
   end
 
   @doc """
