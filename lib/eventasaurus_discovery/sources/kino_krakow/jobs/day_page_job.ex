@@ -31,6 +31,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     Extractors.ShowtimeExtractor
   }
 
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     day_offset = args["day_offset"]
@@ -158,7 +160,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
   end
 
   # Schedule ShowtimeProcessJobs for each showtime
-  defp schedule_showtime_jobs(showtimes, source_id, _day_offset, movie_count) do
+  defp schedule_showtime_jobs(showtimes, source_id, day_offset, movie_count) do
     # Calculate delay to give MovieDetailJobs time to complete first
     # Each MovieDetailJob is scheduled with delays based on its index: index * Config.rate_limit()
     # Last movie starts at: (movie_count - 1) * rate_limit
@@ -167,13 +169,50 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     # Ensure all movies are cached before showtimes process
     base_delay = movie_count * rate_limit + 30
 
-    scheduled_jobs =
-      showtimes
-      |> Enum.with_index()
-      |> Enum.map(fn {showtime, index} ->
-        # Showtime is already a map (not a struct), so use directly
+    # Add external_ids to showtimes for freshness checking
+    # Must match the external_id generation in ShowtimeProcessJob
+    showtimes_with_ids =
+      Enum.map(showtimes, fn showtime ->
         showtime_map = if is_struct(showtime), do: Map.from_struct(showtime), else: showtime
 
+        # Extract fields for external_id (matching ShowtimeProcessJob logic)
+        movie = showtime_map[:movie_slug] || showtime_map["movie_slug"]
+        cinema = showtime_map[:cinema_slug] || showtime_map["cinema_slug"]
+        datetime = showtime_map[:datetime] || showtime_map["datetime"]
+
+        # Extract date and time components
+        date = DateTime.to_date(datetime) |> Date.to_iso8601()
+        time = DateTime.to_time(datetime) |> Time.to_string() |> String.slice(0..4)
+
+        # Generate external_id matching ShowtimeProcessJob pattern
+        external_id =
+          "kino_krakow_#{movie}_#{cinema}_#{date}_#{time}"
+          |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
+
+        Map.put(showtime_map, :external_id, external_id)
+      end)
+
+    # Filter out fresh showtimes (seen within threshold)
+    showtimes_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        showtimes_with_ids,
+        source_id
+      )
+
+    # Log efficiency metrics
+    total_showtimes = length(showtimes)
+    skipped = total_showtimes - length(showtimes_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("""
+    🔄 Kino Krakow Freshness Check: Day #{day_offset}
+    Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes (#{skipped} fresh, threshold: #{threshold}h)
+    """)
+
+    scheduled_jobs =
+      showtimes_to_process
+      |> Enum.with_index()
+      |> Enum.map(fn {showtime, index} ->
         # Stagger job execution
         # 2 seconds between showtimes
         delay_seconds = base_delay + index * 2
@@ -181,7 +220,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
 
         EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob.new(
           %{
-            "showtime" => showtime_map,
+            "showtime" => showtime,
             "source_id" => source_id
           },
           queue: :scraper,
