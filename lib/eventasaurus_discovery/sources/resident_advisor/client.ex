@@ -171,6 +171,13 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Client do
             artists {
               id
               name
+              image
+              contentUrl
+              country {
+                id
+                name
+                urlCode
+              }
             }
           }
         }
