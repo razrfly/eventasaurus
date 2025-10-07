@@ -4,7 +4,16 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   Wraps the mix discovery.sync functionality in an Oban job.
   """
 
-  use Oban.Worker, queue: :discovery_sync, max_attempts: 3
+  use Oban.Worker,
+    queue: :discovery_sync,
+    max_attempts: 3,
+    unique: [period: 3600, fields: [:args], states: [:available, :scheduled, :executing]]
+
+  @impl Oban.Worker
+  def backoff(%Oban.Job{attempt: attempt}) do
+    # Exponential backoff: 30s, 2min, 8min
+    trunc(:math.pow(2, attempt) * 15)
+  end
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
@@ -24,14 +33,19 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   @country_wide_sources ["pubquiz-pl"]
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args, attempt: attempt}) do
     source = args["source"]
     city_id = args["city_id"]
     limit = args["limit"] || 100
     _radius = args["radius"] || 50
 
+    # Log retry attempts
+    if attempt > 1 do
+      Logger.info("🔄 Retry attempt #{attempt}/3 for #{source} sync (city_id: #{city_id})")
+    end
+
     # Broadcast start
-    broadcast_progress(:started, %{source: source, city_id: city_id})
+    broadcast_progress(:started, %{source: source, city_id: city_id, attempt: attempt})
 
     # Find the city (only required for city-specific sources)
     city =
@@ -43,8 +57,10 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
 
     # Check if city is required but not found
     if !city && source not in @country_wide_sources && source != "all" do
-      broadcast_progress(:error, %{message: "City not found"})
-      {:error, "City not found"}
+      error_msg = "City not found (id: #{city_id})"
+      Logger.error("❌ #{error_msg} for #{source} sync")
+      broadcast_progress(:error, %{message: error_msg, source: source, city_id: city_id})
+      {:error, error_msg}
     else
       city_info =
         if source in @country_wide_sources do

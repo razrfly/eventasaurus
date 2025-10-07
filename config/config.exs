@@ -131,7 +131,7 @@ config :eventasaurus, Oban,
      crontab: [
        # Daily sitemap generation at 2 AM UTC
        {"0 2 * * *", Eventasaurus.Workers.SitemapWorker},
-       # City discovery orchestration every 24 hours at midnight UTC
+       # City discovery orchestration runs daily at midnight UTC
        {"0 0 * * *", EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator}
      ]}
   ]

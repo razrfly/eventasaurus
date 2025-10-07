@@ -333,6 +333,50 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
   end
 
   @doc """
+  Update next_run_at for a specific source after queueing a job.
+  This prevents duplicate job queueing on subsequent orchestrator runs.
+
+  ## Examples
+
+      iex> update_source_next_run(1, "bandsintown", ~U[2025-10-08 00:00:00Z])
+      {:ok, %City{}}
+  """
+  def update_source_next_run(city_id, source_name, next_run_at) do
+    with {:ok, city} <- get_city(city_id),
+         config when not is_nil(config) <- city.discovery_config do
+      # Convert to map format if needed
+      config_map =
+        if is_struct(config) do
+          Jason.encode!(config) |> Jason.decode!()
+        else
+          config
+        end
+
+      sources = config_map["sources"] || []
+      source_index = Enum.find_index(sources, &(&1["name"] == source_name))
+
+      if source_index do
+        updated_sources =
+          List.update_at(sources, source_index, fn source ->
+            Map.put(source, "next_run_at", DateTime.to_iso8601(next_run_at))
+          end)
+
+        updated_config = Map.put(config_map, "sources", updated_sources)
+
+        city
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.put_change(:discovery_config, updated_config)
+        |> Repo.update()
+      else
+        {:error, :source_not_found}
+      end
+    else
+      {:error, reason} -> {:error, reason}
+      nil -> {:error, :discovery_not_configured}
+    end
+  end
+
+  @doc """
   Get all cities with discovery enabled.
 
   ## Examples
