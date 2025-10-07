@@ -7,9 +7,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   import Ecto.Query
   alias EventasaurusApp.Repo
 
-  @doc """
-  Maps source names to their Oban worker module names.
-  """
+  # Maps source names to their Oban worker module names.
   @source_to_worker %{
     "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
     "ticketmaster" => "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
@@ -42,7 +40,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       }
   """
   def get_source_stats(city_id, source_name) do
-    worker = Map.get(@source_to_worker, source_name)
+    worker =
+      case Map.get(@source_to_worker, source_name) do
+        nil -> nil
+        "Elixir." <> _ = w -> w
+        w when is_binary(w) -> "Elixir." <> w
+      end
 
     if worker do
       # Query for aggregate stats
@@ -62,8 +65,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
       stats = Repo.one(stats_query) || default_stats()
 
-      # Get the most recent error if there is one
-      last_error = get_last_error(worker, city_id)
+      # Fetch error details only when there are discarded jobs
+      last_error =
+        case stats.error_count do
+          0 -> nil
+          _ -> get_last_error(worker, city_id)
+        end
 
       Map.put(stats, :last_error, last_error)
     else
