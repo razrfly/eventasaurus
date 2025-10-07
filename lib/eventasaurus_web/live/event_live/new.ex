@@ -744,8 +744,12 @@ defmodule EventasaurusWeb.EventLive.New do
               case EventasaurusApp.Venues.find_venue_by_address(venue_address) do
                 nil ->
                   # Create new venue using VenueStore for proper city_id lookup
-                  case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(venue_attrs) do
-                    {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
+                  case EventasaurusDiscovery.Locations.VenueStore.find_or_create_venue(
+                         venue_attrs
+                       ) do
+                    {:ok, venue} ->
+                      Map.put(event_params, "venue_id", venue.id)
+
                     # Fall back to creating without venue
                     {:error, reason} ->
                       require Logger

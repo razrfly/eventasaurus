@@ -11,8 +11,6 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
   alias EventasaurusDiscovery.PublicEventsEnhanced
 
-  import EventasaurusWeb.Components.EventCards
-
   @impl true
   def mount(%{"city_slug" => city_slug, "container_slug" => container_slug}, _session, socket) do
     case Locations.get_city_by_slug(city_slug) do
@@ -76,10 +74,13 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         # Fetch all events for this container
         raw_events = PublicEventContainers.get_container_events(container)
 
-        # Enrich events with cover images and display fields
-        events = Enum.map(raw_events, fn event ->
-          Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
-        end)
+        # Filter to city events only, then enrich with cover images
+        events =
+          raw_events
+          |> Enum.filter(&belongs_to_city?(&1, city.id))
+          |> Enum.map(fn event ->
+            Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
+          end)
 
         # Group events by date
         grouped_events = group_events_by_date(events)
@@ -95,15 +96,13 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   end
 
   defp find_container_by_slug(slug, city_id) do
-    # Get all containers and find by slug
-    # We filter by city through the events relationship
-    containers = PublicEventContainers.list_containers()
-
-    Enum.find(containers, fn container ->
-      container.slug == slug &&
-        # Verify container has events in this city
-        has_events_in_city?(container, city_id)
-    end)
+    # Fetch container by slug directly (avoids N+1)
+    with %PublicEventContainer{} = container <- PublicEventContainers.get_container_by_slug(slug),
+         true <- has_events_in_city?(container, city_id) do
+      container
+    else
+      _ -> nil
+    end
   end
 
   defp has_events_in_city?(container, city_id) do
@@ -113,6 +112,9 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
       event.venue && event.venue.city_id == city_id
     end)
   end
+
+  defp belongs_to_city?(%{venue: %{city_id: city_id}}, city_id), do: true
+  defp belongs_to_city?(_, _), do: false
 
   defp group_events_by_date(events) do
     events
@@ -430,13 +432,6 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
 
   defp get_url_from_source_event(_), do: nil
 
-  # Helper to get event cover image (fallback to nil if none)
-  defp get_event_cover_image(event) do
-    # Events from the database might have cover_image_url already
-    # Otherwise return nil for placeholder image
-    Map.get(event, :cover_image_url) || nil
-  end
-
   # Component for event list item (reuse from EventCards or define here)
   defp event_list_item(assigns) do
     ~H"""
@@ -469,10 +464,12 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
                 <%= format_datetime(@event.starts_at) %>
               </div>
 
-              <div class="flex items-center">
-                <Heroicons.map_pin class="w-4 h-4 mr-1" />
-                <%= @event.venue.name %>
-              </div>
+              <%= if venue = @event.venue do %>
+                <div class="flex items-center">
+                  <Heroicons.map_pin class="w-4 h-4 mr-1" />
+                  <%= venue.name %>
+                </div>
+              <% end %>
             </div>
 
             <%= if Map.get(@event, :display_description) do %>

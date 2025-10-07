@@ -65,11 +65,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Client do
   # Private functions
 
   defp execute_graphql(query, variables, operation_name) do
-    body = Jason.encode!(%{
-      query: query,
-      variables: variables,
-      operationName: operation_name
-    })
+    body =
+      Jason.encode!(%{
+        query: query,
+        variables: variables,
+        operationName: operation_name
+      })
 
     case HTTPoison.post(
            Config.graphql_endpoint(),

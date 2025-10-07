@@ -144,7 +144,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
         cinema_index = Enum.find_index(cinemas, &(&1 == cinema)) || 0
         date_offset = Date.diff(date, Date.utc_today())
         # Total delay: (date_offset * cinemas * rate_limit) + (cinema_index * rate_limit)
-        delay_seconds = date_offset * length(cinemas) * Config.rate_limit() + cinema_index * Config.rate_limit()
+        delay_seconds =
+          date_offset * length(cinemas) * Config.rate_limit() + cinema_index * Config.rate_limit()
+
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         CinemaDateJob.new(

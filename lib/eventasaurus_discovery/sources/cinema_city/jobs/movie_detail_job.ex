@@ -110,9 +110,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
          }}
 
       {:error, :missing_title} ->
-        Logger.error(
-          "❌ TMDB matching failed - missing title for film: #{cinema_city_film_id}"
-        )
+        Logger.error("❌ TMDB matching failed - missing title for film: #{cinema_city_film_id}")
 
         {:error, %{reason: :missing_title, cinema_city_film_id: cinema_city_film_id}}
 

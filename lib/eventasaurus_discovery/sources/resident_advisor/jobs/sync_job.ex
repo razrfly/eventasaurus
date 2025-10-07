@@ -222,7 +222,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
                 {[transformed[:external_id] | queued_acc], failed_acc}
 
               {:error, reason} ->
-                Logger.warning("⚠️ Failed to queue EventDetailJob for #{transformed[:external_id]}: #{inspect(reason)}")
+                Logger.warning(
+                  "⚠️ Failed to queue EventDetailJob for #{transformed[:external_id]}: #{inspect(reason)}"
+                )
+
                 {queued_acc, [transformed[:external_id] | failed_acc]}
             end
 

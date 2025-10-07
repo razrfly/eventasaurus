@@ -191,9 +191,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
           nil
 
         city ->
-          case EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.AreaMapper.get_area_id(
-                 city
-               ) do
+          case EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.AreaMapper.get_area_id(city) do
             {:ok, area_id} ->
               Logger.info("✅ Found RA area_id #{area_id} for #{city.name}")
               area_id
