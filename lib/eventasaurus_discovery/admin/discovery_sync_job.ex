@@ -11,7 +11,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
 
   @impl Oban.Worker
   def backoff(%Oban.Job{attempt: attempt}) do
-    # Exponential backoff: 30s, 2min, 8min
+    # Exponential backoff: 30s, 1min, 2min
     trunc(:math.pow(2, attempt - 1) * 30)
   end
 

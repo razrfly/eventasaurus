@@ -14,8 +14,10 @@ assignees: ''
 
 ## Reference Documents
 
-- [Scraper Specification](../../../SCRAPER_SPECIFICATION.md)
-- [Audit Report](../../../SCRAPER_AUDIT_REPORT.md)
+- [Scraper Specification](../../docs/scrapers/SCRAPER_SPECIFICATION.md)
+- [Audit Report](../../docs/scrapers/SCRAPER_AUDIT_REPORT.md)
+- [Implementation Guide](../../docs/scrapers/SCRAPER_DOCUMENTATION_SUMMARY.md)
+- [Quick Reference](../../docs/scrapers/SCRAPER_QUICK_REFERENCE.md)
 
 ## Issues Identified
 
