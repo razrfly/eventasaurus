@@ -55,7 +55,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.UmbrellaDetector do
 
       # Multiple heuristic signals (2+) indicate umbrella
       positive_signals >= 2 ->
-        primary_reason = signals |> Enum.find(fn {r, _} -> r == :umbrella end) |> elem(1) |> Map.get(:reason)
+        primary_reason =
+          signals |> Enum.find(fn {r, _} -> r == :umbrella end) |> elem(1) |> Map.get(:reason)
+
         {:umbrella, %{reason: primary_reason, confidence: 0.85, signals: positive_signals}}
 
       true ->
@@ -99,7 +101,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.UmbrellaDetector do
     has_late_end = is_binary(end_time) && String.contains?(end_time, "T23:59:00")
 
     if has_generic_start or has_late_end do
-      {:umbrella, %{reason: :generic_times, generic_start: has_generic_start, late_end: has_late_end}}
+      {:umbrella,
+       %{reason: :generic_times, generic_start: has_generic_start, late_end: has_late_end}}
     else
       {:not_umbrella, nil}
     end

@@ -9,6 +9,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
   require Logger
 
   alias EventasaurusApp.Repo
+
   alias EventasaurusDiscovery.PublicEvents.{
     PublicEvent,
     PublicEventContainer,
@@ -33,7 +34,23 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
   end
 
   @doc """
-  List all containers, optionally filtered by type.
+  Get a container by slug with associations preloaded.
+  """
+  def get_container_by_slug(slug) do
+    PublicEventContainer
+    |> where([c], c.slug == ^slug)
+    |> preload([:source, source_event: :source])
+    |> Repo.one()
+  end
+
+  @doc """
+  List all containers, optionally filtered by type and city.
+
+  Options:
+  - `:type` - Filter by container type
+  - `:active_only` - Only return active containers
+  - `:city_id` - Filter containers by city (via event venues)
+  - `:with_counts` - Include event counts per container
   """
   def list_containers(opts \\ []) do
     query = PublicEventContainer
@@ -41,13 +58,14 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
     query =
       if type = opts[:type] do
         where(query, [c], c.container_type == ^type)
-        else
+      else
         query
       end
 
     query =
       if opts[:active_only] do
         now = DateTime.utc_now()
+
         where(
           query,
           [c],
@@ -57,10 +75,50 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
         query
       end
 
-    query
-    |> order_by([c], desc: c.start_date)
-    |> preload([:source, source_event: :sources])
-    |> Repo.all()
+    # Filter by city if provided
+    query =
+      if city_id = opts[:city_id] do
+        query
+        |> join(:inner, [c], m in PublicEventContainerMembership, on: m.container_id == c.id)
+        |> join(:inner, [c, m], e in PublicEvent, on: e.id == m.event_id)
+        |> join(:inner, [c, m, e], v in assoc(e, :venue))
+        |> where([c, m, e, v], v.city_id == ^city_id)
+        |> distinct([c], c.id)
+      else
+        query
+      end
+
+    # Add event counts if requested
+    query =
+      if opts[:with_counts] && opts[:city_id] do
+        query
+        |> select([c, m, e, v], {c, count(e.id)})
+        |> group_by([c], c.id)
+      else
+        if opts[:with_counts] do
+          query
+          |> join(:left, [c], m in PublicEventContainerMembership, on: m.container_id == c.id)
+          |> select([c, m], {c, count(m.event_id)})
+          |> group_by([c], c.id)
+        else
+          query
+        end
+      end
+
+    results =
+      query
+      |> order_by([c], desc: c.start_date)
+      |> preload([:source, source_event: :sources])
+      |> Repo.all()
+
+    # Transform results if counts were requested
+    if opts[:with_counts] do
+      Enum.map(results, fn {container, count} ->
+        Map.put(container, :event_count, count)
+      end)
+    else
+      results
+    end
   end
 
   @doc """
@@ -86,6 +144,44 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
   """
   def delete_container(%PublicEventContainer{} = container) do
     Repo.delete(container)
+  end
+
+  @doc """
+  Refresh container dates from associated events.
+  Uses hierarchical data sourcing: umbrella event dates first, then calculated.
+  """
+  def refresh_container_dates(%PublicEventContainer{} = container) do
+    query =
+      from(e in PublicEvent,
+        join: m in PublicEventContainerMembership,
+        on: m.event_id == e.id,
+        where: m.container_id == ^container.id,
+        select: %{
+          min_date: min(e.starts_at),
+          max_date: max(e.starts_at)
+        }
+      )
+
+    case Repo.one(query) do
+      %{min_date: nil, max_date: nil} ->
+        # No events, keep existing dates (from umbrella event)
+        {:ok, container}
+
+      %{min_date: min_date, max_date: max_date} ->
+        # If container has umbrella end_date that's valid, keep it
+        # Otherwise use calculated max_date
+        end_date =
+          if container.end_date && DateTime.compare(container.end_date, max_date) in [:gt, :eq] do
+            container.end_date
+          else
+            max_date
+          end
+
+        update_container(container, %{
+          start_date: min_date,
+          end_date: end_date
+        })
+    end
   end
 
   @doc """
@@ -178,15 +274,18 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
           end_date: end_datetime,
           source_id: source_id,
           title_pattern: festival_data[:title],
-          metadata: Map.merge(festival_data[:metadata] || %{}, %{
-            "promoter_id" => promoter_id,
-            "promoter_name" => festival_data[:promoter_name]
-          })
+          metadata:
+            Map.merge(festival_data[:metadata] || %{}, %{
+              "promoter_id" => promoter_id,
+              "promoter_name" => festival_data[:promoter_name]
+            })
         }
 
         case create_container(attrs) do
           {:ok, container} ->
-            Logger.info("✅ Created festival container: #{container.title} (promoter: #{promoter_id})")
+            Logger.info(
+              "✅ Created festival container: #{container.title} (promoter: #{promoter_id})"
+            )
 
             # Trigger retroactive association with existing events
             associate_matching_events(container)
@@ -200,7 +299,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
 
       container ->
         # Return existing container (deduplication)
-        Logger.info("ℹ️ Container already exists for promoter #{promoter_id} on #{start_date}: #{container.title}")
+        Logger.info(
+          "ℹ️ Container already exists for promoter #{promoter_id} on #{start_date}: #{container.title}"
+        )
+
         {:ok, container}
     end
   end
@@ -214,12 +316,23 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
     title = String.downcase(event_data[:title] || "")
 
     cond do
-      String.contains?(title, "festival") -> :festival
-      String.contains?(title, "conference") || String.contains?(title, "summit") -> :conference
-      String.contains?(title, "tour") -> :tour
-      String.contains?(title, "exhibition") || String.contains?(title, "expo") -> :exhibition
-      String.contains?(title, "tournament") || String.contains?(title, "championship") -> :tournament
-      true -> :unknown
+      String.contains?(title, "festival") ->
+        :festival
+
+      String.contains?(title, "conference") || String.contains?(title, "summit") ->
+        :conference
+
+      String.contains?(title, "tour") ->
+        :tour
+
+      String.contains?(title, "exhibition") || String.contains?(title, "expo") ->
+        :exhibition
+
+      String.contains?(title, "tournament") || String.contains?(title, "championship") ->
+        :tournament
+
+      true ->
+        :unknown
     end
   end
 
@@ -265,9 +378,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
         date_start = DateTime.add(container.start_date, -7 * 24 * 60 * 60, :second)
         date_end = DateTime.add(container.end_date, 7 * 24 * 60 * 60, :second)
 
-        where(query, [e],
-          e.starts_at >= ^date_start and e.starts_at <= ^date_end
-        )
+        where(query, [e], e.starts_at >= ^date_start and e.starts_at <= ^date_end)
       else
         where(query, [e], e.starts_at >= ^container.start_date)
       end
@@ -291,7 +402,9 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
   def associate_matching_events(%PublicEventContainer{} = container) do
     candidates = find_matching_events(container)
 
-    Logger.info("🔍 Found #{length(candidates)} potential sub-events for container #{container.id}")
+    Logger.info(
+      "🔍 Found #{length(candidates)} potential sub-events for container #{container.id}"
+    )
 
     Enum.each(candidates, fn event ->
       confidence = calculate_association_confidence(event, container)
@@ -299,7 +412,9 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
       if Decimal.compare(confidence, Decimal.new("0.70")) in [:gt, :eq] do
         case create_membership(container, event, :title_match, confidence) do
           {:ok, _membership} ->
-            Logger.info("✅ Associated event #{event.id} with container #{container.id} (confidence: #{confidence})")
+            Logger.info(
+              "✅ Associated event #{event.id} with container #{container.id} (confidence: #{confidence})"
+            )
 
           {:error, _changeset} ->
             Logger.debug("⚠️ Failed to associate event #{event.id} (may already be associated)")
@@ -330,13 +445,15 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
 
     # Find containers that might match by date range with ±7 day tolerance
     # This handles edge cases where umbrella event dates don't perfectly align with sub-event dates
-    date_tolerance = 7 * 24 * 60 * 60  # 7 days in seconds
+    # 7 days in seconds
+    date_tolerance = 7 * 24 * 60 * 60
     date_min = DateTime.add(event.starts_at, -date_tolerance, :second)
     date_max = DateTime.add(event.starts_at, date_tolerance, :second)
 
     potential_containers =
       PublicEventContainer
-      |> where([c],
+      |> where(
+        [c],
         c.start_date <= ^date_max and
           (is_nil(c.end_date) or c.end_date >= ^date_min)
       )
@@ -353,7 +470,11 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
 
       # DEBUG: Log matching signals
       Logger.debug("🔍 Container match check - Event #{event.id} vs Container #{container.id}")
-      Logger.debug("   Event promoter: #{inspect(event_promoter_id)}, Container promoter: #{inspect(container_promoter_id)}")
+
+      Logger.debug(
+        "   Event promoter: #{inspect(event_promoter_id)}, Container promoter: #{inspect(container_promoter_id)}"
+      )
+
       Logger.debug("   Promoter match: #{promoter_match?}, Title match: #{title_match?}")
 
       # Associate if promoter matches OR if title matches (fallback for events without promoter)
@@ -367,10 +488,15 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
 
           case create_membership(container, event, method, confidence) do
             {:ok, _membership} ->
-              Logger.info("✅ Auto-associated new event #{event.id} with container #{container.id} (method: #{method})")
+              Logger.info(
+                "✅ Auto-associated new event #{event.id} with container #{container.id} (method: #{method})"
+              )
 
             {:error, changeset} ->
-              Logger.warning("❌ Failed to create membership for event #{event.id} and container #{container.id}")
+              Logger.warning(
+                "❌ Failed to create membership for event #{event.id} and container #{container.id}"
+              )
+
               Logger.warning("   Changeset errors: #{inspect(changeset.errors)}")
               :ok
           end
@@ -391,7 +517,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
   - Title match: 20% (VALIDATION SIGNAL - confirms grouping)
   - Date range: 10% (BOUNDARY SIGNAL - prevents incorrect grouping)
   """
-  def calculate_association_confidence(%PublicEvent{} = event, %PublicEventContainer{} = container) do
+  def calculate_association_confidence(
+        %PublicEvent{} = event,
+        %PublicEventContainer{} = container
+      ) do
     scores = []
 
     # Preload sources if not already loaded
@@ -490,7 +619,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
     PublicEvent
     |> join(:inner, [e], m in PublicEventContainerMembership, on: m.event_id == e.id)
     |> where([e, m], m.container_id == ^container.id)
-    |> order_by([e, m], [asc: e.starts_at, desc: m.confidence_score])
+    |> order_by([e, m], asc: e.starts_at, desc: m.confidence_score)
     |> preload([:venue, :sources])
     |> Repo.all()
   end
@@ -502,7 +631,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainers do
     PublicEventContainer
     |> join(:inner, [c], m in PublicEventContainerMembership, on: m.container_id == c.id)
     |> where([c, m], m.event_id == ^event.id)
-    |> order_by([c, m], [desc: m.confidence_score])
+    |> order_by([c, m], desc: m.confidence_score)
     |> Repo.all()
   end
 end

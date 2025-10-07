@@ -134,8 +134,15 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser do
   """
   def infer_timezone(city) do
     if city.latitude && city.longitude do
-      lat = if is_struct(city.latitude, Decimal), do: Decimal.to_float(city.latitude), else: city.latitude
-      lng = if is_struct(city.longitude, Decimal), do: Decimal.to_float(city.longitude), else: city.longitude
+      lat =
+        if is_struct(city.latitude, Decimal),
+          do: Decimal.to_float(city.latitude),
+          else: city.latitude
+
+      lng =
+        if is_struct(city.longitude, Decimal),
+          do: Decimal.to_float(city.longitude),
+          else: city.longitude
 
       EventasaurusDiscovery.Scraping.Helpers.TimezoneConverter.infer_timezone_from_location(
         lat,

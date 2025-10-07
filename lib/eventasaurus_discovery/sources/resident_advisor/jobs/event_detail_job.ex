@@ -48,7 +48,6 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
   end
 
   defp process_event(event_data, source_id, external_id) do
-
     Logger.info("🎵 Processing RA event: #{external_id}")
 
     # Get the source

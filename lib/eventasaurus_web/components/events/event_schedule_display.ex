@@ -187,7 +187,9 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
     formats = if String.contains?(label_lower, "imax"), do: ["IMAX" | formats], else: formats
     formats = if String.contains?(label_lower, "4dx"), do: ["4DX" | formats], else: formats
     formats = if String.contains?(label_lower, "3d"), do: ["3D" | formats], else: formats
-    formats = if String.contains?(label_lower, ["2d", "standard"]), do: ["2D" | formats], else: formats
+
+    formats =
+      if String.contains?(label_lower, ["2d", "standard"]), do: ["2D" | formats], else: formats
 
     formats
   end
