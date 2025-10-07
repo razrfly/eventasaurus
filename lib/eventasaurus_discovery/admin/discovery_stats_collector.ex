@@ -157,9 +157,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         end
 
       # Map back to source names with error details
+      source_to_worker_inverted =
+        worker_to_source
+        |> Enum.map(fn {k, v} -> {v, k} end)
+        |> Map.new()
+
       source_names
       |> Enum.map(fn source_name ->
-        worker = Map.get(worker_to_source |> Enum.map(fn {k, v} -> {v, k} end) |> Map.new(), source_name)
+        worker = Map.get(source_to_worker_inverted, source_name)
 
         stats =
           case Map.get(stats_by_worker, worker) do
