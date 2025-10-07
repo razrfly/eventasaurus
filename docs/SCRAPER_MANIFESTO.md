@@ -434,9 +434,12 @@ The system uses a 7-day (168 hours) freshness window. Events that were `last_see
 defp schedule_detail_jobs(events, source_id, page_number) do
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
+  # Get source to access slug
+  source = Repo.get!(Source, source_id)
+
   # 1. Add external_ids to events (with source prefix)
   events_with_ids = Enum.map(events, fn event ->
-    Map.put(event, :external_id, "#{source_slug}_#{event.id}")
+    Map.put(event, :external_id, "#{source.slug}_#{event.id}")
   end)
 
   # 2. Filter to events needing processing based on freshness
@@ -465,7 +468,7 @@ end
 - ✅ Configured globally via `config :eventasaurus, :event_discovery, freshness_threshold_hours: 168`
 - ✅ Prevents unnecessary API calls and database writes
 - ✅ Automatically handles recurring events (e.g., daily movie showtimes)
-- ✅ Updates `last_seen_at` timestamp via `EventProcessor.update_event_source()`
+- ✅ Updates `last_seen_at` timestamp via `EventProcessor.mark_event_as_seen()` and `Processor.process_single_event()`
 
 **Reference Implementations:**
 - `lib/eventasaurus_discovery/sources/bandsintown/jobs/index_page_job.ex:213-228`

@@ -17,6 +17,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     Jobs.VenueDetailJob
   }
 
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"city_url" => city_url, "source_id" => source_id}}) do
     # Extract city name from URL (e.g., "katowice" from "/kategoria-produktu/katowice/")
@@ -72,7 +74,33 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
   end
 
   defp schedule_venue_jobs(venues, source_id, city_name) do
-    venues
+    # Add external_ids to venues for freshness checking
+    # Must match the external_id generation in VenueDetailJob
+    venues_with_ids =
+      Enum.map(venues, fn venue ->
+        # Generate external_id matching VenueDetailJob pattern
+        external_id = generate_external_id(venue.url)
+        Map.put(venue, :external_id, external_id)
+      end)
+
+    # Filter out fresh venues (seen within threshold)
+    venues_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        venues_with_ids,
+        source_id
+      )
+
+    # Log efficiency metrics
+    total_venues = length(venues)
+    skipped = total_venues - length(venues_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("""
+    🔄 PubQuiz Freshness Check: #{city_name}
+    Processing #{length(venues_to_process)}/#{total_venues} venues (#{skipped} fresh, threshold: #{threshold}h)
+    """)
+
+    venues_to_process
     |> Enum.with_index()
     |> Enum.map(fn {venue, index} ->
       # Stagger venue jobs to respect rate limits (3 seconds between requests)
@@ -94,5 +122,18 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
       {:ok, _} -> true
       _ -> false
     end)
+  end
+
+  # Generate external_id for venue (matching VenueDetailJob pattern)
+  defp generate_external_id(url) do
+    # Create a stable ID from the URL
+    # Format: pubquiz_pl_warszawa_centrum
+    url
+    |> String.trim_trailing("/")
+    |> String.split("/")
+    |> Enum.take(-2)
+    |> Enum.join("_")
+    |> String.replace("-", "_")
+    |> then(&"pubquiz-pl_#{&1}")
   end
 end

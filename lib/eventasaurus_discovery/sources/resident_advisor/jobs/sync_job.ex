@@ -44,6 +44,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   }
 
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -195,41 +196,89 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
       end
     end)
 
-    # PHASE 2: Transform and queue individual events for processing
-    {queued, failed} =
+    # PHASE 2: Transform events and filter for freshness before scheduling
+    Logger.info("🔍 Transforming #{length(raw_events)} raw events...")
+
+    # Transform all events first
+    transformed_events =
       raw_events
-      |> Enum.with_index()
-      |> Enum.reduce({[], []}, fn {raw_event, index}, {queued_acc, failed_acc} ->
+      |> Enum.map(fn raw_event ->
         case Transformer.transform_event(raw_event, city) do
-          {:umbrella, _umbrella_data} ->
+          {:ok, transformed} -> {:ok, transformed}
+          {:umbrella, _umbrella_data} -> :skip_umbrella
+          {:error, reason} -> {:error, reason, raw_event}
+        end
+      end)
+
+    # Extract successfully transformed events for freshness check
+    transformed_for_check =
+      transformed_events
+      |> Enum.filter(fn
+        {:ok, _} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn {:ok, event} -> event end)
+
+    # Apply freshness filter
+    events_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        transformed_for_check,
+        source.id
+      )
+
+    # Log efficiency metrics
+    total_transformed = length(transformed_for_check)
+    skipped = total_transformed - length(events_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("""
+    🔄 Resident Advisor Freshness Check
+    Processing #{length(events_to_process)}/#{total_transformed} events (#{skipped} fresh, threshold: #{threshold}h)
+    """)
+
+    # Create a set of external_ids to process for fast lookup
+    ids_to_process = MapSet.new(events_to_process, & &1[:external_id])
+
+    # PHASE 3: Queue only stale events for processing
+    {queued, failed} =
+      transformed_events
+      |> Enum.with_index()
+      |> Enum.reduce({[], []}, fn {result, index}, {queued_acc, failed_acc} ->
+        case result do
+          :skip_umbrella ->
             # Skip umbrella events - containers already created by ContainerGrouper
-            external_id = get_in(raw_event, ["event", "id"])
-            Logger.debug("⏭️ Skipping umbrella event #{external_id} (container already created)")
             {queued_acc, failed_acc}
 
           {:ok, transformed} ->
-            # Regular event - queue for processing
-            # Stagger jobs to avoid overwhelming the system (Config.rate_limit() seconds apart)
-            scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
+            # Check if event passed freshness filter
+            if MapSet.member?(ids_to_process, transformed[:external_id]) do
+              # Event is stale - queue for processing
+              # Stagger jobs to avoid overwhelming the system (Config.rate_limit() seconds apart)
+              scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
 
-            job_args = %{
-              "event_data" => transformed,
-              "source_id" => source.id
-            }
+              job_args = %{
+                "event_data" => transformed,
+                "source_id" => source.id
+              }
 
-            case EventDetailJob.new(job_args, scheduled_at: scheduled_at) |> Oban.insert() do
-              {:ok, _job} ->
-                {[transformed[:external_id] | queued_acc], failed_acc}
+              case EventDetailJob.new(job_args, scheduled_at: scheduled_at) |> Oban.insert() do
+                {:ok, _job} ->
+                  {[transformed[:external_id] | queued_acc], failed_acc}
 
-              {:error, reason} ->
-                Logger.warning(
-                  "⚠️ Failed to queue EventDetailJob for #{transformed[:external_id]}: #{inspect(reason)}"
-                )
+                {:error, reason} ->
+                  Logger.warning(
+                    "⚠️ Failed to queue EventDetailJob for #{transformed[:external_id]}: #{inspect(reason)}"
+                  )
 
-                {queued_acc, [transformed[:external_id] | failed_acc]}
+                  {queued_acc, [transformed[:external_id] | failed_acc]}
+              end
+            else
+              # Event is fresh - skip scheduling
+              Logger.debug("⏭️ Skipping fresh event #{transformed[:external_id]}")
+              {queued_acc, failed_acc}
             end
 
-          {:error, reason} ->
+          {:error, reason, raw_event} ->
             external_id = get_in(raw_event, ["event", "id"]) || "unknown"
 
             Logger.warning("""

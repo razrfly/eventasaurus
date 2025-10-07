@@ -173,7 +173,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
 
             %{event: existing, source: source} ->
               # Found higher priority duplicate
-              confidence = calculate_match_confidence(event_data, existing)
+              # Use fallback coordinates for confidence calculation
+              event_data_for_confidence =
+                event_data
+                |> put_in([:venue_data, :latitude], final_lat)
+                |> put_in([:venue_data, :longitude], final_lng)
+
+              confidence = calculate_match_confidence(event_data_for_confidence, existing)
 
               if confidence > 0.8 do
                 Logger.info("""

@@ -79,23 +79,28 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     # Transform to event format
     case Transformer.transform_event(enriched) do
       {:ok, transformed} ->
-        # Get source
-        source = Repo.get!(Source, source_id)
+        # Get source safely
+        case Repo.get(Source, source_id) do
+          nil ->
+            Logger.error("🚫 Discarding showtime: source #{source_id} not found")
+            {:discard, :source_not_found}
 
-        # Check for duplicates before processing
-        case check_deduplication(transformed) do
-          {:ok, :unique} ->
-            Logger.debug("✅ Processing unique showtime: #{transformed[:title]}")
-            process_event(transformed, source)
+          source ->
+            # Check for duplicates before processing
+            case check_deduplication(transformed) do
+              {:ok, :unique} ->
+                Logger.debug("✅ Processing unique showtime: #{transformed[:title]}")
+                process_event(transformed, source)
 
-          {:ok, :skip_duplicate} ->
-            Logger.info("⏭️  Skipping duplicate showtime: #{transformed[:title]}")
-            # Still process through Processor to create/update PublicEventSource entry
-            process_event(transformed, source)
+              {:ok, :skip_duplicate} ->
+                Logger.info("⏭️  Skipping duplicate showtime: #{transformed[:title]}")
+                # Still process through Processor to create/update PublicEventSource entry
+                process_event(transformed, source)
 
-          {:ok, :validation_failed} ->
-            Logger.warning("⚠️ Validation failed, processing anyway: #{transformed[:title]}")
-            process_event(transformed, source)
+              {:ok, :validation_failed} ->
+                Logger.warning("⚠️ Validation failed, processing anyway: #{transformed[:title]}")
+                process_event(transformed, source)
+            end
         end
 
       {:error, reason} ->
