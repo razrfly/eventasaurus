@@ -33,14 +33,19 @@ defmodule EventasaurusDiscovery.Admin.SourceOptionsBuilder do
   def build_options("resident-advisor", city, base_settings) do
     # RA requires area_id mapping from city
     area_id =
-      case AreaMapper.get_area_id(city) do
-        {:ok, area_id} ->
-          Logger.info("✅ Found RA area_id #{area_id} for #{city.name}")
-          area_id
+      if city do
+        case AreaMapper.get_area_id(city) do
+          {:ok, area_id} ->
+            Logger.info("✅ Found RA area_id #{area_id} for #{city.name}")
+            area_id
 
-        {:error, :area_not_found} ->
-          Logger.warning("⚠️ No area_id mapping for #{city.name}, #{city.country.name}")
-          base_settings["area_id"] || base_settings[:area_id]
+          {:error, :area_not_found} ->
+            Logger.warning("⚠️ No area_id mapping for #{city.name}, #{city.country.name}")
+            base_settings["area_id"] || base_settings[:area_id]
+        end
+      else
+        Logger.warning("⚠️ City not found, using area_id from settings")
+        base_settings["area_id"] || base_settings[:area_id]
       end
 
     %{area_id: area_id}
