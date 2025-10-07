@@ -193,6 +193,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
       {nil, calculated} ->
         calculated
 
+      {umbrella_end, nil} ->
+        umbrella_end
+
       {umbrella_end, calculated} ->
         case Date.compare(umbrella_end, calculated) do
           :lt -> calculated

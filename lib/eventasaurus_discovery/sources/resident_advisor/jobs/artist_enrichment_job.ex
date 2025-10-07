@@ -68,18 +68,27 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
   """
   def enrich_all_pending do
     performers = find_performers_needing_enrichment()
-    count = length(performers)
 
-    Logger.info("Scheduling enrichment for #{count} RA performers")
+    result =
+      Enum.reduce_while(performers, {:ok, 0}, fn performer, {:ok, acc} ->
+        case %{performer_id: performer.id} |> new() |> Oban.insert() do
+          {:ok, _job} -> {:cont, {:ok, acc + 1}}
+          {:error, changeset} -> {:halt, {:error, {performer.id, changeset}}}
+        end
+      end)
 
-    performers
-    |> Enum.each(fn performer ->
-      %{performer_id: performer.id}
-      |> new()
-      |> Oban.insert()
-    end)
+    case result do
+      {:ok, scheduled} ->
+        Logger.info("Scheduled enrichment for #{scheduled} RA performers")
+        {:ok, scheduled}
 
-    {:ok, count}
+      {:error, {performer_id, changeset}} ->
+        Logger.error(
+          "Failed to enqueue enrichment for performer #{performer_id}: #{inspect(changeset.errors)}"
+        )
+
+        {:error, :enqueue_failed}
+    end
   end
 
   @doc """
@@ -91,7 +100,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
         where:
           fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
             (is_nil(p.image_url) or
-               fragment("?->'ra_artist_url' IS NULL", p.metadata)),
+               fragment("?->'ra_artist_url' IS NULL", p.metadata) or
+               fragment("?->'enriched_at' IS NULL", p.metadata)),
         limit: ^limit
     )
   end
@@ -173,22 +183,32 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
     delay_seconds = Keyword.get(opts, :delay_seconds, 60)
 
     performers = find_performers_needing_enrichment(batch_size)
-    count = length(performers)
 
-    Logger.info("Scheduling batch enrichment for #{count} performers")
+    result =
+      performers
+      |> Enum.with_index()
+      |> Enum.reduce_while({:ok, 0}, fn {performer, index}, {:ok, acc} ->
+        # Stagger jobs to avoid overwhelming the system
+        schedule_in = index * delay_seconds
 
-    performers
-    |> Enum.with_index()
-    |> Enum.each(fn {performer, index} ->
-      # Stagger jobs to avoid overwhelming the system
-      schedule_in = index * delay_seconds
+        case %{performer_id: performer.id} |> new(schedule_in: schedule_in) |> Oban.insert() do
+          {:ok, _job} -> {:cont, {:ok, acc + 1}}
+          {:error, changeset} -> {:halt, {:error, {performer.id, changeset}}}
+        end
+      end)
 
-      %{performer_id: performer.id}
-      |> new(schedule_in: schedule_in)
-      |> Oban.insert()
-    end)
+    case result do
+      {:ok, scheduled} ->
+        Logger.info("Scheduled batch enrichment for #{scheduled} performers")
+        {:ok, scheduled}
 
-    {:ok, count}
+      {:error, {performer_id, changeset}} ->
+        Logger.error(
+          "Failed to enqueue batch enrichment for performer #{performer_id}: #{inspect(changeset.errors)}"
+        )
+
+        {:error, :enqueue_failed}
+    end
   end
 
   @doc """
