@@ -50,7 +50,7 @@ defmodule Mix.Tasks.Bandsintown.TestFix do
     }
 
     # Transform using Client module
-    alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
+    alias EventasaurusDiscovery.Sources.Bandsintown.Client
 
     transformed =
       Client.__info__(:functions)

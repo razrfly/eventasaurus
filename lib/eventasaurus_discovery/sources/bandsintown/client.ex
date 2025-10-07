@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
+defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
   @moduledoc """
   HTTP client for Bandsintown scraping with browser automation support.
 
@@ -291,7 +291,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
 
       %{"html" => html} when is_binary(html) ->
         # If it returns HTML, we need to parse it
-        case EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor.extract_events_from_html_fragment(
+        case EventasaurusDiscovery.Sources.Bandsintown.Extractor.extract_events_from_html_fragment(
                html
              ) do
           {:ok, events} -> events

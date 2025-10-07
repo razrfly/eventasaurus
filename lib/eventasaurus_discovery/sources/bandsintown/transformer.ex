@@ -7,7 +7,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser
+  alias EventasaurusDiscovery.Sources.Bandsintown.DateParser
 
   @doc """
   Transform a raw Bandsintown event into our unified format.

@@ -23,8 +23,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
-  alias EventasaurusDiscovery.Sources.Bandsintown.Config
+  alias EventasaurusDiscovery.Sources.Bandsintown.{Client, Config}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do

@@ -20,7 +20,7 @@ jobs_query =
     where:
       j.worker in [
         "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob",
-        "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob"
+        "EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob"
       ],
     order_by: [asc: j.id]
   )
@@ -75,8 +75,8 @@ updated_stats =
                 max_attempts: job.max_attempts
               )
 
-            "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob" ->
-              EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(
+            "EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob" ->
+              EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob.new(
                 clean_args,
                 queue: job.queue,
                 max_attempts: job.max_attempts

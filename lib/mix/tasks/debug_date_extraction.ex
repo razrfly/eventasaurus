@@ -6,8 +6,7 @@ defmodule Mix.Tasks.Debug.DateExtraction do
   use Mix.Task
   require Logger
 
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor
+  alias EventasaurusDiscovery.Sources.Bandsintown.{Client, DetailExtractor}
 
   @shortdoc "Debug date extraction from Bandsintown event pages"
 

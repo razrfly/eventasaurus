@@ -245,7 +245,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
               "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
               "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
               "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
-              "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob",
+              "EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Scraping.Scrapers.Ticketmaster.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob",
               "EventasaurusDiscovery.Admin.DiscoverySyncJob"
