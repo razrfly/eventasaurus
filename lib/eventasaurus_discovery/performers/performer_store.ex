@@ -235,4 +235,77 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
 
     Repo.all(query)
   end
+
+  @doc """
+  Get a performer by slug with preloaded events.
+  """
+  def get_performer_by_slug(slug, opts \\ []) do
+    preload_events = Keyword.get(opts, :preload_events, true)
+
+    query = from(p in Performer, where: p.slug == ^slug)
+
+    query =
+      if preload_events do
+        from(p in query,
+          preload: [
+            public_events:
+              ^from(e in EventasaurusDiscovery.PublicEvents.PublicEvent,
+                order_by: [asc: e.starts_at],
+                preload: [venue: :city_ref]
+              )
+          ]
+        )
+      else
+        query
+      end
+
+    Repo.one(query)
+  end
+
+  @doc """
+  Get events for a performer, split into upcoming and past.
+  Returns %{upcoming: [], past: []}
+  """
+  def get_performer_events(performer_id) do
+    now = DateTime.utc_now()
+
+    query =
+      from(e in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        join: pep in EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
+        on: pep.event_id == e.id,
+        where: pep.performer_id == ^performer_id,
+        preload: [venue: :city_ref],
+        order_by: [asc: e.starts_at]
+      )
+
+    events = Repo.all(query)
+
+    %{
+      upcoming: Enum.filter(events, fn e -> DateTime.compare(e.starts_at, now) != :lt end),
+      past: Enum.filter(events, fn e -> DateTime.compare(e.starts_at, now) == :lt end)
+    }
+  end
+
+  @doc """
+  Get performer statistics.
+  Returns %{total_events: n, first_event: date, latest_event: date}
+  """
+  def get_performer_stats(performer_id) do
+    query =
+      from(e in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        join: pep in EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
+        on: pep.event_id == e.id,
+        where: pep.performer_id == ^performer_id,
+        select: %{
+          total: count(e.id),
+          first: min(e.starts_at),
+          latest: max(e.starts_at)
+        }
+      )
+
+    case Repo.one(query) do
+      nil -> %{total_events: 0, first_event: nil, latest_event: nil}
+      result -> %{total_events: result.total, first_event: result.first, latest_event: result.latest}
+    end
+  end
 end
