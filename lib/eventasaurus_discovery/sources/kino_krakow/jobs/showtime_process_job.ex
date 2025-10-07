@@ -33,13 +33,28 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     showtime = args["showtime"]
     source_id = args["source_id"]
 
-    # Use external_id from showtime if already generated (by DayPageJob for freshness check)
-    # Otherwise generate it here (for backward compatibility)
-    external_id = showtime["external_id"] || generate_external_id(showtime)
+    # CRITICAL: external_id MUST be set by DayPageJob
+    # We do NOT generate it here to avoid drift (BandsInTown A+ pattern)
+    external_id = showtime["external_id"]
 
-    # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
-    # This ensures last_seen_at is updated even if processing fails
-    EventProcessor.mark_event_as_seen(external_id, source_id)
+    if is_nil(external_id) do
+      Logger.error("""
+      🚨 CRITICAL: Missing external_id in showtime job args.
+      This indicates a bug in DayPageJob or job serialization.
+      Showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}
+      """)
+
+      {:error, :missing_external_id}
+    else
+      # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
+      # This ensures last_seen_at is updated even if processing fails
+      EventProcessor.mark_event_as_seen(external_id, source_id)
+
+      process_showtime(showtime, source_id)
+    end
+  end
+
+  defp process_showtime(showtime, source_id) do
 
     Logger.debug("🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}")
 
@@ -198,17 +213,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     end
   end
 
-  # Generate external_id for showtime
-  defp generate_external_id(showtime) do
-    # Use movie_slug + cinema_slug + time to create unique ID
-    movie = showtime["movie_slug"]
-    cinema = showtime["cinema_slug"]
-    time = showtime["time"]
-    date = showtime["date"] || Date.utc_today() |> Date.to_iso8601()
-
-    "kino_krakow_#{movie}_#{cinema}_#{date}_#{time}"
-    |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
-  end
+  # NOTE: generate_external_id removed - now handled exclusively in DayPageJob
+  # This ensures consistency and prevents external_id drift (BandsInTown A+ pattern)
+  # If you need to generate external_id, use:
+  #   EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler.generate_external_id(showtime_data)
 
   # Convert string keys to atom keys
   defp atomize_keys(map) when is_map(map) do
