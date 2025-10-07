@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
+defmodule EventasaurusDiscovery.Sources.Bandsintown.DetailExtractor do
   @moduledoc """
   Extracts detailed event information from Bandsintown event pages.
 

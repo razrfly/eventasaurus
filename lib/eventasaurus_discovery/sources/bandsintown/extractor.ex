@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
+defmodule EventasaurusDiscovery.Sources.Bandsintown.Extractor do
   @moduledoc """
   HTML extraction logic for Bandsintown pages.
 

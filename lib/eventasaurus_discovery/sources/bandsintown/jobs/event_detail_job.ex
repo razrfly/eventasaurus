@@ -27,10 +27,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusDiscovery.Sources.Bandsintown.Transformer
+  alias EventasaurusDiscovery.Sources.Bandsintown.{Client, DetailExtractor, Transformer}
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.{Client, DetailExtractor}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do

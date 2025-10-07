@@ -14,8 +14,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusDiscovery.Sources.Bandsintown.{Config, Transformer}
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
+  alias EventasaurusDiscovery.Sources.Bandsintown.{Client, Config, Transformer}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do

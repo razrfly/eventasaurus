@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
+defmodule EventasaurusDiscovery.Sources.Bandsintown.DateParser do
   @moduledoc """
   Date parsing utilities for Bandsintown events.
 
