@@ -1,8 +1,7 @@
 defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
-  use EventasaurusApp.DataCase, async: true
+  use EventasaurusApp.DataCase, async: false
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
-  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
 
   describe "filter_events_needing_processing/3" do
     setup do
@@ -162,6 +161,188 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessCheckerTest do
 
       # Should return default of 168 hours (7 days)
       assert threshold == 168
+    end
+  end
+
+  describe "get_threshold_for_slug/1" do
+    test "returns override threshold for kino-krakow" do
+      threshold = EventFreshnessChecker.get_threshold_for_slug("kino-krakow")
+
+      # Should return 24 hours as configured in test.exs
+      assert threshold == 24
+    end
+
+    test "returns override threshold for cinema-city" do
+      threshold = EventFreshnessChecker.get_threshold_for_slug("cinema-city")
+
+      # Should return 48 hours as configured in test.exs
+      assert threshold == 48
+    end
+
+    test "returns default threshold for unknown source" do
+      threshold = EventFreshnessChecker.get_threshold_for_slug("unknown-source")
+
+      # Should fallback to default 168 hours
+      assert threshold == 168
+    end
+
+    test "returns default threshold for nil slug" do
+      threshold = EventFreshnessChecker.get_threshold_for_slug("")
+
+      # Should fallback to default 168 hours
+      assert threshold == 168
+    end
+  end
+
+  describe "get_threshold_for_source/1" do
+    test "returns override threshold for kino-krakow source" do
+      # Create source with kino-krakow slug
+      source = insert(:public_event_source_type, slug: "kino-krakow", name: "Kino Krakow")
+
+      threshold = EventFreshnessChecker.get_threshold_for_source(source.id)
+
+      # Should return 24 hours
+      assert threshold == 24
+    end
+
+    test "returns override threshold for cinema-city source" do
+      # Create source with cinema-city slug
+      source = insert(:public_event_source_type, slug: "cinema-city", name: "Cinema City")
+
+      threshold = EventFreshnessChecker.get_threshold_for_source(source.id)
+
+      # Should return 48 hours
+      assert threshold == 48
+    end
+
+    test "returns default threshold for source without override" do
+      # Create source with regular slug
+      source = insert(:public_event_source_type, slug: "bandsintown", name: "Bandsintown")
+
+      threshold = EventFreshnessChecker.get_threshold_for_source(source.id)
+
+      # Should return default 168 hours
+      assert threshold == 168
+    end
+
+    test "returns default threshold and logs warning for missing source" do
+      # Use non-existent source ID
+      threshold = EventFreshnessChecker.get_threshold_for_source(99999)
+
+      # Should fallback to default 168 hours
+      assert threshold == 168
+    end
+  end
+
+  describe "filter_events_needing_processing/3 with source-specific thresholds" do
+    test "uses source-specific threshold for kino-krakow" do
+      # Create kino-krakow source
+      source = insert(:public_event_source_type, slug: "kino-krakow", name: "Kino Krakow")
+
+      # Create event source seen 12 hours ago
+      # Within 24h threshold for kino-krakow, so should be filtered
+      datetime = DateTime.add(DateTime.utc_now(), -12, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "kk_event_1",
+        last_seen_at: datetime
+      )
+
+      events = [%{"external_id" => "kk_event_1"}]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be filtered out (12h < 24h threshold)
+      assert length(result) == 0
+    end
+
+    test "processes stale kino-krakow events outside 24h threshold" do
+      # Create kino-krakow source
+      source = insert(:public_event_source_type, slug: "kino-krakow", name: "Kino Krakow")
+
+      # Create event source seen 30 hours ago
+      # Outside 24h threshold for kino-krakow, so should be processed
+      datetime = DateTime.add(DateTime.utc_now(), -30, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "kk_event_old",
+        last_seen_at: datetime
+      )
+
+      events = [%{"external_id" => "kk_event_old"}]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be included (30h > 24h threshold)
+      assert length(result) == 1
+    end
+
+    test "uses source-specific threshold for cinema-city" do
+      # Create cinema-city source
+      source = insert(:public_event_source_type, slug: "cinema-city", name: "Cinema City")
+
+      # Create event source seen 24 hours ago
+      # Within 48h threshold for cinema-city, so should be filtered
+      datetime = DateTime.add(DateTime.utc_now(), -24, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "cc_event_1",
+        last_seen_at: datetime
+      )
+
+      events = [%{"external_id" => "cc_event_1"}]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be filtered out (24h < 48h threshold)
+      assert length(result) == 0
+    end
+
+    test "processes stale cinema-city events outside 48h threshold" do
+      # Create cinema-city source
+      source = insert(:public_event_source_type, slug: "cinema-city", name: "Cinema City")
+
+      # Create event source seen 50 hours ago
+      # Outside 48h threshold for cinema-city, so should be processed
+      datetime = DateTime.add(DateTime.utc_now(), -50, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "cc_event_old",
+        last_seen_at: datetime
+      )
+
+      events = [%{"external_id" => "cc_event_old"}]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be included (50h > 48h threshold)
+      assert length(result) == 1
+    end
+
+    test "uses default threshold for sources without override" do
+      # Create regular source
+      source = insert(:public_event_source_type, slug: "bandsintown", name: "Bandsintown")
+
+      # Create event source seen 100 hours ago
+      # Within 168h (7 day) default threshold, so should be filtered
+      datetime = DateTime.add(DateTime.utc_now(), -100, :hour)
+
+      insert(:public_event_source,
+        source_id: source.id,
+        external_id: "bit_event_1",
+        last_seen_at: datetime
+      )
+
+      events = [%{"external_id" => "bit_event_1"}]
+
+      result = EventFreshnessChecker.filter_events_needing_processing(events, source.id)
+
+      # Should be filtered out (100h < 168h default threshold)
+      assert length(result) == 0
     end
   end
 end

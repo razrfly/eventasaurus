@@ -337,12 +337,26 @@ end
 
 **Configuration**:
 ```elixir
-# config/dev.exs, config/runtime.exs
+# config/dev.exs, config/test.exs, config/runtime.exs
 config :eventasaurus, :event_discovery,
-  freshness_threshold_hours: 168  # 7 days (configurable)
+  # Default threshold for all sources (7 days)
+  freshness_threshold_hours: 168,
+
+  # Source-specific overrides (by source slug)
+  source_freshness_overrides: %{
+    "kino-krakow" => 24,    # Daily scraping due to data quality issues
+    "cinema-city" => 48      # Every 2 days (movie showtimes change frequently)
+  }
 ```
 
-**Timestamp Updates**: The `EventProcessor.update_event_source/4` function automatically updates `last_seen_at` when processing events, ensuring the freshness system works correctly.
+**Source-Specific Thresholds**: Different sources may require different scraping frequencies based on:
+- **Data Quality**: Sources with inconsistent data need more frequent validation (e.g., Kino Krakow daily)
+- **Update Frequency**: Sources with rapidly changing content need shorter windows (e.g., Cinema City every 2 days)
+- **Default Fallback**: Sources without specific overrides use the default 168-hour threshold
+
+The `EventFreshnessChecker` automatically detects source-specific thresholds by looking up the source's slug in the configuration. No code changes needed in scrapers - just add the override to the config map.
+
+**Timestamp Updates**: The `EventProcessor.mark_event_as_seen/2` and `Processor.process_single_event/2` functions automatically update `last_seen_at` when processing events, ensuring the freshness system works correctly.
 
 **Reference Implementations**:
 - ✅ Bandsintown: `lib/eventasaurus_discovery/sources/bandsintown/jobs/index_page_job.ex:213-228`
