@@ -200,18 +200,20 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
     scheduled_jobs =
       showtimes_to_process
       |> Enum.with_index()
-      |> Enum.map(fn {%{film: film, event: event}, index} ->
+      |> Enum.map(fn {%{film: film, event: event, external_id: external_id}, index} ->
         # Extract event_id BEFORE putting event into showtime_data
         # event is a map with atom keys from EventExtractor
         cinema_city_event_id = event[:cinema_city_event_id]
 
-        # Combine film and event data for ShowtimeProcessJob
+        # CRITICAL: Include external_id in showtime_data (BandsInTown A+ pattern)
+        # This allows ShowtimeProcessJob to reuse it without regenerating
         showtime_data = %{
           "film" => film,
           "event" => event,
           "cinema_data" => cinema_data,
           "cinema_city_id" => cinema_city_id,
-          "date" => date
+          "date" => date,
+          "external_id" => external_id
         }
 
         # Schedule with delay to ensure MovieDetailJobs complete first

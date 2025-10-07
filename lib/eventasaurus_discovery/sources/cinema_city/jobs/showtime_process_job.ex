@@ -153,6 +153,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     end
   end
 
+  # Handle structs (DateTime, Date, etc.) - pass through unchanged
+  defp atomize_event_data(%{__struct__: _} = struct), do: struct
+
   defp atomize_event_data(%{} = data) do
     Enum.reduce(data, %{}, fn {k, v}, acc ->
       key =
