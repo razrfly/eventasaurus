@@ -21,6 +21,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
   require Logger
 
+  alias EventasaurusApp.Repo
+  alias EventasaurusApp.Events.Event
+  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.Sources.Source
+  import Ecto.Query
+
   @doc """
   Check if a concert already exists from other sources.
   Uses fuzzy matching on artist name, date, and venue/GPS location.
@@ -71,26 +77,70 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
   end
 
   defp find_similar_concert(artist_name, date, venue_name, latitude, longitude) do
-    # TODO: Implement actual event lookup when Events module has the proper function
-    # For now, external_id uniqueness is handled by database constraint
+    # Query events within 1 day of target date
+    date_start = DateTime.add(date, -86400, :second)
+    date_end = DateTime.add(date, 86400, :second)
 
-    # events = Events.list_events_by_date_range(
-    #   DateTime.add(date, -86400, :second),  # 1 day before
-    #   DateTime.add(date, 86400, :second)    # 1 day after
-    # )
+    # Build query for events in date range with their sources
+    # Join through public_event_sources to get source information
+    query =
+      from(e in Event,
+        join: v in assoc(e, :venue),
+        join: es in PublicEventSource,
+        on: es.event_id == e.id,
+        join: s in Source,
+        on: s.id == es.source_id,
+        where:
+          e.start_at >= ^date_start and
+            e.start_at <= ^date_end and
+            is_nil(e.deleted_at),
+        preload: [venue: v],
+        select: %{event: e, source: s}
+      )
 
-    # Temporary - no cross-source deduplication until we have proper event lookup
-    events = []
+    # Add GPS proximity filter if coordinates available
+    query =
+      if latitude && longitude do
+        from([e, v, es, s] in query,
+          where:
+            fragment(
+              "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < 100",
+              v.latitude,
+              v.longitude,
+              ^latitude,
+              ^longitude
+            )
+        )
+      else
+        query
+      end
 
-    Enum.find(events, fn event ->
-      artist_match = similar_artist?(artist_name, event.title)
-      venue_match = venue_name && similar_venue?(venue_name, event.venue_name)
-      location_match = latitude && longitude && nearby_location?(latitude, longitude, event)
+    candidates = Repo.all(query)
 
-      artist_match && (venue_match || location_match || same_date?(date, event.starts_at))
-    end)
+    # Find best match using fuzzy matching
+    # candidates is now a list of %{event: event, source: source}
+    match_result =
+      Enum.find(candidates, fn %{event: event, source: _source} ->
+        artist_match = similar_artist?(artist_name, event.title)
+        venue_match = venue_name && event.venue && similar_venue?(venue_name, event.venue.name)
+        location_match = latitude && longitude && event.venue && nearby_location?(latitude, longitude, event.venue)
+
+        artist_match && (venue_match || location_match || same_date?(date, event.start_at))
+      end)
+
+    # Return just the event with source info attached
+    case match_result do
+      %{event: event, source: source} ->
+        # Attach source to event for priority checking
+        Map.put(event, :source, source)
+
+      nil ->
+        nil
+    end
   rescue
-    _ -> nil
+    e ->
+      Logger.error("Error finding similar concert: #{inspect(e)}")
+      nil
   end
 
   defp calculate_match_confidence(bandsintown_event, existing_event) do
@@ -106,7 +156,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
     # Date match (25% weight)
     scores =
-      if same_date?(bandsintown_event[:starts_at], existing_event.starts_at) do
+      if same_date?(bandsintown_event[:starts_at], existing_event.start_at) do
         [0.25 | scores]
       else
         scores
@@ -116,7 +166,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
     venue_name = get_in(bandsintown_event, [:venue_data, :name])
 
     scores =
-      if venue_name && similar_venue?(venue_name, existing_event.venue_name) do
+      if venue_name && existing_event.venue && similar_venue?(venue_name, existing_event.venue.name) do
         [0.2 | scores]
       else
         scores
@@ -127,7 +177,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
     longitude = get_in(bandsintown_event, [:venue_data, :longitude])
 
     scores =
-      if latitude && longitude && nearby_location?(latitude, longitude, existing_event) do
+      if latitude && longitude && existing_event.venue && nearby_location?(latitude, longitude, existing_event.venue) do
         [0.15 | scores]
       else
         scores
@@ -189,14 +239,18 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
     end
   end
 
-  defp nearby_location?(lat1, lon1, event) do
+  defp nearby_location?(lat1, lon1, venue) do
     cond do
-      is_nil(event.latitude) || is_nil(event.longitude) ->
+      is_nil(venue) || is_nil(venue.latitude) || is_nil(venue.longitude) ->
         false
 
       true ->
         # Calculate distance using Haversine formula
-        distance_meters = calculate_distance(lat1, lon1, event.latitude, event.longitude)
+        # Convert Decimal to float if needed
+        venue_lat = if is_struct(venue.latitude, Decimal), do: Decimal.to_float(venue.latitude), else: venue.latitude
+        venue_lon = if is_struct(venue.longitude, Decimal), do: Decimal.to_float(venue.longitude), else: venue.longitude
+
+        distance_meters = calculate_distance(lat1, lon1, venue_lat, venue_lon)
 
         # Consider venues within 100m as the same location
         distance_meters < 100
@@ -229,7 +283,11 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
       true ->
         # Check if same day (ignore time for concert matching)
-        Date.compare(DateTime.to_date(date1), DateTime.to_date(date2)) == :eq
+        # Handle both DateTime and NaiveDateTime
+        d1 = if is_struct(date1, DateTime), do: DateTime.to_date(date1), else: NaiveDateTime.to_date(date1)
+        d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
+
+        Date.compare(d1, d2) == :eq
     end
   end
 
@@ -240,7 +298,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
     # Bandsintown already provides good performer data
     enriched =
-      if performer = event_data[:performer] do
+      if event_data[:performer] do
         Map.put(enriched, :performer_enriched, true)
       else
         enriched

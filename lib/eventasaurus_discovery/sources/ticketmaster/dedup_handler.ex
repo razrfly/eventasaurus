@@ -1,31 +1,28 @@
-defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
+defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
   @moduledoc """
-  Deduplication handler for Karnet Kraków events.
+  Deduplication handler for Ticketmaster events.
 
-  Karnet is a regional source (priority 60) focused on Kraków cultural events.
-  It should defer to higher-priority sources:
-  - Ticketmaster (90) - International ticketing platform
-  - Bandsintown (80) - Artist tour tracking platform
-  - Resident Advisor (75) - Electronic music events
+  Ticketmaster is the highest priority source (priority 90), so it should:
+  - Check for duplicates within Ticketmaster itself (same external_id)
+  - NOT defer to any other sources (it's the highest priority)
+  - Allow lower priority sources to be replaced/enriched
 
   ## Priority System
 
-  Karnet has priority 60, so it should defer to higher-priority sources
-  but takes precedence over lower-priority regional scrapers.
+  Ticketmaster (90) > Bandsintown (80) > Resident Advisor (75) > Karnet (60)
 
   ## Deduplication Strategy
 
-  1. **External ID Lookup**: Check if Karnet event already imported
-  2. **Title + Date + Venue Matching**: Fuzzy matching for duplicates
-  3. **GPS Proximity**: Venue matching within 500m radius
-  4. **Quality Assessment**: Ensure Karnet event meets minimum standards
+  1. **External ID**: Primary deduplication via `external_id`
+  2. **Title + Venue + Date**: Fuzzy matching for duplicate detection
+  3. **GPS Coordinates**: Venue proximity matching (within 100m)
 
-  ## Karnet-Specific Features
+  ## Ticketmaster-Specific Features
 
-  - Polish and English bilingual content
-  - Comprehensive Kraków cultural calendar
-  - Official city cultural partnership
-  - Category-based event classification
+  - Official ticketing data (ticket prices, availability)
+  - Venue seating charts and layouts
+  - Artist tour information
+  - High-quality promotional images
   """
 
   require Logger
@@ -35,6 +32,27 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Sources.Source
   import Ecto.Query
+
+  @doc """
+  Check if a Ticketmaster event already exists.
+
+  Since Ticketmaster is the highest priority source, we only check for
+  duplicates within Ticketmaster itself, not from other sources.
+
+  Returns {:duplicate, existing_event} or {:unique, nil}
+  """
+  def check_duplicate(event_data) do
+    # First check by external_id (exact match within Ticketmaster)
+    case find_by_external_id(event_data[:external_id]) do
+      %Event{} = existing ->
+        Logger.info("🔍 Found existing Ticketmaster event by external_id")
+        {:duplicate, existing}
+
+      nil ->
+        # Check by title + date + venue (fuzzy match)
+        check_fuzzy_duplicate(event_data)
+    end
+  end
 
   @doc """
   Validate event quality before processing.
@@ -74,27 +92,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
     end
   end
 
-  @doc """
-  Check if event is a duplicate of existing higher-priority source.
-
-  ## Returns
-  - `{:unique, event_data}` - Event is unique, safe to import
-  - `{:duplicate, existing_event}` - Event exists from higher priority source
-  - `{:enriched, event_data}` - Event exists but Karnet provides additional data
-  """
-  def check_duplicate(event_data) do
-    # First check by external_id (exact match)
-    case find_by_external_id(event_data[:external_id]) do
-      %Event{} = existing ->
-        Logger.info("🔍 Found existing Karnet event by external_id")
-        {:duplicate, existing}
-
-      nil ->
-        # Check by title + date + venue (fuzzy match)
-        check_fuzzy_duplicate(event_data)
-    end
-  end
-
   # Private functions
 
   defp is_date_sane?(datetime) do
@@ -109,11 +106,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
 
   defp find_by_external_id(external_id) when is_binary(external_id) do
     # Query through public_event_sources join table
+    # Only look for Ticketmaster events
     query =
       from(e in Event,
         join: es in PublicEventSource,
         on: es.event_id == e.id,
-        where: es.external_id == ^external_id and is_nil(e.deleted_at),
+        join: s in Source,
+        on: s.id == es.source_id,
+        where: es.external_id == ^external_id and s.slug == "ticketmaster" and is_nil(e.deleted_at),
         limit: 1
       )
 
@@ -133,42 +133,25 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
         {:unique, event_data}
 
       matches ->
-        # Filter to higher priority sources only
-        # Karnet priority is 60, so check if existing source is higher
-        higher_priority_match =
-          Enum.find(matches, fn %{event: _event, source: source} ->
-            source.priority > 60
-          end)
+        # Find best match
+        best_match = Enum.max_by(matches, fn %{event: event, source: _source} ->
+          calculate_match_confidence(event_data, event)
+        end)
 
-        case higher_priority_match do
-          nil ->
-            # No higher priority matches, Karnet event is unique
-            {:unique, event_data}
+        %{event: existing, source: source} = best_match
+        confidence = calculate_match_confidence(event_data, existing)
 
-          %{event: existing, source: source} ->
-            # Found higher priority duplicate
-            confidence = calculate_match_confidence(event_data, existing)
+        if confidence > 0.8 do
+          Logger.info("""
+          🔍 Found likely duplicate Ticketmaster event
+          New: #{event_data[:title]}
+          Existing: #{existing.title} (source: #{source.name})
+          Confidence: #{Float.round(confidence, 2)}
+          """)
 
-            if confidence > 0.8 do
-              Logger.info("""
-              🔍 Found likely duplicate from higher-priority source
-              Karnet Event: #{event_data[:title]}
-              Existing: #{existing.title} (source: #{source.name}, priority: #{source.priority})
-              Confidence: #{Float.round(confidence, 2)}
-              """)
-
-              # Check if we can enrich the existing event
-              if can_enrich?(event_data, existing) do
-                Logger.info("✨ Karnet event can enrich existing event")
-                # Attach source to existing event for enrichment
-                existing_with_source = Map.put(existing, :source, source)
-                {:enriched, enrich_existing_event(existing_with_source, event_data)}
-              else
-                {:duplicate, existing}
-              end
-            else
-              {:unique, event_data}
-            end
+          {:duplicate, existing}
+        else
+          {:unique, event_data}
         end
     end
   end
@@ -176,7 +159,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
   defp find_matching_events(title, date, venue_lat, venue_lng) do
     # Query events within:
     # - 1 day of target date
-    # - 500m of venue coordinates
+    # - 100m of venue coordinates
     # - Similar title
 
     date_start = DateTime.add(date, -86400, :second)
@@ -193,17 +176,27 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
         where:
           e.start_at >= ^date_start and
             e.start_at <= ^date_end and
-            is_nil(e.deleted_at) and
+            is_nil(e.deleted_at),
+        preload: [venue: v],
+        select: %{event: e, source: s}
+      )
+
+    # Add GPS proximity filter if coordinates available
+    query =
+      if venue_lat && venue_lng do
+        from([e, v, es, s] in query,
+          where:
             fragment(
-              "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < 500",
+              "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < 100",
               v.latitude,
               v.longitude,
               ^venue_lat,
               ^venue_lng
-            ),
-        preload: [venue: v],
-        select: %{event: e, source: s}
-      )
+            )
+        )
+      else
+        query
+      end
 
     candidates = Repo.all(query)
 
@@ -217,12 +210,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
       []
   end
 
-  defp calculate_match_confidence(karnet_event, existing_event) do
+  defp calculate_match_confidence(ticketmaster_event, existing_event) do
     scores = []
 
     # Title similarity (40% weight)
     scores =
-      if similar_title?(karnet_event[:title], existing_event.title) do
+      if similar_title?(ticketmaster_event[:title], existing_event.title) do
         [0.4 | scores]
       else
         scores
@@ -230,19 +223,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
 
     # Date match (30% weight)
     scores =
-      if same_date?(karnet_event[:starts_at], existing_event.start_at) do
+      if same_date?(ticketmaster_event[:starts_at], existing_event.start_at) do
         [0.3 | scores]
       else
         scores
       end
 
     # Venue proximity (30% weight)
+    venue_lat = get_in(ticketmaster_event, [:venue_data, :latitude])
+    venue_lng = get_in(ticketmaster_event, [:venue_data, :longitude])
+
     scores =
-      if same_venue?(
-           karnet_event[:venue_data][:latitude],
-           karnet_event[:venue_data][:longitude],
-           existing_event.venue
-         ) do
+      if venue_lat && venue_lng && existing_event.venue &&
+           same_venue?(venue_lat, venue_lng, existing_event.venue) do
         [0.3 | scores]
       else
         scores
@@ -284,9 +277,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
     end
   end
 
-  defp same_venue?(karnet_lat, karnet_lng, existing_venue) do
+  defp same_venue?(tm_lat, tm_lng, existing_venue) do
     cond do
-      is_nil(karnet_lat) || is_nil(karnet_lng) || is_nil(existing_venue) ->
+      is_nil(tm_lat) || is_nil(tm_lng) || is_nil(existing_venue) ->
         false
 
       is_nil(existing_venue.latitude) || is_nil(existing_venue.longitude) ->
@@ -297,10 +290,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
         venue_lat = if is_struct(existing_venue.latitude, Decimal), do: Decimal.to_float(existing_venue.latitude), else: existing_venue.latitude
         venue_lng = if is_struct(existing_venue.longitude, Decimal), do: Decimal.to_float(existing_venue.longitude), else: existing_venue.longitude
 
-        # Check if within 500m
-        distance = calculate_distance(karnet_lat, karnet_lng, venue_lat, venue_lng)
+        # Check if within 100m
+        distance = calculate_distance(tm_lat, tm_lng, venue_lat, venue_lng)
 
-        distance < 500
+        distance < 100
     end
   end
 
@@ -321,49 +314,5 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
     c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
 
     r * c
-  end
-
-  defp can_enrich?(karnet_data, existing) do
-    # Karnet can enrich if it has:
-    # - Bilingual content (Polish and English)
-    # - Category information
-    # - Additional venue details
-
-    has_translations = not is_nil(karnet_data[:title_translations]) || not is_nil(karnet_data[:description_translations])
-    has_category = not is_nil(karnet_data[:category]) && karnet_data[:category] != ""
-    has_description = not is_nil(karnet_data[:description]) && is_nil(existing.description)
-
-    has_translations || has_category || has_description
-  end
-
-  defp enrich_existing_event(existing, karnet_data) do
-    # Build enrichment data
-    enrichments = %{}
-
-    # Add bilingual content if available
-    enrichments =
-      if karnet_data[:title_translations] do
-        Map.put(enrichments, :title_translations, karnet_data[:title_translations])
-      else
-        enrichments
-      end
-
-    enrichments =
-      if karnet_data[:description_translations] do
-        Map.put(enrichments, :description_translations, karnet_data[:description_translations])
-      else
-        enrichments
-      end
-
-    # Add Karnet-specific metadata
-    enrichments =
-      Map.put(enrichments, :karnet_metadata, %{
-        karnet_external_id: karnet_data[:external_id],
-        karnet_url: karnet_data[:source_url],
-        category: karnet_data[:category],
-        is_free: karnet_data[:is_free]
-      })
-
-    Map.merge(existing, enrichments)
   end
 end

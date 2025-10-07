@@ -27,6 +27,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Sources.Bandsintown
   alias EventasaurusDiscovery.Sources.Bandsintown.{Client, DetailExtractor, Transformer}
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
@@ -58,12 +59,18 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
          enriched_event_data <- enrich_with_detail_page(event_data),
          # Transform the event data with city context for proper venue association
          {:ok, transformed_event} <- transform_event(enriched_event_data, city),
+         # Check for duplicates from higher-priority sources
+         {:ok, dedup_result} <- check_deduplication(transformed_event),
          # Process through unified Processor for venue validation
-         {:ok, result} <- process_event(transformed_event, source) do
+         {:ok, result} <- process_event_if_unique(transformed_event, source, dedup_result) do
       case result do
         event when is_struct(event) ->
           # Successfully processed and created/updated event
           {:ok, event}
+
+        :skipped_duplicate ->
+          # Event was skipped due to deduplication
+          {:ok, :skipped_duplicate}
 
         :filtered ->
           # Event was filtered out during processing
@@ -166,6 +173,48 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
       {:error, reason} ->
         Logger.warning("⚠️ Failed to transform event: #{inspect(reason)}")
         {:error, {:transform_failed, reason}}
+    end
+  end
+
+  defp check_deduplication(event) do
+    case Bandsintown.deduplicate_event(event) do
+      {:unique, _} ->
+        {:ok, :unique}
+
+      {:duplicate, existing} ->
+        Logger.info("""
+        ⏭️  Skipping duplicate concert from higher-priority source
+        Bandsintown: #{event[:title]}
+        Existing: #{existing.title} (source priority: #{get_source_priority(existing)})
+        """)
+
+        {:ok, :skip_duplicate}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        # Continue with processing even if dedup fails
+        {:ok, :validation_failed}
+    end
+  end
+
+  defp get_source_priority(event) do
+    case Repo.preload(event, :source) do
+      %{source: %{priority: priority}} -> priority
+      _ -> "unknown"
+    end
+  end
+
+  defp process_event_if_unique(event, source, dedup_result) do
+    case dedup_result do
+      :unique ->
+        process_event(event, source)
+
+      :skip_duplicate ->
+        {:ok, :skipped_duplicate}
+
+      :validation_failed ->
+        # Process anyway if validation failed
+        process_event(event, source)
     end
   end
 
