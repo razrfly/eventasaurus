@@ -1,3 +1,19 @@
+defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer.Slug do
+  use EctoAutoslugField.Slug, from: :title, to: :slug
+
+  def build_slug(sources, changeset) do
+    # Get the default slug from sources
+    slug = super(sources, changeset)
+
+    # Add randomness to ensure uniqueness (same pattern as Movie)
+    "#{slug}-#{random_suffix()}"
+  end
+
+  defp random_suffix do
+    :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
+  end
+end
+
 defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
   @moduledoc """
   Schema for event containers (festivals, conferences, tours, etc.)
@@ -33,6 +49,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
   import Ecto.Changeset
 
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventContainerMembership}
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainer.Slug
   alias EventasaurusDiscovery.Sources.Source
 
   @container_types [:festival, :conference, :tour, :series, :exhibition, :tournament, :unknown]
@@ -41,6 +58,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
 
   schema "public_event_containers" do
     field :title, :string
+    field :slug, Slug.Type
     field :container_type, Ecto.Enum, values: @container_types
     field :description, :string
 
@@ -70,10 +88,12 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
   def changeset(container, attrs) do
     container
     |> cast(attrs, @required_fields ++ @optional_fields)
+    |> Slug.maybe_generate_slug()
     |> validate_required(@required_fields)
     |> validate_inclusion(:container_type, @container_types)
     |> validate_date_range()
     |> maybe_extract_title_pattern()
+    |> unique_constraint(:slug)
   end
 
   defp validate_date_range(changeset) do
@@ -159,4 +179,36 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
   def duration_days(%__MODULE__{start_date: start_date, end_date: end_date}) do
     DateTime.diff(end_date, start_date, :day) + 1
   end
+
+  @doc """
+  Get plural form of container type for routing.
+
+  Examples:
+    - :festival → "festivals"
+    - :conference → "conferences"
+  """
+  def container_type_plural(:festival), do: "festivals"
+  def container_type_plural(:conference), do: "conferences"
+  def container_type_plural(:tour), do: "tours"
+  def container_type_plural(:series), do: "series"
+  def container_type_plural(:exhibition), do: "exhibitions"
+  def container_type_plural(:tournament), do: "tournaments"
+  def container_type_plural(:unknown), do: "containers"
+  def container_type_plural(_), do: "containers"
+
+  @doc """
+  Get ring color class for container type.
+
+  Examples:
+    - :festival → "ring-purple-500"
+    - :conference → "ring-orange-500"
+  """
+  def container_type_ring_color(:festival), do: "ring-purple-500"
+  def container_type_ring_color(:conference), do: "ring-orange-500"
+  def container_type_ring_color(:tour), do: "ring-red-500"
+  def container_type_ring_color(:series), do: "ring-indigo-500"
+  def container_type_ring_color(:exhibition), do: "ring-yellow-500"
+  def container_type_ring_color(:tournament), do: "ring-pink-500"
+  def container_type_ring_color(:unknown), do: "ring-gray-500"
+  def container_type_ring_color(_), do: "ring-gray-500"
 end
