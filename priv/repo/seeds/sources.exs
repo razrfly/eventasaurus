@@ -52,11 +52,41 @@ sources = [
     slug: "pubquiz-pl",
     website_url: "https://pubquiz.pl",
     priority: 25,
+    aggregate_on_index: true,
+    aggregation_type: "trivia",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
       "language" => "pl",
       "supports_recurring_events" => true
+    }
+  },
+  %{
+    name: "Cinema City",
+    slug: "cinema-city",
+    website_url: "https://www.cinema-city.pl",
+    priority: 15,
+    aggregate_on_index: true,
+    aggregation_type: "movie",
+    metadata: %{
+      "rate_limit_seconds" => 1,
+      "max_requests_per_hour" => 500,
+      "language" => "pl",
+      "supports_screenings" => true
+    }
+  },
+  %{
+    name: "Kino Krakow",
+    slug: "kino-krakow",
+    website_url: "https://www.kino.krakow.pl",
+    priority: 15,
+    aggregate_on_index: true,
+    aggregation_type: "movie",
+    metadata: %{
+      "rate_limit_seconds" => 1,
+      "max_requests_per_hour" => 500,
+      "language" => "pl",
+      "supports_screenings" => true
     }
   }
 ]

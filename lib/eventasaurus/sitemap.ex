@@ -16,15 +16,19 @@ defmodule Eventasaurus.Sitemap do
   Generates and persists a sitemap for the website.
   Phase 1 includes activities and static pages.
 
+  ## Options
+  * `:environment` - Override environment detection (e.g., :prod, :dev)
+  * `:host` - Override host for URL generation (e.g., "eventasaurus.com")
+
   Returns :ok on success or {:error, reason} on failure.
   """
-  def generate_and_persist do
+  def generate_and_persist(opts \\ []) do
     try do
       # Ensure environment variables are loaded
       load_env_vars()
 
-      # Get the sitemap configuration
-      config = get_sitemap_config()
+      # Get the sitemap configuration with optional overrides
+      config = get_sitemap_config(opts)
 
       # Log start of generation
       Logger.info("Starting sitemap generation")
@@ -32,7 +36,7 @@ defmodule Eventasaurus.Sitemap do
       # Use a database transaction to ensure proper streaming
       Repo.transaction(fn ->
         # Get the stream of URLs and count them
-        url_stream = stream_urls()
+        url_stream = stream_urls(opts)
 
         # Log URL count before generating sitemap (for debugging)
         url_count = Enum.count(url_stream)
@@ -43,7 +47,7 @@ defmodule Eventasaurus.Sitemap do
           :ok
         else
           # Create a fresh stream for actual generation
-          stream_urls()
+          stream_urls(opts)
           |> tap(fn _ -> Logger.info("Starting sitemap file generation") end)
           |> Sitemapper.generate(config)
           |> tap(fn stream ->
@@ -79,18 +83,21 @@ defmodule Eventasaurus.Sitemap do
   @doc """
   Creates a stream of URLs for the sitemap.
   Phase 1: Static pages and activities.
+
+  ## Options
+  * `:host` - Override host for URL generation
   """
-  def stream_urls do
+  def stream_urls(opts \\ []) do
     # Combine all streams
-    [static_urls(), activity_urls()]
+    [static_urls(opts), activity_urls(opts)]
     |> Enum.reduce(Stream.concat([]), fn stream, acc ->
       Stream.concat(acc, stream)
     end)
   end
 
   # Returns a stream of static pages
-  defp static_urls do
-    base_url = get_base_url()
+  defp static_urls(opts) do
+    base_url = get_base_url(opts)
 
     [
       %Sitemapper.URL{
@@ -140,8 +147,8 @@ defmodule Eventasaurus.Sitemap do
   end
 
   # Returns a stream of all activities (Phase 1 primary focus)
-  defp activity_urls do
-    base_url = get_base_url()
+  defp activity_urls(opts) do
+    base_url = get_base_url(opts)
 
     # Query public_events for activities
     # Only include events that have valid slugs and timestamps
@@ -169,15 +176,23 @@ defmodule Eventasaurus.Sitemap do
   end
 
   # Get the base URL for the sitemap
-  defp get_base_url do
+  defp get_base_url(opts) do
+    # Allow host override via opts
+    override_host = Keyword.get(opts, :host)
+
     # Use EventasaurusWeb.Endpoint configuration
     endpoint_config = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)
     url_config = endpoint_config[:url]
-    host = url_config[:host]
+    host = override_host || url_config[:host]
     port = url_config[:port]
     scheme = url_config[:scheme] || "https"
 
-    is_prod = Application.get_env(:eventasaurus, :environment) == :prod
+    # Determine environment from opts or application config
+    is_prod =
+      case Keyword.get(opts, :environment) do
+        nil -> Application.get_env(:eventasaurus, :environment) == :prod
+        env -> env == :prod
+      end
 
     # For production, check PHX_HOST env var as a backup
     prod_host =
@@ -207,12 +222,17 @@ defmodule Eventasaurus.Sitemap do
   end
 
   # Get the sitemap configuration
-  defp get_sitemap_config do
+  defp get_sitemap_config(opts) do
     # Get base URL
-    base_url = get_base_url()
+    base_url = get_base_url(opts)
 
     # Determine if we're in production environment
-    is_prod = Application.get_env(:eventasaurus, :environment) == :prod
+    is_prod =
+      case Keyword.get(opts, :environment) do
+        nil -> Application.get_env(:eventasaurus, :environment) == :prod
+        env -> env == :prod
+      end
+
     Logger.debug("Environment: #{if is_prod, do: "production", else: "development"}")
 
     # For local development, use FileStore
@@ -258,17 +278,6 @@ defmodule Eventasaurus.Sitemap do
         raise error_msg
       end
 
-      # Directly configure ExAws for Tigris
-      Application.put_env(:ex_aws, :access_key_id, access_key_id)
-      Application.put_env(:ex_aws, :secret_access_key, secret_access_key)
-
-      # Configure S3 endpoint for Tigris
-      Application.put_env(:ex_aws, :s3, %{
-        host: "fly.storage.tigris.dev",
-        scheme: "https://",
-        region: region
-      })
-
       # Define path for sitemaps (store in sitemaps/ directory)
       sitemap_path = "sitemaps"
 
@@ -285,7 +294,8 @@ defmodule Eventasaurus.Sitemap do
         "Sitemap config - S3Store, bucket: #{bucket}, path: #{sitemap_path}, region: #{region}"
       )
 
-      # Configure sitemap to store on S3
+      # Configure sitemap to store on S3 with explicit ExAws config
+      # Note: Sitemapper will handle ExAws configuration internally via store_config
       [
         store: Sitemapper.S3Store,
         store_config: [
@@ -294,7 +304,10 @@ defmodule Eventasaurus.Sitemap do
           access_key_id: access_key_id,
           secret_access_key: secret_access_key,
           path: sitemap_path,
-          extra_props: extra_props
+          extra_props: extra_props,
+          # S3 endpoint configuration for Tigris
+          host: "fly.storage.tigris.dev",
+          scheme: "https://"
         ],
         # For search engines, the sitemap should be accessible via the site's domain
         sitemap_url: "#{base_url}/#{sitemap_path}"
@@ -321,19 +334,19 @@ defmodule Eventasaurus.Sitemap do
   # Load environment variables from .env file
   defp load_env_vars do
     case Code.ensure_loaded(DotenvParser) do
-      {:module, _} ->
+      {:module, mod} ->
         Logger.debug("Checking for .env file")
 
         if File.exists?(".env") do
           Logger.debug("Loading environment variables from .env file")
-          DotenvParser.load_file(".env")
+          apply(mod, :load_file, [".env"])
         else
           Logger.debug("No .env file found, using system environment variables")
           :ok
         end
 
       _ ->
-        Logger.warning("DotenvParser module not found. Using system environment variables.")
+        Logger.debug("DotenvParser module not found. Using system environment variables.")
         :ok
     end
   end
@@ -341,13 +354,17 @@ defmodule Eventasaurus.Sitemap do
   @doc """
   Test S3 connectivity with current credentials.
   This is useful for debugging S3 access issues.
+
+  ## Options
+  * `:environment` - Override environment detection (e.g., :prod)
+  * `:host` - Override host for URL generation
   """
-  def test_s3_connectivity do
+  def test_s3_connectivity(opts \\ []) do
     # Ensure environment variables are loaded
     load_env_vars()
 
     # Get the sitemap configuration to load credentials
-    config = get_sitemap_config()
+    config = get_sitemap_config(opts)
 
     # Extract store config
     store_config = config[:store_config]
@@ -356,30 +373,37 @@ defmodule Eventasaurus.Sitemap do
     bucket = store_config[:bucket]
     Logger.info("Testing S3 connectivity to bucket: #{bucket}")
 
-    # Configure AWS directly
-    Application.put_env(:ex_aws, :access_key_id, store_config[:access_key_id])
-    Application.put_env(:ex_aws, :secret_access_key, store_config[:secret_access_key])
+    # Create explicit ExAws config (avoid global state mutation)
+    ex_aws_config = [
+      access_key_id: store_config[:access_key_id],
+      secret_access_key: store_config[:secret_access_key],
+      region: store_config[:region],
+      host: store_config[:host] || "fly.storage.tigris.dev",
+      scheme: store_config[:scheme] || "https://"
+    ]
 
-    # Configure S3 endpoint for Tigris
-    Application.put_env(:ex_aws, :s3, %{
-      host: "fly.storage.tigris.dev",
-      scheme: "https://",
-      region: store_config[:region]
-    })
+    # Try to list objects in the bucket using explicit config
+    case Code.ensure_loaded(ExAws) do
+      {:module, _} ->
+        list_op = apply(ExAws.S3, :list_objects, [bucket, [max_keys: 5]])
 
-    # Try to list objects in the bucket
-    case ExAws.S3.list_objects(bucket, max_keys: 5) |> ExAws.request() do
-      {:ok, response} ->
-        # Log successful response
-        object_count = length(response.body.contents || [])
-        Logger.info("S3 connection successful. Found #{object_count} objects in bucket.")
-        Logger.debug("S3 response: #{inspect(response, pretty: true)}")
-        {:ok, response}
+        case apply(ExAws, :request, [list_op, ex_aws_config]) do
+          {:ok, response} ->
+            # Log successful response
+            object_count = length(response.body.contents || [])
+            Logger.info("S3 connection successful. Found #{object_count} objects in bucket.")
+            Logger.debug("S3 response: #{inspect(response, pretty: true)}")
+            {:ok, response}
 
-      {:error, error} ->
-        # Log error
-        Logger.error("S3 connection failed: #{inspect(error, pretty: true)}")
-        {:error, error}
+          {:error, error} ->
+            # Log error
+            Logger.error("S3 connection failed: #{inspect(error, pretty: true)}")
+            {:error, error}
+        end
+
+      _ ->
+        Logger.warning("ExAws module not found. S3 connectivity test skipped.")
+        {:error, :module_not_loaded}
     end
   end
 end

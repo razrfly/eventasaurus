@@ -39,13 +39,20 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
     Client,
     Config,
     Transformer,
+    ContainerGrouper,
     Jobs.EventDetailJob
   }
 
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
+    # Debug: Log the args to see what we receive
+    Logger.debug("RA SyncJob received args: #{inspect(args)}")
+
     # Extract area_id from options if provided (dashboard integration)
     area_id_from_args = args["area_id"] || get_in(args, ["options", "area_id"])
+    Logger.debug("Extracted area_id: #{inspect(area_id_from_args)}")
 
     # Validate required arguments
     with {:ok, city_id} <- validate_integer(args["city_id"], "city_id"),
@@ -166,13 +173,42 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   end
 
   defp schedule_event_detail_jobs(raw_events, city, source) do
-    # Transform events and queue individual EventDetailJobs
+    # PHASE 1: Use ContainerGrouper to detect and create festival containers
+    Logger.info("🔍 Running multi-signal container detection...")
+
+    container_groups = ContainerGrouper.group_events_into_containers(raw_events)
+
+    Logger.info("📦 Detected #{length(container_groups)} festival container(s)")
+
+    # Create containers from grouped data
+    Enum.each(container_groups, fn container_data ->
+      case PublicEventContainers.create_from_festival_group(container_data, source.id) do
+        {:ok, container} ->
+          Logger.info("""
+          ✅ Festival container created: #{container.title}
+          Promoter: #{container_data[:promoter_name]} (ID: #{container_data[:promoter_id]})
+          Sub-events detected: #{length(container_data[:sub_events])}
+          """)
+
+        {:error, changeset} ->
+          Logger.error("❌ Failed to create festival container: #{inspect(changeset.errors)}")
+      end
+    end)
+
+    # PHASE 2: Transform and queue individual events for processing
     {queued, failed} =
       raw_events
       |> Enum.with_index()
       |> Enum.reduce({[], []}, fn {raw_event, index}, {queued_acc, failed_acc} ->
         case Transformer.transform_event(raw_event, city) do
+          {:umbrella, _umbrella_data} ->
+            # Skip umbrella events - containers already created by ContainerGrouper
+            external_id = get_in(raw_event, ["event", "id"])
+            Logger.debug("⏭️ Skipping umbrella event #{external_id} (container already created)")
+            {queued_acc, failed_acc}
+
           {:ok, transformed} ->
+            # Regular event - queue for processing
             # Stagger jobs to avoid overwhelming the system (Config.rate_limit() seconds apart)
             scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
 

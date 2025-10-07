@@ -14,10 +14,6 @@ defmodule Eventasaurus.Workers.SitemapWorker do
     # Log worker details
     Logger.info("Starting scheduled sitemap generation")
 
-    # Log environment details
-    env = Application.get_env(:eventasaurus, :environment)
-    Logger.info("Running sitemap generation in #{env || "undefined"} environment")
-
     # Check AWS/Tigris credentials availability
     tigris_key = System.get_env("TIGRIS_ACCESS_KEY_ID")
     tigris_secret = System.get_env("TIGRIS_SECRET_ACCESS_KEY")
@@ -28,20 +24,15 @@ defmodule Eventasaurus.Workers.SitemapWorker do
       "Credentials available: Tigris (#{!is_nil(tigris_key) && !is_nil(tigris_secret)}), AWS (#{!is_nil(aws_key) && !is_nil(aws_secret)})"
     )
 
-    # Ensure we're in production mode for sitemap generation
-    Application.put_env(:eventasaurus, :environment, :prod)
-
-    # Force production domain as the host for sitemaps in production
-    config = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)
-
-    # Update the host to production domain to ensure correct URLs in the sitemap
-    updated_url_config = put_in(config[:url][:host], "eventasaurus.com")
-    Application.put_env(:eventasaurus, EventasaurusWeb.Endpoint, updated_url_config)
-
+    Logger.info("Using production configuration for sitemap generation")
     Logger.info("Using host: eventasaurus.com for sitemap URLs")
 
-    # Generate and persist sitemap
-    case Eventasaurus.Sitemap.generate_and_persist() do
+    # Generate and persist sitemap with explicit production configuration
+    # Pass environment and host as options instead of modifying global state
+    case Eventasaurus.Sitemap.generate_and_persist(
+           environment: :prod,
+           host: "eventasaurus.com"
+         ) do
       :ok ->
         Logger.info("Scheduled sitemap generation completed successfully")
         :ok

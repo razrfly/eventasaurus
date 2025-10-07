@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource, PublicEventPerformer}
+  alias EventasaurusDiscovery.PublicEvents.{PublicEventContainer, PublicEventContainerMembership}
   alias EventasaurusDiscovery.Categories.PublicEventCategory
   alias EventasaurusDiscovery.Sources.Source
   import Ecto.Query
@@ -40,7 +41,10 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       # 4. Optionally clean up sources (only if not used elsewhere)
       clean_orphaned_sources()
 
-      # 5. Optionally clear related Oban jobs
+      # 5. Clean up orphaned containers (containers with no events)
+      container_count = clean_orphaned_containers()
+
+      # 6. Optionally clear related Oban jobs
       oban_count =
         if clear_oban_jobs do
           clear_discovery_oban_jobs()
@@ -49,7 +53,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         end
 
       Logger.info(
-        "Successfully cleared #{deleted_count} public events#{if oban_count > 0, do: " and #{oban_count} Oban jobs", else: ""}"
+        "Successfully cleared #{deleted_count} public events#{if container_count > 0, do: ", #{container_count} containers", else: ""}#{if oban_count > 0, do: ", and #{oban_count} Oban jobs", else: ""}"
       )
 
       deleted_count
@@ -105,7 +109,13 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
             from(pe in PublicEvent, where: pe.id in ^event_ids)
             |> Repo.delete_all()
 
-          Logger.info("Successfully cleared #{deleted_count} events from source: #{source_name}")
+          # Clean up orphaned containers from this source
+          container_count = clean_orphaned_containers_by_source(source.id)
+
+          Logger.info(
+            "Successfully cleared #{deleted_count} events#{if container_count > 0, do: " and #{container_count} containers", else: ""} from source: #{source_name}"
+          )
+
           deleted_count
         end
       end
@@ -155,7 +165,13 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
           from(pe in PublicEvent, where: pe.id in ^event_ids)
           |> Repo.delete_all()
 
-        Logger.info("Successfully cleared #{deleted_count} events for city_id: #{city_id}")
+        # Clean up orphaned containers
+        container_count = clean_orphaned_containers()
+
+        Logger.info(
+          "Successfully cleared #{deleted_count} events#{if container_count > 0, do: " and #{container_count} containers", else: ""} for city_id: #{city_id}"
+        )
+
         deleted_count
       end
     end)
@@ -267,6 +283,83 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
     :ok
   end
 
+  defp clean_orphaned_containers do
+    # Query for containers with no remaining memberships
+    orphaned_container_ids =
+      from(c in PublicEventContainer,
+        left_join: m in PublicEventContainerMembership,
+        on: m.container_id == c.id,
+        group_by: c.id,
+        having: count(m.id) == 0,
+        select: c.id
+      )
+      |> Repo.all()
+
+    if Enum.empty?(orphaned_container_ids) do
+      0
+    else
+      {deleted_count, _} =
+        from(c in PublicEventContainer, where: c.id in ^orphaned_container_ids)
+        |> Repo.delete_all()
+
+      Logger.info("Cleaned up #{deleted_count} orphaned containers")
+      deleted_count
+    end
+  end
+
+  defp clean_orphaned_containers_by_source(source_id) do
+    # Query for containers from this source with no remaining memberships
+    orphaned_container_ids =
+      from(c in PublicEventContainer,
+        left_join: m in PublicEventContainerMembership,
+        on: m.container_id == c.id,
+        where: c.source_id == ^source_id,
+        group_by: c.id,
+        having: count(m.id) == 0,
+        select: c.id
+      )
+      |> Repo.all()
+
+    if Enum.empty?(orphaned_container_ids) do
+      0
+    else
+      {deleted_count, _} =
+        from(c in PublicEventContainer, where: c.id in ^orphaned_container_ids)
+        |> Repo.delete_all()
+
+      Logger.info(
+        "Cleaned up #{deleted_count} orphaned containers from source_id: #{source_id}"
+      )
+
+      deleted_count
+    end
+  end
+
+  defp count_orphaned_containers do
+    Repo.one(
+      from(c in PublicEventContainer,
+        left_join: m in PublicEventContainerMembership,
+        on: m.container_id == c.id,
+        group_by: c.id,
+        having: count(m.id) == 0,
+        select: count(c.id)
+      )
+    ) || 0
+  end
+
+  defp count_orphaned_containers_by_source(source_id) do
+    Repo.one(
+      from(c in PublicEventContainer,
+        left_join: m in PublicEventContainerMembership,
+        on: m.container_id == c.id,
+        where: c.source_id == ^source_id,
+        group_by: c.id,
+        having: count(m.id) == 0,
+        select: count(c.id)
+      )
+    ) || 0
+  end
+
   @doc """
   Gets statistics about data that would be cleared.
   Useful for showing confirmation dialogs.
@@ -278,10 +371,13 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
           events: Repo.aggregate(PublicEvent, :count, :id),
           sources: Repo.aggregate(PublicEventSource, :count, :id),
           categories: Repo.aggregate(PublicEventCategory, :count, :id),
-          performers: Repo.aggregate(PublicEventPerformer, :count, :id)
+          performers: Repo.aggregate(PublicEventPerformer, :count, :id),
+          containers: count_orphaned_containers()
         }
 
       "source:" <> source ->
+        source_record = Repo.get_by(Source, name: source)
+
         event_ids =
           from(pes in PublicEventSource,
             where: pes.source == ^source,
@@ -290,9 +386,17 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
           |> Repo.all()
           |> Enum.uniq()
 
+        container_count =
+          if source_record do
+            count_orphaned_containers_by_source(source_record.id)
+          else
+            0
+          end
+
         %{
           events: length(event_ids),
-          source: source
+          source: source,
+          containers: container_count
         }
 
       "city:" <> city_id_str ->
@@ -309,11 +413,12 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
               :count,
               :id
             ),
-          city_id: city_id
+          city_id: city_id,
+          containers: count_orphaned_containers()
         }
 
       _ ->
-        %{events: 0}
+        %{events: 0, containers: 0}
     end
   end
 end

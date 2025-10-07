@@ -48,6 +48,7 @@ defmodule Mix.Tasks.Discovery.Sync do
   @sources %{
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
+    "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob
   }
@@ -86,7 +87,7 @@ defmodule Mix.Tasks.Discovery.Sync do
         limit
       end
 
-    options = build_source_options(source_name, opts)
+    options = build_source_options(source_name, city, opts)
 
     # Run sync
     case source_name do
@@ -139,13 +140,33 @@ defmodule Mix.Tasks.Discovery.Sync do
     |> String.trim("-")
   end
 
-  defp build_source_options("ticketmaster", opts) do
+  defp build_source_options("ticketmaster", _city, opts) do
     %{
       radius: opts[:radius] || 50
     }
   end
 
-  defp build_source_options(_source, _opts), do: %{}
+  defp build_source_options("resident-advisor", city, _opts) do
+    # Get area_id from AreaMapper
+    if city do
+      city = Repo.preload(city, :country)
+
+      case EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.AreaMapper.get_area_id(city) do
+        {:ok, area_id} ->
+          Logger.info("✅ Found RA area_id #{area_id} for #{city.name}")
+          # Use string key for Oban job args compatibility
+          %{"area_id" => area_id}
+
+        {:error, :area_not_found} ->
+          Logger.warning("⚠️ No area_id mapping for #{city.name}, #{city.country.name}")
+          %{}
+      end
+    else
+      %{}
+    end
+  end
+
+  defp build_source_options(_source, _city, _opts), do: %{}
 
   defp sync_source(source_name, city, limit, options, inline) do
     job_module = @sources[source_name]
