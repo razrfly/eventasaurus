@@ -28,12 +28,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   # GPS-based matching thresholds (in meters)
   @gps_tight_radius_meters 50
-  @gps_broad_radius_meters 200  # Increased from 100m to catch venues across street
+  # Increased from 100m to catch venues across street
+  @gps_broad_radius_meters 200
 
   # Name similarity thresholds (0.0 = completely different, 1.0 = identical)
   # Uses Jaro distance algorithm: https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance
-  @name_similarity_tight_gps 0.2   # Very low threshold for tight GPS matches (venues at same coords)
-  @name_similarity_broad_gps 0.5   # Medium threshold for broader GPS matches (within 200m)
+  # Very low threshold for tight GPS matches (venues at same coords)
+  @name_similarity_tight_gps 0.2
+  # Medium threshold for broader GPS matches (within 200m)
+  @name_similarity_broad_gps 0.5
 
   # PostgreSQL similarity() function threshold (uses trigram matching)
   # This is different from Jaro distance - uses character n-grams
@@ -154,7 +157,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       fuzzy_match =
         from(v in Venue,
           where: v.city_id == ^city_id,
-          where: fragment("similarity(?, ?) > ?", v.name, ^clean_name, ^@postgres_similarity_threshold),
+          where:
+            fragment("similarity(?, ?) > ?", v.name, ^clean_name, ^@postgres_similarity_threshold),
           order_by: [desc: fragment("similarity(?, ?)", v.name, ^clean_name)],
           limit: 1
         )
@@ -498,7 +502,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           # Safe to insert, no existing venue with this place_id
           # However, another worker could still insert between the check and insert (TOCTOU gap)
           # The database unique constraint will catch this, so we handle constraint violations
-          case insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata) do
+          case insert_new_venue(
+                 data,
+                 city,
+                 final_name,
+                 final_place_id,
+                 latitude,
+                 longitude,
+                 google_metadata
+               ) do
             {:ok, venue} ->
               {:ok, venue}
 
@@ -538,11 +550,27 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       end
     else
       # No place_id, proceed with normal insert
-      insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata)
+      insert_new_venue(
+        data,
+        city,
+        final_name,
+        final_place_id,
+        latitude,
+        longitude,
+        google_metadata
+      )
     end
   end
 
-  defp insert_new_venue(data, city, final_name, final_place_id, latitude, longitude, google_metadata) do
+  defp insert_new_venue(
+         data,
+         city,
+         final_name,
+         final_place_id,
+         latitude,
+         longitude,
+         google_metadata
+       ) do
     # All discovery sources use "scraper" as the venue source
     # Clean UTF-8 for venue name before database insert
     attrs = %{

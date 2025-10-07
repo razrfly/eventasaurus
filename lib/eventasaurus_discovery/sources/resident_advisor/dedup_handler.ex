@@ -192,7 +192,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
     import Ecto.Query
 
     query =
-      from e in Event,
+      from(e in Event,
         join: v in assoc(e, :venue),
         where:
           e.starts_at >= ^date_start and
@@ -205,6 +205,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
               ^venue_lng
             ),
         preload: [:venue, :source]
+      )
 
     candidates = Repo.all(query)
 
@@ -299,14 +300,16 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
       true ->
         # Check if within 500m
-        distance = calculate_distance(ra_lat, ra_lng, existing_venue.latitude, existing_venue.longitude)
+        distance =
+          calculate_distance(ra_lat, ra_lng, existing_venue.latitude, existing_venue.longitude)
+
         distance < 500
     end
   end
 
   defp calculate_distance(lat1, lng1, lat2, lng2) do
     # Simple haversine formula
-    r = 6371000
+    r = 6_371_000
     # Earth radius in meters
 
     lat1_rad = lat1 * :math.pi() / 180

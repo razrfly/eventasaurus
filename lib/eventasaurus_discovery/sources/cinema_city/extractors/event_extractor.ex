@@ -140,6 +140,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Extractors.EventExtractor do
   defp extract_title(_), do: nil
 
   defp extract_runtime(%{"length" => length}) when is_integer(length), do: length
+
   defp extract_runtime(%{"length" => length}) when is_binary(length) do
     case Integer.parse(length) do
       {int_val, _} -> int_val
@@ -150,6 +151,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Extractors.EventExtractor do
   defp extract_runtime(_), do: nil
 
   defp extract_year(%{"releaseYear" => year}) when is_integer(year), do: year
+
   defp extract_year(%{"releaseYear" => year}) when is_binary(year) do
     case Integer.parse(year) do
       {int_val, _} -> int_val
@@ -173,7 +175,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Extractors.EventExtractor do
   defp extract_event_id(_), do: nil
 
   defp extract_film_id_from_event(%{"filmId" => id}) when is_binary(id), do: id
-  defp extract_film_id_from_event(%{"filmId" => id}) when is_integer(id), do: Integer.to_string(id)
+
+  defp extract_film_id_from_event(%{"filmId" => id}) when is_integer(id),
+    do: Integer.to_string(id)
+
   defp extract_film_id_from_event(_), do: nil
 
   defp extract_cinema_id_from_event(%{"cinemaId" => id}) when is_binary(id), do: id

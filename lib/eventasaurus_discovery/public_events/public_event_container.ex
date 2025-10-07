@@ -57,27 +57,27 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
   @optional_fields ~w(description end_date source_event_id source_id title_pattern venue_pattern metadata)a
 
   schema "public_event_containers" do
-    field :title, :string
-    field :slug, Slug.Type
-    field :container_type, Ecto.Enum, values: @container_types
-    field :description, :string
+    field(:title, :string)
+    field(:slug, Slug.Type)
+    field(:container_type, Ecto.Enum, values: @container_types)
+    field(:description, :string)
 
-    field :start_date, :utc_datetime
-    field :end_date, :utc_datetime
+    field(:start_date, :utc_datetime)
+    field(:end_date, :utc_datetime)
 
     # Pattern matching fields
-    field :title_pattern, :string
-    field :venue_pattern, :string
+    field(:title_pattern, :string)
+    field(:venue_pattern, :string)
 
     # Metadata
-    field :metadata, :map, default: %{}
+    field(:metadata, :map, default: %{})
 
     # Associations
-    belongs_to :source_event, PublicEvent
-    belongs_to :source, Source
+    belongs_to(:source_event, PublicEvent)
+    belongs_to(:source, Source)
 
-    has_many :memberships, PublicEventContainerMembership, foreign_key: :container_id
-    many_to_many :events, PublicEvent, join_through: PublicEventContainerMembership
+    has_many(:memberships, PublicEventContainerMembership, foreign_key: :container_id)
+    many_to_many(:events, PublicEvent, join_through: PublicEventContainerMembership)
 
     timestamps()
   end

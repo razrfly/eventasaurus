@@ -13,7 +13,12 @@ defmodule EventasaurusWeb.Components.EventCards do
   use Phoenix.Component
   use EventasaurusWeb, :verified_routes
 
-  alias EventasaurusDiscovery.PublicEvents.{PublicEvent, AggregatedEventGroup, AggregatedContainerGroup}
+  alias EventasaurusDiscovery.PublicEvents.{
+    PublicEvent,
+    AggregatedEventGroup,
+    AggregatedContainerGroup
+  }
+
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Helpers.CategoryHelpers

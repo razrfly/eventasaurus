@@ -52,9 +52,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     # This ensures last_seen_at is updated even if processing fails
     EventProcessor.mark_event_as_seen(external_id, source_id)
 
-    Logger.debug(
-      "🎫 Processing showtime: #{film["polish_title"]} at #{cinema_data["name"]}"
-    )
+    Logger.debug("🎫 Processing showtime: #{film["polish_title"]} at #{cinema_data["name"]}")
 
     # Get movie from database
     case get_movie(cinema_city_film_id) do

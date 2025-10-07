@@ -327,9 +327,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         from(c in PublicEventContainer, where: c.id in ^orphaned_container_ids)
         |> Repo.delete_all()
 
-      Logger.info(
-        "Cleaned up #{deleted_count} orphaned containers from source_id: #{source_id}"
-      )
+      Logger.info("Cleaned up #{deleted_count} orphaned containers from source_id: #{source_id}")
 
       deleted_count
     end

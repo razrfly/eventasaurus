@@ -10,8 +10,6 @@ defmodule EventasaurusWeb.CityLive.Events do
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
 
-  import EventasaurusWeb.Components.EventCards
-
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
     case Locations.get_city_by_slug(city_slug) do
@@ -55,13 +53,13 @@ defmodule EventasaurusWeb.CityLive.Events do
     city = socket.assigns.city
     container_type = get_container_type_from_live_action(socket)
 
-    # Get all containers of this type
+    # Use efficient query with city filtering and counts at DB level
     containers =
-      PublicEventContainers.list_containers(type: container_type)
-      |> Enum.filter(fn container ->
-        has_events_in_city?(container, city.id)
-      end)
-      |> Enum.sort_by(fn container -> container.start_date end, {:desc, DateTime})
+      PublicEventContainers.list_containers(
+        type: container_type,
+        city_id: city.id,
+        with_counts: true
+      )
 
     type_label = container_type_label(container_type)
     type_plural = PublicEventContainer.container_type_plural(container_type)
@@ -85,14 +83,6 @@ defmodule EventasaurusWeb.CityLive.Events do
       :tournaments -> :tournament
       _ -> :festival
     end
-  end
-
-  defp has_events_in_city?(container, city_id) do
-    events = PublicEventContainers.get_container_events(container)
-
-    Enum.any?(events, fn event ->
-      event.venue && event.venue.city_id == city_id
-    end)
   end
 
   defp container_type_label(:festival), do: "Festival"
@@ -277,8 +267,7 @@ defmodule EventasaurusWeb.CityLive.Events do
   end
 
   defp count_container_events(container) do
-    container
-    |> PublicEventContainers.get_container_events()
-    |> length()
+    # Use preloaded event_count from query for efficiency
+    Map.get(container, :event_count, 0)
   end
 end

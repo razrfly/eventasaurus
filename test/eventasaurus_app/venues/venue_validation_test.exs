@@ -32,7 +32,9 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
         })
 
       refute changeset.valid?
+
       assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+
       assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
     end
 
@@ -120,7 +122,9 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
         |> Repo.insert()
 
       refute changeset.valid?
+
       assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+
       assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
     end
 
@@ -153,7 +157,9 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
         })
 
       refute changeset.valid?
+
       assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+
       assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
     end
 
@@ -166,7 +172,9 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
         })
 
       refute changeset.valid?
+
       assert {:latitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
+
       assert {:longitude, {"GPS coordinates are required for physical venues", []}} in changeset.errors
     end
 

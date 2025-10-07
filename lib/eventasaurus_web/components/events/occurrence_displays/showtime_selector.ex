@@ -19,7 +19,9 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector 
 
   def showtime_selector(assigns) do
     # Group showtimes by date
-    assigns = assign(assigns, :showtimes_by_date, group_showtimes_by_date(assigns.occurrence_list))
+    assigns =
+      assign(assigns, :showtimes_by_date, group_showtimes_by_date(assigns.occurrence_list))
+
     # Get list of dates for tabs (limit to next 7 days)
     assigns = assign(assigns, :available_dates, get_available_dates(assigns.showtimes_by_date))
     # Set selected date (default to today or first available)
