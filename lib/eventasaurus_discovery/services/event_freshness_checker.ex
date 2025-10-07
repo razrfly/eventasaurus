@@ -177,8 +177,9 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   """
   @spec get_threshold_for_slug(String.t()) :: integer()
   def get_threshold_for_slug(source_slug) when is_binary(source_slug) do
-    overrides = Application.get_env(:eventasaurus, :event_discovery, [])
-                |> Keyword.get(:source_freshness_overrides, %{})
+    overrides =
+      Application.get_env(:eventasaurus, :event_discovery, [])
+      |> Keyword.get(:source_freshness_overrides, %{})
 
     Map.get(overrides, source_slug, get_threshold())
   end

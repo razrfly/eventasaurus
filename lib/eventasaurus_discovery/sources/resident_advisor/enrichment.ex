@@ -60,13 +60,14 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
   """
   def enrich_event_performers(event_id) do
     query =
-      from ep in "event_performers",
+      from(ep in "event_performers",
         join: p in Performer,
         on: ep.performer_id == p.id,
         where:
           ep.event_id == ^event_id and
             fragment("?->'ra_artist_id' IS NOT NULL", p.metadata),
         select: p
+      )
 
     performers = Repo.all(query)
 
@@ -154,11 +155,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
   def enrich_high_priority(limit \\ 50) do
     performers =
       Repo.all(
-        from p in Performer,
+        from(p in Performer,
           where:
             fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
               is_nil(p.image_url),
           limit: ^limit
+        )
       )
 
     result =

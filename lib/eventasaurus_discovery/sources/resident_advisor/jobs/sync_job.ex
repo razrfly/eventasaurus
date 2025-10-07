@@ -257,7 +257,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
             if MapSet.member?(ids_to_process, transformed[:external_id]) do
               # Event is stale - queue for processing
               # Stagger jobs to avoid overwhelming the system (Config.rate_limit() seconds apart)
-              scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
+              scheduled_at =
+                DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
 
               job_args = %{
                 "event_data" => transformed,
