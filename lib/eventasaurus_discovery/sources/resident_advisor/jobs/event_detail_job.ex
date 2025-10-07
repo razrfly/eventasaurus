@@ -123,16 +123,28 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
     end
   end
 
-  defp atomize_event_data(event_data) when is_map(event_data) do
-    event_data
-    |> Enum.map(fn
-      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
-      {k, v} -> {k, v}
+  defp atomize_event_data(%{} = data) do
+    Enum.reduce(data, %{}, fn {k, v}, acc ->
+      key =
+        if is_binary(k) do
+          try do
+            String.to_existing_atom(k)
+          rescue
+            ArgumentError -> k
+          end
+        else
+          k
+        end
+
+      Map.put(acc, key, atomize_event_data(v))
     end)
-    |> Map.new()
-  rescue
-    _ -> event_data
   end
+
+  defp atomize_event_data(list) when is_list(list) do
+    Enum.map(list, &atomize_event_data/1)
+  end
+
+  defp atomize_event_data(value), do: value
 
   defp get_source_priority(event) do
     case Repo.preload(event, :source) do

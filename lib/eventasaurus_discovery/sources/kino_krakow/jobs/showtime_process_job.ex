@@ -22,6 +22,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
 
+  alias EventasaurusDiscovery.Sources.KinoKrakow
   alias EventasaurusDiscovery.Sources.KinoKrakow.{
     Extractors.CinemaExtractor,
     Transformer
@@ -81,15 +82,20 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
         # Get source
         source = Repo.get!(Source, source_id)
 
-        # Process through unified pipeline
-        case Processor.process_single_event(transformed, source) do
-          {:ok, event} ->
-            Logger.debug("✅ Created event: #{event.title}")
-            {:ok, event}
+        # Check for duplicates before processing
+        case check_deduplication(transformed) do
+          {:ok, :unique} ->
+            Logger.debug("✅ Processing unique showtime: #{transformed[:title]}")
+            process_event(transformed, source)
 
-          {:error, reason} ->
-            Logger.error("❌ Failed to process event: #{inspect(reason)}")
-            {:error, reason}
+          {:ok, :skip_duplicate} ->
+            Logger.info("⏭️  Skipping duplicate showtime: #{transformed[:title]}")
+            # Still process through Processor to create/update PublicEventSource entry
+            process_event(transformed, source)
+
+          {:ok, :validation_failed} ->
+            Logger.warning("⚠️ Validation failed, processing anyway: #{transformed[:title]}")
+            process_event(transformed, source)
         end
 
       {:error, reason} ->
@@ -208,5 +214,65 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     ArgumentError ->
       # If atom doesn't exist, keep as string keys
       map
+  end
+
+  defp check_deduplication(event_data) do
+    # Convert string keys to atom keys for dedup handler
+    event_with_atom_keys = atomize_event_data(event_data)
+
+    case KinoKrakow.deduplicate_event(event_with_atom_keys) do
+      {:unique, _} ->
+        {:ok, :unique}
+
+      {:duplicate, existing} ->
+        Logger.info("""
+        ⏭️  Skipping duplicate Kino Krakow event
+        New: #{event_data[:title] || event_data["title"]}
+        Existing: #{existing.title} (ID: #{existing.id})
+        """)
+
+        {:ok, :skip_duplicate}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        # Continue with processing even if dedup fails
+        {:ok, :validation_failed}
+    end
+  end
+
+  defp atomize_event_data(%{} = data) do
+    Enum.reduce(data, %{}, fn {k, v}, acc ->
+      key =
+        if is_binary(k) do
+          try do
+            String.to_existing_atom(k)
+          rescue
+            ArgumentError -> k
+          end
+        else
+          k
+        end
+
+      Map.put(acc, key, atomize_event_data(v))
+    end)
+  end
+
+  defp atomize_event_data(list) when is_list(list) do
+    Enum.map(list, &atomize_event_data/1)
+  end
+
+  defp atomize_event_data(value), do: value
+
+  defp process_event(transformed, source) do
+    # Process through unified pipeline
+    case Processor.process_single_event(transformed, source) do
+      {:ok, event} ->
+        Logger.debug("✅ Created event: #{event.title}")
+        {:ok, event}
+
+      {:error, reason} ->
+        Logger.error("❌ Failed to process event: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 end

@@ -133,25 +133,40 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
         {:unique, event_data}
 
       matches ->
-        # Find best match
-        best_match = Enum.max_by(matches, fn %{event: event, source: _source} ->
-          calculate_match_confidence(event_data, event)
-        end)
+        # Ticketmaster is highest priority (90), so only dedup against itself
+        # Don't let lower-priority sources suppress Ticketmaster events
+        tm_matches =
+          Enum.filter(matches, fn %{source: source} ->
+            source.slug == "ticketmaster"
+          end)
 
-        %{event: existing, source: source} = best_match
-        confidence = calculate_match_confidence(event_data, existing)
+        case tm_matches do
+          [] ->
+            # No Ticketmaster matches found - only lower-priority sources
+            # Ticketmaster should import and supersede them
+            {:unique, event_data}
 
-        if confidence > 0.8 do
-          Logger.info("""
-          🔍 Found likely duplicate Ticketmaster event
-          New: #{event_data[:title]}
-          Existing: #{existing.title} (source: #{source.name})
-          Confidence: #{Float.round(confidence, 2)}
-          """)
+          tm_candidates ->
+            # Find best Ticketmaster match
+            best_match = Enum.max_by(tm_candidates, fn %{event: event, source: _source} ->
+              calculate_match_confidence(event_data, event)
+            end)
 
-          {:duplicate, existing}
-        else
-          {:unique, event_data}
+            %{event: existing, source: source} = best_match
+            confidence = calculate_match_confidence(event_data, existing)
+
+            if confidence > 0.8 do
+              Logger.info("""
+              🔍 Found likely duplicate Ticketmaster event
+              New: #{event_data[:title]}
+              Existing: #{existing.title} (source: #{source.name})
+              Confidence: #{Float.round(confidence, 2)}
+              """)
+
+              {:duplicate, existing}
+            else
+              {:unique, event_data}
+            end
         end
     end
   end
