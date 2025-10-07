@@ -182,7 +182,7 @@ events = []  # Always returns empty!
 ### The Resident Advisor Pattern (Recommended Standard)
 
 **Structure**:
-```
+```text
 sources/
 ├── resident_advisor/
 │   ├── dedup_handler.ex          ← Dedup logic

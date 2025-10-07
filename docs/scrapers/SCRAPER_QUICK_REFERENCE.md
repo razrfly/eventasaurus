@@ -68,7 +68,7 @@ sources/my_source/
 def transform_event(raw_event) do
   %{
     # ✅ REQUIRED
-    external_id: "source_#{raw_event.id}",  # Must be stable!
+    external_id: "source_#{raw_event.id}",  # Must be stable! Used for freshness checking
     title: raw_event.title,
     starts_at: parse_datetime(raw_event.date),  # DateTime, not NaiveDateTime
 
@@ -97,6 +97,38 @@ def transform_event(raw_event) do
   }
 end
 ```
+
+---
+
+## 🔄 Freshness Checking Pattern (REQUIRED)
+
+**Add to IndexPageJob or SyncJob before scheduling detail jobs:**
+
+```elixir
+defp schedule_detail_jobs(events, source_id) do
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+
+  # 1. Ensure external_id on all events
+  events_with_ids = Enum.map(events, fn event ->
+    Map.put(event, :external_id, "source_#{event.id}")
+  end)
+
+  # 2. Filter stale events (not seen in last 7 days)
+  events_to_process = EventFreshnessChecker.filter_events_needing_processing(
+    events_with_ids,
+    source_id
+  )
+
+  # 3. Log efficiency
+  skipped = length(events) - length(events_to_process)
+  Logger.info("Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} fresh)")
+
+  # 4. Schedule only stale events
+  Enum.each(events_to_process, &schedule_job/1)
+end
+```
+
+**Why?** Prevents re-scraping events updated within 7 days. Saves 80-90% API calls for recurring events.
 
 ---
 
