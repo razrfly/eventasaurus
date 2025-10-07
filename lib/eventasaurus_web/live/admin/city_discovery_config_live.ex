@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.City.DiscoveryConfig
   alias EventasaurusDiscovery.Admin.DiscoveryConfigManager
+  alias EventasaurusDiscovery.Admin.DiscoveryStatsCollector
 
   import Ecto.Query
   require Logger
@@ -16,6 +17,11 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   @impl true
   def mount(%{"slug" => city_slug}, _session, socket) do
     city = Repo.get_by!(City, slug: city_slug) |> Repo.preload(:country)
+
+    # Subscribe to discovery progress updates
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "discovery_progress")
+    end
 
     socket =
       socket
@@ -26,6 +32,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
       |> assign(:selected_source, nil)
       |> assign(:source_settings, %{})
       |> assign(:editing_source, false)
+      |> load_stats()
 
     {:ok, socket}
   end
@@ -45,41 +52,51 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   @impl true
   def handle_event("enable_discovery", %{"city_id" => city_id}, socket) do
-    city_id = String.to_integer(city_id)
+    case parse_city_id(city_id) do
+      {:ok, city_id} ->
+        case DiscoveryConfigManager.enable_city(city_id) do
+          {:ok, _city} ->
+            city = Repo.get!(City, city_id) |> Repo.preload(:country)
 
-    case DiscoveryConfigManager.enable_city(city_id) do
-      {:ok, _city} ->
-        city = Repo.get!(City, city_id) |> Repo.preload(:country)
+            socket =
+              socket
+              |> put_flash(:info, "Discovery enabled for #{city.name}")
+              |> assign(:city, city)
+              |> load_stats()
 
-        socket =
-          socket
-          |> put_flash(:info, "Discovery enabled for #{city.name}")
-          |> assign(:city, city)
+            {:noreply, socket}
 
-        {:noreply, socket}
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to enable discovery: #{inspect(reason)}")}
+        end
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to enable discovery: #{inspect(reason)}")}
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city id")}
     end
   end
 
   @impl true
   def handle_event("disable_discovery", %{"city_id" => city_id}, socket) do
-    city_id = String.to_integer(city_id)
+    case parse_city_id(city_id) do
+      {:ok, city_id} ->
+        case DiscoveryConfigManager.disable_city(city_id) do
+          {:ok, _city} ->
+            city = Repo.get!(City, city_id) |> Repo.preload(:country)
 
-    case DiscoveryConfigManager.disable_city(city_id) do
-      {:ok, _city} ->
-        city = Repo.get!(City, city_id) |> Repo.preload(:country)
+            socket =
+              socket
+              |> put_flash(:info, "Discovery disabled for #{city.name}")
+              |> assign(:city, city)
+              |> load_stats()
 
-        socket =
-          socket
-          |> put_flash(:info, "Discovery disabled for #{city.name}")
-          |> assign(:city, city)
+            {:noreply, socket}
 
-        {:noreply, socket}
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to disable discovery: #{inspect(reason)}")}
+        end
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to disable discovery: #{inspect(reason)}")}
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city id")}
     end
   end
 
@@ -128,44 +145,50 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   @impl true
   def handle_event("add_source", %{"city_id" => city_id}, socket) do
-    city_id = String.to_integer(city_id)
-    source_name = socket.assigns.selected_source
-    settings = socket.assigns.source_settings
-    editing = socket.assigns.editing_source
+    case parse_city_id(city_id) do
+      {:ok, city_id} ->
+        source_name = socket.assigns.selected_source
+        settings = socket.assigns.source_settings
+        editing = socket.assigns.editing_source
 
-    result = if editing do
-      DiscoveryConfigManager.update_source_settings(city_id, source_name, settings)
-    else
-      DiscoveryConfigManager.enable_source(city_id, source_name, settings)
-    end
+        result = if editing do
+          DiscoveryConfigManager.update_source_settings(city_id, source_name, settings)
+        else
+          DiscoveryConfigManager.enable_source(city_id, source_name, settings)
+        end
 
-    case result do
-      {:ok, _city} ->
-        city = Repo.get!(City, city_id) |> Repo.preload(:country)
-        action = if editing, do: "updated", else: "added"
+        case result do
+          {:ok, _city} ->
+            city = Repo.get!(City, city_id) |> Repo.preload(:country)
+            action = if editing, do: "updated", else: "added"
 
-        socket =
-          socket
-          |> put_flash(:info, "Successfully #{action} #{source_name} source")
-          |> assign(:city, city)
-          |> assign(:show_add_source_modal, false)
-          |> assign(:selected_source, nil)
-          |> assign(:source_settings, %{})
-          |> assign(:editing_source, false)
+            socket =
+              socket
+              |> put_flash(:info, "Successfully #{action} #{source_name} source")
+              |> assign(:city, city)
+              |> assign(:show_add_source_modal, false)
+              |> assign(:selected_source, nil)
+              |> assign(:source_settings, %{})
+              |> assign(:editing_source, false)
+              |> load_stats()
 
-        {:noreply, socket}
+            {:noreply, socket}
 
-      {:error, reason} ->
-        action = if editing, do: "update", else: "add"
-        {:noreply, put_flash(socket, :error, "Failed to #{action} source: #{inspect(reason)}")}
+          {:error, reason} ->
+            action = if editing, do: "update", else: "add"
+            {:noreply, put_flash(socket, :error, "Failed to #{action} source: #{inspect(reason)}")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city id")}
     end
   end
 
   @impl true
   def handle_event("show_edit_source", %{"source" => source_name}, socket) do
     city = socket.assigns.city
-    config = city.discovery_config || %{}
-    sources = config["sources"] || []
+    config = normalize_config(city.discovery_config)
+    sources = Map.get(config, "sources", [])
     source = Enum.find(sources, &(&1["name"] == source_name))
 
     if source do
@@ -186,57 +209,107 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   @impl true
   def handle_event("toggle_source", %{"city_id" => city_id, "source" => source_name}, socket) do
-    city_id = String.to_integer(city_id)
-
-    # Reload city from database to get fresh data
-    city = Repo.get!(City, city_id) |> Repo.preload(:country)
-    config = city.discovery_config || %{}
-    sources = config["sources"] || []
-    source = Enum.find(sources, &(&1["name"] == source_name))
-
-    result =
-      if source && source["enabled"] do
-        DiscoveryConfigManager.disable_source(city_id, source_name)
-      else
-        # Re-enable with existing settings
-        settings = (source && source["settings"]) || %{}
-        DiscoveryConfigManager.enable_source(city_id, source_name, settings)
-      end
-
-    case result do
-      {:ok, _city} ->
+    case parse_city_id(city_id) do
+      {:ok, city_id} ->
+        # Reload city from database to get fresh data
         city = Repo.get!(City, city_id) |> Repo.preload(:country)
-        action = if source && source["enabled"], do: "disabled", else: "enabled"
+        config = normalize_config(city.discovery_config)
+        sources = Map.get(config, "sources", [])
+        source = Enum.find(sources, &(&1["name"] == source_name))
 
-        socket =
-          socket
-          |> put_flash(:info, "Source #{source_name} #{action}")
-          |> assign(:city, city)
+        result =
+          if source && source["enabled"] do
+            DiscoveryConfigManager.disable_source(city_id, source_name)
+          else
+            # Re-enable with existing settings
+            settings = (source && source["settings"]) || %{}
+            DiscoveryConfigManager.enable_source(city_id, source_name, settings)
+          end
 
-        {:noreply, socket}
+        case result do
+          {:ok, _city} ->
+            city = Repo.get!(City, city_id) |> Repo.preload(:country)
+            action = if source && source["enabled"], do: "disabled", else: "enabled"
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to toggle source: #{inspect(reason)}")}
+            socket =
+              socket
+              |> put_flash(:info, "Source #{source_name} #{action}")
+              |> assign(:city, city)
+              |> load_stats()
+
+            {:noreply, socket}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to toggle source: #{inspect(reason)}")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city id")}
     end
   end
 
   @impl true
   def handle_event("delete_source", %{"city_id" => city_id, "source" => source_name}, socket) do
-    city_id = String.to_integer(city_id)
+    case parse_city_id(city_id) do
+      {:ok, city_id} ->
+        case DiscoveryConfigManager.delete_source(city_id, source_name) do
+          {:ok, _city} ->
+            city = Repo.get!(City, city_id) |> Repo.preload(:country)
 
-    case DiscoveryConfigManager.delete_source(city_id, source_name) do
-      {:ok, _city} ->
-        city = Repo.get!(City, city_id) |> Repo.preload(:country)
+            socket =
+              socket
+              |> put_flash(:info, "Successfully deleted #{source_name} source")
+              |> assign(:city, city)
+              |> load_stats()
 
-        socket =
-          socket
-          |> put_flash(:info, "Successfully deleted #{source_name} source")
-          |> assign(:city, city)
+            {:noreply, socket}
 
-        {:noreply, socket}
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to delete source: #{inspect(reason)}")}
+        end
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete source: #{inspect(reason)}")}
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city id")}
+    end
+  end
+
+  @impl true
+  def handle_info({:discovery_progress, %{city_id: city_id, status: _status}}, socket) do
+    # Only refresh if this is the city we're viewing
+    if socket.assigns[:city] && socket.assigns.city.id == city_id do
+      # Reload city data and stats
+      city = Repo.get!(City, city_id) |> Repo.preload(:country)
+
+      socket =
+        socket
+        |> assign(:city, city)
+        |> load_stats()
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Catch-all for other messages
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
+  # Private helper functions
+
+  defp load_stats(socket) do
+    city = socket.assigns[:city]
+
+    if city do
+      config = city.discovery_config || %{}
+      sources = config["sources"] || []
+      source_names = Enum.map(sources, & &1["name"])
+
+      # Get real-time stats from Oban
+      stats = DiscoveryStatsCollector.get_all_source_stats(city.id, source_names)
+
+      assign(socket, :source_stats, stats)
+    else
+      assign(socket, :source_stats, %{})
     end
   end
 
@@ -268,6 +341,10 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     Calendar.strftime(dt, "%b %d, %Y %I:%M %p")
   end
 
+  defp format_datetime(%NaiveDateTime{} = ndt) do
+    Calendar.strftime(ndt, "%b %d, %Y %I:%M %p")
+  end
+
   defp source_icon("bandsintown"), do: "🎵"
   defp source_icon("ticketmaster"), do: "🎫"
   defp source_icon("resident-advisor"), do: "🎧"
@@ -275,4 +352,25 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp source_icon("kino-krakow"), do: "🎬"
   defp source_icon("cinema-city"), do: "🍿"
   defp source_icon(_), do: "📅"
+
+  defp parse_city_id(city_id) when is_integer(city_id), do: {:ok, city_id}
+
+  defp parse_city_id(city_id) when is_binary(city_id) do
+    case Integer.parse(city_id) do
+      {id, _} -> {:ok, id}
+      :error -> :error
+    end
+  end
+
+  defp parse_city_id(_), do: :error
+
+  defp normalize_config(nil), do: %{}
+
+  defp normalize_config(config) when is_struct(config) do
+    config
+    |> Jason.encode!()
+    |> Jason.decode!()
+  end
+
+  defp normalize_config(config) when is_map(config), do: config
 end
