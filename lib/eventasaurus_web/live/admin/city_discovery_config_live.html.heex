@@ -128,31 +128,31 @@
                     <% end %>
                   </div>
 
-                  <!-- Stats -->
-                  <% stats = source["stats"] || %{} %>
+                  <!-- Stats (from Oban) -->
+                  <% source_stats = @source_stats[source["name"]] || %{} %>
                   <div class="mt-4 grid grid-cols-3 md:grid-cols-5 gap-3 text-sm">
                     <div>
                       <span class="text-gray-600">Total Runs:</span>
-                      <span class="font-medium ml-1">{stats["run_count"] || 0}</span>
+                      <span class="font-medium ml-1">{source_stats[:run_count] || 0}</span>
                     </div>
                     <div>
                       <span class="text-gray-600">Success:</span>
-                      <span class="font-medium ml-1 text-green-600">{stats["success_count"] || 0}</span>
+                      <span class="font-medium ml-1 text-green-600">{source_stats[:success_count] || 0}</span>
                     </div>
                     <div>
                       <span class="text-gray-600">Errors:</span>
-                      <span class="font-medium ml-1 text-red-600">{stats["error_count"] || 0}</span>
+                      <span class="font-medium ml-1 text-red-600">{source_stats[:error_count] || 0}</span>
                     </div>
                     <div class="col-span-2">
                       <span class="text-gray-600">Last Run:</span>
-                      <span class="font-medium ml-1">{format_datetime(source["last_run_at"])}</span>
+                      <span class="font-medium ml-1">{format_datetime(source_stats[:last_run_at])}</span>
                     </div>
                   </div>
 
-                  <%= if source["stats"]["last_error"] do %>
+                  <%= if source_stats[:last_error] do %>
                     <div class="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
                       <div class="text-xs font-medium text-red-800 mb-1">Last Error:</div>
-                      <div class="text-xs text-red-700">{source["stats"]["last_error"]}</div>
+                      <div class="text-xs text-red-700">{source_stats[:last_error]}</div>
                     </div>
                   <% end %>
                 </div>
