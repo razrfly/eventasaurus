@@ -35,7 +35,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
       city = insert(:city, discovery_enabled: true)
 
       settings = %{limit: 100, radius: 50}
-      assert {:ok, updated_city} = DiscoveryConfigManager.enable_source(city.id, "bandsintown", settings)
+
+      assert {:ok, updated_city} =
+               DiscoveryConfigManager.enable_source(city.id, "bandsintown", settings)
 
       source = Enum.find(updated_city.discovery_config.sources, &(&1.name == "bandsintown"))
       assert source != nil
@@ -50,7 +52,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
       {:ok, _} = DiscoveryConfigManager.enable_source(city.id, "bandsintown", %{limit: 100})
 
       # Enable again with different settings
-      {:ok, updated_city} = DiscoveryConfigManager.enable_source(city.id, "bandsintown", %{limit: 200})
+      {:ok, updated_city} =
+        DiscoveryConfigManager.enable_source(city.id, "bandsintown", %{limit: 200})
 
       sources = updated_city.discovery_config.sources
       assert length(sources) == 1
@@ -60,7 +63,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
     test "returns error for invalid source" do
       city = insert(:city, discovery_enabled: true)
 
-      assert {:error, :invalid_source} = DiscoveryConfigManager.enable_source(city.id, "invalid-source", %{})
+      assert {:error, :invalid_source} =
+               DiscoveryConfigManager.enable_source(city.id, "invalid-source", %{})
     end
   end
 
@@ -78,7 +82,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
     test "returns error for non-existent source" do
       city = insert(:city, discovery_enabled: true)
 
-      assert {:error, :source_not_found} = DiscoveryConfigManager.disable_source(city.id, "bandsintown")
+      assert {:error, :source_not_found} =
+               DiscoveryConfigManager.disable_source(city.id, "bandsintown")
     end
   end
 
@@ -87,7 +92,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
       city = insert(:city, discovery_enabled: true)
       {:ok, _} = DiscoveryConfigManager.enable_source(city.id, "bandsintown", %{limit: 100})
 
-      assert {:ok, updated_city} = DiscoveryConfigManager.update_source_settings(city.id, "bandsintown", %{radius: 50})
+      assert {:ok, updated_city} =
+               DiscoveryConfigManager.update_source_settings(city.id, "bandsintown", %{radius: 50})
 
       source = Enum.find(updated_city.discovery_config.sources, &(&1.name == "bandsintown"))
       assert source.settings == %{limit: 100, radius: 50}
@@ -99,7 +105,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
       city = insert(:city, discovery_enabled: true)
       {:ok, _} = DiscoveryConfigManager.enable_source(city.id, "bandsintown", %{})
 
-      assert {:ok, updated_city} = DiscoveryConfigManager.update_source_stats(city.id, "bandsintown", :success)
+      assert {:ok, updated_city} =
+               DiscoveryConfigManager.update_source_stats(city.id, "bandsintown", :success)
 
       source = Enum.find(updated_city.discovery_config.sources, &(&1.name == "bandsintown"))
       assert source.stats.run_count == 1
@@ -113,7 +120,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManagerTest do
       city = insert(:city, discovery_enabled: true)
       {:ok, _} = DiscoveryConfigManager.enable_source(city.id, "bandsintown", %{})
 
-      assert {:ok, updated_city} = DiscoveryConfigManager.update_source_stats(city.id, "bandsintown", {:error, "timeout"})
+      assert {:ok, updated_city} =
+               DiscoveryConfigManager.update_source_stats(
+                 city.id,
+                 "bandsintown",
+                 {:error, "timeout"}
+               )
 
       source = Enum.find(updated_city.discovery_config.sources, &(&1.name == "bandsintown"))
       assert source.stats.run_count == 1

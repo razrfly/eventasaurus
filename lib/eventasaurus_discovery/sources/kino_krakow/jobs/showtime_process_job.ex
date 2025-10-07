@@ -23,6 +23,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
 
   alias EventasaurusDiscovery.Sources.KinoKrakow
+
   alias EventasaurusDiscovery.Sources.KinoKrakow.{
     Extractors.CinemaExtractor,
     Transformer
@@ -55,7 +56,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   end
 
   defp process_showtime(showtime, source_id) do
-
     Logger.debug("🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}")
 
     # Get movie from database
