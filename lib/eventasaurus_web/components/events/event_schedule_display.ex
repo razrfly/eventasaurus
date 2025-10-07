@@ -172,7 +172,7 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
   # Extract unique formats from occurrence labels
   defp extract_formats_from_occurrences(occurrences) do
     occurrences
-    |> Enum.map(& &1.label)
+    |> Enum.map(&Map.get(&1, :label))
     |> Enum.reject(&is_nil/1)
     |> Enum.flat_map(&parse_formats_from_label/1)
     |> Enum.uniq()

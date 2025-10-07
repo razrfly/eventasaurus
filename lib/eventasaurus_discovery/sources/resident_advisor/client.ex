@@ -163,6 +163,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Client do
               contentUrl
               live
             }
+            promoters {
+              id
+              name
+            }
             artists {
               id
               name

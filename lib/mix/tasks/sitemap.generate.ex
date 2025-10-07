@@ -31,8 +31,14 @@ defmodule Mix.Tasks.Sitemap.Generate do
   @impl Mix.Task
   def run(args) do
     # Parse args
-    {opts, _, _} = OptionParser.parse(args, strict: [s3: :boolean])
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [s3: :boolean, host: :string, env: :string]
+      )
+
     use_s3 = Keyword.get(opts, :s3, false)
+    host = Keyword.get(opts, :host, "eventasaurus.com")
+    env = Keyword.get(opts, :env, if(use_s3, do: "prod", else: nil))
 
     # Determine which apps to start based on storage type
     apps_to_start = [:logger, :ecto_sql, :postgrex]
@@ -49,34 +55,28 @@ defmodule Mix.Tasks.Sitemap.Generate do
     # Start your application to make sure the database and other services are ready
     {:ok, _} = Application.ensure_all_started(:eventasaurus)
 
-    # Force production environment if s3 flag is used
+    # Build sitemap options
+    sitemap_opts =
+      []
+      |> maybe_add_opt(:environment, env && String.to_atom(env))
+      |> maybe_add_opt(:host, use_s3 && host)
+
     if use_s3 do
       Logger.info("Using S3 storage as requested via --s3 flag")
-      Application.put_env(:eventasaurus, :environment, :prod)
-
-      # Force production host for sitemaps when using S3 storage
-      config = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)
-
-      # Update the host to production domain
-      updated_url_config = put_in(config[:url][:host], "eventasaurus.com")
-      Application.put_env(:eventasaurus, EventasaurusWeb.Endpoint, updated_url_config)
-
-      # Output the base URL that will be used
-      host = "eventasaurus.com"
       Logger.info("Using host: #{host} for sitemap URLs")
     end
 
     Logger.info("Starting sitemap generation task")
 
-    # Generate and persist the sitemap
-    case Eventasaurus.Sitemap.generate_and_persist() do
+    # Generate and persist the sitemap with explicit options
+    case Eventasaurus.Sitemap.generate_and_persist(sitemap_opts) do
       :ok ->
         Logger.info("Sitemap generation task completed successfully")
 
         # If using S3, verify the upload
         if use_s3 do
           Logger.info("Verifying S3 upload...")
-          Eventasaurus.Sitemap.test_s3_connectivity()
+          Eventasaurus.Sitemap.test_s3_connectivity(sitemap_opts)
         end
 
         :ok
@@ -86,4 +86,8 @@ defmodule Mix.Tasks.Sitemap.Generate do
         exit({:shutdown, 1})
     end
   end
+
+  defp maybe_add_opt(opts, _key, nil), do: opts
+  defp maybe_add_opt(opts, _key, false), do: opts
+  defp maybe_add_opt(opts, key, value), do: Keyword.put(opts, key, value)
 end
