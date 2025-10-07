@@ -9,7 +9,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.Admin.{DataManager, DiscoverySyncJob, DiscoveryConfigManager}
+  alias EventasaurusDiscovery.Admin.{DataManager, DiscoverySyncJob, DiscoveryConfigManager, DiscoveryStatsCollector}
   alias EventasaurusDiscovery.Categories.Category
 
   import Ecto.Query
@@ -339,10 +339,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
     if city do
       # Get all enabled sources for this city
-      sources = DiscoveryConfigManager.get_due_sources(city) ++
-                (city.discovery_config["sources"] || [])
-                |> Enum.filter(&(&1["enabled"]))
-                |> Enum.uniq_by(&(&1["name"]))
+      config_sources = Map.get(city.discovery_config || %{}, "sources", [])
+      sources =
+        (DiscoveryConfigManager.get_due_sources(city) ++ config_sources)
+        |> Enum.filter(&(&1["enabled"]))
+        |> Enum.uniq_by(& &1["name"])
 
       # Queue jobs for each source
       results =
@@ -428,8 +429,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         :id
       )
 
-    # Get automated discovery cities
-    discovery_cities = DiscoveryConfigManager.list_discovery_enabled_cities()
+    # Get automated discovery cities with Oban stats
+    discovery_cities =
+      DiscoveryConfigManager.list_discovery_enabled_cities()
+      |> Enum.map(&load_city_stats/1)
 
     socket
     |> assign(:stats, stats)
@@ -441,6 +444,42 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     |> assign(:upcoming_count, upcoming_count)
     |> assign(:past_count, past_count)
     |> assign(:discovery_cities, discovery_cities)
+  end
+
+  defp load_city_stats(city) do
+    config = city.discovery_config || %{}
+    sources = config["sources"] || []
+    source_names = Enum.map(sources, & &1["name"])
+
+    # Get real-time stats from Oban for this city
+    oban_stats = DiscoveryStatsCollector.get_all_source_stats(city.id, source_names)
+
+    # Calculate next run times based on last run + frequency
+    sources_with_next_run =
+      Enum.map(sources, fn source ->
+        source_name = source["name"]
+        frequency_hours = source["frequency_hours"] || 24
+        last_run = get_in(oban_stats, [source_name, :last_run_at])
+
+        next_run_at =
+          if last_run && source["enabled"] do
+            # Add frequency hours to last run time
+            last_run
+            |> DateTime.from_naive!("Etc/UTC")
+            |> DateTime.add(frequency_hours * 3600, :second)
+          else
+            nil
+          end
+
+        Map.put(source, "next_run_at", next_run_at)
+      end)
+
+    # Update city with enhanced sources
+    config = Map.put(config, "sources", sources_with_next_run)
+    city = Map.put(city, :discovery_config, config)
+
+    # Attach stats to city for easy template access
+    Map.put(city, :oban_stats, oban_stats)
   end
 
   defp count_unique_venues do

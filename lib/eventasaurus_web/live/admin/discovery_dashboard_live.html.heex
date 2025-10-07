@@ -354,8 +354,9 @@
               <% enabled_sources = Enum.filter(sources, & &1["enabled"]) %>
               <% next_runs = Enum.map(enabled_sources, & &1["next_run_at"]) |> Enum.reject(&is_nil/1) %>
               <% next_run = if Enum.empty?(next_runs), do: nil, else: Enum.min(next_runs, DateTime) %>
-              <% total_runs = Enum.sum(Enum.map(sources, & get_in(&1, ["stats", "run_count"]) || 0)) %>
-              <% total_success = Enum.sum(Enum.map(sources, & get_in(&1, ["stats", "success_count"]) || 0)) %>
+              <% oban_stats = city.oban_stats || %{} %>
+              <% total_runs = Enum.sum(Enum.map(Map.values(oban_stats), & &1[:run_count] || 0)) %>
+              <% total_success = Enum.sum(Enum.map(Map.values(oban_stats), & &1[:success_count] || 0)) %>
 
               <tr>
                 <td class="px-6 py-4 whitespace-nowrap">

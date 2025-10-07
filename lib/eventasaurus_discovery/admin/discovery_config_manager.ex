@@ -306,10 +306,23 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
 
         updated_config = Map.put(config_map, "sources", updated_sources)
 
-        city
+        result = city
         |> Ecto.Changeset.change()
         |> Ecto.Changeset.put_change(:discovery_config, updated_config)
         |> Repo.update()
+
+        # Broadcast update to LiveView subscribers
+        case result do
+          {:ok, _updated_city} ->
+            Phoenix.PubSub.broadcast(
+              Eventasaurus.PubSub,
+              "discovery_progress",
+              {:discovery_progress, %{city_id: city_id, status: result}}
+            )
+          _ -> :ok
+        end
+
+        result
       else
         {:error, :source_not_found}
       end
@@ -349,18 +362,33 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
   def get_due_sources(%City{discovery_config: config}) when not is_nil(config) do
     now = DateTime.utc_now()
 
-    # Handle both map and struct formats
-    sources =
+    # Check if schedule is enabled
+    schedule_enabled =
       cond do
-        is_map(config) && Map.has_key?(config, "sources") -> config["sources"] || []
-        is_struct(config) -> config.sources || []
-        true -> []
+        is_map(config) and Map.has_key?(config, "schedule") ->
+          Map.get(config["schedule"], "enabled", true)
+        is_struct(config) and Map.has_key?(config, :schedule) ->
+          Map.get(config.schedule, :enabled, true)
+        true ->
+          true
       end
 
-    Enum.filter(sources, fn source ->
-      enabled = if is_map(source), do: source["enabled"], else: source.enabled
-      enabled && source_due_to_run?(source, now)
-    end)
+    if schedule_enabled == false do
+      []
+    else
+      # Handle both map and struct formats
+      sources =
+        cond do
+          is_map(config) and Map.has_key?(config, "sources") -> config["sources"] || []
+          is_struct(config) -> config.sources || []
+          true -> []
+        end
+
+      Enum.filter(sources, fn source ->
+        enabled = if is_map(source), do: source["enabled"], else: source.enabled
+        enabled && source_due_to_run?(source, now)
+      end)
+    end
   end
 
   def get_due_sources(_city), do: []

@@ -108,18 +108,10 @@ defmodule EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator do
       case DiscoverySyncJob.new(job_args) |> Oban.insert() do
         {:ok, job} ->
           Logger.info("  ✅ Queued #{source_name} sync for #{city.name} (job ##{job.id})")
-
-          # Update source stats to mark as queued
-          DiscoveryConfigManager.update_source_stats(city.id, source_name, :success)
-
           {:ok, job}
 
         {:error, reason} ->
           Logger.error("  ❌ Failed to queue #{source_name} for #{city.name}: #{inspect(reason)}")
-
-          # Update source stats with error
-          DiscoveryConfigManager.update_source_stats(city.id, source_name, {:error, reason})
-
           {:error, reason}
       end
     end
