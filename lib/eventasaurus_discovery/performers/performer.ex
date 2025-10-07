@@ -17,6 +17,7 @@ defmodule EventasaurusDiscovery.Performers.Performer do
 
     many_to_many(:public_events, EventasaurusDiscovery.PublicEvents.PublicEvent,
       join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
+      join_keys: [performer_id: :id, event_id: :id],
       on_replace: :delete
     )
 

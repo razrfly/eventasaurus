@@ -64,7 +64,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
   @doc """
   Enrich all performers with RA artist IDs that need enrichment.
 
-  Returns count of jobs scheduled.
+  Returns `{:ok, count}` on success or `{:error, :enqueue_failed}` if any job fails to enqueue.
+  Stops at the first failure to prevent partial batch execution.
   """
   def enrich_all_pending do
     performers = find_performers_needing_enrichment()
