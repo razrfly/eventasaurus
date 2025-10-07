@@ -1001,9 +1001,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     </h2>
                     <div class="flex flex-wrap gap-3">
                       <%= for performer <- @event.performers do %>
-                        <span class="px-4 py-2 bg-gray-100 rounded-lg text-gray-800 font-medium">
+                        <a
+                          href={~p"/performers/#{performer.slug}"}
+                          class="px-4 py-2 bg-gray-100 rounded-lg text-gray-800 font-medium hover:bg-indigo-100 hover:text-indigo-800 transition-colors"
+                        >
                           <%= performer.name %>
-                        </span>
+                        </a>
                       <% end %>
                     </div>
                   </div>
