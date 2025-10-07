@@ -175,7 +175,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
     showtimes_with_ids =
       Enum.map(showtimes, fn %{film: film, event: event} ->
         cinema_city_event_id = event[:cinema_city_event_id]
-        external_id = "cinema_city_#{cinema_city_id}_#{cinema_city_event_id}"
+        cinema_city_film_id = film[:cinema_city_film_id]
+        # Include film_id to ensure uniqueness per movie (prevents collision between different movies)
+        external_id = "cinema_city_#{cinema_city_id}_#{cinema_city_film_id}_#{cinema_city_event_id}"
 
         Map.put(%{film: film, event: event}, :external_id, external_id)
       end)
