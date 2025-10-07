@@ -32,6 +32,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
       |> assign(:selected_source, nil)
       |> assign(:source_settings, %{})
       |> assign(:editing_source, false)
+      |> assign(:loading_stats, true)
+      |> assign(:stats_error, nil)
       |> load_stats()
 
     {:ok, socket}
@@ -300,16 +302,32 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     city = socket.assigns[:city]
 
     if city do
-      config = normalize_config(city.discovery_config)
-      sources = Map.get(config, "sources", [])
-      source_names = Enum.map(sources, & &1["name"])
+      try do
+        config = normalize_config(city.discovery_config)
+        sources = Map.get(config, "sources", [])
+        source_names = Enum.map(sources, & &1["name"])
 
-      # Get real-time stats from Oban
-      stats = DiscoveryStatsCollector.get_all_source_stats(city.id, source_names)
+        # Get real-time stats from Oban with batched queries
+        stats = DiscoveryStatsCollector.get_all_source_stats(city.id, source_names)
 
-      assign(socket, :source_stats, stats)
+        socket
+        |> assign(:source_stats, stats)
+        |> assign(:loading_stats, false)
+        |> assign(:stats_error, nil)
+      rescue
+        error ->
+          Logger.error("Failed to load discovery stats: #{inspect(error)}")
+
+          socket
+          |> assign(:source_stats, %{})
+          |> assign(:loading_stats, false)
+          |> assign(:stats_error, "Failed to load statistics. Please refresh the page.")
+      end
     else
-      assign(socket, :source_stats, %{})
+      socket
+      |> assign(:source_stats, %{})
+      |> assign(:loading_stats, false)
+      |> assign(:stats_error, nil)
     end
   end
 
