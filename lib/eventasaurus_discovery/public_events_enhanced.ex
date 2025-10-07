@@ -7,6 +7,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
+  alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainer
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainerMembership
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusApp.Venues.Venue
@@ -430,7 +433,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
   end
 
-  defp get_cover_image_url(event) do
+  @doc """
+  Gets the cover image URL for an event from its sources.
+
+  Sorts sources by priority and last_seen_at timestamp, then extracts
+  the first available image from either the image_url field or metadata.
+  """
+  def get_cover_image_url(event) do
     # Sort sources by priority and try to get the first available image
     # Fix: Sort by newest last_seen_at first (negative timestamp)
     sorted_sources =
@@ -477,6 +486,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp extract_image_from_metadata(metadata) do
     cond do
+      # Resident Advisor stores in raw_data -> event -> flyerFront
+      flyer = get_in(metadata, ["raw_data", "event", "flyerFront"]) ->
+        flyer
+
       # Ticketmaster stores images in an array
       images = get_in(metadata, ["ticketmaster_data", "images"]) ->
         case images do
@@ -899,14 +912,20 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         end
       end)
 
+    # Build container aggregated groups for all events (not just aggregatable ones)
+    # Containers should display even if individual events also display
+    container_aggregated_groups = build_container_aggregated_groups(events_with_sources)
+
     # Combine all types and sort by starts_at (for groups, use first event's date)
     (source_aggregated_groups ++
-       movie_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
+       movie_aggregated_groups ++ container_aggregated_groups ++ non_aggregatable ++ failed_movie_events)
     |> Enum.sort_by(fn
       # Groups sort to top
       %AggregatedEventGroup{} -> DateTime.utc_now()
       # Movie groups sort to top
       %AggregatedMovieGroup{} -> DateTime.utc_now()
+      # Container groups sort to top
+      %AggregatedContainerGroup{start_date: start_date} -> start_date || DateTime.utc_now()
       %PublicEvent{starts_at: starts_at} -> starts_at || DateTime.utc_now()
     end)
   end
@@ -1051,6 +1070,92 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       }
     else
       nil
+    end
+  end
+
+  # Build container aggregated groups from events that belong to containers
+  defp build_container_aggregated_groups(events) do
+    # Extract event IDs for querying memberships
+    event_ids = events |> Enum.map(& &1.id)
+
+    if Enum.empty?(event_ids) do
+      []
+    else
+      # Query all containers with their event counts for these events
+      container_data =
+        from(c in PublicEventContainer,
+          join: m in PublicEventContainerMembership,
+          on: m.container_id == c.id,
+          where: m.event_id in ^event_ids,
+          group_by: c.id,
+          select: %{
+            container_id: c.id,
+            slug: c.slug,
+            type: c.container_type,
+            title: c.title,
+            description: c.description,
+            start_date: c.start_date,
+            end_date: c.end_date,
+            metadata: c.metadata,
+            event_ids: fragment("array_agg(?)", m.event_id)
+          }
+        )
+        |> Repo.all()
+
+      # Build groups from container data
+      container_data
+      |> Enum.map(fn container ->
+        # Get events for this container
+        container_events = events |> Enum.filter(&(&1.id in container.event_ids))
+
+        if Enum.empty?(container_events) do
+          nil
+        else
+          build_container_aggregated_group(container, container_events)
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+    end
+  end
+
+  defp build_container_aggregated_group(container, events) do
+    first_event = List.first(events)
+
+    if first_event && first_event.venue && first_event.venue.city_ref do
+      # Get unique venue info
+      venue_ids = events |> Enum.map(& &1.venue_id) |> Enum.uniq()
+      venue_names = events |> Enum.map(& &1.venue.name) |> Enum.uniq()
+
+      # Get cover image from first event (or could be from container metadata)
+      cover_image = get_event_cover_image(first_event)
+
+      %AggregatedContainerGroup{
+        container_id: container.container_id,
+        container_slug: container.slug,
+        container_type: container.type,
+        container_title: container.title,
+        description: container.description,
+        start_date: container.start_date,
+        end_date: container.end_date,
+        city_id: first_event.venue.city_id,
+        city: first_event.venue.city_ref,
+        event_count: length(events),
+        venue_ids: venue_ids,
+        venue_names: venue_names,
+        cover_image_url: cover_image,
+        metadata: container.metadata || %{}
+      }
+    else
+      nil
+    end
+  end
+
+  # Get cover image from event (check multiple sources)
+  defp get_event_cover_image(event) do
+    cond do
+      event.cover_image_url -> event.cover_image_url
+      event.images && length(event.images) > 0 -> List.first(event.images)
+      true -> nil
     end
   end
 end
