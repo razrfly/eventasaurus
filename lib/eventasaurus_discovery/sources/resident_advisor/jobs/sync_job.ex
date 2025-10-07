@@ -267,7 +267,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
 
   defp default_end_date do
     Date.utc_today()
-    |> Date.add(30)
+    |> Date.add(60)
     |> Date.to_iso8601()
   end
 

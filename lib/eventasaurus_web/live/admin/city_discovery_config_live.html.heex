@@ -1,0 +1,308 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <%= if assigns[:city] do %>
+    <!-- Single City Configuration -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between">
+        <div>
+          <.link navigate="/admin/imports" class="text-sm text-blue-600 hover:text-blue-800 mb-2 inline-block">
+            ← Back to Dashboard
+          </.link>
+          <h1 class="text-3xl font-bold text-gray-900">{@city.name}</h1>
+          <p class="mt-1 text-gray-600">{@city.country.name} • Automated Discovery Configuration</p>
+        </div>
+        <%= if @city.discovery_enabled do %>
+          <button
+            phx-click="disable_discovery"
+            phx-value-city_id={@city.id}
+            class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            Disable Discovery
+          </button>
+        <% else %>
+          <button
+            phx-click="enable_discovery"
+            phx-value-city_id={@city.id}
+            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            Enable Discovery
+          </button>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- Status Card -->
+    <div class="bg-white shadow rounded-lg p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Status</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="border rounded-lg p-4">
+          <div class="text-sm text-gray-600">Discovery Status</div>
+          <div class="mt-2">
+            <%= if @city.discovery_enabled do %>
+              <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                Active
+              </span>
+            <% else %>
+              <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
+                Disabled
+              </span>
+            <% end %>
+          </div>
+        </div>
+
+        <div class="border rounded-lg p-4">
+          <div class="text-sm text-gray-600">Enabled Sources</div>
+          <div class="mt-2 text-2xl font-bold text-gray-900">
+            <% config = @city.discovery_config || %{} %>
+            <% sources = config["sources"] || [] %>
+            <% enabled_count = Enum.count(sources, & &1["enabled"]) %>
+            {enabled_count} / {length(sources)}
+          </div>
+        </div>
+
+        <div class="border rounded-lg p-4">
+          <div class="text-sm text-gray-600">Schedule</div>
+          <div class="mt-2 text-sm text-gray-900">
+            <% schedule = get_in(@city.discovery_config, ["schedule"]) || %{} %>
+            {schedule["cron"] || "0 0 * * *"}
+            <div class="text-xs text-gray-500">{schedule["timezone"] || "UTC"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sources Configuration -->
+    <div class="bg-white shadow rounded-lg p-6 mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Discovery Sources</h2>
+        <button
+          phx-click="show_add_source"
+          class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+        >
+          + Add Source
+        </button>
+      </div>
+
+      <% config = @city.discovery_config || %{} %>
+      <% sources = config["sources"] || [] %>
+
+      <%= if Enum.empty?(sources) do %>
+        <div class="text-center py-12 bg-gray-50 rounded-lg">
+          <div class="text-gray-400 text-4xl mb-4">📡</div>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">No sources configured</h3>
+          <p class="text-sm text-gray-500 mb-6">Add your first discovery source to start automated event collection</p>
+          <button
+            phx-click="show_add_source"
+            class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            Add First Source
+          </button>
+        </div>
+      <% else %>
+        <div class="space-y-4">
+          <%= for source <- sources do %>
+            <div class="border rounded-lg p-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center space-x-3">
+                    <span class="text-2xl">{source_icon(source["name"])}</span>
+                    <div>
+                      <h3 class="text-lg font-medium text-gray-900 capitalize">{source["name"]}</h3>
+                      <div class="flex items-center space-x-4 mt-1 text-sm text-gray-500">
+                        <span>Runs every {source["frequency_hours"] || 24}h</span>
+                        <%= if source["enabled"] do %>
+                          <span class="text-green-600">● Enabled</span>
+                        <% else %>
+                          <span class="text-gray-400">○ Disabled</span>
+                        <% end %>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Settings -->
+                  <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <%= for {key, value} <- source["settings"] || %{} do %>
+                      <div class="bg-gray-50 rounded px-3 py-2">
+                        <div class="text-xs text-gray-600 capitalize">{String.replace(to_string(key), "_", " ")}</div>
+                        <div class="text-sm font-medium text-gray-900">{value}</div>
+                      </div>
+                    <% end %>
+                  </div>
+
+                  <!-- Stats -->
+                  <% stats = source["stats"] || %{} %>
+                  <div class="mt-4 grid grid-cols-3 md:grid-cols-5 gap-3 text-sm">
+                    <div>
+                      <span class="text-gray-600">Total Runs:</span>
+                      <span class="font-medium ml-1">{stats["run_count"] || 0}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">Success:</span>
+                      <span class="font-medium ml-1 text-green-600">{stats["success_count"] || 0}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">Errors:</span>
+                      <span class="font-medium ml-1 text-red-600">{stats["error_count"] || 0}</span>
+                    </div>
+                    <div class="col-span-2">
+                      <span class="text-gray-600">Last Run:</span>
+                      <span class="font-medium ml-1">{format_datetime(source["last_run_at"])}</span>
+                    </div>
+                  </div>
+
+                  <%= if source["stats"]["last_error"] do %>
+                    <div class="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
+                      <div class="text-xs font-medium text-red-800 mb-1">Last Error:</div>
+                      <div class="text-xs text-red-700">{source["stats"]["last_error"]}</div>
+                    </div>
+                  <% end %>
+                </div>
+
+                <div class="ml-4 flex-shrink-0 flex gap-2">
+                  <button
+                    phx-click="show_edit_source"
+                    phx-value-source={source["name"]}
+                    class="px-3 py-1 text-sm rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    phx-click="toggle_source"
+                    phx-value-city_id={@city.id}
+                    phx-value-source={source["name"]}
+                    class={"px-3 py-1 text-sm rounded #{if source["enabled"], do: "bg-gray-100 text-gray-700 hover:bg-gray-200", else: "bg-green-100 text-green-700 hover:bg-green-200"}"}
+                  >
+                    <%= if source["enabled"], do: "Disable", else: "Enable" %>
+                  </button>
+                  <button
+                    phx-click="delete_source"
+                    phx-value-city_id={@city.id}
+                    phx-value-source={source["name"]}
+                    data-confirm={"Are you sure you want to delete the #{source["name"]} source? This action cannot be undone."}
+                    class="px-3 py-1 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- Add Source Modal -->
+    <%= if @show_add_source_modal do %>
+      <div class="fixed z-10 inset-0 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" phx-click="hide_add_source"></div>
+
+          <!-- This element is to trick the browser into centering the modal contents. -->
+          <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+          <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                <%= if @editing_source, do: "Edit Discovery Source", else: "Add Discovery Source" %>
+              </h3>
+
+              <form phx-change="form_change">
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Source</label>
+                    <select
+                      name="source"
+                      disabled={@editing_source}
+                      class={"mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 #{if @editing_source, do: "bg-gray-100 cursor-not-allowed", else: ""}"}
+                    >
+                      <option value="">Choose a source...</option>
+                      <%= for source <- @available_sources do %>
+                        <option value={source} selected={@selected_source == source}>
+                          {String.capitalize(source)}
+                        </option>
+                      <% end %>
+                    </select>
+                  </div>
+
+                  <%= if @selected_source do %>
+                    <div class="border-t pt-4">
+                      <h4 class="text-sm font-medium text-gray-700 mb-3">Settings</h4>
+                      <div class="space-y-3">
+                        <%= for {key, default_value} <- @source_settings do %>
+                          <div>
+                            <label class="block text-sm text-gray-600 mb-1 capitalize">
+                              {String.replace(to_string(key), "_", " ")}
+                            </label>
+                            <input
+                              type={if is_integer(default_value), do: "number", else: "text"}
+                              value={default_value}
+                              name={"setting_#{key}"}
+                              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            />
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              </form>
+            </div>
+
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <button
+                type="button"
+                phx-click="add_source"
+                phx-value-city_id={@city.id}
+                disabled={is_nil(@selected_source)}
+                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <%= if @editing_source, do: "Save Changes", else: "Add Source" %>
+              </button>
+              <button
+                type="button"
+                phx-click="hide_add_source"
+                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+  <% else %>
+    <!-- City Selection Page -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">City Discovery Configuration</h1>
+      <p class="mt-2 text-gray-600">Configure automated event discovery for your cities</p>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-xl font-semibold mb-4">Select a City</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <%= for city <- @cities do %>
+          <.link
+            navigate={"/admin/discovery/config/#{city.slug}"}
+            class="block border rounded-lg p-4 hover:border-blue-500 hover:shadow-md transition-all"
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-medium text-gray-900">{city.name}</h3>
+                <p class="text-sm text-gray-500">{city.country.name}</p>
+              </div>
+              <%= if city.discovery_enabled do %>
+                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                  Active
+                </span>
+              <% else %>
+                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                  Inactive
+                </span>
+              <% end %>
+            </div>
+          </.link>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

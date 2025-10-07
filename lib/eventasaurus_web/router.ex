@@ -34,6 +34,10 @@ defmodule EventasaurusWeb.Router do
       # Discovery Dashboard (dev - no auth)
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
 
+      # City Discovery Configuration (dev - no auth)
+      live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index
+      live "/discovery/config/:slug", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :show
+
       # Category Management (dev - no auth)
       live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
       live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
@@ -79,6 +83,10 @@ defmodule EventasaurusWeb.Router do
 
       # Discovery Dashboard with admin authentication
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+      # City Discovery Configuration
+      live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index
+      live "/discovery/config/:slug", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :show
 
       # Category Management
       live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index

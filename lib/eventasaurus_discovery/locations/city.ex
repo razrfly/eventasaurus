@@ -12,6 +12,8 @@ defmodule EventasaurusDiscovery.Locations.City do
     field(:slug, Slug.Type)
     field(:latitude, :decimal)
     field(:longitude, :decimal)
+    field(:discovery_enabled, :boolean, default: false)
+    field(:discovery_config, :map)
 
     belongs_to(:country, EventasaurusDiscovery.Locations.Country)
     has_many(:venues, EventasaurusApp.Venues.Venue)
@@ -22,10 +24,34 @@ defmodule EventasaurusDiscovery.Locations.City do
   @doc false
   def changeset(city, attrs) do
     city
-    |> cast(attrs, [:name, :country_id, :latitude, :longitude])
+    |> cast(attrs, [:name, :country_id, :latitude, :longitude, :discovery_enabled, :discovery_config])
     |> validate_required([:name, :country_id])
     |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)
     |> unique_constraint([:country_id, :slug])
+  end
+
+  @doc """
+  Changeset for enabling discovery on a city.
+  """
+  def enable_discovery_changeset(city, attrs \\ %{}) do
+    default_config = %{
+      schedule: %{cron: "0 0 * * *", timezone: "UTC", enabled: true},
+      sources: []
+    }
+
+    city
+    |> cast(attrs, [:discovery_enabled])
+    |> put_change(:discovery_enabled, true)
+    |> put_change(:discovery_config, default_config)
+  end
+
+  @doc """
+  Changeset for disabling discovery on a city.
+  """
+  def disable_discovery_changeset(city) do
+    city
+    |> cast(%{}, [])
+    |> put_change(:discovery_enabled, false)
   end
 end
