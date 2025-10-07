@@ -300,8 +300,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     city = socket.assigns[:city]
 
     if city do
-      config = city.discovery_config || %{}
-      sources = config["sources"] || []
+      config = normalize_config(city.discovery_config)
+      sources = Map.get(config, "sources", [])
       source_names = Enum.map(sources, & &1["name"])
 
       # Get real-time stats from Oban

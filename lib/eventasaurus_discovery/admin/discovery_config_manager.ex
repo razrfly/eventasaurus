@@ -313,11 +313,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
 
         # Broadcast update to LiveView subscribers
         case result do
-          {:ok, _updated_city} ->
+          {:ok, updated_city} ->
             Phoenix.PubSub.broadcast(
               Eventasaurus.PubSub,
               "discovery_progress",
-              {:discovery_progress, %{city_id: city_id, status: result}}
+              {:discovery_progress, %{city_id: city_id, status: :stats_updated, payload: updated_city}}
             )
           _ -> :ok
         end
@@ -365,10 +365,16 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
     # Check if schedule is enabled
     schedule_enabled =
       cond do
-        is_map(config) and Map.has_key?(config, "schedule") ->
-          Map.get(config["schedule"], "enabled", true)
-        is_struct(config) and Map.has_key?(config, :schedule) ->
-          Map.get(config.schedule, :enabled, true)
+        is_map(config) ->
+          case Map.get(config, "schedule") do
+            %{} = schedule -> Map.get(schedule, "enabled", true)
+            _ -> true
+          end
+        is_struct(config) ->
+          case Map.get(config, :schedule) do
+            %{} = schedule -> Map.get(schedule, :enabled, true)
+            _ -> true
+          end
         true ->
           true
       end
