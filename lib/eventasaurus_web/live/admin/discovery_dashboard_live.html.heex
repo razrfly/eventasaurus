@@ -303,6 +303,160 @@
     </div>
   </div>
 
+  <!-- Automated Discovery -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div class="flex justify-between items-center mb-4">
+      <div>
+        <h2 class="text-xl font-semibold">Automated Discovery</h2>
+        <p class="text-sm text-gray-600 mt-1">Cities configured for automated event discovery (runs daily at midnight UTC)</p>
+      </div>
+      <.link
+        navigate="/admin/discovery/config"
+        class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+      >
+        Manage Cities
+      </.link>
+    </div>
+
+    <%= if Enum.empty?(@discovery_cities) do %>
+      <div class="text-center py-8 bg-gray-50 rounded-lg">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No cities configured</h3>
+        <p class="mt-1 text-sm text-gray-500">Get started by enabling automated discovery for a city</p>
+        <div class="mt-6">
+          <.link
+            navigate="/admin/discovery/config"
+            class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            Configure Cities
+          </.link>
+        </div>
+      </div>
+    <% else %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sources</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Run</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stats</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for city <- @discovery_cities do %>
+              <% config = city.discovery_config || %{} %>
+              <% sources = config["sources"] || [] %>
+              <% enabled_sources = Enum.filter(sources, & &1["enabled"]) %>
+              <% next_runs = Enum.map(enabled_sources, & &1["next_run_at"]) |> Enum.reject(&is_nil/1) %>
+              <% next_run = if Enum.empty?(next_runs), do: nil, else: Enum.min(next_runs, DateTime) %>
+              <% total_runs = Enum.sum(Enum.map(sources, & get_in(&1, ["stats", "run_count"]) || 0)) %>
+              <% total_success = Enum.sum(Enum.map(sources, & get_in(&1, ["stats", "success_count"]) || 0)) %>
+
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div>
+                      <div class="text-sm font-medium text-gray-900">{city.name}</div>
+                      <div class="text-sm text-gray-500">{city.country.name}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <%= if city.discovery_enabled do %>
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      Active
+                    </span>
+                  <% else %>
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                      Disabled
+                    </span>
+                  <% end %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <div class="flex items-center space-x-1">
+                    <span class="font-medium">{length(enabled_sources)}</span>
+                    <span class="text-gray-400">/</span>
+                    <span>{length(sources)}</span>
+                    <span class="text-gray-400">enabled</span>
+                  </div>
+                  <%= if length(enabled_sources) > 0 do %>
+                    <div class="text-xs text-gray-400 mt-1">
+                      {Enum.map_join(enabled_sources, ", ", & &1["name"])}
+                    </div>
+                  <% end %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <%= if next_run do %>
+                    <%= format_datetime(next_run) %>
+                  <% else %>
+                    <span class="text-gray-400">Not scheduled</span>
+                  <% end %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <%= if total_runs > 0 do %>
+                    <div class="text-xs">
+                      <div>{total_runs} runs</div>
+                      <div class="text-green-600">{total_success} success</div>
+                    </div>
+                  <% else %>
+                    <span class="text-gray-400">No runs yet</span>
+                  <% end %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                  <button
+                    phx-click="trigger_city_discovery"
+                    phx-value-city_id={city.id}
+                    class="text-blue-600 hover:text-blue-900"
+                    disabled={length(enabled_sources) == 0}
+                  >
+                    Trigger Now
+                  </button>
+                  <.link
+                    navigate={"/admin/discovery/config/#{city.slug}"}
+                    class="text-indigo-600 hover:text-indigo-900"
+                  >
+                    Configure
+                  </.link>
+                  <button
+                    phx-click="toggle_city_discovery"
+                    phx-value-city_id={city.id}
+                    class="text-gray-600 hover:text-gray-900"
+                  >
+                    <%= if city.discovery_enabled, do: "Disable", else: "Enable" %>
+                  </button>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <h3 class="text-sm font-medium text-blue-800">How Automated Discovery Works</h3>
+            <div class="mt-2 text-sm text-blue-700 space-y-1">
+              <p>• Orchestrator runs daily at midnight UTC for all enabled cities</p>
+              <p>• Each source runs according to its frequency (typically 24 hours)</p>
+              <p>• Click "Trigger Now" to manually queue discovery jobs immediately</p>
+              <p>• Configure individual sources and settings per city</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
   <!-- Source Statistics -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">Source Statistics</h2>
