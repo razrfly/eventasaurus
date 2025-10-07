@@ -77,7 +77,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
           is_featured: is_featured?(event),
 
           # Performer data
-          performer: extract_performer(event),
+          performers: extract_performers(event),
 
           # Categories and tags
           tags: extract_tags(event),
@@ -268,27 +268,38 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
     !is_nil(event["pick"])
   end
 
-  defp extract_performer(event) do
+  defp extract_performers(event) do
     artists = event["artists"] || []
 
-    if length(artists) > 0 do
-      # Take first artist as primary performer
-      first_artist = List.first(artists)
+    # Return all artists as performers with enriched data
+    Enum.map(artists, fn artist ->
+      # Extract country information if available
+      country_name = get_in(artist, ["country", "name"])
+      country_code = get_in(artist, ["country", "urlCode"])
+
+      # Build artist profile URL if contentUrl available
+      artist_url =
+        if artist["contentUrl"] do
+          "https://ra.co#{artist["contentUrl"]}"
+        else
+          nil
+        end
 
       %{
-        name: first_artist["name"],
-        # RA doesn't provide genres in event listing
+        name: artist["name"],
+        # RA doesn't provide genres in event listing GraphQL
         genres: [],
-        # No artist images in event listing
-        image_url: nil,
+        # Image URL from artist profile
+        image_url: artist["image"],
         metadata: %{
-          ra_artist_id: first_artist["id"],
-          all_artists: Enum.map(artists, & &1["name"])
+          ra_artist_id: artist["id"],
+          ra_artist_url: artist_url,
+          country: country_name,
+          country_code: country_code,
+          source: "resident_advisor"
         }
       }
-    else
-      nil
-    end
+    end)
   end
 
   defp extract_tags(event) do
