@@ -190,10 +190,14 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.ContainerGrouper do
     # If umbrella endTime is valid and >= calculated end, use it
     # Otherwise use calculated end (more accurate)
     case {festival.end_date, calculated_end} do
-      {nil, calculated} -> calculated
-      {umbrella_end, calculated} when umbrella_end >= calculated -> umbrella_end
-      # Umbrella data conflicts, use calculated
-      {_umbrella_end, calculated} -> calculated
+      {nil, calculated} ->
+        calculated
+
+      {umbrella_end, calculated} ->
+        case Date.compare(umbrella_end, calculated) do
+          :lt -> calculated
+          _ -> umbrella_end
+        end
     end
   end
 

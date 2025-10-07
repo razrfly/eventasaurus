@@ -198,6 +198,13 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
   end
 
   @doc """
+  Get a performer by ID.
+  """
+  def get_performer(id) when is_integer(id) do
+    Repo.get(Performer, id)
+  end
+
+  @doc """
   Update performer information (e.g., image, genre).
   """
   def update_performer(%Performer{} = performer, attrs) do
