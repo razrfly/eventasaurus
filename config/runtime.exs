@@ -197,7 +197,15 @@ if config_env() == :prod do
     # Events seen within this window will NOT be re-scraped
     # Can be overridden via EVENT_FRESHNESS_THRESHOLD_HOURS env var
     freshness_threshold_hours:
-      System.get_env("EVENT_FRESHNESS_THRESHOLD_HOURS", "168") |> String.to_integer()
+      System.get_env("EVENT_FRESHNESS_THRESHOLD_HOURS", "168") |> String.to_integer(),
+    # Source-specific freshness threshold overrides
+    # Sources not listed here will use the default freshness_threshold_hours
+    source_freshness_overrides: %{
+      # Kino Krakow - Daily scraping due to data quality issues
+      "kino-krakow" => 24,
+      # Cinema City - Every 2 days (movie showtimes change frequently)
+      "cinema-city" => 48
+    }
 
   # Stripe configuration is now handled globally above (lines 25-27)
   # Sentry configuration is now handled globally above (lines 29-47)

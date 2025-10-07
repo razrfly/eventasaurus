@@ -3,11 +3,25 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   Checks if events need processing based on last_seen_at timestamps.
   Uses batch queries for performance.
   Universal across all scrapers.
+
+  ## Source-Specific Thresholds
+
+  Supports source-specific freshness thresholds configured in config files:
+
+      config :eventasaurus, :event_discovery,
+        freshness_threshold_hours: 168,  # Default: 7 days
+        source_freshness_overrides: %{
+          "kino-krakow" => 24,    # Daily scraping
+          "cinema-city" => 48      # Every 2 days
+        }
+
+  Sources without overrides use the default `freshness_threshold_hours`.
   """
 
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
+  alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusApp.Venues.Venue
   require Logger
 
@@ -29,7 +43,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   """
   @spec filter_events_needing_processing([map()], integer(), integer() | nil) :: [map()]
   def filter_events_needing_processing(events, source_id, threshold_hours \\ nil) do
-    threshold = threshold_hours || get_threshold()
+    threshold = threshold_hours || get_threshold_for_source(source_id)
 
     # Extract external_ids from events (works with any scraper format)
     external_ids =
@@ -114,8 +128,64 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   end
 
   @doc """
-  Get the configured freshness threshold in hours.
-  Universal across all scrapers - no per-scraper configuration needed.
+  Get the freshness threshold for a specific source by ID.
+  Checks for source-specific overrides, falls back to default.
+
+  ## Parameters
+  - source_id: The source identifier (integer)
+
+  ## Examples
+
+      iex> get_threshold_for_source(kino_krakow_source_id)
+      24  # Daily scraping for Kino Krakow
+
+      iex> get_threshold_for_source(bandsintown_source_id)
+      168  # Default 7 days for sources without override
+
+  """
+  @spec get_threshold_for_source(integer()) :: integer()
+  def get_threshold_for_source(source_id) when is_integer(source_id) do
+    case Repo.get(Source, source_id) do
+      nil ->
+        # Source not found, use default threshold
+        Logger.warning("Source #{source_id} not found, using default freshness threshold")
+        get_threshold()
+
+      source ->
+        get_threshold_for_slug(source.slug)
+    end
+  end
+
+  @doc """
+  Get the freshness threshold for a specific source by slug.
+  Checks for source-specific overrides in config, falls back to default.
+
+  ## Parameters
+  - source_slug: The source slug (string like "kino-krakow", "cinema-city")
+
+  ## Examples
+
+      iex> get_threshold_for_slug("kino-krakow")
+      24  # Daily scraping
+
+      iex> get_threshold_for_slug("cinema-city")
+      48  # Every 2 days
+
+      iex> get_threshold_for_slug("bandsintown")
+      168  # Default 7 days
+
+  """
+  @spec get_threshold_for_slug(String.t()) :: integer()
+  def get_threshold_for_slug(source_slug) when is_binary(source_slug) do
+    overrides = Application.get_env(:eventasaurus, :event_discovery, [])
+                |> Keyword.get(:source_freshness_overrides, %{})
+
+    Map.get(overrides, source_slug, get_threshold())
+  end
+
+  @doc """
+  Get the default configured freshness threshold in hours.
+  This is the fallback threshold used when no source-specific override exists.
 
   ## Examples
 

@@ -2,10 +2,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   @moduledoc """
   Oban job for syncing Resident Advisor events via GraphQL API.
 
-  Unlike HTML scrapers, RA uses a GraphQL API which simplifies the job pipeline:
+  Unlike HTML scrapers, RA uses a GraphQL API which provides structured data:
   1. SyncJob queries GraphQL with pagination
-  2. Processes events inline (no separate EventDetailJob needed for most cases)
-  3. Uses unified Processor for venue/event creation
+  2. Transforms events to unified format
+  3. Filters events using EventFreshnessChecker (skips recently seen events)
+  4. Schedules EventDetailJob for stale events only
+  5. Uses unified Processor for venue/event creation
 
   ## Job Arguments
 
@@ -19,7 +21,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   ## Features
 
   - GraphQL pagination with cursor support
-  - Inline event processing (no separate detail jobs)
+  - Freshness-based filtering (skips events updated within threshold)
+  - EventDetailJob for processing individual events
   - Multi-strategy venue geocoding
   - Strict venue validation (rejects events without coordinates)
   - Rate limiting (2 req/s default)

@@ -33,8 +33,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     showtime = args["showtime"]
     source_id = args["source_id"]
 
-    # Generate external_id for this showtime
-    external_id = generate_external_id(showtime)
+    # Use external_id from showtime if already generated (by DayPageJob for freshness check)
+    # Otherwise generate it here (for backward compatibility)
+    external_id = showtime["external_id"] || generate_external_id(showtime)
 
     # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
     # This ensures last_seen_at is updated even if processing fails
