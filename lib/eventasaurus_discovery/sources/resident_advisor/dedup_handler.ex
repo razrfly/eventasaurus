@@ -34,6 +34,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.Event
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
+  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.Sources.Source
+  import Ecto.Query
 
   @doc """
   Validate event quality before processing.
@@ -120,7 +123,16 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
   end
 
   defp find_by_external_id(external_id) when is_binary(external_id) do
-    Repo.get_by(Event, external_id: external_id)
+    # Query through public_event_sources join table
+    query =
+      from(e in Event,
+        join: es in PublicEventSource,
+        on: es.event_id == e.id,
+        where: es.external_id == ^external_id and is_nil(e.deleted_at),
+        limit: 1
+      )
+
+    Repo.one(query)
   end
 
   defp find_by_external_id(_), do: nil
@@ -137,13 +149,11 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
       matches ->
         # Filter to higher priority sources only
+        # matches is now a list of %{event: event, source: source}
         higher_priority_match =
-          Enum.find(matches, fn event ->
-            # Get source priority
-            source_priority = get_source_priority(event.source_id)
-
+          Enum.find(matches, fn %{event: _event, source: source} ->
             # RA priority is 75, so check if existing source is higher
-            source_priority > 75
+            source.priority > 75
           end)
 
         case higher_priority_match do
@@ -151,7 +161,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
             # No higher priority matches, RA event is unique
             {:unique, event_data}
 
-          existing ->
+          %{event: existing, source: source} ->
             # Found higher priority duplicate
             confidence = calculate_match_confidence(event_data, existing)
 
@@ -159,14 +169,16 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
               Logger.info("""
               🔍 Found likely duplicate from higher-priority source
               RA Event: #{event_data[:title]}
-              Existing: #{existing.title}
+              Existing: #{existing.title} (source: #{source.name}, priority: #{source.priority})
               Confidence: #{Float.round(confidence, 2)}
               """)
 
               # Check if we can enrich the existing event
               if can_enrich?(event_data, existing) do
                 Logger.info("✨ RA event can enrich existing event")
-                {:enriched, enrich_existing_event(existing, event_data)}
+                # Attach source to existing event for enrichment
+                existing_with_source = Map.put(existing, :source, source)
+                {:enriched, enrich_existing_event(existing_with_source, event_data)}
               else
                 {:duplicate, existing}
               end
@@ -189,14 +201,18 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
     # 1 day after
 
-    import Ecto.Query
-
+    # Query through public_event_sources to get source information
     query =
       from(e in Event,
         join: v in assoc(e, :venue),
+        join: es in PublicEventSource,
+        on: es.event_id == e.id,
+        join: s in Source,
+        on: s.id == es.source_id,
         where:
-          e.starts_at >= ^date_start and
-            e.starts_at <= ^date_end and
+          e.start_at >= ^date_start and
+            e.start_at <= ^date_end and
+            is_nil(e.deleted_at) and
             fragment(
               "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < 500",
               v.latitude,
@@ -204,26 +220,21 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
               ^venue_lat,
               ^venue_lng
             ),
-        preload: [:venue, :source]
+        preload: [venue: v],
+        select: %{event: e, source: s}
       )
 
     candidates = Repo.all(query)
 
     # Filter by title similarity
-    Enum.filter(candidates, fn event ->
+    # candidates is now a list of %{event: event, source: source}
+    Enum.filter(candidates, fn %{event: event, source: _source} ->
       similar_title?(title, event.title)
     end)
   rescue
     e ->
       Logger.error("Error finding matching events: #{inspect(e)}")
       []
-  end
-
-  defp get_source_priority(source_id) do
-    case Repo.get(EventasaurusDiscovery.Sources.Source, source_id) do
-      nil -> 0
-      source -> source.priority || 0
-    end
   end
 
   defp calculate_match_confidence(ra_event, existing_event) do
@@ -239,7 +250,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
     # Date match (30% weight)
     scores =
-      if same_date?(ra_event[:starts_at], existing_event.starts_at) do
+      if same_date?(ra_event[:starts_at], existing_event.start_at) do
         [0.3 | scores]
       else
         scores
@@ -286,7 +297,11 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
       true ->
         # Check if same day (ignore time)
-        Date.compare(DateTime.to_date(date1), DateTime.to_date(date2)) == :eq
+        # Handle both DateTime and NaiveDateTime
+        d1 = if is_struct(date1, DateTime), do: DateTime.to_date(date1), else: NaiveDateTime.to_date(date1)
+        d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
+
+        Date.compare(d1, d2) == :eq
     end
   end
 
@@ -299,9 +314,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
         false
 
       true ->
+        # Convert Decimal to float if needed
+        venue_lat = if is_struct(existing_venue.latitude, Decimal), do: Decimal.to_float(existing_venue.latitude), else: existing_venue.latitude
+        venue_lng = if is_struct(existing_venue.longitude, Decimal), do: Decimal.to_float(existing_venue.longitude), else: existing_venue.longitude
+
         # Check if within 500m
-        distance =
-          calculate_distance(ra_lat, ra_lng, existing_venue.latitude, existing_venue.longitude)
+        distance = calculate_distance(ra_lat, ra_lng, venue_lat, venue_lng)
 
         distance < 500
     end

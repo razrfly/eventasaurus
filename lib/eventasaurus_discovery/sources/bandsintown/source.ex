@@ -23,7 +23,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Source do
   alias EventasaurusDiscovery.Sources.Bandsintown.{Client, Config, Transformer}
   alias EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob
 
-  def name, do: "bandsintown"
+  def name, do: "Bandsintown"
+
+  def key, do: "bandsintown"
 
   def display_name, do: "Bandsintown"
 
@@ -56,5 +58,31 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Source do
       coverage: :international,
       update_frequency: :daily
     }
+  end
+
+  def config do
+    %{
+      priority: priority(),
+      rate_limit_ms: rate_limit_ms(),
+      metadata: metadata()
+    }
+  end
+
+  def sync_job_args(options \\ %{}) do
+    %{
+      "city_id" => options[:city_id],
+      "limit" => options[:limit] || 200,
+      "max_pages" => options[:max_pages]
+    }
+  end
+
+  def validate_config do
+    cond do
+      !enabled?() ->
+        {:error, "Bandsintown source is disabled"}
+
+      true ->
+        {:ok, "Bandsintown source configuration valid"}
+    end
   end
 end
