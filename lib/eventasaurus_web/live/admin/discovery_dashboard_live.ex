@@ -229,6 +229,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         "source:" <> source ->
           DataManager.clear_by_source(source)
 
+        "source-future:" <> source ->
+          DataManager.clear_future_by_source(source)
+
         "city:" <> city_id ->
           DataManager.clear_by_city(String.to_integer(city_id))
 
@@ -691,6 +694,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     do: "all future public events (preserving historical data)"
 
   def format_clear_target("source:" <> source), do: "all #{source} data"
+
+  def format_clear_target("source-future:" <> source),
+    do: "all future #{source} events (preserving historical data)"
+
   def format_clear_target("city:" <> _city_id), do: "all events for this city"
 
   def format_clear_target("city-future:" <> _city_id),

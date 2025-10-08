@@ -161,7 +161,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
             fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
           error_count:
             fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
-          last_run_at: max(j.completed_at)
+          last_run_at:
+            fragment(
+              "MAX(COALESCE(?, ?, ?))",
+              j.completed_at,
+              j.discarded_at,
+              j.attempted_at
+            )
         }
 
     stats = Repo.one(stats_query) || default_stats()
@@ -188,7 +194,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
             fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
           error_count:
             fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
-          last_run_at: max(j.completed_at)
+          last_run_at:
+            fragment(
+              "MAX(COALESCE(?, ?, ?))",
+              j.completed_at,
+              j.discarded_at,
+              j.attempted_at
+            )
         }
 
     stats = Repo.one(stats_query) || default_stats()
@@ -236,7 +248,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
               fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
             error_count:
               fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
-            last_run_at: max(j.completed_at)
+            last_run_at:
+              fragment(
+                "MAX(COALESCE(?, ?, ?))",
+                j.completed_at,
+                j.discarded_at,
+                j.attempted_at
+              )
           }
 
       stats_by_worker =
@@ -314,7 +332,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
               fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
             error_count:
               fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
-            last_run_at: max(j.completed_at)
+            last_run_at:
+              fragment(
+                "MAX(COALESCE(?, ?, ?))",
+                j.completed_at,
+                j.discarded_at,
+                j.attempted_at
+              )
           }
 
       stats_by_worker =
@@ -366,7 +390,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         where: j.worker == ^worker,
         where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
         where: j.state == "discarded",
-        order_by: [desc: j.completed_at],
+        order_by: [
+          desc:
+            fragment(
+              "COALESCE(?, ?, ?)",
+              j.discarded_at,
+              j.completed_at,
+              j.attempted_at
+            )
+        ],
         limit: 1,
         select: j.errors
 
@@ -383,7 +415,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       from j in "oban_jobs",
         where: j.worker == ^worker,
         where: j.state == "discarded",
-        order_by: [desc: j.completed_at],
+        order_by: [
+          desc:
+            fragment(
+              "COALESCE(?, ?, ?)",
+              j.discarded_at,
+              j.completed_at,
+              j.attempted_at
+            )
+        ],
         limit: 1,
         select: j.errors
 
@@ -411,7 +451,16 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
         where: j.state == "discarded",
         distinct: [j.worker],
-        order_by: [asc: j.worker, desc: j.completed_at],
+        order_by: [
+          asc: j.worker,
+          desc:
+            fragment(
+              "COALESCE(?, ?, ?)",
+              j.discarded_at,
+              j.completed_at,
+              j.attempted_at
+            )
+        ],
         select: {j.worker, j.errors}
 
     error_query
@@ -437,7 +486,16 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         where: j.worker in ^workers,
         where: j.state == "discarded",
         distinct: [j.worker],
-        order_by: [asc: j.worker, desc: j.completed_at],
+        order_by: [
+          asc: j.worker,
+          desc:
+            fragment(
+              "COALESCE(?, ?, ?)",
+              j.discarded_at,
+              j.completed_at,
+              j.attempted_at
+            )
+        ],
         select: {j.worker, j.errors}
 
     error_query

@@ -35,6 +35,26 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollectorTest do
       assert is_nil(stats.last_error)
     end
 
+    test "computes last_run_at from discarded_at when only failures exist" do
+      # Discarded job with only discarded_at set (typical Oban behavior)
+      insert_oban_job(%{
+        worker: "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
+        args: %{"city_id" => 1},
+        state: "discarded",
+        attempted_at: ~U[2025-10-08 11:00:00.000000Z],
+        discarded_at: ~U[2025-10-08 12:34:56.000000Z],
+        completed_at: nil,
+        errors: [%{"error" => "Network error"}]
+      })
+
+      stats = DiscoveryStatsCollector.get_source_stats(1, "ticketmaster")
+      assert stats.run_count == 1
+      assert stats.error_count == 1
+      # Expect last_run_at to reflect discarded_at
+      assert stats.last_run_at == ~N[2025-10-08 12:34:56.000000]
+      assert stats.last_error =~ "Network"
+    end
+
     test "correctly counts success vs errors" do
       # Insert completed job
       insert_oban_job(%{
