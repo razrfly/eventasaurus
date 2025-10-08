@@ -289,6 +289,34 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   end
 
   defp get_event_image_url(event) do
+    # For movie events, prioritize movie poster/backdrop from TMDb
+    # This ensures we show correct movie images instead of potentially wrong scraper data
+    case get_movie_image(event) do
+      nil ->
+        # Fall back to source image if no movie image available
+        get_image_from_source(event)
+
+      image_url ->
+        image_url
+    end
+  end
+
+  defp get_movie_image(event) do
+    case event.movies do
+      [movie | _] when not is_nil(movie) ->
+        # Prefer backdrop, fall back to poster
+        cond do
+          is_binary(movie.backdrop_url) and movie.backdrop_url != "" -> movie.backdrop_url
+          is_binary(movie.poster_url) and movie.poster_url != "" -> movie.poster_url
+          true -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp get_image_from_source(event) do
     # Use primary source (sorted by priority and last_seen_at) to get image
     # This ensures we show the most authoritative/recent image
     primary_source = get_primary_source(event)

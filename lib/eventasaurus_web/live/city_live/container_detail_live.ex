@@ -364,12 +364,6 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
     end
   end
 
-  # Helper to get container type index path (avoids verified sigil warning)
-  defp container_type_index_path(city_slug, container_type) do
-    type_plural = PublicEventContainer.container_type_plural(container_type)
-    "/c/#{city_slug}/#{type_plural}"
-  end
-
   defp format_relative_time(nil), do: "unknown"
 
   defp format_relative_time(%NaiveDateTime{} = naive_datetime) do

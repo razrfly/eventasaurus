@@ -359,6 +359,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       :venue,
       :categories,
       :performers,
+      :movies,
       :sources
     ])
     |> Enum.map(fn event ->
@@ -436,10 +437,40 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   @doc """
   Gets the cover image URL for an event from its sources.
 
+  For movie events, prioritizes movie poster/backdrop from TMDb over source images.
+  Falls back to source images if no movie image is available.
+
   Sorts sources by priority and last_seen_at timestamp, then extracts
   the first available image from either the image_url field or metadata.
   """
   def get_cover_image_url(event) do
+    # For movie events, prioritize movie images from TMDb
+    case get_movie_image(event) do
+      nil ->
+        # Fall back to source image if no movie image available
+        get_image_from_sources(event)
+
+      image_url ->
+        image_url
+    end
+  end
+
+  defp get_movie_image(event) do
+    case event.movies do
+      [movie | _] when not is_nil(movie) ->
+        # Prefer backdrop, fall back to poster
+        cond do
+          is_binary(movie.backdrop_url) and movie.backdrop_url != "" -> movie.backdrop_url
+          is_binary(movie.poster_url) and movie.poster_url != "" -> movie.poster_url
+          true -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp get_image_from_sources(event) do
     # Sort sources by priority and try to get the first available image
     # Fix: Sort by newest last_seen_at first (negative timestamp)
     sorted_sources =

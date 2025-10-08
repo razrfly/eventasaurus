@@ -641,7 +641,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
         |> Enum.reject(&(&1.id == current_event.id))
         |> Enum.shuffle()
         |> Enum.take(display_count)
-        |> Repo.preload([:venue, :categories, :performers, sources: :source])
+        |> Repo.preload([:venue, :categories, :performers, :movies, sources: :source])
 
       _ ->
         []
