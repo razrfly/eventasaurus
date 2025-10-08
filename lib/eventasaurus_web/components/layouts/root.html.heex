@@ -18,36 +18,64 @@
     <.live_title suffix=" · Eventasaurus">
       <%= assigns[:page_title] || "Home" %>
     </.live_title>
-    
+
     <!-- Favicon with dinosaur emoji -->
     <link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🦖%3C/text%3E%3C/svg%3E" />
-    
+
+    <!-- Canonical URL -->
+    <%= if assigns[:canonical_url] do %>
+      <link rel="canonical" href={assigns[:canonical_url]} />
+    <% end %>
+
+    <!-- Hreflang alternate language links -->
+    <%= if assigns[:hreflang_path] do %>
+      <%
+        base_url = get_base_url()
+        path = assigns[:hreflang_path]
+      %>
+      <link rel="alternate" hreflang="en" href={"#{base_url}#{path}?locale=en"} />
+      <link rel="alternate" hreflang="pl" href={"#{base_url}#{path}?locale=pl"} />
+      <link rel="alternate" hreflang="x-default" href={"#{base_url}#{path}"} />
+    <% end %>
+
+    <!-- JSON-LD Structured Data -->
+    <%= if assigns[:json_ld] do %>
+      <script type="application/ld+json">
+        <%= Phoenix.HTML.raw(assigns[:json_ld]) %>
+      </script>
+    <% end %>
+
     <!-- Open Graph and Twitter Card meta tags -->
-    <%= if assigns[:meta_title] do %>
-      <meta property="og:title" content={assigns[:meta_title]} />
-      <meta property="og:description" content={assigns[:meta_description] || ""} />
-      <meta property="og:image" content={assigns[:meta_image]} />
-      <meta property="og:image:width" content="800" />
-      <meta property="og:image:height" content="419" />
-      <meta property="og:type" content="website" />
-      <meta property="og:url" content={assigns[:meta_url] || ""} />
-      <meta property="og:site_name" content="Eventasaurus" />
-      
-      <!-- Twitter Card tags -->
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={assigns[:meta_title]} />
-      <meta name="twitter:description" content={assigns[:meta_description] || ""} />
-      <meta name="twitter:image" content={assigns[:meta_image]} />
-      
-      <!-- Standard meta description -->
-      <meta name="description" content={assigns[:meta_description] || ""} />
+    <%= if assigns[:open_graph] do %>
+      <!-- Enhanced Open Graph tags from component -->
+      <%= Phoenix.HTML.raw(assigns[:open_graph]) %>
     <% else %>
-      <!-- Default meta tags -->
-      <meta name="description" content="Create and manage events with Eventasaurus - the modern event management platform" />
-      <meta property="og:title" content="Eventasaurus" />
-      <meta property="og:description" content="Create and manage events with Eventasaurus - the modern event management platform" />
-      <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="Eventasaurus" />
+      <%= if assigns[:meta_title] do %>
+        <meta property="og:title" content={assigns[:meta_title]} />
+        <meta property="og:description" content={assigns[:meta_description] || ""} />
+        <meta property="og:image" content={assigns[:meta_image]} />
+        <meta property="og:image:width" content="800" />
+        <meta property="og:image:height" content="419" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={assigns[:meta_url] || ""} />
+        <meta property="og:site_name" content="Eventasaurus" />
+
+        <!-- Twitter Card tags -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={assigns[:meta_title]} />
+        <meta name="twitter:description" content={assigns[:meta_description] || ""} />
+        <meta name="twitter:image" content={assigns[:meta_image]} />
+
+        <!-- Standard meta description -->
+        <meta name="description" content={assigns[:meta_description] || ""} />
+      <% else %>
+        <!-- Default meta tags -->
+        <meta name="description" content="Create and manage events with Eventasaurus - the modern event management platform" />
+        <meta property="og:title" content="Eventasaurus" />
+        <meta property="og:description" content="Create and manage events with Eventasaurus - the modern event management platform" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Eventasaurus" />
+      <% end %>
     <% end %>
     
     <!-- Main application CSS (includes base theme system) -->

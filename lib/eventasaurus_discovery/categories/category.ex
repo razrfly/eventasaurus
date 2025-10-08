@@ -2,6 +2,33 @@ defmodule EventasaurusDiscovery.Categories.Category do
   use Ecto.Schema
   import Ecto.Changeset
 
+  # Valid schema.org Event types for SEO structured data
+  @valid_schema_types ~w[
+    Event
+    MusicEvent
+    TheaterEvent
+    ComedyEvent
+    DanceEvent
+    SportsEvent
+    ScreeningEvent
+    FoodEvent
+    BusinessEvent
+    EducationEvent
+    ExhibitionEvent
+    Festival
+    LiteraryEvent
+    SocialEvent
+    VisualArtsEvent
+    ChildrensEvent
+    CourseInstance
+    DeliveryEvent
+    Hackathon
+    PublicationEvent
+    SaleEvent
+  ]
+
+  def valid_schema_types, do: @valid_schema_types
+
   schema "categories" do
     field(:name, :string)
     field(:slug, :string)
@@ -11,6 +38,7 @@ defmodule EventasaurusDiscovery.Categories.Category do
     field(:color, :string)
     field(:display_order, :integer, default: 0)
     field(:is_active, :boolean, default: true)
+    field(:schema_type, :string, default: "Event")
 
     belongs_to(:parent, __MODULE__, foreign_key: :parent_id)
     has_many(:children, __MODULE__, foreign_key: :parent_id)
@@ -36,9 +64,13 @@ defmodule EventasaurusDiscovery.Categories.Category do
       :color,
       :display_order,
       :is_active,
-      :parent_id
+      :parent_id,
+      :schema_type
     ])
-    |> validate_required([:name, :slug])
+    |> validate_required([:name, :slug, :schema_type])
+    |> validate_inclusion(:schema_type, @valid_schema_types,
+      message: "must be a valid schema.org Event type"
+    )
     |> unique_constraint(:slug)
     |> validate_format(:color, ~r/^#[0-9A-Fa-f]{6}$/, message: "must be a valid hex color")
     |> foreign_key_constraint(:parent_id)
