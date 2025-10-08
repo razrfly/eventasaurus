@@ -54,8 +54,8 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     # Add category
     items_with_category = add_category_breadcrumb(items_with_container, event)
 
-    # Add current event (no link)
-    items_with_category ++ [%{label: event.title, path: nil}]
+    # Add current event (no link) - use display_title if available for localization
+    items_with_category ++ [%{label: event.display_title || event.title, path: nil}]
   end
 
   @doc """
@@ -74,7 +74,8 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
       %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
       %{label: city.name, path: ~p"/c/#{city.slug}"},
       %{
-        label: String.capitalize(PublicEventContainer.container_type_plural(container.container_type)),
+        label:
+          String.capitalize(PublicEventContainer.container_type_plural(container.container_type)),
         path: container_type_index_path(city.slug, container.container_type)
       },
       %{label: container.title, path: nil}
@@ -83,7 +84,11 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   # Private helper functions
 
-  defp add_city_breadcrumb(items, %{venue: %{city_ref: %{slug: city_slug, name: city_name}}}, _gettext_backend) do
+  defp add_city_breadcrumb(
+         items,
+         %{venue: %{city_ref: %{slug: city_slug, name: city_name}}},
+         _gettext_backend
+       ) do
     items ++ [%{label: city_name, path: ~p"/c/#{city_slug}"}]
   end
 
@@ -102,16 +107,21 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
         city_slug = get_in(event, [Access.key(:venue), Access.key(:city_ref), Access.key(:slug)])
 
         if city_slug do
-          items ++ [
-            %{
-              label: String.capitalize(PublicEventContainer.container_type_plural(container.container_type)),
-              path: container_type_index_path(city_slug, container.container_type)
-            },
-            %{
-              label: container.title,
-              path: ~p"/c/#{city_slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
-            }
-          ]
+          items ++
+            [
+              %{
+                label:
+                  String.capitalize(
+                    PublicEventContainer.container_type_plural(container.container_type)
+                  ),
+                path: container_type_index_path(city_slug, container.container_type)
+              },
+              %{
+                label: container.title,
+                path:
+                  ~p"/c/#{city_slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
+              }
+            ]
         else
           # If no city, can't build proper container path, skip container breadcrumb
           items
@@ -123,7 +133,13 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     primary_category = get_primary_category(event)
 
     if primary_category do
-      items ++ [%{label: primary_category.name, path: ~p"/activities?#{[category: primary_category.slug]}"}]
+      items ++
+        [
+          %{
+            label: primary_category.name,
+            path: ~p"/activities?#{[category: primary_category.slug]}"
+          }
+        ]
     else
       items
     end
@@ -148,12 +164,14 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     end
   end
 
-  defp get_primary_category(%{primary_category_id: nil, categories: categories}) when is_list(categories) do
+  defp get_primary_category(%{primary_category_id: nil, categories: categories})
+       when is_list(categories) do
     # No primary category set, use first category
     List.first(categories)
   end
 
-  defp get_primary_category(%{primary_category_id: cat_id, categories: categories}) when not is_nil(cat_id) do
+  defp get_primary_category(%{primary_category_id: cat_id, categories: categories})
+       when not is_nil(cat_id) do
     Enum.find(categories, &(&1.id == cat_id))
   end
 
@@ -163,5 +181,4 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     type_plural = PublicEventContainer.container_type_plural(container_type)
     "/c/#{city_slug}/#{type_plural}"
   end
-
 end

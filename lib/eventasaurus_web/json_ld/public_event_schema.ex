@@ -55,10 +55,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
       "@type" => determine_event_type(event),
       "name" => get_event_name(event),
       "startDate" => DateTime.to_iso8601(event.starts_at),
-      "location" => build_location(event.venue),
       "eventAttendanceMode" => "https://schema.org/OfflineEventAttendanceMode",
       "eventStatus" => "https://schema.org/EventScheduled"
     }
+    |> maybe_add_location(event.venue)
     |> add_end_date(event.ends_at)
     |> add_description(event)
     |> add_images(event)
@@ -127,7 +127,9 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
         "Event"
 
       source ->
-        source_domains = get_in(source, [Access.key(:source), Access.key(:domains)]) || ["general"]
+        source_domains =
+          get_in(source, [Access.key(:source), Access.key(:domains)]) || ["general"]
+
         domain_to_schema_type(List.first(source_domains))
     end
   end
@@ -184,9 +186,11 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     end
   end
 
-  # Build schema.org Place object for venue location
-  defp build_location(nil), do: nil
+  # Add location to schema if venue exists
+  defp maybe_add_location(schema, nil), do: schema
+  defp maybe_add_location(schema, venue), do: Map.put(schema, "location", build_location(venue))
 
+  # Build schema.org Place object for venue location
   defp build_location(venue) do
     %{
       "@type" => "Place",
@@ -405,7 +409,11 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
         |> Enum.sort_by(fn source ->
           priority = get_in(source.metadata, ["priority"]) || 10
           # Newer timestamps first (negative for descending sort)
-          ts = if source.last_seen_at, do: -DateTime.to_unix(source.last_seen_at, :second), else: 9_223_372_036_854_775_807
+          ts =
+            if source.last_seen_at,
+              do: -DateTime.to_unix(source.last_seen_at, :second),
+              else: 9_223_372_036_854_775_807
+
           {priority, ts}
         end)
         |> Enum.flat_map(fn source ->
@@ -438,7 +446,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
         List.first(metadata["images"])["url"]
 
       # Ticketmaster stores in images array with different structure
-      is_list(get_in(metadata, ["event", "images"])) and length(get_in(metadata, ["event", "images"])) > 0 ->
+      is_list(get_in(metadata, ["event", "images"])) and
+          length(get_in(metadata, ["event", "images"])) > 0 ->
         # Get the largest image
         metadata
         |> get_in(["event", "images"])
