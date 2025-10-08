@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
   """
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
 
   attr :event, :map, required: true
   attr :occurrence_list, :list, required: true
@@ -18,28 +19,26 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
 
   def event_schedule_display(assigns) do
     ~H"""
-    <%= if should_show_schedule?(@occurrence_list, @is_movie_screening) do %>
-      <div>
-        <%= case schedule_display_type(@is_movie_screening, @occurrence_list) do %>
-          <% :movie_screening -> %>
-            <.movie_screening_schedule
-              occurrence_list={@occurrence_list}
-              event={@event}
-            />
+    <div>
+      <%= case schedule_display_type(@is_movie_screening, @occurrence_list) do %>
+        <% :movie_screening -> %>
+          <.movie_screening_schedule
+            occurrence_list={@occurrence_list}
+            event={@event}
+          />
 
-          <% :single_datetime -> %>
-            <.single_datetime_display
-              event={@event}
-              selected_occurrence={@selected_occurrence}
-            />
+        <% :single_datetime -> %>
+          <.single_datetime_display
+            event={@event}
+            selected_occurrence={@selected_occurrence}
+          />
 
-          <% :multi_day_schedule -> %>
-            <.multi_day_schedule_display
-              occurrence_list={@occurrence_list}
-            />
-        <% end %>
-      </div>
-    <% end %>
+        <% :multi_day_schedule -> %>
+          <.multi_day_schedule_display
+            occurrence_list={@occurrence_list}
+          />
+      <% end %>
+    </div>
     """
   end
 
@@ -81,11 +80,11 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
       <%= if @selected_occurrence do %>
         <%= format_occurrence_datetime(@selected_occurrence) %>
       <% else %>
-        <%= format_event_datetime(@event.starts_at) %>
+        <%= format_local_datetime(@event.starts_at, @event.venue, :full) %>
         <%= if @event.ends_at do %>
           <br />
           <span class="text-sm text-gray-600">
-            <%= gettext("Until") %> <%= format_event_datetime(@event.ends_at) %>
+            <%= gettext("Until") %> <%= format_local_datetime(@event.ends_at, @event.venue, :full) %>
           </span>
         <% end %>
       <% end %>
@@ -111,13 +110,8 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
     """
   end
 
-  # Determine if we should show any schedule information
-  defp should_show_schedule?(nil, _), do: false
-  defp should_show_schedule?([], _), do: false
-  defp should_show_schedule?(_occurrences, _is_movie), do: true
-
   # Determine which type of schedule display to use
-  defp schedule_display_type(is_movie_screening, occurrence_list) do
+  defp schedule_display_type(is_movie_screening, occurrence_list) when is_list(occurrence_list) do
     cond do
       # Movie screenings with multiple occurrences
       is_movie_screening && length(occurrence_list) > 1 ->
@@ -131,11 +125,14 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
       length(occurrence_list) > 1 ->
         :multi_day_schedule
 
-      # Default - single datetime
+      # Empty or nil occurrence_list - fall back to event starts_at
       true ->
         :single_datetime
     end
   end
+
+  # Handle nil occurrence_list - use event's starts_at
+  defp schedule_display_type(_is_movie_screening, nil), do: :single_datetime
 
   # Extract schedule information from occurrence list
   defp extract_schedule_info(occurrences) when is_list(occurrences) do
@@ -202,12 +199,6 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
   end
 
   defp format_occurrence_datetime(_), do: ""
-
-  defp format_event_datetime(nil), do: ""
-
-  defp format_event_datetime(datetime) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
-  end
 
   defp format_date_medium(date) do
     Calendar.strftime(date, "%B %d, %Y")
