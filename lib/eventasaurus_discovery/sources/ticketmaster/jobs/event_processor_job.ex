@@ -42,8 +42,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
 
     # Get the source
     with {:ok, source} <- get_source(source_id),
-         # Check for duplicates (within Ticketmaster itself)
-         {:ok, dedup_result} <- check_deduplication(event_data),
+         # Check for duplicates (within Ticketmaster itself, pass source struct)
+         {:ok, dedup_result} <- check_deduplication(event_data, source),
          # Process the event if unique
          {:ok, _processed_event} <- process_event_if_unique(event_data, source, dedup_result) do
       Logger.info("✅ Successfully processed Ticketmaster event: #{external_id}")
@@ -74,11 +74,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
     end
   end
 
-  defp check_deduplication(event_data) do
+  defp check_deduplication(event_data, source) do
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case Ticketmaster.deduplicate_event(event_with_atom_keys) do
+    case Ticketmaster.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 

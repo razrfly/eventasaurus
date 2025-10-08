@@ -1,0 +1,126 @@
+<div class="container mx-auto px-4 py-8 max-w-2xl">
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold"><%= @page_title %></h1>
+  </div>
+
+  <.form
+    for={@form}
+    phx-change="validate"
+    phx-submit="save"
+    class="bg-white shadow rounded-lg p-6"
+  >
+    <!-- Name -->
+    <div class="mb-4">
+      <label for="source_name" class="block text-sm font-medium text-gray-700 mb-2">
+        Name *
+      </label>
+      <.input
+        field={@form[:name]}
+        type="text"
+        placeholder="e.g., Cinema City"
+        required
+      />
+    </div>
+
+    <!-- Slug -->
+    <div class="mb-4">
+      <label for="source_slug" class="block text-sm font-medium text-gray-700 mb-2">
+        Slug *
+      </label>
+      <.input
+        field={@form[:slug]}
+        type="text"
+        placeholder="e.g., cinema-city"
+        required
+      />
+      <p class="mt-1 text-sm text-gray-500">
+        Lowercase, dash-separated identifier for the source
+      </p>
+    </div>
+
+    <!-- Website URL -->
+    <div class="mb-4">
+      <label for="source_website_url" class="block text-sm font-medium text-gray-700 mb-2">
+        Website URL
+      </label>
+      <.input
+        field={@form[:website_url]}
+        type="url"
+        placeholder="https://example.com"
+      />
+    </div>
+
+    <!-- Priority -->
+    <div class="mb-4">
+      <label for="source_priority" class="block text-sm font-medium text-gray-700 mb-2">
+        Priority (0-100)
+      </label>
+      <.input
+        field={@form[:priority]}
+        type="number"
+        min="0"
+        max="100"
+        placeholder="50"
+      />
+      <p class="mt-1 text-sm text-gray-500">
+        Higher priority sources take precedence in deduplication. Ticketmaster: 100, BandsInTown: 80, RA: 75, Karnet: 70, Movies: 15
+      </p>
+    </div>
+
+    <!-- Domains -->
+    <div class="mb-4">
+      <label for="source_domains" class="block text-sm font-medium text-gray-700 mb-2">
+        Domains *
+      </label>
+      <select
+        id="source_domains"
+        name="source[domains][]"
+        multiple
+        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-48"
+      >
+        <%= for domain <- @allowed_domains do %>
+          <option
+            value={domain}
+            selected={domain in (@form[:domains].value || [])}
+          >
+            <%= String.capitalize(domain) |> String.replace("-", " ") %>
+          </option>
+        <% end %>
+      </select>
+      <p class="mt-1 text-sm text-gray-500">
+        Hold Cmd/Ctrl to select multiple domains. Choose "general" for sources that can import any event type.
+      </p>
+      <p class="mt-1 text-xs text-gray-400">
+        Domain compatibility prevents inappropriate cross-source deduplication (e.g., music events won't match movies).
+      </p>
+    </div>
+
+    <!-- Active Status -->
+    <div class="mb-6">
+      <label class="flex items-center">
+        <.input
+          field={@form[:is_active]}
+          type="checkbox"
+          class="rounded"
+        />
+        <span class="ml-2 text-sm font-medium text-gray-700">Active</span>
+      </label>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-between">
+      <.link
+        navigate={~p"/admin/sources"}
+        class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+      >
+        Cancel
+      </.link>
+      <button
+        type="submit"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        <%= if @source.id, do: "Update Source", else: "Create Source" %>
+      </button>
+    </div>
+  </.form>
+</div>
