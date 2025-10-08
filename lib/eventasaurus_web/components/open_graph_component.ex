@@ -113,30 +113,20 @@ defmodule EventasaurusWeb.Components.OpenGraphComponent do
   defp ensure_absolute_url(assigns, key) do
     url = Map.get(assigns, key)
 
-    if url && is_binary(url) && !String.starts_with?(url, ["http://", "https://"]) do
-      # If URL is relative, make it absolute using the app's URL
-      base_url = get_base_url()
-      Map.put(assigns, key, "#{base_url}#{url}")
-    else
-      assigns
-    end
-  end
+    cond do
+      is_binary(url) and String.starts_with?(url, ["http://", "https://"]) ->
+        assigns
 
-  # Get the base URL for the application
-  defp get_base_url do
-    # Get from endpoint configuration
-    endpoint = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, [])
-    url_config = Keyword.get(endpoint, :url, [])
+      is_binary(url) ->
+        base_url = EventasaurusWeb.Layouts.get_base_url()
 
-    scheme = Keyword.get(url_config, :scheme, "https")
-    host = Keyword.get(url_config, :host, "eventasaurus.com")
-    port = Keyword.get(url_config, :port, 443)
+        absolute =
+          if String.starts_with?(url, "/"), do: base_url <> url, else: base_url <> "/" <> url
 
-    # Only include port if not standard (80 for http, 443 for https)
-    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) do
-      "#{scheme}://#{host}"
-    else
-      "#{scheme}://#{host}:#{port}"
+        Map.put(assigns, key, absolute)
+
+      true ->
+        assigns
     end
   end
 end
