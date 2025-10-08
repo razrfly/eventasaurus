@@ -99,5 +99,28 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
       assert is_nil(transformed.description)
       assert is_nil(transformed.image_url)
     end
+
+    test "decodes HTML entities in venue titles and descriptions" do
+      venue_data = %{
+        title: "Royal Oak, Twickenham &#8211; Every Thursday",
+        raw_title: "PUB QUIZ &#8211; Royal Oak, Twickenham &#8211; Every Thursday",
+        address: "13 Richmond Road, Twickenham England TW1 3AB, United Kingdom",
+        time_text: "Thursdays at 6:30pm",
+        fee_text: "£2 per person",
+        phone: nil,
+        website: nil,
+        description: "Join us for trivia &#038; prizes every Thursday!",
+        hero_image_url: nil,
+        source_url: "https://questionone.com/venues/royal-oak-twickenham"
+      }
+
+      transformed = Transformer.transform_event(venue_data)
+
+      # HTML entities should be decoded
+      assert transformed.title == "Trivia Night at Royal Oak, Twickenham – Every Thursday"
+      assert transformed.venue_data.name == "Royal Oak, Twickenham – Every Thursday"
+      assert transformed.venue_data.metadata.raw_title == "PUB QUIZ – Royal Oak, Twickenham – Every Thursday"
+      assert transformed.description == "Join us for trivia & prizes every Thursday!"
+    end
   end
 end

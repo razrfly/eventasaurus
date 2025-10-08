@@ -16,22 +16,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   import Ecto.Query
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Sources.SourceRegistry
   require Logger
-
-  # Maps source names to their Oban worker module names.
-  # These names must match exactly what's stored in the oban_jobs.worker column.
-  @source_to_worker %{
-    "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
-    "ticketmaster" => "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
-    "resident-advisor" => "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob",
-    "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
-    "kino-krakow" => "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob",
-    "cinema-city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
-    "pubquiz-pl" => "EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob"
-  }
-
-  # Sources that operate country-wide and don't have city_id in their job args
-  @country_wide_sources ["pubquiz-pl"]
 
   @doc """
   Get statistics for a specific source and city by querying Oban jobs.
@@ -78,19 +64,21 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   """
   def get_source_stats(city_id, source_name)
       when (is_integer(city_id) or is_nil(city_id)) and is_binary(source_name) do
-    worker = Map.get(@source_to_worker, source_name)
-    is_country_wide = source_name in @country_wide_sources
-
-    cond do
-      is_nil(worker) ->
+    # Get worker name from SourceRegistry
+    case SourceRegistry.get_worker_name(source_name) do
+      {:error, :not_found} ->
         Logger.debug("Unknown source: #{source_name}")
         default_stats()
 
-      is_country_wide ->
-        get_country_wide_stats(worker)
+      {:ok, worker} ->
+        # Check if source requires city using SourceRegistry
+        requires_city = SourceRegistry.requires_city_id?(source_name)
 
-      true ->
-        get_city_stats(worker, city_id)
+        if requires_city do
+          get_city_stats(worker, city_id)
+        else
+          get_country_wide_stats(worker)
+        end
     end
   end
 
@@ -127,18 +115,20 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   """
   def get_all_source_stats(city_id, source_names)
       when is_integer(city_id) and is_list(source_names) do
-    # Separate country-wide from city-specific sources
-    {country_wide_sources, city_sources} =
-      Enum.split_with(source_names, &(&1 in @country_wide_sources))
+    # Separate sources by scope using SourceRegistry
+    {non_city_sources, city_sources} =
+      Enum.split_with(source_names, fn source_name ->
+        not SourceRegistry.requires_city_id?(source_name)
+      end)
 
     # Get stats for city-specific sources
     city_stats = get_city_sources_batch(city_id, city_sources)
 
-    # Get stats for country-wide sources
-    country_wide_stats = get_country_wide_sources_batch(country_wide_sources)
+    # Get stats for non-city sources (country-wide/regional)
+    non_city_stats = get_country_wide_sources_batch(non_city_sources)
 
     # Merge the results
-    Map.merge(city_stats, country_wide_stats)
+    Map.merge(city_stats, non_city_stats)
   end
 
   def get_all_source_stats(_city_id, _source_names) do
@@ -216,12 +206,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   end
 
   defp get_city_sources_batch(city_id, source_names) do
-    # Build worker name mapping
+    # Build worker name mapping using SourceRegistry
     worker_to_source =
       source_names
       |> Enum.map(fn source_name ->
-        worker = Map.get(@source_to_worker, source_name)
-        {worker, source_name}
+        case SourceRegistry.get_worker_name(source_name) do
+          {:ok, worker} -> {worker, source_name}
+          {:error, _} -> {nil, source_name}
+        end
       end)
       |> Enum.reject(fn {worker, _} -> is_nil(worker) end)
       |> Map.new()
@@ -301,12 +293,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   end
 
   defp get_country_wide_sources_batch(source_names) do
-    # Build worker name mapping
+    # Build worker name mapping using SourceRegistry
     worker_to_source =
       source_names
       |> Enum.map(fn source_name ->
-        worker = Map.get(@source_to_worker, source_name)
-        {worker, source_name}
+        case SourceRegistry.get_worker_name(source_name) do
+          {:ok, worker} -> {worker, source_name}
+          {:error, _} -> {nil, source_name}
+        end
       end)
       |> Enum.reject(fn {worker, _} -> is_nil(worker) end)
       |> Map.new()

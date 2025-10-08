@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.DateParser
+  alias HtmlEntities
 
   @doc """
   Transform extracted venue data to unified format.
@@ -34,6 +35,12 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   - fee_text, phone, website, description, hero_image_url
   """
   def transform_event(venue_data, _options \\ %{}) do
+    # Decode HTML entities from title and other fields
+    title = decode_html_entities(venue_data.title)
+    raw_title = decode_html_entities(venue_data.raw_title)
+    address = decode_html_entities(venue_data.address)
+    description = if venue_data.description, do: decode_html_entities(venue_data.description), else: nil
+
     # Parse time text to get day and time
     {day_of_week, start_time} = parse_time_data(venue_data.time_text)
 
@@ -41,11 +48,11 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     starts_at = DateParser.next_occurrence(day_of_week, start_time)
 
     # Generate stable external_id
-    venue_slug = slugify(venue_data.title)
+    venue_slug = slugify(title)
     external_id = "question_one_#{venue_slug}_#{day_of_week}"
 
     # Extract city from address
-    city = extract_city_from_address(venue_data.address)
+    city = extract_city_from_address(address)
 
     # Parse pricing from fee_text
     {is_free, min_price} = parse_pricing(venue_data.fee_text)
@@ -53,13 +60,13 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     %{
       # Required fields
       external_id: external_id,
-      title: "Trivia Night at #{venue_data.title}",
+      title: "Trivia Night at #{title}",
       starts_at: starts_at,
 
       # Venue data (REQUIRED - VenueProcessor will geocode)
       venue_data: %{
-        name: venue_data.title,
-        address: venue_data.address,
+        name: title,
+        address: address,
         city: city,
         country: "United Kingdom",
         latitude: nil,
@@ -68,13 +75,13 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
         website: venue_data.website,
         external_id: "question_one_venue_#{venue_slug}",
         metadata: %{
-          raw_title: venue_data.raw_title
+          raw_title: raw_title
         }
       },
 
       # Optional fields
       ends_at: add_hours(starts_at, 2),
-      description: venue_data.description,
+      description: description,
       source_url: venue_data.source_url,
       image_url: venue_data.hero_image_url,
 
@@ -174,4 +181,11 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   defp add_hours(datetime, hours) do
     DateTime.add(datetime, hours * 3600, :second)
   end
+
+  # Decode HTML entities (&#8211; -> –, &#038; -> &, etc.)
+  defp decode_html_entities(nil), do: nil
+  defp decode_html_entities(text) when is_binary(text) do
+    HtmlEntities.decode(text)
+  end
+  defp decode_html_entities(text), do: text
 end
