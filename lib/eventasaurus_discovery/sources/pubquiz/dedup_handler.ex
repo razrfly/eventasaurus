@@ -116,7 +116,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
              end
            end) do
         nil ->
-          {:unique, event_data}
+          {:unique, event_data_with_coords}
 
         {match, confidence} ->
           BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
