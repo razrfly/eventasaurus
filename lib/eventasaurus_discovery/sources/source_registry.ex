@@ -21,6 +21,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
   import Ecto.Query
+  require Logger
 
   @source_to_job %{
     "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
@@ -110,8 +111,17 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
         {:error, :not_found}
 
       metadata when is_map(metadata) ->
-        scope = metadata["scope"] || "city"
-        {:ok, String.to_atom(scope)}
+        scope =
+          case metadata["scope"] do
+            "city" -> :city
+            "country" -> :country
+            "regional" -> :regional
+            nil -> :city
+            other ->
+              Logger.warning("Unknown scope #{inspect(other)} for #{source_slug}, defaulting to :city")
+              :city
+          end
+        {:ok, scope}
 
       _ ->
         {:ok, :city}  # Default to city if no metadata
@@ -161,8 +171,16 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     Repo.all(query)
     |> Enum.group_by(
       fn {_slug, metadata} ->
-        scope = if is_map(metadata), do: metadata["scope"], else: nil
-        String.to_atom(scope || "city")
+        scope_string = if is_map(metadata), do: metadata["scope"], else: nil
+        case scope_string do
+          "city" -> :city
+          "country" -> :country
+          "regional" -> :regional
+          nil -> :city
+          other ->
+            Logger.warning("Unknown scope #{inspect(other)} in sources_by_scope, defaulting to :city")
+            :city
+        end
       end,
       fn {slug, _metadata} -> slug end
     )

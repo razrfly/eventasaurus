@@ -22,7 +22,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
 
       # Check required fields
       assert transformed.external_id =~ "question_one_"
-      assert transformed.title == "Trivia Night at The Red Lion"
+      assert transformed.title == "Quiz Night at The Red Lion"
       assert %DateTime{} = transformed.starts_at
       assert %DateTime{} = transformed.ends_at
 
@@ -90,7 +90,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
 
       transformed = Transformer.transform_event(venue_data)
 
-      assert transformed.title == "Trivia Night at The Ship"
+      assert transformed.title == "Quiz Night at The Ship"
       assert transformed.venue_data.name == "The Ship"
       # Should default to free when no fee_text
       assert transformed.is_free == true
@@ -100,25 +100,27 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
       assert is_nil(transformed.image_url)
     end
 
-    test "decodes HTML entities in venue titles and descriptions" do
+    test "HTML entities are decoded in VenueExtractor (not here)" do
+      # This test verifies the transformer receives already-cleaned data from VenueExtractor
+      # VenueExtractor.clean_title/1 now decodes HTML entities BEFORE cleaning
       venue_data = %{
-        title: "Royal Oak, Twickenham &#8211; Every Thursday",
-        raw_title: "PUB QUIZ &#8211; Royal Oak, Twickenham &#8211; Every Thursday",
+        title: "Royal Oak, Twickenham",  # Already cleaned by VenueExtractor
+        raw_title: "PUB QUIZ – Royal Oak, Twickenham – Every Thursday",  # Already decoded
         address: "13 Richmond Road, Twickenham England TW1 3AB, United Kingdom",
         time_text: "Thursdays at 6:30pm",
         fee_text: "£2 per person",
         phone: nil,
         website: nil,
-        description: "Join us for trivia &#038; prizes every Thursday!",
+        description: "Join us for trivia & prizes every Thursday!",  # Already decoded
         hero_image_url: nil,
         source_url: "https://questionone.com/venues/royal-oak-twickenham"
       }
 
       transformed = Transformer.transform_event(venue_data)
 
-      # HTML entities should be decoded
-      assert transformed.title == "Trivia Night at Royal Oak, Twickenham – Every Thursday"
-      assert transformed.venue_data.name == "Royal Oak, Twickenham – Every Thursday"
+      # Transformer should use the already-cleaned title from VenueExtractor
+      assert transformed.title == "Quiz Night at Royal Oak, Twickenham"
+      assert transformed.venue_data.name == "Royal Oak, Twickenham"
       assert transformed.venue_data.metadata.raw_title == "PUB QUIZ – Royal Oak, Twickenham – Every Thursday"
       assert transformed.description == "Join us for trivia & prizes every Thursday!"
     end
