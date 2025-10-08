@@ -11,24 +11,24 @@ defmodule EventasaurusDiscovery.Locations.City.DiscoveryConfig do
   @primary_key false
   embedded_schema do
     embeds_one :schedule, Schedule, primary_key: false, on_replace: :update do
-      field :cron, :string, default: "0 0 * * *"
-      field :timezone, :string, default: "UTC"
-      field :enabled, :boolean, default: true
+      field(:cron, :string, default: "0 0 * * *")
+      field(:timezone, :string, default: "UTC")
+      field(:enabled, :boolean, default: true)
     end
 
     embeds_many :sources, Source, on_replace: :delete do
-      field :name, :string
-      field :enabled, :boolean, default: true
-      field :frequency_hours, :integer, default: 24
-      field :settings, :map, default: %{}
-      field :last_run_at, :utc_datetime
-      field :next_run_at, :utc_datetime
+      field(:name, :string)
+      field(:enabled, :boolean, default: true)
+      field(:frequency_hours, :integer, default: 24)
+      field(:settings, :map, default: %{})
+      field(:last_run_at, :utc_datetime)
+      field(:next_run_at, :utc_datetime)
 
       embeds_one :stats, Stats, primary_key: false, on_replace: :update do
-        field :run_count, :integer, default: 0
-        field :success_count, :integer, default: 0
-        field :error_count, :integer, default: 0
-        field :last_error, :string
+        field(:run_count, :integer, default: 0)
+        field(:success_count, :integer, default: 0)
+        field(:error_count, :integer, default: 0)
+        field(:last_error, :string)
       end
     end
   end
@@ -99,7 +99,16 @@ defmodule EventasaurusDiscovery.Locations.City.DiscoveryConfig do
   @doc """
   Creates a new source configuration.
   """
-  def new_source(name, settings \\ %{}) when name in ["ticketmaster", "bandsintown", "resident-advisor", "karnet", "kino-krakow", "cinema-city", "pubquiz-pl"] do
+  def new_source(name, settings \\ %{})
+      when name in [
+             "ticketmaster",
+             "bandsintown",
+             "resident-advisor",
+             "karnet",
+             "kino-krakow",
+             "cinema-city",
+             "pubquiz-pl"
+           ] do
     %__MODULE__.Source{
       name: name,
       enabled: true,

@@ -24,7 +24,14 @@ defmodule EventasaurusDiscovery.Locations.City do
   @doc false
   def changeset(city, attrs) do
     city
-    |> cast(attrs, [:name, :country_id, :latitude, :longitude, :discovery_enabled, :discovery_config])
+    |> cast(attrs, [
+      :name,
+      :country_id,
+      :latitude,
+      :longitude,
+      :discovery_enabled,
+      :discovery_config
+    ])
     |> validate_required([:name, :country_id])
     |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)

@@ -67,10 +67,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
   def enable_source(city_id, source_name, settings \\ %{}) do
     with {:ok, city} <- get_city(city_id),
          true <- valid_source?(source_name) do
-      config = city.discovery_config || %{
-        "schedule" => %{"cron" => "0 0 * * *", "timezone" => "UTC", "enabled" => true},
-        "sources" => []
-      }
+      config =
+        city.discovery_config ||
+          %{
+            "schedule" => %{"cron" => "0 0 * * *", "timezone" => "UTC", "enabled" => true},
+            "sources" => []
+          }
 
       # Convert to map format if needed
       config_map =
@@ -274,7 +276,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
 
         updated_sources =
           List.update_at(sources, source_index, fn source ->
-            stats = source["stats"] || %{"run_count" => 0, "success_count" => 0, "error_count" => 0}
+            stats =
+              source["stats"] || %{"run_count" => 0, "success_count" => 0, "error_count" => 0}
+
             frequency_hours = source["frequency_hours"] || 24
             next_run = DateTime.add(now, frequency_hours * 3600, :second)
 
@@ -306,10 +310,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
 
         updated_config = Map.put(config_map, "sources", updated_sources)
 
-        result = city
-        |> Ecto.Changeset.change()
-        |> Ecto.Changeset.put_change(:discovery_config, updated_config)
-        |> Repo.update()
+        result =
+          city
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.put_change(:discovery_config, updated_config)
+          |> Repo.update()
 
         # Broadcast update to LiveView subscribers
         case result do
@@ -317,9 +322,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
             Phoenix.PubSub.broadcast(
               Eventasaurus.PubSub,
               "discovery_progress",
-              {:discovery_progress, %{city_id: city_id, status: :stats_updated, payload: updated_city}}
+              {:discovery_progress,
+               %{city_id: city_id, status: :stats_updated, payload: updated_city}}
             )
-          _ -> :ok
+
+          _ ->
+            :ok
         end
 
         result
@@ -388,10 +396,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
     import Ecto.Query
 
     Repo.all(
-      from c in City,
+      from(c in City,
         where: c.discovery_enabled == true,
         preload: :country,
         order_by: c.name
+      )
     )
   end
 
@@ -414,11 +423,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
             %{} = schedule -> Map.get(schedule, "enabled", true)
             _ -> true
           end
+
         is_struct(config) ->
           case Map.get(config, :schedule) do
             %{} = schedule -> Map.get(schedule, :enabled, true)
             _ -> true
           end
+
         true ->
           true
       end
@@ -466,19 +477,22 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
 
     case next_run_at do
       nil ->
-        true  # Never run before
+        # Never run before
+        true
 
       next_run_str when is_binary(next_run_str) ->
         case DateTime.from_iso8601(next_run_str) do
           {:ok, next_run, _} -> DateTime.compare(now, next_run) in [:gt, :eq]
-          _ -> true  # Invalid date, run it
+          # Invalid date, run it
+          _ -> true
         end
 
       %DateTime{} = next_run ->
         DateTime.compare(now, next_run) in [:gt, :eq]
 
       _ ->
-        true  # Unknown format, run it
+        # Unknown format, run it
+        true
     end
   end
 end

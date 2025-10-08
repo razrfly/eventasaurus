@@ -67,7 +67,6 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
   end
 
   defp process_showtime(showtime, source_id, film, cinema_city_film_id, cinema_data) do
-
     Logger.debug("🎫 Processing showtime: #{film["polish_title"]} at #{cinema_data["name"]}")
 
     # Get movie from database

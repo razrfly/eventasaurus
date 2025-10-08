@@ -23,7 +23,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   require Logger
 
   @refresh_interval 5000
-  @country_wide_sources ["pubquiz-pl"]
+  @country_wide_sources ["pubquiz-pl", "question-one"]
   @city_specific_sources %{
     "karnet" => "krakow",
     "kino-krakow" => "krakow",
@@ -423,6 +423,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       "kino-krakow",
       "cinema-city",
       "pubquiz-pl",
+      "question-one",
       "all"
     ]
 
@@ -641,6 +642,19 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   def country_wide_source?(_), do: false
+
+  @doc """
+  Returns the coverage description for a country-wide source.
+  """
+  def source_coverage(source) when is_binary(source) do
+    case source do
+      "pubquiz-pl" -> "Poland"
+      "question-one" -> "UK & Ireland"
+      _ -> "Multiple Countries"
+    end
+  end
+
+  def source_coverage(_), do: "Unknown"
 
   @doc """
   Formats a number with thousand separators.

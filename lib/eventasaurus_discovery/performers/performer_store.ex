@@ -304,8 +304,11 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
       )
 
     case Repo.one(query) do
-      nil -> %{total_events: 0, first_event: nil, latest_event: nil}
-      result -> %{total_events: result.total, first_event: result.first, latest_event: result.latest}
+      nil ->
+        %{total_events: 0, first_event: nil, latest_event: nil}
+
+      result ->
+        %{total_events: result.total, first_event: result.first, latest_event: result.latest}
     end
   end
 end

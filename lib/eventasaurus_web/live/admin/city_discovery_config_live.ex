@@ -41,7 +41,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    cities = Repo.all(from c in City, order_by: c.name, preload: :country)
+    cities = Repo.all(from(c in City, order_by: c.name, preload: :country))
 
     socket =
       socket
@@ -69,7 +69,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
             {:noreply, socket}
 
           {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Failed to enable discovery: #{inspect(reason)}")}
+            {:noreply,
+             put_flash(socket, :error, "Failed to enable discovery: #{inspect(reason)}")}
         end
 
       :error ->
@@ -94,7 +95,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
             {:noreply, socket}
 
           {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Failed to disable discovery: #{inspect(reason)}")}
+            {:noreply,
+             put_flash(socket, :error, "Failed to disable discovery: #{inspect(reason)}")}
         end
 
       :error ->
@@ -124,23 +126,27 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     source = params["source"]
     editing = socket.assigns.editing_source
 
-    socket = if !editing and source != "" and source != socket.assigns.selected_source do
-      # Switching to a new source - load default settings
-      default_settings = get_default_settings(source)
-      socket
-      |> assign(:selected_source, source)
-      |> assign(:source_settings, default_settings)
-    else
-      # Update settings from form (either editing existing source or updating new source settings)
-      updated_settings = Enum.reduce(params, socket.assigns.source_settings, fn
-        {"setting_" <> key, value}, acc ->
-          Map.put(acc, key, parse_setting_value(value))
-        _, acc ->
-          acc
-      end)
+    socket =
+      if !editing and source != "" and source != socket.assigns.selected_source do
+        # Switching to a new source - load default settings
+        default_settings = get_default_settings(source)
 
-      assign(socket, :source_settings, updated_settings)
-    end
+        socket
+        |> assign(:selected_source, source)
+        |> assign(:source_settings, default_settings)
+      else
+        # Update settings from form (either editing existing source or updating new source settings)
+        updated_settings =
+          Enum.reduce(params, socket.assigns.source_settings, fn
+            {"setting_" <> key, value}, acc ->
+              Map.put(acc, key, parse_setting_value(value))
+
+            _, acc ->
+              acc
+          end)
+
+        assign(socket, :source_settings, updated_settings)
+      end
 
     {:noreply, socket}
   end
@@ -153,11 +159,12 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
         settings = socket.assigns.source_settings
         editing = socket.assigns.editing_source
 
-        result = if editing do
-          DiscoveryConfigManager.update_source_settings(city_id, source_name, settings)
-        else
-          DiscoveryConfigManager.enable_source(city_id, source_name, settings)
-        end
+        result =
+          if editing do
+            DiscoveryConfigManager.update_source_settings(city_id, source_name, settings)
+          else
+            DiscoveryConfigManager.enable_source(city_id, source_name, settings)
+          end
 
         case result do
           {:ok, _city} ->
@@ -178,7 +185,9 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
           {:error, reason} ->
             action = if editing, do: "update", else: "add"
-            {:noreply, put_flash(socket, :error, "Failed to #{action} source: #{inspect(reason)}")}
+
+            {:noreply,
+             put_flash(socket, :error, "Failed to #{action} source: #{inspect(reason)}")}
         end
 
       :error ->
