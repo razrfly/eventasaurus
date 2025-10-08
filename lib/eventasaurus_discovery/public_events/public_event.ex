@@ -344,6 +344,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     # Virtual field for primary category (populated in queries when needed)
     field(:primary_category_id, :id, virtual: true)
 
+    # Virtual fields for localized display (populated by PublicEventsEnhanced)
+    field(:display_title, :string, virtual: true)
+    field(:display_description, :string, virtual: true)
+
     belongs_to(:venue, EventasaurusApp.Venues.Venue)
 
     # Keep old relationship for backward compatibility during transition

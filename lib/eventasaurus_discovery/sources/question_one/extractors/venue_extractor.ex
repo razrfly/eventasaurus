@@ -21,6 +21,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Extractors.VenueExtractor do
   """
 
   require Logger
+  alias HtmlEntities
 
   @doc """
   Extract venue data from a parsed HTML document.
@@ -91,18 +92,24 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Extractors.VenueExtractor do
   @doc """
   Clean the raw title by removing common prefixes and formatting.
 
+  IMPORTANT: Decodes HTML entities FIRST, before any regex operations,
+  so that cleaning regexes can properly match decoded characters.
+
   ## Examples
-      iex> clean_title("PUB QUIZ – The Red Lion")
+      iex> clean_title("PUB QUIZ &#8211; The Red Lion")
       "The Red Lion"
 
-      iex> clean_title("PUB QUIZ: The Crown – Every Wednesday")
+      iex> clean_title("PUB QUIZ: The Crown &#8211; Every Wednesday")
       "The Crown"
   """
   def clean_title(raw_title) do
     raw_title
+    # CRITICAL: Decode HTML entities FIRST before any regex operations
+    # This ensures regexes can match actual characters (–) not entity strings (&#8211;)
+    |> HtmlEntities.decode()
     # Remove "PUB QUIZ" prefix with various punctuation
     |> String.replace(~r/^PUB QUIZ[[:punct:]]*/i, "")
-    # Remove leading dashes and whitespace
+    # Remove leading dashes and whitespace (now matches actual – character)
     |> String.replace(~r/^[–\s]+/, "")
     # Remove trailing dashes and anything after
     |> String.replace(~r/\s+[–].*$/i, "")
