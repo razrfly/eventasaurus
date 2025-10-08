@@ -529,13 +529,21 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {format_number(stat.count)}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                 <button
                   phx-click="show_clear_modal"
                   phx-value-target={"city:#{stat.city_id}"}
                   class="text-red-600 hover:text-red-900"
                 >
-                  Clear
+                  Clear All
+                </button>
+                <span class="text-gray-300">|</span>
+                <button
+                  phx-click="show_clear_modal"
+                  phx-value-target={"city-future:#{stat.city_id}"}
+                  class="text-orange-600 hover:text-orange-900"
+                >
+                  Clear Future
                 </button>
               </td>
             </tr>
@@ -563,13 +571,28 @@
           These actions will permanently delete data. Use with caution.
         </p>
 
-        <button
-          phx-click="show_clear_modal"
-          phx-value-target="all"
-          class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Clear All Public Event Data
-        </button>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button
+            phx-click="show_clear_modal"
+            phx-value-target="all"
+            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex-1 sm:flex-initial"
+          >
+            Clear All Public Event Data
+          </button>
+
+          <button
+            phx-click="show_clear_modal"
+            phx-value-target="all-future"
+            class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 flex-1 sm:flex-initial"
+          >
+            Clear Future Events Only
+          </button>
+        </div>
+
+        <div class="mt-3 text-sm text-gray-600">
+          <p><strong>Clear All:</strong> Deletes all public events (historical and future)</p>
+          <p><strong>Clear Future:</strong> Deletes only events that haven't happened yet (preserves historical data)</p>
+        </div>
       </div>
     </div>
   </div>
