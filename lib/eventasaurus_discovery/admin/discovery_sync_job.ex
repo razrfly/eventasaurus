@@ -36,7 +36,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     broadcast_progress(:started, %{source: source, city_id: city_id, attempt: attempt})
 
     # Check if source requires a city_id using SourceRegistry
-    requires_city = SourceRegistry.requires_city_id?(source)
+    # "all" is a special case that always requires a city
+    requires_city = source == "all" || SourceRegistry.requires_city_id?(source)
 
     # Find the city (only required for city-specific sources)
     city =
