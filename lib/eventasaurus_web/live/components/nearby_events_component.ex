@@ -289,30 +289,29 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   end
 
   defp get_event_image_url(event) do
-    # Try to get image from sources
-    cond do
-      # Check sources for image URLs - most have image_url field directly
-      event.sources && length(event.sources) > 0 ->
-        event.sources
-        |> Enum.find_value(fn source ->
-          # Direct image_url field (most common)
-          case source do
-            %{image_url: url} when is_binary(url) and url != "" ->
-              url
+    # Use primary source (sorted by priority and last_seen_at) to get image
+    # This ensures we show the most authoritative/recent image
+    primary_source = get_primary_source(event)
 
-            _ ->
-              # Check metadata for image URLs
-              case source.metadata do
-                %{"image_url" => url} when is_binary(url) and url != "" -> url
-                %{"images" => [%{"url" => url} | _]} when is_binary(url) and url != "" -> url
-                %{"image" => url} when is_binary(url) and url != "" -> url
-                _ -> nil
-              end
-          end
-        end)
-
-      true ->
+    case primary_source do
+      nil ->
         nil
+
+      source ->
+        # Try direct image_url field first (most common)
+        case source do
+          %{image_url: url} when is_binary(url) and url != "" ->
+            url
+
+          _ ->
+            # Check metadata for image URLs
+            case source.metadata do
+              %{"image_url" => url} when is_binary(url) and url != "" -> url
+              %{"images" => [%{"url" => url} | _]} when is_binary(url) and url != "" -> url
+              %{"image" => url} when is_binary(url) and url != "" -> url
+              _ -> nil
+            end
+        end
     end
   end
 end
