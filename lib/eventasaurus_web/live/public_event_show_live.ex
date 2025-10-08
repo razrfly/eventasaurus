@@ -114,7 +114,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event =
       from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
         where: pe.slug == ^slug,
-        preload: [:categories, :performers, :movies, venue: [city_ref: :country], sources: :source]
+        preload: [
+          :categories,
+          :performers,
+          :movies,
+          venue: [city_ref: :country],
+          sources: :source
+        ]
       )
       |> Repo.one()
 
@@ -160,7 +166,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         aggregated_url = get_aggregated_movie_url(movie, city)
 
         # Build breadcrumb items (used for both visual breadcrumbs and JSON-LD)
-        breadcrumb_items = BreadcrumbBuilder.build_event_breadcrumbs(enriched_event, gettext_backend: EventasaurusWeb.Gettext)
+        breadcrumb_items =
+          BreadcrumbBuilder.build_event_breadcrumbs(enriched_event,
+            gettext_backend: EventasaurusWeb.Gettext
+          )
 
         # Generate SEO data (includes JSON-LD structured data with breadcrumbs)
         seo_data = generate_seo_data(enriched_event, breadcrumb_items, socket)
@@ -1570,11 +1579,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
     # Generate breadcrumb structured data using BreadcrumbBuilder items
     # This ensures visual breadcrumbs and JSON-LD breadcrumbs stay in sync
-    breadcrumb_json_ld = BreadcrumbListSchema.from_breadcrumb_builder_items(
-      breadcrumb_items,
-      canonical_url,
-      base_url
-    )
+    breadcrumb_json_ld =
+      BreadcrumbListSchema.from_breadcrumb_builder_items(
+        breadcrumb_items,
+        canonical_url,
+        base_url
+      )
 
     # Generate venue LocalBusiness structured data if venue exists
     venue_json_ld =
@@ -1585,8 +1595,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       end
 
     # Combine all JSON-LD schemas into an array
-    json_ld_schemas = [event_json_ld, breadcrumb_json_ld, venue_json_ld]
-    |> Enum.reject(&is_nil/1)
+    json_ld_schemas =
+      [event_json_ld, breadcrumb_json_ld, venue_json_ld]
+      |> Enum.reject(&is_nil/1)
 
     # Combine multiple JSON-LD schemas
     combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
@@ -1600,10 +1611,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     locale_code = if locale == "pl", do: "pl_PL", else: "en_US"
 
     # Escape values for safe HTML attribute usage
-    escaped_title = event.display_title |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-    escaped_description = description |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-    escaped_image = image_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-    escaped_url = canonical_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+    escaped_title =
+      event.display_title
+      |> to_string()
+      |> Phoenix.HTML.html_escape()
+      |> Phoenix.HTML.safe_to_string()
+
+    escaped_description =
+      description |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    escaped_image =
+      image_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    escaped_url =
+      canonical_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
 
     open_graph_html = """
     <!-- Open Graph meta tags -->
@@ -1669,8 +1690,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp get_placeholder_image_url(event) do
     # Use a placeholder service with the event title
-    event_name = URI.encode(event.display_title)
-    "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{event_name}"
+    name =
+      (event.display_title || event.title || "Event")
+      |> to_string()
+      |> URI.encode()
+
+    "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{name}"
   end
 
   defp truncate_for_description(text, max_length \\ 155) do
