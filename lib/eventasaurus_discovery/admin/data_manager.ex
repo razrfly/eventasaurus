@@ -232,6 +232,135 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
     end
   end
 
+  @doc """
+  Clears all future public events (events starting from now onwards).
+  Preserves historical events that have already occurred.
+  Options:
+    - clear_oban_jobs: boolean - Also clear related Oban jobs (default: false)
+  Returns {:ok, count} with the number of events deleted, or {:error, reason}.
+  """
+  def clear_future_public_events(opts \\ []) do
+    clear_oban_jobs = Keyword.get(opts, :clear_oban_jobs, false)
+    now = DateTime.utc_now()
+
+    Logger.info(
+      "Starting clear of future public event data from #{now} onwards (clear_oban_jobs: #{clear_oban_jobs})"
+    )
+
+    Repo.transaction(fn ->
+      # Get all future event IDs
+      event_ids =
+        from(pe in PublicEvent,
+          where: pe.starts_at >= ^now,
+          select: pe.id
+        )
+        |> Repo.all()
+
+      if Enum.empty?(event_ids) do
+        0
+      else
+        # Delete related records
+        from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
+        |> Repo.delete_all()
+
+        from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
+        |> Repo.delete_all()
+
+        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
+        |> Repo.delete_all()
+
+        # Delete events
+        {deleted_count, _} =
+          from(pe in PublicEvent, where: pe.id in ^event_ids)
+          |> Repo.delete_all()
+
+        # Clean up orphaned containers
+        container_count = clean_orphaned_containers()
+
+        # Optionally clear related Oban jobs
+        oban_count =
+          if clear_oban_jobs do
+            clear_discovery_oban_jobs()
+          else
+            0
+          end
+
+        Logger.info(
+          "Successfully cleared #{deleted_count} future public events#{if container_count > 0, do: ", #{container_count} containers", else: ""}#{if oban_count > 0, do: ", and #{oban_count} Oban jobs", else: ""}"
+        )
+
+        deleted_count
+      end
+    end)
+    |> case do
+      {:ok, count} ->
+        {:ok, count}
+
+      {:error, reason} ->
+        Logger.error("Failed to clear future public events: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Clears future public events by city (preserves historical events).
+  """
+  def clear_future_by_city(city_id) when is_integer(city_id) do
+    now = DateTime.utc_now()
+
+    Logger.info(
+      "Starting clear of future public events for city_id: #{city_id} from #{now} onwards"
+    )
+
+    Repo.transaction(fn ->
+      # Get all future event IDs for this city
+      event_ids =
+        from(pe in PublicEvent,
+          join: v in EventasaurusApp.Venues.Venue,
+          on: v.id == pe.venue_id,
+          where: v.city_id == ^city_id and pe.starts_at >= ^now,
+          select: pe.id
+        )
+        |> Repo.all()
+
+      if Enum.empty?(event_ids) do
+        0
+      else
+        # Delete related records
+        from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
+        |> Repo.delete_all()
+
+        from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
+        |> Repo.delete_all()
+
+        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
+        |> Repo.delete_all()
+
+        # Delete events
+        {deleted_count, _} =
+          from(pe in PublicEvent, where: pe.id in ^event_ids)
+          |> Repo.delete_all()
+
+        # Clean up orphaned containers
+        container_count = clean_orphaned_containers()
+
+        Logger.info(
+          "Successfully cleared #{deleted_count} future events#{if container_count > 0, do: " and #{container_count} containers", else: ""} for city_id: #{city_id}"
+        )
+
+        deleted_count
+      end
+    end)
+    |> case do
+      {:ok, count} ->
+        {:ok, count}
+
+      {:error, reason} ->
+        Logger.error("Failed to clear future events by city: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
   # Private helper functions
 
   defp clear_discovery_oban_jobs do
