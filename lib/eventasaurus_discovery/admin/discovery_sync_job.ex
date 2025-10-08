@@ -48,7 +48,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
       end
 
     # Check if city is required but not found
-    if !city && requires_city && source != "all" do
+    if !city && requires_city do
       error_msg = "City not found (id: #{city_id})"
       Logger.error("❌ #{error_msg} for #{source} sync")
       broadcast_progress(:error, %{message: error_msg, source: source, city_id: city_id})
