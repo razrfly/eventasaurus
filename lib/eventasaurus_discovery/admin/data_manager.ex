@@ -131,6 +131,74 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
   end
 
   @doc """
+  Clears future public events by source (preserves historical events).
+  """
+  def clear_future_by_source(source_name) when is_binary(source_name) do
+    now = DateTime.utc_now()
+
+    Logger.info(
+      "Starting clear of future public events from source: #{source_name} from #{now} onwards"
+    )
+
+    Repo.transaction(fn ->
+      # First, get the source ID from the source name
+      source = Repo.get_by(Source, name: source_name)
+
+      if is_nil(source) do
+        Logger.warning("Source not found: #{source_name}")
+        0
+      else
+        # Get all future event IDs for this source
+        event_ids =
+          from(pes in PublicEventSource,
+            join: pe in PublicEvent,
+            on: pe.id == pes.event_id,
+            where: pes.source_id == ^source.id and pe.starts_at >= ^now,
+            select: pes.event_id
+          )
+          |> Repo.all()
+          |> Enum.uniq()
+
+        if Enum.empty?(event_ids) do
+          0
+        else
+          # Delete related records
+          from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
+          |> Repo.delete_all()
+
+          from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
+          |> Repo.delete_all()
+
+          from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
+          |> Repo.delete_all()
+
+          # Delete events
+          {deleted_count, _} =
+            from(pe in PublicEvent, where: pe.id in ^event_ids)
+            |> Repo.delete_all()
+
+          # Clean up orphaned containers from this source
+          container_count = clean_orphaned_containers_by_source(source.id)
+
+          Logger.info(
+            "Successfully cleared #{deleted_count} future events#{if container_count > 0, do: " and #{container_count} containers", else: ""} from source: #{source_name}"
+          )
+
+          deleted_count
+        end
+      end
+    end)
+    |> case do
+      {:ok, count} ->
+        {:ok, count}
+
+      {:error, reason} ->
+        Logger.error("Failed to clear future events by source: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Clears public events by city.
   """
   def clear_by_city(city_id) when is_integer(city_id) do
