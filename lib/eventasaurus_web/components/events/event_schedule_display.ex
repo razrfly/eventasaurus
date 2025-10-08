@@ -78,7 +78,7 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
     </div>
     <p class="text-gray-900">
       <%= if @selected_occurrence do %>
-        <%= format_occurrence_datetime(@selected_occurrence) %>
+        <%= format_occurrence_datetime(@selected_occurrence, @event.venue) %>
       <% else %>
         <%= format_local_datetime(@event.starts_at, @event.venue, :full) %>
         <%= if @event.ends_at do %>
@@ -194,11 +194,11 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
   defp parse_formats_from_label(_), do: []
 
   # Format helpers
-  defp format_occurrence_datetime(%{datetime: datetime}) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
+  defp format_occurrence_datetime(%{datetime: datetime}, venue) do
+    format_local_datetime(datetime, venue, :full)
   end
 
-  defp format_occurrence_datetime(_), do: ""
+  defp format_occurrence_datetime(_occurrence, _venue), do: ""
 
   defp format_date_medium(date) do
     Calendar.strftime(date, "%B %d, %Y")
