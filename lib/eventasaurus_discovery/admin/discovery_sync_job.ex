@@ -17,20 +17,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Sources.SourceRegistry
   require Logger
-
-  @sources %{
-    "ticketmaster" => EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob,
-    "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
-    "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
-    "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
-    "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
-    "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
-    "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob
-  }
-
-  # Sources that don't require a city (country-wide)
-  @country_wide_sources ["pubquiz-pl"]
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args, attempt: attempt}) do
@@ -47,26 +35,33 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     # Broadcast start
     broadcast_progress(:started, %{source: source, city_id: city_id, attempt: attempt})
 
+    # Check if source requires a city_id using SourceRegistry
+    requires_city = SourceRegistry.requires_city_id?(source)
+
     # Find the city (only required for city-specific sources)
     city =
-      if source in @country_wide_sources do
-        nil
-      else
+      if requires_city do
         Repo.get(City, city_id) |> Repo.preload(:country)
+      else
+        nil
       end
 
     # Check if city is required but not found
-    if !city && source not in @country_wide_sources && source != "all" do
+    if !city && requires_city && source != "all" do
       error_msg = "City not found (id: #{city_id})"
       Logger.error("❌ #{error_msg} for #{source} sync")
       broadcast_progress(:error, %{message: error_msg, source: source, city_id: city_id})
       {:error, error_msg}
     else
       city_info =
-        if source in @country_wide_sources do
-          "Country: Poland (all cities)"
-        else
+        if requires_city do
           "City: #{city.name}, #{city.country.name}"
+        else
+          case SourceRegistry.get_scope(source) do
+            {:ok, :country} -> "Country-wide source"
+            {:ok, :regional} -> "Regional source"
+            _ -> "Source without city"
+          end
         end
 
       Logger.info("""
@@ -80,59 +75,70 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
         "all" ->
           sync_all_sources(city, limit, args)
 
-        source when is_map_key(@sources, source) ->
-          # Build job arguments based on source (single source path only)
-          options = build_source_options(source, args)
-          sync_single_source(source, city, limit, options)
+        source ->
+          # Check if source is registered in SourceRegistry
+          case SourceRegistry.get_sync_job(source) do
+            {:ok, _job_module} ->
+              # Build job arguments based on source (single source path only)
+              options = build_source_options(source, args)
+              sync_single_source(source, city, limit, options)
 
-        _ ->
-          broadcast_progress(:error, %{message: "Unknown source: #{source}"})
-          {:error, "Unknown source: #{source}"}
+            {:error, :not_found} ->
+              broadcast_progress(:error, %{message: "Unknown source: #{source}"})
+              {:error, "Unknown source: #{source}"}
+          end
       end
     end
   end
 
   defp sync_single_source(source_name, city, limit, options) do
-    job_module = @sources[source_name]
+    # Get job module from registry
+    case SourceRegistry.get_sync_job(source_name) do
+      {:error, :not_found} ->
+        {:error, "Unknown source: #{source_name}"}
 
-    # Build job args based on source type
-    job_args =
-      if source_name in @country_wide_sources do
-        %{
-          "limit" => limit
-        }
-      else
-        %{
-          "city_id" => city.id,
-          "limit" => limit,
-          "options" => options
-        }
-      end
+      {:ok, job_module} ->
+        requires_city = SourceRegistry.requires_city_id?(source_name)
 
-    # Queue the actual sync job
-    case job_module.new(job_args) |> Oban.insert() do
-      {:ok, job} ->
-        city_name =
-          if source_name in @country_wide_sources, do: "Poland (all cities)", else: city.name
+        # Build job args based on source type
+        job_args =
+          if requires_city do
+            %{
+              "city_id" => city.id,
+              "limit" => limit,
+              "options" => options
+            }
+          else
+            %{
+              "limit" => limit
+            }
+          end
 
-        broadcast_progress(:completed, %{
-          message: "Sync job queued for #{source_name}",
-          job_id: job.id,
-          source: source_name,
-          city: city_name
-        })
+        # Queue the actual sync job
+        case job_module.new(job_args) |> Oban.insert() do
+          {:ok, job} ->
+            city_name =
+              if requires_city, do: city.name, else: "N/A (#{source_name})"
 
-        {:ok, %{job_id: job.id, source: source_name}}
+            broadcast_progress(:completed, %{
+              message: "Sync job queued for #{source_name}",
+              job_id: job.id,
+              source: source_name,
+              city: city_name
+            })
 
-      {:error, reason} ->
-        Logger.error("❌ Failed to queue sync job: #{inspect(reason)}")
+            {:ok, %{job_id: job.id, source: source_name}}
 
-        broadcast_progress(:error, %{
-          message: "Failed to queue sync: #{inspect(reason)}",
-          source: source_name
-        })
+          {:error, reason} ->
+            Logger.error("❌ Failed to queue sync job: #{inspect(reason)}")
 
-        {:error, reason}
+            broadcast_progress(:error, %{
+              message: "Failed to queue sync: #{inspect(reason)}",
+              source: source_name
+            })
+
+            {:error, reason}
+        end
     end
   end
 
@@ -143,23 +149,34 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     Total limit: #{limit} events
     """)
 
+    # Get all sources from registry
+    all_sources = SourceRegistry.sources_map()
+
     # Divide limit among sources
     source_limit =
       cond do
         limit <= 0 -> 0
-        true -> max(1, div(limit, map_size(@sources)))
+        true -> max(1, div(limit, map_size(all_sources)))
       end
 
     # Queue jobs for each source
     results =
-      Enum.map(@sources, fn {source_name, job_module} ->
+      Enum.map(all_sources, fn {source_name, job_module} ->
         per_source_options = build_source_options(source_name, args)
+        requires_city = SourceRegistry.requires_city_id?(source_name)
 
-        job_args = %{
-          "city_id" => city.id,
-          "limit" => source_limit,
-          "options" => per_source_options
-        }
+        job_args =
+          if requires_city do
+            %{
+              "city_id" => city.id,
+              "limit" => source_limit,
+              "options" => per_source_options
+            }
+          else
+            %{
+              "limit" => source_limit
+            }
+          end
 
         case job_module.new(job_args) |> Oban.insert() do
           {:ok, job} ->

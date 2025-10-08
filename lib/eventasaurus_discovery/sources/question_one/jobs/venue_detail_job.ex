@@ -87,13 +87,13 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
   end
 
   defp log_results(results) do
-    created = Enum.count(results, fn r -> r.action == :created end)
-    updated = Enum.count(results, fn r -> r.action == :updated end)
+    # Results are PublicEvent structs, not maps with :action field
+    # We can't distinguish between created/updated here
+    count = length(results)
 
     Logger.info("""
     📊 Processing results:
-    - Created: #{created}
-    - Updated: #{updated}
+    - Events processed: #{count}
     """)
   end
 end
