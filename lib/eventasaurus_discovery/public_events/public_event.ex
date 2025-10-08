@@ -1,6 +1,8 @@
 defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
   use EctoAutoslugField.Slug, to: :slug
   require Logger
+  import Ecto.Query
+  alias EventasaurusApp.Repo
 
   def get_sources(_changeset, _opts) do
     # Use title as primary source for slug generation
@@ -18,14 +20,270 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
       ["" | _] ->
         # Fallback slug if title is empty/invalid after cleaning
         # This prevents slug generation errors when UTF-8 cleaning results in empty string
-        "event-#{DateTime.utc_now() |> DateTime.to_unix()}-#{random_suffix()}"
+        "event-#{DateTime.utc_now() |> DateTime.to_unix()}"
 
       _ ->
         # Get the default slug from cleaned sources
-        slug = super(safe_sources, changeset)
+        base_slug = super(safe_sources, changeset)
 
-        # Add some randomness to ensure uniqueness
-        "#{slug}-#{random_suffix()}"
+        # Truncate title to 40 characters at word boundary
+        truncated_title = truncate_title(base_slug, 40)
+
+        # Build deterministic suffix from venue + date (conditionally includes venue)
+        suffix = build_deterministic_suffix(changeset, truncated_title)
+
+        # Combine title and suffix
+        candidate_slug = "#{truncated_title}-#{suffix}"
+
+        # Ensure uniqueness by checking for collisions
+        ensure_unique_slug(candidate_slug, changeset)
+    end
+  end
+
+  # Truncate slug to max_length at word boundary (hyphen)
+  defp truncate_title(title, max_length) do
+    if String.length(title) <= max_length do
+      title
+    else
+      title
+      |> String.slice(0, max_length)
+      |> String.split("-")
+      |> Enum.drop(-1)  # Drop partial word at end
+      |> Enum.join("-")
+    end
+  end
+
+  # Build deterministic suffix from venue slug + date
+  # Only includes venue slug if not already present in title
+  defp build_deterministic_suffix(changeset, title_slug) do
+    venue_id = Ecto.Changeset.get_field(changeset, :venue_id)
+    starts_at = Ecto.Changeset.get_field(changeset, :starts_at)
+
+    # Get venue slug (truncated and cleaned)
+    venue_slug = get_venue_slug(venue_id)
+
+    # Format date as yymmdd
+    date_str = format_date(starts_at)
+
+    # Only append venue if not already in title (prevents duplication)
+    if should_append_venue_slug?(title_slug, venue_slug) do
+      "#{venue_slug}-#{date_str}"
+    else
+      date_str
+    end
+  end
+
+  # Check if venue slug should be appended to avoid duplication
+  # Normalizes both strings and checks for containment
+  defp should_append_venue_slug?(title_slug, venue_slug) do
+    # Normalize: remove all non-alphanumeric characters
+    title_normalized = title_slug |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "")
+    venue_normalized = venue_slug |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "")
+
+    # Don't append venue if title already contains it
+    not String.contains?(title_normalized, venue_normalized)
+  end
+
+  # Get venue slug from venue_id and clean it
+  defp get_venue_slug(nil), do: "online"
+
+  defp get_venue_slug(venue_id) do
+    venue =
+      EventasaurusApp.Venues.Venue
+      |> Repo.get(venue_id)
+      |> Repo.preload([city_ref: :country])
+
+    case venue do
+      nil ->
+        "venue"
+
+      %{slug: slug, city_ref: %{slug: city_slug}} when is_binary(slug) ->
+        clean_venue_slug(slug, city_slug, 25)
+
+      %{slug: slug} when is_binary(slug) ->
+        clean_venue_slug(slug, nil, 25)
+
+      _ ->
+        "venue"
+    end
+  end
+
+  # Clean venue slug by removing city name and trailing numbers
+  defp clean_venue_slug(slug, city_slug, max_length) do
+    slug
+    # Remove city name if present (e.g., "krakow-bonarka-1-649" → "bonarka-1-649")
+    |> remove_city_from_slug(city_slug)
+    # Remove trailing numbers (e.g., "bonarka-1-649" → "bonarka")
+    |> remove_trailing_numbers()
+    # Remove trailing hyphens
+    |> String.trim_trailing("-")
+    # Truncate to max_length at word boundary
+    |> truncate_at_word_boundary(max_length)
+  end
+
+  # Remove city slug from venue slug if present
+  defp remove_city_from_slug(venue_slug, nil), do: venue_slug
+
+  defp remove_city_from_slug(venue_slug, city_slug) when is_binary(city_slug) do
+    # Try to remove city at beginning: "krakow-bonarka" → "bonarka"
+    cleaned =
+      venue_slug
+      |> String.replace_prefix("#{city_slug}-", "")
+
+    # If nothing changed, try removing city anywhere in the slug
+    if cleaned == venue_slug do
+      venue_slug
+      |> String.split("-")
+      |> Enum.reject(&(&1 == city_slug))
+      |> Enum.join("-")
+    else
+      cleaned
+    end
+  end
+
+  # Remove trailing numeric segments (e.g., "bonarka-1-649" → "bonarka")
+  defp remove_trailing_numbers(slug) do
+    slug
+    |> String.split("-")
+    |> Enum.reverse()
+    |> Enum.drop_while(&String.match?(&1, ~r/^[0-9]+$/))
+    |> Enum.reverse()
+    |> Enum.join("-")
+  end
+
+  # Truncate to max_length at word boundary (hyphen)
+  defp truncate_at_word_boundary(slug, max_length) do
+    if String.length(slug) <= max_length do
+      slug
+    else
+      # Take complete words only
+      slug
+      |> String.split("-")
+      |> Enum.reduce_while([], fn word, acc ->
+        candidate = Enum.join(acc ++ [word], "-")
+
+        if String.length(candidate) <= max_length do
+          {:cont, acc ++ [word]}
+        else
+          {:halt, acc}
+        end
+      end)
+      |> Enum.join("-")
+    end
+  end
+
+  # Format date as yymmdd
+  defp format_date(nil), do: "nodate"
+
+  defp format_date(datetime) do
+    Calendar.strftime(datetime, "%y%m%d")
+  end
+
+  # Ensure slug is unique using semantic disambiguation
+  defp ensure_unique_slug(candidate_slug, changeset) do
+    existing_id = Ecto.Changeset.get_field(changeset, :id)
+
+    if slug_exists?(candidate_slug, existing_id) do
+      # Try semantic disambiguation first
+      resolve_collision_semantically(candidate_slug, changeset, existing_id)
+    else
+      candidate_slug
+    end
+  end
+
+  # Resolve collisions using semantic information (city, country) before falling back to numbers
+  defp resolve_collision_semantically(base_slug, changeset, existing_id) do
+    venue_id = Ecto.Changeset.get_field(changeset, :venue_id)
+
+    # Get city and country info
+    {city_slug, country_code} = get_location_info(venue_id)
+
+    # Try adding city name
+    with_city = try_slug_with_suffix(base_slug, city_slug, existing_id)
+
+    cond do
+      with_city != nil ->
+        with_city
+
+      true ->
+        # Try adding country code
+        with_country = try_slug_with_suffix(base_slug, country_code, existing_id)
+
+        cond do
+          with_country != nil ->
+            with_country
+
+          true ->
+            # Try both city and country
+            with_both =
+              try_slug_with_suffix(base_slug, "#{city_slug}-#{country_code}", existing_id)
+
+            cond do
+              with_both != nil ->
+                with_both
+
+              true ->
+                # Fall back to numeric increment
+                find_next_available_slug(base_slug, existing_id, 2)
+            end
+        end
+    end
+  end
+
+  # Get city slug and country code for semantic disambiguation
+  defp get_location_info(nil), do: {nil, nil}
+
+  defp get_location_info(venue_id) do
+    case Repo.get(EventasaurusApp.Venues.Venue, venue_id, preload: [city_ref: :country]) do
+      %{city_ref: %{slug: city_slug, country: %{code: country_code}}} ->
+        {city_slug, String.downcase(country_code)}
+
+      %{city_ref: %{slug: city_slug}} ->
+        {city_slug, nil}
+
+      _ ->
+        {nil, nil}
+    end
+  end
+
+  # Try a slug with a suffix, return it if unique, nil otherwise
+  # Guard against nil or empty suffixes to prevent double hyphens
+  defp try_slug_with_suffix(_base_slug, suffix, _existing_id)
+       when suffix in [nil, ""], do: nil
+
+  defp try_slug_with_suffix(base_slug, suffix, existing_id) do
+    candidate = "#{base_slug}-#{suffix}"
+
+    if slug_exists?(candidate, existing_id) do
+      nil
+    else
+      candidate
+    end
+  end
+
+  # Check if slug already exists (excluding current record if updating)
+  defp slug_exists?(slug, nil) do
+    query = from(e in EventasaurusDiscovery.PublicEvents.PublicEvent, where: e.slug == ^slug)
+    Repo.exists?(query)
+  end
+
+  defp slug_exists?(slug, existing_id) do
+    query =
+      from(e in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        where: e.slug == ^slug and e.id != ^existing_id
+      )
+
+    Repo.exists?(query)
+  end
+
+  # Recursively find next available slug by incrementing counter (last resort)
+  defp find_next_available_slug(base_slug, existing_id, counter) do
+    candidate = "#{base_slug}-#{counter}"
+
+    if slug_exists?(candidate, existing_id) do
+      find_next_available_slug(base_slug, existing_id, counter + 1)
+    else
+      candidate
     end
   end
 
@@ -63,10 +321,6 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
     error ->
       Logger.error("Error in ensure_safe_string: #{inspect(error)}")
       ""
-  end
-
-  defp random_suffix do
-    :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
   end
 end
 
