@@ -21,7 +21,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
   require Logger
 
-  alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.Event
   alias EventasaurusDiscovery.Sources.BaseDedupHandler
 
@@ -34,7 +33,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
   Uses fuzzy matching on artist name, date, and venue/GPS location.
 
-  Returns {:duplicate, existing_event} or {:unique, nil}
+  Returns {:duplicate, existing_event} or {:unique, event_data}
   """
   def check_duplicate(event_data, source) do
     # PHASE 1: Check if THIS source already imported this event (same-source dedup)
@@ -71,7 +70,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
     case higher_priority_matches do
       [] ->
-        {:unique, nil}
+        {:unique, event_data}
 
       [match | _] ->
         confidence = calculate_match_confidence(event_data, match.event)
@@ -80,7 +79,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
           BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
           {:duplicate, match.event}
         else
-          {:unique, nil}
+          {:unique, event_data}
         end
     end
   end
@@ -117,24 +116,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
          ), do: [0.15 | scores], else: scores
 
     Enum.sum(scores)
-  end
-
-  defp handle_duplicate(bandsintown_data, existing) do
-    # Compare priority scores
-    # Ticketmaster (90) > Bandsintown (80) > Karnet (60)
-
-    # For now, skip if duplicate exists
-    # Future: enrich lower-priority events with Bandsintown performer data
-    %{
-      id: existing.id,
-      action: :skip,
-      reason: "Event already exists from another source",
-      bandsintown_metadata: %{
-        "bandsintown_url" => bandsintown_data[:source_url],
-        "artist_name" => bandsintown_data[:title],
-        "performer_data" => bandsintown_data[:performer]
-      }
-    }
   end
 
   defp normalize_artist_name(title) do
@@ -180,46 +161,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
         d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
         Date.compare(d1, d2) == :eq
     end
-  end
-
-  defp enrich_with_partial_matches(event_data) do
-    # For unique events, try to enrich with performer or venue data
-
-    enriched = event_data
-
-    # Bandsintown already provides good performer data
-    enriched =
-      if event_data[:performer] do
-        Map.put(enriched, :performer_enriched, true)
-      else
-        enriched
-      end
-
-    # Ensure GPS coordinates are present (Bandsintown usually has them)
-    enriched =
-      if venue_data = event_data[:venue_data] do
-        enrich_venue_data(enriched, venue_data)
-      else
-        enriched
-      end
-
-    enriched
-  end
-
-  defp enrich_venue_data(event_data, venue_data) do
-    # Bandsintown provides international venue data
-    # Ensure all standard fields are present
-    venue_data =
-      Map.merge(
-        %{
-          timezone: "UTC",
-          # Will be geocoded if coordinates missing
-          needs_geocoding: is_nil(venue_data[:latitude]) || is_nil(venue_data[:longitude])
-        },
-        venue_data
-      )
-
-    Map.put(event_data, :venue_data, venue_data)
   end
 
   @doc """

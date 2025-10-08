@@ -105,23 +105,24 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
       # Apply domain compatibility filtering
       higher_priority_matches = BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
 
-      case higher_priority_matches do
-        [] ->
+      event_data_with_coords =
+        event_data
+        |> put_in([:venue_data, :latitude], final_lat)
+        |> put_in([:venue_data, :longitude], final_lng)
+
+      case Enum.find_value(higher_priority_matches, fn match ->
+             confidence = calculate_match_confidence(event_data_with_coords, match.event)
+
+             if BaseDedupHandler.should_defer_to_match?(match, source, confidence) do
+               {match, confidence}
+             end
+           end) do
+        nil ->
           {:unique, event_data}
 
-        [match | _] ->
-          event_data_with_coords = event_data
-            |> put_in([:venue_data, :latitude], final_lat)
-            |> put_in([:venue_data, :longitude], final_lng)
-
-          confidence = calculate_match_confidence(event_data_with_coords, match.event)
-
-          if BaseDedupHandler.should_defer_to_match?(match, source, confidence) do
-            BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
-            {:duplicate, match.event}
-          else
-            {:unique, event_data}
-          end
+        {match, confidence} ->
+          BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
+          {:duplicate, match.event}
       end
     end
   end
