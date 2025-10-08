@@ -40,12 +40,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       }
   """
   def get_source_stats(city_id, source_name) do
-    worker =
-      case Map.get(@source_to_worker, source_name) do
-        nil -> nil
-        "Elixir." <> _ = w -> w
-        w when is_binary(w) -> "Elixir." <> w
-      end
+    worker = Map.get(@source_to_worker, source_name)
 
     if worker do
       # Query for aggregate stats
@@ -98,13 +93,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     worker_to_source =
       source_names
       |> Enum.map(fn source_name ->
-        worker =
-          case Map.get(@source_to_worker, source_name) do
-            nil -> nil
-            "Elixir." <> _ = w -> w
-            w when is_binary(w) -> "Elixir." <> w
-          end
-
+        worker = Map.get(@source_to_worker, source_name)
         {worker, source_name}
       end)
       |> Enum.reject(fn {worker, _} -> is_nil(worker) end)
