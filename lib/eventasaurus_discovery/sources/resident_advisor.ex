@@ -128,20 +128,28 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor do
   Process an event through deduplication.
 
   Checks if event exists from higher-priority sources (Ticketmaster, Bandsintown).
+  Two-phase deduplication strategy:
+  - Phase 1: Check if THIS source already imported it (same-source dedup)
+  - Phase 2: Check if higher-priority source imported it (cross-source fuzzy match)
+
   Validates event quality before processing.
   Detects umbrella events and creates containers instead of regular events.
 
-  Returns:
+  ## Parameters
+  - `event_data` - Event data with external_id, title, starts_at, venue_data
+  - `source_id` - ID of the Resident Advisor source
+
+  ## Returns
   - `{:unique, event_data}` - Event is unique, proceed with import
-  - `{:duplicate, existing}` - Event exists from higher-priority source
+  - `{:duplicate, existing}` - Event already exists (same source or higher priority)
   - `{:enriched, event_data}` - Event enriched with additional data
   - `{:container, container}` - Umbrella event created as container
   - `{:error, reason}` - Event validation failed
   """
-  def deduplicate_event(event_data) do
+  def deduplicate_event(event_data, source) do
     case DedupHandler.validate_event_quality(event_data) do
       {:ok, validated} ->
-        DedupHandler.check_duplicate(validated)
+        DedupHandler.check_duplicate(validated, source)
 
       {:container, container} ->
         # Umbrella event was created as container, don't import as regular event
@@ -181,6 +189,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor do
               website_url: "https://ra.co",
               is_active: Source.enabled?(),
               priority: Source.priority(),
+              domains: ["music", "electronic"],
               metadata: Source.config()
             })
           )
@@ -188,13 +197,14 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor do
         %{source_id: source.id}
 
       source ->
-        # Update metadata if changed
-        if source.metadata != Source.config() do
+        # Update metadata and domains if changed
+        if source.metadata != Source.config() or source.domains != ["music", "electronic"] do
           {:ok, updated} =
             Repo.update(
               SourceSchema.changeset(source, %{
                 metadata: Source.config(),
-                priority: Source.priority()
+                priority: Source.priority(),
+                domains: ["music", "electronic"]
               })
             )
 
