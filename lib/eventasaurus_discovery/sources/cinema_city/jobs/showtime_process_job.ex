@@ -107,8 +107,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
         # Get source
         source = Repo.get!(Source, source_id)
 
-        # Check for duplicates before processing
-        case check_deduplication(transformed) do
+        # Check for duplicates before processing (pass source struct)
+        case check_deduplication(transformed, source) do
           {:ok, :unique} ->
             Logger.debug("✅ Processing unique showtime: #{transformed[:title]}")
             process_event(transformed, source)
@@ -129,11 +129,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     end
   end
 
-  defp check_deduplication(event_data) do
+  defp check_deduplication(event_data, source) do
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case CinemaCity.deduplicate_event(event_with_atom_keys) do
+    case CinemaCity.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 

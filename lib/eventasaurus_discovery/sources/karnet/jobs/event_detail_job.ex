@@ -193,8 +193,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Transform data to match processor expectations
     processor_data = transform_for_processor(event_data)
 
-    # Check for duplicates from higher-priority sources
-    case check_deduplication(processor_data) do
+    # Check for duplicates from higher-priority sources (pass source struct)
+    case check_deduplication(processor_data, source) do
       {:ok, :unique} ->
         # Process through unified pipeline
         Processor.process_single_event(processor_data, source)
@@ -216,11 +216,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     end
   end
 
-  defp check_deduplication(event_data) do
+  defp check_deduplication(event_data, source) do
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case Karnet.deduplicate_event(event_with_atom_keys) do
+    case Karnet.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 

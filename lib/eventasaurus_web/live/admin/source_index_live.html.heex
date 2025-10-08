@@ -1,0 +1,137 @@
+<div class="container mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">Source Management</h1>
+    <.link
+      navigate={~p"/admin/sources/new"}
+      class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      New Source
+    </.link>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="mb-6 flex gap-4">
+    <form phx-submit="search" phx-change="search" class="flex-1">
+      <input
+        type="text"
+        name="search"
+        value={@search_query}
+        placeholder="Search by name or slug..."
+        class="w-full px-4 py-2 border rounded"
+      />
+    </form>
+
+    <button
+      phx-click="toggle_inactive"
+      class={"px-4 py-2 rounded border " <> if(@show_inactive, do: "bg-gray-200", else: "bg-white")}
+    >
+      <%= if @show_inactive, do: "Hide", else: "Show" %> Inactive
+    </button>
+  </div>
+
+  <!-- Sources Table -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domains</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <%= for source <- @sources do %>
+          <tr class={unless source.is_active, do: "opacity-50 bg-gray-50"}>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-medium text-gray-900"><%= source.name %></div>
+              <%= if source.website_url do %>
+                <div class="text-xs text-gray-500">
+                  <a href={source.website_url} target="_blank" class="hover:text-blue-600">
+                    <%= source.website_url %>
+                  </a>
+                </div>
+              <% end %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-500"><%= source.slug %></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class={
+                "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
+                cond do
+                  source.priority >= 90 -> "bg-purple-100 text-purple-800"
+                  source.priority >= 70 -> "bg-blue-100 text-blue-800"
+                  source.priority >= 50 -> "bg-green-100 text-green-800"
+                  true -> "bg-gray-100 text-gray-800"
+                end
+              }>
+                <%= source.priority %>
+              </span>
+            </td>
+            <td class="px-6 py-4">
+              <div class="flex flex-wrap gap-1">
+                <%= for domain <- source.domains || ["general"] do %>
+                  <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
+                    <%= domain %>
+                  </span>
+                <% end %>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class={
+                "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
+                if source.is_active,
+                  do: "bg-green-100 text-green-800",
+                  else: "bg-red-100 text-red-800"
+              }>
+                <%= if source.is_active, do: "Active", else: "Inactive" %>
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div class="flex gap-2">
+                <.link
+                  navigate={~p"/admin/sources/#{source.id}/edit"}
+                  class="text-blue-600 hover:text-blue-900"
+                >
+                  Edit
+                </.link>
+                <button
+                  phx-click="toggle_active"
+                  phx-value-id={source.id}
+                  class="text-indigo-600 hover:text-indigo-900"
+                  data-confirm="Are you sure?"
+                >
+                  <%= if source.is_active, do: "Deactivate", else: "Activate" %>
+                </button>
+                <button
+                  phx-click="delete"
+                  phx-value-id={source.id}
+                  class="text-red-600 hover:text-red-900"
+                  data-confirm="Are you sure you want to delete this source? This action cannot be undone."
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+
+    <%= if Enum.empty?(@sources) do %>
+      <div class="text-center py-12 text-gray-500">
+        <p class="text-lg">No sources found</p>
+        <p class="text-sm mt-2">
+          <%= if @search_query != "" do %>
+            Try adjusting your search query
+          <% else %>
+            Create your first source to get started
+          <% end %>
+        </p>
+      </div>
+    <% end %>
+  </div>
+</div>

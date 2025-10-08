@@ -140,8 +140,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
 
     # Only process if we have dates
     if event_map.starts_at do
-      # Check for duplicates before processing
-      case check_deduplication(event_map) do
+      # Check for duplicates before processing (pass source struct)
+      case check_deduplication(event_map, source) do
         {:ok, :unique} ->
           Logger.info("✅ Processing unique recurring event: #{event_map.title}")
           Processor.process_single_event(event_map, source)
@@ -162,11 +162,11 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
     end
   end
 
-  defp check_deduplication(event_data) do
+  defp check_deduplication(event_data, source) do
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case Pubquiz.deduplicate_event(event_with_atom_keys) do
+    case Pubquiz.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 

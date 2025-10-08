@@ -29,18 +29,23 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity do
   @doc """
   Process a Cinema City event through deduplication.
 
-  Checks if event exists from any source (including Cinema City itself).
-  Validates event quality before processing.
+  Two-phase deduplication strategy:
+  - Phase 1: Check if THIS source already imported it (same-source dedup)
+  - Phase 2: Check if higher-priority source imported it (cross-source fuzzy match)
 
-  Returns:
+  ## Parameters
+  - `event_data` - Event data with external_id, title, starts_at, venue_data
+  - `source` - The Source struct (with priority and domains)
+
+  ## Returns
   - `{:unique, event_data}` - Event is unique, proceed with import
-  - `{:duplicate, existing}` - Event already exists (same external_id or fuzzy match)
+  - `{:duplicate, existing}` - Event already exists (same source or higher priority)
   - `{:error, reason}` - Event validation failed
   """
-  def deduplicate_event(event_data) do
+  def deduplicate_event(event_data, source) do
     case DedupHandler.validate_event_quality(event_data) do
       {:ok, validated} ->
-        DedupHandler.check_duplicate(validated)
+        DedupHandler.check_duplicate(validated, source)
 
       {:error, reason} ->
         {:error, reason}

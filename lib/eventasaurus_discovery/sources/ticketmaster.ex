@@ -21,18 +21,22 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster do
   @doc """
   Process a Ticketmaster event through deduplication.
 
-  Checks if event exists from any source (including Ticketmaster itself).
+  Checks if event exists within Ticketmaster itself (highest priority source).
   Validates event quality before processing.
 
-  Returns:
+  ## Parameters
+  - `event_data` - Event data with external_id, title, starts_at, venue_data
+  - `source` - Source struct with priority and domains
+
+  ## Returns
   - `{:unique, event_data}` - Event is unique, proceed with import
   - `{:duplicate, existing}` - Event already exists (same external_id or fuzzy match)
   - `{:error, reason}` - Event validation failed
   """
-  def deduplicate_event(event_data) do
+  def deduplicate_event(event_data, source) do
     case DedupHandler.validate_event_quality(event_data) do
       {:ok, validated} ->
-        DedupHandler.check_duplicate(validated)
+        DedupHandler.check_duplicate(validated, source)
 
       {:error, reason} ->
         {:error, reason}
