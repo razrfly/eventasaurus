@@ -105,6 +105,16 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
   end
 
   @doc """
+  Get source by key (slug) - raises if not found
+  """
+  def get_by_key!(key) when is_binary(key) do
+    case Repo.get_by(Source, slug: key) do
+      nil -> raise "Source not found for key: #{key}"
+      source -> source
+    end
+  end
+
+  @doc """
   List all active sources
   """
   def list_active_sources do

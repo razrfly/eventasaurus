@@ -87,8 +87,13 @@ defmodule EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator do
   defp queue_discovery_job(city, source, _now, dry_run) do
     # Handle both map and struct formats
     source_name = if is_map(source), do: source["name"], else: source.name
-    source_settings = if is_map(source), do: source["settings"] || %{}, else: source.settings || %{}
-    frequency_hours = if is_map(source), do: source["frequency_hours"] || 24, else: source.frequency_hours || 24
+
+    source_settings =
+      if is_map(source), do: source["settings"] || %{}, else: source.settings || %{}
+
+    frequency_hours =
+      if is_map(source), do: source["frequency_hours"] || 24, else: source.frequency_hours || 24
+
     limit = source_settings["limit"] || source_settings[:limit] || 100
 
     # Build job arguments using shared builder
@@ -112,11 +117,17 @@ defmodule EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator do
 
           # Update next_run_at to prevent duplicate queueing on next orchestrator run
           next_run = DateTime.add(DateTime.utc_now(), frequency_hours * 3600, :second)
+
           case DiscoveryConfigManager.update_source_next_run(city.id, source_name, next_run) do
             {:ok, _} ->
-              Logger.debug("  📅 Updated next_run_at for #{source_name} to #{DateTime.to_iso8601(next_run)}")
+              Logger.debug(
+                "  📅 Updated next_run_at for #{source_name} to #{DateTime.to_iso8601(next_run)}"
+              )
+
             {:error, reason} ->
-              Logger.warning("  ⚠️ Failed to update next_run_at for #{source_name}: #{inspect(reason)}")
+              Logger.warning(
+                "  ⚠️ Failed to update next_run_at for #{source_name}: #{inspect(reason)}"
+              )
           end
 
           {:ok, job}

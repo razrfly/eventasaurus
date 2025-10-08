@@ -97,13 +97,14 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
   """
   def find_performers_needing_enrichment(limit \\ 100) do
     Repo.all(
-      from p in Performer,
+      from(p in Performer,
         where:
           fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
             (is_nil(p.image_url) or
                fragment("?->'ra_artist_url' IS NULL", p.metadata) or
                fragment("?->'enriched_at' IS NULL", p.metadata)),
         limit: ^limit
+      )
     )
   end
 
@@ -218,27 +219,30 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
   def enrichment_stats do
     total_ra_performers =
       Repo.one(
-        from p in Performer,
+        from(p in Performer,
           where: fragment("?->'ra_artist_id' IS NOT NULL", p.metadata),
           select: count(p.id)
+        )
       )
 
     enriched_performers =
       Repo.one(
-        from p in Performer,
+        from(p in Performer,
           where:
             fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
               fragment("?->'enriched_at' IS NOT NULL", p.metadata),
           select: count(p.id)
+        )
       )
 
     performers_with_images =
       Repo.one(
-        from p in Performer,
+        from(p in Performer,
           where:
             fragment("?->'ra_artist_id' IS NOT NULL", p.metadata) and
               not is_nil(p.image_url),
           select: count(p.id)
+        )
       )
 
     %{
