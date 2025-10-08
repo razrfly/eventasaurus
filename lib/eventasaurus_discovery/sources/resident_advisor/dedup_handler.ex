@@ -14,7 +14,6 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.DedupHandler do
 
   require Logger
 
-  alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.Event
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
   alias EventasaurusDiscovery.Sources.BaseDedupHandler

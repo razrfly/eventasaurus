@@ -30,10 +30,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
 
   require Logger
 
-  alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.Event
-  alias EventasaurusApp.Venues.Venue
-  alias EventasaurusApp.Geo.City
   alias EventasaurusDiscovery.Sources.BaseDedupHandler
 
   @doc """
