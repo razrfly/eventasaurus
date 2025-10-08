@@ -9,7 +9,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.Admin.{DataManager, DiscoverySyncJob, DiscoveryConfigManager, DiscoveryStatsCollector}
+
+  alias EventasaurusDiscovery.Admin.{
+    DataManager,
+    DiscoverySyncJob,
+    DiscoveryConfigManager,
+    DiscoveryStatsCollector
+  }
+
   alias EventasaurusDiscovery.Categories.Category
 
   import Ecto.Query
@@ -216,11 +223,17 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         "all" ->
           DataManager.clear_all_public_events(clear_oban_jobs: clear_oban_jobs)
 
+        "all-future" ->
+          DataManager.clear_future_public_events(clear_oban_jobs: clear_oban_jobs)
+
         "source:" <> source ->
           DataManager.clear_by_source(source)
 
         "city:" <> city_id ->
           DataManager.clear_by_city(String.to_integer(city_id))
+
+        "city-future:" <> city_id ->
+          DataManager.clear_future_by_city(String.to_integer(city_id))
 
         _ ->
           {:error, "Unknown clear target"}
@@ -340,9 +353,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     if city do
       # Get all enabled sources for this city
       config_sources = Map.get(city.discovery_config || %{}, "sources", [])
+
       sources =
         (DiscoveryConfigManager.get_due_sources(city) ++ config_sources)
-        |> Enum.filter(&(&1["enabled"]))
+        |> Enum.filter(& &1["enabled"])
         |> Enum.uniq_by(& &1["name"])
 
       # Queue jobs for each source
@@ -672,7 +686,15 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   Formats clear target for display.
   """
   def format_clear_target("all"), do: "all public event data"
+
+  def format_clear_target("all-future"),
+    do: "all future public events (preserving historical data)"
+
   def format_clear_target("source:" <> source), do: "all #{source} data"
   def format_clear_target("city:" <> _city_id), do: "all events for this city"
+
+  def format_clear_target("city-future:" <> _city_id),
+    do: "all future events for this city (preserving historical data)"
+
   def format_clear_target(_), do: "selected data"
 end
