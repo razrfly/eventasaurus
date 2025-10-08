@@ -469,7 +469,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     if event.movies && event.movies != [] do
       movie_images =
         event.movies
-        |> Enum.map(fn movie ->
+        |> Enum.map(fn _movie ->
           # TODO: Extract poster URL from movie metadata when available
           # For now, return nil to filter out
           nil
@@ -587,7 +587,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   end
 
   # Determine if performer is a Person or MusicGroup/Organization
-  defp determine_performer_type(performer) do
+  defp determine_performer_type(_performer) do
     # TODO: Add performer type field to distinguish between person/group
     # For now, default to PerformingGroup which works for both
     "PerformingGroup"
