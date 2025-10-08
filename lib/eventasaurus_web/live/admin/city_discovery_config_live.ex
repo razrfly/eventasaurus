@@ -378,6 +378,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp source_icon("karnet"), do: "🎭"
   defp source_icon("kino-krakow"), do: "🎬"
   defp source_icon("cinema-city"), do: "🍿"
+  defp source_icon("pubquiz-pl"), do: "🧠"
+  defp source_icon("question-one"), do: "❓"
   defp source_icon(_), do: "📅"
 
   defp parse_city_id(city_id) when is_integer(city_id), do: {:ok, city_id}
