@@ -83,6 +83,9 @@ defmodule Eventasaurus.MixProject do
       # HTML sanitization for social cards
       {:html_sanitize_ex, "~> 1.4"},
 
+      # HTML entity decoding for Question One venue extraction
+      {:html_entities, "~> 0.5"},
+
       # State machine library for event lifecycle management
       {:machinery, "~> 1.0"},
 

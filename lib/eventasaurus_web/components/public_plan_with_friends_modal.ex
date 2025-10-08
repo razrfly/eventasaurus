@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   Does NOT include direct add functionality (invitation only).
   """
   use Phoenix.Component
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
 
   alias EventasaurusWeb.Components.Invitations.{
     HistoricalParticipantsComponent,
@@ -131,7 +132,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                       <%= if @selected_occurrence do %>
                         <%= format_occurrence_datetime(@selected_occurrence) %>
                       <% else %>
-                        <%= format_datetime(@public_event.starts_at) %>
+                        <%= format_local_datetime(@public_event.starts_at, @public_event.venue, :full) %>
                       <% end %>
                     </p>
                     <%= if @public_event.venue do %>
@@ -189,12 +190,6 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   defp participant_count(assigns) do
     length(assigns[:selected_users] || []) + length(assigns[:selected_emails] || [])
   end
-
-  defp format_datetime(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p")
-  end
-
-  defp format_datetime(_), do: "TBD"
 
   defp format_occurrence_datetime(%{datetime: datetime}) do
     Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p")

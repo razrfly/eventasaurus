@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.Components.EventCards do
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Helpers.CategoryHelpers
+  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
 
   @doc """
   Check if an item is an aggregated group (recurring events, movies, or containers).
@@ -107,10 +108,10 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.calendar class="w-4 h-4 mr-1" />
             <%= if PublicEvent.recurring?(@event) do %>
               <span class="text-green-600 font-medium">
-                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(PublicEvent.next_occurrence_date(@event)) %>
+                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_local_datetime(PublicEvent.next_occurrence_date(@event), @event.venue, :short) %>
               </span>
             <% else %>
-              <%= format_datetime(@event.starts_at) %>
+              <%= format_local_datetime(@event.starts_at, @event.venue, :short) %>
             <% end %>
           </div>
 
@@ -359,20 +360,4 @@ defmodule EventasaurusWeb.Components.EventCards do
   defp get_container_text_color(:exhibition), do: "text-yellow-600"
   defp get_container_text_color(:tournament), do: "text-pink-600"
   defp get_container_text_color(_), do: "text-gray-600"
-
-  # Helper function for datetime formatting
-  defp format_datetime(nil), do: ""
-
-  defp format_datetime(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%b %d, %Y • %I:%M %p")
-  end
-
-  defp format_datetime(date_str) when is_binary(date_str) do
-    case DateTime.from_iso8601(date_str) do
-      {:ok, datetime, _offset} -> format_datetime(datetime)
-      _ -> date_str
-    end
-  end
-
-  defp format_datetime(_), do: ""
 end

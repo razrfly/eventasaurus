@@ -908,8 +908,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Non-aggregatable events are returned as-is.
   """
   def aggregate_events(events, _opts \\ []) do
-    # Preload sources, movies, and venue.city_ref for all events
-    events_with_sources = Repo.preload(events, sources: :source, venue: :city_ref, movies: [])
+    # Preload sources, movies, venue, and venue associations for timezone conversion
+    events_with_sources = Repo.preload(events, sources: :source, venue: [city_ref: :country], movies: [])
 
     # Separate movie events from other events
     {movie_events, other_events} = Enum.split_with(events_with_sources, &has_movie?/1)
