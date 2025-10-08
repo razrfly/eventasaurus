@@ -27,30 +27,33 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
 
   require Logger
 
-  alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.Event
-  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
-  alias EventasaurusDiscovery.Sources.Source
-  import Ecto.Query
+  alias EventasaurusDiscovery.Sources.BaseDedupHandler
 
   @doc """
   Check if a Ticketmaster event already exists.
 
-  Since Ticketmaster is the highest priority source, we only check for
+  Since Ticketmaster is the highest priority source (90), we only check for
   duplicates within Ticketmaster itself, not from other sources.
 
-  Returns {:duplicate, existing_event} or {:unique, nil}
+  ## Parameters
+  - `event_data` - Event data with external_id, title, starts_at, venue_data
+  - `source` - Source struct (should be Ticketmaster with priority 90)
+
+  ## Returns
+  - `{:unique, event_data}` - Event is unique within Ticketmaster
+  - `{:duplicate, existing_event}` - Event already exists in Ticketmaster
   """
-  def check_duplicate(event_data) do
-    # First check by external_id (exact match within Ticketmaster)
-    case find_by_external_id(event_data[:external_id]) do
+  def check_duplicate(event_data, source) do
+    # PHASE 1: Check by external_id (exact match within Ticketmaster)
+    case BaseDedupHandler.find_by_external_id(event_data[:external_id], source.id) do
       %Event{} = existing ->
-        Logger.info("🔍 Found existing Ticketmaster event by external_id")
+        Logger.info("🔍 Found existing Ticketmaster event by external_id (same source)")
         {:duplicate, existing}
 
       nil ->
-        # Check by title + date + venue (fuzzy match)
-        check_fuzzy_duplicate(event_data)
+        # PHASE 2: Fuzzy match within Ticketmaster only
+        check_fuzzy_duplicate(event_data, source)
     end
   end
 
@@ -84,7 +87,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
       is_nil(event_data[:venue_data]) ->
         {:error, "Event missing venue_data"}
 
-      not is_date_sane?(event_data[:starts_at]) ->
+      not BaseDedupHandler.is_date_sane?(event_data[:starts_at]) ->
         {:error, "Event date is not sane (past or >2 years future)"}
 
       true ->
@@ -94,135 +97,51 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
 
   # Private functions
 
-  defp is_date_sane?(datetime) do
-    now = DateTime.utc_now()
-    two_years_in_seconds = 2 * 365 * 24 * 60 * 60
-    two_years_future = DateTime.add(now, two_years_in_seconds, :second)
-
-    # Event should be in future but not more than 2 years out
-    DateTime.compare(datetime, now) in [:gt, :eq] &&
-      DateTime.compare(datetime, two_years_future) == :lt
-  end
-
-  defp find_by_external_id(external_id) when is_binary(external_id) do
-    # Query through public_event_sources join table
-    # Only look for Ticketmaster events
-    query =
-      from(e in Event,
-        join: es in PublicEventSource,
-        on: es.event_id == e.id,
-        join: s in Source,
-        on: s.id == es.source_id,
-        where: es.external_id == ^external_id and s.slug == "ticketmaster" and is_nil(e.deleted_at),
-        limit: 1
-      )
-
-    Repo.one(query)
-  end
-
-  defp find_by_external_id(_), do: nil
-
-  defp check_fuzzy_duplicate(event_data) do
+  defp check_fuzzy_duplicate(event_data, source) do
     title = normalize_title(event_data[:title])
     date = event_data[:starts_at]
     venue_lat = get_in(event_data, [:venue_data, :latitude])
     venue_lng = get_in(event_data, [:venue_data, :longitude])
 
-    case find_matching_events(title, date, venue_lat, venue_lng) do
-      [] ->
-        {:unique, event_data}
-
-      matches ->
-        # Ticketmaster is highest priority (90), so only dedup against itself
-        # Don't let lower-priority sources suppress Ticketmaster events
-        tm_matches =
-          Enum.filter(matches, fn %{source: source} ->
-            source.slug == "ticketmaster"
-          end)
-
-        case tm_matches do
-          [] ->
-            # No Ticketmaster matches found - only lower-priority sources
-            # Ticketmaster should import and supersede them
-            {:unique, event_data}
-
-          tm_candidates ->
-            # Find best Ticketmaster match
-            best_match = Enum.max_by(tm_candidates, fn %{event: event, source: _source} ->
-              calculate_match_confidence(event_data, event)
-            end)
-
-            %{event: existing, source: source} = best_match
-            confidence = calculate_match_confidence(event_data, existing)
-
-            if confidence > 0.8 do
-              Logger.info("""
-              🔍 Found likely duplicate Ticketmaster event
-              New: #{event_data[:title]}
-              Existing: #{existing.title} (source: #{source.name})
-              Confidence: #{Float.round(confidence, 2)}
-              """)
-
-              {:duplicate, existing}
-            else
-              {:unique, event_data}
-            end
-        end
-    end
-  end
-
-  defp find_matching_events(title, date, venue_lat, venue_lng) do
-    # Query events within:
-    # - 1 day of target date
-    # - 100m of venue coordinates
-    # - Similar title
-
-    date_start = DateTime.add(date, -86400, :second)
-    date_end = DateTime.add(date, 86400, :second)
-
-    # Query through public_event_sources to get source information
-    query =
-      from(e in Event,
-        join: v in assoc(e, :venue),
-        join: es in PublicEventSource,
-        on: es.event_id == e.id,
-        join: s in Source,
-        on: s.id == es.source_id,
-        where:
-          e.start_at >= ^date_start and
-            e.start_at <= ^date_end and
-            is_nil(e.deleted_at),
-        preload: [venue: v],
-        select: %{event: e, source: s}
-      )
-
-    # Add GPS proximity filter if coordinates available
-    query =
-      if venue_lat && venue_lng do
-        from([e, v, es, s] in query,
-          where:
-            fragment(
-              "earth_distance(ll_to_earth(?, ?), ll_to_earth(?, ?)) < 100",
-              v.latitude,
-              v.longitude,
-              ^venue_lat,
-              ^venue_lng
-            )
-        )
-      else
-        query
-      end
-
-    candidates = Repo.all(query)
+    # Find potential matches using BaseDedupHandler
+    matches = BaseDedupHandler.find_events_by_date_and_proximity(
+      date, venue_lat, venue_lng, proximity_meters: 100
+    )
 
     # Filter by title similarity
-    Enum.filter(candidates, fn %{event: event, source: _source} ->
+    title_matches = Enum.filter(matches, fn %{event: event} ->
       similar_title?(title, event.title)
     end)
-  rescue
-    e ->
-      Logger.error("Error finding matching events: #{inspect(e)}")
-      []
+
+    # Ticketmaster is highest priority (90), so only check against itself
+    # Filter to only Ticketmaster events (same source_id)
+    ticketmaster_matches = Enum.filter(title_matches, fn %{source: match_source} ->
+      match_source.id == source.id
+    end)
+
+    case ticketmaster_matches do
+      [] ->
+        # No Ticketmaster matches found
+        # Even if lower-priority sources exist, Ticketmaster imports anyway
+        {:unique, event_data}
+
+      [match | _] ->
+        # Found a Ticketmaster match
+        confidence = calculate_match_confidence(event_data, match.event)
+
+        if confidence > 0.8 do
+          Logger.info("""
+          🔍 Found likely duplicate Ticketmaster event
+          New: #{event_data[:title]}
+          Existing: #{match.event.title} (ID: #{match.event.id})
+          Confidence: #{Float.round(confidence, 2)}
+          """)
+
+          {:duplicate, match.event}
+        else
+          {:unique, event_data}
+        end
+    end
   end
 
   defp calculate_match_confidence(ticketmaster_event, existing_event) do
@@ -250,7 +169,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
 
     scores =
       if venue_lat && venue_lng && existing_event.venue &&
-           same_venue?(venue_lat, venue_lng, existing_event.venue) do
+           BaseDedupHandler.same_location?(
+             venue_lat, venue_lng,
+             existing_event.venue.latitude, existing_event.venue.longitude,
+             threshold_meters: 100
+           ) do
         [0.3 | scores]
       else
         scores
@@ -290,44 +213,5 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
 
         Date.compare(d1, d2) == :eq
     end
-  end
-
-  defp same_venue?(tm_lat, tm_lng, existing_venue) do
-    cond do
-      is_nil(tm_lat) || is_nil(tm_lng) || is_nil(existing_venue) ->
-        false
-
-      is_nil(existing_venue.latitude) || is_nil(existing_venue.longitude) ->
-        false
-
-      true ->
-        # Convert Decimal to float if needed
-        venue_lat = if is_struct(existing_venue.latitude, Decimal), do: Decimal.to_float(existing_venue.latitude), else: existing_venue.latitude
-        venue_lng = if is_struct(existing_venue.longitude, Decimal), do: Decimal.to_float(existing_venue.longitude), else: existing_venue.longitude
-
-        # Check if within 100m
-        distance = calculate_distance(tm_lat, tm_lng, venue_lat, venue_lng)
-
-        distance < 100
-    end
-  end
-
-  defp calculate_distance(lat1, lng1, lat2, lng2) do
-    # Haversine formula
-    r = 6_371_000  # Earth radius in meters
-
-    lat1_rad = lat1 * :math.pi() / 180
-    lat2_rad = lat2 * :math.pi() / 180
-    delta_lat = (lat2 - lat1) * :math.pi() / 180
-    delta_lng = (lng2 - lng1) * :math.pi() / 180
-
-    a =
-      :math.sin(delta_lat / 2) * :math.sin(delta_lat / 2) +
-        :math.cos(lat1_rad) * :math.cos(lat2_rad) *
-          :math.sin(delta_lng / 2) * :math.sin(delta_lng / 2)
-
-    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
-
-    r * c
   end
 end

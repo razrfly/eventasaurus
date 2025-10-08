@@ -63,19 +63,27 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown do
   @doc """
   Process an event through deduplication.
 
+  Two-phase deduplication strategy:
+  - Phase 1: Check if THIS source already imported it (same-source dedup)
+  - Phase 2: Check if higher-priority source imported it (cross-source fuzzy match)
+
   Checks if event exists from higher-priority sources (Ticketmaster).
   Validates event quality before processing.
 
-  Returns:
+  ## Parameters
+  - `event_data` - Event data with external_id, title, starts_at, venue_data
+  - `source` - Source struct with priority and domains
+
+  ## Returns
   - `{:unique, event_data}` - Event is unique, proceed with import
-  - `{:duplicate, existing}` - Event exists from higher-priority source
+  - `{:duplicate, existing}` - Event already exists (same source or higher priority)
   - `{:enriched, event_data}` - Event enriched with additional data
   - `{:error, reason}` - Event validation failed
   """
-  def deduplicate_event(event_data) do
+  def deduplicate_event(event_data, source) do
     case DedupHandler.validate_event_quality(event_data) do
       {:ok, validated} ->
-        DedupHandler.check_duplicate(validated)
+        DedupHandler.check_duplicate(validated, source)
 
       {:error, reason} ->
         {:error, reason}
@@ -98,6 +106,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown do
               website_url: "https://www.bandsintown.com",
               is_active: Source.enabled?(),
               priority: Source.priority(),
+              domains: ["music", "concert"],
               metadata: Source.config()
             })
           )
@@ -105,13 +114,14 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown do
         %{source_id: source.id}
 
       source ->
-        # Update metadata if changed
-        if source.metadata != Source.config() do
+        # Update metadata and domains if changed
+        if source.metadata != Source.config() or source.domains != ["music", "concert"] do
           {:ok, updated} =
             Repo.update(
               SourceSchema.changeset(source, %{
                 metadata: Source.config(),
-                priority: Source.priority()
+                priority: Source.priority(),
+                domains: ["music", "concert"]
               })
             )
 

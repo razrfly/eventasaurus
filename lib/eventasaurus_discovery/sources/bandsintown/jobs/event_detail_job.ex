@@ -59,8 +59,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
          enriched_event_data <- enrich_with_detail_page(event_data),
          # Transform the event data with city context for proper venue association
          {:ok, transformed_event} <- transform_event(enriched_event_data, city),
-         # Check for duplicates from higher-priority sources
-         {:ok, dedup_result} <- check_deduplication(transformed_event),
+         # Check for duplicates from higher-priority sources (pass source struct)
+         {:ok, dedup_result} <- check_deduplication(transformed_event, source),
          # Process through unified Processor for venue validation
          {:ok, result} <- process_event_if_unique(transformed_event, source, dedup_result) do
       case result do
@@ -176,8 +176,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     end
   end
 
-  defp check_deduplication(event) do
-    case Bandsintown.deduplicate_event(event) do
+  defp check_deduplication(event, source) do
+    case Bandsintown.deduplicate_event(event, source) do
       {:unique, _} ->
         {:ok, :unique}
 

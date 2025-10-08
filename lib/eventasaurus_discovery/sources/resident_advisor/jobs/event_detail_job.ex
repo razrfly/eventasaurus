@@ -53,8 +53,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
 
     # Get the source
     with {:ok, source} <- get_source(source_id),
-         # Check for duplicates from higher-priority sources
-         {:ok, dedup_result} <- check_deduplication(event_data),
+         # Check for duplicates from higher-priority sources (pass source struct)
+         {:ok, dedup_result} <- check_deduplication(event_data, source),
          # Process the event if unique
          {:ok, processed_event} <- process_event_if_unique(event_data, source, dedup_result) do
       Logger.info("✅ Successfully processed RA event: #{external_id}")
@@ -90,11 +90,11 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
     end
   end
 
-  defp check_deduplication(event_data) do
+  defp check_deduplication(event_data, source) do
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case ResidentAdvisor.deduplicate_event(event_with_atom_keys) do
+    case ResidentAdvisor.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 

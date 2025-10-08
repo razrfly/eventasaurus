@@ -25,6 +25,11 @@ defmodule EventasaurusWeb.Router do
       live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
       live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
       live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+
+      # Source Management (dev - no auth)
+      live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
+      live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
+      live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
@@ -42,6 +47,11 @@ defmodule EventasaurusWeb.Router do
       live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
       live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
       live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+
+      # Source Management (dev - no auth)
+      live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
+      live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
+      live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
     end
 
     # Category demo routes for testing
@@ -92,6 +102,11 @@ defmodule EventasaurusWeb.Router do
       live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
       live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
       live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+
+      # Source Management
+      live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
+      live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
+      live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
     end
   end
 
