@@ -3,10 +3,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
-  alias EventasaurusWeb.Components.PublicPlanWithFriendsModal
+  alias EventasaurusWeb.Components.{PublicPlanWithFriendsModal, Breadcrumbs}
   alias EventasaurusWeb.Components.Events.OccurrenceDisplay
   alias EventasaurusWeb.Components.Events.EventScheduleDisplay
   alias EventasaurusWeb.StaticMapComponent
+  alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+  alias EventasaurusWeb.JsonLd.PublicEventSchema
+  alias EventasaurusWeb.JsonLd.LocalBusinessSchema
+  alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
   import Ecto.Query
 
   @impl true
@@ -110,7 +114,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     event =
       from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
         where: pe.slug == ^slug,
-        preload: [:categories, :performers, :movies, venue: :city_ref, sources: :source]
+        preload: [:categories, :performers, :movies, venue: [city_ref: :country], sources: :source]
       )
       |> Repo.one()
 
@@ -155,6 +159,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         city = if event.venue, do: event.venue.city_ref, else: nil
         aggregated_url = get_aggregated_movie_url(movie, city)
 
+        # Build breadcrumb items (used for both visual breadcrumbs and JSON-LD)
+        breadcrumb_items = BreadcrumbBuilder.build_event_breadcrumbs(enriched_event, gettext_backend: EventasaurusWeb.Gettext)
+
+        # Generate SEO data (includes JSON-LD structured data with breadcrumbs)
+        seo_data = generate_seo_data(enriched_event, breadcrumb_items, socket)
+
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
@@ -163,6 +173,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:movie, movie)
         |> assign(:is_movie_screening, is_movie)
         |> assign(:aggregated_movie_url, aggregated_url)
+        |> assign(:breadcrumb_items, breadcrumb_items)
+        |> assign(:json_ld, seo_data.json_ld)
+        |> assign(:open_graph, seo_data.open_graph)
+        |> assign(:canonical_url, seo_data.canonical_url)
+        |> assign(:page_title, enriched_event.display_title)
     end
   end
 
@@ -636,25 +651,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             </div>
 
             <!-- Breadcrumb -->
-            <div class="mb-6">
-              <nav class="flex items-center space-x-2 text-sm">
-                <.link navigate={~p"/activities"} class="text-blue-600 hover:text-blue-800">
-                  <%= gettext("All Activities") %>
-                </.link>
-                <span class="text-gray-500">/</span>
-                <%= if @event.categories && @event.categories != [] do %>
-                  <% primary_category = get_primary_category(@event) || List.first(@event.categories) %>
-                  <.link
-                    navigate={~p"/activities?#{[category: primary_category.slug]}"}
-                    class="text-blue-600 hover:text-blue-800"
-                  >
-                    <%= primary_category.name %>
-                  </.link>
-                  <span class="text-gray-500">/</span>
-                <% end %>
-                <span class="text-gray-700"><%= @event.display_title %></span>
-              </nav>
-            </div>
+            <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-6" />
 
             <!-- Past Event Banner -->
             <%= if event_is_past?(@event) do %>
@@ -1560,6 +1557,131 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp format_movie_runtime(_), do: nil
+
+  # SEO helper functions
+  defp generate_seo_data(event, breadcrumb_items, socket) do
+    # Get the request URI for canonical URL
+    uri = get_connect_info(socket, :uri) || URI.new!("/activities/#{event.slug}")
+    base_url = get_base_url()
+    canonical_url = "#{base_url}#{uri.path}"
+
+    # Generate JSON-LD structured data for the event
+    event_json_ld = PublicEventSchema.generate(event)
+
+    # Generate breadcrumb structured data using BreadcrumbBuilder items
+    # This ensures visual breadcrumbs and JSON-LD breadcrumbs stay in sync
+    breadcrumb_json_ld = BreadcrumbListSchema.from_breadcrumb_builder_items(
+      breadcrumb_items,
+      canonical_url,
+      base_url
+    )
+
+    # Generate venue LocalBusiness structured data if venue exists
+    venue_json_ld =
+      if event.venue do
+        LocalBusinessSchema.generate(event.venue)
+      else
+        nil
+      end
+
+    # Combine all JSON-LD schemas into an array
+    json_ld_schemas = [event_json_ld, breadcrumb_json_ld, venue_json_ld]
+    |> Enum.reject(&is_nil/1)
+
+    # Combine multiple JSON-LD schemas
+    combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
+
+    # Get image URL (fallback to placeholder if none available)
+    image_url = event.cover_image_url || get_placeholder_image_url(event)
+
+    # Build Open Graph meta tags directly
+    description = event.display_description || truncate_for_description(event.display_title)
+    locale = socket.assigns[:language] || "en"
+    locale_code = if locale == "pl", do: "pl_PL", else: "en_US"
+
+    # Escape values for safe HTML attribute usage
+    escaped_title = event.display_title |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+    escaped_description = description |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+    escaped_image = image_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+    escaped_url = canonical_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    open_graph_html = """
+    <!-- Open Graph meta tags -->
+    <meta property="og:type" content="event" />
+    <meta property="og:title" content="#{escaped_title}" />
+    <meta property="og:description" content="#{escaped_description}" />
+    <meta property="og:image" content="#{escaped_image}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="#{escaped_url}" />
+    <meta property="og:site_name" content="Eventasaurus" />
+    <meta property="og:locale" content="#{locale_code}" />
+
+    <!-- Twitter Card meta tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="#{escaped_title}" />
+    <meta name="twitter:description" content="#{escaped_description}" />
+    <meta name="twitter:image" content="#{escaped_image}" />
+
+    <!-- Standard meta description for SEO -->
+    <meta name="description" content="#{escaped_description}" />
+    """
+
+    # Get current path for hreflang alternate links
+    current_path = uri.path
+
+    %{
+      json_ld: combined_json_ld,
+      open_graph: open_graph_html,
+      canonical_url: canonical_url,
+      hreflang_path: current_path
+    }
+  end
+
+  # Combine multiple JSON-LD schemas into a single script-ready string
+  defp combine_json_ld_schemas([single_schema]) do
+    # If only one schema, return it as-is
+    single_schema
+  end
+
+  defp combine_json_ld_schemas(schemas) when is_list(schemas) do
+    # Decode each JSON string, combine into array, re-encode
+    schemas
+    |> Enum.map(&Jason.decode!/1)
+    |> Jason.encode!()
+  end
+
+  defp get_base_url do
+    endpoint = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, [])
+    url_config = Keyword.get(endpoint, :url, [])
+
+    scheme = Keyword.get(url_config, :scheme, "https")
+    host = Keyword.get(url_config, :host, "eventasaurus.com")
+    port = Keyword.get(url_config, :port)
+
+    # Only include port if not standard (80 for http, 443 for https)
+    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
+      "#{scheme}://#{host}"
+    else
+      "#{scheme}://#{host}:#{port}"
+    end
+  end
+
+  defp get_placeholder_image_url(event) do
+    # Use a placeholder service with the event title
+    event_name = URI.encode(event.display_title)
+    "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{event_name}"
+  end
+
+  defp truncate_for_description(text, max_length \\ 155) do
+    if String.length(text) <= max_length do
+      text
+    else
+      text
+      |> String.slice(0, max_length - 3)
+      |> Kernel.<>("...")
+    end
+  end
 
   # URL slug helper functions for shareable day URLs
   defp date_to_url_slug(%Date{} = date) do

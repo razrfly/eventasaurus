@@ -10,6 +10,9 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+  alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
 
   @impl true
   def mount(%{"city_slug" => city_slug, "container_slug" => container_slug}, _session, socket) do
@@ -85,10 +88,25 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         # Group events by date
         grouped_events = group_events_by_date(events)
 
+        # Build breadcrumb items
+        breadcrumb_items = BreadcrumbBuilder.build_container_breadcrumbs(container, city, gettext_backend: EventasaurusWeb.Gettext)
+
+        # Generate breadcrumb JSON-LD structured data
+        base_url = EventasaurusWeb.Endpoint.url()
+        canonical_url = "#{base_url}/c/#{city.slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
+        breadcrumb_json_ld = BreadcrumbListSchema.from_breadcrumb_builder_items(
+          breadcrumb_items,
+          canonical_url,
+          base_url
+        )
+
         socket
         |> assign(:container, container)
         |> assign(:events, events)
         |> assign(:grouped_events, grouped_events)
+        |> assign(:breadcrumb_items, breadcrumb_items)
+        |> assign(:json_ld, breadcrumb_json_ld)
+        |> assign(:canonical_url, canonical_url)
         |> assign(:loading, false)
         |> assign(:page_title, container.title)
         |> assign(:meta_description, build_meta_description(container))
@@ -167,27 +185,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         <div class="bg-white shadow-sm border-b">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Breadcrumbs -->
-            <nav class="mb-4 text-sm">
-              <ol class="flex items-center space-x-2 text-gray-500">
-                <li>
-                  <.link navigate={~p"/"} class="hover:text-gray-700">Home</.link>
-                </li>
-                <li>/</li>
-                <li>
-                  <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-gray-700">
-                    <%= @city.name %>
-                  </.link>
-                </li>
-                <li>/</li>
-                <li>
-                  <.link navigate={container_type_index_path(@city.slug, @container.container_type)} class="hover:text-gray-700">
-                    <%= String.capitalize(PublicEventContainer.container_type_plural(@container.container_type)) %>
-                  </.link>
-                </li>
-                <li>/</li>
-                <li class="text-gray-900 font-medium"><%= @container.title %></li>
-              </ol>
-            </nav>
+            <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
 
             <div class="flex items-start justify-between">
               <div class="flex-1">

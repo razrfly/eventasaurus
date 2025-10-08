@@ -1,0 +1,152 @@
+defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
+  @moduledoc """
+  Generates JSON-LD structured data for venues as LocalBusiness according to schema.org.
+
+  This module converts venue data into properly formatted structured data
+  for better SEO and Google rich results for local business listings.
+
+  ## Schema.org LocalBusiness
+  - Schema.org LocalBusiness: https://schema.org/LocalBusiness
+  - Google Local Business: https://developers.google.com/search/docs/appearance/structured-data/local-business
+
+  ## Venue Types Mapping
+  - "venue" → EntertainmentBusiness (theaters, clubs, arenas)
+  - "city" → Place (city-wide event locations)
+  - "region" → Place (regional event locations)
+  """
+
+  require Logger
+
+  @doc """
+  Generates JSON-LD structured data for a venue as LocalBusiness.
+
+  ## Parameters
+    - venue: Venue struct with preloaded associations:
+      - :city_ref (with :country)
+
+  ## Returns
+    - JSON-LD string ready to be included in <script type="application/ld+json">
+
+  ## Example
+      iex> venue = Repo.get(Venue, 1) |> Repo.preload(city_ref: :country)
+      iex> EventasaurusWeb.JsonLd.LocalBusinessSchema.generate(venue)
+      "{\"@context\":\"https://schema.org\",\"@type\":\"EntertainmentBusiness\",...}"
+  """
+  def generate(venue) do
+    venue
+    |> build_business_schema()
+    |> Jason.encode!()
+  end
+
+  @doc """
+  Builds the local business schema map (without JSON encoding).
+  Useful for testing or combining with other schemas.
+  """
+  def build_business_schema(venue) do
+    %{
+      "@context" => "https://schema.org",
+      "@type" => determine_business_type(venue),
+      "name" => venue.name,
+      "address" => build_address(venue)
+    }
+    |> add_geo_coordinates(venue)
+    |> add_place_id(venue)
+    |> add_url(venue)
+  end
+
+  # Determine the appropriate schema.org business type based on venue_type
+  defp determine_business_type(venue) do
+    case venue.venue_type do
+      "venue" -> "EntertainmentBusiness"
+      "city" -> "Place"
+      "region" -> "Place"
+      _ -> "Place"
+    end
+  end
+
+  # Build the postal address according to schema.org
+  defp build_address(venue) do
+    address = %{
+      "@type" => "PostalAddress"
+    }
+
+    address =
+      if venue.address do
+        Map.put(address, "streetAddress", venue.address)
+      else
+        address
+      end
+
+    address =
+      if venue.city_ref do
+        address
+        |> Map.put("addressLocality", venue.city_ref.name)
+        |> add_country_info(venue.city_ref)
+      else
+        address
+      end
+
+    address
+  end
+
+  defp add_country_info(address, city) do
+    if city.country do
+      address
+      |> Map.put("addressCountry", city.country.code)
+    else
+      address
+    end
+  end
+
+  # Add geographic coordinates
+  defp add_geo_coordinates(schema, venue) do
+    if venue.latitude && venue.longitude do
+      Map.put(schema, "geo", %{
+        "@type" => "GeoCoordinates",
+        "latitude" => venue.latitude,
+        "longitude" => venue.longitude
+      })
+    else
+      schema
+    end
+  end
+
+  # Add Google Place ID if available
+  defp add_place_id(schema, venue) do
+    if venue.place_id do
+      # Use the Google Maps URL format
+      url = "https://www.google.com/maps/place/?q=place_id:#{venue.place_id}"
+      Map.put(schema, "hasMap", url)
+    else
+      schema
+    end
+  end
+
+  # Add venue URL (using slug to build the URL)
+  defp add_url(schema, venue) do
+    if venue.slug do
+      # Get the base URL from endpoint configuration
+      base_url = get_base_url()
+      venue_url = "#{base_url}/venues/#{venue.slug}"
+      Map.put(schema, "url", venue_url)
+    else
+      schema
+    end
+  end
+
+  defp get_base_url do
+    endpoint = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, [])
+    url_config = Keyword.get(endpoint, :url, [])
+
+    scheme = Keyword.get(url_config, :scheme, "https")
+    host = Keyword.get(url_config, :host, "eventasaurus.com")
+    port = Keyword.get(url_config, :port)
+
+    # Only include port if not standard (80 for http, 443 for https)
+    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
+      "#{scheme}://#{host}"
+    else
+      "#{scheme}://#{host}:#{port}"
+    end
+  end
+end
