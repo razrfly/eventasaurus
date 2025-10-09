@@ -93,10 +93,14 @@
                 <label class="block text-sm font-medium text-gray-700">Coverage</label>
                 <div class="mt-1 block w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
                   <span class="font-medium text-blue-900">{source_coverage(@selected_source)}</span>
-                  <span class="text-sm text-blue-600 ml-2">(Country-wide)</span>
+                  <span class="text-sm text-blue-600 ml-2">(Unbounded)</span>
                 </div>
                 <p class="mt-1 text-sm text-gray-500">
-                  <%= String.capitalize(@selected_source) %> imports all venues across {source_coverage(@selected_source)}
+                  <%= if @selected_source == "question-one" do %>
+                    Discovers all venues from RSS feed. Cities are auto-created via geocoding.
+                  <% else %>
+                    <%= String.capitalize(@selected_source) %> imports all venues across {source_coverage(@selected_source)}
+                  <% end %>
                 </p>
               </div>
 

@@ -51,8 +51,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     venue_slug = slugify(title)
     external_id = "question_one_#{venue_slug}_#{day_of_week}"
 
-    # Extract city from address
-    city = extract_city_from_address(address)
+    # Use geocoded city and country (enriched by venue_detail_job)
+    city = Map.get(venue_data, :city_name)
+    country = Map.get(venue_data, :country_name)
 
     # Parse pricing from fee_text
     {is_free, min_price} = parse_pricing(venue_data.fee_text)
@@ -63,12 +64,12 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
       title: "Quiz Night at #{title}",
       starts_at: starts_at,
 
-      # Venue data (REQUIRED - VenueProcessor will geocode)
+      # Venue data (REQUIRED - VenueProcessor will geocode if coordinates missing)
       venue_data: %{
         name: title,
         address: address,
         city: city,
-        country: "United Kingdom",
+        country: country,
         latitude: nil,
         longitude: nil,
         phone: venue_data.phone,
@@ -118,28 +119,6 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
         {:monday, ~T[19:00:00]}
     end
   end
-
-  # Extract city from address string
-  # UK addresses typically: "Street, City, Postcode"
-  defp extract_city_from_address(address) when is_binary(address) do
-    # Split by comma and try to get second-to-last part (before postcode)
-    parts =
-      address
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-
-    case length(parts) do
-      # If we have multiple parts, city is usually before the postcode
-      n when n >= 2 ->
-        Enum.at(parts, -2, "London")
-
-      # Single part or empty - default to London
-      _ ->
-        "London"
-    end
-  end
-
-  defp extract_city_from_address(_), do: "London"
 
   # Parse pricing information from fee_text
   # Returns {is_free, min_price}
