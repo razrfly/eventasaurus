@@ -649,7 +649,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   def source_coverage(source) when is_binary(source) do
     case source do
       "pubquiz-pl" -> "Poland"
-      "question-one" -> "UK & Ireland"
+      "question-one" -> "Global (RSS feed)"
       _ -> "Multiple Countries"
     end
   end

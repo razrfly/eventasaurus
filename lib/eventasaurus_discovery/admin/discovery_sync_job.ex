@@ -41,14 +41,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
 
     # Find the city (only required for city-specific sources)
     city =
-      if requires_city do
+      if requires_city && city_id do
         Repo.get(City, city_id) |> Repo.preload(:country)
       else
         nil
       end
 
     # Check if city is required but not found
-    if !city && requires_city do
+    if requires_city && (!city_id || !city) do
       error_msg = "City not found (id: #{city_id})"
       Logger.error("❌ #{error_msg} for #{source} sync")
       broadcast_progress(:error, %{message: error_msg, source: source, city_id: city_id})
