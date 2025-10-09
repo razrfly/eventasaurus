@@ -31,7 +31,8 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
-    "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob
+    "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob,
+    "geeks-who-drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob
   }
 
   @doc """

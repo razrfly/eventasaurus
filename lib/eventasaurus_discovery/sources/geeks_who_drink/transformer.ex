@@ -49,7 +49,6 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     starts_at = venue_data.starts_at
 
     # Generate stable external_id from venue_id
-    venue_slug = slugify(title)
     external_id = "geeks_who_drink_#{venue_data.venue_id}"
 
     # Extract city and country from address
@@ -84,7 +83,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
       },
 
       # Optional fields
-      ends_at: add_hours(starts_at, 2),
+      ends_at: if(match?(%DateTime{}, starts_at), do: add_hours(starts_at, 2), else: nil),
       description: build_description(venue_data),
       source_url: venue_data.source_url,
       image_url: venue_data[:logo_url],
