@@ -208,7 +208,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
 
   defp truncate_name(name, max_length) when is_binary(name) do
     if String.length(name) > max_length do
-      Logger.warn(
+      Logger.warning(
         "⚠️  Truncating performer name from #{String.length(name)} to #{max_length} characters"
       )
 

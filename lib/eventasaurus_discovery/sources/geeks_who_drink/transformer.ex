@@ -178,15 +178,6 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     end
   end
 
-  # Generate URL-safe slug from title
-  defp slugify(text) when is_binary(text) do
-    text
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "_")
-    |> String.trim("_")
-  end
-
-  defp slugify(_), do: "unknown"
 
   # Add hours to a DateTime
   defp add_hours(datetime, hours) do
