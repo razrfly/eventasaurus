@@ -110,7 +110,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
         venue_data
 
       {:error, reason} ->
-        Logger.warn("⚠️ Failed to parse venue block: #{inspect(reason)}")
+        Logger.warning("⚠️ Failed to parse venue block: #{inspect(reason)}")
         nil
     end
   end
