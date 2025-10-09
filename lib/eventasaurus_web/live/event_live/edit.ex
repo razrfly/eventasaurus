@@ -397,12 +397,22 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     params_with_venue =
       if (!is_virtual and venue_name) && venue_name != "" do
+        venue_country = Map.get(event_params, "venue_country")
+
+        # Convert country name to ISO code (e.g., "United States" -> "US")
+        country_code =
+          if venue_country && venue_country != "" do
+            EventasaurusDiscovery.Locations.CountryResolver.get_code(venue_country)
+          else
+            nil
+          end
+
         # Try to find existing venue or create new one using VenueStore normalization
         venue_attrs = %{
           name: venue_name,
           address: venue_address,
           city_name: Map.get(event_params, "venue_city"),
-          country_code: Map.get(event_params, "venue_country"),
+          country_code: country_code,
           latitude:
             case Map.get(event_params, "venue_latitude") do
               lat when is_binary(lat) and lat != "" ->
