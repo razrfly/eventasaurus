@@ -95,6 +95,15 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 exclude_event_ids: [event.id]
               )
 
+            # Get the Supabase access token from session
+            access_token = get_current_valid_token(session)
+
+            # Log warning if token is missing
+            if is_nil(access_token) do
+              require Logger
+              Logger.warning("Supabase access token is nil for user #{user.id}. Image uploads will not work.")
+            end
+
             # Set up the socket with all required assigns
             socket =
               socket
@@ -154,7 +163,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
-              |> assign(:supabase_access_token, get_current_valid_token(session))
+              |> assign(:supabase_access_token, access_token || "")
               # Ticketing assigns
               |> assign(:tickets, existing_tickets)
               |> assign(:show_ticket_modal, false)
