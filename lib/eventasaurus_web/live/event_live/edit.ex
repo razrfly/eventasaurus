@@ -101,7 +101,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
             # Log warning if token is missing
             if is_nil(access_token) do
               require Logger
-              Logger.warning("Supabase access token is nil for user #{user.id}. Image uploads will not work.")
+
+              Logger.warning(
+                "Supabase access token is nil for user #{user.id}. Image uploads will not work."
+              )
             end
 
             # Set up the socket with all required assigns
@@ -394,19 +397,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     params_with_venue =
       if (!is_virtual and venue_name) && venue_name != "" do
-        # Extract city and country from address if not provided
-        {city_name, country_code} = extract_city_country_from_address(
-          Map.get(event_params, "venue_city"),
-          Map.get(event_params, "venue_country"),
-          venue_address
-        )
-
         # Try to find existing venue or create new one using VenueStore normalization
         venue_attrs = %{
           name: venue_name,
           address: venue_address,
-          city_name: city_name,
-          country_code: country_code,
+          city_name: Map.get(event_params, "venue_city"),
+          country_code: Map.get(event_params, "venue_country"),
           latitude:
             case Map.get(event_params, "venue_latitude") do
               lat when is_binary(lat) and lat != "" ->
@@ -2134,43 +2130,4 @@ defmodule EventasaurusWeb.EventLive.Edit do
         :ok
     end
   end
-
-  # Extract city and country from address when not explicitly provided
-  defp extract_city_country_from_address(city, country, address) when not is_nil(city) and city != "" and not is_nil(country) and country != "" do
-    # Both provided, use them
-    {city, country}
-  end
-
-  defp extract_city_country_from_address(_city, _country, address) when is_binary(address) and address != "" do
-    # Try to parse city and country from address
-    # Format: "Street, City, Country" or "Street, Postal Code City, Country"
-    parts = String.split(address, ",") |> Enum.map(&String.trim/1)
-
-    case parts do
-      # "Street, City, Country" or longer
-      [_street | rest] when length(rest) >= 2 ->
-        country = List.last(rest)
-        # City is second to last
-        city = Enum.at(rest, -2)
-
-        # Try to extract country code (e.g., "Poland" -> "PL")
-        country_code = extract_country_code(country)
-
-        {city, country_code}
-
-      _ ->
-        {nil, nil}
-    end
-  end
-
-  defp extract_city_country_from_address(_city, _country, _address) do
-    {nil, nil}
-  end
-
-  # Use the proper country resolution library
-  defp extract_country_code(country_name) when is_binary(country_name) do
-    EventasaurusDiscovery.Locations.CountryResolver.get_code(country_name)
-  end
-
-  defp extract_country_code(_), do: nil
 end
