@@ -11,21 +11,36 @@ defmodule EventasaurusWeb.TokenHelpers do
   and attempts to refresh it if possible.
   """
   def get_current_valid_token(session) do
+    require Logger
     token = session["access_token"]
     refresh_token = session["refresh_token"]
     token_expires_at = session["token_expires_at"]
 
+    # Log if token is missing from session
+    if is_nil(token) do
+      Logger.warning("No access_token found in session. Session keys: #{inspect(Map.keys(session))}")
+    end
+
     # Check if we need to refresh the token
     if token && refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+      Logger.debug("Token needs refresh, attempting to refresh...")
+
       case EventasaurusApp.Auth.Client.refresh_token(refresh_token) do
         {:ok, auth_data} ->
           # Extract the new access token
           new_token = get_token_value(auth_data, "access_token")
-          # Fall back to old token if extraction fails
-          new_token || token
 
-        {:error, _reason} ->
+          if new_token do
+            Logger.debug("Token refreshed successfully")
+            new_token
+          else
+            Logger.warning("Failed to extract new token from refresh response, using old token")
+            token
+          end
+
+        {:error, reason} ->
           # Refresh failed, use original token
+          Logger.warning("Token refresh failed: #{inspect(reason)}, using old token")
           token
       end
     else

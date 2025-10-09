@@ -163,7 +163,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Helpers.TimeParser do
   def next_occurrence(day_of_week, time, timezone \\ "America/New_York") do
     now = DateTime.now!(timezone)
     target_day_num = day_to_number(day_of_week)
-    current_day_num = Date.day_of_week(now, :monday)
+    current_day_num = Date.day_of_week(DateTime.to_date(now), :monday)
 
     # Calculate days until target day
     days_ahead =

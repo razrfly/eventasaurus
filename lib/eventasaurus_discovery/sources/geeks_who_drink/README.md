@@ -5,7 +5,7 @@ Scrapes weekly trivia event data from [Geeks Who Drink](https://www.geekswhodrin
 ## Overview
 
 - **Type**: WordPress AJAX API + detail page scraper
-- **Coverage**: United States (700+ venues across all 50 states)
+- **Coverage**: United States and Canada (700+ venues)
 - **Frequency**: Weekly recurring trivia events
 - **Priority**: 35 (regional specialist source)
 - **External ID Format**: `geeks_who_drink_<venue_id>`
