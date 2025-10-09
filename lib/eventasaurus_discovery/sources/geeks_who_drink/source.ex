@@ -2,11 +2,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Source do
   @moduledoc """
   Geeks Who Drink source configuration for the unified discovery system.
 
-  US-based trivia company with 700+ weekly trivia nights across the United States.
+  Trivia company with 700+ weekly trivia nights across the United States and Canada.
   Priority 35: Regional specialist source.
 
   ## Coverage
   - United States (national coverage)
+  - Canada (national coverage)
   - 700+ weekly recurring trivia events
 
   ## Data Characteristics
@@ -42,8 +43,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Source do
       retry_attempts: Config.max_retries(),
       retry_delay_ms: Config.retry_delay_ms(),
 
-      # Regional settings
-      country: "United States",
+      # Regional settings (covers US and Canada)
+      countries: ["United States", "Canada"],
       timezone: "America/New_York",
       locale: "en_US",
 

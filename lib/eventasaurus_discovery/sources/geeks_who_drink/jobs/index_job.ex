@@ -110,7 +110,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
         venue_data
 
       {:error, reason} ->
-        Logger.warning("⚠️ Failed to parse venue block: #{inspect(reason)}")
+        Logger.warn("⚠️ Failed to parse venue block: #{inspect(reason)}")
         nil
     end
   end
@@ -136,23 +136,33 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
       end
 
     # Schedule detail jobs for stale venues
-    venues_to_process
-    |> Enum.with_index()
-    |> Enum.each(fn {venue, index} ->
-      # Stagger jobs to respect rate limit (2 seconds between requests)
-      delay_seconds = index * 3
+    {ok_count, _err_count} =
+      venues_to_process
+      |> Enum.with_index()
+      |> Enum.reduce({0, 0}, fn {venue, index}, {ok, err} ->
+        # Stagger jobs to respect rate limit (2 seconds between requests)
+        delay_seconds = index * 3
 
-      %{
-        "venue_id" => venue.venue_id,
-        "venue_url" => venue.url,
-        "venue_title" => venue.title,
-        "venue_data" => venue,
-        "source_id" => source_id
-      }
-      |> VenueDetailJob.new(schedule_in: delay_seconds)
-      |> Oban.insert()
-    end)
+        job =
+          %{
+            "venue_id" => venue.venue_id,
+            "venue_url" => venue.url,
+            "venue_title" => venue.title,
+            "venue_data" => venue,
+            "source_id" => source_id
+          }
+          |> VenueDetailJob.new(schedule_in: delay_seconds)
 
-    length(venues_to_process)
+        case Oban.insert(job) do
+          {:ok, _job} ->
+            {ok + 1, err}
+
+          {:error, reason} ->
+            Logger.error("❌ Failed to enqueue detail job for #{inspect(venue.title)}: #{inspect(reason)}")
+            {ok, err + 1}
+        end
+      end)
+
+    ok_count
   end
 end

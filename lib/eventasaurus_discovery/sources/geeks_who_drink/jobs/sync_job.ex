@@ -42,9 +42,15 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
         }
         |> GeeksWhoDrink.Jobs.IndexJob.new()
         |> Oban.insert()
+        |> case do
+          {:ok, _job} ->
+            Logger.info("✅ Enqueued index job for Geeks Who Drink")
+            {:ok, %{source_id: source.id, limit: limit}}
 
-        Logger.info("✅ Enqueued index job for Geeks Who Drink")
-        {:ok, %{source_id: source.id, limit: limit}}
+          {:error, reason} = error ->
+            Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
+            error
+        end
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch nonce: #{inspect(reason)}")
