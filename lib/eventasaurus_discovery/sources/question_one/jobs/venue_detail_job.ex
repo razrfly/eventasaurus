@@ -31,6 +31,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
   }
 
   alias EventasaurusDiscovery.Sources.Processor
+  alias EventasaurusWeb.Services.GooglePlaces.Geocoding
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -43,7 +44,8 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     with {:ok, body} <- Client.fetch_venue_page(venue_url),
          {:ok, document} <- parse_document(body),
          {:ok, venue_data} <- VenueExtractor.extract_venue_data(document, venue_url, venue_title),
-         {:ok, transformed} <- transform_and_validate(venue_data),
+         {:ok, enriched_venue_data} <- enrich_with_geocoding(venue_data),
+         {:ok, transformed} <- transform_and_validate(enriched_venue_data),
          {:ok, results} <- process_event(transformed, source_id) do
       Logger.info("✅ Successfully processed venue: #{venue_title}")
       log_results(results)
@@ -61,6 +63,85 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
   rescue
     error ->
       {:error, "Failed to parse HTML: #{inspect(error)}"}
+  end
+
+  # Enrich venue data with geocoded city and country information
+  # Uses Google Geocoding API to extract proper city_name and country_name from address
+  defp enrich_with_geocoding(venue_data) do
+    address = Map.get(venue_data, :address)
+
+    case geocode_address(address) do
+      {:ok, {city_name, country_name}} ->
+        enriched =
+          venue_data
+          |> Map.put(:city_name, city_name)
+          |> Map.put(:country_name, country_name)
+
+        Logger.debug("📍 Geocoded #{address} → #{city_name}, #{country_name}")
+        {:ok, enriched}
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Geocoding failed for #{address}: #{reason}. Using fallback.")
+        # Fallback: Use nil values which will cause VenueProcessor to attempt its own geocoding
+        enriched =
+          venue_data
+          |> Map.put(:city_name, nil)
+          |> Map.put(:country_name, nil)
+
+        {:ok, enriched}
+    end
+  end
+
+  # Geocode address to extract city_name and country_name
+  defp geocode_address(address) when is_binary(address) do
+    case Geocoding.search(address) do
+      {:ok, [first_result | _]} ->
+        address_components = Map.get(first_result, "address_components", [])
+        city_name = extract_city(address_components)
+        country_name = extract_country(address_components)
+
+        if city_name && country_name do
+          {:ok, {city_name, country_name}}
+        else
+          {:error, "Missing city or country in geocoding results"}
+        end
+
+      {:ok, []} ->
+        {:error, "No geocoding results found"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp geocode_address(_), do: {:error, "Invalid address"}
+
+  # Extract city from address_components (same logic as VenuePlacesAdapter)
+  defp extract_city(address_components) when is_list(address_components) do
+    find_component(address_components, "locality") ||
+      find_component(address_components, "administrative_area_level_2")
+  end
+
+  defp extract_city(_), do: nil
+
+  # Extract country name (long_name) from address_components
+  defp extract_country(address_components) when is_list(address_components) do
+    find_component(address_components, "country")
+  end
+
+  defp extract_country(_), do: nil
+
+  # Find address component by type (returns long_name)
+  defp find_component(components, type) do
+    components
+    |> Enum.find(fn component ->
+      types = Map.get(component, "types", [])
+      type in types
+    end)
+    |> case do
+      %{"long_name" => name} -> name
+      _ -> nil
+    end
   end
 
   defp transform_and_validate(venue_data) do
