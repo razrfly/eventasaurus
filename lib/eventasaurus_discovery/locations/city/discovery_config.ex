@@ -68,18 +68,14 @@ defmodule EventasaurusDiscovery.Locations.City.DiscoveryConfig do
   end
 
   @doc """
-  Returns list of valid discovery source names.
+  Returns list of valid discovery source names from the sources table.
   """
   def valid_source_names do
-    [
-      "ticketmaster",
-      "bandsintown",
-      "resident-advisor",
-      "karnet",
-      "kino-krakow",
-      "cinema-city",
-      "pubquiz-pl"
-    ]
+    alias EventasaurusApp.Repo
+    alias EventasaurusDiscovery.Sources.Source
+    import Ecto.Query
+
+    Repo.all(from s in Source, where: s.is_active == true, select: s.slug, order_by: s.slug)
   end
 
   @doc """
@@ -98,17 +94,14 @@ defmodule EventasaurusDiscovery.Locations.City.DiscoveryConfig do
 
   @doc """
   Creates a new source configuration.
+  Validates that source name exists in sources table.
   """
-  def new_source(name, settings \\ %{})
-      when name in [
-             "ticketmaster",
-             "bandsintown",
-             "resident-advisor",
-             "karnet",
-             "kino-krakow",
-             "cinema-city",
-             "pubquiz-pl"
-           ] do
+  def new_source(name, settings \\ %{}) do
+    # Validate source exists and is active
+    unless name in valid_source_names() do
+      raise ArgumentError, "Invalid source name: #{name}. Must be an active source in the sources table."
+    end
+
     %__MODULE__.Source{
       name: name,
       enabled: true,
