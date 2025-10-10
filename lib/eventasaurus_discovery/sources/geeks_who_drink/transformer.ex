@@ -1,21 +1,29 @@
 defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   @moduledoc """
-  Transforms Geeks Who Drink venue data into unified event format.
+  Transforms Geeks Who Drink venue data into unified event format with recurrence patterns.
 
   Geeks Who Drink provides weekly recurring trivia events at venues with:
   - GPS coordinates provided directly (no geocoding needed)
   - Performer information via AJAX endpoint
-  - Weekly recurring schedule
-  - US-based events (America/New_York timezone)
+  - Weekly recurring schedule with recurrence_rule support
+  - US/Canada-based events (America/New_York timezone primarily)
 
   ## Transformation Strategy
   - Use provided GPS coordinates (latitude/longitude)
   - Parse time_text to extract day of week and start time
+  - Create recurrence_rule for pattern-based occurrences (following PubQuiz pattern)
   - Calculate next occurrence of the event in America/New_York
   - Create stable external_id for deduplication
   - Handle pricing from fee_text
   - Set category to "trivia"
   - Link performer via metadata
+
+  ## Recurring Event Pattern
+  Uses `recurrence_rule` field to enable frontend generation of future dates:
+  - One database record represents all future occurrences
+  - Frontend generates next 4+ dates dynamically
+  - Always shows upcoming events (no stale past dates)
+  - See docs/RECURRING_EVENT_PATTERNS.md for full specification
   """
 
   require Logger
@@ -57,6 +65,17 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     # Parse pricing from fee_text
     {is_free, min_price} = parse_pricing(venue_data[:fee_text])
 
+    # Parse schedule to recurrence_rule (for pattern-based occurrences)
+    recurrence_rule =
+      case parse_schedule_to_recurrence(venue_data[:time_text], venue_data[:start_time]) do
+        {:ok, rule} ->
+          rule
+
+        {:error, reason} ->
+          Logger.warning("⚠️ Could not create recurrence_rule: #{reason}")
+          nil
+      end
+
     %{
       # Required fields
       external_id: external_id,
@@ -88,6 +107,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
       source_url: venue_data.source_url,
       image_url: venue_data[:logo_url],
 
+      # Recurring pattern (enables frontend to generate future dates)
+      recurrence_rule: recurrence_rule,
+
       # Pricing
       is_ticketed: not is_free,
       is_free: is_free,
@@ -112,6 +134,72 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
       category: "trivia"
     }
   end
+
+  @doc """
+  Parses time_text into recurrence_rule JSON for pattern-based event occurrences.
+
+  Following the PubQuiz pattern, this enables the frontend to generate multiple
+  future dates from a single recurring event record.
+
+  ## Parameters
+  - `time_text` - Schedule text (e.g., "Tuesdays at 7:00 pm")
+  - `start_time` - Pre-parsed start time in HH:MM format (fallback if time_text parsing fails)
+
+  ## Examples
+
+      iex> parse_schedule_to_recurrence("Tuesdays at 7:00 pm", "19:00")
+      {:ok, %{
+        "frequency" => "weekly",
+        "days_of_week" => ["tuesday"],
+        "time" => "19:00",
+        "timezone" => "America/New_York"
+      }}
+
+      iex> parse_schedule_to_recurrence("Wednesdays at 8pm", nil)
+      {:ok, %{
+        "frequency" => "weekly",
+        "days_of_week" => ["wednesday"],
+        "time" => "20:00",
+        "timezone" => "America/New_York"
+      }}
+
+  ## Returns
+  - `{:ok, recurrence_rule_map}` - Successfully parsed schedule
+  - `{:error, reason}` - Parsing failed
+  """
+  def parse_schedule_to_recurrence(time_text, start_time \\ nil)
+
+  def parse_schedule_to_recurrence(time_text, start_time) when is_binary(time_text) do
+    alias EventasaurusDiscovery.Sources.GeeksWhoDrink.Helpers.TimeParser
+
+    case TimeParser.parse_time_text(time_text) do
+      {:ok, {day_of_week, time_struct}} ->
+        # Convert Time struct to HH:MM string format
+        time_string = Time.to_string(time_struct) |> String.slice(0, 5)
+
+        recurrence_rule = %{
+          "frequency" => "weekly",
+          "days_of_week" => [Atom.to_string(day_of_week)],
+          "time" => time_string,
+          # US/Canada events use America/New_York timezone by default
+          # TODO: Could enhance to detect timezone from venue location (state-based)
+          "timezone" => "America/New_York"
+        }
+
+        {:ok, recurrence_rule}
+
+      {:error, _reason} ->
+        # Fallback to start_time if provided
+        if start_time do
+          # Still need day of week, can't create full recurrence_rule
+          {:error, "Could not extract day of week from time_text: #{time_text}"}
+        else
+          {:error, "Could not parse time_text and no start_time fallback"}
+        end
+    end
+  end
+
+  def parse_schedule_to_recurrence(nil, _start_time), do: {:error, "Time text is nil"}
 
   # Parse location from address string
   # US addresses typically: "Street, City, State ZIP"
