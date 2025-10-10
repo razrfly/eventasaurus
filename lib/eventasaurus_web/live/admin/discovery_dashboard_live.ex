@@ -434,6 +434,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       "cinema-city",
       "pubquiz-pl",
       "question-one",
+      "geeks-who-drink",
       "all"
     ]
 

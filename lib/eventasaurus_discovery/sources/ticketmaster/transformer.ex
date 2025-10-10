@@ -761,8 +761,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     case CityResolver.resolve_city(latitude, longitude) do
       {:ok, city_name} ->
         # Successfully resolved city from coordinates
-        country = known_country || "Poland"
-        {city_name, country}
+        {city_name, known_country}
 
       {:error, reason} ->
         # Geocoding failed - log and fall back to conservative validation
@@ -782,8 +781,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     # CRITICAL: Validate city candidate before using
     case CityResolver.validate_city_name(city_trimmed) do
       {:ok, validated_city} ->
-        country = known_country || "Poland"
-        {validated_city, country}
+        {validated_city, known_country}
 
       {:error, reason} ->
         # City candidate failed validation (postcode, street address, etc.)
@@ -791,12 +789,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           "Ticketmaster API returned invalid city: #{inspect(city_trimmed)} (#{reason})"
         )
 
-        {nil, known_country || "Poland"}
+        {nil, known_country}
     end
   end
 
   defp validate_api_city(_api_city, known_country) do
-    {nil, known_country || "Poland"}
+    {nil, known_country}
   end
 
   # Extract price information from priceRanges array
