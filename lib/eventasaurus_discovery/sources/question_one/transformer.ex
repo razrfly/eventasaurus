@@ -1,17 +1,26 @@
 defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   @moduledoc """
-  Transforms Question One venue data into unified event format.
+  Transforms Question One venue data into unified event format with recurrence patterns.
 
   Question One provides weekly recurring trivia events at venues.
-  Each venue gets one event representing the recurring schedule.
+  Each venue gets one event with a recurrence_rule that enables the frontend
+  to generate multiple future occurrences.
 
   ## Transformation Strategy
   - Parse time_text to extract day of week and start time
+  - Create recurrence_rule for pattern-based occurrences (following PubQuiz pattern)
   - Calculate next occurrence of the event
   - Create stable external_id for deduplication
   - Extract city from address
   - Handle pricing from fee_text
   - Set category to "trivia"
+
+  ## Recurring Event Pattern
+  Uses `recurrence_rule` field to enable frontend generation of future dates:
+  - One database record represents all future occurrences
+  - Frontend generates next 4+ dates dynamically
+  - Always shows upcoming events (no stale past dates)
+  - See docs/RECURRING_EVENT_PATTERNS.md for full specification
   """
 
   require Logger
@@ -58,6 +67,17 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     # Parse pricing from fee_text
     {is_free, min_price} = parse_pricing(venue_data.fee_text)
 
+    # Parse schedule to recurrence_rule (for pattern-based occurrences)
+    recurrence_rule =
+      case parse_schedule_to_recurrence(venue_data.time_text) do
+        {:ok, rule} ->
+          rule
+
+        {:error, reason} ->
+          Logger.warning("⚠️ Could not create recurrence_rule: #{reason}")
+          nil
+      end
+
     %{
       # Required fields
       external_id: external_id,
@@ -86,6 +106,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
       source_url: venue_data.source_url,
       image_url: venue_data.hero_image_url,
 
+      # Recurring pattern (enables frontend to generate future dates)
+      recurrence_rule: recurrence_rule,
+
       # Pricing
       is_ticketed: not is_free,
       is_free: is_free,
@@ -106,6 +129,56 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
       category: "trivia"
     }
   end
+
+  @doc """
+  Parses time_text into recurrence_rule JSON for pattern-based event occurrences.
+
+  Following the PubQuiz pattern, this enables the frontend to generate multiple
+  future dates from a single recurring event record.
+
+  ## Examples
+
+      iex> parse_schedule_to_recurrence("Wednesdays at 8pm")
+      {:ok, %{
+        "frequency" => "weekly",
+        "days_of_week" => ["wednesday"],
+        "time" => "20:00",
+        "timezone" => "Europe/London"
+      }}
+
+      iex> parse_schedule_to_recurrence("Every Monday at 7:30pm")
+      {:ok, %{
+        "frequency" => "weekly",
+        "days_of_week" => ["monday"],
+        "time" => "19:30",
+        "timezone" => "Europe/London"
+      }}
+
+  ## Returns
+  - `{:ok, recurrence_rule_map}` - Successfully parsed schedule
+  - `{:error, reason}` - Parsing failed
+  """
+  def parse_schedule_to_recurrence(time_text) when is_binary(time_text) do
+    case DateParser.parse_time_text(time_text) do
+      {:ok, {day_of_week, time_struct}} ->
+        # Convert Time struct to HH:MM string format
+        time_string = Time.to_string(time_struct) |> String.slice(0, 5)
+
+        recurrence_rule = %{
+          "frequency" => "weekly",
+          "days_of_week" => [Atom.to_string(day_of_week)],
+          "time" => time_string,
+          "timezone" => "Europe/London"
+        }
+
+        {:ok, recurrence_rule}
+
+      {:error, reason} ->
+        {:error, "Could not parse time_text: #{reason}"}
+    end
+  end
+
+  def parse_schedule_to_recurrence(nil), do: {:error, "Time text is nil"}
 
   # Parse time_text or return defaults if parsing fails
   defp parse_time_data(time_text) do
