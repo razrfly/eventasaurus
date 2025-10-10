@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   alias EventasaurusDiscovery.Locations.{City, Country, CountryResolver}
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusWeb.Services.GooglePlaces.{TextSearch, Details, VenuePlacesAdapter}
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   import Ecto.Query
   require Logger
@@ -378,41 +379,67 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp derive_country_code(_), do: nil
 
-  defp create_city(name, country, data) do
-    attrs = %{
-      name: name,
-      slug: Normalizer.create_slug(name),
-      country_id: country.id,
-      latitude: data[:latitude],
-      longitude: data[:longitude]
-    }
+  # SAFETY NET: Validate city name before creating city record
+  # This is Layer 2 of defense in depth - prevents ANY garbage from entering database
+  # even if transformers forget validation or have bugs
+  defp create_city(name, country, data) when is_binary(name) do
+    # Validate city name BEFORE database insertion
+    case CityResolver.validate_city_name(name) do
+      {:ok, validated_name} ->
+        # Valid city name - proceed with creation
+        attrs = %{
+          name: validated_name,
+          slug: Normalizer.create_slug(validated_name),
+          country_id: country.id,
+          latitude: data[:latitude],
+          longitude: data[:longitude]
+        }
 
-    case %City{} |> City.changeset(attrs) |> Repo.insert() do
-      {:ok, city} ->
-        city
-
-      {:error, changeset} ->
-        # If insert fails (e.g., unique constraint), try to find the existing city
-        # This handles race conditions and edge cases with slug generation
-        Logger.warning("Failed to create city #{name}: #{inspect(changeset.errors)}")
-
-        from(c in City,
-          where:
-            c.country_id == ^country.id and
-              (c.name == ^name or c.slug == ^attrs.slug),
-          limit: 1
-        )
-        |> Repo.one()
-        |> case do
-          nil ->
-            # If we still can't find it, something is wrong
-            Logger.error("Cannot create or find city #{name} in country #{country.name}")
-            nil
-
-          city ->
+        case %City{} |> City.changeset(attrs) |> Repo.insert() do
+          {:ok, city} ->
             city
+
+          {:error, changeset} ->
+            # If insert fails (e.g., unique constraint), try to find the existing city
+            # This handles race conditions and edge cases with slug generation
+            Logger.warning("Failed to create city #{validated_name}: #{inspect(changeset.errors)}")
+
+            from(c in City,
+              where:
+                c.country_id == ^country.id and
+                  (c.name == ^validated_name or c.slug == ^attrs.slug),
+              limit: 1
+            )
+            |> Repo.one()
+            |> case do
+              nil ->
+                # If we still can't find it, something is wrong
+                Logger.error("Cannot create or find city #{validated_name} in country #{country.name}")
+                nil
+
+              city ->
+                city
+            end
         end
+
+      {:error, reason} ->
+        # REJECT invalid city name (postcode, street address, numeric value, etc.)
+        Logger.error("""
+        ❌ VenueProcessor REJECTED invalid city name (Layer 2 safety net):
+        City name: #{inspect(name)}
+        Country: #{country.name}
+        Reason: #{reason}
+        Source transformer must provide valid city name or nil.
+        This prevents database pollution.
+        """)
+
+        nil  # Return nil - this causes venue/event creation to fail (correct behavior)
     end
+  end
+
+  # Allow nil city names - better to have event without city than pollute database
+  defp create_city(nil, _country, _data) do
+    nil
   end
 
   defp find_or_create_venue(data, city, source) do
