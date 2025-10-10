@@ -8,6 +8,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Bandsintown.DateParser
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @doc """
   Transform a raw Bandsintown event into our unified format.
@@ -237,13 +238,16 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
     latitude = parse_coordinate(event["venue_latitude"])
     longitude = parse_coordinate(event["venue_longitude"])
 
+    # Resolve city name using CityResolver with coordinates
+    {resolved_city, resolved_country} = resolve_location(latitude, longitude, event["venue_city"], known_country)
+
     # Build address components
     address_parts =
       [
         event["venue_address"],
-        event["venue_city"],
+        resolved_city,
         event["venue_state"],
-        known_country || event["venue_country"]
+        resolved_country
       ]
       |> Enum.filter(&(&1 && &1 != ""))
 
@@ -257,27 +261,30 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
           latitude: latitude,
           longitude: longitude,
           address: address,
-          city: event["venue_city"],
+          city: resolved_city,
           state: event["venue_state"],
-          country: known_country || event["venue_country"],
+          country: resolved_country,
           postal_code: event["venue_postal_code"]
         }
 
       # We have venue name but missing coordinates - use city location
       venue_name && (event["venue_city"] || city) ->
-        # Use city context if available, otherwise use event's venue_city
+        # Validate API city name before using
+        {validated_city, validated_country} = validate_api_city(event["venue_city"], known_country)
+
+        # Use city context if available, otherwise use validated API city
         actual_city_name =
           if city && city.name do
             city.name
           else
-            event["venue_city"] || "Unknown City"
+            validated_city || "Unknown City"
           end
 
         actual_country_name =
           if city && city.country do
             city.country.name
           else
-            known_country || event["venue_country"]
+            validated_country
           end
 
         Logger.warning("""
@@ -482,4 +489,61 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
   end
 
   defp validate_image_url(_), do: nil
+
+  @doc """
+  Resolves city and country from GPS coordinates using offline geocoding.
+
+  Uses CityResolver for reliable city name extraction from coordinates.
+  Falls back to conservative validation of API-provided city name if geocoding fails.
+
+  ## Parameters
+  - `latitude` - GPS latitude coordinate
+  - `longitude` - GPS longitude coordinate
+  - `api_city` - City name from Bandsintown API (fallback only)
+  - `known_country` - Country from city context (preferred)
+
+  ## Returns
+  - `{city_name, country}` tuple
+  """
+  def resolve_location(latitude, longitude, api_city, known_country) do
+    case CityResolver.resolve_city(latitude, longitude) do
+      {:ok, city_name} ->
+        # Successfully resolved city from coordinates
+        country = known_country || "United States"
+        {city_name, country}
+
+      {:error, reason} ->
+        # Geocoding failed - log and fall back to conservative validation
+        Logger.warning(
+          "Geocoding failed for (#{inspect(latitude)}, #{inspect(longitude)}): #{reason}. Falling back to API city validation."
+        )
+
+        validate_api_city(api_city, known_country)
+    end
+  end
+
+  # Conservative fallback - validates API city name before using
+  # Prefers nil over garbage data
+  defp validate_api_city(api_city, known_country) when is_binary(api_city) do
+    city_trimmed = String.trim(api_city)
+
+    # CRITICAL: Validate city candidate before using
+    case CityResolver.validate_city_name(city_trimmed) do
+      {:ok, validated_city} ->
+        country = known_country || "United States"
+        {validated_city, country}
+
+      {:error, reason} ->
+        # City candidate failed validation (postcode, street address, etc.)
+        Logger.warning(
+          "Bandsintown API returned invalid city: #{inspect(city_trimmed)} (#{reason})"
+        )
+
+        {nil, known_country || "United States"}
+    end
+  end
+
+  defp validate_api_city(_api_city, known_country) do
+    {nil, known_country || "United States"}
+  end
 end

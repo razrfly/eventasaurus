@@ -141,6 +141,9 @@ defmodule Eventasaurus.MixProject do
       # Timezone lookup by geographic coordinates
       {:tz_world, "~> 1.3"},
 
+      # Offline reverse geocoding (lat/lng → city name)
+      {:geocoding, "~> 0.3.0"},
+
       # YAML parsing for category mappings
       {:yaml_elixir, "~> 2.11"},
 
