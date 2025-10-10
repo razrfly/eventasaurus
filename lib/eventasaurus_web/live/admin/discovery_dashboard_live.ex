@@ -18,12 +18,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   }
 
   alias EventasaurusDiscovery.Categories.Category
+  alias EventasaurusDiscovery.Sources.SourceRegistry
 
   import Ecto.Query
   require Logger
 
   @refresh_interval 5000
-  @country_wide_sources ["pubquiz-pl", "question-one"]
   @city_specific_sources %{
     "karnet" => "krakow",
     "kino-krakow" => "krakow",
@@ -50,7 +50,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:selected_city, nil)
       |> assign(:import_limit, 100)
       |> assign(:import_radius, 50)
-      |> assign(:country_wide_sources, @country_wide_sources)
       |> assign(:city_specific_sources, @city_specific_sources)
       |> load_data()
       |> schedule_refresh()
@@ -116,9 +115,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         city_id
       end
 
-    # Validate: source is required, city is required only for non-country-wide and non-city-specific sources
+    # Validate: source is required, city is required only for city-scoped sources (not regional/country)
     city_required =
-      source not in @country_wide_sources and not Map.has_key?(@city_specific_sources, source)
+      SourceRegistry.requires_city_id?(source) and not Map.has_key?(@city_specific_sources, source)
 
     missing_city = city_required and (is_nil(city_id_or_slug) or city_id_or_slug == "")
 
@@ -161,12 +160,23 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           {:noreply, socket}
 
         {:ok, city_id_val} ->
-          job_args = %{
-            "source" => source,
-            "city_id" => city_id_val,
-            "limit" => limit,
-            "radius" => radius
-          }
+          # Build job_args conditionally based on whether source requires city
+          job_args =
+            if city_required do
+              %{
+                "source" => source,
+                "city_id" => city_id_val,
+                "limit" => limit,
+                "radius" => radius
+              }
+            else
+              # Country-wide/regional sources don't need city_id
+              %{
+                "source" => source,
+                "limit" => limit,
+                "radius" => radius
+              }
+            end
 
           case DiscoverySyncJob.new(job_args) |> Oban.insert() do
             {:ok, job} ->
@@ -635,22 +645,35 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   @doc """
-  Checks if a source is country-wide (doesn't require city selection).
+  Checks if a source is country-wide or regional (doesn't require city selection).
+  Uses SourceRegistry to dynamically determine scope.
   """
   def country_wide_source?(source) when is_binary(source) do
-    source in @country_wide_sources
+    !SourceRegistry.requires_city_id?(source)
   end
 
   def country_wide_source?(_), do: false
 
   @doc """
-  Returns the coverage description for a country-wide source.
+  Returns the coverage description for a country-wide or regional source.
   """
   def source_coverage(source) when is_binary(source) do
-    case source do
-      "pubquiz-pl" -> "Poland"
-      "question-one" -> "Global (RSS feed)"
-      _ -> "Multiple Countries"
+    case SourceRegistry.get_scope(source) do
+      {:ok, :country} ->
+        case source do
+          "pubquiz-pl" -> "Poland"
+          _ -> "Country-wide"
+        end
+
+      {:ok, :regional} ->
+        case source do
+          "question-one" -> "UK & Ireland"
+          "geeks-who-drink" -> "US & Canada"
+          _ -> "Regional"
+        end
+
+      _ ->
+        "Unknown"
     end
   end
 
