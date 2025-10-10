@@ -12,6 +12,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
   require Logger
   alias EventasaurusDiscovery.Sources.ResidentAdvisor.{VenueEnricher, Config, UmbrellaDetector}
   alias EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.DateParser
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @doc """
   Transform a raw RA GraphQL event into our unified format.
@@ -139,14 +140,22 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
     venue = event["venue"]
 
     if venue && venue["name"] do
-      # Try to get coordinates from RA GraphQL (usually returns nil)
-      # VenueProcessor will handle Google Places lookup automatically if nil
-      # This follows the same pattern as Cinema City scraper
+      # Get coordinates from RA GraphQL via VenueEnricher (may return nil)
       {lat, lng, _needs_geocoding} =
         VenueEnricher.get_coordinates(
           venue["id"],
           venue["name"],
           city_context
+        )
+
+      # A-grade city resolution: Use CityResolver with GPS coordinates (primary)
+      # or validate API city name (fallback)
+      {resolved_city, resolved_country} =
+        resolve_location(
+          lat,
+          lng,
+          city_context.name,
+          get_country_name(city_context)
         )
 
       %{
@@ -155,8 +164,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
         # RA doesn't provide address
         latitude: lat,
         longitude: lng,
-        city: city_context.name,
-        country: get_country_name(city_context),
+        city: resolved_city,
+        country: resolved_country,
         external_venue_id: venue["id"],
         source_url: Config.build_venue_url(venue["contentUrl"]),
         metadata: %{
@@ -172,13 +181,22 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
       """)
 
       # Create placeholder venue - VenueProcessor will geocode if needed
+      # Validate city name even for placeholders
+      {resolved_city, resolved_country} =
+        resolve_location(
+          nil,
+          nil,
+          city_context.name,
+          get_country_name(city_context)
+        )
+
       %{
         name: "Venue TBD - #{city_context.name}",
         address: nil,
         latitude: nil,
         longitude: nil,
-        city: city_context.name,
-        country: get_country_name(city_context),
+        city: resolved_city,
+        country: resolved_country,
         metadata: %{placeholder: true}
       }
     end
@@ -186,6 +204,90 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Transformer do
 
   defp get_country_name(%{country: %{name: name}}), do: name
   defp get_country_name(_), do: nil
+
+  # Resolve city and country from GPS coordinates or validate API city name.
+  #
+  # Strategy (A-grade implementation):
+  # 1. If GPS coordinates available → Use CityResolver.resolve_city() (primary)
+  # 2. If geocoding fails → Validate API city name with CityResolver.validate_city_name() (fallback)
+  # 3. If validation fails → Return nil for city (safe default, VenueProcessor Layer 2 will catch)
+  #
+  # Pattern: International events with GPS fallback to API city validation.
+  # Similar to Bandsintown A-grade pattern.
+  #
+  # Returns: {city_name | nil, country_name}
+  defp resolve_location(latitude, longitude, api_city, country_name)
+       when is_float(latitude) and is_float(longitude) do
+    case CityResolver.resolve_city(latitude, longitude) do
+      {:ok, city_name} ->
+        Logger.debug("""
+        ✅ ResidentAdvisor: CityResolver resolved city from GPS coordinates
+        Coordinates: #{latitude}, #{longitude}
+        Resolved city: #{city_name}
+        Country: #{country_name}
+        """)
+
+        {city_name, country_name}
+
+      {:error, reason} ->
+        Logger.warning("""
+        ⚠️  ResidentAdvisor: CityResolver geocoding failed (#{reason}), falling back to API city validation
+        Coordinates: #{latitude}, #{longitude}
+        API city: #{inspect(api_city)}
+        """)
+
+        validate_api_city(api_city, country_name)
+    end
+  end
+
+  defp resolve_location(_latitude, _longitude, api_city, country_name) do
+    Logger.debug("""
+    ⚠️  ResidentAdvisor: No GPS coordinates available, validating API city name
+    API city: #{inspect(api_city)}
+    Country: #{country_name}
+    """)
+
+    validate_api_city(api_city, country_name)
+  end
+
+  # Validate API city name using CityResolver validation rules.
+  #
+  # Strategy:
+  # - Use CityResolver.validate_city_name() to reject invalid patterns
+  # - Return nil if validation fails (safe default for VenueProcessor Layer 2)
+  #
+  # Returns: {validated_city_name | nil, country_name}
+  defp validate_api_city(api_city, country_name) when is_binary(api_city) do
+    case CityResolver.validate_city_name(String.trim(api_city)) do
+      {:ok, validated_city} ->
+        Logger.debug("""
+        ✅ ResidentAdvisor: API city name validated successfully
+        API city: #{api_city}
+        Validated: #{validated_city}
+        """)
+
+        {validated_city, country_name}
+
+      {:error, reason} ->
+        Logger.warning("""
+        ❌ ResidentAdvisor: API city failed validation (#{reason})
+        API city: #{inspect(api_city)}
+        Returning nil for VenueProcessor Layer 2 safety net
+        """)
+
+        {nil, country_name}
+    end
+  end
+
+  defp validate_api_city(nil, country_name) do
+    Logger.debug("⚠️  ResidentAdvisor: No API city provided, returning nil")
+    {nil, country_name}
+  end
+
+  defp validate_api_city(_invalid, country_name) do
+    Logger.warning("⚠️  ResidentAdvisor: Invalid API city type, returning nil")
+    {nil, country_name}
+  end
 
   defp extract_title(event), do: event["title"] || "Unknown Event"
 

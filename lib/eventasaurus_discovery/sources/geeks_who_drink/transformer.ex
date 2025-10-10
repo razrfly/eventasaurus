@@ -10,6 +10,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
 
   ## Transformation Strategy
   - Use provided GPS coordinates (latitude/longitude)
+  - Resolve city names using offline geocoding via CityResolver
   - Parse time_text to extract day of week and start time
   - Create recurrence_rule for pattern-based occurrences (following PubQuiz pattern)
   - Calculate next occurrence of the event in America/New_York
@@ -27,6 +28,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   """
 
   require Logger
+
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @doc """
   Transform extracted venue data to unified format.
@@ -59,8 +62,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     # Generate stable external_id from venue_id
     external_id = "geeks_who_drink_#{venue_data.venue_id}"
 
-    # Extract city and country from address
-    {city, country} = parse_location_from_address(address)
+    # Resolve city and country using offline geocoding
+    {city, country} = resolve_location(latitude, longitude, address)
 
     # Parse pricing from fee_text
     {is_free, min_price} = parse_pricing(venue_data[:fee_text])
@@ -210,23 +213,76 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   def parse_schedule_to_recurrence(nil, _starts_at, _venue_data),
     do: {:error, "Time text is nil"}
 
-  # Parse location from address string
-  # US addresses typically: "Street, City, State ZIP"
-  defp parse_location_from_address(address) when is_binary(address) do
-    parts = String.split(address, ",")
+  @doc """
+  Resolves city and country from GPS coordinates using offline geocoding.
 
-    case parts do
-      # Has at least city
-      [_street, city | _rest] ->
-        {String.trim(city), "United States"}
+  Uses CityResolver for reliable city name extraction from coordinates.
+  Falls back to conservative address parsing if geocoding fails.
 
-      # Fallback: use whole address as city
-      _ ->
-        {address, "United States"}
+  ## Parameters
+  - `latitude` - GPS latitude coordinate
+  - `longitude` - GPS longitude coordinate
+  - `address` - Full address string (fallback only)
+
+  ## Returns
+  - `{city_name, country}` tuple
+
+  ## Examples
+
+      iex> resolve_location(40.7128, -74.0060, "123 Main St, New York, NY 10001")
+      {"New York City", "United States"}
+
+      iex> resolve_location(nil, nil, "123 Main St, New York, NY 10001")
+      {nil, "United States"}
+  """
+  def resolve_location(latitude, longitude, address) do
+    case CityResolver.resolve_city(latitude, longitude) do
+      {:ok, city_name} ->
+        # Successfully resolved city from coordinates
+        {city_name, "United States"}
+
+      {:error, reason} ->
+        # Geocoding failed - log and fall back to conservative parsing
+        Logger.warning(
+          "Geocoding failed for (#{inspect(latitude)}, #{inspect(longitude)}): #{reason}. Falling back to address parsing."
+        )
+
+        parse_location_from_address_conservative(address)
     end
   end
 
-  defp parse_location_from_address(_), do: {nil, "United States"}
+  # Conservative fallback parser - only extracts city if high confidence
+  # Prefers nil over garbage data
+  defp parse_location_from_address_conservative(address) when is_binary(address) do
+    parts = String.split(address, ",")
+
+    case parts do
+      # Has at least 3 parts (street, city, state+zip)
+      [_street, city_candidate, _state_zip | _rest] ->
+        city_trimmed = String.trim(city_candidate)
+
+        # Validate the city candidate before using it
+        case CityResolver.validate_city_name(city_trimmed) do
+          {:ok, validated_city} ->
+            {validated_city, "United States"}
+
+          {:error, _reason} ->
+            # City candidate failed validation (postcode, street address, etc.)
+            Logger.warning(
+              "Address parsing found invalid city candidate: #{inspect(city_trimmed)} from address: #{address}"
+            )
+
+            {nil, "United States"}
+        end
+
+      # Not enough parts or unexpected format - prefer nil
+      _ ->
+        Logger.debug("Could not parse city from address: #{address}")
+        {nil, "United States"}
+    end
+  end
+
+  defp parse_location_from_address_conservative(_), do: {nil, "United States"}
 
   # Build description from venue data
   defp build_description(venue_data) do
