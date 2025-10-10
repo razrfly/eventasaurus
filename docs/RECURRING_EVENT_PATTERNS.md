@@ -365,7 +365,37 @@ end
 
 For sources covering multiple timezones (e.g., US-wide events):
 
-**Option 1: Detect from venue location**
+**Option 1: Extract from starts_at DateTime (Recommended - Geeks Who Drink pattern)**
+```elixir
+def parse_schedule_to_recurrence(time_text, starts_at, venue_data) do
+  # starts_at already calculated with correct timezone by VenueDetailJob
+  timezone =
+    cond do
+      # Priority 1: Extract from starts_at DateTime (most accurate)
+      match?(%DateTime{}, starts_at) ->
+        starts_at.time_zone
+
+      # Priority 2: Use explicit timezone from venue metadata
+      is_binary(venue_data[:timezone]) ->
+        venue_data[:timezone]
+
+      # Priority 3: Fallback to most common timezone
+      true ->
+        "America/New_York"
+    end
+
+  recurrence_rule = %{
+    "frequency" => "weekly",
+    "days_of_week" => [day_of_week],
+    "time" => time,
+    "timezone" => timezone
+  }
+
+  {:ok, recurrence_rule}
+end
+```
+
+**Option 2: Detect from venue location (state-based)**
 ```elixir
 def determine_timezone(venue_data) do
   cond do
@@ -377,7 +407,7 @@ def determine_timezone(venue_data) do
 end
 ```
 
-**Option 2: Use venue metadata**
+**Option 3: Use venue metadata directly**
 ```elixir
 # If source provides timezone explicitly
 def parse_schedule_to_recurrence(schedule_text, venue_data) do
@@ -395,6 +425,8 @@ end
 ```
 
 **Important:** Always store times in the **event's local timezone**, not UTC. The frontend will handle timezone conversions for display.
+
+**Best Practice:** Extract timezone from the already-calculated `starts_at` DateTime (Option 1) to ensure consistency between the next occurrence time and the recurrence pattern timezone.
 
 ---
 

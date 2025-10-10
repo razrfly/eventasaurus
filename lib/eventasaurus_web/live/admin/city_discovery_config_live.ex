@@ -346,6 +346,9 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp get_default_settings("karnet"), do: %{"limit" => 100, "max_pages" => 10}
   defp get_default_settings("kino-krakow"), do: %{"limit" => 100, "max_pages" => 10}
   defp get_default_settings("cinema-city"), do: %{"limit" => 100}
+  defp get_default_settings("pubquiz-pl"), do: %{"limit" => 100}
+  defp get_default_settings("question-one"), do: %{"limit" => 100}
+  defp get_default_settings("geeks-who-drink"), do: %{"limit" => 100}
   defp get_default_settings(_), do: %{"limit" => 100}
 
   defp parse_setting_value(value) do
@@ -380,6 +383,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp source_icon("cinema-city"), do: "🍿"
   defp source_icon("pubquiz-pl"), do: "🧠"
   defp source_icon("question-one"), do: "❓"
+  defp source_icon("geeks-who-drink"), do: "🍺"
   defp source_icon(_), do: "📅"
 
   defp parse_city_id(city_id) when is_integer(city_id), do: {:ok, city_id}

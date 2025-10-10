@@ -193,8 +193,6 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
         "bandsintown" -> 3
         # Standard delay for Ticketmaster
         "ticketmaster" -> 2
-        # Standard delay for StubHub
-        "stubhub" -> 2
         # Default delay
         _ -> job_delay_interval()
       end
@@ -218,12 +216,6 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
         max_per_minute: 50,
         delay_seconds: 2,
         max_attempts: 5
-      },
-      "stubhub" => %{
-        max_per_hour: 800,
-        max_per_minute: 40,
-        delay_seconds: 2,
-        max_attempts: 4
       }
     }
 

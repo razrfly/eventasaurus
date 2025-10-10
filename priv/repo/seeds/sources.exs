@@ -5,10 +5,22 @@ alias EventasaurusDiscovery.Sources.Source
 
 sources = [
   %{
+    name: "Ticketmaster",
+    slug: "ticketmaster",
+    website_url: "https://www.ticketmaster.com",
+    priority: 100,
+    domains: ["music", "sports", "theater", "general"],
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 1000
+    }
+  },
+  %{
     name: "Bandsintown",
     slug: "bandsintown",
     website_url: "https://www.bandsintown.com",
     priority: 80,
+    domains: ["music", "concert"],
     metadata: %{
       "rate_limit_seconds" => 3,
       "max_requests_per_hour" => 500,
@@ -20,6 +32,7 @@ sources = [
     slug: "resident-advisor",
     website_url: "https://ra.co",
     priority: 75,
+    domains: ["music", "concert"],
     metadata: %{
       "rate_limit_seconds" => 0.5,
       "max_requests_per_hour" => 7200,
@@ -28,23 +41,49 @@ sources = [
     }
   },
   %{
-    name: "Ticketmaster",
-    slug: "ticketmaster",
-    website_url: "https://www.ticketmaster.com",
+    name: "Karnet Kraków",
+    slug: "karnet",
+    website_url: "https://karnet.krakowculture.pl",
     priority: 70,
+    domains: ["music", "theater", "cultural", "general"],
     metadata: %{
-      "rate_limit_seconds" => 2,
-      "max_requests_per_hour" => 1000
+      "rate_limit_seconds" => 4,
+      "max_requests_per_hour" => 900,
+      "language" => "pl",
+      "encoding" => "UTF-8",
+      "supports_pagination" => true,
+      "supports_filters" => true,
+      "event_types" => ["festivals", "concerts", "performances", "exhibitions", "outdoor"]
     }
   },
   %{
-    name: "StubHub",
-    slug: "stubhub",
-    website_url: "https://www.stubhub.com",
-    priority: 60,
+    name: "Question One",
+    slug: "question-one",
+    website_url: "https://www.questionone.co.uk",
+    priority: 35,
+    domains: ["trivia"],
+    aggregate_on_index: true,
+    aggregation_type: "trivia",
     metadata: %{
       "rate_limit_seconds" => 2,
-      "max_requests_per_hour" => 800
+      "max_requests_per_hour" => 300,
+      "language" => "en",
+      "supports_recurring_events" => true
+    }
+  },
+  %{
+    name: "Geeks Who Drink",
+    slug: "geeks-who-drink",
+    website_url: "https://www.geekswhodrink.com",
+    priority: 35,
+    domains: ["trivia"],
+    aggregate_on_index: true,
+    aggregation_type: "trivia",
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 300,
+      "language" => "en",
+      "supports_recurring_events" => true
     }
   },
   %{
@@ -52,6 +91,7 @@ sources = [
     slug: "pubquiz-pl",
     website_url: "https://pubquiz.pl",
     priority: 25,
+    domains: ["trivia"],
     aggregate_on_index: true,
     aggregation_type: "trivia",
     metadata: %{
@@ -66,6 +106,7 @@ sources = [
     slug: "cinema-city",
     website_url: "https://www.cinema-city.pl",
     priority: 15,
+    domains: ["screening", "cinema", "movie"],
     aggregate_on_index: true,
     aggregation_type: "movie",
     metadata: %{
@@ -80,6 +121,7 @@ sources = [
     slug: "kino-krakow",
     website_url: "https://www.kino.krakow.pl",
     priority: 15,
+    domains: ["screening", "cinema", "movie"],
     aggregate_on_index: true,
     aggregation_type: "movie",
     metadata: %{
