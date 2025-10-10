@@ -310,6 +310,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       city = city || create_city(city_name, country, data)
 
       if city do
+        # Schedule coordinate calculation if city has no coordinates
+        # This ensures all cities get coordinates calculated from their venues
+        # CityCoordinateCalculationJob handles deduplication (max once per 24h)
+        if is_nil(city.latitude) || is_nil(city.longitude) do
+          schedule_city_coordinate_update(city.id)
+        end
+
         {:ok, city}
       else
         {:error, "Failed to find or create city: #{city_name}"}
@@ -728,5 +735,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     Enum.any?(errors, fn {field, _} ->
       field in [:latitude, :longitude]
     end)
+  end
+
+  defp schedule_city_coordinate_update(city_id) do
+    # Schedule coordinate calculation job for this city
+    # Job will check internally if update is needed (24hr deduplication)
+    EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob.schedule_update(city_id)
+    :ok
+  rescue
+    error ->
+      Logger.warning(
+        "Failed to schedule coordinate update for city #{city_id}: #{inspect(error)}"
+      )
+
+      # Don't fail the main venue processing if coordinate scheduling fails
+      :ok
   end
 end

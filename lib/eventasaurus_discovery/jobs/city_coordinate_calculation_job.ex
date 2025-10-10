@@ -145,11 +145,11 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
 
     unique =
       if force do
-        # Allow bypassing the 24h window but dedupe identical forced submissions briefly
+        # Allow bypassing the 24h window but dedupe identical forced submissions briefly (60 seconds)
         [
           fields: [:args, :queue, :worker],
           keys: [:city_id, :force],
-          period: 0,
+          period: 60,
           states: [:available, :scheduled, :executing]
         ]
       else

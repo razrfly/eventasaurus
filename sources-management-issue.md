@@ -26,18 +26,20 @@ We have a sources table and management UI (`/admin/sources`, form at `/admin/sou
 - ✅ **Admin UI**: `/admin/sources` (index) and `/admin/source_form_live` (form)
 - ✅ **Source Schema**: `EventasaurusDiscovery.Sources.Source`
 - ✅ **SourceStore**: Helper module for get/create operations
-- ✅ **Seeds File**: `priv/repo/seeds/sources.exs` (7 sources)
+- ✅ **Seeds File**: `priv/repo/seeds/sources.exs` (9 sources)
 - ✅ **Join Table**: `public_event_sources` links events to sources
 
 ### Seeds File Sources
-Current seeds define:
-1. Bandsintown (priority: 80)
-2. Resident Advisor (priority: 75)
-3. Ticketmaster (priority: 70)
-4. StubHub (priority: 60)
-5. PubQuiz Poland (priority: 25)
-6. Cinema City (priority: 15)
-7. Kino Krakow (priority: 15)
+Current seeds define (9 sources):
+1. Ticketmaster (priority: 100)
+2. Bandsintown (priority: 80)
+3. Resident Advisor (priority: 75)
+4. Karnet Kraków (priority: 70)
+5. Question One (priority: 35)
+6. Geeks Who Drink (priority: 35)
+7. PubQuiz Poland (priority: 25)
+8. Cinema City (priority: 15)
+9. Kino Krakow (priority: 15)
 
 ## Scraper Integration Audit
 
@@ -126,11 +128,17 @@ end
 
 ### ❓ Not Audited
 
-#### StubHub
-**Status: In seeds but no active scraper found**
-- Listed in seeds (priority: 60)
-- No scraper implementation found in codebase
-- May be placeholder for future implementation
+#### Question One
+**Integration Score: TBD**
+- ✅ In seeds (priority: 35)
+- ✅ Regional trivia source for UK
+- ❓ Integration pattern needs verification
+
+#### Geeks Who Drink
+**Integration Score: TBD**
+- ✅ In seeds (priority: 35)
+- ✅ Regional trivia source for US/Canada
+- ❓ Integration pattern needs verification
 
 ## Issues Identified
 
@@ -153,29 +161,20 @@ end
 
 ### ⚠️ High Priority Issues (P1)
 
-4. **Missing Seeds Entries**
-   - Karnet not in seeds despite being fully integrated
-   - If database is rebuilt, Karnet source won't exist
-   - **Impact**: Scraper will create source but inconsistent with other sources
-
-5. **Inconsistent Integration Patterns**
+4. **Inconsistent Integration Patterns**
    - RA/Karnet: Full get_or_create with table queries ✅
    - Cinema City/Kino/PubQuiz: Rely on seeds ⚠️
+   - Question One/Geeks Who Drink: Integration needs verification ❓
    - **Impact**: Fragile, requires seeds to run, can't add sources via UI
 
-6. **Config/Table Duplication**
+5. **Config/Table Duplication**
    - Priority defined in BOTH Config modules AND seeds
    - Metadata (rate limits, etc.) duplicated
    - **Impact**: Changes in one place don't reflect in other
 
 ### 📋 Medium Priority Issues (P2)
 
-7. **StubHub Placeholder**
-   - In seeds but no scraper exists
-   - Clutters source list
-   - **Impact**: Confusing, maintenance burden
-
-8. **Seeds File Maintenance**
+7. **Seeds File Maintenance**
    - No automatic sync between scrapers and seeds
    - Easy to forget updating seeds when adding scrapers
    - **Impact**: Database rebuild loses sources
@@ -226,12 +225,15 @@ end
 5. ❌ Cinema City
 6. ❌ Kino Krakow
 7. ❌ PubQuiz
+8. ❓ Question One (needs verification)
+9. ❓ Geeks Who Drink (needs verification)
 
 ### Phase 3: Seeds & Configuration (Week 3)
 
 1. **Update Seeds File**
-   - Add Karnet
-   - Remove or document StubHub placeholder
+   - ✅ Karnet added
+   - ✅ Question One added
+   - ✅ Geeks Who Drink added
    - Ensure all active scrapers represented
    - Match priorities with Config modules
 
@@ -257,10 +259,12 @@ end
 
 - [ ] Dashboard has visible link to `/admin/sources`
 - [ ] All active scrapers use get_or_create pattern
-- [ ] Seeds file includes all active sources
+- [x] Seeds file includes all active sources (9 sources)
 - [ ] No priority conflicts between Config and seeds
 - [ ] Bandsintown consolidation complete
-- [ ] Karnet added to seeds
+- [x] Karnet added to seeds
+- [x] Question One added to seeds
+- [x] Geeks Who Drink added to seeds
 - [ ] Documentation updated for adding new sources
 - [ ] All sources created via table are visible in UI
 

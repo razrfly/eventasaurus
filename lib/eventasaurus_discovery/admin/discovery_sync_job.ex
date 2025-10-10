@@ -47,21 +47,22 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
         nil
       end
 
-    # Check if city is required but not found
-    if requires_city && (!city_id || !city) do
-      error_msg = "City not found (id: #{city_id})"
+    # Only fail if city_id was explicitly provided but city doesn't exist
+    # Allow nil city_id - regional/country sources will auto-create cities via VenueProcessor
+    if requires_city && city_id && !city do
+      error_msg = "Invalid city_id: #{city_id}"
       Logger.error("❌ #{error_msg} for #{source} sync")
       broadcast_progress(:error, %{message: error_msg, source: source, city_id: city_id})
       {:error, error_msg}
     else
       city_info =
-        if requires_city do
+        if requires_city && city do
           "City: #{city.name}, #{city.country.name}"
         else
           case SourceRegistry.get_scope(source) do
-            {:ok, :country} -> "Country-wide source"
-            {:ok, :regional} -> "Regional source"
-            _ -> "Source without city"
+            {:ok, :country} -> "Country-wide source (will auto-create cities)"
+            {:ok, :regional} -> "Regional source (will auto-create cities)"
+            _ -> "Source without city (will auto-create cities)"
           end
         end
 
@@ -103,13 +104,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
 
         # Build job args based on source type
         job_args =
-          if requires_city do
+          if requires_city && city do
             %{
               "city_id" => city.id,
               "limit" => limit,
               "options" => options
             }
           else
+            # Regional/country sources or when city_id not provided
             %{
               "limit" => limit
             }
@@ -119,7 +121,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
         case job_module.new(job_args) |> Oban.insert() do
           {:ok, job} ->
             city_name =
-              if requires_city, do: city.name, else: "N/A (#{source_name})"
+              if requires_city && city, do: city.name, else: "N/A (#{source_name})"
 
             broadcast_progress(:completed, %{
               message: "Sync job queued for #{source_name}",
