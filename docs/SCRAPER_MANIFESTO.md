@@ -54,6 +54,51 @@ Every venue **MUST** have:
 
 ---
 
+## 🔁 Recurring Event Patterns (Optional)
+
+For events with **predictable recurring schedules** (weekly trivia nights, monthly meetups, daily showtimes), scrapers should implement the `recurrence_rule` pattern.
+
+**Benefits:**
+- One database record represents hundreds of future occurrences
+- Frontend generates next 4+ upcoming dates dynamically
+- Better UX (no stale past dates, always shows future events)
+- Improved storage efficiency and data freshness
+
+**When to Use:**
+- ✅ Weekly or monthly recurring events (predictable pattern)
+- ✅ Schedule clearly indicates recurrence (e.g., "Every Tuesday at 7 PM")
+- ✅ Timezone is known or reliably inferable
+- ❌ One-time events or irregular schedules
+
+**Implementation:**
+
+Add `recurrence_rule` field to event map:
+
+```elixir
+%{
+  title: "Weekly Trivia Night - The Local Pub",
+  starts_at: next_occurrence,  # Calculate next upcoming date
+
+  # Recurring pattern (optional field)
+  recurrence_rule: %{
+    "frequency" => "weekly",           # "weekly" | "monthly"
+    "days_of_week" => ["monday"],      # Day names
+    "time" => "19:00",                 # HH:MM format
+    "timezone" => "Europe/London"      # IANA timezone
+  }
+}
+```
+
+**Reference Implementation:** PubQuiz scraper (`lib/eventasaurus_discovery/sources/pubquiz/`)
+
+**Full Documentation:** See [RECURRING_EVENT_PATTERNS.md](./RECURRING_EVENT_PATTERNS.md) for complete specification, implementation patterns, timezone handling, edge cases, and examples.
+
+**Current Use Cases:**
+- Trivia events (PubQuiz ✅, Question One 🚧, Geeks Who Drink 🚧)
+- Future: Movie showtimes, music series, community events
+
+---
+
 ## 🏗️ Architecture Pattern
 
 ### Module Structure
