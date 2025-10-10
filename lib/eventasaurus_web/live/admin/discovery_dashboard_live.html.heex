@@ -87,7 +87,7 @@
           </div>
 
           <%= cond do %>
-            <% @selected_source && @selected_source in @country_wide_sources -> %>
+            <% @selected_source && country_wide_source?(@selected_source) -> %>
               <!-- Country-wide source: Show coverage info instead of city selector -->
               <div>
                 <label class="block text-sm font-medium text-gray-700">Coverage</label>
@@ -175,7 +175,7 @@
             phx-disable-with="Starting..."
             disabled={
               (is_nil(@selected_source) or @selected_source == "") or
-              (not (@selected_source in @country_wide_sources) and not Map.has_key?(@city_specific_sources, @selected_source) and (is_nil(@selected_city) or @selected_city == "")) or
+              (not country_wide_source?(@selected_source) and not Map.has_key?(@city_specific_sources, @selected_source) and (is_nil(@selected_city) or @selected_city == "")) or
               @import_running
             }
           >

@@ -112,8 +112,11 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
         {:error, :not_found}
 
       metadata when is_map(metadata) ->
+        # Use database scope if available, otherwise fallback to hardcoded defaults
+        scope_value = metadata["scope"] || get_default_scope_for_slug(source_slug)
+
         scope =
-          case metadata["scope"] do
+          case scope_value do
             "city" -> :city
             "country" -> :country
             "regional" -> :regional
@@ -128,6 +131,19 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
         {:ok, :city}  # Default to city if no metadata
     end
   end
+
+  # Hardcoded scope defaults for production compatibility
+  # These are fallbacks when metadata["scope"] is not set in the database
+  defp get_default_scope_for_slug("question-one"), do: "regional"
+  defp get_default_scope_for_slug("geeks-who-drink"), do: "regional"
+  defp get_default_scope_for_slug("pubquiz-pl"), do: "country"
+  defp get_default_scope_for_slug("ticketmaster"), do: "city"
+  defp get_default_scope_for_slug("bandsintown"), do: "city"
+  defp get_default_scope_for_slug("resident-advisor"), do: "city"
+  defp get_default_scope_for_slug("karnet"), do: "city"
+  defp get_default_scope_for_slug("cinema-city"), do: "city"
+  defp get_default_scope_for_slug("kino-krakow"), do: "city"
+  defp get_default_scope_for_slug(_), do: "city"  # Safe default for unknown sources
 
   @doc """
   Check if a source requires a city_id.

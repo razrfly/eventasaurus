@@ -106,7 +106,7 @@ sources = [
     slug: "cinema-city",
     website_url: "https://www.cinema-city.pl",
     priority: 15,
-    domains: ["screening", "cinema", "movie"],
+    domains: ["screening", "cinema", "movies"],
     aggregate_on_index: true,
     aggregation_type: "movie",
     metadata: %{
@@ -121,7 +121,7 @@ sources = [
     slug: "kino-krakow",
     website_url: "https://www.kino.krakow.pl",
     priority: 15,
-    domains: ["screening", "cinema", "movie"],
+    domains: ["screening", "cinema", "movies"],
     aggregate_on_index: true,
     aggregation_type: "movie",
     metadata: %{
