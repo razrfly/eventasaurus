@@ -380,9 +380,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp derive_country_code(_), do: nil
 
   # SAFETY NET: Validate city name before creating city record
+  # Allow nil city names - better to have event without city than pollute database
+  defp create_city(nil, _country, _data), do: nil
+
   # This is Layer 2 of defense in depth - prevents ANY garbage from entering database
   # even if transformers forget validation or have bugs
-  defp create_city(name, country, data) when is_binary(name) do
+  defp create_city(name, country, data) when not is_nil(name) do
     # Validate city name BEFORE database insertion
     case CityResolver.validate_city_name(name) do
       {:ok, validated_name} ->
@@ -435,11 +438,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
         nil  # Return nil - this causes venue/event creation to fail (correct behavior)
     end
-  end
-
-  # Allow nil city names - better to have event without city than pollute database
-  defp create_city(nil, _country, _data) do
-    nil
   end
 
   defp find_or_create_venue(data, city, source) do

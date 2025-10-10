@@ -233,7 +233,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
       {"New York City", "United States"}
 
       iex> resolve_location(nil, nil, "123 Main St, New York, NY 10001")
-      {nil, "United States"}
+      {"New York", "United States"}
   """
   def resolve_location(latitude, longitude, address) do
     case CityResolver.resolve_city(latitude, longitude) do
