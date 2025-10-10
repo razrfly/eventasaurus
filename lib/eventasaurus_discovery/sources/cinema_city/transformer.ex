@@ -13,6 +13,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   """
 
   require Logger
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @doc """
   Transform raw Cinema City showtime into unified event format.
@@ -188,13 +189,20 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   defp build_venue_data(event) do
     cinema = fetch(event, :cinema_data) || %{}
 
+    latitude = fetch(cinema, :latitude)
+    longitude = fetch(cinema, :longitude)
+    api_city = fetch(cinema, :city)
+
+    # Resolve city using CityResolver with coordinates if available
+    {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city, "Poland")
+
     %{
       name: fetch(cinema, :name),
       address: fetch(cinema, :address),
-      city: fetch(cinema, :city),
-      country: fetch(cinema, :country) || "Poland",
-      latitude: fetch(cinema, :latitude),
-      longitude: fetch(cinema, :longitude),
+      city: resolved_city,
+      country: resolved_country,
+      latitude: latitude,
+      longitude: longitude,
       phone: nil,
       # Not provided by Cinema City API
       metadata: %{
@@ -202,6 +210,61 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
         website: fetch(cinema, :website)
       }
     }
+  end
+
+  @doc """
+  Resolves city and country from GPS coordinates using offline geocoding.
+
+  Uses CityResolver for reliable city name extraction from coordinates.
+  Falls back to conservative validation of API-provided city name if geocoding fails.
+
+  ## Parameters
+  - `latitude` - GPS latitude coordinate (may be nil)
+  - `longitude` - GPS longitude coordinate (may be nil)
+  - `api_city` - City name from Cinema City API (fallback only)
+  - `known_country` - Country from context (Poland)
+
+  ## Returns
+  - `{city_name, country}` tuple
+  """
+  def resolve_location(latitude, longitude, api_city, known_country) do
+    case CityResolver.resolve_city(latitude, longitude) do
+      {:ok, city_name} ->
+        # Successfully resolved city from coordinates
+        {city_name, known_country}
+
+      {:error, reason} ->
+        # Geocoding failed - log and fall back to conservative validation
+        Logger.warning(
+          "Geocoding failed for (#{inspect(latitude)}, #{inspect(longitude)}): #{reason}. Falling back to API city validation."
+        )
+
+        validate_api_city(api_city, known_country)
+    end
+  end
+
+  # Conservative fallback - validates API city name before using
+  # Prefers nil over garbage data
+  defp validate_api_city(api_city, known_country) when is_binary(api_city) do
+    city_trimmed = String.trim(api_city)
+
+    # CRITICAL: Validate city candidate before using
+    case CityResolver.validate_city_name(city_trimmed) do
+      {:ok, validated_city} ->
+        {validated_city, known_country}
+
+      {:error, reason} ->
+        # City candidate failed validation (postcode, street address, etc.)
+        Logger.warning(
+          "Cinema City API returned invalid city: #{inspect(city_trimmed)} (#{reason})"
+        )
+
+        {nil, known_country}
+    end
+  end
+
+  defp validate_api_city(_api_city, known_country) do
+    {nil, known_country}
   end
 
   # Helper to get value from map with both atom and string keys

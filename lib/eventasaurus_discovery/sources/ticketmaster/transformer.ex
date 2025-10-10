@@ -5,6 +5,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   """
 
   require Logger
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @doc """
   Transforms a Ticketmaster event to our standardized event data structure.
@@ -103,7 +104,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   """
   def transform_venue(tm_venue, city \\ nil) when is_map(tm_venue) do
     # Use the KNOWN country from city context, not the unreliable API response
-    country =
+    known_country =
       if city && city.country do
         city.country.name
       else
@@ -111,23 +112,26 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         get_in(tm_venue, ["country", "name"]) || get_in(tm_venue, ["country", "countryCode"])
       end
 
-    # Trim city name to avoid trailing spaces that cause slug conflicts
-    city_name =
-      case get_in(tm_venue, ["city", "name"]) do
-        nil -> nil
-        name -> String.trim(name)
-      end
+    # Get coordinates
+    latitude = get_in(tm_venue, ["location", "latitude"]) |> to_float()
+    longitude = get_in(tm_venue, ["location", "longitude"]) |> to_float()
+
+    # Get API city name
+    api_city_name = get_in(tm_venue, ["city", "name"])
+
+    # Resolve city name using CityResolver with coordinates
+    {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city_name, known_country)
 
     %{
       external_id: "tm_venue_#{tm_venue["id"]}",
       name: tm_venue["name"],
       address: get_in(tm_venue, ["address", "line1"]),
-      city: city_name,
+      city: resolved_city,
       state: get_in(tm_venue, ["state", "name"]) || get_in(tm_venue, ["state", "stateCode"]),
-      country: country,
+      country: resolved_country,
       postal_code: tm_venue["postalCode"],
-      latitude: get_in(tm_venue, ["location", "latitude"]) |> to_float(),
-      longitude: get_in(tm_venue, ["location", "longitude"]) |> to_float(),
+      latitude: latitude,
+      longitude: longitude,
       timezone: tm_venue["timezone"],
       metadata: extract_venue_metadata(tm_venue)
     }
@@ -415,24 +419,28 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       # Check for place information
       place = event["place"] ->
         Logger.info("🔄 Attempting to build venue from place data")
-        # Trim city name to avoid trailing spaces
-        city_name =
-          case get_in(place, ["city", "name"]) || place["city"] do
-            nil -> nil
-            name -> String.trim(name)
-          end
+
+        # Get coordinates
+        latitude = get_in(place, ["location", "latitude"]) |> to_float()
+        longitude = get_in(place, ["location", "longitude"]) |> to_float()
+
+        # Get API city name
+        api_city_name = get_in(place, ["city", "name"]) || place["city"]
+
+        # Resolve city name using CityResolver
+        {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city_name, known_country)
 
         %{
           external_id:
             "tm_place_#{place["id"] || :crypto.hash(:md5, inspect(place)) |> Base.encode16()}",
           name: place["name"] || "Unknown Venue",
           address: place["address"] || place["line1"],
-          city: city_name,
+          city: resolved_city,
           state: get_in(place, ["state", "name"]) || place["state"],
-          country: known_country || get_in(place, ["country", "name"]) || place["country"],
+          country: resolved_country || known_country || get_in(place, ["country", "name"]) || place["country"],
           postal_code: place["postalCode"],
-          latitude: get_in(place, ["location", "latitude"]) |> to_float(),
-          longitude: get_in(place, ["location", "longitude"]) |> to_float(),
+          latitude: latitude,
+          longitude: longitude,
           timezone: place["timezone"],
           metadata: %{}
         }
@@ -441,16 +449,23 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       location = event["location"] ->
         Logger.info("🔄 Attempting to build venue from location data")
 
+        # Get coordinates
+        latitude = location["latitude"] |> to_float()
+        longitude = location["longitude"] |> to_float()
+
+        # Resolve city name using CityResolver
+        {resolved_city, resolved_country} = resolve_location(latitude, longitude, location["city"], known_country)
+
         %{
           external_id: "tm_location_#{:crypto.hash(:md5, inspect(location)) |> Base.encode16()}",
           name: location["name"] || "Unknown Venue",
           address: location["address"],
-          city: location["city"],
+          city: resolved_city,
           state: location["state"],
-          country: known_country || location["country"],
+          country: resolved_country || known_country || location["country"],
           postal_code: location["postalCode"],
-          latitude: location["latitude"] |> to_float(),
-          longitude: location["longitude"] |> to_float(),
+          latitude: latitude,
+          longitude: longitude,
           timezone: event["timezone"],
           metadata: %{}
         }
@@ -725,6 +740,63 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       {float, _} -> float
       :error -> nil
     end
+  end
+
+  @doc """
+  Resolves city and country from GPS coordinates using offline geocoding.
+
+  Uses CityResolver for reliable city name extraction from coordinates.
+  Falls back to conservative validation of API-provided city name if geocoding fails.
+
+  ## Parameters
+  - `latitude` - GPS latitude coordinate
+  - `longitude` - GPS longitude coordinate
+  - `api_city` - City name from Ticketmaster API (fallback only)
+  - `known_country` - Country from city context (preferred)
+
+  ## Returns
+  - `{city_name, country}` tuple
+  """
+  def resolve_location(latitude, longitude, api_city, known_country) do
+    case CityResolver.resolve_city(latitude, longitude) do
+      {:ok, city_name} ->
+        # Successfully resolved city from coordinates
+        country = known_country || "Poland"
+        {city_name, country}
+
+      {:error, reason} ->
+        # Geocoding failed - log and fall back to conservative validation
+        Logger.warning(
+          "Geocoding failed for (#{inspect(latitude)}, #{inspect(longitude)}): #{reason}. Falling back to API city validation."
+        )
+
+        validate_api_city(api_city, known_country)
+    end
+  end
+
+  # Conservative fallback - validates API city name before using
+  # Prefers nil over garbage data
+  defp validate_api_city(api_city, known_country) when is_binary(api_city) do
+    city_trimmed = String.trim(api_city)
+
+    # CRITICAL: Validate city candidate before using
+    case CityResolver.validate_city_name(city_trimmed) do
+      {:ok, validated_city} ->
+        country = known_country || "Poland"
+        {validated_city, country}
+
+      {:error, reason} ->
+        # City candidate failed validation (postcode, street address, etc.)
+        Logger.warning(
+          "Ticketmaster API returned invalid city: #{inspect(city_trimmed)} (#{reason})"
+        )
+
+        {nil, known_country || "Poland"}
+    end
+  end
+
+  defp validate_api_city(_api_city, known_country) do
+    {nil, known_country || "Poland"}
   end
 
   # Extract price information from priceRanges array

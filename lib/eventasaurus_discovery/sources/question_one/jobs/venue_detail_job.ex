@@ -31,7 +31,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
   }
 
   alias EventasaurusDiscovery.Sources.Processor
-  alias EventasaurusWeb.Services.GooglePlaces.Geocoding
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -65,23 +65,24 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
       {:error, "Failed to parse HTML: #{inspect(error)}"}
   end
 
-  # Enrich venue data with geocoded city and country information
-  # Uses Google Geocoding API to extract proper city_name and country_name from address
+  # Enrich venue data with city and country information
+  # Uses conservative UK address parsing with CityResolver validation
+  # UK addresses typically follow: "Street, City, Postcode" or "Venue, Street, City, Postcode"
   defp enrich_with_geocoding(venue_data) do
     address = Map.get(venue_data, :address)
 
-    case geocode_address(address) do
+    case parse_uk_address(address) do
       {:ok, {city_name, country_name}} ->
         enriched =
           venue_data
           |> Map.put(:city_name, city_name)
           |> Map.put(:country_name, country_name)
 
-        Logger.debug("📍 Geocoded #{address} → #{city_name}, #{country_name}")
+        Logger.debug("📍 Parsed #{address} → #{city_name}, #{country_name}")
         {:ok, enriched}
 
       {:error, reason} ->
-        Logger.warning("⚠️ Geocoding failed for #{address}: #{reason}. Using fallback.")
+        Logger.warning("⚠️ Address parsing failed for #{address}: #{reason}. Using nil.")
         # Fallback: Use nil values which will cause VenueProcessor to attempt its own geocoding
         enriched =
           venue_data
@@ -92,55 +93,49 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     end
   end
 
-  # Geocode address to extract city_name and country_name
-  defp geocode_address(address) when is_binary(address) do
-    case Geocoding.search(address) do
-      {:ok, [first_result | _]} ->
-        address_components = Map.get(first_result, "address_components", [])
-        city_name = extract_city(address_components)
-        country_name = extract_country(address_components)
+  # Parse UK address to extract city_name and country_name
+  # UK addresses typically: "Street, City, Postcode" or "Venue, Street, City, Postcode"
+  defp parse_uk_address(address) when is_binary(address) do
+    parts = String.split(address, ",") |> Enum.map(&String.trim/1)
 
-        if city_name && country_name do
-          {:ok, {city_name, country_name}}
+    case parts do
+      # 4+ parts: venue, street, city, postcode[, extras]
+      [_venue, _street, city_candidate, _postcode | _rest] ->
+        validate_and_return_city(city_candidate)
+
+      # 3 parts: street, city, postcode
+      [_street, city_candidate, _postcode] ->
+        validate_and_return_city(city_candidate)
+
+      # 2 parts: might be city, postcode
+      [city_candidate, postcode_candidate] ->
+        # Check if second part looks like postcode (UK pattern)
+        if String.match?(postcode_candidate, ~r/^[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}$/i) do
+          validate_and_return_city(city_candidate)
         else
-          {:error, "Missing city or country in geocoding results"}
+          {:error, "Cannot determine city from 2-part address"}
         end
 
-      {:ok, []} ->
-        {:error, "No geocoding results found"}
-
-      {:error, reason} ->
-        {:error, reason}
+      # Not enough parts
+      _ ->
+        {:error, "Address format not recognized"}
     end
   end
 
-  defp geocode_address(_), do: {:error, "Invalid address"}
+  defp parse_uk_address(_), do: {:error, "Invalid address"}
 
-  # Extract city from address_components (same logic as VenuePlacesAdapter)
-  defp extract_city(address_components) when is_list(address_components) do
-    find_component(address_components, "locality") ||
-      find_component(address_components, "administrative_area_level_2")
-  end
+  # Validate city candidate using CityResolver before returning
+  defp validate_and_return_city(city_candidate) do
+    case CityResolver.validate_city_name(city_candidate) do
+      {:ok, validated_city} ->
+        {:ok, {validated_city, "United Kingdom"}}
 
-  defp extract_city(_), do: nil
+      {:error, reason} ->
+        Logger.warning(
+          "City candidate failed validation: #{inspect(city_candidate)} (#{reason})"
+        )
 
-  # Extract country name (long_name) from address_components
-  defp extract_country(address_components) when is_list(address_components) do
-    find_component(address_components, "country")
-  end
-
-  defp extract_country(_), do: nil
-
-  # Find address component by type (returns long_name)
-  defp find_component(components, type) do
-    components
-    |> Enum.find(fn component ->
-      types = Map.get(component, "types", [])
-      type in types
-    end)
-    |> case do
-      %{"long_name" => name} -> name
-      _ -> nil
+        {:error, "Invalid city name: #{reason}"}
     end
   end
 
