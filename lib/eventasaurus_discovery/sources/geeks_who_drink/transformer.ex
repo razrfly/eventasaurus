@@ -66,8 +66,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     {is_free, min_price} = parse_pricing(venue_data[:fee_text])
 
     # Parse schedule to recurrence_rule (for pattern-based occurrences)
+    # Pass starts_at and venue_data for timezone detection
     recurrence_rule =
-      case parse_schedule_to_recurrence(venue_data[:time_text], venue_data[:start_time]) do
+      case parse_schedule_to_recurrence(venue_data[:time_text], starts_at, venue_data) do
         {:ok, rule} ->
           rule
 
@@ -143,33 +144,32 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
 
   ## Parameters
   - `time_text` - Schedule text (e.g., "Tuesdays at 7:00 pm")
-  - `start_time` - Pre-parsed start time in HH:MM format (fallback if time_text parsing fails)
+  - `starts_at` - DateTime with correct timezone from VenueDetailJob calculation
+  - `venue_data` - Full venue data map (for timezone fallback from metadata)
 
   ## Examples
 
-      iex> parse_schedule_to_recurrence("Tuesdays at 7:00 pm", "19:00")
+      iex> starts_at = %DateTime{time_zone: "America/Chicago", ...}
+      iex> parse_schedule_to_recurrence("Tuesdays at 7:00 pm", starts_at, %{})
       {:ok, %{
         "frequency" => "weekly",
         "days_of_week" => ["tuesday"],
         "time" => "19:00",
-        "timezone" => "America/New_York"
-      }}
-
-      iex> parse_schedule_to_recurrence("Wednesdays at 8pm", nil)
-      {:ok, %{
-        "frequency" => "weekly",
-        "days_of_week" => ["wednesday"],
-        "time" => "20:00",
-        "timezone" => "America/New_York"
+        "timezone" => "America/Chicago"
       }}
 
   ## Returns
   - `{:ok, recurrence_rule_map}` - Successfully parsed schedule
   - `{:error, reason}` - Parsing failed
-  """
-  def parse_schedule_to_recurrence(time_text, start_time \\ nil)
 
-  def parse_schedule_to_recurrence(time_text, start_time) when is_binary(time_text) do
+  ## Timezone Detection Priority
+  1. Extract from starts_at DateTime (calculated by VenueDetailJob with correct zone)
+  2. Use venue_data[:timezone] if present
+  3. Fallback to "America/New_York" (Eastern Time)
+  """
+  def parse_schedule_to_recurrence(time_text, starts_at \\ nil, venue_data \\ %{})
+
+  def parse_schedule_to_recurrence(time_text, starts_at, venue_data) when is_binary(time_text) do
     alias EventasaurusDiscovery.Sources.GeeksWhoDrink.Helpers.TimeParser
 
     case TimeParser.parse_time_text(time_text) do
@@ -177,29 +177,38 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         # Convert Time struct to HH:MM string format
         time_string = Time.to_string(time_struct) |> String.slice(0, 5)
 
+        # Detect timezone with priority: starts_at > venue_data > default
+        timezone =
+          cond do
+            # Priority 1: Extract from starts_at DateTime (most accurate)
+            match?(%DateTime{}, starts_at) ->
+              starts_at.time_zone
+
+            # Priority 2: Use explicit timezone from venue metadata
+            is_binary(venue_data[:timezone]) ->
+              venue_data[:timezone]
+
+            # Priority 3: Fallback to Eastern Time (most common for Geeks Who Drink)
+            true ->
+              "America/New_York"
+          end
+
         recurrence_rule = %{
           "frequency" => "weekly",
           "days_of_week" => [Atom.to_string(day_of_week)],
           "time" => time_string,
-          # US/Canada events use America/New_York timezone by default
-          # TODO: Could enhance to detect timezone from venue location (state-based)
-          "timezone" => "America/New_York"
+          "timezone" => timezone
         }
 
         {:ok, recurrence_rule}
 
       {:error, _reason} ->
-        # Fallback to start_time if provided
-        if start_time do
-          # Still need day of week, can't create full recurrence_rule
-          {:error, "Could not extract day of week from time_text: #{time_text}"}
-        else
-          {:error, "Could not parse time_text and no start_time fallback"}
-        end
+        {:error, "Could not extract day of week from time_text: #{time_text}"}
     end
   end
 
-  def parse_schedule_to_recurrence(nil, _start_time), do: {:error, "Time text is nil"}
+  def parse_schedule_to_recurrence(nil, _starts_at, _venue_data),
+    do: {:error, "Time text is nil"}
 
   # Parse location from address string
   # US addresses typically: "Street, City, State ZIP"
