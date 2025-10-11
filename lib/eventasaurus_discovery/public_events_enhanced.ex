@@ -906,8 +906,18 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Groups events by source+city combination and creates AggregatedEventGroup structs.
   Also groups movie screenings by movie+city and creates AggregatedMovieGroup structs.
   Non-aggregatable events are returned as-is.
+
+  ## Options
+
+    * `:ignore_city_in_aggregation` - When true, aggregates events by source only,
+      ignoring city boundaries. Used for city-specific pages where geographic filtering
+      already determines relevance.
+    * `:viewing_city` - The city context for aggregation. When provided with
+      `ignore_city_in_aggregation: true`, this city is used as the canonical city
+      for generated aggregation groups.
+
   """
-  def aggregate_events(events, _opts \\ []) do
+  def aggregate_events(events, opts \\ []) do
     # Preload sources, movies, venue, and venue associations for timezone conversion
     events_with_sources = Repo.preload(events, sources: :source, venue: [city_ref: :country], movies: [])
 
@@ -917,30 +927,61 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # Separate aggregatable from non-aggregatable events (for source-based aggregation)
     {aggregatable, non_aggregatable} = Enum.split_with(other_events, &event_aggregatable?/1)
 
-    # Group aggregatable events by source+city
+    # Group aggregatable events by source+city (or source only if ignoring city boundaries)
     source_aggregated_groups =
       aggregatable
       |> Enum.group_by(fn event ->
         source = get_event_source(event)
-        {source.id, event.venue.city_id, source.aggregation_type}
+        if opts[:ignore_city_in_aggregation] do
+          # City-specific page: group by source only
+          {source.id, source.aggregation_type}
+        else
+          # Global page: group by source + city to differentiate locations
+          {source.id, event.venue.city_id, source.aggregation_type}
+        end
       end)
-      |> Enum.map(fn {{source_id, city_id, aggregation_type}, events} ->
-        build_aggregated_group(source_id, city_id, aggregation_type, events)
+      |> Enum.map(fn
+        # When ignoring city boundaries, use viewing city as canonical city
+        {{source_id, aggregation_type}, events} when is_map_key(opts, :ignore_city_in_aggregation) ->
+          viewing_city = opts[:viewing_city]
+          city_id = if viewing_city, do: viewing_city.id, else: nil
+          build_aggregated_group(source_id, city_id, aggregation_type, events, viewing_city)
+
+        # Normal city-based aggregation
+        {{source_id, city_id, aggregation_type}, events} ->
+          build_aggregated_group(source_id, city_id, aggregation_type, events, nil)
       end)
       |> Enum.reject(&is_nil/1)
 
-    # Group movie events by movie+city, keeping failed events as individual items
+    # Group movie events by movie+city (or movie only if ignoring city boundaries)
     {movie_aggregated_groups, failed_movie_events} =
       movie_events
       |> Enum.group_by(fn event ->
         movie = List.first(event.movies)
-        {movie.id, event.venue.city_id}
-      end)
-      |> Enum.reduce({[], []}, fn {{movie_id, city_id}, events}, {groups, failed} ->
-        case build_movie_aggregated_group(movie_id, city_id, events) do
-          nil -> {groups, failed ++ events}
-          group -> {[group | groups], failed}
+        if opts[:ignore_city_in_aggregation] do
+          # City-specific page: group by movie only
+          {movie.id}
+        else
+          # Global page: group by movie + city to differentiate locations
+          {movie.id, event.venue.city_id}
         end
+      end)
+      |> Enum.reduce({[], []}, fn
+        # When ignoring city boundaries, use viewing city as canonical city
+        {{movie_id}, events}, {groups, failed} when is_map_key(opts, :ignore_city_in_aggregation) ->
+          viewing_city = opts[:viewing_city]
+          city_id = if viewing_city, do: viewing_city.id, else: nil
+          case build_movie_aggregated_group(movie_id, city_id, events, viewing_city) do
+            nil -> {groups, failed ++ events}
+            group -> {[group | groups], failed}
+          end
+
+        # Normal city-based aggregation
+        {{movie_id, city_id}, events}, {groups, failed} ->
+          case build_movie_aggregated_group(movie_id, city_id, events, nil) do
+            nil -> {groups, failed ++ events}
+            group -> {[group | groups], failed}
+          end
       end)
 
     # Build container aggregated groups for all events (not just aggregatable ones)
@@ -1033,7 +1074,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Build an AggregatedEventGroup from a list of events
-  defp build_aggregated_group(source_id, city_id, aggregation_type, events) do
+  defp build_aggregated_group(source_id, city_id, aggregation_type, events, viewing_city \\ nil) do
     # Get source and city info from first event
     first_event = List.first(events)
     source = get_event_source(first_event)
@@ -1054,13 +1095,16 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       # Check if any event is recurring
       is_recurring = Enum.any?(events, &PublicEvent.recurring?/1)
 
+      # Use viewing_city if provided (for city-specific pages), otherwise use first event's city
+      canonical_city = viewing_city || first_event.venue.city_ref
+
       %AggregatedEventGroup{
         source_id: source_id,
         source_slug: source.slug,
         source_name: source.name,
         aggregation_type: aggregation_type || "events",
         city_id: city_id,
-        city: first_event.venue.city_ref,
+        city: canonical_city,
         event_count: length(events),
         venue_count: unique_venues,
         categories: all_categories,
@@ -1073,7 +1117,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Build an AggregatedMovieGroup from a list of movie screening events
-  defp build_movie_aggregated_group(movie_id, city_id, events) do
+  defp build_movie_aggregated_group(movie_id, city_id, events, viewing_city \\ nil) do
     first_event = List.first(events)
     movie = List.first(first_event.movies)
 
@@ -1087,6 +1131,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         |> Enum.flat_map(&(&1.categories || []))
         |> Enum.uniq_by(& &1.id)
 
+      # Use viewing_city if provided (for city-specific pages), otherwise use first event's city
+      canonical_city = viewing_city || first_event.venue.city_ref
+
       %AggregatedMovieGroup{
         movie_id: movie_id,
         movie_slug: movie.slug,
@@ -1095,7 +1142,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         movie_poster_url: movie.poster_url,
         movie_release_date: movie.release_date,
         city_id: city_id,
-        city: first_event.venue.city_ref,
+        city: canonical_city,
         screening_count: length(events),
         venue_count: unique_venues,
         categories: all_categories

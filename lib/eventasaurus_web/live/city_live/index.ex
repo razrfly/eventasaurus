@@ -619,9 +619,14 @@ defmodule EventasaurusWeb.CityLive.Index do
     {geographic_events, total_count, all_events_count, date_range_counts} =
       if lat && lng do
         # Get the paginated events with aggregation enabled
+        # For city pages, ignore city boundaries in aggregation since geographic
+        # filtering already determines relevance. Use viewing city as canonical city.
         events =
           PublicEventsEnhanced.list_events_with_aggregation(
-            Map.put(query_filters, :aggregate, true)
+            query_filters
+            |> Map.put(:aggregate, true)
+            |> Map.put(:ignore_city_in_aggregation, true)
+            |> Map.put(:viewing_city, city)
           )
 
         # Get the total count without pagination
