@@ -81,3 +81,4 @@ test-results/
 # Task files
 # tasks.json
 # tasks/ 
+erl_crash.dump

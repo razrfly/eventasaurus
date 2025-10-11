@@ -31,7 +31,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
   }
 
   alias EventasaurusDiscovery.Sources.Processor
-  alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Helpers.AddressGeocoder
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -65,77 +65,31 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
       {:error, "Failed to parse HTML: #{inspect(error)}"}
   end
 
-  # Enrich venue data with city and country information
-  # Uses conservative UK address parsing with CityResolver validation
-  # UK addresses typically follow: "Street, City, Postcode" or "Venue, Street, City, Postcode"
+  # Enrich venue data with city and country information using forward geocoding
   defp enrich_with_geocoding(venue_data) do
     address = Map.get(venue_data, :address)
 
-    case parse_uk_address(address) do
-      {:ok, {city_name, country_name}} ->
+    case AddressGeocoder.geocode_address(address) do
+      {:ok, {city_name, country_name, {lat, lng}}} ->
         enriched =
           venue_data
           |> Map.put(:city_name, city_name)
           |> Map.put(:country_name, country_name)
+          |> Map.put(:latitude, lat)
+          |> Map.put(:longitude, lng)
 
-        Logger.debug("📍 Parsed #{address} → #{city_name}, #{country_name}")
+        Logger.info("📍 Geocoded #{address} → #{city_name}, #{country_name}")
         {:ok, enriched}
 
       {:error, reason} ->
-        Logger.warning("⚠️ Address parsing failed for #{address}: #{reason}. Using nil.")
-        # Fallback: Use nil values which will cause VenueProcessor to attempt its own geocoding
+        Logger.warning("⚠️ Geocoding failed for #{address}: #{reason}. Using nil.")
+        # Fallback: Use nil values
         enriched =
           venue_data
           |> Map.put(:city_name, nil)
           |> Map.put(:country_name, nil)
 
         {:ok, enriched}
-    end
-  end
-
-  # Parse UK address to extract city_name and country_name
-  # UK addresses typically: "Street, City, Postcode" or "Venue, Street, City, Postcode"
-  defp parse_uk_address(address) when is_binary(address) do
-    parts = String.split(address, ",") |> Enum.map(&String.trim/1)
-
-    case parts do
-      # 4+ parts: venue, street, city, postcode[, extras]
-      [_venue, _street, city_candidate, _postcode | _rest] ->
-        validate_and_return_city(city_candidate)
-
-      # 3 parts: street, city, postcode
-      [_street, city_candidate, _postcode] ->
-        validate_and_return_city(city_candidate)
-
-      # 2 parts: might be city, postcode
-      [city_candidate, postcode_candidate] ->
-        # Check if second part looks like postcode (UK pattern)
-        if String.match?(postcode_candidate, ~r/^[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}$/i) do
-          validate_and_return_city(city_candidate)
-        else
-          {:error, "Cannot determine city from 2-part address"}
-        end
-
-      # Not enough parts
-      _ ->
-        {:error, "Address format not recognized"}
-    end
-  end
-
-  defp parse_uk_address(_), do: {:error, "Invalid address"}
-
-  # Validate city candidate using CityResolver before returning
-  defp validate_and_return_city(city_candidate) do
-    case CityResolver.validate_city_name(city_candidate) do
-      {:ok, validated_city} ->
-        {:ok, {validated_city, "United Kingdom"}}
-
-      {:error, reason} ->
-        Logger.warning(
-          "City candidate failed validation: #{inspect(city_candidate)} (#{reason})"
-        )
-
-        {:error, "Invalid city name: #{reason}"}
     end
   end
 
