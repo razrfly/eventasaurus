@@ -25,6 +25,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.DateParser
+  alias EventasaurusDiscovery.Locations.CountryResolver
 
   @doc """
   Transform extracted venue data to unified format.
@@ -196,17 +197,15 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     end
   end
 
-  # Determine currency based on country name
+  # Determine currency based on country name using Countries library
   defp determine_currency(country) when is_binary(country) do
-    case String.downcase(country) do
-      "australia" -> "AUD"
-      "united kingdom" -> "GBP"
-      "uk" -> "GBP"
-      "great britain" -> "GBP"
-      "united states" -> "USD"
-      "usa" -> "USD"
-      "canada" -> "CAD"
-      _ -> "GBP"  # Default to GBP for Question One (primarily UK)
+    case CountryResolver.resolve(country) do
+      %{currency_code: currency_code} when is_binary(currency_code) ->
+        currency_code
+
+      _ ->
+        Logger.warning("Could not determine currency for country: #{country}, defaulting to GBP")
+        "GBP"  # Default to GBP for Question One (primarily UK)
     end
   end
 
