@@ -131,17 +131,50 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
       assert {:error, :too_short} = CityResolver.validate_city_name("1")
     end
 
-    test "rejects postcodes (UK and US patterns)" do
+    test "rejects pure postcodes (UK and US patterns)" do
       # UK postcodes
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("SW18 2SS")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("E1 6AN")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("W1A 1AA")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("M1 1AE")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("B33 8TH")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("SW18 2SS")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("E1 6AN")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("W1A 1AA")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("M1 1AE")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("B33 8TH")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("E5 8NN")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("W1F 8PU")
 
       # US ZIP codes (pure numeric)
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("90210")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("10001")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("90210")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("10001")
+    end
+
+    test "rejects city names with embedded UK postcodes - CRITICAL BUG FIX" do
+      # These were creating fake cities in the database (Issue: QuestionOne fake cities)
+      invalid_cities = [
+        "England E5 8NN",
+        "London England W1F 8PU",
+        "Cambridge England CB2 3AR",
+        "Wembley England HA9 0HP",
+        "St Albans England AL1 1NG",
+        "England W5 5DB",
+        "England E14 7HG",
+        "London England SE11 5AW"
+      ]
+
+      for city <- invalid_cities do
+        assert {:error, :contains_postcode} = CityResolver.validate_city_name(city),
+               "Expected #{city} to be rejected due to embedded postcode"
+      end
+    end
+
+    test "rejects city names with postcode at end" do
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("City W5 5DB")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("Location E1 6AN")
+    end
+
+    test "rejects city names with postcode in middle" do
+      assert {:error, :contains_postcode} =
+               CityResolver.validate_city_name("London W1F 8PU Extra")
+
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("City E5 8NN Location")
     end
 
     test "rejects street addresses with numbers" do
@@ -162,9 +195,9 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
     end
 
     test "rejects pure numeric values" do
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("12345")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("999")
-      assert {:error, :postcode_pattern} = CityResolver.validate_city_name("00000")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("12345")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("999")
+      assert {:error, :contains_postcode} = CityResolver.validate_city_name("00000")
     end
 
     test "rejects likely venue names" do

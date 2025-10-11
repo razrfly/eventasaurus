@@ -34,6 +34,11 @@ config :eventasaurus, :turnstile,
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
 
+# Configure geocoder's Google Maps provider to use our existing API key
+# We've been using Google Maps API for 6+ months - this wires up the new geocoder library
+config :geocoder, Geocoder.Providers.GoogleMaps,
+  api_key: System.get_env("GOOGLE_MAPS_API_KEY")
+
 # Configure Sentry for all environments (dev/test/prod)
 # Using runtime.exs ensures File.cwd() runs at startup, not compile time
 case System.get_env("SENTRY_DSN") do
