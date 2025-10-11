@@ -20,8 +20,8 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 
 FROM ${BUILDER_IMAGE} as builder
 
-# install build dependencies (including Node.js for npm)
-RUN apt-get update -y && apt-get install -y build-essential git curl \
+# install build dependencies (including Node.js for npm and libbsd for geocoding)
+RUN apt-get update -y && apt-get install -y build-essential git curl libbsd-dev \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
