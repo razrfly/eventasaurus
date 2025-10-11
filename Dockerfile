@@ -41,6 +41,20 @@ COPY mix.exs mix.lock ./
 RUN mix deps.get --only $MIX_ENV
 RUN mkdir config
 
+# Patch geocoding library to use getline instead of fgetln for Linux compatibility
+RUN if [ -f deps/geocoding/c_src/GeocodingDriver.cpp ]; then \
+    sed -i 's/char\* line;/char* line = NULL;/g' deps/geocoding/c_src/GeocodingDriver.cpp && \
+    sed -i 's/size_t line_size;/size_t line_size = 0;\n    ssize_t nread;/g' deps/geocoding/c_src/GeocodingDriver.cpp && \
+    sed -i 's/while ((line = fgetln(db_file, \&line_size)))/while ((nread = getline(\&line, \&line_size, db_file)) != -1)/g' deps/geocoding/c_src/GeocodingDriver.cpp && \
+    sed -i 's/fclose(db_file);/if (line) free(line);\n    fclose(db_file);/g' deps/geocoding/c_src/GeocodingDriver.cpp; \
+fi
+
+# Fix Makefile to link math library and correct library order
+RUN if [ -f deps/geocoding/c_src/Makefile ]; then \
+    sed -i 's/LDFLAGS+=-lstdc++/LDFLAGS+=-lm/' deps/geocoding/c_src/Makefile && \
+    sed -i 's/\${CC} \${LDFLAGS} -o \$@ \$< \${LIBS}/\${CC} -o \$@ \$< \${LDFLAGS} \${LIBS} -lstdc++/' deps/geocoding/c_src/Makefile; \
+fi
+
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.

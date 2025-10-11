@@ -64,6 +64,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     city = Map.get(venue_data, :city_name)
     country = Map.get(venue_data, :country_name)
 
+    # Determine currency from country
+    currency = determine_currency(country)
+
     # Parse pricing from fee_text
     {is_free, min_price} = parse_pricing(venue_data.fee_text)
 
@@ -114,7 +117,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
       is_free: is_free,
       min_price: min_price,
       max_price: nil,
-      currency: "GBP",
+      currency: currency,
 
       # Metadata
       metadata: %{
@@ -193,6 +196,22 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     end
   end
 
+  # Determine currency based on country name
+  defp determine_currency(country) when is_binary(country) do
+    case String.downcase(country) do
+      "australia" -> "AUD"
+      "united kingdom" -> "GBP"
+      "uk" -> "GBP"
+      "great britain" -> "GBP"
+      "united states" -> "USD"
+      "usa" -> "USD"
+      "canada" -> "CAD"
+      _ -> "GBP"  # Default to GBP for Question One (primarily UK)
+    end
+  end
+
+  defp determine_currency(_), do: "GBP"  # Default if country is nil
+
   # Parse pricing information from fee_text
   # Returns {is_free, min_price}
   defp parse_pricing(nil), do: {true, nil}
@@ -212,6 +231,11 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
 
       # Try to extract price with "per person" etc
       price_match = Regex.run(~r/(\d+(?:\.\d{2})?)\s*(?:per|pp|p\/p)/i, fee_text) ->
+        [_, price_str] = price_match
+        {false, Decimal.new(price_str)}
+
+      # Try to extract plain number (e.g., "2", "3", "1.5")
+      price_match = Regex.run(~r/^(\d+(?:\.\d{1,2})?)$/, String.trim(fee_text)) ->
         [_, price_str] = price_match
         {false, Decimal.new(price_str)}
 
