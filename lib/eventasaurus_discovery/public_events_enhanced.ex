@@ -879,8 +879,10 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       page_size = min(opts[:page_size] || @default_limit, @max_limit)
 
       # Fetch window sized to requested page (cap at @max_limit)
-      # Use 3x multiplier to account for aggregation reducing result count
-      fetch_size = min(@max_limit, page * page_size * 3)
+      # Use larger multiplier for first page to ensure all events are seen for aggregation
+      # Subsequent pages use smaller multiplier since aggregation is already established
+      multiplier = if page == 1, do: 20, else: 3
+      fetch_size = min(@max_limit, page * page_size * multiplier)
 
       # Build fetch opts without DB pagination
       # Handle both Keyword lists and Maps by converting to Map
@@ -1074,7 +1076,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Build an AggregatedEventGroup from a list of events
-  defp build_aggregated_group(source_id, city_id, aggregation_type, events, viewing_city \\ nil) do
+  defp build_aggregated_group(source_id, city_id, aggregation_type, events, viewing_city) do
     # Get source and city info from first event
     first_event = List.first(events)
     source = get_event_source(first_event)
@@ -1117,7 +1119,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   # Build an AggregatedMovieGroup from a list of movie screening events
-  defp build_movie_aggregated_group(movie_id, city_id, events, viewing_city \\ nil) do
+  defp build_movie_aggregated_group(movie_id, city_id, events, viewing_city) do
     first_event = List.first(events)
     movie = List.first(first_event.movies)
 
