@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Locations
   alias EventasaurusWeb.Helpers.CategoryHelpers
+  alias EventasaurusWeb.Helpers.CurrencyHelpers
 
   @impl true
   def mount(
@@ -153,6 +154,13 @@ defmodule EventasaurusWeb.AggregatedContentLive do
               <%= @event.venue.name %>
             </div>
           <% end %>
+          <%= if has_pricing?(@event) do %>
+            <div class="mt-2">
+              <span class="text-sm font-medium text-gray-900">
+                <%= format_price_range(@event) %>
+              </span>
+            </div>
+          <% end %>
         </div>
       </div>
     </.link>
@@ -165,11 +173,19 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     # In the future, this could handle movies by title, classes by name, etc.
     source_slug = identifier
 
-    # Query events by source slug and city
+    # Get city coordinates for radius filtering
+    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
+
+    # Query events by source slug with geographic radius filtering (matching CityLive.Index)
+    # This ensures we show all events within the city's radius, not just exact city matches
     PublicEventsEnhanced.list_events(%{
       source_slug: source_slug,
-      city_id: city.id,
-      include_pattern_events: true
+      center_lat: lat,
+      center_lng: lng,
+      radius_km: 50,  # Same default as CityLive.Index
+      include_pattern_events: true,
+      page_size: 500  # Get all results (max limit)
     })
   end
 
@@ -192,4 +208,41 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
   defp get_source_name("pubquiz-pl"), do: "PubQuiz Poland"
   defp get_source_name(slug), do: slug |> String.replace("-", " ") |> String.capitalize()
+
+  # Check if event has pricing information (from first source)
+  defp has_pricing?(event) do
+    case event.sources do
+      [source | _] -> source.min_price || source.max_price
+      _ -> false
+    end
+  end
+
+  # Format price range with currency support using CurrencyHelpers
+  defp format_price_range(event) do
+    # Get pricing from first source
+    source = List.first(event.sources)
+
+    if source do
+      currency_symbol = CurrencyHelpers.currency_symbol(source.currency || "USD")
+
+      cond do
+        source.min_price && source.max_price && Decimal.equal?(source.min_price, source.max_price) ->
+          "#{currency_symbol}#{source.min_price}"
+
+        source.min_price && source.max_price ->
+          "#{currency_symbol}#{source.min_price} - #{currency_symbol}#{source.max_price}"
+
+        source.min_price ->
+          "From #{currency_symbol}#{source.min_price}"
+
+        source.max_price ->
+          "Up to #{currency_symbol}#{source.max_price}"
+
+        true ->
+          "Price not available"
+      end
+    else
+      "Price not available"
+    end
+  end
 end
