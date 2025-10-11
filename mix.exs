@@ -144,6 +144,9 @@ defmodule Eventasaurus.MixProject do
       # Offline reverse geocoding (lat/lng → city name)
       {:geocoding, "~> 0.3.0"},
 
+      # Forward geocoding (address → city/coordinates)
+      {:geocoder, "~> 1.1"},
+
       # YAML parsing for category mappings
       {:yaml_elixir, "~> 2.11"},
 

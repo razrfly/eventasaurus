@@ -27,7 +27,7 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
 
   ## Validation Rules
   Rejects city names that are:
-  - UK/US postcodes (e.g., "SW18 2SS", "90210")
+  - UK/US postcodes (e.g., "SW18 2SS", "90210") or contain embedded postcodes (e.g., "England E5 8NN")
   - Street addresses (containing numbers + street keywords)
   - Pure numeric values
   - Empty or whitespace-only strings
@@ -119,7 +119,7 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   Validates a city name to prevent garbage data.
 
   Rejects names that match patterns for:
-  - UK/US postcodes (e.g., "SW18 2SS", "90210", "12345-6789")
+  - UK/US postcodes (e.g., "SW18 2SS", "90210", "12345-6789") or contain embedded postcodes (e.g., "England E5 8NN", "London W1F 8PU")
   - Street addresses (e.g., "123 Main Street", "76 Narrow Street")
   - Pure numeric values
   - Empty/whitespace strings
@@ -132,7 +132,7 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   - `{:ok, name}` - Valid city name
   - `{:error, :empty_name}` - Empty or whitespace-only
   - `{:error, :too_short}` - Single character (likely abbreviation)
-  - `{:error, :postcode_pattern}` - Matches postcode pattern
+  - `{:error, :contains_postcode}` - Contains UK postcode pattern anywhere in string
   - `{:error, :street_address_pattern}` - Matches street address pattern
   - `{:error, :numeric_only}` - Pure numeric value
 
@@ -142,13 +142,16 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       {:ok, "New York"}
 
       iex> CityResolver.validate_city_name("SW18 2SS")
-      {:error, :postcode_pattern}
+      {:error, :contains_postcode}
+
+      iex> CityResolver.validate_city_name("England E5 8NN")
+      {:error, :contains_postcode}
 
       iex> CityResolver.validate_city_name("123 Main Street")
       {:error, :street_address_pattern}
 
       iex> CityResolver.validate_city_name("90210")
-      {:error, :postcode_pattern}
+      {:error, :contains_postcode}
   """
   @spec validate_city_name(String.t() | nil) :: {:ok, String.t()} | {:error, atom()}
   def validate_city_name(name) when is_binary(name) do
@@ -163,9 +166,9 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       String.length(trimmed) == 1 ->
         {:error, :too_short}
 
-      # UK postcode pattern (e.g., "SW18 2SS", "E1 6AN")
-      Regex.match?(~r/^[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}$/i, trimmed) ->
-        {:error, :postcode_pattern}
+      # UK postcode pattern - detects postcodes ANYWHERE in string (e.g., "SW18 2SS", "England E5 8NN")
+      Regex.match?(~r/[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}/i, trimmed) ->
+        {:error, :contains_postcode}
 
       # Street address pattern (starts with number + contains street keywords)
       Regex.match?(
@@ -174,9 +177,9 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       ) ->
         {:error, :street_address_pattern}
 
-      # Pure numeric (likely postcode or address number) - must be before US ZIP check
+      # Pure numeric (likely postcode or address number)
       Regex.match?(~r/^\d+$/, trimmed) ->
-        {:error, :postcode_pattern}
+        {:error, :contains_postcode}
 
       # Likely venue name pattern (contains "at", "bar", "pub", etc.)
       Regex.match?(~r/\b(at|bar|pub|restaurant|cafe|hotel|inn)\b/i, trimmed) ->

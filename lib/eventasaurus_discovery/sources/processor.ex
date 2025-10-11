@@ -60,20 +60,33 @@ defmodule EventasaurusDiscovery.Sources.Processor do
       # Return proper error tuples based on results
       case {successful, failed} do
         {[], [_ | _] = failed} ->
-          # All events failed - return error
-          Logger.error("All #{length(failed)} events failed processing")
+          # All events failed - log detailed error info for debugging
+          Logger.error("❌ All #{length(failed)} events failed processing")
+
+          # Log each failure reason with details
+          Enum.with_index(failed, 1)
+          |> Enum.each(fn {{:error, reason}, index} ->
+            Logger.error("  Event #{index} failed: #{inspect(reason)}")
+          end)
+
           {:error, :all_events_failed}
 
         {successful, []} ->
           # All events succeeded
-          Logger.info("Successfully processed all #{length(successful)} events")
+          Logger.info("✅ Successfully processed all #{length(successful)} events")
           {:ok, Enum.map(successful, fn {:ok, event} -> event end)}
 
         {_successful, failed} ->
           # Partial success - return error so Oban can retry
           Logger.warning(
-            "Partial failure: #{length(failed)} failed out of #{length(events)} total events"
+            "⚠️ Partial failure: #{length(failed)} failed out of #{length(events)} total events"
           )
+
+          # Log each failure for debugging
+          Enum.with_index(failed, 1)
+          |> Enum.each(fn {{:error, reason}, index} ->
+            Logger.warning("  Event #{index} failed: #{inspect(reason)}")
+          end)
 
           {:error, {:partial_failure, length(failed), length(events)}}
       end
