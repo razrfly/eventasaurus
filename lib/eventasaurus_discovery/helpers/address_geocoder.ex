@@ -99,9 +99,16 @@ defmodule EventasaurusDiscovery.Helpers.AddressGeocoder do
   defp try_google_maps(address) do
     Logger.debug("Geocoding with Google Maps: #{address}")
 
-    # Get API key from environment or config
-    api_key = System.get_env("GOOGLE_MAPS_API_KEY") ||
-              Application.get_env(:geocoder, Geocoder.Providers.GoogleMaps)[:api_key]
+    # Get API key from environment or config (defensive fetching)
+    api_key =
+      System.get_env("GOOGLE_MAPS_API_KEY") ||
+        (Application.get_env(:geocoder, Geocoder.Providers.GoogleMaps, [])
+         |> Keyword.get(:api_key))
+
+    # Warn if API key is missing
+    if is_nil(api_key) do
+      Logger.warning("⚠️ Google Maps API key not configured. Geocoding will fail.")
+    end
 
     # Use Google Maps provider with explicit API key
     case Geocoder.call(address, provider: Geocoder.Providers.GoogleMaps, key: api_key) do
@@ -109,7 +116,7 @@ defmodule EventasaurusDiscovery.Helpers.AddressGeocoder do
         extract_location_data(coordinates, "GoogleMaps")
 
       {:error, reason} ->
-        Logger.error("Google Maps geocoding also failed: #{inspect(reason)}")
+        Logger.error("Google Maps geocoding failed: #{inspect(reason)}")
         {:error, :all_geocoding_failed}
     end
   end
