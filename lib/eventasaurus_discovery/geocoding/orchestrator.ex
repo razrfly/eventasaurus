@@ -30,7 +30,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Geocoding.ProviderConfig
+  alias EventasaurusDiscovery.Geocoding.{ProviderConfig, RateLimiter}
 
   @doc """
   Geocode an address using multiple providers in fallback order.
@@ -78,6 +78,27 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
     provider_name = provider_module.name()
     Logger.debug("🔄 Trying provider: #{provider_name}")
 
+    # Check rate limit BEFORE calling provider
+    case RateLimiter.check_rate_limit(provider_name) do
+      :ok ->
+        # Rate limit OK, proceed with geocoding
+        call_provider(address, provider_module, provider_name, rest, attempted)
+
+      {:error, :rate_limited, retry_after_ms} ->
+        # Rate limited, wait and retry (blocking)
+        Logger.warning(
+          "⏱️ #{provider_name} rate limited, waiting #{retry_after_ms}ms before retry..."
+        )
+
+        Process.sleep(retry_after_ms)
+
+        # Retry same provider after waiting
+        try_providers(address, [provider_module | rest], attempted)
+    end
+  end
+
+  # Separated out to reduce nesting
+  defp call_provider(address, provider_module, provider_name, rest, attempted) do
     case provider_module.geocode(address) do
       {:ok, %{latitude: lat, longitude: lng} = result}
       when is_float(lat) and is_float(lng) ->
@@ -100,7 +121,10 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
 
       other ->
         # Invalid response format
-        Logger.warning("⚠️ Provider #{provider_name} returned invalid format: #{inspect(other)}")
+        Logger.warning(
+          "⚠️ Provider #{provider_name} returned invalid format: #{inspect(other)}"
+        )
+
         try_providers(address, rest, [provider_name | attempted])
     end
   end
