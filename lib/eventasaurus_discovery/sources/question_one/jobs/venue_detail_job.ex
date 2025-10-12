@@ -69,25 +69,27 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
   defp enrich_with_geocoding(venue_data) do
     address = Map.get(venue_data, :address)
 
-    case AddressGeocoder.geocode_address(address) do
-      {:ok, {city_name, country_name, {lat, lng}}} ->
+    case AddressGeocoder.geocode_address_with_metadata(address) do
+      {:ok, %{city: city_name, country: country_name, latitude: lat, longitude: lng, geocoding_metadata: metadata}} ->
         enriched =
           venue_data
           |> Map.put(:city_name, city_name)
           |> Map.put(:country_name, country_name)
           |> Map.put(:latitude, lat)
           |> Map.put(:longitude, lng)
+          |> Map.put(:geocoding_metadata, metadata)
 
         Logger.info("📍 Geocoded #{address} → #{city_name}, #{country_name}")
         {:ok, enriched}
 
-      {:error, reason} ->
+      {:error, reason, metadata} ->
         Logger.warning("⚠️ Geocoding failed for #{address}: #{reason}. Using nil.")
-        # Fallback: Use nil values
+        # Fallback: Use nil values but preserve metadata for failure tracking
         enriched =
           venue_data
           |> Map.put(:city_name, nil)
           |> Map.put(:country_name, nil)
+          |> Map.put(:geocoding_metadata, metadata)
 
         {:ok, enriched}
     end

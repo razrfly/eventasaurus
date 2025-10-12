@@ -12,46 +12,52 @@ defmodule EventasaurusWeb.Router do
     import Oban.Web.Router
 
     # Development tools
-    scope "/dev" do
+    scope "/dev", EventasaurusWeb do
       pipe_through :browser
 
       # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
 
       # Discovery Dashboard (dev - no auth)
-      live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+      live "/imports", Admin.DiscoveryDashboardLive
+
+      # Geocoding Cost Dashboard (dev - no auth)
+      live "/geocoding", Admin.GeocodingDashboardLive
 
       # Category Management (dev - no auth)
-      live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
-      live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
-      live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+      live "/categories", Admin.CategoryIndexLive, :index
+      live "/categories/new", Admin.CategoryFormLive, :new
+      live "/categories/:id/edit", Admin.CategoryFormLive, :edit
 
       # Source Management (dev - no auth)
-      live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
-      live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
-      live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
+      live "/sources", Admin.SourceIndexLive, :index
+      live "/sources/new", Admin.SourceFormLive, :new
+      live "/sources/:id/edit", Admin.SourceFormLive, :edit
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
-    scope "/admin" do
+    scope "/admin", EventasaurusWeb do
       pipe_through :browser
 
       # Discovery Dashboard (dev - no auth)
-      live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+      live "/imports", Admin.DiscoveryDashboardLive
+
+      # Geocoding Cost Dashboard (dev - no auth)
+      live "/geocoding", Admin.GeocodingDashboardLive
 
       # City Discovery Configuration (dev - no auth)
-      live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index
-      live "/discovery/config/:slug", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :show
+      live "/discovery/config", Admin.CityDiscoveryConfigLive, :index
+      live "/discovery/config/:slug", Admin.CityDiscoveryConfigLive, :show
 
       # Category Management (dev - no auth)
-      live "/categories", EventasaurusWeb.Admin.CategoryIndexLive, :index
-      live "/categories/new", EventasaurusWeb.Admin.CategoryFormLive, :new
-      live "/categories/:id/edit", EventasaurusWeb.Admin.CategoryFormLive, :edit
+      live "/categories", Admin.CategoryIndexLive, :index
+      live "/categories/new", Admin.CategoryFormLive, :new
+      live "/categories/:id/edit", Admin.CategoryFormLive, :edit
 
       # Source Management (dev - no auth)
-      live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
-      live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
-      live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
+      live "/sources", Admin.SourceIndexLive, :index
+      live "/sources/new", Admin.SourceFormLive, :new
+      live "/sources/:id/edit", Admin.SourceFormLive, :edit
     end
 
     # Category demo routes for testing
@@ -93,6 +99,9 @@ defmodule EventasaurusWeb.Router do
 
       # Discovery Dashboard with admin authentication
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+      # Geocoding Cost Dashboard with admin authentication
+      live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
 
       # City Discovery Configuration
       live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index

@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusWeb.Services.GooglePlaces.{TextSearch, Details, VenuePlacesAdapter}
   alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Geocoding.MetadataBuilder
 
   import Ecto.Query
   require Logger
@@ -51,12 +52,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   @doc """
   Processes venue data and returns a venue record.
   Creates or finds existing venue, city, and country as needed.
+
+  ## Parameters
+  - `venue_data` - Raw venue data from scraper
+  - `source` - Source type ("scraper", "user", "google")
+  - `source_scraper` - Optional scraper name for cost tracking (e.g., "question_one", "kino_krakow")
   """
-  def process_venue(venue_data, source \\ "scraper") do
+  def process_venue(venue_data, source \\ "scraper", source_scraper \\ nil) do
     # Data is already cleaned at HTTP client level (single entry point validation)
     with {:ok, normalized_data} <- normalize_venue_data(venue_data),
          {:ok, city} <- ensure_city(normalized_data),
-         {:ok, venue} <- find_or_create_venue(normalized_data, city, source) do
+         {:ok, venue} <- find_or_create_venue(normalized_data, city, source, source_scraper) do
       {:ok, venue}
     else
       {:error, reason} = error ->
@@ -440,7 +446,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
-  defp find_or_create_venue(data, city, source) do
+  defp find_or_create_venue(data, city, source, source_scraper) do
     # Clean UTF-8 before creating venue attributes
     venue_attrs = %{
       name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name),
@@ -452,10 +458,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
     case find_existing_venue(venue_attrs) do
       nil ->
-        create_venue(data, city, source)
+        create_venue(data, city, source, source_scraper)
 
       existing ->
-        maybe_update_venue(existing, data)
+        maybe_update_venue(existing, data, source_scraper)
     end
   end
 
@@ -511,7 +517,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     parts
   end
 
-  defp create_venue(data, city, _source) do
+  defp create_venue(data, city, _source, source_scraper) do
     # Check if we need to lookup venue data from Google Places
     {latitude, longitude, google_name, google_place_id, google_metadata} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
@@ -541,7 +547,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                  final_place_id,
                  latitude,
                  longitude,
-                 google_metadata
+                 google_metadata,
+                 source_scraper
                ) do
             {:ok, venue} ->
               {:ok, venue}
@@ -589,7 +596,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         final_place_id,
         latitude,
         longitude,
-        google_metadata
+        google_metadata,
+        source_scraper
       )
     end
   end
@@ -601,10 +609,35 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          final_place_id,
          latitude,
          longitude,
-         google_metadata
+         google_metadata,
+         source_scraper
        ) do
     # All discovery sources use "scraper" as the venue source
     # Clean UTF-8 for venue name before database insert
+
+    # Build geocoding metadata based on the geocoding path taken
+    geocoding_metadata = cond do
+      # Google Places was used (TextSearch + Details API)
+      google_metadata != nil ->
+        MetadataBuilder.build_google_places_metadata(google_metadata)
+        |> MetadataBuilder.add_scraper_source(source_scraper)
+
+      # AddressGeocoder was used (OSM or Google Maps fallback)
+      Map.has_key?(data, :geocoding_metadata) ->
+        data.geocoding_metadata
+        |> MetadataBuilder.add_scraper_source(source_scraper)
+
+      # Coordinates provided directly by scraper (no geocoding needed)
+      latitude != nil and longitude != nil ->
+        MetadataBuilder.build_provided_coordinates_metadata()
+        |> MetadataBuilder.add_scraper_source(source_scraper)
+
+      # No coordinates available - deferred geocoding (Karnet pattern)
+      true ->
+        MetadataBuilder.build_deferred_geocoding_metadata()
+        |> MetadataBuilder.add_scraper_source(source_scraper)
+    end
+
     attrs = %{
       name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(final_name),
       address: data.address,
@@ -617,7 +650,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       place_id: final_place_id,
       source: "scraper",
       city_id: city.id,
-      metadata: google_metadata
+      metadata: %{
+        geocoding: geocoding_metadata,
+        google_places: google_metadata
+      }
     }
 
     case Venue.changeset(%Venue{}, attrs) |> Repo.insert() do
@@ -641,7 +677,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
-  defp maybe_update_venue(venue, data) do
+  defp maybe_update_venue(venue, data, _source_scraper) do
     updates = []
 
     updates =

@@ -137,8 +137,28 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   end
 
   defp process_venue(venue_data, source) when is_map(venue_data) do
-    VenueProcessor.process_venue(venue_data, source)
+    # Extract scraper name from source (e.g., "question_one", "kino_krakow", "resident_advisor")
+    source_scraper = extract_scraper_name(source)
+    VenueProcessor.process_venue(venue_data, source, source_scraper)
   end
+
+  # Extract scraper name from source parameter
+  # Source can be: integer (source_id), string ("question_one"), or atom (:question_one)
+  defp extract_scraper_name(source) when is_integer(source) do
+    # For source_id integers, we can't reliably determine scraper name
+    # This will be nil and VenueProcessor will handle it
+    nil
+  end
+
+  defp extract_scraper_name(source) when is_binary(source) do
+    source
+  end
+
+  defp extract_scraper_name(source) when is_atom(source) do
+    Atom.to_string(source)
+  end
+
+  defp extract_scraper_name(_), do: nil
 
   defp process_performers(nil, _source), do: {:ok, []}
   defp process_performers([], _source), do: {:ok, []}

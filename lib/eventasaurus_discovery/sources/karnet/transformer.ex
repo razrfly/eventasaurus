@@ -8,6 +8,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Karnet.DateParser
+  alias EventasaurusDiscovery.Geocoding.MetadataBuilder
 
   @doc """
   Transform a raw Karnet event into our unified format.
@@ -205,6 +206,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
     cond do
       venue_data && venue_data[:name] ->
+        needs_geocoding = is_nil(venue_data[:latitude]) || is_nil(venue_data[:longitude])
+
+        # Build deferred geocoding metadata if using default coordinates
+        geocoding_metadata = if needs_geocoding do
+          MetadataBuilder.build_deferred_geocoding_metadata()
+          |> MetadataBuilder.add_scraper_source("karnet")
+        else
+          # Coordinates were provided - no geocoding needed
+          MetadataBuilder.build_provided_coordinates_metadata()
+          |> MetadataBuilder.add_scraper_source("karnet")
+        end
+
         %{
           name: venue_data[:name],
           # Use provided coordinates or default to Kraków center
@@ -215,13 +228,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
           state: venue_data[:state],
           country: venue_data[:country] || "Poland",
           postal_code: venue_data[:postal_code],
-          # Flag for geocoding if we used defaults
-          needs_geocoding: is_nil(venue_data[:latitude]) || is_nil(venue_data[:longitude])
+          # Flag for geocoding if we used defaults (kept for backward compatibility)
+          needs_geocoding: needs_geocoding,
+          # Add geocoding metadata for cost tracking
+          geocoding_metadata: geocoding_metadata
         }
 
       # Try to extract venue name from event data
       event[:venue_name] ->
         Logger.info("🔄 Building venue from venue_name field")
+
+        geocoding_metadata = MetadataBuilder.build_deferred_geocoding_metadata()
+                             |> MetadataBuilder.add_scraper_source("karnet")
 
         %{
           name: event[:venue_name],
@@ -232,7 +250,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
           state: nil,
           country: "Poland",
           postal_code: nil,
-          needs_geocoding: true
+          needs_geocoding: true,
+          geocoding_metadata: geocoding_metadata
         }
 
       # Last resort - create placeholder venue
@@ -244,6 +263,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
         """)
 
         # Create a TBD venue for Kraków
+        geocoding_metadata = MetadataBuilder.build_deferred_geocoding_metadata()
+                             |> MetadataBuilder.add_scraper_source("karnet")
+
         %{
           name: "Venue TBD - Kraków",
           latitude: default_krakow_lat,
@@ -254,6 +276,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
           country: "Poland",
           postal_code: nil,
           needs_geocoding: false,
+          geocoding_metadata: geocoding_metadata,
           metadata: %{placeholder: true}
         }
     end
