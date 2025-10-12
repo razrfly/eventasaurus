@@ -107,6 +107,13 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
         Map.get(location, "country_name") ||
         "Unknown"
 
+    # Extract OpenStreetMap place ID
+    place_id =
+      Map.get(location, :osm_id) ||
+        Map.get(location, "osm_id") ||
+        Map.get(location, :place_id) ||
+        Map.get(location, "place_id")
+
     cond do
       is_nil(lat) or is_nil(lon) ->
         Logger.warning("⚠️ OSM: missing coordinates in response")
@@ -129,7 +136,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
            latitude: lat,
            longitude: lon,
            city: city,
-           country: country
+           country: country,
+           place_id: place_id,
+           raw_response: coordinates  # Store entire Geocoder coordinates struct
          }}
     end
   end

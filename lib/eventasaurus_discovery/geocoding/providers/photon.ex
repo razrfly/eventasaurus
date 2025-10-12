@@ -115,6 +115,11 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
 
     country = Map.get(properties, "country")
 
+    # Extract Photon/OSM place ID
+    place_id =
+      Map.get(properties, "osm_id") ||
+        Map.get(properties, "place_id")
+
     cond do
       is_nil(lat) or is_nil(lng) ->
         Logger.warning("⚠️ Photon: missing coordinates in response")
@@ -137,7 +142,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
            latitude: lat * 1.0,
            longitude: lng * 1.0,
            city: city,
-           country: country || "Unknown"
+           country: country || "Unknown",
+           place_id: place_id,
+           raw_response: feature  # Store entire Photon GeoJSON feature
          }}
     end
   end

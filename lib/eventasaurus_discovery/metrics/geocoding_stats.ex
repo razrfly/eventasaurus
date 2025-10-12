@@ -3,7 +3,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
   Query module for geocoding cost tracking and provider performance analysis.
 
   Provides metrics and reporting for geocoding API usage across all scrapers.
-  All queries operate on `venues.metadata.geocoding` JSONB field.
+  All queries operate on `venues.geocoding_performance` JSONB field.
 
   ## Cost Tracking Examples
 
@@ -57,15 +57,15 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding'", v.metadata)),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month),
         select: %{
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->'geocoding'->>'cost_per_call')::numeric, 0)",
-                v.metadata
+                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                v.geocoding_performance
               )
             ),
           count: count(v.id)
@@ -109,22 +109,22 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding'", v.metadata)),
-        group_by: fragment("?->'geocoding'->>'provider'", v.metadata),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month),
+        group_by: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
         select: %{
-          provider: fragment("?->'geocoding'->>'provider'", v.metadata),
+          provider: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->'geocoding'->>'cost_per_call')::numeric, 0)",
-                v.metadata
+                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                v.geocoding_performance
               )
             ),
           count: count(v.id)
         },
-        order_by: [desc: fragment("sum(COALESCE((?->'geocoding'->>'cost_per_call')::numeric, 0))", v.metadata)]
+        order_by: [desc: fragment("sum(COALESCE((?->>'cost_per_call')::numeric, 0))", v.geocoding_performance)]
 
     case Repo.all(query) do
       results -> {:ok, results}
@@ -159,22 +159,22 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding'", v.metadata)),
-        group_by: fragment("?->'geocoding'->>'source_scraper'", v.metadata),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month),
+        group_by: fragment("?->>'source_scraper'", v.geocoding_performance),
         select: %{
-          scraper: fragment("?->'geocoding'->>'source_scraper'", v.metadata),
+          scraper: fragment("?->>'source_scraper'", v.geocoding_performance),
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->'geocoding'->>'cost_per_call')::numeric, 0)",
-                v.metadata
+                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                v.geocoding_performance
               )
             ),
           count: count(v.id)
         },
-        order_by: [desc: fragment("sum(COALESCE((?->'geocoding'->>'cost_per_call')::numeric, 0))", v.metadata)]
+        order_by: [desc: fragment("sum(COALESCE((?->>'cost_per_call')::numeric, 0))", v.geocoding_performance)]
 
     case Repo.all(query) do
       results -> {:ok, results}
@@ -199,8 +199,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          not is_nil(fragment("?->'geocoding'", v.metadata)) and
-            fragment("(?->'geocoding'->>'geocoding_failed')::boolean = true", v.metadata),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoding_failed')::boolean = true", v.geocoding_performance),
         select: count(v.id)
 
     case Repo.one(query) do
@@ -224,17 +224,17 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          not is_nil(fragment("?->'geocoding'", v.metadata)) and
-            fragment("(?->'geocoding'->>'geocoding_failed')::boolean = true", v.metadata),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoding_failed')::boolean = true", v.geocoding_performance),
         select: %{
           id: v.id,
           name: v.name,
           address: v.address,
-          city: v.city,
-          failure_reason: fragment("?->'geocoding'->>'failure_reason'", v.metadata),
-          geocoded_at: fragment("(?->'geocoding'->>'geocoded_at')::timestamp", v.metadata)
+          city: v.city_id,
+          failure_reason: fragment("?->>'failure_reason'", v.geocoding_performance),
+          geocoded_at: fragment("(?->>'geocoded_at')::timestamp", v.geocoding_performance)
         },
-        order_by: [desc: fragment("(?->'geocoding'->>'geocoded_at')::timestamp", v.metadata)],
+        order_by: [desc: fragment("(?->>'geocoded_at')::timestamp", v.geocoding_performance)],
         limit: ^limit
 
     case Repo.all(query) do
@@ -260,8 +260,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          not is_nil(fragment("?->'geocoding'", v.metadata)) and
-            fragment("(?->'geocoding'->>'needs_manual_geocoding')::boolean = true", v.metadata),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'needs_manual_geocoding')::boolean = true", v.geocoding_performance),
         select: count(v.id)
 
     case Repo.one(query) do
@@ -351,15 +351,15 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_datetime) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_datetime) and
-            not is_nil(fragment("?->'geocoding'", v.metadata)),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_datetime) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_datetime),
         select: %{
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->'geocoding'->>'cost_per_call')::numeric, 0)",
-                v.metadata
+                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                v.geocoding_performance
               )
             ),
           count: count(v.id)
@@ -403,17 +403,17 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     start_of_month = date |> Date.beginning_of_month() |> NaiveDateTime.new!(~T[00:00:00])
     end_of_month = date |> Date.end_of_month() |> NaiveDateTime.new!(~T[23:59:59])
 
-    # Query for successful geocodings grouped by provider
+    # Query for successful geocodings grouped by provider (last element of attempted_providers array)
     success_query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
-            not is_nil(fragment("?->'geocoding_metadata'->>'provider'", v.metadata)),
-        group_by: fragment("?->'geocoding_metadata'->>'provider'", v.metadata),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month) and
+            fragment("jsonb_array_length(?->'attempted_providers') > 0", v.geocoding_performance),
+        group_by: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
         select: %{
-          provider: fragment("?->'geocoding_metadata'->>'provider'", v.metadata),
+          provider: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
           success_count: count(v.id)
         }
 
@@ -425,12 +425,12 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
       Repo.all(
         from v in Venue,
           where:
-            fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-              fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-              not is_nil(fragment("?->'geocoding_metadata'", v.metadata))
+            not is_nil(v.geocoding_performance) and
+              fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+              fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month)
       )
       |> Enum.flat_map(fn venue ->
-        case get_in(venue.metadata, ["geocoding_metadata", "attempted_providers"]) do
+        case get_in(venue.geocoding_performance, ["attempted_providers"]) do
           providers when is_list(providers) -> providers
           _ -> []
         end
@@ -506,24 +506,24 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
-            not is_nil(fragment("?->'geocoding_metadata'->>'attempts'", v.metadata)),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month) and
+            not is_nil(fragment("?->>'attempts'", v.geocoding_performance)),
         select: %{
           average_attempts:
             avg(
               fragment(
-                "(?->'geocoding_metadata'->>'attempts')::integer",
-                v.metadata
+                "(?->>'attempts')::integer",
+                v.geocoding_performance
               )
             ),
           total_geocoded: count(v.id),
           single_provider_success:
             sum(
               fragment(
-                "CASE WHEN (?->'geocoding_metadata'->>'attempts')::integer = 1 THEN 1 ELSE 0 END",
-                v.metadata
+                "CASE WHEN (?->>'attempts')::integer = 1 THEN 1 ELSE 0 END",
+                v.geocoding_performance
               )
             )
         }
@@ -581,24 +581,24 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month),
         group_by: [
           fragment(
-            "array_to_string(ARRAY(SELECT jsonb_array_elements_text(?->'geocoding_metadata'->'attempted_providers')), ',')",
-            v.metadata
+            "array_to_string(ARRAY(SELECT jsonb_array_elements_text(?->'attempted_providers')), ',')",
+            v.geocoding_performance
           ),
-          fragment("?->'geocoding_metadata'->>'provider'", v.metadata)
+          fragment("?->'attempted_providers'->-1", v.geocoding_performance)
         ],
         select: %{
           pattern:
             fragment(
-              "array_to_string(ARRAY(SELECT jsonb_array_elements_text(?->'geocoding_metadata'->'attempted_providers')), ',')",
-              v.metadata
+              "array_to_string(ARRAY(SELECT jsonb_array_elements_text(?->'attempted_providers')), ',')",
+              v.geocoding_performance
             ),
           count: count(v.id),
-          success_provider: fragment("?->'geocoding_metadata'->>'provider'", v.metadata)
+          success_provider: fragment("?->'attempted_providers'->-1", v.geocoding_performance)
         },
         order_by: [desc: count(v.id)],
         limit: ^limit
@@ -727,28 +727,26 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     start_of_month = date |> Date.beginning_of_month() |> NaiveDateTime.new!(~T[00:00:00])
     end_of_month = date |> Date.end_of_month() |> NaiveDateTime.new!(~T[23:59:59])
 
-    # Count successful geocodings
+    # Count successful geocodings (has attempted_providers array and coordinates)
     success_query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
-            not is_nil(fragment("?->'geocoding_metadata'->>'provider'", v.metadata)) and
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month) and
+            fragment("jsonb_array_length(?->'attempted_providers') > 0", v.geocoding_performance) and
             not is_nil(v.latitude) and
             not is_nil(v.longitude),
         select: count(v.id)
 
-    # Count failed geocodings
+    # Count failed geocodings (has geocoding_performance but no coordinates)
     failure_query =
       from v in Venue,
         where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
-            (is_nil(fragment("?->'geocoding_metadata'->>'provider'", v.metadata)) or
-               is_nil(v.latitude) or
-               is_nil(v.longitude)),
+          not is_nil(v.geocoding_performance) and
+            fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+            fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month) and
+            (is_nil(v.latitude) or is_nil(v.longitude)),
         select: count(v.id)
 
     successful = Repo.one(success_query) || 0
@@ -805,13 +803,13 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
       Repo.all(
         from v in Venue,
           where:
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-              fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-              not is_nil(fragment("?->'geocoding_metadata'", v.metadata)),
+            not is_nil(v.geocoding_performance) and
+              fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+              fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month),
           select: %{
             attempted_providers:
-              fragment("?->'geocoding_metadata'->'attempted_providers'", v.metadata),
-            successful_provider: fragment("?->'geocoding_metadata'->>'provider'", v.metadata)
+              fragment("?->'attempted_providers'", v.geocoding_performance),
+            successful_provider: fragment("?->'attempted_providers'->-1", v.geocoding_performance)
           }
       )
 
@@ -906,44 +904,76 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     start_of_month = date |> Date.beginning_of_month() |> NaiveDateTime.new!(~T[00:00:00])
     end_of_month = date |> Date.end_of_month() |> NaiveDateTime.new!(~T[23:59:59])
 
-    query =
-      from v in Venue,
-        where:
-          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
-            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
-            not is_nil(fragment("?->'geocoding_metadata'->>'attempts'", v.metadata)),
-        group_by: fragment("(?->'geocoding_metadata'->>'attempts')::integer", v.metadata),
-        select: %{
-          depth: fragment("(?->'geocoding_metadata'->>'attempts')::integer", v.metadata),
-          total: count(v.id),
-          successful:
-            sum(
-              fragment(
-                "CASE WHEN ?->'geocoding_metadata'->>'provider' IS NOT NULL THEN 1 ELSE 0 END",
-                v.metadata
-              )
-            )
-        },
-        order_by: [asc: fragment("(?->'geocoding_metadata'->>'attempts')::integer", v.metadata)]
+    # Get all venues with geocoding attempts in the date range
+    venues =
+      Repo.all(
+        from v in Venue,
+          where:
+            not is_nil(v.geocoding_performance) and
+              fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
+              fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month) and
+              fragment("jsonb_array_length(?->'attempted_providers') > 0", v.geocoding_performance),
+          select: %{
+            attempted_providers: fragment("?->'attempted_providers'", v.geocoding_performance),
+            successful_provider: fragment("?->>'provider'", v.geocoding_performance)
+          }
+      )
+
+    # Calculate success rate at each provider position
+    # Position 1 = first provider tried, Position 2 = second provider tried, etc.
+    max_depth =
+      venues
+      |> Enum.map(fn v ->
+        case v.attempted_providers do
+          providers when is_list(providers) -> length(providers)
+          _ -> 0
+        end
+      end)
+      |> Enum.max(fn -> 0 end)
 
     results =
-      Repo.all(query)
-      |> Enum.map(fn row ->
+      1..max_depth
+      |> Enum.map(fn position ->
+        # Count venues that tried this position (have at least position providers in array)
+        total_at_position =
+          venues
+          |> Enum.count(fn v ->
+            case v.attempted_providers do
+              providers when is_list(providers) -> length(providers) >= position
+              _ -> false
+            end
+          end)
+
+        # Count venues where provider at this position succeeded
+        # (provider field matches the provider at index position-1)
+        successful_at_position =
+          venues
+          |> Enum.count(fn v ->
+            case v.attempted_providers do
+              providers when is_list(providers) and length(providers) >= position ->
+                provider_at_position = Enum.at(providers, position - 1)
+                provider_at_position == v.successful_provider
+
+              _ ->
+                false
+            end
+          end)
+
         success_rate =
-          if row.total > 0 do
-            Float.round(row.successful / row.total * 100, 2)
+          if total_at_position > 0 do
+            Float.round(successful_at_position / total_at_position * 100, 2)
           else
             0.0
           end
 
         %{
-          depth: row.depth,
-          total: row.total,
-          successful: row.successful,
+          depth: position,
+          total: total_at_position,
+          successful: successful_at_position,
           success_rate: success_rate
         }
       end)
+      |> Enum.reject(fn row -> row.total == 0 end)
 
     {:ok, results}
   rescue

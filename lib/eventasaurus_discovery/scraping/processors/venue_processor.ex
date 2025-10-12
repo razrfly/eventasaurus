@@ -507,18 +507,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp create_venue(data, city, _source, source_scraper) do
     # Check if we need to geocode the venue address
-    {latitude, longitude, geocoding_metadata} =
+    {latitude, longitude, geocoding_metadata, geocoding_place_id} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
         # Try to geocode using multi-provider system
-        geocode_venue_address(data, city)
+        {lat, lng, metadata} = geocode_venue_address(data, city)
+        # Extract place_id from geocoding metadata if available
+        place_id = if metadata, do: Map.get(metadata, :place_id), else: nil
+        {lat, lng, metadata, place_id}
       else
         # Use provided coordinates
-        {data.latitude, data.longitude, nil}
+        {data.latitude, data.longitude, nil, nil}
       end
 
     # Use scraped name and place_id
     final_name = data.name
-    final_place_id = data.place_id
+    # Prefer geocoding provider's place_id over scraper's place_id
+    final_place_id = geocoding_place_id || data.place_id
 
     # RACE CONDITION FIX: Re-check if place_id now exists after geocoding
     # This prevents duplicates when multiple Oban workers geocode the same venue in parallel
@@ -590,26 +594,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
-  # Detects venue source from place_id format
-  # Returns "google", "mapbox", or "scraper" based on place_id pattern
-  defp detect_venue_source(nil), do: "scraper"
-
-  defp detect_venue_source(place_id) when is_binary(place_id) do
-    cond do
-      # Google Places IDs start with "ChIJ"
-      String.starts_with?(place_id, "ChIJ") ->
-        "google"
-
-      # Mapbox IDs can be:
-      # 1. Official Mapbox IDs (base64-encoded, start with various patterns)
-      # 2. Custom format: "mapbox-..." or "mapbox-coord-..."
-      String.starts_with?(place_id, "mapbox") or String.contains?(place_id, "dXJu") ->
-        "mapbox"
-
-      # Unknown format, mark as scraper
-      true ->
-        "scraper"
-    end
+  # Detects venue source from geocoding metadata
+  # Returns the geocoding provider name (mapbox, google, geoapify, etc.)
+  # or "scraper" if coordinates were provided directly
+  defp detect_venue_source(geocoding_metadata) when is_map(geocoding_metadata) do
+    # Use the provider from geocoding metadata
+    Map.get(geocoding_metadata, :provider, "scraper")
   end
 
   defp detect_venue_source(_), do: "scraper"
@@ -650,11 +640,37 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         |> MetadataBuilder.add_scraper_source(source_scraper)
     end
 
-    # Auto-detect provider from place_id format
-    # Google: "ChIJ..." format
-    # Mapbox: "dXJuOm1ieHBvaSo..." or "mapbox-..." or "mapbox-coord-..." format
-    # Scraper: fallback for venues without place_id from external providers
-    source = detect_venue_source(final_place_id)
+    # Auto-detect source from geocoding metadata
+    # Use the geocoding provider name (mapbox, google, geoapify, etc.)
+    # Falls back to "scraper" for venues with provided coordinates
+    source = detect_venue_source(geocoding_metadata)
+
+    # Validate and clean source_scraper (prevent empty strings in database)
+    valid_source_scraper = if is_binary(source_scraper) && String.trim(source_scraper) != "", do: source_scraper, else: nil
+
+    # Build geocoding_performance for dashboard (flat structure)
+    # This should be populated for ALL venues, including those with provided coordinates
+    geocoding_performance = if geocoding_metadata do
+      # Venue was geocoded using multi-provider system
+      geocoding_metadata
+      |> Map.put(:source_scraper, valid_source_scraper)
+      |> Map.put(:cost_per_call, get_in(final_geocoding_metadata, ["cost_per_call"]) || 0.0)
+    else
+      # Venue has provided coordinates (no geocoding needed)
+      # Build performance data from final_geocoding_metadata
+      if final_geocoding_metadata && final_geocoding_metadata["provider"] == "provided" do
+        %{
+          provider: "provided",
+          source_scraper: valid_source_scraper,
+          geocoded_at: final_geocoding_metadata["geocoded_at"] || DateTime.utc_now(),
+          cost_per_call: 0.0,
+          attempts: 0,
+          attempted_providers: []
+        }
+      else
+        nil
+      end
+    end
 
     attrs = %{
       name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(final_name),
@@ -668,6 +684,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       place_id: final_place_id,
       source: source,
       city_id: city.id,
+      geocoding_performance: geocoding_performance,
       metadata: %{
         geocoding: final_geocoding_metadata,
         geocoding_metadata: geocoding_metadata

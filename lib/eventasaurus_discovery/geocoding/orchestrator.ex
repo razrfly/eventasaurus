@@ -109,7 +109,9 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
           provider: provider_name,
           attempted_providers: Enum.reverse([provider_name | attempted]),
           attempts: length(attempted) + 1,
-          geocoded_at: DateTime.utc_now()
+          geocoded_at: DateTime.utc_now(),
+          place_id: Map.get(result, :place_id),
+          raw_response: Map.get(result, :raw_response)
         }
 
         {:ok, Map.put(result, :geocoding_metadata, metadata)}

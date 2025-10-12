@@ -128,6 +128,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
 
     country = Map.get(address, "country")
 
+    # Extract LocationIQ place ID
+    place_id = Map.get(result, "place_id")
+
     cond do
       is_nil(lat) or is_nil(lng) ->
         Logger.warning("⚠️ LocationIQ: missing or invalid coordinates in response")
@@ -150,7 +153,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
            latitude: lat,
            longitude: lng,
            city: city,
-           country: country || "Unknown"
+           country: country || "Unknown",
+           place_id: place_id,
+           raw_response: result  # Store entire LocationIQ result object
          }}
     end
   end
