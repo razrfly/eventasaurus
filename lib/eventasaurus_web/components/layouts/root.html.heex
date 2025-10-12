@@ -147,15 +147,21 @@
     <script>
       // Provider configuration for frontend geocoding system
       // This will be read by ProviderFactory to determine which provider to use
-      window.GEOCODING_PROVIDER = {
-        name: 'mapbox',  // Using Mapbox provider (Google Maps API key is invalid)
-        apiKey: '<%= System.get_env("MAPBOX_ACCESS_TOKEN") || "" %>'
-      };
+      (function() {
+        const mapboxToken = "<%= System.get_env("MAPBOX_ACCESS_TOKEN") || "" %>";
+        window.GEOCODING_PROVIDER = {
+          name: mapboxToken ? 'mapbox' : 'google_places',
+          apiKey: mapboxToken
+        };
 
-      // Mapbox configuration (if using Mapbox provider)
-      window.MAPBOX_ACCESS_TOKEN = '<%= System.get_env("MAPBOX_ACCESS_TOKEN") || "" %>';
+        if (mapboxToken) {
+          window.MAPBOX_ACCESS_TOKEN = mapboxToken;
+        }
 
-      console.log("Geocoding provider configured:", window.GEOCODING_PROVIDER.name);
+        // Gate for conditional Google Maps loading
+        window.USE_GOOGLE_MAPS = window.GEOCODING_PROVIDER?.name === 'google_places';
+        console.log("Geocoding provider configured:", window.GEOCODING_PROVIDER.name);
+      })();
     </script>
 
     <!-- Load Google Maps API with environment variable -->
@@ -188,12 +194,21 @@
       }
     </script>
     
-    <% maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY") |> String.trim() %>
+    <% maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY") || "" %>
     <script>
       // Google Maps API async loader - properly handles loading=async
       (function() {
+        // Skip entirely unless explicitly using Google
+        if (!window.USE_GOOGLE_MAPS) return;
+
+        const key = "<%= maps_api_key %>".trim();
+        if (!key) {
+          console.warn("Google Maps API key not configured; skipping load.");
+          return;
+        }
+
         const googleMapsLoader = document.createElement('script');
-        googleMapsLoader.src = "https://maps.googleapis.com/maps/api/js?key=<%= maps_api_key %>&libraries=places&v=weekly&callback=initGoogleMaps";
+        googleMapsLoader.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&v=weekly&callback=initGoogleMaps`;
         googleMapsLoader.async = true;
         googleMapsLoader.defer = true;
         googleMapsLoader.onerror = handleGoogleMapsError;

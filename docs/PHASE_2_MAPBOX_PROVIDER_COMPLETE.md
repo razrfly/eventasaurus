@@ -156,11 +156,19 @@ Mapbox is a geocoding service focused on location search, not business informati
 
 ### Advantages
 
-- ✅ **More Generous Pricing**: Mapbox offers 100,000 free requests/month vs Google's 28,000
 - ✅ **Better International Coverage**: Stronger coverage in developing regions
-- ✅ **Simpler Terms of Service**: No attribution requirements for basic usage
 - ✅ **Faster Load Times**: Smaller API footprint than Google Maps
 - ✅ **Developer-Friendly**: Clear API documentation and examples
+
+### Pricing Considerations
+
+**Free Tier Limits**:
+- **Search Sessions**: 2,500 free sessions per month (NOT 100,000 requests)
+- **Session Definition**: A session starts when a user types and ends when they select or abandon
+- **Attribution**: Mapbox logo and attribution must be visible on all map displays
+- **Commercial Use**: Subject to Mapbox Terms of Service
+
+**Important**: Free tier is more restrictive than initially documented. For high-traffic applications, evaluate pricing against Google Places (which offers 28,000 SKU-based operations/month free).
 
 ### Professional UI Design
 

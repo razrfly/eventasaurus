@@ -75,6 +75,12 @@ export const UnifiedPlacesHook = {
 
   async initializeProvider() {
     try {
+      // Destroy existing provider before reinitializing
+      if (this.provider) {
+        this.provider.destroy();
+        this.provider = null;
+      }
+
       // Create provider instance from page configuration
       this.provider = await ProviderFactory.createFromPageConfig();
 
@@ -321,7 +327,10 @@ export const UnifiedPlacesHook = {
         html += `<div class="text-gray-600">📞 ${this.escapeHtml(place.phone)}</div>`;
       }
       if (place.website) {
-        html += `<div class="text-gray-600">🌐 <a href="${this.escapeHtml(place.website)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Website</a></div>`;
+        const sanitizedUrl = this.sanitizeUrl(place.website);
+        if (sanitizedUrl) {
+          html += `<div class="text-gray-600">🌐 <a href="${this.escapeHtml(sanitizedUrl)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Website</a></div>`;
+        }
       }
       html += '</div>';
     }
@@ -366,6 +375,11 @@ export const UnifiedPlacesHook = {
   },
 
   hideSuggestions() {
+    // Hide provider-specific suggestions (e.g., Mapbox dropdown)
+    if (this.provider && typeof this.provider.hideSuggestions === 'function') {
+      this.provider.hideSuggestions();
+    }
+
     // Hide any custom suggestion containers
     const suggestionsContainer = this.el.parentElement.querySelector('.places-suggestions');
     if (suggestionsContainer) {
@@ -379,12 +393,38 @@ export const UnifiedPlacesHook = {
   },
 
   escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') {
+      return '';
+    }
     return unsafe
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  },
+
+  sanitizeUrl(url) {
+    if (!url || typeof url !== 'string') {
+      return '';
+    }
+
+    // Remove any whitespace
+    const trimmed = url.trim();
+
+    // Reject javascript:, data:, and other dangerous protocols
+    const dangerousProtocols = /^(javascript|data|vbscript|file|about):/i;
+    if (dangerousProtocols.test(trimmed)) {
+      return '';
+    }
+
+    // Accept valid http/https URLs
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Reject anything else (including protocol-relative URLs which could be dangerous)
+    return '';
   },
 
   // Handle LiveView events
@@ -400,8 +440,10 @@ export const UnifiedPlacesHook = {
 
       case 'set_location_scope':
         this.config.locationScope = payload.scope;
-        // Reinitialize autocomplete with new types
+        // Destroy and reinitialize provider with new types
         if (this.provider) {
+          this.provider.destroy();
+          this.provider = null;
           this.initializeProvider();
         }
         break;

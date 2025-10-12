@@ -89,7 +89,7 @@ class ProviderFactory {
     const providerName = pageConfig.name || this.defaultProvider;
     const config = {
       apiKey: pageConfig.apiKey,
-      ...pageConfig.options
+      ...(pageConfig.options || {})
     };
 
     console.log(`ProviderFactory: Creating provider from page config: ${providerName}`);

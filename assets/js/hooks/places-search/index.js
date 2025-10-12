@@ -36,7 +36,10 @@ export const CitySearch = {
 
   initCityAutocomplete() {
     if (!window.google || !window.google.maps || !window.google.maps.places) {
-      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not loaded yet for CitySearch, waiting...");
+      // Guard against undefined process in browser environments
+      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+        console.log("Google Maps not loaded yet for CitySearch, waiting...");
+      }
       this.initRetryHandle = setTimeout(() => this.initCityAutocomplete(), 100);
       return;
     }
