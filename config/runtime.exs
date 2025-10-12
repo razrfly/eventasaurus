@@ -39,6 +39,52 @@ config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN
 config :geocoder, Geocoder.Providers.GoogleMaps,
   api_key: System.get_env("GOOGLE_MAPS_API_KEY")
 
+# Configure OpenStreetMap Nominatim provider with proper User-Agent
+# OSM Usage Policy requires identifying the application making requests
+# See: https://operations.osmfoundation.org/policies/nominatim/
+config :geocoder, Geocoder.Providers.OpenStreetMaps,
+  headers: [
+    {"User-Agent", "Eventasaurus/1.0 (#{System.get_env("APP_URL") || "https://eventasaurus.com"}; #{System.get_env("CONTACT_EMAIL") || "support@eventasaurus.com"})"}
+  ]
+
+# Configure multi-provider geocoding system
+# Providers are tried in priority order until one succeeds
+# Free providers first (Mapbox, HERE, OSM alternatives), paid providers last (Google)
+config :eventasaurus_discovery, :geocoding,
+  providers: [
+    # Priority 1: Mapbox (100K/month free, high quality, global coverage)
+    {EventasaurusDiscovery.Geocoding.Providers.Mapbox,
+     enabled: System.get_env("MAPBOX_ENABLED", "true") == "true", priority: 1},
+
+    # Priority 2: HERE (250K/month free, high quality, generous rate limits)
+    {EventasaurusDiscovery.Geocoding.Providers.Here,
+     enabled: System.get_env("HERE_ENABLED", "true") == "true", priority: 2},
+
+    # Priority 3: Geoapify (90K/month free, good quality)
+    {EventasaurusDiscovery.Geocoding.Providers.Geoapify,
+     enabled: System.get_env("GEOAPIFY_ENABLED", "true") == "true", priority: 3},
+
+    # Priority 4: LocationIQ (150K/month free, OSM-based)
+    {EventasaurusDiscovery.Geocoding.Providers.LocationIQ,
+     enabled: System.get_env("LOCATIONIQ_ENABLED", "true") == "true", priority: 4},
+
+    # Priority 5: OpenStreetMap (free, 1 req/sec limit)
+    {EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap,
+     enabled: System.get_env("OSM_ENABLED", "true") == "true", priority: 5},
+
+    # Priority 6: Photon (unlimited free, OSM-based, community service)
+    {EventasaurusDiscovery.Geocoding.Providers.Photon,
+     enabled: System.get_env("PHOTON_ENABLED", "true") == "true", priority: 6},
+
+    # Priority 97: Google Maps ($0.005/call, DISABLED by default)
+    {EventasaurusDiscovery.Geocoding.Providers.GoogleMaps,
+     enabled: System.get_env("GOOGLE_MAPS_ENABLED", "false") == "true", priority: 97},
+
+    # Priority 99: Google Places ($0.034/call, DISABLED by default)
+    {EventasaurusDiscovery.Geocoding.Providers.GooglePlaces,
+     enabled: System.get_env("GOOGLE_PLACES_ENABLED", "false") == "true", priority: 99}
+  ]
+
 # Configure Sentry for all environments (dev/test/prod)
 # Using runtime.exs ensures File.cwd() runs at startup, not compile time
 case System.get_env("SENTRY_DSN") do
