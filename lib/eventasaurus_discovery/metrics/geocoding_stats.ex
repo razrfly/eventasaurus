@@ -57,8 +57,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
             not is_nil(fragment("?->'geocoding'", v.metadata)),
         select: %{
           total_cost:
@@ -109,8 +109,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
             not is_nil(fragment("?->'geocoding'", v.metadata)),
         group_by: fragment("?->'geocoding'->>'provider'", v.metadata),
         select: %{
@@ -159,8 +159,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
             not is_nil(fragment("?->'geocoding'", v.metadata)),
         group_by: fragment("?->'geocoding'->>'source_scraper'", v.metadata),
         select: %{
@@ -351,8 +351,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_datetime) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_datetime) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_datetime) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_datetime) and
             not is_nil(fragment("?->'geocoding'", v.metadata)),
         select: %{
           total_cost:
@@ -407,8 +407,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     success_query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
             not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
             not is_nil(fragment("?->'geocoding_metadata'->>'provider'", v.metadata)),
         group_by: fragment("?->'geocoding_metadata'->>'provider'", v.metadata),
@@ -438,12 +438,28 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
       |> Enum.frequencies()
 
     # Combine success counts with attempt counts
-    results =
+    # Build a map of providers with their success counts
+    success_map =
       success_results
-      |> Enum.map(fn success ->
-        provider = success.provider
-        success_count = success.success_count
+      |> Enum.into(%{}, fn %{provider: provider, success_count: count} ->
+        {provider, count}
+      end)
+
+    # Get all providers (both those with successes and those with only attempts)
+    providers =
+      Map.keys(attempt_results)
+      |> MapSet.new()
+      |> MapSet.union(MapSet.new(Map.keys(success_map)))
+      |> MapSet.to_list()
+
+    # Calculate metrics for all providers
+    results =
+      providers
+      |> Enum.map(fn provider ->
+        success_count = Map.get(success_map, provider, 0)
         total_attempts = Map.get(attempt_results, provider, success_count)
+        # Ensure total_attempts is at least as large as success_count
+        total_attempts = max(total_attempts, success_count)
 
         success_rate =
           if total_attempts > 0 do
@@ -490,8 +506,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
             not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
             not is_nil(fragment("?->'geocoding_metadata'->>'attempts'", v.metadata)),
         select: %{
@@ -517,9 +533,17 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         {:ok, %{average_attempts: 0.0, total_geocoded: 0, single_provider_success: 0}}
 
       result ->
+        avg_attempts =
+          case result.average_attempts do
+            nil -> 0.0
+            %Decimal{} = d -> Decimal.to_float(d) |> Float.round(2)
+            val when is_float(val) -> Float.round(val, 2)
+            val when is_integer(val) -> Float.round(val * 1.0, 2)
+          end
+
         {:ok,
          %{
-           average_attempts: Float.round(result.average_attempts || 0.0, 2),
+           average_attempts: avg_attempts,
            total_geocoded: result.total_geocoded,
            single_provider_success: result.single_provider_success || 0
          }}
@@ -557,8 +581,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
     query =
       from v in Venue,
         where:
-          fragment("(?->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
-            fragment("(?->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
             not is_nil(fragment("?->'geocoding_metadata'", v.metadata)),
         group_by: [
           fragment(
@@ -679,5 +703,280 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
       "  - #{s.scraper}: #{s.count} venues ($#{Float.round(s.total_cost, 2)})"
     end)
     |> Enum.join("\n")
+  end
+
+  @doc """
+  Calculate overall geocoding success rate for the month.
+
+  Success = venue has coordinates AND has geocoding_metadata.provider
+  Failure = geocoding attempted but failed (has geocoding_metadata but no provider)
+
+  ## Parameters
+  - `date` - Any date within the target month (default: current month)
+
+  ## Returns
+  - `{:ok, %{success_rate: float, total_attempts: integer, successful: integer, failed: integer}}`
+  - `{:error, reason}` - If query fails
+
+  ## Examples
+
+      iex> GeocodingStats.overall_success_rate()
+      {:ok, %{success_rate: 95.2, total_attempts: 150, successful: 143, failed: 7}}
+  """
+  def overall_success_rate(date \\ Date.utc_today()) do
+    start_of_month = date |> Date.beginning_of_month() |> NaiveDateTime.new!(~T[00:00:00])
+    end_of_month = date |> Date.end_of_month() |> NaiveDateTime.new!(~T[23:59:59])
+
+    # Count successful geocodings
+    success_query =
+      from v in Venue,
+        where:
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
+            not is_nil(fragment("?->'geocoding_metadata'->>'provider'", v.metadata)) and
+            not is_nil(v.latitude) and
+            not is_nil(v.longitude),
+        select: count(v.id)
+
+    # Count failed geocodings
+    failure_query =
+      from v in Venue,
+        where:
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
+            (is_nil(fragment("?->'geocoding_metadata'->>'provider'", v.metadata)) or
+               is_nil(v.latitude) or
+               is_nil(v.longitude)),
+        select: count(v.id)
+
+    successful = Repo.one(success_query) || 0
+    failed = Repo.one(failure_query) || 0
+    total = successful + failed
+
+    success_rate =
+      if total > 0 do
+        Float.round(successful / total * 100, 2)
+      else
+        0.0
+      end
+
+    {:ok,
+     %{
+       success_rate: success_rate,
+       total_attempts: total,
+       successful: successful,
+       failed: failed
+     }}
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  @doc """
+  Get usage distribution and success rates for each provider.
+
+  Extracts all attempted_providers arrays and counts:
+  - How many times each provider was attempted
+  - How many times each provider succeeded
+  - Success rate per provider
+
+  ## Parameters
+  - `date` - Any date within the target month (default: current month)
+
+  ## Returns
+  - `{:ok, [%{provider: string, attempts: integer, successes: integer, success_rate: float, avg_position: float}]}`
+  - `{:error, reason}` - If query fails
+
+  ## Examples
+
+      iex> GeocodingStats.provider_hit_rates()
+      {:ok, [
+        %{provider: "mapbox", attempts: 150, successes: 143, success_rate: 95.3, avg_position: 1.0},
+        %{provider: "here", attempts: 30, successes: 18, success_rate: 60.0, avg_position: 2.0}
+      ]}
+  """
+  def provider_hit_rates(date \\ Date.utc_today()) do
+    start_of_month = date |> Date.beginning_of_month() |> NaiveDateTime.new!(~T[00:00:00])
+    end_of_month = date |> Date.end_of_month() |> NaiveDateTime.new!(~T[23:59:59])
+
+    # Get all venues with geocoding attempts in the date range
+    venues =
+      Repo.all(
+        from v in Venue,
+          where:
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+              fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+              not is_nil(fragment("?->'geocoding_metadata'", v.metadata)),
+          select: %{
+            attempted_providers:
+              fragment("?->'geocoding_metadata'->'attempted_providers'", v.metadata),
+            successful_provider: fragment("?->'geocoding_metadata'->>'provider'", v.metadata)
+          }
+      )
+
+    # Count attempts per provider
+    attempt_counts =
+      venues
+      |> Enum.flat_map(fn venue ->
+        case venue.attempted_providers do
+          providers when is_list(providers) ->
+            providers
+            |> Enum.with_index(1)
+            |> Enum.map(fn {provider, position} -> {provider, position} end)
+
+          _ ->
+            []
+        end
+      end)
+      |> Enum.reduce(%{}, fn {provider, position}, acc ->
+        current = Map.get(acc, provider, %{count: 0, positions: []})
+
+        Map.put(acc, provider, %{
+          count: current.count + 1,
+          positions: [position | current.positions]
+        })
+      end)
+
+    # Count successes per provider
+    success_counts =
+      venues
+      |> Enum.map(fn venue -> venue.successful_provider end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.frequencies()
+
+    # Combine data
+    results =
+      attempt_counts
+      |> Enum.map(fn {provider, data} ->
+        successes = Map.get(success_counts, provider, 0)
+        attempts = data.count
+
+        success_rate =
+          if attempts > 0 do
+            Float.round(successes / attempts * 100, 2)
+          else
+            0.0
+          end
+
+        avg_position =
+          if length(data.positions) > 0 do
+            Float.round(Enum.sum(data.positions) / length(data.positions), 2)
+          else
+            0.0
+          end
+
+        %{
+          provider: provider,
+          attempts: attempts,
+          successes: successes,
+          success_rate: success_rate,
+          avg_position: avg_position
+        }
+      end)
+      |> Enum.sort_by(& &1.attempts, :desc)
+
+    {:ok, results}
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  @doc """
+  Analyze success rates by fallback depth (attempt number).
+
+  Shows how often geocoding succeeds on 1st try, 2nd try, 3rd+ try.
+
+  ## Parameters
+  - `date` - Any date within the target month (default: current month)
+
+  ## Returns
+  - `{:ok, [%{depth: integer, total: integer, successful: integer, success_rate: float}]}`
+  - `{:error, reason}` - If query fails
+
+  ## Examples
+
+      iex> GeocodingStats.fallback_depth_analysis()
+      {:ok, [
+        %{depth: 1, total: 120, successful: 114, success_rate: 95.0},
+        %{depth: 2, total: 25, successful: 18, success_rate: 72.0},
+        %{depth: 3, total: 5, successful: 2, success_rate: 40.0}
+      ]}
+  """
+  def fallback_depth_analysis(date \\ Date.utc_today()) do
+    start_of_month = date |> Date.beginning_of_month() |> NaiveDateTime.new!(~T[00:00:00])
+    end_of_month = date |> Date.end_of_month() |> NaiveDateTime.new!(~T[23:59:59])
+
+    query =
+      from v in Venue,
+        where:
+          fragment("(?->'geocoding'->>'geocoded_at')::timestamp >= ?", v.metadata, ^start_of_month) and
+            fragment("(?->'geocoding'->>'geocoded_at')::timestamp <= ?", v.metadata, ^end_of_month) and
+            not is_nil(fragment("?->'geocoding_metadata'", v.metadata)) and
+            not is_nil(fragment("?->'geocoding_metadata'->>'attempts'", v.metadata)),
+        group_by: fragment("(?->'geocoding_metadata'->>'attempts')::integer", v.metadata),
+        select: %{
+          depth: fragment("(?->'geocoding_metadata'->>'attempts')::integer", v.metadata),
+          total: count(v.id),
+          successful:
+            sum(
+              fragment(
+                "CASE WHEN ?->'geocoding_metadata'->>'provider' IS NOT NULL THEN 1 ELSE 0 END",
+                v.metadata
+              )
+            )
+        },
+        order_by: [asc: fragment("(?->'geocoding_metadata'->>'attempts')::integer", v.metadata)]
+
+    results =
+      Repo.all(query)
+      |> Enum.map(fn row ->
+        success_rate =
+          if row.total > 0 do
+            Float.round(row.successful / row.total * 100, 2)
+          else
+            0.0
+          end
+
+        %{
+          depth: row.depth,
+          total: row.total,
+          successful: row.successful,
+          success_rate: success_rate
+        }
+      end)
+
+    {:ok, results}
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  @doc """
+  Enhanced summary including performance metrics.
+
+  Combines cost tracking with performance tracking for comprehensive dashboard.
+
+  ## Parameters
+  - `date` - Any date within the target month (default: current month)
+
+  ## Returns
+  - `{:ok, map}` - Complete statistics including performance and cost data
+  - `{:error, reason}` - If query fails
+  """
+  def performance_summary(date \\ Date.utc_today()) do
+    with {:ok, cost_summary} <- summary(),
+         {:ok, success_rate} <- overall_success_rate(date),
+         {:ok, hit_rates} <- provider_hit_rates(date),
+         {:ok, fallback_depth} <- fallback_depth_analysis(date),
+         {:ok, avg_attempts_data} <- average_attempts(date) do
+      {:ok,
+       Map.merge(cost_summary, %{
+         overall_success_rate: success_rate,
+         provider_hit_rates: hit_rates,
+         fallback_depth: fallback_depth,
+         average_attempts: avg_attempts_data.average_attempts
+       })}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
   end
 end

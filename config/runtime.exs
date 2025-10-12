@@ -50,7 +50,7 @@ config :geocoder, Geocoder.Providers.OpenStreetMaps,
 # Configure multi-provider geocoding system
 # Providers are tried in priority order until one succeeds
 # Free providers first (Mapbox, HERE, OSM alternatives), paid providers last (Google)
-config :eventasaurus_discovery, :geocoding,
+config :eventasaurus, :geocoding,
   providers: [
     # Priority 1: Mapbox (100K/month free, high quality, global coverage)
     {EventasaurusDiscovery.Geocoding.Providers.Mapbox,

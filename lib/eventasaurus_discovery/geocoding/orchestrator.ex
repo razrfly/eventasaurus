@@ -9,7 +9,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
 
   Providers are configured in `config/runtime.exs`:
 
-      config :eventasaurus_discovery, :geocoding,
+      config :eventasaurus, :geocoding,
         providers: [
           {Providers.Mapbox, enabled: true, priority: 1},
           {Providers.OpenStreetMap, enabled: true, priority: 2}
@@ -109,7 +109,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
 
   # Get enabled providers sorted by priority
   defp get_enabled_providers do
-    Application.get_env(:eventasaurus_discovery, :geocoding, [])
+    Application.get_env(:eventasaurus, :geocoding, [])
     |> Keyword.get(:providers, [])
     |> Enum.filter(fn {_module, opts} ->
       Keyword.get(opts, :enabled, false)

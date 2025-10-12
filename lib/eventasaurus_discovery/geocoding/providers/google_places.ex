@@ -134,9 +134,24 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         parse_place_details_response(body)
 
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ Google Places Details rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: 403}} ->
+        Logger.error(
+          "❌ Google Places Details authentication failed (invalid API key or billing not enabled)"
+        )
+
+        {:error, :api_error}
+
       {:ok, %HTTPoison.Response{status_code: status}} ->
         Logger.error("❌ Google Places Details HTTP error: #{status}")
         {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Google Places Details request timed out")
+        {:error, :timeout}
 
       {:error, reason} ->
         Logger.error("❌ Google Places Details request failed: #{inspect(reason)}")

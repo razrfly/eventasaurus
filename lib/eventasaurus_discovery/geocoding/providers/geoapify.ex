@@ -124,7 +124,13 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
 
       is_nil(city) ->
         Logger.warning("⚠️ Geoapify: could not extract city. Result: #{inspect(result)}")
-        {:error, :no_city_found}
+        {:ok,
+         %{
+           latitude: lat * 1.0,
+           longitude: lng * 1.0,
+           city: "Unknown",
+           country: country || "Unknown"
+         }}
 
       true ->
         {:ok,
