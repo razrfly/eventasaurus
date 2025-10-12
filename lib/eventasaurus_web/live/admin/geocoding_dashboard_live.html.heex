@@ -113,11 +113,10 @@
               <dl>
                 <dt class="text-sm font-medium text-gray-500 truncate">Avg Attempts</dt>
                 <dd class="text-2xl font-semibold text-gray-900">
-                  <%= if @summary.average_attempts do %>
-                    <%= @summary.average_attempts.average_attempts %>
-                  <% else %>
-                    N/A
-                  <% end %>
+                  <%= case Map.get(@summary, :average_attempts) do
+                    nil -> "N/A"
+                    val -> val
+                  end %>
                 </dd>
               </dl>
             </div>
@@ -242,11 +241,12 @@
                 <%= for depth <- @fallback_depth do %>
                   <tr>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      <%= if depth.depth == 1 do %>
-                        1st attempt
-                      <% else %>
-                        <%= depth.depth %><%= if depth.depth == 2, do: "nd", else: "th" %> attempt
-                      <% end %>
+                      <%= case depth.depth do
+                        1 -> "1st attempt"
+                        2 -> "2nd attempt"
+                        3 -> "3rd attempt"
+                        n -> "#{n}th attempt"
+                      end %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <%= depth.total %>

@@ -126,13 +126,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
 
       is_nil(city) ->
         Logger.warning("⚠️ HERE: could not extract city. Address: #{inspect(address)}")
-        {:ok,
-         %{
-           latitude: lat * 1.0,
-           longitude: lng * 1.0,
-           city: "Unknown",
-           country: country || "Unknown"
-         }}
+        {:error, :no_city_found}
 
       true ->
         {:ok,
