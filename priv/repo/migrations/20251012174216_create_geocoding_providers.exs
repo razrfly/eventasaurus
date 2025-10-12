@@ -6,7 +6,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreateGeocodingProviders do
       add :name, :string, null: false
       add :priority, :integer, null: false
       add :is_active, :boolean, default: true, null: false
-      add :metadata, :jsonb, default: "{}"
+      add :metadata, :jsonb, default: fragment("'{}'::jsonb")
 
       timestamps()
     end

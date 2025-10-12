@@ -54,8 +54,10 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
     provider = Repo.get!(GeocodingProvider, provider_id)
 
     # Merge rate limits into existing metadata
+    metadata = provider.metadata || %{}
+
     updated_metadata =
-      provider.metadata
+      metadata
       |> Map.put("rate_limits", %{
         "per_second" => rate_limits.per_second,
         "per_minute" => rate_limits.per_minute,
@@ -86,9 +88,11 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
         nil
 
       provider ->
+        metadata = provider.metadata || %{}
+
         # Extract rate_limits from metadata (handle both string and atom keys)
-        get_in(provider.metadata, ["rate_limits"]) ||
-          get_in(provider.metadata, [:rate_limits])
+        get_in(metadata, ["rate_limits"]) ||
+          get_in(metadata, [:rate_limits])
     end
   end
 

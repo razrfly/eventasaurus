@@ -46,6 +46,8 @@ defmodule EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider do
   defp validate_metadata(changeset) do
     changeset
     |> validate_change(:metadata, fn :metadata, metadata ->
+      metadata = metadata || %{}
+
       # Validate rate_limits structure if present
       case get_in(metadata, ["rate_limits"]) || get_in(metadata, [:rate_limits]) do
         nil -> []
