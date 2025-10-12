@@ -37,7 +37,11 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
     Logger.debug("🌐 OpenStreetMap request: #{address}")
 
     # CRITICAL: Enforce 1 req/sec rate limit BEFORE making request
-    # This is intentionally blocking to prevent parallel requests
+    # NOTE: This Process.sleep is a simple per-worker delay and doesn't prevent
+    # parallel workers from hitting OSM simultaneously. For production use with
+    # high concurrency, this should be replaced with a shared rate limiter
+    # (e.g., Hammer-based) to queue requests globally. However, since OSM is
+    # priority 5 (only used as fallback), this simple approach is acceptable.
     Process.sleep(1000)
 
     try do

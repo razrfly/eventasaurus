@@ -42,7 +42,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
-  alias EventasaurusDiscovery.Repo
+  alias EventasaurusApp.Repo
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do

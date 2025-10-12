@@ -11,9 +11,9 @@
     </div>
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900">Geocoding Cost Dashboard</h1>
+        <h1 class="text-3xl font-bold text-gray-900">Geocoding Performance Dashboard</h1>
         <p class="mt-2 text-sm text-gray-600">
-          Monitor geocoding API usage and costs across all scrapers
+          Monitor geocoding success rates and provider performance
         </p>
       </div>
       <div class="flex gap-2">
@@ -53,7 +53,7 @@
   <% end %>
 
   <%= if @summary do %>
-    <!-- Overview Stats -->
+    <!-- Overview Stats - Performance Focused -->
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
       <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
@@ -63,9 +63,13 @@
             </div>
             <div class="ml-5 w-0 flex-1">
               <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Total Venues</dt>
+                <dt class="text-sm font-medium text-gray-500 truncate">Total Attempts</dt>
                 <dd class="text-2xl font-semibold text-gray-900">
-                  <%= @summary.total_venues_geocoded %>
+                  <%= if @overall_success_rate do %>
+                    <%= @overall_success_rate.total_attempts %>
+                  <% else %>
+                    <%= @summary.total_venues_geocoded %>
+                  <% end %>
                 </dd>
               </dl>
             </div>
@@ -77,19 +81,21 @@
         <div class="p-5">
           <div class="flex items-center">
             <div class="flex-shrink-0">
-              <.icon name="hero-currency-dollar" class="h-6 w-6 text-gray-400" />
+              <%= if @overall_success_rate && @overall_success_rate.success_rate >= 95.0 do %>
+                <.icon name="hero-check-circle" class="h-6 w-6 text-green-400" />
+              <% else %>
+                <.icon name="hero-chart-bar" class="h-6 w-6 text-yellow-400" />
+              <% end %>
             </div>
             <div class="ml-5 w-0 flex-1">
               <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Total Cost</dt>
+                <dt class="text-sm font-medium text-gray-500 truncate">Success Rate</dt>
                 <dd class="text-2xl font-semibold text-gray-900">
-                  $<%=
-                    case @summary.total_cost do
-                      %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
-                      cost when is_float(cost) -> Float.round(cost, 2)
-                      cost when is_integer(cost) -> Float.round(cost * 1.0, 2)
-                    end
-                  %>
+                  <%= if @overall_success_rate do %>
+                    <%= @overall_success_rate.success_rate %>%
+                  <% else %>
+                    N/A
+                  <% end %>
                 </dd>
               </dl>
             </div>
@@ -101,13 +107,17 @@
         <div class="p-5">
           <div class="flex items-center">
             <div class="flex-shrink-0">
-              <.icon name="hero-check-circle" class="h-6 w-6 text-green-400" />
+              <.icon name="hero-arrow-trending-up" class="h-6 w-6 text-indigo-400" />
             </div>
             <div class="ml-5 w-0 flex-1">
               <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Free Geocoding</dt>
+                <dt class="text-sm font-medium text-gray-500 truncate">Avg Attempts</dt>
                 <dd class="text-2xl font-semibold text-gray-900">
-                  <%= @summary.free_geocoding_count %>
+                  <%= if @summary.average_attempts do %>
+                    <%= @summary.average_attempts.average_attempts %>
+                  <% else %>
+                    N/A
+                  <% end %>
                 </dd>
               </dl>
             </div>
@@ -119,13 +129,17 @@
         <div class="p-5">
           <div class="flex items-center">
             <div class="flex-shrink-0">
-              <.icon name="hero-credit-card" class="h-6 w-6 text-red-400" />
+              <.icon name="hero-x-circle" class="h-6 w-6 text-red-400" />
             </div>
             <div class="ml-5 w-0 flex-1">
               <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Paid Geocoding</dt>
+                <dt class="text-sm font-medium text-gray-500 truncate">Failed</dt>
                 <dd class="text-2xl font-semibold text-gray-900">
-                  <%= @summary.paid_geocoding_count %>
+                  <%= if @overall_success_rate do %>
+                    <%= @overall_success_rate.failed %>
+                  <% else %>
+                    <%= @summary.failed_count %>
+                  <% end %>
                 </dd>
               </dl>
             </div>
@@ -134,11 +148,11 @@
       </div>
     </div>
 
-    <!-- Costs by Provider -->
+    <!-- Provider Performance - Primary Section -->
     <div class="bg-white shadow rounded-lg mb-8">
       <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
-        <h3 class="text-lg leading-6 font-medium text-gray-900">Costs by Provider</h3>
-        <p class="mt-1 text-sm text-gray-500">Geocoding costs broken down by API provider</p>
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Provider Performance</h3>
+        <p class="mt-1 text-sm text-gray-500">Success rates and usage by geocoding provider</p>
       </div>
       <div class="px-4 py-5 sm:p-6">
         <div class="overflow-x-auto">
@@ -149,18 +163,21 @@
                   Provider
                 </th>
                 <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Venue Count
+                  Attempts
                 </th>
                 <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total Cost
+                  Successes
                 </th>
                 <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Avg Cost/Venue
+                  Success Rate
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Avg Position
                 </th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <%= for provider <- @by_provider do %>
+              <%= for provider <- @provider_hit_rates do %>
                 <tr>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     <span class={[
@@ -171,26 +188,21 @@
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <%= provider.count %>
+                    <%= provider.attempts %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                    $<%=
-                      case provider.total_cost do
-                        %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
-                        cost when is_float(cost) -> Float.round(cost, 2)
-                        cost when is_integer(cost) -> Float.round(cost * 1.0, 2)
-                      end
-                    %>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <%= provider.successes %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <span class={[
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                      success_rate_badge_class(provider.success_rate)
+                    ]}>
+                      <%= provider.success_rate %>%
+                    </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    $<%=
-                      avg = case provider.total_cost do
-                        %Decimal{} = d -> Decimal.div(d, provider.count) |> Decimal.to_float()
-                        cost when is_float(cost) -> cost / provider.count
-                        cost when is_integer(cost) -> cost / provider.count
-                      end
-                      Float.round(avg, 4)
-                    %>
+                    <%= provider.avg_position %>
                   </td>
                 </tr>
               <% end %>
@@ -200,11 +212,70 @@
       </div>
     </div>
 
-    <!-- Costs by Scraper -->
+    <!-- Fallback Chain Analysis -->
+    <%= if length(@fallback_depth) > 0 do %>
+      <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Fallback Chain Analysis</h3>
+          <p class="mt-1 text-sm text-gray-500">Success rates by attempt number (fallback depth)</p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Attempt #
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Successful
+                  </th>
+                  <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Success Rate
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <%= for depth <- @fallback_depth do %>
+                  <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <%= if depth.depth == 1 do %>
+                        1st attempt
+                      <% else %>
+                        <%= depth.depth %><%= if depth.depth == 2, do: "nd", else: "th" %> attempt
+                      <% end %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <%= depth.total %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <%= depth.successful %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <span class={[
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                        success_rate_badge_class(depth.success_rate)
+                      ]}>
+                        <%= depth.success_rate %>%
+                      </span>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Scraper Performance -->
     <div class="bg-white shadow rounded-lg mb-8">
       <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
-        <h3 class="text-lg leading-6 font-medium text-gray-900">Costs by Scraper</h3>
-        <p class="mt-1 text-sm text-gray-500">Geocoding costs broken down by source scraper</p>
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Scraper Performance</h3>
+        <p class="mt-1 text-sm text-gray-500">Geocoding activity broken down by source scraper</p>
       </div>
       <div class="px-4 py-5 sm:p-6">
         <div class="overflow-x-auto">
@@ -218,10 +289,7 @@
                   Venue Count
                 </th>
                 <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total Cost
-                </th>
-                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Avg Cost/Venue
+                  Cost
                 </th>
               </tr>
             </thead>
@@ -234,23 +302,13 @@
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <%= scraper.count %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     $<%=
                       case scraper.total_cost do
                         %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
                         cost when is_float(cost) -> Float.round(cost, 2)
                         cost when is_integer(cost) -> Float.round(cost * 1.0, 2)
                       end
-                    %>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    $<%=
-                      avg = case scraper.total_cost do
-                        %Decimal{} = d -> Decimal.div(d, scraper.count) |> Decimal.to_float()
-                        cost when is_float(cost) -> cost / scraper.count
-                        cost when is_integer(cost) -> cost / scraper.count
-                      end
-                      Float.round(avg, 4)
                     %>
                   </td>
                 </tr>
