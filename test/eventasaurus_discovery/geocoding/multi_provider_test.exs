@@ -13,16 +13,18 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
   For production validation, use database audits instead of running these tests.
 
   Run all tests:
-    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs
+    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --include external_api
 
   Run specific phase:
-    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --only provider_isolation
-    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --only fallback_chain
-    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --only scraper_integration
+    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --only provider_isolation --include external_api
+    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --only fallback_chain --include external_api
+    mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs --only scraper_integration --include external_api
   """
 
   use EventasaurusApp.DataCase, async: false
   require Logger
+
+  @moduletag :external_api
 
   alias EventasaurusDiscovery.Geocoding.Orchestrator
   alias EventasaurusDiscovery.Geocoding.Providers.{Mapbox, Here, Geoapify, LocationIQ, OpenStreetMap, Photon}

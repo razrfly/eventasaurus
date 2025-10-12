@@ -1,12 +1,24 @@
 <div class="container mx-auto px-4 py-8">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold">Source Management</h1>
-    <.link
-      navigate={~p"/admin/sources/new"}
-      class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-    >
-      New Source
-    </.link>
+  <div class="mb-8">
+    <div class="mb-4">
+      <.link navigate="/admin/imports" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
+        ← Back to Dashboard
+      </.link>
+    </div>
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Source Management</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Manage event sources, priorities, and configuration
+        </p>
+      </div>
+      <.link
+        navigate={~p"/admin/sources/new"}
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        New Source
+      </.link>
+    </div>
   </div>
 
   <!-- Search and Filters -->
