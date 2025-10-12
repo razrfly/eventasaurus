@@ -8,7 +8,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Karnet.DateParser
-  alias EventasaurusDiscovery.Geocoding.MetadataBuilder
 
   @doc """
   Transform a raw Karnet event into our unified format.

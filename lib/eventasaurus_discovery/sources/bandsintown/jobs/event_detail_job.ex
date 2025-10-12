@@ -229,7 +229,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     # Call the Processor with the required arguments
     # The Processor will handle venue validation and event creation/updating
     # Note: City is not needed by the Processor, it uses venue data from the event
-    case Processor.process_source_data(events_to_process, source) do
+    # Pass explicit scraper name for venue attribution metadata
+    case Processor.process_source_data(events_to_process, source, "bandsintown") do
       {:ok, results} when is_list(results) ->
         # process_source_data returns a list of processed events
         Logger.debug("✅ Event processed through Processor")

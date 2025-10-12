@@ -94,7 +94,9 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
       end
 
       defp process_events(events, source) do
-        Processor.process_source_data(events, source)
+        # Extract scraper name from source struct for venue attribution
+        scraper_name = if is_struct(source) && Map.has_key?(source, :name), do: source.name, else: nil
+        Processor.process_source_data(events, source, scraper_name)
       end
 
       # Helper function to call transform_events with options if the implementation supports it

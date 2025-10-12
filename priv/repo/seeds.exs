@@ -57,4 +57,8 @@ Code.eval_file("priv/repo/seeds/categories.exs")
 IO.puts("\n🌱 Seeding sources...")
 Code.eval_file("priv/repo/seeds/sources.exs")
 
+# Seed automated discovery configuration for cities
+IO.puts("\n🌱 Seeding discovery configuration...")
+Code.eval_file("priv/repo/seeds/discovery_cities.exs")
+
 IO.puts("\n🌱 Seeds completed!")
