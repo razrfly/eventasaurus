@@ -21,6 +21,7 @@ export default class MapboxProvider extends BaseGeocodingProvider {
     this.searchOptions = null;
     this.suggestionsBox = null;
     this.debounceTimer = null;
+    this.boundInputHandler = null;
   }
 
   /**
@@ -92,7 +93,7 @@ export default class MapboxProvider extends BaseGeocodingProvider {
     // Add proximity bias if search location provided
     if (searchLocation?.geometry) {
       this.searchOptions.proximity = [
-        searchLocation.geometry.lng || searchLocation.geometry.lon,
+        searchLocation.geometry.lng ?? searchLocation.geometry.lon,
         searchLocation.geometry.lat
       ];
     }
@@ -113,7 +114,8 @@ export default class MapboxProvider extends BaseGeocodingProvider {
   setupInputListener() {
     if (!this.inputElement) return;
 
-    this.inputElement.addEventListener('input', async (e) => {
+    // Store bound handler for proper cleanup
+    this.boundInputHandler = async (e) => {
       clearTimeout(this.debounceTimer);
       const query = e.target.value.trim();
 
@@ -138,7 +140,9 @@ export default class MapboxProvider extends BaseGeocodingProvider {
           this.hideSuggestions();
         }
       }, 300);
-    });
+    };
+
+    this.inputElement.addEventListener('input', this.boundInputHandler);
   }
 
   /**
@@ -354,9 +358,15 @@ export default class MapboxProvider extends BaseGeocodingProvider {
     const website = '';
     const photos = [];
 
+    // Generate stable place_id
+    // Priority: feature.id > feature.mapbox_id > coordinate-based fallback
+    // Coordinate-based fallback ensures same location = same ID (no timestamp!)
+    const placeId = feature.id || feature.mapbox_id ||
+      `mapbox-coord-${longitude.toFixed(6)}-${latitude.toFixed(6)}`;
+
     // Build normalized place data
     return {
-      place_id: feature.id || feature.mapbox_id || `mapbox-${Date.now()}`,
+      place_id: placeId,
       name: name,
       formatted_address: formattedAddress,
       city: city,
@@ -383,7 +393,7 @@ export default class MapboxProvider extends BaseGeocodingProvider {
 
     // Update proximity option in search options
     this.searchOptions.proximity = [
-      location.geometry.lng || location.geometry.lon,
+      location.geometry.lng ?? location.geometry.lon,
       location.geometry.lat
     ];
   }
@@ -428,6 +438,12 @@ export default class MapboxProvider extends BaseGeocodingProvider {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+
+    // Remove input event listener
+    if (this.inputElement && this.boundInputHandler) {
+      this.inputElement.removeEventListener('input', this.boundInputHandler);
+      this.boundInputHandler = null;
     }
 
     // Remove suggestions box

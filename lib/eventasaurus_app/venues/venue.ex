@@ -141,7 +141,7 @@ defmodule EventasaurusApp.Venues.Venue do
       message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}"
     )
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
-    |> validate_inclusion(:source, ["user", "scraper", "google"])
+    |> validate_inclusion(:source, ["user", "scraper", "google", "mapbox"])
     |> validate_length(:place_id, max: 255)
     |> validate_utf8_fields()
     |> validate_gps_coordinates()

@@ -590,6 +590,30 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
+  # Detects venue source from place_id format
+  # Returns "google", "mapbox", or "scraper" based on place_id pattern
+  defp detect_venue_source(nil), do: "scraper"
+
+  defp detect_venue_source(place_id) when is_binary(place_id) do
+    cond do
+      # Google Places IDs start with "ChIJ"
+      String.starts_with?(place_id, "ChIJ") ->
+        "google"
+
+      # Mapbox IDs can be:
+      # 1. Official Mapbox IDs (base64-encoded, start with various patterns)
+      # 2. Custom format: "mapbox-..." or "mapbox-coord-..."
+      String.starts_with?(place_id, "mapbox") or String.contains?(place_id, "dXJu") ->
+        "mapbox"
+
+      # Unknown format, mark as scraper
+      true ->
+        "scraper"
+    end
+  end
+
+  defp detect_venue_source(_), do: "scraper"
+
   defp insert_new_venue(
          data,
          city,
@@ -626,6 +650,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         |> MetadataBuilder.add_scraper_source(source_scraper)
     end
 
+    # Auto-detect provider from place_id format
+    # Google: "ChIJ..." format
+    # Mapbox: "dXJuOm1ieHBvaSo..." or "mapbox-..." or "mapbox-coord-..." format
+    # Scraper: fallback for venues without place_id from external providers
+    source = detect_venue_source(final_place_id)
+
     attrs = %{
       name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(final_name),
       address: data.address,
@@ -636,7 +666,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       longitude: longitude,
       venue_type: "venue",
       place_id: final_place_id,
-      source: "scraper",
+      source: source,
       city_id: city.id,
       metadata: %{
         geocoding: final_geocoding_metadata,
