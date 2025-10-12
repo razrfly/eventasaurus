@@ -99,7 +99,8 @@
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
               <%= if @editing_rate_limit_id == provider.id do %>
-                <% rate_limits = get_in(provider.metadata, ["rate_limits"]) || get_in(provider.metadata, [:rate_limits]) || %{} %>
+                <% metadata = provider.metadata || %{} %>
+                <% rate_limits = get_in(metadata, ["rate_limits"]) || get_in(metadata, [:rate_limits]) || %{} %>
                 <div>
                   <form phx-submit="update_rate_limits" class="flex flex-col gap-2">
                     <input type="hidden" name="provider_id" value={provider.id} />
@@ -154,7 +155,8 @@
                   <% end %>
                 </div>
               <% else %>
-                <%= if rate_limits = get_in(provider.metadata, ["rate_limits"]) || get_in(provider.metadata, [:rate_limits]) do %>
+                <% metadata = provider.metadata || %{} %>
+                <%= if rate_limits = get_in(metadata, ["rate_limits"]) || get_in(metadata, [:rate_limits]) do %>
                   <div class="flex flex-col">
                     <span class="font-medium text-gray-900">
                       <%= rate_limits["per_second"] || rate_limits[:per_second] || "?" %> req/sec

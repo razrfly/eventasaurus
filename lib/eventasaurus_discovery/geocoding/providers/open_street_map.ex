@@ -45,7 +45,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
     Process.sleep(1000)
 
     try do
-      case Geocoder.call(address, :osm) do
+      case Geocoder.call(address, provider: Geocoder.Providers.OpenStreetMaps) do
         {:ok, coordinates} ->
           extract_result(coordinates)
 
