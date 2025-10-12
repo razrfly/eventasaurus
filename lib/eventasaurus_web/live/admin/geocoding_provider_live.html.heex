@@ -1,4 +1,4 @@
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="container mx-auto px-4 py-8">
   <div class="mb-8">
     <div class="mb-4">
       <.link navigate="/admin/geocoding" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
@@ -15,27 +15,27 @@
     </div>
   </div>
 
-  <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+  <div class="bg-white shadow rounded-lg overflow-hidden">
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Provider
           </th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Priority
           </th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Status
           </th>
-          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Actions
           </th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
         <%= for provider <- @providers do %>
-          <tr>
+          <tr class={unless provider.is_active, do: "opacity-50 bg-gray-50"}>
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm font-medium text-gray-900">
                 <%= display_name(provider.name) %>
@@ -45,32 +45,85 @@
               </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <form phx-change="set_priority">
-                <input type="hidden" name="provider_id" value={provider.id} />
-                <input
-                  type="number"
-                  name="priority"
-                  value={provider.priority}
-                  min="1"
-                  max="99"
-                  class="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                />
-              </form>
+              <%= if @editing_provider_id == provider.id do %>
+                <div>
+                  <form phx-submit="update_priority" class="flex gap-2 items-center">
+                    <input type="hidden" name="provider_id" value={provider.id} />
+                    <input
+                      type="number"
+                      name="priority"
+                      value={provider.priority}
+                      min="1"
+                      max="99"
+                      class={
+                        "w-20 px-2 py-1 border rounded text-sm " <>
+                        if @validation_error, do: "border-red-500", else: "border-gray-300"
+                      }
+                      autofocus
+                    />
+                    <button
+                      type="submit"
+                      class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="cancel_edit"
+                      class="px-2 py-1 bg-gray-300 text-gray-700 text-xs rounded hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                  <%= if @validation_error do %>
+                    <p class="text-xs text-red-600 mt-1"><%= @validation_error %></p>
+                  <% end %>
+                </div>
+              <% else %>
+                <span class={
+                  "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
+                  cond do
+                    provider.priority >= 90 -> "bg-purple-100 text-purple-800"
+                    provider.priority >= 70 -> "bg-blue-100 text-blue-800"
+                    provider.priority >= 50 -> "bg-green-100 text-green-800"
+                    provider.priority >= 10 -> "bg-yellow-100 text-yellow-800"
+                    true -> "bg-gray-100 text-gray-800"
+                  end
+                }>
+                  <%= provider.priority %>
+                </span>
+              <% end %>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class={"px-2 inline-flex text-xs leading-5 font-semibold rounded-full #{if provider.is_active, do: "bg-green-100 text-green-800", else: "bg-gray-100 text-gray-800"}"}>
+              <span class={
+                "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
+                if provider.is_active,
+                  do: "bg-green-100 text-green-800",
+                  else: "bg-red-100 text-red-800"
+              }>
                 <%= if provider.is_active, do: "Active", else: "Inactive" %>
               </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-              <button
-                type="button"
-                phx-click="toggle_active"
-                phx-value-id={provider.id}
-                class={"px-3 py-2 text-sm font-medium rounded-md #{if provider.is_active, do: "text-red-700 hover:text-red-900", else: "text-green-700 hover:text-green-900"}"}
-              >
-                <%= if provider.is_active, do: "Disable", else: "Enable" %>
-              </button>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  phx-click="edit_priority"
+                  phx-value-id={provider.id}
+                  class="text-blue-600 hover:text-blue-900"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  phx-click="toggle_active"
+                  phx-value-id={provider.id}
+                  class="text-indigo-600 hover:text-indigo-900"
+                  data-confirm="Are you sure?"
+                >
+                  <%= if provider.is_active, do: "Deactivate", else: "Activate" %>
+                </button>
+              </div>
             </td>
           </tr>
         <% end %>

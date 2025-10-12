@@ -4,6 +4,7 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
   Reads provider settings from database and provides them to the geocoding system.
   """
 
+  require Logger
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
@@ -22,6 +23,7 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
     |> group_by_priority()
     |> Enum.flat_map(&shuffle_equal_priority/1)
     |> Enum.map(&provider_to_config/1)
+    |> Enum.reject(&is_nil/1)
   end
 
   @doc """
@@ -50,8 +52,23 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
   def reorder_providers(priority_map) when is_map(priority_map) do
     Repo.transaction(fn ->
       Enum.each(priority_map, fn {provider_id, new_priority} ->
-        from(p in GeocodingProvider, where: p.id == ^provider_id)
-        |> Repo.update_all(set: [priority: new_priority])
+        id =
+          case Integer.parse(to_string(provider_id)) do
+            {i, ""} -> i
+            _ -> raise ArgumentError, "invalid provider_id: #{inspect(provider_id)}"
+          end
+
+        prio =
+          case Integer.parse(to_string(new_priority)) do
+            {i, ""} when i > 0 and i < 100 ->
+              i
+
+            _ ->
+              raise ArgumentError, "invalid priority: #{inspect(new_priority)}"
+          end
+
+        from(p in GeocodingProvider, where: p.id == ^id)
+        |> Repo.update_all(set: [priority: prio])
       end)
     end)
   end
@@ -72,8 +89,21 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
   defp shuffle_equal_priority(providers), do: providers
 
   defp provider_to_config(provider) do
-    module = name_to_module(provider.name)
-    {module, [enabled: true, priority: provider.priority]}
+    module =
+      provider.name
+      |> String.trim()
+      |> String.downcase()
+      |> name_to_module()
+
+    if Code.ensure_loaded?(module) and function_exported?(module, :geocode, 1) do
+      {module, [enabled: true, priority: provider.priority]}
+    else
+      Logger.warning(
+        "Skipping unknown geocoding provider: #{inspect(provider.name)} -> #{inspect(module)}"
+      )
+
+      nil
+    end
   end
 
   defp name_to_module("mapbox"), do: EventasaurusDiscovery.Geocoding.Providers.Mapbox
