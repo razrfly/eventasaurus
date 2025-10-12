@@ -14,6 +14,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Geocoding.MetadataBuilder
 
   @doc """
   Transform raw Cinema City showtime into unified event format.
@@ -196,6 +197,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
     # Resolve city using CityResolver with coordinates if available
     {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city, "Poland")
 
+    # Build CityResolver metadata (offline reverse geocoding - free)
+    geocoding_metadata = MetadataBuilder.build_city_resolver_metadata()
+                         |> MetadataBuilder.add_scraper_source("cinema_city")
+
     %{
       name: fetch(cinema, :name),
       address: fetch(cinema, :address),
@@ -205,6 +210,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
       longitude: longitude,
       phone: nil,
       # Not provided by Cinema City API
+      geocoding_metadata: geocoding_metadata,
       metadata: %{
         cinema_city_id: fetch(cinema, :cinema_city_id),
         website: fetch(cinema, :website)

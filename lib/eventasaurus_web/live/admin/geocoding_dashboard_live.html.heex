@@ -1,0 +1,339 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div class="mb-8">
+    <div class="mb-4">
+      <a
+        href={~p"/dev/imports"}
+        class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
+      >
+        <.icon name="hero-arrow-left" class="h-4 w-4 mr-1" />
+        Back to Discovery Dashboard
+      </a>
+    </div>
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Geocoding Cost Dashboard</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Monitor geocoding API usage and costs across all scrapers
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <button
+          phx-click="refresh"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          Refresh
+        </button>
+        <button
+          phx-click="generate_report"
+          class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          Generate Report
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <%= if @loading do %>
+    <div class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <p class="mt-4 text-gray-600">Loading geocoding statistics...</p>
+    </div>
+  <% end %>
+
+  <%= if @error do %>
+    <div class="rounded-md bg-red-50 p-4 mb-6">
+      <div class="flex">
+        <.icon name="hero-x-circle" class="h-5 w-5 text-red-400" />
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-red-800">Error loading statistics</h3>
+          <p class="mt-2 text-sm text-red-700"><%= @error %></p>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <%= if @summary do %>
+    <!-- Overview Stats -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-map-pin" class="h-6 w-6 text-gray-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Total Venues</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  <%= @summary.total_venues_geocoded %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-currency-dollar" class="h-6 w-6 text-gray-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Total Cost</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  $<%=
+                    case @summary.total_cost do
+                      %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
+                      cost when is_float(cost) -> Float.round(cost, 2)
+                      cost when is_integer(cost) -> Float.round(cost * 1.0, 2)
+                    end
+                  %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-check-circle" class="h-6 w-6 text-green-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Free Geocoding</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  <%= @summary.free_geocoding_count %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-credit-card" class="h-6 w-6 text-red-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Paid Geocoding</dt>
+                <dd class="text-2xl font-semibold text-gray-900">
+                  <%= @summary.paid_geocoding_count %>
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Costs by Provider -->
+    <div class="bg-white shadow rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Costs by Provider</h3>
+        <p class="mt-1 text-sm text-gray-500">Geocoding costs broken down by API provider</p>
+      </div>
+      <div class="px-4 py-5 sm:p-6">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Provider
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Venue Count
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Cost
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Avg Cost/Venue
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for provider <- @by_provider do %>
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <span class={[
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                      provider_badge_class(provider.provider)
+                    ]}>
+                      <%= format_provider_name(provider.provider) %>
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <%= provider.count %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                    $<%=
+                      case provider.total_cost do
+                        %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
+                        cost when is_float(cost) -> Float.round(cost, 2)
+                        cost when is_integer(cost) -> Float.round(cost * 1.0, 2)
+                      end
+                    %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    $<%=
+                      avg = case provider.total_cost do
+                        %Decimal{} = d -> Decimal.div(d, provider.count) |> Decimal.to_float()
+                        cost when is_float(cost) -> cost / provider.count
+                        cost when is_integer(cost) -> cost / provider.count
+                      end
+                      Float.round(avg, 4)
+                    %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Costs by Scraper -->
+    <div class="bg-white shadow rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Costs by Scraper</h3>
+        <p class="mt-1 text-sm text-gray-500">Geocoding costs broken down by source scraper</p>
+      </div>
+      <div class="px-4 py-5 sm:p-6">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Scraper
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Venue Count
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Cost
+                </th>
+                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Avg Cost/Venue
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for scraper <- @by_scraper do %>
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <%= format_scraper_name(scraper.scraper) %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <%= scraper.count %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                    $<%=
+                      case scraper.total_cost do
+                        %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
+                        cost when is_float(cost) -> Float.round(cost, 2)
+                        cost when is_integer(cost) -> Float.round(cost * 1.0, 2)
+                      end
+                    %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    $<%=
+                      avg = case scraper.total_cost do
+                        %Decimal{} = d -> Decimal.div(d, scraper.count) |> Decimal.to_float()
+                        cost when is_float(cost) -> cost / scraper.count
+                        cost when is_integer(cost) -> cost / scraper.count
+                      end
+                      Float.round(avg, 4)
+                    %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Issues Section -->
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 mb-8">
+      <!-- Failed Geocoding -->
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">
+            Failed Geocoding
+            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+              <%= @summary.failed_count %>
+            </span>
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">Venues that failed geocoding need manual review</p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <%= if @summary.failed_count == 0 do %>
+            <p class="text-sm text-gray-500 text-center py-4">No failed geocoding attempts</p>
+          <% else %>
+            <ul class="divide-y divide-gray-200">
+              <%= for venue <- Enum.take(@failed_venues, 5) do %>
+                <li class="py-3">
+                  <div class="flex items-start">
+                    <.icon name="hero-x-circle" class="h-5 w-5 text-red-400 mt-0.5" />
+                    <div class="ml-3 flex-1">
+                      <p class="text-sm font-medium text-gray-900"><%= venue.name %></p>
+                      <p class="text-xs text-gray-500"><%= venue.city %> • <%= venue.address %></p>
+                      <p class="text-xs text-red-600 mt-1">Reason: <%= venue.failure_reason %></p>
+                    </div>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- Deferred Geocoding -->
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">
+            Deferred Geocoding
+            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+              <%= @summary.deferred_count %>
+            </span>
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">Venues using default coordinates pending geocoding</p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <%= if @summary.deferred_count == 0 do %>
+            <p class="text-sm text-gray-500 text-center py-4">No deferred geocoding</p>
+          <% else %>
+            <div class="text-sm text-gray-700">
+              <p class="mb-2">
+                <strong><%= @summary.deferred_count %></strong> venues are using default Krakow coordinates.
+              </p>
+              <p class="text-gray-500">
+                These venues will be geocoded automatically when more data becomes available.
+              </p>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Report Section -->
+    <%= if @manual_report do %>
+      <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Generated Report</h3>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+          <pre class="bg-gray-50 p-4 rounded-md text-xs text-gray-700 overflow-x-auto"><%= @manual_report %></pre>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
+</div>

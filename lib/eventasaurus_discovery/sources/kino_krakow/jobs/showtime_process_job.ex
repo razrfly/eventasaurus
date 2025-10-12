@@ -280,9 +280,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
   defp atomize_event_data(value), do: value
 
-  defp process_event(transformed, source) do
-    # Process through unified pipeline
-    case Processor.process_single_event(transformed, source) do
+  defp process_event(transformed, _source) do
+    # Process through unified pipeline with scraper name for geocoding metadata
+    case Processor.process_single_event(transformed, "kino_krakow") do
       {:ok, event} ->
         Logger.debug("✅ Created event: #{event.title}")
         {:ok, event}

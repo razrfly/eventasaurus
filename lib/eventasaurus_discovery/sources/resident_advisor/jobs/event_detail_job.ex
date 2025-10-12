@@ -176,10 +176,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
     end
   end
 
-  defp process_single_event(event_data, source) do
-    # Process the single event through the Processor
+  defp process_single_event(event_data, _source) do
+    # Process the single event through the Processor with scraper name for geocoding metadata
     # Note: We wrap it in a list because Processor.process_source_data expects a list
-    case Processor.process_source_data([event_data], source) do
+    case Processor.process_source_data([event_data], "resident_advisor") do
       {:ok, [processed_event]} ->
         {:ok, processed_event}
 

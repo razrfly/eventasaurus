@@ -7,9 +7,15 @@ defmodule EventasaurusDiscovery.Helpers.AddressGeocoder do
   2. If that fails, fallback to Google Maps API
 
   No manual validation - if the geocoding service returns a city, we trust it.
+
+  ## Cost Tracking
+
+  This module now supports cost tracking via the `geocode_address_with_metadata/1` function.
+  The original `geocode_address/1` function remains unchanged for backward compatibility.
   """
 
   require Logger
+  alias EventasaurusDiscovery.Geocoding.MetadataBuilder
 
   @doc """
   Geocode a full address string to extract city name, country, and coordinates.
@@ -38,6 +44,105 @@ defmodule EventasaurusDiscovery.Helpers.AddressGeocoder do
   end
 
   def geocode_address(_), do: {:error, :invalid_address}
+
+  @doc """
+  Geocode an address and return result with cost tracking metadata.
+
+  This is a non-breaking addition to the existing geocode_address/1 function.
+  It returns the same location data plus geocoding metadata for cost tracking.
+
+  ## Parameters
+  - `address` - Full address string to geocode
+
+  ## Returns
+  - `{:ok, map}` - Map containing city, country, coordinates, and geocoding_metadata
+  - `{:error, reason, metadata}` - Error with failure metadata for tracking
+
+  ## Examples
+
+      iex> geocode_address_with_metadata("Pub Name, 123 Street, London, E5 8NN")
+      {:ok, %{
+        city: "London",
+        country: "United Kingdom",
+        latitude: 51.5074,
+        longitude: -0.1278,
+        geocoding_metadata: %{
+          provider: "openstreetmap",
+          cost_per_call: 0.0,
+          # ... other metadata
+        }
+      }}
+
+      iex> geocode_address_with_metadata("invalid address")
+      {:error, :all_geocoding_failed, %{provider: "google_maps", geocoding_failed: true, ...}}
+  """
+  @spec geocode_address_with_metadata(String.t()) ::
+          {:ok,
+           %{
+             city: String.t(),
+             country: String.t(),
+             latitude: float(),
+             longitude: float(),
+             geocoding_metadata: map()
+           }}
+          | {:error, atom(), map()}
+  def geocode_address_with_metadata(address) when is_binary(address) do
+    # Try OpenStreetMaps with retry, then fallback to Google if needed
+    case try_openstreetmaps_with_retry(address) do
+      {:ok, {city, country, {lat, lng}}} ->
+        # OSM succeeded - build OSM metadata
+        metadata = MetadataBuilder.build_openstreetmap_metadata(address)
+
+        {:ok,
+         %{
+           city: city,
+           country: country,
+           latitude: lat,
+           longitude: lng,
+           geocoding_metadata: metadata
+         }}
+
+      {:error, reason} ->
+        Logger.warning(
+          "⚠️ OpenStreetMaps failed for: #{address}, trying Google Maps... (reason: #{reason})"
+        )
+
+        # Try Google Maps fallback
+        case try_google_maps(address) do
+          {:ok, {city, country, {lat, lng}}} ->
+            # Google Maps succeeded - build Google Maps metadata
+            # Note: 3 attempts because OSM retries 3 times before falling back
+            metadata = MetadataBuilder.build_google_maps_metadata(address, 3)
+
+            {:ok,
+             %{
+               city: city,
+               country: country,
+               latitude: lat,
+               longitude: lng,
+               geocoding_metadata: metadata
+             }}
+
+          {:error, google_reason} ->
+            # Both OSM and Google failed - return error with metadata
+            Logger.error("❌ All geocoding failed for: #{address}")
+
+            metadata =
+              MetadataBuilder.build_google_maps_metadata(address, 3)
+              |> MetadataBuilder.mark_failed(google_reason)
+
+            {:error, :all_geocoding_failed, metadata}
+        end
+    end
+  end
+
+  def geocode_address_with_metadata(_) do
+    metadata =
+      MetadataBuilder.build_google_maps_metadata("invalid", 0)
+      |> MetadataBuilder.mark_failed(:invalid_address)
+
+    {:error, :invalid_address, metadata}
+  end
 
   # Try OpenStreetMaps with exponential backoff retry
   # Retries up to 3 times with increasing delays (1s, 2s) before giving up

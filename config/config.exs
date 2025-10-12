@@ -117,7 +117,9 @@ config :eventasaurus, Oban,
     # Default queue for other background jobs
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation
-    maintenance: 2
+    maintenance: 2,
+    # Reports queue for generating analytics and cost reports
+    reports: 1
   ],
   plugins: [
     # Keep completed jobs for 7 days for debugging
@@ -132,7 +134,9 @@ config :eventasaurus, Oban,
        # Daily sitemap generation at 2 AM UTC
        {"0 2 * * *", Eventasaurus.Workers.SitemapWorker},
        # City discovery orchestration runs daily at midnight UTC
-       {"0 0 * * *", EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator}
+       {"0 0 * * *", EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator},
+       # Monthly geocoding cost report on 1st of month at 8 AM UTC
+       {"0 8 1 * *", EventasaurusDiscovery.Workers.GeocodingCostReportWorker}
      ]}
   ]
 
