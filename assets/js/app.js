@@ -15,7 +15,7 @@ import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
 import PaymentHooks from "./hooks/payment-business-logic";
 import MediaHooks from "./hooks/media-external-apis";
-import PlacesHooks from "./hooks/places-search";
+import PlacesHooks from "./hooks/places-search/index";
 import DragDropHooks from "./hooks/poll-drag-drop";
 
 // Supabase client setup for identity management

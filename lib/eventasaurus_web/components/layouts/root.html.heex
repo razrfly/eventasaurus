@@ -142,7 +142,22 @@
     
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
-    
+
+    <!-- Geocoding Provider Configuration -->
+    <script>
+      // Provider configuration for frontend geocoding system
+      // This will be read by ProviderFactory to determine which provider to use
+      window.GEOCODING_PROVIDER = {
+        name: 'mapbox',  // Using Mapbox provider (Google Maps API key is invalid)
+        apiKey: '<%= System.get_env("MAPBOX_ACCESS_TOKEN") || "" %>'
+      };
+
+      // Mapbox configuration (if using Mapbox provider)
+      window.MAPBOX_ACCESS_TOKEN = '<%= System.get_env("MAPBOX_ACCESS_TOKEN") || "" %>';
+
+      console.log("Geocoding provider configured:", window.GEOCODING_PROVIDER.name);
+    </script>
+
     <!-- Load Google Maps API with environment variable -->
     <script>
       console.log("Setting up Google Maps API loader...");
