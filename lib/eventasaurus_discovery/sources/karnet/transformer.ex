@@ -96,6 +96,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
   @doc """
   Validates that venue data contains all required fields.
   Returns :ok if valid, {:error, reason} if not.
+
+  Note: Coordinates are optional - VenueProcessor will geocode if missing.
   """
   def validate_venue(venue_data) do
     cond do
@@ -104,12 +106,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
 
       is_nil(venue_data[:name]) || venue_data[:name] == "" ->
         {:error, "Venue name is required"}
-
-      is_nil(venue_data[:latitude]) ->
-        {:error, "Venue latitude is required for location"}
-
-      is_nil(venue_data[:longitude]) ->
-        {:error, "Venue longitude is required for location"}
 
       true ->
         :ok
@@ -194,64 +190,42 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
   end
 
   defp extract_venue(event) do
-    # CRITICAL: Venue with location is REQUIRED
-    # We MUST always return venue data for Kraków events
+    # Karnet doesn't provide GPS coordinates - VenueProcessor will geocode via Orchestrator
+    # We provide venue name, address, city, country and let the modular geocoding system handle coordinates
 
     venue_data = event[:venue_data] || event[:venue]
 
-    # Karnet doesn't provide coordinates, so we need to geocode
-    # For now, we'll use default Kraków coordinates and let the geocoder fix it later
-    default_krakow_lat = 50.0647
-    default_krakow_lng = 19.9450
-
     cond do
       venue_data && venue_data[:name] ->
-        needs_geocoding = is_nil(venue_data[:latitude]) || is_nil(venue_data[:longitude])
-
-        # Build deferred geocoding metadata if using default coordinates
-        geocoding_metadata = if needs_geocoding do
-          MetadataBuilder.build_deferred_geocoding_metadata()
-          |> MetadataBuilder.add_scraper_source("karnet")
-        else
-          # Coordinates were provided - no geocoding needed
-          MetadataBuilder.build_provided_coordinates_metadata()
-          |> MetadataBuilder.add_scraper_source("karnet")
-        end
+        # Check if coordinates were explicitly provided (rare for Karnet)
+        has_coordinates = venue_data[:latitude] && venue_data[:longitude]
 
         %{
           name: venue_data[:name],
-          # Use provided coordinates or default to Kraków center
-          latitude: venue_data[:latitude] || default_krakow_lat,
-          longitude: venue_data[:longitude] || default_krakow_lng,
+          # Set nil coordinates so VenueProcessor geocodes via Orchestrator
+          # Only use provided coordinates if they exist (rare)
+          latitude: if(has_coordinates, do: venue_data[:latitude], else: nil),
+          longitude: if(has_coordinates, do: venue_data[:longitude], else: nil),
           address: build_address(venue_data),
           city: venue_data[:city] || "Kraków",
           state: venue_data[:state],
           country: venue_data[:country] || "Poland",
-          postal_code: venue_data[:postal_code],
-          # Flag for geocoding if we used defaults (kept for backward compatibility)
-          needs_geocoding: needs_geocoding,
-          # Add geocoding metadata for cost tracking
-          geocoding_metadata: geocoding_metadata
+          postal_code: venue_data[:postal_code]
         }
 
       # Try to extract venue name from event data
       event[:venue_name] ->
-        Logger.info("🔄 Building venue from venue_name field")
-
-        geocoding_metadata = MetadataBuilder.build_deferred_geocoding_metadata()
-                             |> MetadataBuilder.add_scraper_source("karnet")
+        Logger.info("🔄 Building venue from venue_name field - VenueProcessor will geocode")
 
         %{
           name: event[:venue_name],
-          latitude: default_krakow_lat,
-          longitude: default_krakow_lng,
+          latitude: nil,
+          longitude: nil,
           address: nil,
           city: "Kraków",
           state: nil,
           country: "Poland",
-          postal_code: nil,
-          needs_geocoding: true,
-          geocoding_metadata: geocoding_metadata
+          postal_code: nil
         }
 
       # Last resort - create placeholder venue
@@ -260,23 +234,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
         ⚠️ Creating placeholder venue for Karnet event:
         Title: #{inspect(event[:title])}
         URL: #{inspect(event[:url])}
+        VenueProcessor will attempt geocoding.
         """)
-
-        # Create a TBD venue for Kraków
-        geocoding_metadata = MetadataBuilder.build_deferred_geocoding_metadata()
-                             |> MetadataBuilder.add_scraper_source("karnet")
 
         %{
           name: "Venue TBD - Kraków",
-          latitude: default_krakow_lat,
-          longitude: default_krakow_lng,
+          latitude: nil,
+          longitude: nil,
           address: nil,
           city: "Kraków",
           state: nil,
           country: "Poland",
           postal_code: nil,
-          needs_geocoding: false,
-          geocoding_metadata: geocoding_metadata,
           metadata: %{placeholder: true}
         }
     end
