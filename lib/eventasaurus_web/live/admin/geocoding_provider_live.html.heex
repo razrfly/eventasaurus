@@ -26,6 +26,9 @@
             Priority
           </th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Rate Limit
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Status
           </th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -94,6 +97,77 @@
                 </span>
               <% end %>
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              <%= if @editing_rate_limit_id == provider.id do %>
+                <% rate_limits = get_in(provider.metadata, ["rate_limits"]) || get_in(provider.metadata, [:rate_limits]) || %{} %>
+                <div>
+                  <form phx-submit="update_rate_limits" class="flex flex-col gap-2">
+                    <input type="hidden" name="provider_id" value={provider.id} />
+
+                    <div class="flex gap-2 items-center">
+                      <label class="text-xs text-gray-600 w-16">Per sec:</label>
+                      <input
+                        type="number"
+                        name="per_second"
+                        value={rate_limits["per_second"] || rate_limits[:per_second] || 1}
+                        min="1"
+                        class={
+                          "w-20 px-2 py-1 border rounded text-sm " <>
+                          if @validation_error, do: "border-red-500", else: "border-gray-300"
+                        }
+                        autofocus
+                      />
+                    </div>
+
+                    <div class="flex gap-2 items-center">
+                      <label class="text-xs text-gray-600 w-16">Per min:</label>
+                      <input
+                        type="number"
+                        name="per_minute"
+                        value={rate_limits["per_minute"] || rate_limits[:per_minute] || 60}
+                        min="1"
+                        class={
+                          "w-20 px-2 py-1 border rounded text-sm " <>
+                          if @validation_error, do: "border-red-500", else: "border-gray-300"
+                        }
+                      />
+                    </div>
+
+                    <div class="flex gap-2 mt-1">
+                      <button
+                        type="submit"
+                        class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="cancel_edit"
+                        class="px-2 py-1 bg-gray-300 text-gray-700 text-xs rounded hover:bg-gray-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                  <%= if @validation_error do %>
+                    <p class="text-xs text-red-600 mt-1"><%= @validation_error %></p>
+                  <% end %>
+                </div>
+              <% else %>
+                <%= if rate_limits = get_in(provider.metadata, ["rate_limits"]) || get_in(provider.metadata, [:rate_limits]) do %>
+                  <div class="flex flex-col">
+                    <span class="font-medium text-gray-900">
+                      <%= rate_limits["per_second"] || rate_limits[:per_second] || "?" %> req/sec
+                    </span>
+                    <span class="text-xs text-gray-500">
+                      <%= rate_limits["per_minute"] || rate_limits[:per_minute] || "?" %>/min
+                    </span>
+                  </div>
+                <% else %>
+                  <span class="text-gray-400 text-xs">No limit</span>
+                <% end %>
+              <% end %>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span class={
                 "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
@@ -105,20 +179,30 @@
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-              <div class="flex gap-2">
-                <button
-                  type="button"
-                  phx-click="edit_priority"
-                  phx-value-id={provider.id}
-                  class="text-blue-600 hover:text-blue-900"
-                >
-                  Edit
-                </button>
+              <div class="flex flex-col gap-1">
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    phx-click="edit_priority"
+                    phx-value-id={provider.id}
+                    class="text-blue-600 hover:text-blue-900"
+                  >
+                    Edit Priority
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="edit_rate_limits"
+                    phx-value-id={provider.id}
+                    class="text-green-600 hover:text-green-900"
+                  >
+                    Edit Limits
+                  </button>
+                </div>
                 <button
                   type="button"
                   phx-click="toggle_active"
                   phx-value-id={provider.id}
-                  class="text-indigo-600 hover:text-indigo-900"
+                  class="text-indigo-600 hover:text-indigo-900 text-left"
                   data-confirm="Are you sure?"
                 >
                   <%= if provider.is_active, do: "Deactivate", else: "Activate" %>
@@ -142,6 +226,7 @@
           <ul class="list-disc pl-5 space-y-1">
             <li>Lower priority numbers are tried first (1 = highest priority)</li>
             <li>Providers with equal priority are randomly selected (useful for testing)</li>
+            <li>Rate limits are enforced globally across all workers</li>
             <li>Use "Enable/Disable" to control which providers are available</li>
             <li>Disabled providers (like Google Maps/Places) won't be used for geocoding</li>
           </ul>

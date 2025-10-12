@@ -46,6 +46,53 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
   end
 
   @doc """
+  Update rate limits for a provider.
+
+  Merges new rate limits into existing metadata.
+  """
+  def update_rate_limits(provider_id, rate_limits) do
+    provider = Repo.get!(GeocodingProvider, provider_id)
+
+    # Merge rate limits into existing metadata
+    updated_metadata =
+      provider.metadata
+      |> Map.put("rate_limits", %{
+        "per_second" => rate_limits.per_second,
+        "per_minute" => rate_limits.per_minute,
+        "per_hour" => rate_limits.per_hour
+      })
+
+    provider
+    |> GeocodingProvider.changeset(%{metadata: updated_metadata})
+    |> Repo.update()
+  end
+
+  @doc """
+  Get rate limit configuration for a provider.
+
+  Returns rate_limits map from metadata or nil if not configured.
+
+  ## Examples
+
+      iex> ProviderConfig.get_rate_limit("openstreetmap")
+      %{"per_second" => 1, "per_minute" => 60, "per_hour" => 3600}
+
+      iex> ProviderConfig.get_rate_limit("unknown_provider")
+      nil
+  """
+  def get_rate_limit(provider_name) when is_binary(provider_name) do
+    case Repo.get_by(GeocodingProvider, name: provider_name) do
+      nil ->
+        nil
+
+      provider ->
+        # Extract rate_limits from metadata (handle both string and atom keys)
+        get_in(provider.metadata, ["rate_limits"]) ||
+          get_in(provider.metadata, [:rate_limits])
+    end
+  end
+
+  @doc """
   Bulk reorder providers after drag-and-drop.
   Priority map: %{provider_id => new_priority}
   """

@@ -64,6 +64,8 @@ defmodule Eventasaurus.Application do
       {Finch, name: Eventasaurus.Finch},
       # Start TzWorld backend for timezone lookups
       TzWorld.Backend.Memory,
+      # Start Hammer rate limiter for geocoding providers
+      EventasaurusDiscovery.Geocoding.RateLimiter,
       # Start Oban background job processor
       {Oban, Application.fetch_env!(:eventasaurus, Oban)},
       # Add a Task Supervisor for background jobs
