@@ -138,7 +138,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
   defp process_single_event(event_data, source) do
     # Process the single event through the Processor
     # Note: We wrap it in a list because Processor.process_source_data expects a list
-    case Processor.process_source_data([event_data], source) do
+    # Pass explicit scraper name for venue attribution metadata
+    case Processor.process_source_data([event_data], source, "ticketmaster") do
       {:ok, [processed_event]} ->
         {:ok, processed_event}
 

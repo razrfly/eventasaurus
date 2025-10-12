@@ -14,15 +14,20 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   @doc """
   Process a list of events from any source.
 
-  Returns:
+  ## Parameters
+  - `events` - List of event data maps to process
+  - `source` - Source struct, source_id (integer), or scraper name (string) - used for performer attribution
+  - `scraper_name` - Optional explicit scraper name (string) for venue metadata attribution
+
+  ## Returns
     - {:ok, processed_events} - Successfully processed events
     - {:error, reason} - Processing failed with retryable error
     - {:discard, reason} - Critical failure, job should be discarded (e.g., missing GPS coordinates)
   """
-  def process_source_data(events, source) when is_list(events) do
+  def process_source_data(events, source, scraper_name \\ nil) when is_list(events) do
     results =
       Enum.map(events, fn event_data ->
-        process_single_event(event_data, source)
+        process_single_event(event_data, source, scraper_name)
       end)
 
     # Check if any events failed with critical GPS coordinate errors
@@ -96,13 +101,13 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   @doc """
   Process a single event with its venue and performers
   """
-  def process_single_event(event_data, source) do
+  def process_single_event(event_data, source, scraper_name \\ nil) do
     # Handle different key names for venue data
     venue_data =
       event_data[:venue] || event_data["venue"] ||
         event_data[:venue_data] || event_data["venue_data"]
 
-    with {:ok, venue} <- process_venue(venue_data, source),
+    with {:ok, venue} <- process_venue(venue_data, source, scraper_name),
          {:ok, performers} <-
            process_performers(event_data[:performers] || event_data["performers"] || [], source),
          {:ok, event} <- process_event(event_data, source, venue, performers) do
@@ -132,18 +137,23 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     end
   end
 
-  defp process_venue(nil, _source) do
+  defp process_venue(nil, _source, _scraper_name) do
     {:error, :venue_required}
   end
 
-  defp process_venue(venue_data, source) when is_map(venue_data) do
-    # Extract scraper name from source (e.g., "question_one", "kino_krakow", "resident_advisor")
-    source_scraper = extract_scraper_name(source)
+  defp process_venue(venue_data, source, scraper_name) when is_map(venue_data) do
+    # Use explicit scraper_name if provided, otherwise extract from source
+    source_scraper = scraper_name || extract_scraper_name(source)
     VenueProcessor.process_venue(venue_data, source, source_scraper)
   end
 
   # Extract scraper name from source parameter
-  # Source can be: integer (source_id), string ("question_one"), or atom (:question_one)
+  # Source can be: struct (Source), integer (source_id), string ("question_one"), or atom (:question_one)
+  defp extract_scraper_name(%{name: name}) when is_binary(name) do
+    # Source struct with name field - extract the scraper name
+    name
+  end
+
   defp extract_scraper_name(source) when is_integer(source) do
     # For source_id integers, we can't reliably determine scraper name
     # This will be nil and VenueProcessor will handle it

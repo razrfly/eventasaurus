@@ -105,14 +105,15 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     end
   end
 
-  # CRITICAL: Use Processor.process_source_data/2
+  # CRITICAL: Use Processor.process_source_data/3
   # This handles:
   # - VenueProcessor geocoding
   # - EventProcessor creation/update
   # - last_seen_at timestamps
   # - Deduplication via external_id
+  # - Scraper attribution via explicit scraper name
   defp process_event(transformed, source_id) do
-    case Processor.process_source_data([transformed], source_id) do
+    case Processor.process_source_data([transformed], source_id, "question_one") do
       {:ok, results} -> {:ok, results}
       error -> error
     end
