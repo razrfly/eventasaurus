@@ -1,0 +1,99 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-8">
+    <div class="mb-4">
+      <.link navigate="/admin/geocoding" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
+        ← Back to Dashboard
+      </.link>
+    </div>
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Geocoding Providers</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Manage provider priority and availability
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Provider
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Priority
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Status
+          </th>
+          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Actions
+          </th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <%= for provider <- @providers do %>
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-medium text-gray-900">
+                <%= display_name(provider.name) %>
+              </div>
+              <div class="text-sm text-gray-500">
+                <%= provider.name %>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <form phx-change="set_priority">
+                <input type="hidden" name="provider_id" value={provider.id} />
+                <input
+                  type="number"
+                  name="priority"
+                  value={provider.priority}
+                  min="1"
+                  max="99"
+                  class="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
+              </form>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class={"px-2 inline-flex text-xs leading-5 font-semibold rounded-full #{if provider.is_active, do: "bg-green-100 text-green-800", else: "bg-gray-100 text-gray-800"}"}>
+                <%= if provider.is_active, do: "Active", else: "Inactive" %>
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <button
+                type="button"
+                phx-click="toggle_active"
+                phx-value-id={provider.id}
+                class={"px-3 py-2 text-sm font-medium rounded-md #{if provider.is_active, do: "text-red-700 hover:text-red-900", else: "text-green-700 hover:text-green-900"}"}
+              >
+                <%= if provider.is_active, do: "Disable", else: "Enable" %>
+              </button>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 bg-blue-50 border border-blue-200 rounded-md p-4">
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <.icon name="hero-information-circle" class="h-5 w-5 text-blue-400" />
+      </div>
+      <div class="ml-3">
+        <h3 class="text-sm font-medium text-blue-800">How to use</h3>
+        <div class="mt-2 text-sm text-blue-700">
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Lower priority numbers are tried first (1 = highest priority)</li>
+            <li>Providers with equal priority are randomly selected (useful for testing)</li>
+            <li>Use "Enable/Disable" to control which providers are available</li>
+            <li>Disabled providers (like Google Maps/Places) won't be used for geocoding</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

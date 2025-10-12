@@ -7,13 +7,10 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
 
   ## Configuration
 
-  Providers are configured in `config/runtime.exs`:
+  Providers are now configured in the database via the `geocoding_providers` table.
+  The admin UI allows dynamic reordering and enabling/disabling of providers.
 
-      config :eventasaurus, :geocoding,
-        providers: [
-          {Providers.Mapbox, enabled: true, priority: 1},
-          {Providers.OpenStreetMap, enabled: true, priority: 2}
-        ]
+  Configuration is read from `EventasaurusDiscovery.Geocoding.ProviderConfig`.
 
   ## Usage
 
@@ -33,6 +30,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
   """
 
   require Logger
+  alias EventasaurusDiscovery.Geocoding.ProviderConfig
 
   @doc """
   Geocode an address using multiple providers in fallback order.
@@ -107,16 +105,10 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
     end
   end
 
-  # Get enabled providers sorted by priority
+  # Get enabled providers from database sorted by priority
+  # Providers with equal priority are shuffled for random selection (useful for testing)
   defp get_enabled_providers do
-    Application.get_env(:eventasaurus, :geocoding, [])
-    |> Keyword.get(:providers, [])
-    |> Enum.filter(fn {_module, opts} ->
-      Keyword.get(opts, :enabled, false)
-    end)
-    |> Enum.sort_by(fn {_module, opts} ->
-      Keyword.get(opts, :priority, 99)
-    end)
+    ProviderConfig.list_active_providers()
     |> Enum.map(fn {module, _opts} -> module end)
   end
 end

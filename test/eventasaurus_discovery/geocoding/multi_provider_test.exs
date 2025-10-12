@@ -4,6 +4,14 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
 
   Tests all providers, fallback chains, and scraper integration patterns.
 
+  ⚠️ **IMPORTANT**: These tests make REAL API calls to geocoding providers.
+  - Requires valid API keys in environment variables
+  - Will consume rate limits (use sparingly)
+  - May fail without network connectivity
+  - Should be run manually, not in CI/CD pipelines
+
+  For production validation, use database audits instead of running these tests.
+
   Run all tests:
     mix test test/eventasaurus_discovery/geocoding/multi_provider_test.exs
 
@@ -266,14 +274,14 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.success_rate_by_provider/1 returns valid data" do
-      stats = EventasaurusDiscovery.Metrics.GeocodingStats.success_rate_by_provider(7)
+      {:ok, stats} = EventasaurusDiscovery.Metrics.GeocodingStats.success_rate_by_provider(Date.utc_today())
 
       assert is_list(stats)
 
       Enum.each(stats, fn stat ->
         assert is_binary(stat.provider)
         assert is_integer(stat.total_attempts)
-        assert is_integer(stat.successful_attempts)
+        assert is_integer(stat.success_count)
         assert is_float(stat.success_rate) or is_integer(stat.success_rate)
         assert stat.success_rate >= 0 and stat.success_rate <= 100
       end)
@@ -282,27 +290,30 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.average_attempts/1 returns valid float" do
-      avg = EventasaurusDiscovery.Metrics.GeocodingStats.average_attempts(7)
+      {:ok, result} = EventasaurusDiscovery.Metrics.GeocodingStats.average_attempts(Date.utc_today())
 
-      assert is_float(avg) or avg == nil
+      assert is_map(result)
+      assert is_float(result.average_attempts) or result.average_attempts == 0.0
+      assert is_integer(result.total_geocoded)
+      assert is_integer(result.single_provider_success)
 
-      if avg do
-        assert avg >= 1.0
-        Logger.info("✅ average_attempts: #{avg}")
+      if result.average_attempts > 0 do
+        assert result.average_attempts >= 1.0
+        Logger.info("✅ average_attempts: #{result.average_attempts}")
       else
         Logger.info("✅ average_attempts: no data yet")
       end
     end
 
     test "GeocodingStats.fallback_patterns/1 returns valid data" do
-      patterns = EventasaurusDiscovery.Metrics.GeocodingStats.fallback_patterns(7)
+      {:ok, patterns} = EventasaurusDiscovery.Metrics.GeocodingStats.fallback_patterns(Date.utc_today())
 
       assert is_list(patterns)
 
       Enum.each(patterns, fn pattern ->
-        assert is_integer(pattern.depth)
+        assert is_binary(pattern.pattern)
         assert is_integer(pattern.count)
-        assert pattern.depth >= 1
+        assert is_binary(pattern.success_provider)
         assert pattern.count >= 0
       end)
 
@@ -310,7 +321,7 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.provider_performance/1 returns valid data" do
-      performance = EventasaurusDiscovery.Metrics.GeocodingStats.provider_performance(7)
+      {:ok, performance} = EventasaurusDiscovery.Metrics.GeocodingStats.provider_performance(Date.utc_today())
 
       assert is_list(performance)
 
