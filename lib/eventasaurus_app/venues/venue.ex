@@ -95,7 +95,6 @@ defmodule EventasaurusApp.Venues.Venue do
 
   use Ecto.Schema
   import Ecto.Changeset
-  import Ecto.Query
   alias EventasaurusApp.Venues.Venue.Slug
 
   schema "venues" do
@@ -155,22 +154,14 @@ defmodule EventasaurusApp.Venues.Venue do
     |> foreign_key_constraint(:city_id)
   end
 
-  # Validate source against allowed values: user, scraper, provided, and geocoding providers from database
+  # Validate source against allowed values: user, scraper, provided, and geocoding providers
+  # Uses ETS cache to avoid database query on every validation
   defp validate_source(changeset) do
     source = get_field(changeset, :source)
 
     if source do
-      # Base allowed sources (non-geocoding)
-      base_sources = ["user", "scraper", "provided"]
-
-      # Query geocoding provider names from database
-      geocoding_providers =
-        EventasaurusApp.Repo.all(
-          from p in EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider,
-          select: p.name
-        )
-
-      allowed_sources = base_sources ++ geocoding_providers
+      # Get allowed sources from ETS cache (no database query)
+      allowed_sources = EventasaurusApp.Venues.VenueSourceCache.get_allowed_sources()
 
       if source in allowed_sources do
         changeset

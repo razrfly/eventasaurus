@@ -18,6 +18,7 @@ This separation follows our universal convention where `metadata` always stores 
 **Structure**:
 ```elixir
 %{
+  provider: "mapbox",                      # String - Successful provider name (duplicates last element of attempted_providers)
   cost_per_call: 0.006,                    # Float - Cost for this geocoding call
   attempted_providers: ["mapbox", "here"], # Array - Providers tried in order
   attempts: 2,                             # Integer - Number of attempts before success
@@ -26,6 +27,7 @@ This separation follows our universal convention where `metadata` always stores 
 ```
 
 **Fields**:
+- `provider` - Name of successful provider (duplicates `attempted_providers[-1]` for query convenience)
 - `cost_per_call` - API cost for the successful provider (0.0 for free providers)
 - `attempted_providers` - List of all providers attempted in fallback order
 - `attempts` - Total number of provider attempts (1 = first provider succeeded)
@@ -108,6 +110,7 @@ VenueProcessor → AddressGeocoder → Orchestrator → Provider (Mapbox, HERE, 
   country: "United Kingdom",
   # Performance metrics for dashboard
   geocoding_performance: %{
+    provider: "mapbox",
     cost_per_call: 0.006,
     attempted_providers: ["mapbox"],
     attempts: 1,
@@ -236,6 +239,7 @@ from v in Venue,
 %Venue{
   source: "mapbox",                    # ✅ Single source of truth
   geocoding_performance: %{            # ✅ Dashboard metrics only
+    provider: "mapbox",                # Duplicates last element of attempted_providers for query convenience
     cost_per_call: 0.006,
     attempted_providers: [...],
     attempts: 1,

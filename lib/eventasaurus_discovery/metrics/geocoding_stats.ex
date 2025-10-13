@@ -64,7 +64,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                "COALESCE((?->>'cost_per_call')::double precision, 0.0)",
                 v.geocoding_performance
               )
             ),
@@ -112,19 +112,19 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
           not is_nil(v.geocoding_performance) and
             fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
             fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month),
-        group_by: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
+        group_by: fragment("?->'attempted_providers'->>-1", v.geocoding_performance),
         select: %{
-          provider: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
+          provider: fragment("?->'attempted_providers'->>-1", v.geocoding_performance),
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                "COALESCE((?->>'cost_per_call')::double precision, 0.0)",
                 v.geocoding_performance
               )
             ),
           count: count(v.id)
         },
-        order_by: [desc: fragment("sum(COALESCE((?->>'cost_per_call')::numeric, 0))", v.geocoding_performance)]
+        order_by: [desc: fragment("sum(COALESCE((?->>'cost_per_call')::double precision, 0.0))", v.geocoding_performance)]
 
     case Repo.all(query) do
       results -> {:ok, results}
@@ -168,13 +168,13 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                "COALESCE((?->>'cost_per_call')::double precision, 0.0)",
                 v.geocoding_performance
               )
             ),
           count: count(v.id)
         },
-        order_by: [desc: fragment("sum(COALESCE((?->>'cost_per_call')::numeric, 0))", v.geocoding_performance)]
+        order_by: [desc: fragment("sum(COALESCE((?->>'cost_per_call')::double precision, 0.0))", v.geocoding_performance)]
 
     case Repo.all(query) do
       results -> {:ok, results}
@@ -230,7 +230,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
           id: v.id,
           name: v.name,
           address: v.address,
-          city: v.city_id,
+          city_id: v.city_id,
           failure_reason: fragment("?->>'failure_reason'", v.geocoding_performance),
           geocoded_at: fragment("(?->>'geocoded_at')::timestamp", v.geocoding_performance)
         },
@@ -358,7 +358,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
           total_cost:
             sum(
               fragment(
-                "COALESCE((?->>'cost_per_call')::numeric, 0)",
+                "COALESCE((?->>'cost_per_call')::double precision, 0.0)",
                 v.geocoding_performance
               )
             ),
@@ -411,9 +411,9 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
             fragment("(?->>'geocoded_at')::timestamp >= ?", v.geocoding_performance, ^start_of_month) and
             fragment("(?->>'geocoded_at')::timestamp <= ?", v.geocoding_performance, ^end_of_month) and
             fragment("jsonb_array_length(?->'attempted_providers') > 0", v.geocoding_performance),
-        group_by: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
+        group_by: fragment("?->'attempted_providers'->>-1", v.geocoding_performance),
         select: %{
-          provider: fragment("?->'attempted_providers'->-1", v.geocoding_performance),
+          provider: fragment("?->'attempted_providers'->>-1", v.geocoding_performance),
           success_count: count(v.id)
         }
 
