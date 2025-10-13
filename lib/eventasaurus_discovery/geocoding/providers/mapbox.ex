@@ -112,6 +112,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Mapbox do
     # Extract place name (city)
     place_name = get_in(feature, ["place_name"]) || ""
 
+    # Extract Mapbox place ID
+    place_id = get_in(feature, ["id"])
+
     # Extract context for city and country
     context = get_in(feature, ["context"]) || []
 
@@ -128,13 +131,14 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Mapbox do
         {:error, :no_city_found}
 
       true ->
-        {:ok,
-         %{
-           latitude: lat,
-           longitude: lng,
-           city: city,
-           country: country || "Unknown"
-         }}
+        {:ok, %{
+          latitude: lat,
+          longitude: lng,
+          city: city,
+          country: country || "Unknown",
+          place_id: place_id,
+          raw_response: feature  # Store entire Mapbox feature object
+        }}
     end
   end
 

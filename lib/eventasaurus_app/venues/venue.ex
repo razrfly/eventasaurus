@@ -95,6 +95,7 @@ defmodule EventasaurusApp.Venues.Venue do
 
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
   alias EventasaurusApp.Venues.Venue.Slug
 
   schema "venues" do
@@ -108,6 +109,7 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:place_id, :string)
     field(:source, :string, default: "user")
     field(:metadata, :map)
+    field(:geocoding_performance, :map)
 
     belongs_to(:city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id)
     has_many(:events, EventasaurusApp.Events.Event)
@@ -134,14 +136,15 @@ defmodule EventasaurusApp.Venues.Venue do
       :place_id,
       :source,
       :city_id,
-      :metadata
+      :metadata,
+      :geocoding_performance
     ])
     |> validate_required_by_type()
     |> validate_inclusion(:venue_type, @valid_venue_types,
       message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}"
     )
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
-    |> validate_inclusion(:source, ["user", "scraper", "google", "mapbox"])
+    |> validate_source()
     |> validate_length(:place_id, max: 255)
     |> validate_utf8_fields()
     |> validate_gps_coordinates()
@@ -150,6 +153,33 @@ defmodule EventasaurusApp.Venues.Venue do
     |> unique_constraint(:slug)
     |> unique_constraint(:place_id, name: :venues_place_id_unique_index)
     |> foreign_key_constraint(:city_id)
+  end
+
+  # Validate source against allowed values: user, scraper, provided, and geocoding providers from database
+  defp validate_source(changeset) do
+    source = get_field(changeset, :source)
+
+    if source do
+      # Base allowed sources (non-geocoding)
+      base_sources = ["user", "scraper", "provided"]
+
+      # Query geocoding provider names from database
+      geocoding_providers =
+        EventasaurusApp.Repo.all(
+          from p in EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider,
+          select: p.name
+        )
+
+      allowed_sources = base_sources ++ geocoding_providers
+
+      if source in allowed_sources do
+        changeset
+      else
+        add_error(changeset, :source, "must be one of: #{Enum.join(allowed_sources, ", ")}")
+      end
+    else
+      changeset
+    end
   end
 
   # All venues are physical locations requiring GPS coordinates

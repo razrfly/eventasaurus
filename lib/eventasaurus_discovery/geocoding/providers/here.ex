@@ -115,6 +115,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
 
     country = Map.get(address, "countryName")
 
+    # Extract HERE place ID
+    place_id = Map.get(item, "id")
+
     cond do
       is_nil(lat) or is_nil(lng) ->
         Logger.warning("⚠️ HERE: missing coordinates in response")
@@ -134,7 +137,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
            latitude: lat * 1.0,
            longitude: lng * 1.0,
            city: city,
-           country: country || "Unknown"
+           country: country || "Unknown",
+           place_id: place_id,
+           raw_response: item  # Store entire HERE item object
          }}
     end
   end

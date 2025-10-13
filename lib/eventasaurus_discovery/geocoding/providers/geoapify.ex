@@ -113,6 +113,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
     # Extract country
     country = Map.get(result, "country")
 
+    # Extract Geoapify place ID
+    place_id = Map.get(result, "place_id")
+
     cond do
       is_nil(lat) or is_nil(lng) ->
         Logger.warning("⚠️ Geoapify: missing coordinates in response")
@@ -132,7 +135,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
            latitude: lat * 1.0,
            longitude: lng * 1.0,
            city: city,
-           country: country || "Unknown"
+           country: country || "Unknown",
+           place_id: place_id,
+           raw_response: result  # Store entire Geoapify result object
          }}
     end
   end
