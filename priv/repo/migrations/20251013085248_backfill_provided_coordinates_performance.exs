@@ -28,6 +28,11 @@ defmodule EventasaurusApp.Repo.Migrations.BackfillProvidedCoordinatesPerformance
   end
 
   def down do
+    # Note: This assumes all 'provided' sources were originally 'scraper'.
+    # If any venues had other original sources before being set to 'provided',
+    # they will be incorrectly set to 'scraper' during rollback.
+    # This is a known limitation of simple reversible migrations.
+
     # Revert source field changes
     execute """
     UPDATE venues
