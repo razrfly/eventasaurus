@@ -18,7 +18,7 @@ defmodule EventasaurusWeb do
   """
 
   def static_paths do
-    base_paths = ~w(assets fonts images favicon.ico robots.txt)
+    base_paths = ~w(assets fonts images favicon.ico robots.txt sitemaps)
 
     if Mix.env() == :dev do
       # No themes in dev - handled by route

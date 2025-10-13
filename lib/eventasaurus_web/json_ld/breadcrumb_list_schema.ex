@@ -110,10 +110,12 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
   def from_breadcrumb_builder_items(items, current_url, base_url) when is_list(items) do
     items
     |> Enum.map(fn item ->
-      url = case item.path do
-        nil -> current_url  # Current page - use the actual page URL
-        path -> build_absolute_url(path, base_url)
-      end
+      url =
+        case item.path do
+          # Current page - use the actual page URL
+          nil -> current_url
+          path -> build_absolute_url(path, base_url)
+        end
 
       %{name: item.label, url: url}
     end)
@@ -155,6 +157,7 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
     breadcrumbs =
       if event.venue && event.venue.city_ref do
         city = event.venue.city_ref
+
         breadcrumbs ++
           [%{name: city.name, url: "#{base_url}/cities/#{city.slug}"}]
       else

@@ -111,7 +111,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet do
 
       source ->
         # Update metadata and domains if changed
-        if source.metadata != Source.config() or source.domains != ["music", "theater", "cultural", "general"] do
+        if source.metadata != Source.config() or
+             source.domains != ["music", "theater", "cultural", "general"] do
           {:ok, updated} =
             Repo.update(
               SourceSchema.changeset(source, %{

@@ -82,6 +82,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
         case find_existing_venue_coordinates(venue_name, city_name) do
           {lat, lng} when not is_nil(lat) and not is_nil(lng) ->
             {lat, lng}
+
           _ ->
             {nil, nil}
         end
@@ -93,17 +94,23 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
       {:unique, event_data}
     else
       # Find potential matches
-      matches = BaseDedupHandler.find_events_by_date_and_proximity(
-        date, final_lat, final_lng, proximity_meters: 500
-      )
+      matches =
+        BaseDedupHandler.find_events_by_date_and_proximity(
+          date,
+          final_lat,
+          final_lng,
+          proximity_meters: 500
+        )
 
       # Filter by title similarity
-      title_matches = Enum.filter(matches, fn %{event: event} ->
-        similar_title?(title, event.title)
-      end)
+      title_matches =
+        Enum.filter(matches, fn %{event: event} ->
+          similar_title?(title, event.title)
+        end)
 
       # Apply domain compatibility filtering
-      higher_priority_matches = BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
+      higher_priority_matches =
+        BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
 
       event_data_with_coords =
         event_data
@@ -121,7 +128,14 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
           {:unique, event_data_with_coords}
 
         {match, confidence} ->
-          BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
+          BaseDedupHandler.log_duplicate(
+            source,
+            event_data,
+            match.event,
+            match.source,
+            confidence
+          )
+
           {:duplicate, match.event}
       end
     end
@@ -146,6 +160,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
         lat_f = if is_struct(lat, Decimal), do: Decimal.to_float(lat), else: lat
         lng_f = if is_struct(lng, Decimal), do: Decimal.to_float(lng), else: lng
         {lat_f, lng_f}
+
       nil ->
         {nil, nil}
     end
@@ -157,24 +172,34 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
     scores = []
 
     # Title similarity (40%)
-    scores = if similar_title?(kino_krakow_event[:title], existing_event.title), do: [0.4 | scores], else: scores
+    scores =
+      if similar_title?(kino_krakow_event[:title], existing_event.title),
+        do: [0.4 | scores],
+        else: scores
 
     # Date match (30%)
-    scores = if same_date?(kino_krakow_event[:starts_at], existing_event.start_at), do: [0.3 | scores], else: scores
+    scores =
+      if same_date?(kino_krakow_event[:starts_at], existing_event.start_at),
+        do: [0.3 | scores],
+        else: scores
 
     # Venue proximity (30%)
-    scores = if BaseDedupHandler.same_location?(
+    scores =
+      if BaseDedupHandler.same_location?(
            kino_krakow_event[:venue_data][:latitude],
            kino_krakow_event[:venue_data][:longitude],
            existing_event.venue.latitude,
            existing_event.venue.longitude,
            threshold_meters: 500
-         ), do: [0.3 | scores], else: scores
+         ),
+         do: [0.3 | scores],
+         else: scores
 
     Enum.sum(scores)
   end
 
   defp normalize_title(nil), do: ""
+
   defp normalize_title(title) do
     title
     |> String.downcase()
@@ -193,10 +218,20 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
 
   defp same_date?(date1, date2) do
     cond do
-      is_nil(date1) || is_nil(date2) -> false
+      is_nil(date1) || is_nil(date2) ->
+        false
+
       true ->
-        d1 = if is_struct(date1, DateTime), do: DateTime.to_date(date1), else: NaiveDateTime.to_date(date1)
-        d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
+        d1 =
+          if is_struct(date1, DateTime),
+            do: DateTime.to_date(date1),
+            else: NaiveDateTime.to_date(date1)
+
+        d2 =
+          if is_struct(date2, DateTime),
+            do: DateTime.to_date(date2),
+            else: NaiveDateTime.to_date(date2)
+
         Date.compare(d1, d2) == :eq
     end
   end

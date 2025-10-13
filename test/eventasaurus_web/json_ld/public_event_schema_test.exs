@@ -599,7 +599,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
 
       schema = PublicEventSchema.build_event_schema(event)
 
-      assert schema["description"] == "Moin performing music event at Łaźnia Nowa Theatre in Kraków."
+      assert schema["description"] ==
+               "Moin performing music event at Łaźnia Nowa Theatre in Kraków."
     end
 
     test "generates fallback with two performers using 'and'", %{venue: venue, category: category} do
@@ -621,10 +622,14 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
 
       schema = PublicEventSchema.build_event_schema(event)
 
-      assert schema["description"] == "Moin and Abdullah Miniawy performing music event at Łaźnia Nowa Theatre in Kraków."
+      assert schema["description"] ==
+               "Moin and Abdullah Miniawy performing music event at Łaźnia Nowa Theatre in Kraków."
     end
 
-    test "generates fallback with three performers using comma and 'and'", %{venue: venue, category: category} do
+    test "generates fallback with three performers using comma and 'and'", %{
+      venue: venue,
+      category: category
+    } do
       performers = [
         %Performer{id: 1, name: "Moin"},
         %Performer{id: 2, name: "Abdullah Miniawy"},
@@ -644,7 +649,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
 
       schema = PublicEventSchema.build_event_schema(event)
 
-      assert schema["description"] == "Moin, Abdullah Miniawy, and Artur Rumiński performing music event at Łaźnia Nowa Theatre in Kraków."
+      assert schema["description"] ==
+               "Moin, Abdullah Miniawy, and Artur Rumiński performing music event at Łaźnia Nowa Theatre in Kraków."
     end
 
     test "generates fallback without performers", %{venue: venue, category: category} do
@@ -713,7 +719,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert schema["description"] == "Music event at Test Venue."
     end
 
-    test "uses fallback when source description is empty string", %{venue: venue, category: category} do
+    test "uses fallback when source description is empty string", %{
+      venue: venue,
+      category: category
+    } do
       source_record = %Source{id: 1, name: "Test Source"}
 
       source = %PublicEventSource{
@@ -738,7 +747,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
 
       schema = PublicEventSchema.build_event_schema(event)
 
-      assert schema["description"] == "Test Artist performing music event at Łaźnia Nowa Theatre in Kraków."
+      assert schema["description"] ==
+               "Test Artist performing music event at Łaźnia Nowa Theatre in Kraków."
     end
 
     test "uses fallback when source description is nil", %{venue: venue, category: category} do
@@ -766,7 +776,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
 
       schema = PublicEventSchema.build_event_schema(event)
 
-      assert schema["description"] == "Test Artist performing music event at Łaźnia Nowa Theatre in Kraków."
+      assert schema["description"] ==
+               "Test Artist performing music event at Łaźnia Nowa Theatre in Kraków."
     end
 
     test "source description takes precedence over fallback", %{venue: venue, category: category} do
@@ -843,6 +854,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
     test "fallback truncates long descriptions to 5000 characters" do
       # Create performers with very long names to exceed 5000 chars
       long_name = String.duplicate("A", 2000)
+
       performers = [
         %Performer{id: 1, name: long_name},
         %Performer{id: 2, name: long_name},

@@ -139,7 +139,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
            city: city,
            country: country || "Unknown",
            place_id: place_id,
-           raw_response: item  # Store entire HERE item object
+           # Store entire HERE item object
+           raw_response: item
          }}
     end
   end

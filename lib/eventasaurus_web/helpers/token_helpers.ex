@@ -18,7 +18,9 @@ defmodule EventasaurusWeb.TokenHelpers do
 
     # Log if token is missing from session
     if is_nil(token) do
-      Logger.warning("No access_token found in session. Session keys: #{inspect(Map.keys(session))}")
+      Logger.warning(
+        "No access_token found in session. Session keys: #{inspect(Map.keys(session))}"
+      )
     end
 
     # Check if we need to refresh the token

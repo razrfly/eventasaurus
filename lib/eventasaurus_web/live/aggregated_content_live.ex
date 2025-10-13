@@ -183,9 +183,11 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       source_slug: source_slug,
       center_lat: lat,
       center_lng: lng,
-      radius_km: 50,  # Same default as CityLive.Index
+      # Same default as CityLive.Index
+      radius_km: 50,
       include_pattern_events: true,
-      page_size: 500  # Get all results (max limit)
+      # Get all results (max limit)
+      page_size: 500
     })
   end
 

@@ -123,9 +123,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
 
       other ->
         # Invalid response format
-        Logger.warning(
-          "⚠️ Provider #{provider_name} returned invalid format: #{inspect(other)}"
-        )
+        Logger.warning("⚠️ Provider #{provider_name} returned invalid format: #{inspect(other)}")
 
         try_providers(address, rest, [provider_name | attempted])
     end

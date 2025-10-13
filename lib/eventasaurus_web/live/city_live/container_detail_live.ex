@@ -89,16 +89,23 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         grouped_events = group_events_by_date(events)
 
         # Build breadcrumb items
-        breadcrumb_items = BreadcrumbBuilder.build_container_breadcrumbs(container, city, gettext_backend: EventasaurusWeb.Gettext)
+        breadcrumb_items =
+          BreadcrumbBuilder.build_container_breadcrumbs(container, city,
+            gettext_backend: EventasaurusWeb.Gettext
+          )
 
         # Generate breadcrumb JSON-LD structured data
         base_url = EventasaurusWeb.Endpoint.url()
-        canonical_url = "#{base_url}/c/#{city.slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
-        breadcrumb_json_ld = BreadcrumbListSchema.from_breadcrumb_builder_items(
-          breadcrumb_items,
-          canonical_url,
-          base_url
-        )
+
+        canonical_url =
+          "#{base_url}/c/#{city.slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
+
+        breadcrumb_json_ld =
+          BreadcrumbListSchema.from_breadcrumb_builder_items(
+            breadcrumb_items,
+            canonical_url,
+            base_url
+          )
 
         socket
         |> assign(:container, container)

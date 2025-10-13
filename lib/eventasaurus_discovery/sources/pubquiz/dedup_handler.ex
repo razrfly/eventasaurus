@@ -91,17 +91,23 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
       {:unique, event_data}
     else
       # Find recurring events at same venue
-      matches = BaseDedupHandler.find_events_by_date_and_proximity(
-        event_data[:starts_at], final_lat, final_lng, proximity_meters: 50
-      )
+      matches =
+        BaseDedupHandler.find_events_by_date_and_proximity(
+          event_data[:starts_at],
+          final_lat,
+          final_lng,
+          proximity_meters: 50
+        )
 
       # Filter by venue name similarity
-      venue_matches = Enum.filter(matches, fn %{event: event} ->
-        similar_venue?(venue_name, event.venue.name)
-      end)
+      venue_matches =
+        Enum.filter(matches, fn %{event: event} ->
+          similar_venue?(venue_name, event.venue.name)
+        end)
 
       # Apply domain compatibility filtering
-      higher_priority_matches = BaseDedupHandler.filter_higher_priority_matches(venue_matches, source)
+      higher_priority_matches =
+        BaseDedupHandler.filter_higher_priority_matches(venue_matches, source)
 
       event_data_with_coords =
         event_data
@@ -119,7 +125,14 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
           {:unique, event_data_with_coords}
 
         {match, confidence} ->
-          BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
+          BaseDedupHandler.log_duplicate(
+            source,
+            event_data,
+            match.event,
+            match.source,
+            confidence
+          )
+
           {:duplicate, match.event}
       end
     end
@@ -144,7 +157,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
         lat_f = if is_struct(lat, Decimal), do: Decimal.to_float(lat), else: lat
         lng_f = if is_struct(lng, Decimal), do: Decimal.to_float(lng), else: lng
         {lat_f, lng_f}
-      nil -> {nil, nil}
+
+      nil ->
+        {nil, nil}
     end
   rescue
     _e -> {nil, nil}
@@ -155,15 +170,33 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
 
     # Venue name similarity (50% - primary signal for recurring events)
     venue_name = get_in(pubquiz_event, [:venue_data, :name])
-    scores = if venue_name && similar_venue?(venue_name, existing_event.venue.name), do: [0.5 | scores], else: scores
+
+    scores =
+      if venue_name && similar_venue?(venue_name, existing_event.venue.name),
+        do: [0.5 | scores],
+        else: scores
 
     # GPS proximity (40%)
     lat = get_in(pubquiz_event, [:venue_data, :latitude])
     lng = get_in(pubquiz_event, [:venue_data, :longitude])
-    scores = if lat && lng && BaseDedupHandler.same_location?(lat, lng, existing_event.venue.latitude, existing_event.venue.longitude, threshold_meters: 50), do: [0.4 | scores], else: scores
+
+    scores =
+      if lat && lng &&
+           BaseDedupHandler.same_location?(
+             lat,
+             lng,
+             existing_event.venue.latitude,
+             existing_event.venue.longitude,
+             threshold_meters: 50
+           ),
+         do: [0.4 | scores],
+         else: scores
 
     # Title similarity (10% - weak signal)
-    scores = if similar_title?(pubquiz_event[:title], existing_event.title), do: [0.1 | scores], else: scores
+    scores =
+      if similar_title?(pubquiz_event[:title], existing_event.title),
+        do: [0.1 | scores],
+        else: scores
 
     Enum.sum(scores)
   end
@@ -178,6 +211,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
   end
 
   defp normalize_title(nil), do: ""
+
   defp normalize_title(title) do
     title
     |> String.downcase()
@@ -187,7 +221,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.DedupHandler do
 
   defp similar_venue?(venue1, venue2) do
     cond do
-      is_nil(venue1) || is_nil(venue2) -> false
+      is_nil(venue1) || is_nil(venue2) ->
+        false
+
       true ->
         normalized1 = normalize_venue_name(venue1)
         normalized2 = normalize_venue_name(venue2)

@@ -1,0 +1,131 @@
+<link href="https://fonts.googleapis.com/css2?family=Knewave&display=swap" rel="stylesheet">
+
+<div class="overflow-hidden">
+  <main>
+    <%!-- Hero Section with Radiant Style --%>
+    <.hero_section class="py-16 sm:py-24">
+      <div class="text-center max-w-4xl mx-auto">
+        <%!-- Old Eventosaurus Logo --%>
+        <div class="mb-12 flex flex-col items-center">
+          <div class="flex items-center gap-3 mb-4 opacity-60 grayscale group cursor-default transition-all duration-300 hover:opacity-100 hover:grayscale-0">
+            <span class="text-6xl sm:text-7xl transition-transform duration-300 group-hover:scale-110">🦖</span>
+            <span
+              class="text-5xl sm:text-6xl lg:text-7xl font-bold text-purple-600 transition-all duration-300 group-hover:bg-gradient-to-r group-hover:from-green-500 group-hover:via-yellow-500 group-hover:to-pink-500 group-hover:bg-clip-text group-hover:text-transparent"
+              style="font-family: 'Knewave', cursive;"
+            >
+              Eventosaurus
+            </span>
+          </div>
+          <p class="text-sm font-mono tracking-widest uppercase text-gray-400">April 2025 - October 2025</p>
+          <div class="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100/60 border border-amber-300/40">
+            <span class="text-sm font-semibold text-amber-800">🦴 Extinct Species</span>
+          </div>
+        </div>
+
+        <%!-- Main Heading --%>
+        <.heading as="h1" class="mb-8">
+          Just Like the Dinosaurs,<br />Our Name Has Gone Extinct
+        </.heading>
+
+        <p class="text-xl sm:text-2xl text-gray-950/75 max-w-3xl mx-auto leading-relaxed mb-8">
+          But don't worry—evolution is a beautiful thing. We've emerged stronger, better, and with a new name:
+        </p>
+
+        <div class="mb-12">
+          <.logo class="text-5xl inline-flex" href="/" />
+        </div>
+
+        <.subheading class="mb-6">New Identity, Same Mission</.subheading>
+
+        <p class="text-lg text-gray-950/75 max-w-2xl mx-auto leading-relaxed mb-8">
+          Same great platform you know, just with a fresh identity and even better features.
+        </p>
+
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 border border-green-300">
+          <span class="text-sm font-semibold text-green-800">✨ Status: Thriving</span>
+        </div>
+      </div>
+    </.hero_section>
+
+    <%!-- Explanation Section --%>
+    <.section class="py-16 sm:py-24">
+      <div class="max-w-3xl mx-auto">
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 sm:p-12 shadow-sm">
+          <.heading as="h2" class="text-3xl sm:text-4xl mb-8 text-center">
+            What Happened?
+          </.heading>
+
+          <div class="space-y-6 text-lg text-gray-700 leading-relaxed">
+            <p>
+              <strong>Eventosaurus</strong> was a great name while it lasted. But like all good things,
+              it was time to evolve. We're now <strong class="text-gray-950">Wombie</strong>—the same
+              great platform you know, just with a fresh identity and even better features.
+            </p>
+            <p>
+              Same mission: making it effortless to organize, attend, and discover real-world events.
+              Same team. Same passion. New name. New energy. Plus, we found that "Wombie" just resonates
+              better with Gen Z—turns out wombats are way more their vibe than dinosaurs.
+            </p>
+            <p class="text-base text-gray-600 italic text-center border-t border-gray-200 pt-6 mt-6">
+              And yes, we know dinosaurs are cool. But have you seen wombats? 🐻
+            </p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- CTA Section --%>
+    <.section background="gradient" class="py-16 sm:py-24">
+      <div class="text-center max-w-3xl mx-auto">
+        <.heading as="h2" class="text-3xl sm:text-4xl lg:text-5xl mb-6">
+          Ready to Explore?
+        </.heading>
+
+        <p class="text-lg text-gray-950/75 mb-8 leading-relaxed">
+          All your events, groups, and data have been preserved. Everything continues to work seamlessly under our new brand.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <.radiant_button href="/" variant="primary" class="text-lg px-8 py-3">
+            🐻 Visit Wombie.com
+          </.radiant_button>
+          <.radiant_button href="/activities" variant="secondary" class="text-lg px-8 py-3">
+            🎉 Discover Events
+          </.radiant_button>
+        </div>
+
+        <div class="mt-6">
+          <a href="/about" class="text-sm font-medium text-gray-600 hover:text-gray-900 underline decoration-gray-300 hover:decoration-gray-600 transition-colors">
+            Learn About Our Mission
+          </a>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Footer with Dinosaur Gallery --%>
+    <.section class="py-12 sm:py-16">
+      <div class="text-center">
+        <div class="flex justify-center gap-4 mb-8 opacity-40">
+          <img src="/images/avatars/dinos-gradient/dino1.png" alt="Dino" class="w-12 h-12 grayscale transition-all duration-300 hover:grayscale-0 hover:opacity-100 cursor-pointer" />
+          <img src="/images/avatars/dinos-gradient/dino2.png" alt="Dino" class="w-12 h-12 grayscale transition-all duration-300 hover:grayscale-0 hover:opacity-100 cursor-pointer" />
+          <img src="/images/avatars/dinos-gradient/dino3.png" alt="Dino" class="w-12 h-12 grayscale transition-all duration-300 hover:grayscale-0 hover:opacity-100 cursor-pointer" />
+          <img src="/images/avatars/dinos-gradient/dino4.png" alt="Dino" class="w-12 h-12 grayscale transition-all duration-300 hover:grayscale-0 hover:opacity-100 cursor-pointer" />
+          <img src="/images/avatars/dinos-gradient/dino5.png" alt="Dino" class="w-12 h-12 grayscale transition-all duration-300 hover:grayscale-0 hover:opacity-100 cursor-pointer" />
+        </div>
+
+        <p class="text-lg text-gray-600 italic mb-2">
+          "Change is the only constant in life."
+        </p>
+        <p class="text-sm text-gray-500 mb-6">
+          — Heraclitus
+        </p>
+        <p class="text-lg text-gray-600 italic mb-2">
+          💀 "Except when you die and then you don't change at all."
+        </p>
+        <p class="text-sm text-gray-500">
+          — Anonymous
+        </p>
+      </div>
+    </.section>
+  </main>
+</div>

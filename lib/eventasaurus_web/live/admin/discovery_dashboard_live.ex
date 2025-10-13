@@ -117,7 +117,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
     # Validate: source is required, city is required only for city-scoped sources (not regional/country)
     city_required =
-      SourceRegistry.requires_city_id?(source) and not Map.has_key?(@city_specific_sources, source)
+      SourceRegistry.requires_city_id?(source) and
+        not Map.has_key?(@city_specific_sources, source)
 
     missing_city = city_required and (is_nil(city_id_or_slug) or city_id_or_slug == "")
 
@@ -356,6 +357,25 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("generate_sitemap", _params, socket) do
+    # Queue the sitemap generation worker
+    case Eventasaurus.Workers.SitemapWorker.new(%{}) |> Oban.insert() do
+      {:ok, job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Queued sitemap generation job ##{job.id}")
+          |> assign(:import_running, true)
+          |> assign(:import_progress, "Generating sitemap...")
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to queue sitemap: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
 
   @impl true

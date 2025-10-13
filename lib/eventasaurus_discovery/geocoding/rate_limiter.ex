@@ -77,9 +77,7 @@ defmodule EventasaurusDiscovery.Geocoding.RateLimiter do
 
       _ ->
         # Invalid or missing rate limit config, allow request
-        Logger.warning(
-          "Invalid rate limit configuration for #{provider_name}, allowing request"
-        )
+        Logger.warning("Invalid rate limit configuration for #{provider_name}, allowing request")
 
         :ok
     end

@@ -198,8 +198,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
     {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city, "Poland")
 
     # Build CityResolver metadata (offline reverse geocoding - free)
-    geocoding_metadata = MetadataBuilder.build_city_resolver_metadata()
-                         |> MetadataBuilder.add_scraper_source("cinema_city")
+    geocoding_metadata =
+      MetadataBuilder.build_city_resolver_metadata()
+      |> MetadataBuilder.add_scraper_source("cinema_city")
 
     %{
       name: fetch(cinema, :name),

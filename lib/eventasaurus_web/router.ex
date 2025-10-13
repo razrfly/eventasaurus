@@ -418,6 +418,14 @@ defmodule EventasaurusWeb.Router do
       get "/invite-only", PageController, :invite_only
       get "/logo-test", LogoTestController, :index
 
+      # Sitemap redirect
+      get "/sitemap", PageController, :sitemap_redirect
+      get "/sitemap.xml", PageController, :sitemap_redirect
+
+      # Legacy Eventosaurus brand redirect page
+      get "/eventosaurus", PageController, :eventosaurus_redirect
+      get "/eventosaurus/*path", PageController, :eventosaurus_redirect
+
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login
       get "/register", PageController, :redirect_to_auth_register

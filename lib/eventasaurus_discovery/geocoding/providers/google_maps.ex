@@ -107,7 +107,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GoogleMaps do
   defp get_api_key do
     # Try environment variable first, then config
     System.get_env("GOOGLE_MAPS_API_KEY") ||
-      (Application.get_env(:geocoder, Geocoder.Providers.GoogleMaps, [])
-       |> Keyword.get(:api_key))
+      Application.get_env(:geocoder, Geocoder.Providers.GoogleMaps, [])
+      |> Keyword.get(:api_key)
   end
 end

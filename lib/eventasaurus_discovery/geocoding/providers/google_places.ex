@@ -77,7 +77,10 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
         {:error, :rate_limited}
 
       {:ok, %HTTPoison.Response{status_code: 403}} ->
-        Logger.error("❌ Google Places authentication failed (invalid API key or billing not enabled)")
+        Logger.error(
+          "❌ Google Places authentication failed (invalid API key or billing not enabled)"
+        )
+
         {:error, :api_error}
 
       {:ok, %HTTPoison.Response{status_code: status}} ->

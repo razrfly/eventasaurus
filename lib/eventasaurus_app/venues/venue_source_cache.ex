@@ -50,7 +50,7 @@ defmodule EventasaurusApp.Venues.VenueSourceCache do
   def refresh do
     providers =
       try do
-        Repo.all(from p in GeocodingProvider, select: p.name)
+        Repo.all(from(p in GeocodingProvider, select: p.name))
       rescue
         error ->
           Logger.error("Failed to load geocoding providers: #{inspect(error)}")

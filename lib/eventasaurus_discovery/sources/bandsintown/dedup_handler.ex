@@ -56,17 +56,23 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
     longitude = get_in(event_data, [:venue_data, :longitude])
 
     # Find potential matches using BaseDedupHandler
-    matches = BaseDedupHandler.find_events_by_date_and_proximity(
-      date, latitude, longitude, proximity_meters: 100
-    )
+    matches =
+      BaseDedupHandler.find_events_by_date_and_proximity(
+        date,
+        latitude,
+        longitude,
+        proximity_meters: 100
+      )
 
     # Filter by artist/title similarity
-    title_matches = Enum.filter(matches, fn %{event: event} ->
-      similar_artist?(artist_name, event.title)
-    end)
+    title_matches =
+      Enum.filter(matches, fn %{event: event} ->
+        similar_artist?(artist_name, event.title)
+      end)
 
     # Apply domain compatibility filtering
-    higher_priority_matches = BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
+    higher_priority_matches =
+      BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
 
     case higher_priority_matches do
       [] ->
@@ -76,7 +82,14 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
         confidence = calculate_match_confidence(event_data, match.event)
 
         if BaseDedupHandler.should_defer_to_match?(match, source, confidence) do
-          BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
+          BaseDedupHandler.log_duplicate(
+            source,
+            event_data,
+            match.event,
+            match.source,
+            confidence
+          )
+
           {:duplicate, match.event}
         else
           {:unique, event_data}
@@ -97,23 +110,41 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
     scores = []
 
     # Artist name similarity (40%)
-    scores = if similar_artist?(bandsintown_event[:title], existing_event.title), do: [0.4 | scores], else: scores
+    scores =
+      if similar_artist?(bandsintown_event[:title], existing_event.title),
+        do: [0.4 | scores],
+        else: scores
 
     # Date match (25%)
-    scores = if same_date?(bandsintown_event[:starts_at], existing_event.start_at), do: [0.25 | scores], else: scores
+    scores =
+      if same_date?(bandsintown_event[:starts_at], existing_event.start_at),
+        do: [0.25 | scores],
+        else: scores
 
     # Venue name match (20%)
     venue_name = get_in(bandsintown_event, [:venue_data, :name])
-    scores = if venue_name && existing_event.venue && similar_venue?(venue_name, existing_event.venue.name), do: [0.2 | scores], else: scores
+
+    scores =
+      if venue_name && existing_event.venue &&
+           similar_venue?(venue_name, existing_event.venue.name),
+         do: [0.2 | scores],
+         else: scores
 
     # GPS proximity match (15%)
     latitude = get_in(bandsintown_event, [:venue_data, :latitude])
     longitude = get_in(bandsintown_event, [:venue_data, :longitude])
-    scores = if latitude && longitude && BaseDedupHandler.same_location?(
-           latitude, longitude,
-           existing_event.venue.latitude, existing_event.venue.longitude,
-           threshold_meters: 100
-         ), do: [0.15 | scores], else: scores
+
+    scores =
+      if latitude && longitude &&
+           BaseDedupHandler.same_location?(
+             latitude,
+             longitude,
+             existing_event.venue.latitude,
+             existing_event.venue.longitude,
+             threshold_meters: 100
+           ),
+         do: [0.15 | scores],
+         else: scores
 
     Enum.sum(scores)
   end
@@ -155,10 +186,20 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.DedupHandler do
 
   defp same_date?(date1, date2) do
     cond do
-      is_nil(date1) || is_nil(date2) -> false
+      is_nil(date1) || is_nil(date2) ->
+        false
+
       true ->
-        d1 = if is_struct(date1, DateTime), do: DateTime.to_date(date1), else: NaiveDateTime.to_date(date1)
-        d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
+        d1 =
+          if is_struct(date1, DateTime),
+            do: DateTime.to_date(date1),
+            else: NaiveDateTime.to_date(date1)
+
+        d2 =
+          if is_struct(date2, DateTime),
+            do: DateTime.to_date(date2),
+            else: NaiveDateTime.to_date(date2)
+
         Date.compare(d1, d2) == :eq
     end
   end

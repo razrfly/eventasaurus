@@ -36,15 +36,15 @@ config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN
 
 # Configure geocoder's Google Maps provider to use our existing API key
 # We've been using Google Maps API for 6+ months - this wires up the new geocoder library
-config :geocoder, Geocoder.Providers.GoogleMaps,
-  api_key: System.get_env("GOOGLE_MAPS_API_KEY")
+config :geocoder, Geocoder.Providers.GoogleMaps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
 
 # Configure OpenStreetMap Nominatim provider with proper User-Agent
 # OSM Usage Policy requires identifying the application making requests
 # See: https://operations.osmfoundation.org/policies/nominatim/
 config :geocoder, Geocoder.Providers.OpenStreetMaps,
   headers: [
-    {"User-Agent", "Wombie/1.0 (#{System.get_env("APP_URL") || "https://wombie.com"}; #{System.get_env("CONTACT_EMAIL") || "support@wombie.com"})"}
+    {"User-Agent",
+     "Wombie/1.0 (#{System.get_env("APP_URL") || "https://wombie.com"}; #{System.get_env("CONTACT_EMAIL") || "support@wombie.com"})"}
   ]
 
 # Configure multi-provider geocoding system

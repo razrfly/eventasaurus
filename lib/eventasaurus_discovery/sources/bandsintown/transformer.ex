@@ -239,7 +239,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
     longitude = parse_coordinate(event["venue_longitude"])
 
     # Resolve city name using CityResolver with coordinates
-    {resolved_city, resolved_country} = resolve_location(latitude, longitude, event["venue_city"], known_country)
+    {resolved_city, resolved_country} =
+      resolve_location(latitude, longitude, event["venue_city"], known_country)
 
     # Build address components
     address_parts =
@@ -270,7 +271,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       # We have venue name but missing coordinates - use city location
       venue_name && (event["venue_city"] || city) ->
         # Validate API city name before using
-        {validated_city, validated_country} = validate_api_city(event["venue_city"], known_country)
+        {validated_city, validated_country} =
+          validate_api_city(event["venue_city"], known_country)
 
         # Use city context if available, otherwise use validated API city
         actual_city_name =

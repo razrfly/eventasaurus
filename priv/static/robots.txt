@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://wombie.com/sitemaps/sitemap.xml.gz

@@ -921,7 +921,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def aggregate_events(events, opts \\ []) do
     # Preload sources, movies, venue, and venue associations for timezone conversion
-    events_with_sources = Repo.preload(events, sources: :source, venue: [city_ref: :country], movies: [])
+    events_with_sources =
+      Repo.preload(events, sources: :source, venue: [city_ref: :country], movies: [])
 
     # Separate movie events from other events
     {movie_events, other_events} = Enum.split_with(events_with_sources, &has_movie?/1)
@@ -934,6 +935,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       aggregatable
       |> Enum.group_by(fn event ->
         source = get_event_source(event)
+
         if opts[:ignore_city_in_aggregation] do
           # City-specific page: group by source only
           {source.id, source.aggregation_type}
@@ -960,6 +962,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       movie_events
       |> Enum.group_by(fn event ->
         movie = List.first(event.movies)
+
         if opts[:ignore_city_in_aggregation] do
           # City-specific page: group by movie only
           {movie.id}
@@ -973,6 +976,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         {{movie_id}, events}, {groups, failed} when is_map_key(opts, :ignore_city_in_aggregation) ->
           viewing_city = opts[:viewing_city]
           city_id = if viewing_city, do: viewing_city.id, else: nil
+
           case build_movie_aggregated_group(movie_id, city_id, events, viewing_city) do
             nil -> {groups, failed ++ events}
             group -> {[group | groups], failed}

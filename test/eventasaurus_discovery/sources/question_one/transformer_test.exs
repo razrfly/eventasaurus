@@ -104,14 +104,17 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
       # This test verifies the transformer receives already-cleaned data from VenueExtractor
       # VenueExtractor.clean_title/1 now decodes HTML entities BEFORE cleaning
       venue_data = %{
-        title: "Royal Oak, Twickenham",  # Already cleaned by VenueExtractor
-        raw_title: "PUB QUIZ – Royal Oak, Twickenham – Every Thursday",  # Already decoded
+        # Already cleaned by VenueExtractor
+        title: "Royal Oak, Twickenham",
+        # Already decoded
+        raw_title: "PUB QUIZ – Royal Oak, Twickenham – Every Thursday",
         address: "13 Richmond Road, Twickenham England TW1 3AB, United Kingdom",
         time_text: "Thursdays at 6:30pm",
         fee_text: "£2 per person",
         phone: nil,
         website: nil,
-        description: "Join us for trivia & prizes every Thursday!",  # Already decoded
+        # Already decoded
+        description: "Join us for trivia & prizes every Thursday!",
         hero_image_url: nil,
         source_url: "https://questionone.com/venues/royal-oak-twickenham"
       }
@@ -121,7 +124,10 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.TransformerTest do
       # Transformer should use the already-cleaned title from VenueExtractor
       assert transformed.title == "Quiz Night at Royal Oak, Twickenham"
       assert transformed.venue_data.name == "Royal Oak, Twickenham"
-      assert transformed.venue_data.metadata.raw_title == "PUB QUIZ – Royal Oak, Twickenham – Every Thursday"
+
+      assert transformed.venue_data.metadata.raw_title ==
+               "PUB QUIZ – Royal Oak, Twickenham – Every Thursday"
+
       assert transformed.description == "Join us for trivia & prizes every Thursday!"
     end
   end

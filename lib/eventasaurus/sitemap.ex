@@ -34,36 +34,20 @@ defmodule Eventasaurus.Sitemap do
       Logger.info("Starting sitemap generation")
 
       # Use a database transaction to ensure proper streaming
-      Repo.transaction(fn ->
-        # Get the stream of URLs and count them
-        url_stream = stream_urls(opts)
-
-        # Log URL count before generating sitemap (for debugging)
-        url_count = Enum.count(url_stream)
-        Logger.info("Generated #{url_count} URLs for sitemap")
-
-        if url_count == 0 do
-          Logger.warning("No URLs generated for sitemap! Check your database content.")
-          :ok
-        else
-          # Create a fresh stream for actual generation
+      # Set timeout to :infinity to allow long-running sitemap generation + S3 upload
+      Repo.transaction(
+        fn ->
+          # Stream URLs directly to Sitemapper without consuming the stream
           stream_urls(opts)
-          |> tap(fn _ -> Logger.info("Starting sitemap file generation") end)
+          |> tap(fn _ -> Logger.info("Starting sitemap generation with all available URLs") end)
           |> Sitemapper.generate(config)
-          |> tap(fn stream ->
-            # Log the first few items in the stream for debugging
-            first_items = stream |> Enum.take(2)
-
-            Logger.info(
-              "Generated #{length(first_items)} sitemap files: #{inspect(Enum.map(first_items, fn {filename, _} -> filename end))}"
-            )
-          end)
-          |> tap(fn _ -> Logger.info("Starting sitemap persistence") end)
+          |> tap(fn _ -> Logger.info("Sitemap generated, starting persistence") end)
           |> Sitemapper.persist(config)
           |> tap(fn _ -> Logger.info("Completed sitemap persistence") end)
           |> Stream.run()
-        end
-      end)
+        end,
+        timeout: :infinity
+      )
 
       Logger.info("Sitemap generation completed")
       :ok
@@ -152,9 +136,14 @@ defmodule Eventasaurus.Sitemap do
 
     # Query public_events for activities
     # Only include events that have valid slugs and timestamps
+    # Filter out broken slugs (empty strings or starting with "-")
     from(pe in PublicEvent,
       select: %{slug: pe.slug, updated_at: pe.updated_at},
-      where: not is_nil(pe.slug) and not is_nil(pe.updated_at)
+      where:
+        not is_nil(pe.slug) and
+          not is_nil(pe.updated_at) and
+          pe.slug != "" and
+          fragment("? !~ ?", pe.slug, "^-")
     )
     |> Repo.stream()
     |> Stream.map(fn activity ->
@@ -179,34 +168,48 @@ defmodule Eventasaurus.Sitemap do
   defp get_base_url(opts) do
     # Allow host override via opts
     override_host = Keyword.get(opts, :host)
+    Logger.info("Sitemap URL generation - override_host from opts: #{inspect(override_host)}")
 
     # Use EventasaurusWeb.Endpoint configuration
     endpoint_config = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)
     url_config = endpoint_config[:url]
-    host = override_host || url_config[:host]
+    config_host = url_config[:host]
     port = url_config[:port]
     scheme = url_config[:scheme] || "https"
 
+    Logger.info(
+      "Sitemap URL generation - config_host from endpoint: #{inspect(config_host)}, port: #{inspect(port)}, scheme: #{inspect(scheme)}"
+    )
+
     # Determine environment from opts or application config
+    env_from_opts = Keyword.get(opts, :environment)
+    app_env = Application.get_env(:eventasaurus, :environment)
+
     is_prod =
-      case Keyword.get(opts, :environment) do
-        nil -> Application.get_env(:eventasaurus, :environment) == :prod
+      case env_from_opts do
+        nil -> app_env == :prod
         env -> env == :prod
       end
 
-    # For production, check PHX_HOST env var as a backup
-    prod_host =
+    Logger.info(
+      "Sitemap URL generation - environment from opts: #{inspect(env_from_opts)}, app environment: #{inspect(app_env)}, is_prod: #{is_prod}"
+    )
+
+    # Use override_host if provided, otherwise fall back to config or PHX_HOST
+    host =
       if is_prod do
-        System.get_env("PHX_HOST") || host || "wombie.com"
+        override_host || config_host || System.get_env("PHX_HOST") || "wombie.com"
       else
-        host
+        override_host || config_host
       end
+
+    Logger.info("Sitemap URL generation - selected host: #{inspect(host)}")
 
     base_url =
       cond do
         # In production, use the configured host directly
         is_prod ->
-          "#{scheme}://#{prod_host}"
+          "#{scheme}://#{host}"
 
         # In development with non-standard port
         port && port != 80 && port != 443 ->
@@ -217,7 +220,7 @@ defmodule Eventasaurus.Sitemap do
           "#{scheme}://#{host}"
       end
 
-    Logger.debug("Base URL for sitemap: #{base_url}")
+    Logger.info("Sitemap URL generation - final base_url: #{base_url}")
     base_url
   end
 
@@ -236,78 +239,19 @@ defmodule Eventasaurus.Sitemap do
     Logger.debug("Environment: #{if is_prod, do: "production", else: "development"}")
 
     # For local development, use FileStore
-    # For production, use S3Store with Tigris credentials
+    # For production, use SupabaseStore
     if is_prod do
-      # Get bucket name from env, checking both Tigris and AWS variables
-      tigris_bucket = System.get_env("TIGRIS_BUCKET_NAME")
-      aws_bucket = System.get_env("BUCKET_NAME")
-
-      Logger.debug(
-        "Available buckets - Tigris: #{inspect(tigris_bucket)}, AWS: #{inspect(aws_bucket)}"
-      )
-
-      bucket = tigris_bucket || aws_bucket || "eventasaurus"
-
-      # Get region (default to auto if not specified)
-      region = System.get_env("AWS_REGION") || "auto"
-
-      # Get credentials, checking Tigris first, then AWS
-      tigris_key = System.get_env("TIGRIS_ACCESS_KEY_ID")
-      aws_key = System.get_env("AWS_ACCESS_KEY_ID")
-      tigris_secret = System.get_env("TIGRIS_SECRET_ACCESS_KEY")
-      aws_secret = System.get_env("AWS_SECRET_ACCESS_KEY")
-
-      # Debug log the credential availability
-      Logger.debug(
-        "Credentials check - Tigris key: #{!is_nil(tigris_key)}, AWS key: #{!is_nil(aws_key)}"
-      )
-
-      Logger.debug(
-        "Credentials check - Tigris secret: #{!is_nil(tigris_secret)}, AWS secret: #{!is_nil(aws_secret)}"
-      )
-
-      access_key_id = tigris_key || aws_key
-      secret_access_key = tigris_secret || aws_secret
-
-      # Ensure credentials are available
-      if is_nil(access_key_id) || is_nil(secret_access_key) do
-        error_msg =
-          "Missing S3 credentials - access_key_id: #{!is_nil(access_key_id)}, secret_access_key: #{!is_nil(secret_access_key)}"
-
-        Logger.error(error_msg)
-        raise error_msg
-      end
-
       # Define path for sitemaps (store in sitemaps/ directory)
       sitemap_path = "sitemaps"
 
-      # Add additional S3 object properties
-      extra_props = [
-        {:acl, :public_read},
-        # Make sitemaps publicly readable
-        {:content_type, "application/xml"}
-        # Set correct content type
-      ]
-
       # Log the final configuration details
-      Logger.info(
-        "Sitemap config - S3Store, bucket: #{bucket}, path: #{sitemap_path}, region: #{region}"
-      )
+      Logger.info("Sitemap config - SupabaseStore, path: #{sitemap_path}")
 
-      # Configure sitemap to store on S3 with explicit ExAws config
-      # Note: Sitemapper will handle ExAws configuration internally via store_config
+      # Configure sitemap to store on Supabase Storage
       [
-        store: Sitemapper.S3Store,
+        store: Eventasaurus.Sitemap.SupabaseStore,
         store_config: [
-          bucket: bucket,
-          region: region,
-          access_key_id: access_key_id,
-          secret_access_key: secret_access_key,
-          path: sitemap_path,
-          extra_props: extra_props,
-          # S3 endpoint configuration for Tigris
-          host: "fly.storage.tigris.dev",
-          scheme: "https://"
+          path: sitemap_path
         ],
         # For search engines, the sitemap should be accessible via the site's domain
         sitemap_url: "#{base_url}/#{sitemap_path}"
@@ -348,62 +292,6 @@ defmodule Eventasaurus.Sitemap do
       _ ->
         Logger.debug("DotenvParser module not found. Using system environment variables.")
         :ok
-    end
-  end
-
-  @doc """
-  Test S3 connectivity with current credentials.
-  This is useful for debugging S3 access issues.
-
-  ## Options
-  * `:environment` - Override environment detection (e.g., :prod)
-  * `:host` - Override host for URL generation
-  """
-  def test_s3_connectivity(opts \\ []) do
-    # Ensure environment variables are loaded
-    load_env_vars()
-
-    # Get the sitemap configuration to load credentials
-    config = get_sitemap_config(opts)
-
-    # Extract store config
-    store_config = config[:store_config]
-
-    # Test connectivity
-    bucket = store_config[:bucket]
-    Logger.info("Testing S3 connectivity to bucket: #{bucket}")
-
-    # Create explicit ExAws config (avoid global state mutation)
-    ex_aws_config = [
-      access_key_id: store_config[:access_key_id],
-      secret_access_key: store_config[:secret_access_key],
-      region: store_config[:region],
-      host: store_config[:host] || "fly.storage.tigris.dev",
-      scheme: store_config[:scheme] || "https://"
-    ]
-
-    # Try to list objects in the bucket using explicit config
-    case Code.ensure_loaded(ExAws) do
-      {:module, _} ->
-        list_op = apply(ExAws.S3, :list_objects, [bucket, [max_keys: 5]])
-
-        case apply(ExAws, :request, [list_op, ex_aws_config]) do
-          {:ok, response} ->
-            # Log successful response
-            object_count = length(response.body.contents || [])
-            Logger.info("S3 connection successful. Found #{object_count} objects in bucket.")
-            Logger.debug("S3 response: #{inspect(response, pretty: true)}")
-            {:ok, response}
-
-          {:error, error} ->
-            # Log error
-            Logger.error("S3 connection failed: #{inspect(error, pretty: true)}")
-            {:error, error}
-        end
-
-      _ ->
-        Logger.warning("ExAws module not found. S3 connectivity test skipped.")
-        {:error, :module_not_loaded}
     end
   end
 end

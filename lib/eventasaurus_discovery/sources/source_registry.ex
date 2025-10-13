@@ -103,9 +103,11 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
       {:ok, :regional}
   """
   def get_scope(source_slug) when is_binary(source_slug) do
-    query = from s in Source,
-      where: s.slug == ^source_slug,
-      select: s.metadata
+    query =
+      from(s in Source,
+        where: s.slug == ^source_slug,
+        select: s.metadata
+      )
 
     case Repo.one(query) do
       nil ->
@@ -117,18 +119,31 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
 
         scope =
           case scope_value do
-            "city" -> :city
-            "country" -> :country
-            "regional" -> :regional
-            nil -> :city
+            "city" ->
+              :city
+
+            "country" ->
+              :country
+
+            "regional" ->
+              :regional
+
+            nil ->
+              :city
+
             other ->
-              Logger.warning("Unknown scope #{inspect(other)} for #{source_slug}, defaulting to :city")
+              Logger.warning(
+                "Unknown scope #{inspect(other)} for #{source_slug}, defaulting to :city"
+              )
+
               :city
           end
+
         {:ok, scope}
 
       _ ->
-        {:ok, :city}  # Default to city if no metadata
+        # Default to city if no metadata
+        {:ok, :city}
     end
   end
 
@@ -143,7 +158,8 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   defp get_default_scope_for_slug("karnet"), do: "city"
   defp get_default_scope_for_slug("cinema-city"), do: "city"
   defp get_default_scope_for_slug("kino-krakow"), do: "city"
-  defp get_default_scope_for_slug(_), do: "city"  # Safe default for unknown sources
+  # Safe default for unknown sources
+  defp get_default_scope_for_slug(_), do: "city"
 
   @doc """
   Check if a source requires a city_id.
@@ -164,7 +180,8 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     case get_scope(source_slug) do
       {:ok, :city} -> true
       {:ok, _} -> false
-      {:error, _} -> true  # Default to requiring city for safety
+      # Default to requiring city for safety
+      {:error, _} -> true
     end
   end
 
@@ -181,21 +198,35 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
       }
   """
   def sources_by_scope do
-    query = from s in Source,
-      where: s.is_active == true,
-      select: {s.slug, s.metadata}
+    query =
+      from(s in Source,
+        where: s.is_active == true,
+        select: {s.slug, s.metadata}
+      )
 
     Repo.all(query)
     |> Enum.group_by(
       fn {_slug, metadata} ->
         scope_string = if is_map(metadata), do: metadata["scope"], else: nil
+
         case scope_string do
-          "city" -> :city
-          "country" -> :country
-          "regional" -> :regional
-          nil -> :city
+          "city" ->
+            :city
+
+          "country" ->
+            :country
+
+          "regional" ->
+            :regional
+
+          nil ->
+            :city
+
           other ->
-            Logger.warning("Unknown scope #{inspect(other)} in sources_by_scope, defaulting to :city")
+            Logger.warning(
+              "Unknown scope #{inspect(other)} in sources_by_scope, defaulting to :city"
+            )
+
             :city
         end
       end,

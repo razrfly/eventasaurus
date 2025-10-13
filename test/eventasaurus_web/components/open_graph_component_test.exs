@@ -25,7 +25,10 @@ defmodule EventasaurusWeb.Components.OpenGraphComponentTest do
       # Open Graph tags
       assert html =~ ~s(<meta property="og:type" content="event")
       assert html =~ ~s(<meta property="og:title" content="Test Event")
-      assert html =~ ~s(<meta property="og:description" content="This is a test event description")
+
+      assert html =~
+               ~s(<meta property="og:description" content="This is a test event description")
+
       assert html =~ ~s(<meta property="og:image" content="https://example.com/image.jpg")
       assert html =~ ~s(<meta property="og:image:width" content="1200")
       assert html =~ ~s(<meta property="og:image:height" content="630")
@@ -36,7 +39,10 @@ defmodule EventasaurusWeb.Components.OpenGraphComponentTest do
       # Twitter Card tags
       assert html =~ ~s(<meta name="twitter:card" content="summary_large_image")
       assert html =~ ~s(<meta name="twitter:title" content="Test Event")
-      assert html =~ ~s(<meta name="twitter:description" content="This is a test event description")
+
+      assert html =~
+               ~s(<meta name="twitter:description" content="This is a test event description")
+
       assert html =~ ~s(<meta name="twitter:image" content="https://example.com/image.jpg")
 
       # Meta description

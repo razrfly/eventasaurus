@@ -48,7 +48,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
       title
       |> String.slice(0, max_length)
       |> String.split("-")
-      |> Enum.drop(-1)  # Drop partial word at end
+      # Drop partial word at end
+      |> Enum.drop(-1)
       |> Enum.join("-")
     end
   end
@@ -91,7 +92,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
     venue =
       EventasaurusApp.Venues.Venue
       |> Repo.get(venue_id)
-      |> Repo.preload([city_ref: :country])
+      |> Repo.preload(city_ref: :country)
 
     case venue do
       nil ->
@@ -249,7 +250,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
   # Try a slug with a suffix, return it if unique, nil otherwise
   # Guard against nil or empty suffixes to prevent double hyphens
   defp try_slug_with_suffix(_base_slug, suffix, _existing_id)
-       when suffix in [nil, ""], do: nil
+       when suffix in [nil, ""],
+       do: nil
 
   defp try_slug_with_suffix(base_slug, suffix, existing_id) do
     candidate = "#{base_slug}-#{suffix}"

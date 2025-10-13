@@ -410,7 +410,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           {:error, changeset} ->
             # If insert fails (e.g., unique constraint), try to find the existing city
             # This handles race conditions and edge cases with slug generation
-            Logger.warning("Failed to create city #{validated_name}: #{inspect(changeset.errors)}")
+            Logger.warning(
+              "Failed to create city #{validated_name}: #{inspect(changeset.errors)}"
+            )
 
             from(c in City,
               where:
@@ -422,7 +424,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             |> case do
               nil ->
                 # If we still can't find it, something is wrong
-                Logger.error("Cannot create or find city #{validated_name} in country #{country.name}")
+                Logger.error(
+                  "Cannot create or find city #{validated_name} in country #{country.name}"
+                )
+
                 nil
 
               city ->
@@ -441,7 +446,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         This prevents database pollution.
         """)
 
-        nil  # Return nil - this causes venue/event creation to fail (correct behavior)
+        # Return nil - this causes venue/event creation to fail (correct behavior)
+        nil
     end
   end
 
@@ -473,7 +479,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     Logger.info("🔍 Geocoding venue address: #{full_address}")
 
     case AddressGeocoder.geocode_address_with_metadata(full_address) do
-      {:ok, %{city: _city_name, country: _country_name, latitude: lat, longitude: lng, geocoding_metadata: metadata}} ->
+      {:ok,
+       %{
+         city: _city_name,
+         country: _country_name,
+         latitude: lat,
+         longitude: lng,
+         geocoding_metadata: metadata
+       }} ->
         Logger.info(
           "🗺️ ✅ Successfully geocoded venue '#{data.name}' via #{metadata.provider}: #{lat}, #{lng}"
         )
@@ -483,7 +496,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       {:error, reason, metadata} ->
         Logger.error(
           "🗺️ ❌ Failed to geocode venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{reason}. " <>
-          "Attempted providers: #{inspect(metadata.attempted_providers)}"
+            "Attempted providers: #{inspect(metadata.attempted_providers)}"
         )
 
         {nil, nil, metadata}
@@ -618,27 +631,28 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Clean UTF-8 for venue name before database insert
 
     # Build geocoding metadata based on the geocoding path taken
-    final_geocoding_metadata = cond do
-      # Multi-provider geocoding was used (from geocode_venue_address)
-      geocoding_metadata != nil ->
-        geocoding_metadata
-        |> MetadataBuilder.add_scraper_source(source_scraper)
+    final_geocoding_metadata =
+      cond do
+        # Multi-provider geocoding was used (from geocode_venue_address)
+        geocoding_metadata != nil ->
+          geocoding_metadata
+          |> MetadataBuilder.add_scraper_source(source_scraper)
 
-      # AddressGeocoder was used directly by scraper (Question One pattern)
-      Map.has_key?(data, :geocoding_metadata) ->
-        data.geocoding_metadata
-        |> MetadataBuilder.add_scraper_source(source_scraper)
+        # AddressGeocoder was used directly by scraper (Question One pattern)
+        Map.has_key?(data, :geocoding_metadata) ->
+          data.geocoding_metadata
+          |> MetadataBuilder.add_scraper_source(source_scraper)
 
-      # Coordinates provided directly by scraper (no geocoding needed)
-      latitude != nil and longitude != nil ->
-        MetadataBuilder.build_provided_coordinates_metadata()
-        |> MetadataBuilder.add_scraper_source(source_scraper)
+        # Coordinates provided directly by scraper (no geocoding needed)
+        latitude != nil and longitude != nil ->
+          MetadataBuilder.build_provided_coordinates_metadata()
+          |> MetadataBuilder.add_scraper_source(source_scraper)
 
-      # No coordinates available - deferred geocoding (Karnet pattern)
-      true ->
-        MetadataBuilder.build_deferred_geocoding_metadata()
-        |> MetadataBuilder.add_scraper_source(source_scraper)
-    end
+        # No coordinates available - deferred geocoding (Karnet pattern)
+        true ->
+          MetadataBuilder.build_deferred_geocoding_metadata()
+          |> MetadataBuilder.add_scraper_source(source_scraper)
+      end
 
     # Auto-detect source from geocoding metadata
     # Use the geocoding provider name (mapbox, google, geoapify, etc.)
@@ -646,45 +660,49 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     source = detect_venue_source(geocoding_metadata)
 
     # Override for provided coordinates to distinguish from scraped venues
-    source = if source == "scraper" && final_geocoding_metadata[:provider] == "provided" do
-      "provided"
-    else
-      source
-    end
+    source =
+      if source == "scraper" && final_geocoding_metadata[:provider] == "provided" do
+        "provided"
+      else
+        source
+      end
 
     # Validate and clean source_scraper (prevent empty strings in database)
-    valid_source_scraper = cond do
-      is_binary(source_scraper) && String.trim(source_scraper) != "" ->
-        source_scraper
+    valid_source_scraper =
+      cond do
+        is_binary(source_scraper) && String.trim(source_scraper) != "" ->
+          source_scraper
 
-      true ->
-        Logger.warning("⚠️ Missing source_scraper for venue processing, using fallback")
-        "unknown_scraper"  # Explicit fallback instead of nil
-    end
+        true ->
+          Logger.warning("⚠️ Missing source_scraper for venue processing, using fallback")
+          # Explicit fallback instead of nil
+          "unknown_scraper"
+      end
 
     # Build geocoding_performance for dashboard (flat structure)
     # This should be populated for ALL venues, including those with provided coordinates
-    geocoding_performance = if geocoding_metadata do
-      # Venue was geocoded using multi-provider system
-      geocoding_metadata
-      |> Map.put(:source_scraper, valid_source_scraper)
-      |> Map.put(:cost_per_call, Map.get(geocoding_metadata, :cost_per_call, 0.0))
-    else
-      # Venue has provided coordinates (no geocoding needed)
-      # Build performance data from final_geocoding_metadata
-      if final_geocoding_metadata && final_geocoding_metadata[:provider] == "provided" do
-        %{
-          provider: "provided",
-          source_scraper: valid_source_scraper,
-          geocoded_at: final_geocoding_metadata[:geocoded_at] || DateTime.utc_now(),
-          cost_per_call: 0.0,
-          attempts: 0,
-          attempted_providers: []
-        }
+    geocoding_performance =
+      if geocoding_metadata do
+        # Venue was geocoded using multi-provider system
+        geocoding_metadata
+        |> Map.put(:source_scraper, valid_source_scraper)
+        |> Map.put(:cost_per_call, Map.get(geocoding_metadata, :cost_per_call, 0.0))
       else
-        nil
+        # Venue has provided coordinates (no geocoding needed)
+        # Build performance data from final_geocoding_metadata
+        if final_geocoding_metadata && final_geocoding_metadata[:provider] == "provided" do
+          %{
+            provider: "provided",
+            source_scraper: valid_source_scraper,
+            geocoded_at: final_geocoding_metadata[:geocoded_at] || DateTime.utc_now(),
+            cost_per_call: 0.0,
+            attempts: 0,
+            attempted_providers: []
+          }
+        else
+          nil
+        end
       end
-    end
 
     attrs = %{
       name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(final_name),
@@ -753,13 +771,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           }
 
           # Create a minimal city struct for geocoding
-          city_for_lookup = %{name: venue.city, country: %{name: venue.country || data.country_name}}
+          city_for_lookup = %{
+            name: venue.city,
+            country: %{name: venue.country || data.country_name}
+          }
 
           case geocode_venue_address(lookup_data, city_for_lookup) do
             {lat, lng, _metadata} when not is_nil(lat) and not is_nil(lng) ->
-              Logger.info(
-                "🗺️ Successfully geocoded existing venue '#{venue.name}'"
-              )
+              Logger.info("🗺️ Successfully geocoded existing venue '#{venue.name}'")
 
               # Update with coordinates
               [{:latitude, lat}, {:longitude, lng} | updates]

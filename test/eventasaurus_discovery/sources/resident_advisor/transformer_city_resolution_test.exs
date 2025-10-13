@@ -35,15 +35,16 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.TransformerCityResolutio
       "title" => "Test Event",
       "date" => "2025-10-15",
       "startTime" => "20:00",
-      "venue" => Map.merge(
-        %{
-          "id" => venue_id,
-          "name" => venue_name,
-          "contentUrl" => "/venues/#{venue_id}",
-          "live" => true
-        },
-        venue_data
-      ),
+      "venue" =>
+        Map.merge(
+          %{
+            "id" => venue_id,
+            "name" => venue_name,
+            "contentUrl" => "/venues/#{venue_id}",
+            "live" => true
+          },
+          venue_data
+        ),
       "artists" => [],
       "contentUrl" => "/events/event_123"
     }

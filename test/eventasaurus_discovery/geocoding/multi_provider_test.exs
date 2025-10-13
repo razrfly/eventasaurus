@@ -27,7 +27,16 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
   @moduletag :external_api
 
   alias EventasaurusDiscovery.Geocoding.Orchestrator
-  alias EventasaurusDiscovery.Geocoding.Providers.{Mapbox, Here, Geoapify, LocationIQ, OpenStreetMap, Photon}
+
+  alias EventasaurusDiscovery.Geocoding.Providers.{
+    Mapbox,
+    Here,
+    Geoapify,
+    LocationIQ,
+    OpenStreetMap,
+    Photon
+  }
+
   alias EventasaurusDiscovery.Helpers.AddressGeocoder
 
   # Test addresses for each provider
@@ -123,7 +132,7 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
         result = provider.geocode(@invalid_address)
 
         assert {:error, _reason} = result,
-          "#{provider.name()} should return error for invalid address"
+               "#{provider.name()} should return error for invalid address"
 
         Logger.info("✅ #{provider.name()} correctly handled invalid address")
       end)
@@ -248,10 +257,11 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
       {:ok, result} = AddressGeocoder.geocode(venue_data.address)
 
       # Then: Venue would be saved with coordinates
-      venue_with_coords = Map.merge(venue_data, %{
-        latitude: result.latitude,
-        longitude: result.longitude
-      })
+      venue_with_coords =
+        Map.merge(venue_data, %{
+          latitude: result.latitude,
+          longitude: result.longitude
+        })
 
       assert is_float(venue_with_coords.latitude)
       assert is_float(venue_with_coords.longitude)
@@ -276,7 +286,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.success_rate_by_provider/1 returns valid data" do
-      {:ok, stats} = EventasaurusDiscovery.Metrics.GeocodingStats.success_rate_by_provider(Date.utc_today())
+      {:ok, stats} =
+        EventasaurusDiscovery.Metrics.GeocodingStats.success_rate_by_provider(Date.utc_today())
 
       assert is_list(stats)
 
@@ -292,7 +303,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.average_attempts/1 returns valid float" do
-      {:ok, result} = EventasaurusDiscovery.Metrics.GeocodingStats.average_attempts(Date.utc_today())
+      {:ok, result} =
+        EventasaurusDiscovery.Metrics.GeocodingStats.average_attempts(Date.utc_today())
 
       assert is_map(result)
       assert is_float(result.average_attempts) or result.average_attempts == 0.0
@@ -308,7 +320,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.fallback_patterns/1 returns valid data" do
-      {:ok, patterns} = EventasaurusDiscovery.Metrics.GeocodingStats.fallback_patterns(Date.utc_today())
+      {:ok, patterns} =
+        EventasaurusDiscovery.Metrics.GeocodingStats.fallback_patterns(Date.utc_today())
 
       assert is_list(patterns)
 
@@ -323,7 +336,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
     end
 
     test "GeocodingStats.provider_performance/1 returns valid data" do
-      {:ok, performance} = EventasaurusDiscovery.Metrics.GeocodingStats.provider_performance(Date.utc_today())
+      {:ok, performance} =
+        EventasaurusDiscovery.Metrics.GeocodingStats.provider_performance(Date.utc_today())
 
       assert is_list(performance)
 

@@ -105,17 +105,23 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
     venue_lng = get_in(event_data, [:venue_data, :longitude])
 
     # Find potential matches using BaseDedupHandler
-    matches = BaseDedupHandler.find_events_by_date_and_proximity(
-      date, venue_lat, venue_lng, proximity_meters: 500
-    )
+    matches =
+      BaseDedupHandler.find_events_by_date_and_proximity(
+        date,
+        venue_lat,
+        venue_lng,
+        proximity_meters: 500
+      )
 
     # Filter by title similarity
-    title_matches = Enum.filter(matches, fn %{event: event} ->
-      similar_title?(title, event.title)
-    end)
+    title_matches =
+      Enum.filter(matches, fn %{event: event} ->
+        similar_title?(title, event.title)
+      end)
 
     # Apply domain compatibility filtering
-    higher_priority_matches = BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
+    higher_priority_matches =
+      BaseDedupHandler.filter_higher_priority_matches(title_matches, source)
 
     case higher_priority_matches do
       [] ->
@@ -125,7 +131,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
         confidence = calculate_match_confidence(event_data, match.event)
 
         if BaseDedupHandler.should_defer_to_match?(match, source, confidence) do
-          BaseDedupHandler.log_duplicate(source, event_data, match.event, match.source, confidence)
+          BaseDedupHandler.log_duplicate(
+            source,
+            event_data,
+            match.event,
+            match.source,
+            confidence
+          )
 
           # Check if we can enrich the existing event
           if can_enrich?(event_data, match.event) do
@@ -144,19 +156,28 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
     scores = []
 
     # Title similarity (40%)
-    scores = if similar_title?(karnet_event[:title], existing_event.title), do: [0.4 | scores], else: scores
+    scores =
+      if similar_title?(karnet_event[:title], existing_event.title),
+        do: [0.4 | scores],
+        else: scores
 
     # Date match (30%)
-    scores = if same_date?(karnet_event[:starts_at], existing_event.start_at), do: [0.3 | scores], else: scores
+    scores =
+      if same_date?(karnet_event[:starts_at], existing_event.start_at),
+        do: [0.3 | scores],
+        else: scores
 
     # Venue proximity (30%)
-    scores = if BaseDedupHandler.same_location?(
+    scores =
+      if BaseDedupHandler.same_location?(
            karnet_event[:venue_data][:latitude],
            karnet_event[:venue_data][:longitude],
            existing_event.venue.latitude,
            existing_event.venue.longitude,
            threshold_meters: 500
-         ), do: [0.3 | scores], else: scores
+         ),
+         do: [0.3 | scores],
+         else: scores
 
     Enum.sum(scores)
   end
@@ -181,10 +202,20 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
 
   defp same_date?(date1, date2) do
     cond do
-      is_nil(date1) || is_nil(date2) -> false
+      is_nil(date1) || is_nil(date2) ->
+        false
+
       true ->
-        d1 = if is_struct(date1, DateTime), do: DateTime.to_date(date1), else: NaiveDateTime.to_date(date1)
-        d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
+        d1 =
+          if is_struct(date1, DateTime),
+            do: DateTime.to_date(date1),
+            else: NaiveDateTime.to_date(date1)
+
+        d2 =
+          if is_struct(date2, DateTime),
+            do: DateTime.to_date(date2),
+            else: NaiveDateTime.to_date(date2)
+
         Date.compare(d1, d2) == :eq
     end
   end
@@ -195,7 +226,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DedupHandler do
     # - Category information
     # - Additional venue details
 
-    has_translations = not is_nil(karnet_data[:title_translations]) || not is_nil(karnet_data[:description_translations])
+    has_translations =
+      not is_nil(karnet_data[:title_translations]) ||
+        not is_nil(karnet_data[:description_translations])
+
     has_category = not is_nil(karnet_data[:category]) && karnet_data[:category] != ""
     has_description = not is_nil(karnet_data[:description]) && is_nil(existing.description)
 

@@ -331,7 +331,6 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     end
   end
 
-
   # Add hours to a DateTime
   defp add_hours(datetime, hours) do
     DateTime.add(datetime, hours * 3600, :second)

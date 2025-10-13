@@ -33,8 +33,10 @@ defmodule EventasaurusDiscovery.Helpers.TimezoneMapper do
     "UA" => "Europe/Kiev",
 
     # Americas (using most populous timezone for multi-TZ countries)
-    "US" => "America/New_York",  # Eastern time (most populous)
-    "CA" => "America/Toronto",   # Eastern time (most populous)
+    # Eastern time (most populous)
+    "US" => "America/New_York",
+    # Eastern time (most populous)
+    "CA" => "America/Toronto",
     "MX" => "America/Mexico_City",
     "BR" => "America/Sao_Paulo",
     "AR" => "America/Argentina/Buenos_Aires",
@@ -58,7 +60,8 @@ defmodule EventasaurusDiscovery.Helpers.TimezoneMapper do
     "AE" => "Asia/Dubai",
 
     # Oceania
-    "AU" => "Australia/Sydney",   # Eastern time (most populous)
+    # Eastern time (most populous)
+    "AU" => "Australia/Sydney",
     "NZ" => "Pacific/Auckland",
 
     # Africa
