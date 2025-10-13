@@ -44,7 +44,7 @@ config :geocoder, Geocoder.Providers.GoogleMaps,
 # See: https://operations.osmfoundation.org/policies/nominatim/
 config :geocoder, Geocoder.Providers.OpenStreetMaps,
   headers: [
-    {"User-Agent", "Eventasaurus/1.0 (#{System.get_env("APP_URL") || "https://eventasaurus.com"}; #{System.get_env("CONTACT_EMAIL") || "support@eventasaurus.com"})"}
+    {"User-Agent", "Wombie/1.0 (#{System.get_env("APP_URL") || "https://wombie.com"}; #{System.get_env("CONTACT_EMAIL") || "support@wombie.com"})"}
   ]
 
 # Configure multi-provider geocoding system
@@ -127,14 +127,20 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "eventasaur.us"
+  host = System.get_env("PHX_HOST") || "wombie.com"
   port = String.to_integer(System.get_env("PORT") || "4000")
 
   config :eventasaurus, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :eventasaurus, EventasaurusWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
-    check_origin: ["https://eventasaur.us", "https://eventasaurus.fly.dev"],
+    check_origin: [
+      "https://wombie.com",
+      "https://www.wombie.com",
+      "https://eventasaur.us",
+      "https://www.eventasaur.us",
+      "https://eventasaurus.fly.dev"
+    ],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
@@ -218,8 +224,8 @@ if config_env() == :prod do
     database_url: System.get_env("SUPABASE_DATABASE_URL"),
     bucket: System.get_env("SUPABASE_BUCKET") || "event-images",
     auth: %{
-      site_url: "https://eventasaur.us",
-      additional_redirect_urls: ["https://eventasaur.us/auth/callback"],
+      site_url: "https://wombie.com",
+      additional_redirect_urls: ["https://wombie.com/auth/callback"],
       auto_confirm_email: false
     }
 
@@ -239,7 +245,7 @@ if config_env() == :prod do
     api_host: "https://eu.i.posthog.com"
 
   # Configure base URL for email links
-  config :eventasaurus, :base_url, "https://eventasaur.us"
+  config :eventasaurus, :base_url, "https://wombie.com"
 
   # Event discovery scraper configuration
   # Note: Not a separate OTP app, just using config namespace for organization
