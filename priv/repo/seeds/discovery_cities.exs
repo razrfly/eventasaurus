@@ -68,7 +68,7 @@ configure_city = fn city_slug, source_configs ->
 end
 
 # ============================================================================
-# KRAKÓW, POLAND - 5 SOURCES
+# KRAKÓW, POLAND - 6 SOURCES
 # ============================================================================
 
 configure_city.("krakow", [
@@ -95,6 +95,12 @@ configure_city.("krakow", [
 
   # Bandsintown - Concert discovery
   {"bandsintown", %{
+    "limit" => 100,
+    "radius" => 50
+  }},
+
+  # Ticketmaster - Major concerts, sports, and theater events
+  {"ticketmaster", %{
     "limit" => 100,
     "radius" => 50
   }}
