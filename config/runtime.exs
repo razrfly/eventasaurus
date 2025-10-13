@@ -31,32 +31,6 @@ config :eventasaurus, :turnstile,
   site_key: System.get_env("TURNSTILE_SITE_KEY"),
   secret_key: System.get_env("TURNSTILE_SECRET_KEY")
 
-# Configure ExAws for Supabase S3-compatible storage
-# This is loaded at runtime to access environment variables
-supabase_url = System.get_env("SUPABASE_URL")
-supabase_secret_key = System.get_env("SUPABASE_SECRET_KEY")
-
-if supabase_url && supabase_secret_key do
-  # Extract project ref from URL
-  project_ref =
-    supabase_url
-    |> String.replace(~r/^https?:\/\//, "")
-    |> String.split(".")
-    |> List.first()
-
-  config :ex_aws,
-    access_key_id: project_ref,
-    secret_access_key: supabase_secret_key,
-    region: "us-east-1"
-
-  config :ex_aws, :s3,
-    scheme: "https://",
-    host: "#{project_ref}.supabase.co",
-    port: 443,
-    # Supabase S3 endpoint path
-    region: "us-east-1"
-end
-
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
 

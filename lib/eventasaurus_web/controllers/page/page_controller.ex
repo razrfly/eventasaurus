@@ -107,14 +107,26 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :eventasaurus, layout: false)
   end
 
-  def sitemap_redirect(conn, _params) do
-    # Redirect to the main sitemap file in Supabase Storage
+  def sitemap_redirect(conn, params) do
+    # Redirect all sitemap requests to Supabase Storage
+    # Uses configuration from :eventasaurus, :supabase
     supabase_config = Application.get_env(:eventasaurus, :supabase)
     supabase_url = supabase_config[:url]
-    bucket = supabase_config[:bucket] || "event-images"
-    path = "sitemaps/sitemap.xml.gz"
+    bucket = System.get_env("SUPABASE_BUCKET") || supabase_config[:bucket] || "eventasaur.us"
 
-    storage_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{path}"
+    # Determine the sitemap file to serve
+    requested_path =
+      case params do
+        %{"path" => path_parts} when is_list(path_parts) ->
+          # /sitemaps/* - serve the exact file requested
+          "sitemaps/" <> Enum.join(path_parts, "/")
+
+        _ ->
+          # /sitemap or /sitemap.xml - serve the main sitemap chunk
+          "sitemaps/sitemap-00001.xml.gz"
+      end
+
+    storage_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{requested_path}"
     redirect(conn, external: storage_url)
   end
 end
