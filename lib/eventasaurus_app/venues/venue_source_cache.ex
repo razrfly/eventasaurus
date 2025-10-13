@@ -49,7 +49,14 @@ defmodule EventasaurusApp.Venues.VenueSourceCache do
   """
   def refresh do
     providers =
-      Repo.all(from p in GeocodingProvider, select: p.name)
+      try do
+        Repo.all(from p in GeocodingProvider, select: p.name)
+      rescue
+        error ->
+          Logger.error("Failed to load geocoding providers: #{inspect(error)}")
+          # Return empty list to fall back to base sources only
+          []
+      end
 
     allowed_sources = @base_sources ++ providers
 

@@ -60,7 +60,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   def process_event(event_data, source_id, source_priority \\ 10) do
     # Data is already cleaned at HTTP client level (single entry point validation)
     with {:ok, normalized} <- normalize_event_data(event_data),
-         {:ok, venue} <- process_venue(normalized),
+         {:ok, venue} <- process_venue(normalized, source_id),
          {:ok, event, action} <- find_or_create_event(normalized, venue, source_id),
          {:ok, _source} <-
            maybe_update_event_source(event, source_id, source_priority, normalized, action),
@@ -154,13 +154,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  defp process_venue(%{venue_data: nil}) do
+  defp process_venue(%{venue_data: nil}, _source_id) do
     # Public events from scrapers MUST have venues
     {:error, "Public events must have venue data for proper location tracking"}
   end
 
-  defp process_venue(%{venue_data: venue_data}) do
-    VenueProcessor.process_venue(venue_data)
+  defp process_venue(%{venue_data: venue_data}, source_id) do
+    # Get source name to pass as source_scraper for proper tracking
+    source = Repo.get(Source, source_id)
+    source_name = if source, do: source.name, else: nil
+
+    VenueProcessor.process_venue(venue_data, "scraper", source_name)
   end
 
   defp find_or_create_event(data, venue, source_id) do
