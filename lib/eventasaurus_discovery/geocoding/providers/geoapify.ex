@@ -113,8 +113,14 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
     # Extract country
     country = Map.get(result, "country")
 
-    # Extract Geoapify place ID
-    place_id = Map.get(result, "place_id")
+    # Extract Geoapify place ID and convert to string (may be integer in response)
+    place_id =
+      case Map.get(result, "place_id") do
+        nil -> nil
+        id when is_integer(id) -> Integer.to_string(id)
+        id when is_binary(id) -> id
+        other -> to_string(other)
+      end
 
     cond do
       is_nil(lat) or is_nil(lng) ->

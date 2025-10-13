@@ -151,7 +151,12 @@ defmodule Eventasaurus.MixProject do
       {:yaml_elixir, "~> 2.11"},
 
       # XML Sitemap generation for SEO
-      {:sitemapper, "~> 0.10"}
+      {:sitemapper, "~> 0.10"},
+
+      # AWS S3 client for Supabase Storage compatibility
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
+      {:sweet_xml, "~> 0.7"}
     ]
   end
 

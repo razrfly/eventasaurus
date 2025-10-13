@@ -103,12 +103,18 @@ defmodule EventasaurusWeb.PageController do
     redirect(conn, to: "/invite-only")
   end
 
-  def eventosaurus_redirect(conn, _params) do
-    render(conn, :eventosaurus, layout: false)
+  def eventasaurus_redirect(conn, _params) do
+    render(conn, :eventasaurus, layout: false)
   end
 
   def sitemap_redirect(conn, _params) do
-    # Redirect to the main sitemap file
-    redirect(conn, to: "/sitemaps/sitemap.xml.gz")
+    # Redirect to the main sitemap file in Supabase Storage
+    supabase_config = Application.get_env(:eventasaurus, :supabase)
+    supabase_url = supabase_config[:url]
+    bucket = supabase_config[:bucket] || "event-images"
+    path = "sitemaps/sitemap.xml.gz"
+
+    storage_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{path}"
+    redirect(conn, external: storage_url)
   end
 end

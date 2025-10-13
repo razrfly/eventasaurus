@@ -13,17 +13,6 @@ defmodule Eventasaurus.Workers.SitemapWorker do
   def perform(_job) do
     # Log worker details
     Logger.info("Starting scheduled sitemap generation")
-
-    # Check AWS/Tigris credentials availability
-    tigris_key = System.get_env("TIGRIS_ACCESS_KEY_ID")
-    tigris_secret = System.get_env("TIGRIS_SECRET_ACCESS_KEY")
-    aws_key = System.get_env("AWS_ACCESS_KEY_ID")
-    aws_secret = System.get_env("AWS_SECRET_ACCESS_KEY")
-
-    Logger.info(
-      "Credentials available: Tigris (#{!is_nil(tigris_key) && !is_nil(tigris_secret)}), AWS (#{!is_nil(aws_key) && !is_nil(aws_secret)})"
-    )
-
     Logger.info("Using production configuration for sitemap generation")
     Logger.info("Using host: wombie.com for sitemap URLs")
 
@@ -39,8 +28,8 @@ defmodule Eventasaurus.Workers.SitemapWorker do
 
       {:error, error} ->
         Logger.error("Scheduled sitemap generation failed: #{inspect(error, pretty: true)}")
-        # We still return :ok to avoid retries, since we've already logged the error
-        :ok
+        # Return error so Oban can retry and alert on failures
+        {:error, error}
     end
   end
 end

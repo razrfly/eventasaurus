@@ -10,6 +10,7 @@ defmodule EventasaurusApp.Auth.ServiceRoleHelper do
   """
   def get_service_role_key do
     System.get_env("SUPABASE_SERVICE_ROLE_KEY") ||
+      System.get_env("SUPABASE_SECRET_KEY") ||
       System.get_env("SUPABASE_SERVICE_ROLE_KEY_LOCAL")
   end
 
