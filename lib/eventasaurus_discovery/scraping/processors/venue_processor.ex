@@ -645,8 +645,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Falls back to "scraper" for venues with provided coordinates
     source = detect_venue_source(geocoding_metadata)
 
+    # Override for provided coordinates to distinguish from scraped venues
+    source = if source == "scraper" && final_geocoding_metadata[:provider] == "provided" do
+      "provided"
+    else
+      source
+    end
+
     # Validate and clean source_scraper (prevent empty strings in database)
-    valid_source_scraper = if is_binary(source_scraper) && String.trim(source_scraper) != "", do: source_scraper, else: nil
+    valid_source_scraper = cond do
+      is_binary(source_scraper) && String.trim(source_scraper) != "" ->
+        source_scraper
+
+      true ->
+        Logger.warning("⚠️ Missing source_scraper for venue processing, using fallback")
+        "unknown_scraper"  # Explicit fallback instead of nil
+    end
 
     # Build geocoding_performance for dashboard (flat structure)
     # This should be populated for ALL venues, including those with provided coordinates
@@ -654,15 +668,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       # Venue was geocoded using multi-provider system
       geocoding_metadata
       |> Map.put(:source_scraper, valid_source_scraper)
-      |> Map.put(:cost_per_call, get_in(final_geocoding_metadata, ["cost_per_call"]) || 0.0)
+      |> Map.put(:cost_per_call, Map.get(geocoding_metadata, :cost_per_call, 0.0))
     else
       # Venue has provided coordinates (no geocoding needed)
       # Build performance data from final_geocoding_metadata
-      if final_geocoding_metadata && final_geocoding_metadata["provider"] == "provided" do
+      if final_geocoding_metadata && final_geocoding_metadata[:provider] == "provided" do
         %{
           provider: "provided",
           source_scraper: valid_source_scraper,
-          geocoded_at: final_geocoding_metadata["geocoded_at"] || DateTime.utc_now(),
+          geocoded_at: final_geocoding_metadata[:geocoded_at] || DateTime.utc_now(),
           cost_per_call: 0.0,
           attempts: 0,
           attempted_providers: []

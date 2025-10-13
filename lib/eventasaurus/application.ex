@@ -7,6 +7,9 @@ defmodule Eventasaurus.Application do
 
   @impl true
   def start(_type, _args) do
+    # Create ETS table for venue validation cache
+    :ets.new(:venue_cache, [:named_table, :public, read_concurrency: true])
+
     # Add Sentry logger handler for capturing crash reports
     :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
       config: %{metadata: [:file, :line]}
@@ -95,7 +98,16 @@ defmodule Eventasaurus.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Eventasaurus.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        # Initialize venue source cache after repo is started
+        EventasaurusApp.Venues.VenueSourceCache.init()
+        {:ok, pid}
+
+      error ->
+        error
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration
