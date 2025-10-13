@@ -2,10 +2,10 @@ defmodule Mix.Tasks.Sitemap.Generate do
   use Mix.Task
   require Logger
 
-  @shortdoc "Generates XML sitemap for the Eventasaurus website"
+  @shortdoc "Generates XML sitemap for the Wombie website"
 
   @moduledoc """
-  Generates an XML sitemap for the Eventasaurus website.
+  Generates an XML sitemap for the Wombie website.
 
   This task uses the Sitemapper library to generate a sitemap
   for activities (Phase 1), and will include cities, venues, and other
@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Sitemap.Generate do
       )
 
     use_s3 = Keyword.get(opts, :s3, false)
-    host = Keyword.get(opts, :host, "eventasaurus.com")
+    host = Keyword.get(opts, :host, "wombie.com")
     env = Keyword.get(opts, :env, if(use_s3, do: "prod", else: nil))
 
     # Determine which apps to start based on storage type

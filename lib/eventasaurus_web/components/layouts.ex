@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.Layouts do
     url_config = Keyword.get(endpoint, :url, [])
 
     scheme = Keyword.get(url_config, :scheme, "https")
-    host = Keyword.get(url_config, :host, "eventasaurus.com")
+    host = Keyword.get(url_config, :host, "wombie.com")
     port = Keyword.get(url_config, :port)
 
     # Only include port if not standard (80 for http, 443 for https)

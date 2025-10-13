@@ -25,13 +25,13 @@ defmodule Eventasaurus.Workers.SitemapWorker do
     )
 
     Logger.info("Using production configuration for sitemap generation")
-    Logger.info("Using host: eventasaurus.com for sitemap URLs")
+    Logger.info("Using host: wombie.com for sitemap URLs")
 
     # Generate and persist sitemap with explicit production configuration
     # Pass environment and host as options instead of modifying global state
     case Eventasaurus.Sitemap.generate_and_persist(
            environment: :prod,
-           host: "eventasaurus.com"
+           host: "wombie.com"
          ) do
       :ok ->
         Logger.info("Scheduled sitemap generation completed successfully")

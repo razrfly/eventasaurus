@@ -32,9 +32,9 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
 
   ## Example
       iex> breadcrumbs = [
-      ...>   %{name: "Home", url: "https://eventasaurus.com"},
-      ...>   %{name: "Kraków", url: "https://eventasaurus.com/cities/krakow"},
-      ...>   %{name: "Arctic Monkeys", url: "https://eventasaurus.com/activities/arctic-monkeys-krakow"}
+      ...>   %{name: "Home", url: "https://wombie.com"},
+      ...>   %{name: "Kraków", url: "https://wombie.com/cities/krakow"},
+      ...>   %{name: "Arctic Monkeys", url: "https://wombie.com/activities/arctic-monkeys-krakow"}
       ...> ]
       iex> EventasaurusWeb.JsonLd.BreadcrumbListSchema.generate(breadcrumbs)
       "{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",...}"
@@ -89,7 +89,7 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
         %{label: "Event Name", path: nil}  # Current page
       ]
     - current_url: Full URL of the current page (used when path is nil)
-    - base_url: Base URL of the application (e.g., "https://eventasaurus.com")
+    - base_url: Base URL of the application (e.g., "https://wombie.com")
 
   ## Returns
     - JSON-LD string ready to be included in <script type="application/ld+json">
@@ -102,8 +102,8 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
       ...> ]
       iex> EventasaurusWeb.JsonLd.BreadcrumbListSchema.from_breadcrumb_builder_items(
       ...>   items,
-      ...>   "https://eventasaurus.com/activities/event-slug",
-      ...>   "https://eventasaurus.com"
+      ...>   "https://wombie.com/activities/event-slug",
+      ...>   "https://wombie.com"
       ...> )
       "{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",...}"
   """
@@ -142,7 +142,7 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
 
   ## Parameters
     - event: PublicEvent struct with preloaded :venue (with :city_ref)
-    - base_url: Base URL of the application (e.g., "https://eventasaurus.com")
+    - base_url: Base URL of the application (e.g., "https://wombie.com")
 
   ## Returns
     - List of breadcrumb maps suitable for generate/1
@@ -173,7 +173,7 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
 
   ## Parameters
     - city: City struct
-    - base_url: Base URL of the application
+    - base_url: Base URL of the application (e.g., "https://wombie.com")
 
   ## Returns
     - List of breadcrumb maps suitable for generate/1
@@ -193,7 +193,7 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchema do
 
   ## Parameters
     - venue: Venue struct with preloaded :city_ref
-    - base_url: Base URL of the application
+    - base_url: Base URL of the application (e.g., "https://wombie.com")
 
   ## Returns
     - List of breadcrumb maps suitable for generate/1

@@ -312,7 +312,7 @@ header[class*="nav"] * {
 /* Exception: Allow logo font in navbar */
 .navbar .font-knewave,
 header[class*="nav"] .font-knewave {
-  font-family: 'Knewave', cursive !important;
+  font-family: 'Pacifico', cursive !important;
 }
 
 /* Footer - always uses Inter font */
@@ -499,7 +499,7 @@ body[class*="theme-"] .theme-card:hover {
 
 /* Ensure logo font always works regardless of theme */
 .font-knewave {
-  font-family: 'Knewave', cursive !important;
+  font-family: 'Pacifico', cursive !important;
 }
 
 /* ============================================================================
