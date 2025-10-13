@@ -139,6 +139,11 @@ if config_env() == :prod do
     System.fetch_env!(var)
   end
 
+  # Validate required Supabase S3 credentials for sitemap storage
+  for var <- ~w(SUPABASE_S3_ACCESS_KEY_ID SUPABASE_S3_SECRET_ACCESS_KEY) do
+    System.fetch_env!(var)
+  end
+
   # Validate required email service environment variables
   System.fetch_env!("RESEND_API_KEY")
   # The secret key base is used to sign/encrypt cookies and other secrets.
