@@ -55,6 +55,7 @@ defmodule Eventasaurus.Sitemap.SupabaseStore do
 
     Logger.info("Uploading sitemap file to Supabase Storage: #{storage_path}")
 
+    # Upload directly - bucket validation removed since we use the same bucket as images
     case upload_to_supabase(storage_path, file_data, content_type) do
       {:ok, _response} ->
         public_url = build_public_url(storage_path)
@@ -67,24 +68,37 @@ defmodule Eventasaurus.Sitemap.SupabaseStore do
     end
   end
 
-  # Upload file to Supabase Storage using REST API
+  # Upload file to Supabase Storage using S3-compatible API
+  # The NEW Supabase secret keys (sb_secret_...) work with S3 API but NOT with REST API Bearer auth
   defp upload_to_supabase(storage_path, file_data, content_type) do
-    url = "#{get_storage_url()}/object/#{get_bucket_name()}/#{storage_path}"
+    config = Application.get_env(:eventasaurus, :supabase)
+    base_url = config[:url]
 
+    # Extract project ref from URL (e.g., "vnhxedeynrtvakglinnr" from "https://vnhxedeynrtvakglinnr.supabase.co")
+    project_ref = base_url |> String.replace(~r/https?:\/\//, "") |> String.split(".") |> List.first()
+
+    # S3 endpoint: https://project_ref.storage.supabase.co/storage/v1/s3/bucket/path
+    s3_url = "https://#{project_ref}.storage.supabase.co/storage/v1/s3/#{get_bucket_name()}/#{storage_path}"
+
+    # S3 API uses Bearer token with the secret key
     headers = [
       {"Authorization", "Bearer #{get_service_role_key()}"},
-      {"Content-Type", content_type},
-      # Allow overwriting existing files
-      {"x-upsert", "true"}
+      {"Content-Type", content_type}
     ]
 
-    case HTTPoison.post(url, file_data, headers) do
-      {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, Jason.decode!(response_body)}
+    Logger.debug("S3 Upload URL: #{s3_url}")
+
+    # S3 uses PUT for uploads
+    case HTTPoison.put(s3_url, file_data, headers) do
+      {:ok, %{status_code: 200}} ->
+        {:ok, %{path: storage_path}}
 
       {:ok, %{status_code: code, body: response_body}} ->
-        error = Jason.decode!(response_body)
-        {:error, %{status: code, message: error["message"] || "Upload failed"}}
+        error = case Jason.decode(response_body) do
+          {:ok, decoded} -> decoded["message"] || response_body
+          {:error, _} -> response_body
+        end
+        {:error, %{status: code, message: error}}
 
       {:error, error} ->
         {:error, error}
@@ -102,15 +116,16 @@ defmodule Eventasaurus.Sitemap.SupabaseStore do
     "#{config[:url]}/storage/v1"
   end
 
-  # Get bucket name (hardcoded to "sitemaps" for sitemap files)
+  # Get bucket name from config (same bucket as images)
   defp get_bucket_name do
-    "sitemaps"
+    config = Application.get_env(:eventasaurus, :supabase)
+    config[:bucket] || "event-images"
   end
 
   # Get service role key (server-side authentication)
   defp get_service_role_key do
-    config = Application.get_env(:eventasaurus, :supabase)
-    config[:service_role_key] || raise "SUPABASE_SECRET_KEY not configured"
+    # Use the existing ServiceRoleHelper which checks both env var names
+    EventasaurusApp.Auth.ServiceRoleHelper.get_service_role_key!()
   end
 
   # Determine content type based on file extension

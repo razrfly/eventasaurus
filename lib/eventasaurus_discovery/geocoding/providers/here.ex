@@ -115,8 +115,14 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
 
     country = Map.get(address, "countryName")
 
-    # Extract HERE place ID
-    place_id = Map.get(item, "id")
+    # Extract HERE place ID and convert to string (may be integer in response)
+    place_id =
+      case Map.get(item, "id") do
+        nil -> nil
+        id when is_integer(id) -> Integer.to_string(id)
+        id when is_binary(id) -> id
+        other -> to_string(other)
+      end
 
     cond do
       is_nil(lat) or is_nil(lng) ->

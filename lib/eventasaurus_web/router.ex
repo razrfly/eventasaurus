@@ -422,9 +422,9 @@ defmodule EventasaurusWeb.Router do
       get "/sitemap", PageController, :sitemap_redirect
       get "/sitemap.xml", PageController, :sitemap_redirect
 
-      # Legacy Eventosaurus brand redirect page
-      get "/eventosaurus", PageController, :eventosaurus_redirect
-      get "/eventosaurus/*path", PageController, :eventosaurus_redirect
+      # Legacy Eventasaurus brand redirect page
+      get "/eventasaurus", PageController, :eventasaurus_redirect
+      get "/eventasaurus/*path", PageController, :eventosaurus_redirect
 
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login

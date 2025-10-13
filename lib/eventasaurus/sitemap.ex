@@ -247,9 +247,10 @@ defmodule Eventasaurus.Sitemap do
       # Log the final configuration details
       Logger.info("Sitemap config - SupabaseStore, path: #{sitemap_path}")
 
-      # Configure sitemap to store on Supabase Storage
+      # Configure sitemap to store on Supabase Storage using S3-compatible API
+      # This works with NEW Supabase secret keys (sb_secret_...)
       [
-        store: Eventasaurus.Sitemap.SupabaseStore,
+        store: Eventasaurus.Sitemap.SupabaseS3Store,
         store_config: [
           path: sitemap_path
         ],
