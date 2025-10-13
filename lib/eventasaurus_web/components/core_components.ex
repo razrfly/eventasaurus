@@ -821,7 +821,7 @@ defmodule EventasaurusWeb.CoreComponents do
   end
 
   @doc """
-  Renders the Eventasaurus logo with the Knewave font.
+  Renders the Wombie logo with the Pacifico font.
 
   ## Examples
 
@@ -860,34 +860,27 @@ defmodule EventasaurusWeb.CoreComponents do
         true -> "text-gray-900 dark:text-white"
       end
 
-    # Choose dinosaur emoji based on theme
-    dinosaur_emoji =
-      if assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) do
-        # Sauropod for dark themes (cosmic)
-        "🦕"
-      else
-        # T-Rex for light themes
-        "🦖"
-      end
+    # Use bear emoji for Wombie branding
+    wombie_emoji = "🐻"
 
     assigns =
       assign(assigns,
         emoji_size: emoji_size,
         computed_text_color: text_color,
-        dinosaur_emoji: dinosaur_emoji
+        wombie_emoji: wombie_emoji
       )
 
     ~H"""
-    <a href={@href} class="flex items-center space-x-2 group">
-      <span class={[@emoji_size, "transition-transform group-hover:scale-110"]}><%= @dinosaur_emoji %></span>
+    <a href={@href} class="inline-flex items-center gap-2 group">
+      <span class={[@emoji_size, "transition-transform group-hover:scale-110 leading-none flex items-center"]}><%= @wombie_emoji %></span>
       <span class={[
         @class,
-        "font-knewave font-bold tracking-wide transition-all duration-300",
+        "font-knewave font-bold tracking-wide transition-all duration-300 leading-none flex items-center",
         "group-hover:bg-gradient-to-r group-hover:from-green-500 group-hover:via-yellow-500 group-hover:to-pink-500",
         "group-hover:bg-clip-text group-hover:text-transparent",
         @computed_text_color
       ]}>
-        Eventasaurus
+        Wombie
       </span>
     </a>
     """

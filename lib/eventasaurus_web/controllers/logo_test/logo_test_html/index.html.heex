@@ -1,0 +1,96 @@
+<div class="min-h-screen bg-gray-50 py-12">
+  <.container>
+    <div class="max-w-7xl mx-auto px-4">
+      <h1 class="text-4xl font-bold text-gray-900 mb-2">Logo Font Test</h1>
+      <p class="text-gray-600 mb-8">Testing 250 different font options for the Wombie logo. Current font: Knewave</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Current Font: Knewave -->
+        <div class="bg-white rounded-lg shadow-md p-6 border-4 border-blue-500">
+          <div class="text-xs text-gray-500 mb-2 font-mono">Current: Knewave</div>
+          <div class="flex items-center space-x-3">
+            <span class="text-3xl">🐻</span>
+            <span class="text-3xl font-bold tracking-wide" style="font-family: 'Knewave', cursive;">Wombie</span>
+          </div>
+        </div>
+
+        <%
+          fonts = [
+            "Pacifico", "Fredoka One", "Righteous", "Baloo 2:wght@800", "Chewy",
+            "Titan One", "Lilita One", "Cabin Sketch:wght@700", "Sigmar One", "Caveat Brush",
+            "Lobster", "Bangers", "Bungee", "Carter One", "Fugaz One",
+            "Alfa Slab One", "Rubik Bubbles", "Archivo Black", "Russo One", "Bebas Neue",
+            "Passion One:wght@700", "Staatliches", "Creepster", "Amatic SC:wght@700", "Permanent Marker",
+            "Shadows Into Light", "Coiny", "Shrikhand", "Ribeye Marrow", "Leckerli One",
+            "Modak", "Bungee Inline", "Kranky", "Monoton", "Lobster Two:wght@700",
+            "Yanone Kaffeesatz:wght@700", "Sriracha", "Poller One", "Bungee Shade", "Ultra",
+            "Fredericka the Great", "Rye", "Eater", "Emblema One", "Fascinate",
+            "Fascinate Inline", "Freckle Face", "Henny Penny", "Jolly Lodger", "Nosifer",
+            "Special Elite", "UnifrakturMaguntia", "Butcherman", "Cinzel:wght@900", "Press Start 2P",
+            "Black Ops One", "Bungee Outline", "Wallpoet", "Rubik Moonrocks", "Faster One",
+            "Rammetto One", "Sancreek", "Trade Winds", "Averia Serif Libre:wght@700", "Cabin Sketch:wght@400",
+            "Patua One", "Fredoka:wght@700", "Luckiest Guy", "Bowlby One SC", "Squada One",
+            "Zilla Slab:wght@700", "Comfortaa:wght@700", "Archivo Narrow:wght@700", "Oswald:wght@700", "Concert One",
+            "Racing Sans One", "Audiowide", "Orbitron:wght@900", "Kanit:wght@900",
+            "Bai Jamjuree:wght@700", "Prompt:wght@900", "Exo 2:wght@900", "Saira Condensed:wght@900", "Ubuntu:wght@700",
+            "Fjalla One", "Saira:wght@700", "Anton", "Teko:wght@700", "Hind Siliguri:wght@700",
+            "Barlow Condensed:wght@900", "Asap Condensed:wght@900", "Mukta:wght@800", "Changa:wght@800", "Catamaran:wght@900",
+            "Nunito Sans:wght@900", "Varela Round", "Alata", "Sarabun:wght@800", "Acme",
+            "Mountains of Christmas:wght@700", "Gochi Hand", "Rock Salt", "Covered By Your Grace", "Kalam:wght@700",
+            "Patrick Hand", "Architects Daughter", "Indie Flower", "Dancing Script:wght@700", "Satisfy",
+            "Cookie", "Great Vibes", "Allura", "Parisienne", "Tangerine:wght@700",
+            "Yesteryear", "Mrs Saint Delafield", "Mr De Haviland", "Niconne", "Rouge Script",
+            "Bad Script", "Marck Script", "Damion", "Sedgwick Ave Display", "Supermercado One",
+            "Graduate", "Baumans", "Atma:wght@700", "Cute Font", "Dongle:wght@700",
+            "Gamja Flower", "Gugi", "Hi Melody", "Jua", "Kirang Haerang",
+            "Poor Story", "Single Day", "Stylish", "Sunflower:wght@700", "Yeon Sung",
+            "Black Han Sans", "Do Hyeon", "East Sea Dokdo", "Gaegu:wght@700", "Dokdo",
+            "Nanum Gothic Coding:wght@700", "Nanum Pen Script", "Nanum Brush Script", "Black And White Picture", "Hahmlet:wght@900",
+            "Reggae One", "Potta One", "Mochiy Pop One", "Rampart One", "Hachi Maru Pop",
+            "Dela Gotic One", "Yusei Magic", "Klee One:wght@600", "RocknRoll One", "DotGothic16",
+            "Train One", "New Tegomin", "Stick", "Yomogi", "BIZ UDGothic:wght@700",
+            "Zen Maru Gothic:wght@900", "Zen Kaku Gothic New:wght@900", "Murecho:wght@900", "Noto Sans JP:wght@900", "M PLUS 1p:wght@900",
+            "Kosugi Maru", "Sawarabi Mincho", "Hina Mincho", "Kaisei Decol:wght@700", "Kaisei Tokumin:wght@800",
+            "Kaisei HarunoUmi:wght@700", "Kaisei Opti:wght@700", "Shippori Mincho:wght@800", "Shippori Mincho B1:wght@800", "Stick No Bills:wght@800",
+            "Mali:wght@700", "Sriracha", "Kodchasan:wght@700", "Charm:wght@700", "Charmonman:wght@700",
+            "Mitr:wght@700", "Niramit:wght@700", "Sarabun:wght@800", "Kanit:wght@900", "K2D:wght@800",
+            "Bai Jamjuree:wght@700", "Pattaya", "Srisakdi:wght@700", "Fahkwang:wght@700", "Itim",
+            "Pridi:wght@700", "Taviraj:wght@900", "Thasadith:wght@700", "Athiti:wght@700", "Chonburi",
+            "Slackey", "Lemon", "Faster One", "Bungee Hairline", "Fontdiner Swanky",
+            "Fruktur", "Geostar", "Geostar Fill", "New Rocker", "Oldenburg",
+            "Pirata One", "Rye", "Skranji:wght@700", "Stalinist One", "Stardos Stencil:wght@700",
+            "Ewert", "Lakki Reddy", "Sarina", "Sevillana", "Vampiro One",
+            "Astloch:wght@700", "Averia Libre:wght@700", "Averia Sans Libre:wght@700", "Averia Gruesa", "Bigelow Rules",
+            "Bungee Spice", "Faster One", "Rubik Glitch", "Rubik Iso", "Rubik Burned",
+            "Rubik Dirt", "Rubik Distressed", "Rubik Marker Hatch", "Rubik Maze", "Rubik Microbe",
+            "Rubik Puddles", "Rubik Spray Paint", "Rubik Storm", "Rubik Vinyl", "Rubik Wet Paint",
+            "Noto Sans Mono:wght@900", "Fira Code:wght@700", "Source Code Pro:wght@900", "IBM Plex Mono:wght@700", "Roboto Mono:wght@700",
+            "Inconsolata:wght@900", "Space Mono:wght@700", "JetBrains Mono:wght@800", "Anonymous Pro:wght@700", "Cousine:wght@700",
+            "Nova Mono", "Overpass Mono:wght@700", "Share Tech Mono", "VT323", "Syne Mono",
+            "Azeret Mono:wght@900", "Red Hat Mono:wght@700", "Martian Mono:wght@800", "Nanum Gothic Coding:wght@700", "B612 Mono:wght@700",
+            "Chivo Mono:wght@900", "Xanh Mono:wght@700", "Sometype Mono:wght@700", "Fragment Mono", "Noto Sans Mono:wght@900"
+          ]
+        %>
+
+        <%= for {font, index} <- Enum.with_index(fonts, 1) do %>
+          <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+            <div class="text-xs text-gray-500 mb-2 font-mono"><%= index %>. <%= String.split(font, ":") |> List.first() |> String.replace("+", " ") %></div>
+            <link href={"https://fonts.googleapis.com/css2?family=#{font |> String.replace(" ", "+")}&display=swap"} rel="stylesheet">
+            <div class="flex items-center space-x-3">
+              <span class="text-3xl">🐻</span>
+              <span class="text-3xl font-bold tracking-wide" style={"font-family: '#{String.split(font, ":") |> List.first() |> String.replace("+", " ")}', cursive;"}>Wombie</span>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="mt-12 bg-blue-50 rounded-lg p-6 border border-blue-200">
+        <h2 class="text-lg font-semibold text-blue-900 mb-2">Instructions</h2>
+        <p class="text-blue-800">
+          Each logo variant is displayed with the 🐻 bear emoji. Hover over the cards to see a subtle shadow effect.
+          The current font (Knewave) is highlighted with a blue border at the top. Scroll through all 250 options to find your favorite!
+        </p>
+      </div>
+    </div>
+  </.container>
+</div>

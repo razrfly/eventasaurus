@@ -6,7 +6,7 @@ defmodule Eventasaurus.Emails do
   import Swoosh.Email
   require Logger
 
-  @from_email {"Eventasaurus", "invitations@eventasaur.us"}
+  @from_email {"Wombie", "invitations@wombie.com"}
 
   # HTML escaping helper to prevent XSS attacks
   defp html_escape(nil), do: ""
@@ -251,11 +251,11 @@ defmodule Eventasaurus.Emails do
 
                 <p>Best regards,<br>
                 #{html_escape(get_organizer_name(organizer))}<br>
-                <strong>The Eventasaurus Team</strong></p>
+                <strong>The Wombie Team</strong></p>
             </div>
 
             <div class="footer">
-                <p>This invitation was sent via <a href="https://eventasaur.us">Eventasaurus</a></p>
+                <p>This invitation was sent via <a href="https://wombie.com">Wombie</a></p>
                 <p>Can't attend? Just ignore this email.</p>
             </div>
         </div>
@@ -287,10 +287,10 @@ defmodule Eventasaurus.Emails do
 
     Best regards,
     #{get_organizer_name(organizer)}
-    The Eventasaurus Team
+    The Wombie Team
 
     ---
-    This invitation was sent via Eventasaurus (https://eventasaur.us)
+    This invitation was sent via Wombie (https://wombie.com)
     Can't attend? Just ignore this email.
     """
   end
@@ -479,7 +479,7 @@ defmodule Eventasaurus.Emails do
     case env do
       :test -> "http://localhost:4002"
       :dev -> "http://localhost:4000"
-      _ -> "https://eventasaur.us"
+      _ -> "https://wombie.com"
     end
   end
 end

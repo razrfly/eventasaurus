@@ -1,6 +1,6 @@
 defmodule Eventasaurus.Sitemap do
   @moduledoc """
-  Generates XML sitemaps for the Eventasaurus website.
+  Generates XML sitemaps for the Wombie website.
   Uses Sitemapper to generate sitemaps for activities, cities, venues, and static pages.
 
   ## Phase 1: Activities (Primary Focus)
@@ -18,7 +18,7 @@ defmodule Eventasaurus.Sitemap do
 
   ## Options
   * `:environment` - Override environment detection (e.g., :prod, :dev)
-  * `:host` - Override host for URL generation (e.g., "eventasaurus.com")
+  * `:host` - Override host for URL generation (e.g., "wombie.com")
 
   Returns :ok on success or {:error, reason} on failure.
   """
@@ -197,7 +197,7 @@ defmodule Eventasaurus.Sitemap do
     # For production, check PHX_HOST env var as a backup
     prod_host =
       if is_prod do
-        System.get_env("PHX_HOST") || host || "eventasaurus.com"
+        System.get_env("PHX_HOST") || host || "wombie.com"
       else
         host
       end

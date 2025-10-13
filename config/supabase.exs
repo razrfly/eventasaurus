@@ -10,9 +10,9 @@ config :eventasaurus, :supabase,
   database_url:
     System.get_env("SUPABASE_DATABASE_URL", "ecto://postgres:postgres@127.0.0.1:54322/postgres"),
   auth: %{
-    site_url: System.get_env("SUPABASE_SITE_URL", "https://eventasaur.us"),
+    site_url: System.get_env("SUPABASE_SITE_URL", "https://wombie.com"),
     additional_redirect_urls: [
-      System.get_env("SUPABASE_SITE_URL", "https://eventasaur.us") <> "/auth/callback"
+      System.get_env("SUPABASE_SITE_URL", "https://wombie.com") <> "/auth/callback"
     ],
     auto_confirm_email: false
   }

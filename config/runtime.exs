@@ -136,9 +136,7 @@ if config_env() == :prod do
     url: [host: host, port: 443, scheme: "https"],
     check_origin: [
       "https://wombie.com",
-      "https://www.wombie.com",
       "https://eventasaur.us",
-      "https://www.eventasaur.us",
       "https://eventasaurus.fly.dev"
     ],
     http: [

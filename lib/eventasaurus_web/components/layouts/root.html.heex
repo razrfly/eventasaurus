@@ -15,12 +15,12 @@
       supabase_bucket = supabase_config[:bucket] || "event-images"
     %>
     
-    <.live_title suffix=" · Eventasaurus">
+    <.live_title suffix=" · Wombie">
       <%= assigns[:page_title] || "Home" %>
     </.live_title>
 
-    <!-- Favicon with dinosaur emoji -->
-    <link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🦖%3C/text%3E%3C/svg%3E" />
+    <!-- Favicon with bear emoji -->
+    <link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🐻%3C/text%3E%3C/svg%3E" />
 
     <!-- Canonical URL -->
     <%= if assigns[:canonical_url] do %>
@@ -58,7 +58,7 @@
         <meta property="og:image:height" content="419" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={assigns[:meta_url] || ""} />
-        <meta property="og:site_name" content="Eventasaurus" />
+        <meta property="og:site_name" content="Wombie" />
 
         <!-- Twitter Card tags -->
         <meta name="twitter:card" content="summary_large_image" />
@@ -70,11 +70,11 @@
         <meta name="description" content={assigns[:meta_description] || ""} />
       <% else %>
         <!-- Default meta tags -->
-        <meta name="description" content="Create and manage events with Eventasaurus - the modern event management platform" />
-        <meta property="og:title" content="Eventasaurus" />
-        <meta property="og:description" content="Create and manage events with Eventasaurus - the modern event management platform" />
+        <meta name="description" content="Create and manage events with Wombie - the modern event management platform" />
+        <meta property="og:title" content="Wombie" />
+        <meta property="og:description" content="Create and manage events with Wombie - the modern event management platform" />
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="Eventasaurus" />
+        <meta property="og:site_name" content="Wombie" />
       <% end %>
     <% end %>
     
@@ -86,10 +86,10 @@
       <link phx-track-static rel="stylesheet" href={"/themes/#{assigns[:theme]}.css"} />
     <% end %>
     
-    <!-- Google Fonts - Knewave for logo -->
+    <!-- Google Fonts - Pacifico for logo -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Knewave&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
     
     <!-- Supabase JavaScript library for identity management -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -280,7 +280,7 @@
         <nav class="flex items-center justify-between">
           <!-- Logo -->
           <div class="flex items-center">
-            <.logo />
+            <.logo class="text-3xl" />
           </div>
           
           <!-- Desktop Navigation -->
@@ -359,7 +359,7 @@
       <div class="flex flex-col h-full">
         <!-- Mobile Menu Header -->
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-          <.logo />
+          <.logo class="text-3xl" />
           <button id="mobile-menu-close" onclick="document.getElementById('mobile-menu-button').click()" class="inline-flex items-center justify-center rounded-md p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-950 dark:hover:text-white transition-colors">
             <span class="sr-only">Close menu</span>
             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -443,7 +443,9 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           <!-- Company Info -->
           <div class="sm:col-span-2 lg:col-span-1">
-            <.logo class="text-xl mb-4" text_color="text-white" href="/" />
+            <div class="mb-4">
+              <.logo class="text-2xl" text_color="text-white" href="/" />
+            </div>
             <p class="text-gray-400 max-w-md mb-6 text-sm leading-relaxed">
               Effortless group event planning, finally done right. Stop the endless back-and-forth and let your group find the perfect date together.
             </p>
@@ -480,7 +482,7 @@
             <h3 class="text-sm font-semibold tracking-wider uppercase">Support</h3>
             <ul class="space-y-3">
               <li><a href="/about" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Help Center</a></li>
-              <li><a href="mailto:support@eventasaurus.com" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Contact Us</a></li>
+              <li><a href="mailto:support@wombie.com" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Contact Us</a></li>
               <li><a href="/about" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Community</a></li>
               <li><a href="#" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Status</a></li>
             </ul>
@@ -502,7 +504,7 @@
         <div class="mt-12 pt-8 border-t border-gray-800">
           <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
             <p class="text-gray-400 text-sm text-center sm:text-left">
-              © <%= Date.utc_today().year %> Eventasaurus. All rights reserved.
+              © <%= Date.utc_today().year %> Wombie. All rights reserved.
             </p>
             
             <!-- Mobile-friendly additional links -->
