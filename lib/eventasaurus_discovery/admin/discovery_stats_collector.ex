@@ -141,16 +141,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp get_city_stats(worker, city_id) do
     # Query for aggregate stats with city filter
     stats_query =
-      from j in "oban_jobs",
+      from(j in "oban_jobs",
         where: j.worker == ^worker,
         where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
         where: j.state in ["completed", "discarded"],
         select: %{
           run_count: count(j.id),
-          success_count:
-            fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
-          error_count:
-            fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
+          success_count: fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
+          error_count: fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
           last_run_at:
             fragment(
               "MAX(COALESCE(?, ?, ?))",
@@ -159,6 +157,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
               j.attempted_at
             )
         }
+      )
 
     stats = Repo.one(stats_query) || default_stats()
 
@@ -175,15 +174,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp get_country_wide_stats(worker) do
     # Query for aggregate stats WITHOUT city filter
     stats_query =
-      from j in "oban_jobs",
+      from(j in "oban_jobs",
         where: j.worker == ^worker,
         where: j.state in ["completed", "discarded"],
         select: %{
           run_count: count(j.id),
-          success_count:
-            fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
-          error_count:
-            fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
+          success_count: fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
+          error_count: fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
           last_run_at:
             fragment(
               "MAX(COALESCE(?, ?, ?))",
@@ -192,6 +189,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
               j.attempted_at
             )
         }
+      )
 
     stats = Repo.one(stats_query) || default_stats()
 
@@ -228,7 +226,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     else
       # Single batched query for all workers
       stats_query =
-        from j in "oban_jobs",
+        from(j in "oban_jobs",
           where: j.worker in ^workers,
           where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
           where: j.state in ["completed", "discarded"],
@@ -236,10 +234,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           select: %{
             worker: j.worker,
             run_count: count(j.id),
-            success_count:
-              fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
-            error_count:
-              fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
+            success_count: fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
+            error_count: fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
             last_run_at:
               fragment(
                 "MAX(COALESCE(?, ?, ?))",
@@ -248,6 +244,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
                 j.attempted_at
               )
           }
+        )
 
       stats_by_worker =
         stats_query
@@ -315,17 +312,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     else
       # Single batched query for all workers WITHOUT city filter
       stats_query =
-        from j in "oban_jobs",
+        from(j in "oban_jobs",
           where: j.worker in ^workers,
           where: j.state in ["completed", "discarded"],
           group_by: j.worker,
           select: %{
             worker: j.worker,
             run_count: count(j.id),
-            success_count:
-              fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
-            error_count:
-              fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
+            success_count: fragment("COUNT(CASE WHEN ? = 'completed' THEN 1 END)", j.state),
+            error_count: fragment("COUNT(CASE WHEN ? = 'discarded' THEN 1 END)", j.state),
             last_run_at:
               fragment(
                 "MAX(COALESCE(?, ?, ?))",
@@ -334,6 +329,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
                 j.attempted_at
               )
           }
+        )
 
       stats_by_worker =
         stats_query
@@ -380,7 +376,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   defp get_last_error(worker, city_id) do
     error_query =
-      from j in "oban_jobs",
+      from(j in "oban_jobs",
         where: j.worker == ^worker,
         where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
         where: j.state == "discarded",
@@ -395,6 +391,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         ],
         limit: 1,
         select: j.errors
+      )
 
     case Repo.one(error_query) do
       nil -> nil
@@ -406,7 +403,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   defp get_last_error_country_wide(worker) do
     error_query =
-      from j in "oban_jobs",
+      from(j in "oban_jobs",
         where: j.worker == ^worker,
         where: j.state == "discarded",
         order_by: [
@@ -420,6 +417,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         ],
         limit: 1,
         select: j.errors
+      )
 
     case Repo.one(error_query) do
       nil -> nil
@@ -440,7 +438,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp get_last_errors_batch(workers, city_id) do
     # Fetch latest error for each worker in a single query
     error_query =
-      from j in "oban_jobs",
+      from(j in "oban_jobs",
         where: j.worker in ^workers,
         where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
         where: j.state == "discarded",
@@ -456,6 +454,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
             )
         ],
         select: {j.worker, j.errors}
+      )
 
     error_query
     |> Repo.all()
@@ -476,7 +475,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp get_last_errors_batch_country_wide(workers) do
     # Fetch latest error for each worker in a single query (no city filter)
     error_query =
-      from j in "oban_jobs",
+      from(j in "oban_jobs",
         where: j.worker in ^workers,
         where: j.state == "discarded",
         distinct: [j.worker],
@@ -491,6 +490,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
             )
         ],
         select: {j.worker, j.errors}
+      )
 
     error_query
     |> Repo.all()

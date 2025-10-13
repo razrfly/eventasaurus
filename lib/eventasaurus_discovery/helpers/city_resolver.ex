@@ -96,9 +96,7 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       end
     rescue
       error ->
-        Logger.error(
-          "Geocoding library error for (#{latitude}, #{longitude}): #{inspect(error)}"
-        )
+        Logger.error("Geocoding library error for (#{latitude}, #{longitude}): #{inspect(error)}")
 
         {:error, :geocoding_error}
     end
@@ -108,9 +106,7 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   def resolve_city(_latitude, nil), do: {:error, :missing_coordinates}
 
   def resolve_city(latitude, longitude) do
-    Logger.warning(
-      "Invalid coordinate types: #{inspect(latitude)}, #{inspect(longitude)}"
-    )
+    Logger.warning("Invalid coordinate types: #{inspect(latitude)}, #{inspect(longitude)}")
 
     {:error, :invalid_coordinates}
   end

@@ -70,8 +70,8 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
         on: es.event_id == e.id,
         where:
           es.external_id == ^external_id and
-          es.source_id == ^source_id and
-          is_nil(e.deleted_at),
+            es.source_id == ^source_id and
+            is_nil(e.deleted_at),
         limit: 1
       )
 
@@ -102,7 +102,9 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
 
     Enum.filter(matches, fn %{event: _event, source: source} ->
       is_higher_priority = source.priority > current_priority
-      is_domain_compatible = Source.domains_compatible?(current_domains, source.domains || ["general"])
+
+      is_domain_compatible =
+        Source.domains_compatible?(current_domains, source.domains || ["general"])
 
       is_higher_priority and is_domain_compatible
     end)
@@ -132,10 +134,13 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
     %{source: match_source} = match
 
     is_higher_priority = match_source.priority > current_source.priority
-    is_domain_compatible = Source.domains_compatible?(
-      current_source.domains || ["general"],
-      match_source.domains || ["general"]
-    )
+
+    is_domain_compatible =
+      Source.domains_compatible?(
+        current_source.domains || ["general"],
+        match_source.domains || ["general"]
+      )
+
     meets_threshold = confidence > threshold
 
     is_higher_priority and is_domain_compatible and meets_threshold
@@ -193,8 +198,8 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
         on: s.id == es.source_id,
         where:
           e.start_at >= ^date_start and
-          e.start_at <= ^date_end and
-          is_nil(e.deleted_at),
+            e.start_at <= ^date_end and
+            is_nil(e.deleted_at),
         preload: [venue: v],
         select: %{event: e, source: s}
       )
@@ -261,7 +266,8 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
   Distance in meters
   """
   def calculate_distance(lat1, lng1, lat2, lng2) do
-    r = 6_371_000  # Earth radius in meters
+    # Earth radius in meters
+    r = 6_371_000
 
     lat1_rad = lat1 * :math.pi() / 180
     lat2_rad = lat2 * :math.pi() / 180

@@ -8,7 +8,8 @@ defmodule EventasaurusDiscovery.Helpers.AddressGeocoderTest do
 
   describe "geocode_address_with_metadata/1" do
     test "returns error with metadata for invalid input" do
-      assert {:error, :invalid_address, metadata} = AddressGeocoder.geocode_address_with_metadata(nil)
+      assert {:error, :invalid_address, metadata} =
+               AddressGeocoder.geocode_address_with_metadata(nil)
 
       assert metadata.provider == "google_maps"
       assert metadata.geocoding_failed == true
@@ -16,7 +17,8 @@ defmodule EventasaurusDiscovery.Helpers.AddressGeocoderTest do
     end
 
     test "returns error with metadata for empty string" do
-      assert {:error, :invalid_address, metadata} = AddressGeocoder.geocode_address_with_metadata("")
+      assert {:error, :invalid_address, metadata} =
+               AddressGeocoder.geocode_address_with_metadata("")
 
       assert metadata.geocoding_failed == true
     end

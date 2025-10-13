@@ -4,6 +4,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.IntegrationTest do
   import Mox
 
   alias EventasaurusApp.Repo
+
   alias EventasaurusDiscovery.Sources.QuestionOne.{
     Client,
     Jobs.IndexPageJob,
@@ -119,9 +120,10 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.IntegrationTest do
       # Verify detail jobs were created
       detail_jobs =
         Repo.all(
-          from j in Oban.Job,
+          from(j in Oban.Job,
             where: j.worker == "EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob",
             where: j.state == "available"
+          )
         )
 
       assert length(detail_jobs) == 2

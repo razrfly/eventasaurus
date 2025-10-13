@@ -67,7 +67,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Client do
     body = URI.encode_query(params)
     headers = Config.headers() ++ [{"Content-Type", "application/x-www-form-urlencoded"}]
 
-    Logger.debug("🔍 POST #{url} with action: #{params["action"]} (attempt #{retries + 1}/#{max_retries + 1})")
+    Logger.debug(
+      "🔍 POST #{url} with action: #{params["action"]} (attempt #{retries + 1}/#{max_retries + 1})"
+    )
 
     case HTTPoison.post(url, body, headers,
            timeout: Config.timeout(),
@@ -87,14 +89,15 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Client do
   end
 
   # Private retry logic with exponential backoff
-  defp maybe_retry(method, _request_data, _error, retries, max_retries, _options) when retries >= max_retries do
+  defp maybe_retry(method, _request_data, _error, retries, max_retries, _options)
+       when retries >= max_retries do
     Logger.error("❌ Max retries (#{max_retries}) exceeded for #{method} request")
     {:error, :max_retries_exceeded}
   end
 
   defp maybe_retry(method, request_data, _error, retries, max_retries, options) do
     # Exponential backoff: 500ms, 1000ms, 2000ms
-    backoff_ms = Config.retry_delay_ms() * :math.pow(2, retries) |> round()
+    backoff_ms = (Config.retry_delay_ms() * :math.pow(2, retries)) |> round()
     Logger.info("⏱️  Retrying in #{backoff_ms}ms... (#{retries + 1}/#{max_retries})")
 
     Process.sleep(backoff_ms)

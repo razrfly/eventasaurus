@@ -104,20 +104,26 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
     venue_lng = get_in(event_data, [:venue_data, :longitude])
 
     # Find potential matches using BaseDedupHandler
-    matches = BaseDedupHandler.find_events_by_date_and_proximity(
-      date, venue_lat, venue_lng, proximity_meters: 100
-    )
+    matches =
+      BaseDedupHandler.find_events_by_date_and_proximity(
+        date,
+        venue_lat,
+        venue_lng,
+        proximity_meters: 100
+      )
 
     # Filter by title similarity
-    title_matches = Enum.filter(matches, fn %{event: event} ->
-      similar_title?(title, event.title)
-    end)
+    title_matches =
+      Enum.filter(matches, fn %{event: event} ->
+        similar_title?(title, event.title)
+      end)
 
     # Ticketmaster is highest priority (90), so only check against itself
     # Filter to only Ticketmaster events (same source_id)
-    ticketmaster_matches = Enum.filter(title_matches, fn %{source: match_source} ->
-      match_source.id == source.id
-    end)
+    ticketmaster_matches =
+      Enum.filter(title_matches, fn %{source: match_source} ->
+        match_source.id == source.id
+      end)
 
     case ticketmaster_matches do
       [] ->
@@ -170,8 +176,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
     scores =
       if venue_lat && venue_lng && existing_event.venue &&
            BaseDedupHandler.same_location?(
-             venue_lat, venue_lng,
-             existing_event.venue.latitude, existing_event.venue.longitude,
+             venue_lat,
+             venue_lng,
+             existing_event.venue.latitude,
+             existing_event.venue.longitude,
              threshold_meters: 100
            ) do
         [0.3 | scores]
@@ -208,8 +216,15 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.DedupHandler do
       true ->
         # Check if same day (ignore time)
         # Handle both DateTime and NaiveDateTime
-        d1 = if is_struct(date1, DateTime), do: DateTime.to_date(date1), else: NaiveDateTime.to_date(date1)
-        d2 = if is_struct(date2, DateTime), do: DateTime.to_date(date2), else: NaiveDateTime.to_date(date2)
+        d1 =
+          if is_struct(date1, DateTime),
+            do: DateTime.to_date(date1),
+            else: NaiveDateTime.to_date(date1)
+
+        d2 =
+          if is_struct(date2, DateTime),
+            do: DateTime.to_date(date2),
+            else: NaiveDateTime.to_date(date2)
 
         Date.compare(d1, d2) == :eq
     end

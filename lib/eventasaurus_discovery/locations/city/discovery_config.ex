@@ -75,7 +75,7 @@ defmodule EventasaurusDiscovery.Locations.City.DiscoveryConfig do
     alias EventasaurusDiscovery.Sources.Source
     import Ecto.Query
 
-    Repo.all(from s in Source, where: s.is_active == true, select: s.slug, order_by: s.slug)
+    Repo.all(from(s in Source, where: s.is_active == true, select: s.slug, order_by: s.slug))
   end
 
   @doc """
@@ -99,7 +99,8 @@ defmodule EventasaurusDiscovery.Locations.City.DiscoveryConfig do
   def new_source(name, settings \\ %{}) do
     # Validate source exists and is active
     unless name in valid_source_names() do
-      raise ArgumentError, "Invalid source name: #{name}. Must be an active source in the sources table."
+      raise ArgumentError,
+            "Invalid source name: #{name}. Must be an active source in the sources table."
     end
 
     %__MODULE__.Source{

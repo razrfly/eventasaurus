@@ -120,7 +120,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
     api_city_name = get_in(tm_venue, ["city", "name"])
 
     # Resolve city name using CityResolver with coordinates
-    {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city_name, known_country)
+    {resolved_city, resolved_country} =
+      resolve_location(latitude, longitude, api_city_name, known_country)
 
     %{
       external_id: "tm_venue_#{tm_venue["id"]}",
@@ -428,7 +429,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         api_city_name = get_in(place, ["city", "name"]) || place["city"]
 
         # Resolve city name using CityResolver
-        {resolved_city, resolved_country} = resolve_location(latitude, longitude, api_city_name, known_country)
+        {resolved_city, resolved_country} =
+          resolve_location(latitude, longitude, api_city_name, known_country)
 
         %{
           external_id:
@@ -437,7 +439,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
           address: place["address"] || place["line1"],
           city: resolved_city,
           state: get_in(place, ["state", "name"]) || place["state"],
-          country: resolved_country || known_country || get_in(place, ["country", "name"]) || place["country"],
+          country:
+            resolved_country || known_country || get_in(place, ["country", "name"]) ||
+              place["country"],
           postal_code: place["postalCode"],
           latitude: latitude,
           longitude: longitude,
@@ -454,7 +458,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
         longitude = location["longitude"] |> to_float()
 
         # Resolve city name using CityResolver
-        {resolved_city, resolved_country} = resolve_location(latitude, longitude, location["city"], known_country)
+        {resolved_city, resolved_country} =
+          resolve_location(latitude, longitude, location["city"], known_country)
 
         %{
           external_id: "tm_location_#{:crypto.hash(:md5, inspect(location)) |> Base.encode16()}",

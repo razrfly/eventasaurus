@@ -72,7 +72,8 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.FreshnessTest do
       ]
 
       # Apply freshness filter
-      venues_to_process = EventFreshnessChecker.filter_events_needing_processing(venues, source.id)
+      venues_to_process =
+        EventFreshnessChecker.filter_events_needing_processing(venues, source.id)
 
       # Verify results
       processed_ids = Enum.map(venues_to_process, & &1.external_id)
@@ -111,8 +112,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.FreshnessTest do
               source_id: source.id,
               title: "Fresh Event #{i}",
               starts_at: DateTime.utc_now() |> DateTime.add(7, :day),
-              ends_at:
-                DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(7200, :second),
+              ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(7200, :second),
               last_seen_at: DateTime.utc_now(),
               category: "trivia",
               is_ticketed: false,
@@ -146,8 +146,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.FreshnessTest do
               source_id: source.id,
               title: "Stale Event #{i}",
               starts_at: DateTime.utc_now() |> DateTime.add(7, :day),
-              ends_at:
-                DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(7200, :second),
+              ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(7200, :second),
               last_seen_at: stale_timestamp,
               category: "trivia",
               is_ticketed: false,

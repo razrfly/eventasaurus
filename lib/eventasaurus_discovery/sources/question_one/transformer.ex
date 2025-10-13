@@ -205,11 +205,13 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
 
       _ ->
         Logger.warning("Could not determine currency for country: #{country}, defaulting to GBP")
-        "GBP"  # Default to GBP for Question One (primarily UK)
+        # Default to GBP for Question One (primarily UK)
+        "GBP"
     end
   end
 
-  defp determine_currency(_), do: "GBP"  # Default if country is nil
+  # Default if country is nil
+  defp determine_currency(_), do: "GBP"
 
   # Parse pricing information from fee_text
   # Returns {is_free, min_price}

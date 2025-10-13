@@ -130,9 +130,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
         {:error, :invalid_response}
 
       is_nil(city) ->
-        Logger.warning(
-          "⚠️ Photon: could not extract city. Properties: #{inspect(properties)}"
-        )
+        Logger.warning("⚠️ Photon: could not extract city. Properties: #{inspect(properties)}")
 
         {:error, :no_city_found}
 
@@ -144,7 +142,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
            city: city,
            country: country || "Unknown",
            place_id: place_id,
-           raw_response: feature  # Store entire Photon GeoJSON feature
+           # Store entire Photon GeoJSON feature
+           raw_response: feature
          }}
     end
   end

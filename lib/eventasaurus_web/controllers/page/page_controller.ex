@@ -102,4 +102,13 @@ defmodule EventasaurusWeb.PageController do
     # Direct signup attempts (without event_id) should go to invite-only page
     redirect(conn, to: "/invite-only")
   end
+
+  def eventosaurus_redirect(conn, _params) do
+    render(conn, :eventosaurus, layout: false)
+  end
+
+  def sitemap_redirect(conn, _params) do
+    # Redirect to the main sitemap file
+    redirect(conn, to: "/sitemaps/sitemap.xml.gz")
+  end
 end

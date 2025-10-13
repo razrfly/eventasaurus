@@ -70,7 +70,14 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     address = Map.get(venue_data, :address)
 
     case AddressGeocoder.geocode_address_with_metadata(address) do
-      {:ok, %{city: city_name, country: country_name, latitude: lat, longitude: lng, geocoding_metadata: metadata}} ->
+      {:ok,
+       %{
+         city: city_name,
+         country: country_name,
+         latitude: lat,
+         longitude: lng,
+         geocoding_metadata: metadata
+       }} ->
         enriched =
           venue_data
           |> Map.put(:city_name, city_name)

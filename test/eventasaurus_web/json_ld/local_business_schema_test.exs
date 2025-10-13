@@ -35,7 +35,10 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchemaTest do
       assert schema["geo"]["@type"] == "GeoCoordinates"
       assert schema["geo"]["latitude"] == 50.068512
       assert schema["geo"]["longitude"] == 19.998699
-      assert schema["hasMap"] == "https://www.google.com/maps/place/?q=place_id:ChIJa_8MdK5bFkcRwLIIIJIH5O0"
+
+      assert schema["hasMap"] ==
+               "https://www.google.com/maps/place/?q=place_id:ChIJa_8MdK5bFkcRwLIIIJIH5O0"
+
       assert String.contains?(schema["url"], "/venues/tauron-arena-krakow")
     end
 

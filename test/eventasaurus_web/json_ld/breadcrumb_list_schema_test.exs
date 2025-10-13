@@ -8,7 +8,10 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchemaTest do
       breadcrumbs = [
         %{name: "Home", url: "https://eventasaurus.com"},
         %{name: "Kraków", url: "https://eventasaurus.com/cities/krakow"},
-        %{name: "Arctic Monkeys", url: "https://eventasaurus.com/activities/arctic-monkeys-krakow"}
+        %{
+          name: "Arctic Monkeys",
+          url: "https://eventasaurus.com/activities/arctic-monkeys-krakow"
+        }
       ]
 
       json = BreadcrumbListSchema.generate(breadcrumbs)
@@ -89,8 +92,16 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchemaTest do
 
       assert length(breadcrumbs) == 3
       assert Enum.at(breadcrumbs, 0) == %{name: "Home", url: "https://eventasaurus.com"}
-      assert Enum.at(breadcrumbs, 1) == %{name: "Kraków", url: "https://eventasaurus.com/cities/krakow"}
-      assert Enum.at(breadcrumbs, 2) == %{name: "Arctic Monkeys Concert", url: "https://eventasaurus.com/activities/arctic-monkeys-krakow-241215"}
+
+      assert Enum.at(breadcrumbs, 1) == %{
+               name: "Kraków",
+               url: "https://eventasaurus.com/cities/krakow"
+             }
+
+      assert Enum.at(breadcrumbs, 2) == %{
+               name: "Arctic Monkeys Concert",
+               url: "https://eventasaurus.com/activities/arctic-monkeys-krakow-241215"
+             }
     end
 
     test "builds breadcrumbs for event without venue" do
@@ -105,7 +116,11 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchemaTest do
 
       assert length(breadcrumbs) == 2
       assert Enum.at(breadcrumbs, 0) == %{name: "Home", url: "https://eventasaurus.com"}
-      assert Enum.at(breadcrumbs, 1) == %{name: "Virtual Event", url: "https://eventasaurus.com/activities/virtual-event"}
+
+      assert Enum.at(breadcrumbs, 1) == %{
+               name: "Virtual Event",
+               url: "https://eventasaurus.com/activities/virtual-event"
+             }
     end
 
     test "builds breadcrumbs for event with venue but no city" do
@@ -136,7 +151,11 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchemaTest do
 
       assert length(breadcrumbs) == 2
       assert Enum.at(breadcrumbs, 0) == %{name: "Home", url: "https://eventasaurus.com"}
-      assert Enum.at(breadcrumbs, 1) == %{name: "Kraków", url: "https://eventasaurus.com/cities/krakow"}
+
+      assert Enum.at(breadcrumbs, 1) == %{
+               name: "Kraków",
+               url: "https://eventasaurus.com/cities/krakow"
+             }
     end
   end
 
@@ -156,8 +175,16 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchemaTest do
 
       assert length(breadcrumbs) == 3
       assert Enum.at(breadcrumbs, 0) == %{name: "Home", url: "https://eventasaurus.com"}
-      assert Enum.at(breadcrumbs, 1) == %{name: "Kraków", url: "https://eventasaurus.com/cities/krakow"}
-      assert Enum.at(breadcrumbs, 2) == %{name: "Tauron Arena", url: "https://eventasaurus.com/venues/tauron-arena-krakow"}
+
+      assert Enum.at(breadcrumbs, 1) == %{
+               name: "Kraków",
+               url: "https://eventasaurus.com/cities/krakow"
+             }
+
+      assert Enum.at(breadcrumbs, 2) == %{
+               name: "Tauron Arena",
+               url: "https://eventasaurus.com/venues/tauron-arena-krakow"
+             }
     end
 
     test "builds breadcrumbs for venue without city" do
@@ -172,7 +199,11 @@ defmodule EventasaurusWeb.JsonLd.BreadcrumbListSchemaTest do
 
       assert length(breadcrumbs) == 2
       assert Enum.at(breadcrumbs, 0) == %{name: "Home", url: "https://eventasaurus.com"}
-      assert Enum.at(breadcrumbs, 1) == %{name: "Virtual Venue", url: "https://eventasaurus.com/venues/virtual-venue"}
+
+      assert Enum.at(breadcrumbs, 1) == %{
+               name: "Virtual Venue",
+               url: "https://eventasaurus.com/venues/virtual-venue"
+             }
     end
   end
 end

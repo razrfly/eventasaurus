@@ -131,14 +131,16 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Mapbox do
         {:error, :no_city_found}
 
       true ->
-        {:ok, %{
-          latitude: lat,
-          longitude: lng,
-          city: city,
-          country: country || "Unknown",
-          place_id: place_id,
-          raw_response: feature  # Store entire Mapbox feature object
-        }}
+        {:ok,
+         %{
+           latitude: lat,
+           longitude: lng,
+           city: city,
+           country: country || "Unknown",
+           place_id: place_id,
+           # Store entire Mapbox feature object
+           raw_response: feature
+         }}
     end
   end
 

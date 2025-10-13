@@ -26,7 +26,13 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
     priority: 1
 
   require Logger
-  alias EventasaurusDiscovery.Sources.GeeksWhoDrink.{Client, Extractors.VenueExtractor, Jobs.VenueDetailJob}
+
+  alias EventasaurusDiscovery.Sources.GeeksWhoDrink.{
+    Client,
+    Extractors.VenueExtractor,
+    Jobs.VenueDetailJob
+  }
+
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
   @impl Oban.Worker
@@ -85,7 +91,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
     # Each block starts with <div id="quizBlock-{venue_id}" ...>
     html
     |> String.split(~r/<div[^>]*id="quizBlock-\d+"/)
-    |> Enum.drop(1)  # First element is empty or header content
+    # First element is empty or header content
+    |> Enum.drop(1)
     |> Enum.map(&restore_opening_tag/1)
     |> Enum.map(&parse_venue_block/1)
     |> Enum.reject(&is_nil/1)
@@ -158,7 +165,10 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
             {ok + 1, err}
 
           {:error, reason} ->
-            Logger.error("❌ Failed to enqueue detail job for #{inspect(venue.title)}: #{inspect(reason)}")
+            Logger.error(
+              "❌ Failed to enqueue detail job for #{inspect(venue.title)}: #{inspect(reason)}"
+            )
+
             {ok, err + 1}
         end
       end)

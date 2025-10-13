@@ -138,7 +138,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
            city: city,
            country: country,
            place_id: place_id,
-           raw_response: coordinates  # Store entire Geocoder coordinates struct
+           # Store entire Geocoder coordinates struct
+           raw_response: coordinates
          }}
     end
   end

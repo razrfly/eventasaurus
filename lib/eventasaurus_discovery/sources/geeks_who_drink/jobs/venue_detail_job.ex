@@ -58,7 +58,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
          {:ok, {day_of_week, time}} <- parse_time_text(venue_data.time_text),
          {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time),
          {:ok, performer} <- process_performer(additional_details[:performer], source_id),
-         enriched_venue_data <- enrich_venue_data(venue_data, additional_details, next_occurrence),
+         enriched_venue_data <-
+           enrich_venue_data(venue_data, additional_details, next_occurrence),
          {:ok, transformed} <- transform_and_validate(enriched_venue_data),
          {:ok, events} <- process_event(transformed, source_id),
          :ok <- link_performer_to_events(performer, events) do

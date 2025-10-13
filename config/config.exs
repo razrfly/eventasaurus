@@ -160,8 +160,7 @@ config :eventasaurus,
   question_one_enabled: true
 
 # Configure geocoder for forward geocoding (address → city/coordinates)
-config :geocoder, :worker,
-  provider: Geocoder.Providers.OpenStreetMaps
+config :geocoder, :worker, provider: Geocoder.Providers.OpenStreetMaps
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

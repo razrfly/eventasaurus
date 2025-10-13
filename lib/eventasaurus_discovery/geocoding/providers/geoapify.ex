@@ -137,7 +137,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
            city: city,
            country: country || "Unknown",
            place_id: place_id,
-           raw_response: result  # Store entire Geoapify result object
+           # Store entire Geoapify result object
+           raw_response: result
          }}
     end
   end

@@ -68,7 +68,7 @@ defmodule EventasaurusWeb.Admin.SourceIndexLive do
   end
 
   defp load_sources(socket) do
-    query = from s in Source, order_by: [desc: s.priority, asc: s.name]
+    query = from(s in Source, order_by: [desc: s.priority, asc: s.name])
 
     sources = Repo.all(query)
 

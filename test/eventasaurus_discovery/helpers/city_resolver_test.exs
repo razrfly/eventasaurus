@@ -174,7 +174,8 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
       assert {:error, :contains_postcode} =
                CityResolver.validate_city_name("London W1F 8PU Extra")
 
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("City E5 8NN Location")
+      assert {:error, :contains_postcode} =
+               CityResolver.validate_city_name("City E5 8NN Location")
     end
 
     test "rejects street addresses with numbers" do

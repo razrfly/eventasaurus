@@ -141,9 +141,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
         {:error, :invalid_response}
 
       is_nil(city) ->
-        Logger.warning(
-          "⚠️ LocationIQ: could not extract city. Address: #{inspect(address)}"
-        )
+        Logger.warning("⚠️ LocationIQ: could not extract city. Address: #{inspect(address)}")
 
         {:error, :no_city_found}
 
@@ -155,7 +153,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
            city: city,
            country: country || "Unknown",
            place_id: place_id,
-           raw_response: result  # Store entire LocationIQ result object
+           # Store entire LocationIQ result object
+           raw_response: result
          }}
     end
   end
