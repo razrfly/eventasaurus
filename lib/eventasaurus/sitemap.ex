@@ -244,8 +244,18 @@ defmodule Eventasaurus.Sitemap do
       # Define path for sitemaps (store in sitemaps/ directory)
       sitemap_path = "sitemaps"
 
+      # Get Supabase configuration
+      supabase_config = Application.get_env(:eventasaurus, :supabase)
+      supabase_url = supabase_config[:url]
+      bucket = System.get_env("SUPABASE_BUCKET") || supabase_config[:bucket] || "eventasaur.us"
+
+      # Build Supabase Storage public URL for sitemap files
+      # This is where the actual sitemap chunk files will be accessible
+      supabase_sitemap_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{sitemap_path}"
+
       # Log the final configuration details
       Logger.info("Sitemap config - SupabaseStore, path: #{sitemap_path}")
+      Logger.info("Sitemap public URL: #{supabase_sitemap_url}")
 
       # Configure sitemap to store on Supabase Storage using S3-compatible API
       # This works with NEW Supabase secret keys (sb_secret_...)
@@ -254,8 +264,8 @@ defmodule Eventasaurus.Sitemap do
         store_config: [
           path: sitemap_path
         ],
-        # For search engines, the sitemap should be accessible via the site's domain
-        sitemap_url: "#{base_url}/#{sitemap_path}"
+        # Point to Supabase Storage public URL so sitemap index contains correct URLs
+        sitemap_url: supabase_sitemap_url
       ]
     else
       # For local development, use file storage

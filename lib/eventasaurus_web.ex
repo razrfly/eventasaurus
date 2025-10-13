@@ -18,7 +18,9 @@ defmodule EventasaurusWeb do
   """
 
   def static_paths do
-    base_paths = ~w(assets fonts images favicon.ico robots.txt sitemaps)
+    # Removed 'sitemaps' from static paths - sitemaps are served from Supabase Storage
+    # and handled by PageController redirect, not Plug.Static
+    base_paths = ~w(assets fonts images favicon.ico robots.txt)
 
     if Mix.env() == :dev do
       # No themes in dev - handled by route

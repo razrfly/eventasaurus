@@ -200,93 +200,35 @@
         </form>
       </div>
 
-      <!-- Quick Actions -->
+      <!-- SEO & Sitemap Actions -->
       <div>
-        <h3 class="text-lg font-medium mb-3">Quick Actions</h3>
+        <h3 class="text-lg font-medium mb-3">SEO & Sitemap</h3>
 
-        <div class="space-y-2">
+        <div class="space-y-3">
           <button
-            phx-click="start_import"
-            phx-value-source="all"
-            phx-value-city_id={List.first(@cities) && List.first(@cities).id}
-            phx-value-limit="100"
-            class="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-            disabled={@import_running || Enum.empty?(@cities)}
+            phx-click="generate_sitemap"
+            class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            phx-disable-with="Generating..."
+            disabled={@import_running}
           >
-            Import All Sources (First City, 100 events)
+            <%= if @import_running do %>
+              Job Running...
+            <% else %>
+              Generate Sitemap Now
+            <% end %>
           </button>
 
-          <button
-            phx-click="start_import"
-            phx-value-source="ticketmaster"
-            phx-value-city_id={List.first(@cities) && List.first(@cities).id}
-            phx-value-limit="50"
-            phx-value-radius="50"
-            class="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-            disabled={@import_running || Enum.empty?(@cities)}
-          >
-            Quick Ticketmaster Import (50 events)
-          </button>
-
-          <button
-            phx-click="start_import"
-            phx-value-source="bandsintown"
-            phx-value-city_id={List.first(@cities) && List.first(@cities).id}
-            phx-value-limit="50"
-            class="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-            disabled={@import_running || Enum.empty?(@cities)}
-          >
-            Quick BandsInTown Import (50 events)
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SEO & Sitemap -->
-  <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h2 class="text-xl font-semibold mb-4">SEO & Sitemap</h2>
-    <p class="text-gray-600 mb-4">Generate XML sitemap for search engines</p>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <!-- Sitemap Generation -->
-      <div>
-        <h3 class="text-lg font-medium mb-3">Generate Sitemap</h3>
-
-        <button
-          phx-click="generate_sitemap"
-          class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          phx-disable-with="Generating..."
-          disabled={@import_running}
-        >
-          <%= if @import_running do %>
-            Job Running...
-          <% else %>
-            Generate Sitemap Now
-          <% end %>
-        </button>
-
-        <p class="mt-2 text-sm text-gray-500">
-          Generates sitemap.xml.gz with all activities and static pages for SEO
-        </p>
-      </div>
-
-      <!-- Info Panel -->
-      <div>
-        <h3 class="text-lg font-medium mb-3">About Sitemap Generation</h3>
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-          <p class="text-sm text-blue-900">
-            <strong>Purpose:</strong> Creates XML sitemap for search engines to discover content
-          </p>
-          <p class="text-sm text-blue-900">
-            <strong>Includes:</strong> All activities, static pages, and valid URLs
-          </p>
-          <p class="text-sm text-blue-900">
-            <strong>Storage:</strong> Uploaded to Supabase Storage and served via /sitemaps. Redirects available at /sitemap and /sitemap.xml.
-          </p>
-          <p class="text-sm text-blue-900">
-            <strong>Frequency:</strong> Runs automatically daily, or trigger manually here
-          </p>
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="text-xs text-blue-900">
+              <strong>Generates:</strong> sitemap.xml.gz with all activities and static pages
+            </p>
+            <p class="text-xs text-blue-900 mt-1">
+              <strong>Storage:</strong> Uploaded to Supabase Storage at /sitemaps
+            </p>
+            <p class="text-xs text-blue-900 mt-1">
+              <strong>Access:</strong> /sitemap or /sitemap.xml redirect to latest
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -295,7 +237,6 @@
   <!-- TMDB Maintenance -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">TMDB Maintenance</h2>
-    <p class="text-gray-600 mb-4">Pre-populate movies database with current cinema releases from TMDB</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Now Playing Sync Form -->
@@ -350,17 +291,14 @@
       <!-- Info Panel -->
       <div>
         <h3 class="text-lg font-medium mb-3">About Now Playing Sync</h3>
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-          <p class="text-sm text-blue-900">
-            <strong>Purpose:</strong> Pre-populate movies database with current cinema releases
-          </p>
-          <p class="text-sm text-blue-900">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+          <p class="text-xs text-blue-900">
             <strong>Includes:</strong> Full TMDB data, translations, and regional metadata
           </p>
-          <p class="text-sm text-blue-900">
+          <p class="text-xs text-blue-900">
             <strong>Benefit:</strong> Improves matching accuracy for cinema scrapers by 15-20%
           </p>
-          <p class="text-sm text-blue-900">
+          <p class="text-xs text-blue-900">
             <strong>Frequency:</strong> Run manually or schedule daily to keep data fresh
           </p>
         </div>
