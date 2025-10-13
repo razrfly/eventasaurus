@@ -137,8 +137,9 @@ defmodule Eventasaurus.Sitemap do
     # Query public_events for activities
     # Only include events that have valid slugs and timestamps
     # Filter out broken slugs (empty strings or starting with "-")
+    # Include starts_at for date-based priority and changefreq calculation
     from(pe in PublicEvent,
-      select: %{slug: pe.slug, updated_at: pe.updated_at},
+      select: %{slug: pe.slug, updated_at: pe.updated_at, starts_at: pe.starts_at},
       where:
         not is_nil(pe.slug) and
           not is_nil(pe.updated_at) and
@@ -148,6 +149,7 @@ defmodule Eventasaurus.Sitemap do
     |> Repo.stream()
     |> Stream.map(fn activity ->
       # Use updated_at for lastmod (last significant modification)
+      # This is already properly tracked by EventProcessor - only updates on content changes
       lastmod =
         if activity.updated_at do
           NaiveDateTime.to_date(activity.updated_at)
@@ -155,13 +157,64 @@ defmodule Eventasaurus.Sitemap do
           Date.utc_today()
         end
 
+      # Calculate changefreq based on event date
+      # Future events: weekly (matches our scraper frequency)
+      # Past events: never (they won't change anymore)
+      changefreq = calculate_changefreq(activity.starts_at)
+
+      # Calculate priority based on event date relative to today
+      # Upcoming events get higher priority, past events get lower priority
+      priority = calculate_priority(activity.starts_at)
+
       %Sitemapper.URL{
         loc: "#{base_url}/activities/#{activity.slug}",
-        changefreq: :daily,
-        priority: 0.9,
+        changefreq: changefreq,
+        priority: priority,
         lastmod: lastmod
       }
     end)
+  end
+
+  # Calculate changefreq based on event date
+  defp calculate_changefreq(starts_at) when is_nil(starts_at), do: :weekly
+
+  defp calculate_changefreq(starts_at) do
+    now = DateTime.utc_now()
+
+    case DateTime.compare(starts_at, now) do
+      # Future event - might change as scrapers run weekly
+      comp when comp in [:gt, :eq] -> :weekly
+      # Past event - won't change anymore
+      :lt -> :never
+    end
+  end
+
+  # Calculate priority based on event date relative to today
+  # Uses Google's recommended 0.0-1.0 scale (relative importance within YOUR site)
+  defp calculate_priority(starts_at) when is_nil(starts_at), do: 0.5
+
+  defp calculate_priority(starts_at) do
+    now = DateTime.utc_now()
+    diff_days = DateTime.diff(starts_at, now, :day)
+
+    cond do
+      # Happening today or tomorrow - highest priority
+      diff_days >= 0 and diff_days <= 1 -> 1.0
+      # Next 7 days - very high priority
+      diff_days > 1 and diff_days <= 7 -> 0.9
+      # Next 8-30 days - high priority
+      diff_days > 7 and diff_days <= 30 -> 0.7
+      # Next 31-90 days - medium-high priority
+      diff_days > 30 and diff_days <= 90 -> 0.6
+      # Future (>90 days) - medium priority
+      diff_days > 90 -> 0.5
+      # Past (0-7 days ago) - low-medium priority
+      diff_days < 0 and diff_days >= -7 -> 0.4
+      # Past (8-30 days ago) - low priority
+      diff_days < -7 and diff_days >= -30 -> 0.3
+      # Past (>30 days ago) - very low priority
+      diff_days < -30 -> 0.1
+    end
   end
 
   # Get the base URL for the sitemap
