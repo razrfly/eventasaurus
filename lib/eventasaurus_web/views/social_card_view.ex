@@ -460,7 +460,6 @@ defmodule EventasaurusWeb.SocialCardView do
   @logo_x 32
   @logo_y 32
   @logo_width 280
-  @logo_height 120
 
   # Title positioning constants to avoid duplication
   @title_base_y 200
@@ -474,61 +473,118 @@ defmodule EventasaurusWeb.SocialCardView do
     @title_base_y + line_number * (font_size_int + @title_line_spacing)
   end
 
-  # Pre-load logo SVG at compile time for better performance
-  @logo_path Path.join([
-               :code.priv_dir(:eventasaurus),
-               "static",
-               "images",
-               "logos",
-               "general-compressed.svg"
-             ])
-  @logo_svg (case File.read(@logo_path) do
-               {:ok, svg_content} ->
-                 {:ok, svg_content}
+  # Pre-load logo SVGs at compile time for better performance
+  @logo_path_dark Path.join([
+                    to_string(:code.priv_dir(:eventasaurus)),
+                    "static",
+                    "images",
+                    "logos",
+                    "general-op.svg"
+                  ])
+  @logo_path_light Path.join([
+                     to_string(:code.priv_dir(:eventasaurus)),
+                     "static",
+                     "images",
+                     "logos",
+                     "general-op-white.svg"
+                   ])
+  @logo_svg_dark (case File.read(@logo_path_dark) do
+                    {:ok, svg_content} ->
+                      {:ok, svg_content}
 
-               {:error, _reason} ->
-                 {:error, :file_not_found}
-             end)
+                    {:error, _reason} ->
+                      {:error, :file_not_found}
+                  end)
+  @logo_svg_light (case File.read(@logo_path_light) do
+                     {:ok, svg_content} ->
+                       {:ok, svg_content}
+
+                     {:error, _reason} ->
+                       {:error, :file_not_found}
+                   end)
 
   @doc """
   Gets the logo as an SVG element.
   Embeds the logo SVG content directly with proper positioning and scaling.
-  Falls back to dinosaur emoji with consistent positioning if logo file cannot be read.
+  Automatically selects white logo for dark backgrounds and black logo for light backgrounds.
   """
-  def get_logo_svg_element do
-    case @logo_svg do
-      {:ok, svg_content} ->
-        # Extract just the inner SVG content (remove <svg> wrapper)
-        # We'll position it using a <g> transform
-        inner_svg =
-          svg_content
-          |> String.replace(~r/^<\?xml[^>]+>\s*/i, "")
-          |> String.replace(~r/<svg[^>]*>/i, "")
-          |> String.replace(~r/<\/svg>\s*$/i, "")
+  def get_logo_svg_element(_theme_suffix, theme_colors) do
+    # Select the appropriate logo based on background color
+    {:ok, svg_content} =
+      if is_dark_color?(theme_colors.primary) do
+        @logo_svg_light
+      else
+        @logo_svg_dark
+      end
 
-        # Scale uniformly to fit width while maintaining aspect ratio (original is 715x166)
-        # Target width: 280
-        # This maintains the proper aspect ratio: 715/166 ≈ 4.3:1
-        scale = @logo_width / 715
+    # Extract just the inner SVG content (remove <svg> wrapper)
+    # We'll position it using a <g> transform
+    inner_svg =
+      svg_content
+      |> String.replace(~r/^<\?xml[^>]+>\s*/i, "")
+      |> String.replace(~r/<svg[^>]*>/i, "")
+      |> String.replace(~r/<\/svg>\s*$/i, "")
 
-        """
-        <g transform="translate(#{@logo_x}, #{@logo_y}) scale(#{scale})">
-          #{inner_svg}
-        </g>
-        """
+    # Scale uniformly to fit width while maintaining aspect ratio (original is 715x166)
+    # Target width: 280
+    # This maintains the proper aspect ratio: 715/166 ≈ 4.3:1
+    scale = @logo_width / 715
 
-      {:error, :file_not_found} ->
-        # Fallback with consistent positioning and background
-        fallback_center_x = @logo_x + div(@logo_width, 2)
-        # Offset for text baseline
-        fallback_center_y = @logo_y + div(@logo_height, 2) + 12
+    """
+    <g transform="translate(#{@logo_x}, #{@logo_y}) scale(#{scale})">
+      #{inner_svg}
+    </g>
+    """
+  end
 
-        """
-        <rect x="#{@logo_x}" y="#{@logo_y}" width="#{@logo_width}" height="#{@logo_height}" rx="8" ry="8" fill="#10b981"/>
-        <text x="#{fallback_center_x}" y="#{fallback_center_y}" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="white">🦖</text>
-        """
+  # Helper to determine if a color is dark (needs logo inversion)
+  defp is_dark_color?(color) when is_binary(color) do
+    # Extract RGB values from hex color
+    case parse_hex_color(color) do
+      {r, g, b} ->
+        # Calculate relative luminance using the formula from WCAG 2.0
+        # https://www.w3.org/TR/WCAG20/#relativeluminancedef
+        luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        # Consider dark if luminance is below 128 (midpoint of 0-255)
+        luminance < 128
+
+      nil ->
+        false
     end
   end
+
+  defp is_dark_color?(_), do: false
+
+  # Parse hex color to RGB tuple
+  defp parse_hex_color("#" <> hex) do
+    case String.length(hex) do
+      6 ->
+        # Full hex format #RRGGBB
+        with {r, ""} <- Integer.parse(String.slice(hex, 0, 2), 16),
+             {g, ""} <- Integer.parse(String.slice(hex, 2, 2), 16),
+             {b, ""} <- Integer.parse(String.slice(hex, 4, 2), 16) do
+          {r, g, b}
+        else
+          _ -> nil
+        end
+
+      3 ->
+        # Short hex format #RGB
+        with {r, ""} <- Integer.parse(String.slice(hex, 0, 1), 16),
+             {g, ""} <- Integer.parse(String.slice(hex, 1, 1), 16),
+             {b, ""} <- Integer.parse(String.slice(hex, 2, 1), 16) do
+          # Convert from 0-15 to 0-255
+          {r * 17, g * 17, b * 17}
+        else
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_hex_color(_), do: nil
 
   @doc """
   Renders a complete SVG social card for an event.
@@ -666,7 +722,7 @@ defmodule EventasaurusWeb.SocialCardView do
       #{image_section}
 
       <!-- Logo (top-left) -->
-      #{get_logo_svg_element()}
+      #{get_logo_svg_element(theme_suffix, theme_colors)}
 
       <!-- Event title (left-aligned, multi-line) -->
       <text font-family="Arial, sans-serif" font-weight="bold"
