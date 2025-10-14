@@ -6,7 +6,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   ensuring social media platforms re-fetch cards when content changes.
   """
 
-  @social_card_version "v1.0.0"
+  @social_card_version "v2.0.0"
 
   @doc """
   Generates a cache-busting hash for a social card based on event data.

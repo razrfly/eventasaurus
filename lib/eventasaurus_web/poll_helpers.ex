@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.PollHelpers do
   """
 
   alias EventasaurusApp.Events
+  alias Eventasaurus.SocialCards.{HashGenerator, PollHashGenerator}
 
   @doc """
   Returns human-readable display text for poll phases.
@@ -253,17 +254,36 @@ defmodule EventasaurusWeb.PollHelpers do
 
   @doc """
   Generates social image URL for polls.
+
+  For poll-specific social cards, generates URL using PollHashGenerator.
+  For event-level poll list pages, falls back to event social card.
   """
   def generate_social_image_url(event, poll \\ nil) do
-    case Map.get(event, :hash) do
-      nil ->
+    cond do
+      # Poll-specific social card
+      not is_nil(poll) ->
+        # Preload event association if needed
+        poll_with_event =
+          if Map.has_key?(poll, :event) && not is_nil(poll.event) do
+            poll
+          else
+            %{poll | event: event}
+          end
+
+        # Generate full URL using PollHashGenerator
+        base_url = EventasaurusWeb.Endpoint.url()
+        path = PollHashGenerator.generate_url_path(poll_with_event, event)
+        "#{base_url}#{path}"
+
+      # Event-level social card (for poll list pages)
+      not is_nil(Map.get(event, :hash)) ->
+        base_url = EventasaurusWeb.Endpoint.url()
+        path = HashGenerator.generate_url_path(event)
+        "#{base_url}#{path}"
+
+      # No social card available
+      true ->
         nil
-
-      hash when is_nil(poll) ->
-        "#{EventasaurusWeb.Endpoint.url()}/events/#{event.slug}/social-card-#{hash}/polls.png"
-
-      hash ->
-        "#{EventasaurusWeb.Endpoint.url()}/events/#{event.slug}/social-card-#{hash}/poll-#{poll.id}.png"
     end
   end
 

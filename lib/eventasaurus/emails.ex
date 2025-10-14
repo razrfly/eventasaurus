@@ -218,7 +218,8 @@ defmodule Eventasaurus.Emails do
     <body>
         <div class="email-container">
             <div class="header">
-                <h1>🎉 You're Invited!</h1>
+                <img src="https://wombie.com/images/logos/wombat.png" alt="Wombie - Event Planning Made Easy" style="width: 120px; height: auto; margin: 0 auto 20px auto; display: block;" />
+                <h1>You're Invited!</h1>
                 <p>#{html_escape(get_organizer_name(organizer))} has invited you to an event</p>
             </div>
 

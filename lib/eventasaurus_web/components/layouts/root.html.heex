@@ -57,7 +57,7 @@
         <meta property="og:image:width" content="800" />
         <meta property="og:image:height" content="419" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content={assigns[:meta_url] || ""} />
+        <meta property="og:url" content={assigns[:canonical_url] || assigns[:meta_url] || ""} />
         <meta property="og:site_name" content="Wombie" />
 
         <!-- Twitter Card tags -->
@@ -449,7 +449,7 @@
             <p class="text-gray-400 max-w-md mb-6 text-sm leading-relaxed">
               Effortless group event planning, finally done right. Stop the endless back-and-forth and let your group find the perfect date together.
             </p>
-            <div class="flex space-x-4 mb-6">
+            <div class="flex space-x-4">
               <a href="#" class="text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">
                 <span class="sr-only">Twitter</span>
                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -463,11 +463,6 @@
                 </svg>
               </a>
             </div>
-            <!-- Cirqus Brand Logo -->
-            <a href="https://cirqus.co" target="_blank" rel="noopener noreferrer" class="flex items-end space-x-2 group">
-              <img src="/images/logos/cirqus-tent-logo-white.svg" alt="Cirqus" class="h-8 opacity-60 group-hover:opacity-100 transition-opacity" />
-              <p class="text-gray-500 text-xs group-hover:text-gray-400 transition-colors">A Cirqus Production</p>
-            </a>
           </div>
           
           <!-- Product -->
@@ -511,6 +506,11 @@
             <p class="text-gray-400 text-sm text-center sm:text-left">
               © <%= Date.utc_today().year %> Wombie. All rights reserved.
             </p>
+
+            <!-- Cirqus Brand Logo - Centered -->
+            <a href="https://cirqus.co" target="_blank" rel="noopener noreferrer" class="group">
+              <img src="/images/logos/cirqus-tent.svg" alt="A Cirqus Production" class="h-8 opacity-60 group-hover:opacity-100 transition-opacity" />
+            </a>
 
             <!-- Mobile-friendly additional links -->
             <div class="flex flex-wrap justify-center sm:justify-end gap-x-6 gap-y-2 text-sm">
