@@ -417,18 +417,27 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   @impl true
   def render(assigns) do
-    # Check if we should show the container styling (for standalone use) or not (when wrapped by parent)
-    assigns = assign(assigns, :show_container, Map.get(assigns, :show_container, true))
+    # Handle mode prop with backward compatibility for show_container
+    # mode: :full (default) - Show container styling and poll header
+    # mode: :content - Show only content, parent handles container and header
+    mode =
+      cond do
+        Map.has_key?(assigns, :mode) -> assigns.mode
+        Map.has_key?(assigns, :show_container) -> if assigns.show_container, do: :full, else: :content
+        true -> :full
+      end
+
+    assigns = assign(assigns, :mode, mode)
 
     ~H"""
-    <div class={"date-selection-poll-component #{if @show_container, do: "bg-white border border-gray-200 rounded-xl shadow-sm", else: ""}"} data-testid="date-selection-poll">
+    <div class={"date-selection-poll-component #{if @mode == :full, do: "bg-white border border-gray-200 rounded-xl shadow-sm", else: ""}"} data-testid="date-selection-poll">
       <%= if @error_message do %>
         <div class="p-4 bg-red-50 border-l-4 border-red-400">
           <p class="text-sm text-red-700"><%= @error_message %></p>
         </div>
       <% else %>
-        <!-- Poll Header (only show when standalone) -->
-        <%= if @show_container do %>
+        <!-- Poll Header (only show when in full mode) -->
+        <%= if @mode == :full do %>
           <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
               <div class="flex items-center space-x-3">
@@ -476,7 +485,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
         <% end %>
 
         <!-- Main Content -->
-        <div class={"#{if @compact_view, do: "p-3 sm:p-4", else: if(@show_container, do: "p-4 sm:p-6", else: "")}"}>
+        <div class={"#{if @compact_view, do: "p-3 sm:p-4", else: if(@mode == :full, do: "p-4 sm:p-6", else: "")}"}>
           <%= cond do %>
             <% @poll.phase == "list_building" -> %>
               <!-- Date Suggestion Phase -->
@@ -693,7 +702,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       loading={@loading}
                       temp_votes={@temp_votes}
                       anonymous_mode={@anonymous_mode}
-                      show_header={false}
+                      mode={:content}
                     />
                   </div>
                 <% else %>
@@ -958,7 +967,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       loading={@loading}
                       temp_votes={@temp_votes}
                       anonymous_mode={@anonymous_mode}
-                      show_header={false}
+                      mode={:content}
                     />
                   </div>
                 <% else %>

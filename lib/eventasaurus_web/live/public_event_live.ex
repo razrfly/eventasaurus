@@ -1558,7 +1558,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                         current_user={@user}
                         temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                         anonymous_mode={is_nil(@user)}
-                        show_container={false}
+                        mode={:content}
                       />
 
                     <% poll.phase in ["list_building", "voting", "voting_with_suggestions", "voting_only"] -> %>
@@ -1569,6 +1569,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                         event={@event}
                         current_user={@user}
                         poll={poll}
+                        mode={:content}
                       />
 
                     <% poll.phase == "closed" -> %>

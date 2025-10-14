@@ -195,13 +195,22 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def render(assigns) do
-    # Default show_header to true if not provided
-    assigns = assign_new(assigns, :show_header, fn -> true end)
+    # Handle mode prop with backward compatibility for show_header
+    # mode: :full (default) - Show header with voting title, instructions, voter count
+    # mode: :content - Show only voting interface, parent handles header
+    mode =
+      cond do
+        Map.has_key?(assigns, :mode) -> assigns.mode
+        Map.has_key?(assigns, :show_header) -> if assigns.show_header, do: :full, else: :content
+        true -> :full
+      end
+
+    assigns = assign(assigns, :mode, mode)
 
     ~H"""
-    <div class={if @show_header, do: "bg-white shadow rounded-lg", else: ""}>
+    <div class={if @mode == :full, do: "bg-white shadow rounded-lg", else: ""}>
       <!-- Header (optional) -->
-      <%= if @show_header do %>
+      <%= if @mode == :full do %>
         <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div class="flex-1">
@@ -237,7 +246,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       <% end %>
 
       <!-- Voting Interface -->
-      <div class={if @show_header, do: "divide-y divide-gray-200", else: ""}>
+      <div class={if @mode == :full, do: "divide-y divide-gray-200", else: ""}>
         <%= case @poll.voting_system do %>
           <% "binary" -> %>
             <%= render_binary_voting(assigns) %>

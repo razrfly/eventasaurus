@@ -4333,6 +4333,41 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Gets a poll by number for a specific event with options optimized for social card display.
+
+  Returns nil if poll not found.
+  Preloads poll_options ordered by vote count (for social card display).
+  Matches semantics of get_poll_with_options/1.
+  """
+  def get_poll_with_options_by_number(number, event_id) when is_integer(number) do
+    poll =
+      from(p in Poll,
+        where: p.event_id == ^event_id and p.number == ^number,
+        where: is_nil(p.deleted_at)
+      )
+      |> Repo.one()
+
+    if poll do
+      # Preload poll_options ordered by vote count (most popular first)
+      # This ensures the social card shows the most relevant options
+      # Matches semantics of get_poll_with_options/1
+      poll_options_query =
+        from(po in PollOption,
+          where: po.poll_id == ^poll.id and po.status == "active",
+          where: is_nil(po.deleted_at),
+          left_join: v in assoc(po, :votes),
+          group_by: po.id,
+          order_by: [desc: count(v.id), asc: po.order_index],
+          limit: 10
+        )
+
+      Repo.preload(poll, poll_options: poll_options_query)
+    else
+      nil
+    end
+  end
+
+  @doc """
   Gets a poll for a specific event and poll type.
   """
   def get_event_poll(%Event{} = event, poll_type, opts \\ []) do

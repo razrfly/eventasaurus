@@ -335,7 +335,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                 loading={false}
                 temp_votes={@temp_votes}
                 anonymous_mode={is_nil(@current_user)}
-                show_header={false}
+                mode={:content}
               />
             </div>
 
