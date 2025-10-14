@@ -91,12 +91,16 @@ defmodule EventasaurusWeb.PublicPollLive do
 
   # Extract base URL (scheme + host + port) from full URI
   defp get_base_url_from_uri(uri) when is_binary(uri) do
-    uri
-    |> URI.parse()
-    |> then(fn parsed ->
+    parsed = URI.parse(uri)
+
+    # Guard against missing scheme/host (nil uri, relative paths, etc.)
+    if parsed.scheme && parsed.host do
       port_part = if parsed.port && parsed.port not in [80, 443], do: ":#{parsed.port}", else: ""
       "#{parsed.scheme}://#{parsed.host}#{port_part}"
-    end)
+    else
+      # Fallback to endpoint URL when scheme/host are missing
+      EventasaurusWeb.Endpoint.url()
+    end
   end
 
   @impl true

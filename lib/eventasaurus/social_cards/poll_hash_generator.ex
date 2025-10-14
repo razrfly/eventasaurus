@@ -128,6 +128,10 @@ defmodule Eventasaurus.SocialCards.PollHashGenerator do
         :minimal
       end
 
+    # Build option fingerprint to ensure cache busts when options change
+    # This is critical since social cards display poll options
+    options_fingerprint = build_options_fingerprint(Map.get(poll, :poll_options, []))
+
     %{
       poll_id: poll_id,
       title: Map.get(poll, :title, ""),
@@ -135,9 +139,29 @@ defmodule Eventasaurus.SocialCards.PollHashGenerator do
       phase: Map.get(poll, :phase, "list_building"),
       theme: theme,
       updated_at: format_timestamp(Map.get(poll, :updated_at)),
+      options: options_fingerprint,
       version: @social_card_version
     }
   end
+
+  # Creates a stable fingerprint of poll options for cache busting
+  # Includes option IDs, titles, and updated_at timestamps
+  # Options are sorted by ID to ensure consistent ordering
+  defp build_options_fingerprint([]), do: []
+
+  defp build_options_fingerprint(options) when is_list(options) do
+    options
+    |> Enum.sort_by(& &1.id)
+    |> Enum.map(fn option ->
+      %{
+        id: option.id,
+        title: Map.get(option, :title, ""),
+        updated_at: format_timestamp(Map.get(option, :updated_at))
+      }
+    end)
+  end
+
+  defp build_options_fingerprint(_), do: []
 
   defp format_timestamp(nil), do: ""
   defp format_timestamp(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)

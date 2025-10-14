@@ -262,12 +262,20 @@ defmodule EventasaurusWeb.PollHelpers do
     cond do
       # Poll-specific social card
       not is_nil(poll) ->
-        # Preload event association if needed
+        # Preload event association if needed (handle NotLoaded)
         poll_with_event =
-          if Map.has_key?(poll, :event) && not is_nil(poll.event) do
-            poll
-          else
-            %{poll | event: event}
+          cond do
+            match?(%{event: %Ecto.Association.NotLoaded{}}, poll) ->
+              %{poll | event: event}
+
+            Map.has_key?(poll, :event) and is_nil(poll.event) ->
+              %{poll | event: event}
+
+            Map.has_key?(poll, :event) ->
+              poll
+
+            true ->
+              Map.put(poll, :event, event)
           end
 
         # Generate full URL using PollHashGenerator
