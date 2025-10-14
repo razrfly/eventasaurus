@@ -601,6 +601,157 @@ defmodule EventasaurusWeb.SocialCardView do
 
   defp parse_hex_color(_), do: nil
 
+  # ============================================================================
+  # Phase 1: Reusable Social Card Components
+  # ============================================================================
+
+  @doc """
+  Renders the background gradient SVG definition and rectangle.
+  Returns SVG markup with gradient definition and filled rectangle.
+
+  ## Parameters
+    - theme_suffix: Unique theme identifier for IDs (e.g., "minimal", "cosmic")
+    - theme_colors: Map with :primary and :secondary color hex values
+
+  ## Returns
+    SVG markup string with gradient definition and background rectangle
+  """
+  def render_background_gradient(theme_suffix, theme_colors) do
+    """
+    <defs>
+      <!-- Gradient background definition (unique per theme) -->
+      <linearGradient id="bgGradient-#{theme_suffix}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#{format_color(theme_colors.primary)};stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#{format_color(theme_colors.secondary)};stop-opacity:1" />
+      </linearGradient>
+    </defs>
+
+    <!-- Background gradient -->
+    <rect width="800" height="419" fill="url(#bgGradient-#{theme_suffix})"/>
+    """
+  end
+
+  @doc """
+  Renders the image section for a social card with proper fallback.
+  Handles both local and external images with appropriate data URL encoding.
+
+  ## Parameters
+    - entity: Map with :cover_image_url field
+    - theme_suffix: Unique theme identifier for clip path ID
+
+  ## Returns
+    SVG markup string with image or "No Image" placeholder
+  """
+  def render_image_section(entity, theme_suffix, _opts \\ []) do
+    if has_image?(entity) do
+      # Check if this is a local static file or external URL
+      if String.starts_with?(entity.cover_image_url, "/") do
+        # Local static file - use base64 data URL (this works)
+        case local_image_data_url(entity) do
+          nil ->
+            render_no_image_placeholder()
+
+          data_url ->
+            """
+            <!-- Clip path for rounded corners on image (unique per theme) -->
+            <clipPath id="imageClip-#{theme_suffix}">
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
+            </clipPath>
+
+            <!-- Image (positioned top-right with rounded corners) -->
+            <image href="#{data_url}"
+                   x="418" y="32"
+                   width="350" height="350"
+                   clip-path="url(#imageClip-#{theme_suffix})"
+                   preserveAspectRatio="xMidYMid meet"/>
+            """
+        end
+      else
+        # External URL - download, optimize, and use base64 data URL
+        case optimized_external_image_data_url(entity) do
+          nil ->
+            render_no_image_placeholder()
+
+          data_url ->
+            """
+            <!-- Clip path for rounded corners on image (unique per theme) -->
+            <clipPath id="imageClip-#{theme_suffix}">
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
+            </clipPath>
+
+            <!-- Image (positioned top-right with rounded corners) -->
+            <image href="#{data_url}"
+                   x="418" y="32"
+                   width="350" height="350"
+                   clip-path="url(#imageClip-#{theme_suffix})"
+                   preserveAspectRatio="xMidYMid meet"/>
+            """
+        end
+      end
+    else
+      render_no_image_placeholder()
+    end
+  end
+
+  # Helper to render "No Image" placeholder
+  defp render_no_image_placeholder do
+    """
+    <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+    <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+    """
+  end
+
+  @doc """
+  Renders a call-to-action bubble (e.g., "RSVP", "VOTE").
+  Positioned at bottom-left with rounded corners.
+
+  ## Parameters
+    - cta_text: Text to display in the bubble (e.g., "RSVP", "VOTE")
+    - theme_suffix: Unique theme identifier for clip path ID
+
+  ## Returns
+    SVG markup string with CTA bubble
+  """
+  def render_cta_bubble(cta_text, theme_suffix) do
+    """
+    <!-- Clip path for CTA bubble rounded corners (unique per theme) -->
+    <clipPath id="ctaClip-#{theme_suffix}">
+      <rect x="32" y="355" width="80" height="32" rx="16" ry="16"/>
+    </clipPath>
+
+    <!-- CTA bubble (bottom-left) -->
+    <rect x="32" y="355" width="80" height="32" rx="16" ry="16" fill="white" opacity="0.95"/>
+    <text x="72" y="375" text-anchor="middle" font-family="Arial, sans-serif"
+          font-size="14" font-weight="bold" fill="#374151">#{cta_text}</text>
+    """
+  end
+
+  @doc """
+  Renders the base SVG structure for a social card with a content block.
+  This is the foundational function that all card types can use.
+
+  ## Parameters
+    - theme_suffix: Unique theme identifier for IDs
+    - theme_colors: Map with :primary and :secondary colors
+    - content_block: SVG markup for card-specific content (title, poll options, etc.)
+
+  ## Returns
+    Complete SVG markup as a string
+  """
+  def render_social_card_base(theme_suffix, theme_colors, content_block) do
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <svg width="800" height="419" viewBox="0 0 800 419" xmlns="http://www.w3.org/2000/svg">
+      #{render_background_gradient(theme_suffix, theme_colors)}
+      #{content_block}
+    </svg>
+    """
+  end
+
+  # ============================================================================
+  # Event-Specific Social Card Rendering
+  # ============================================================================
+
   @doc """
   Renders a complete SVG social card for an event.
   This is a public function that can be used by both the controller and preview tools.
@@ -631,127 +782,66 @@ defmodule EventasaurusWeb.SocialCardView do
           %{primary: "#1a1a1a", secondary: "#333333"}
       end
 
-    theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
+    # Build event-specific content
+    event_content = render_event_content(sanitized_event, theme_suffix, theme_colors)
 
-    # Build image section - use different approaches for local vs external images
-    image_section =
-      if has_image?(sanitized_event) do
-        # Check if this is a local static file or external URL
-        if String.starts_with?(sanitized_event.cover_image_url, "/") do
-          # Local static file - use base64 data URL (this works)
-          case local_image_data_url(sanitized_event) do
-            nil ->
-              # Fallback to "No Image" if image processing fails
-              """
-              <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-              <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-              """
+    # Use the base function to create complete SVG
+    render_social_card_base(theme_suffix, theme_colors, event_content)
+  end
 
-            data_url ->
-              """
-              <image href="#{data_url}"
-                     x="418" y="32"
-                     width="350" height="350"
-                     clip-path="url(#imageClip-#{theme_suffix})"
-                     preserveAspectRatio="xMidYMid meet"/>
-              """
-          end
-        else
-          # External URL - download, optimize, and use base64 data URL
-          case optimized_external_image_data_url(sanitized_event) do
-            nil ->
-              # Fallback to "No Image" if download/optimization fails
-              """
-              <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-              <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-              """
+  @doc """
+  Renders the event-specific content for a social card.
+  This includes the image, logo, title, and RSVP button.
 
-            data_url ->
-              """
-              <image href="#{data_url}"
-                     x="418" y="32"
-                     width="350" height="350"
-                     clip-path="url(#imageClip-#{theme_suffix})"
-                     preserveAspectRatio="xMidYMid meet"/>
-              """
-          end
-        end
-      else
-        """
-        <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-        <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-        """
-      end
+  ## Parameters
+    - event: Sanitized event map with :title, :cover_image_url fields
+    - theme_suffix: Unique theme identifier for IDs
+    - theme_colors: Map with theme color information
 
+  ## Returns
+    SVG markup string with event-specific content
+  """
+  def render_event_content(event, theme_suffix, theme_colors) do
     # Build title sections - positioned lower for better balance
     title_line_1 =
-      if format_title(sanitized_event.title, 0) != "" do
-        y_pos = title_line_y_position(0, calculate_font_size(sanitized_event.title))
-        ~s(<tspan x="32" y="#{y_pos}">#{format_title(sanitized_event.title, 0)}</tspan>)
+      if format_title(event.title, 0) != "" do
+        y_pos = title_line_y_position(0, calculate_font_size(event.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 0)}</tspan>)
       else
         ""
       end
 
     title_line_2 =
-      if format_title(sanitized_event.title, 1) != "" do
-        y_pos = title_line_y_position(1, calculate_font_size(sanitized_event.title))
-        ~s(<tspan x="32" y="#{y_pos}">#{format_title(sanitized_event.title, 1)}</tspan>)
+      if format_title(event.title, 1) != "" do
+        y_pos = title_line_y_position(1, calculate_font_size(event.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 1)}</tspan>)
       else
         ""
       end
 
     title_line_3 =
-      if format_title(sanitized_event.title, 2) != "" do
-        y_pos = title_line_y_position(2, calculate_font_size(sanitized_event.title))
-        ~s(<tspan x="32" y="#{y_pos}">#{format_title(sanitized_event.title, 2)}</tspan>)
+      if format_title(event.title, 2) != "" do
+        y_pos = title_line_y_position(2, calculate_font_size(event.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 2)}</tspan>)
       else
         ""
       end
 
-    # Create the complete SVG with unique IDs per theme
     """
-    <?xml version="1.0" encoding="UTF-8"?>
-    <svg width="800" height="419" viewBox="0 0 800 419" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <!-- Gradient background definition (unique per theme) -->
-        <linearGradient id="bgGradient-#{theme_suffix}" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#{format_color(theme.color1)};stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#{format_color(theme.color2)};stop-opacity:1" />
-        </linearGradient>
+    #{render_image_section(event, theme_suffix)}
 
-        <!-- Clip path for rounded corners on event image (unique per theme) -->
-        <clipPath id="imageClip-#{theme_suffix}">
-          <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
-        </clipPath>
+    <!-- Logo (top-left) -->
+    #{get_logo_svg_element(theme_suffix, theme_colors)}
 
-        <!-- Clip path for RSVP bubble rounded corners (unique per theme) -->
-        <clipPath id="rsvpClip-#{theme_suffix}">
-          <rect x="32" y="355" width="80" height="32" rx="16" ry="16"/>
-        </clipPath>
-      </defs>
+    <!-- Event title (left-aligned, multi-line) -->
+    <text font-family="Arial, sans-serif" font-weight="bold"
+          font-size="#{calculate_font_size(event.title)}" fill="white">
+      #{title_line_1}
+      #{title_line_2}
+      #{title_line_3}
+    </text>
 
-      <!-- Background gradient -->
-      <rect width="800" height="419" fill="url(#bgGradient-#{theme_suffix})"/>
-
-      <!-- Event image (positioned top-right with rounded corners) -->
-      #{image_section}
-
-      <!-- Logo (top-left) -->
-      #{get_logo_svg_element(theme_suffix, theme_colors)}
-
-      <!-- Event title (left-aligned, multi-line) -->
-      <text font-family="Arial, sans-serif" font-weight="bold"
-            font-size="#{calculate_font_size(sanitized_event.title)}" fill="white">
-        #{title_line_1}
-        #{title_line_2}
-        #{title_line_3}
-      </text>
-
-      <!-- RSVP bubble (bottom-left) -->
-      <rect x="32" y="355" width="80" height="32" rx="16" ry="16" fill="white" opacity="0.95"/>
-      <text x="72" y="375" text-anchor="middle" font-family="Arial, sans-serif"
-            font-size="14" font-weight="bold" fill="#374151">RSVP</text>
-    </svg>
+    #{render_cta_bubble("RSVP", theme_suffix)}
     """
   end
 
