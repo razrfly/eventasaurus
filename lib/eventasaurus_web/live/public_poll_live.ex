@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.PublicPollLive do
   alias EventasaurusApp.Events
   alias EventasaurusWeb.{PublicGenericPollComponent, AnonymousVoterComponent}
   alias EventasaurusWeb.ReservedSlugs
+  alias Eventasaurus.SocialCards.PollHashGenerator
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.PollHelpers
@@ -68,7 +69,34 @@ defmodule EventasaurusWeb.PublicPollLive do
 
   @impl true
   def handle_params(_params, uri, socket) do
+    # Extract base URL from the current request URI for Open Graph tags
+    base_url = get_base_url_from_uri(uri)
+
+    # Update meta_image and canonical_url with correct base URL if poll exists
+    socket =
+      if socket.assigns[:poll] && socket.assigns[:event] do
+        poll = socket.assigns.poll
+        event = socket.assigns.event
+
+        socket
+        |> assign(:meta_image,
+          "#{base_url}#{PollHashGenerator.generate_url_path(poll, event)}")
+        |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.id}")
+      else
+        socket
+      end
+
     {:noreply, assign(socket, :current_uri, uri)}
+  end
+
+  # Extract base URL (scheme + host + port) from full URI
+  defp get_base_url_from_uri(uri) when is_binary(uri) do
+    uri
+    |> URI.parse()
+    |> then(fn parsed ->
+      port_part = if parsed.port && parsed.port not in [80, 443], do: ":#{parsed.port}", else: ""
+      "#{parsed.scheme}://#{parsed.host}#{port_part}"
+    end)
   end
 
   @impl true

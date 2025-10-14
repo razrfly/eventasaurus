@@ -13,34 +13,36 @@
       <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">
         Theme Filter
       </label>
-      <select
-        id="theme-select"
-        phx-change="change_theme"
-        name="theme"
-        class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-      >
-        <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
-        <%= for theme <- @themes do %>
-          <option value={theme} selected={@selected_theme == theme}>
-            <%= theme |> Atom.to_string() |> String.capitalize() %>
-          </option>
-        <% end %>
-      </select>
+      <form phx-change="change_theme">
+        <select
+          id="theme-select"
+          name="theme"
+          class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
+          <%= for theme <- @themes do %>
+            <option value={theme} selected={@selected_theme == theme}>
+              <%= theme |> Atom.to_string() |> String.capitalize() %>
+            </option>
+          <% end %>
+        </select>
+      </form>
     </div>
 
     <div class="flex-1 min-w-[200px]">
       <label for="type-select" class="block text-sm font-medium text-gray-700 mb-1">
         Card Type
       </label>
-      <select
-        id="type-select"
-        phx-change="change_card_type"
-        name="type"
-        class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-      >
-        <option value="event" selected={@card_type == :event}>Event Cards</option>
-        <option value="poll" disabled>Poll Cards (Coming Soon)</option>
-      </select>
+      <form phx-change="change_card_type">
+        <select
+          id="type-select"
+          name="type"
+          class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="event" selected={@card_type == :event}>Event Cards</option>
+          <option value="poll" selected={@card_type == :poll}>Poll Cards</option>
+        </select>
+      </form>
     </div>
 
     <div class="flex items-end">
@@ -60,20 +62,32 @@
         </svg>
       </div>
       <div class="ml-3 flex-1">
-        <h3 class="text-sm font-medium text-blue-800">Mock Event Data</h3>
-        <div class="mt-2 text-sm text-blue-700">
-          <p class="font-mono"><strong>Title:</strong> <%= @mock_event.title %></p>
-          <p class="font-mono"><strong>Image:</strong> <%= @mock_event.cover_image_url %></p>
-          <p class="text-xs text-blue-600 mt-1">
-            Phase 2 will allow editing mock data in real-time. For now, showing default mock event.
-          </p>
-        </div>
+        <%= if @card_type == :poll do %>
+          <h3 class="text-sm font-medium text-blue-800">Mock Poll Data</h3>
+          <div class="mt-2 text-sm text-blue-700">
+            <p class="font-mono"><strong>Title:</strong> <%= @mock_poll.title %></p>
+            <p class="font-mono"><strong>Type:</strong> <%= @mock_poll.poll_type %></p>
+            <p class="font-mono"><strong>Phase:</strong> <%= @mock_poll.phase %></p>
+            <p class="text-xs text-blue-600 mt-1">
+              Phase 2 will allow editing mock data in real-time. For now, showing default mock poll.
+            </p>
+          </div>
+        <% else %>
+          <h3 class="text-sm font-medium text-blue-800">Mock Event Data</h3>
+          <div class="mt-2 text-sm text-blue-700">
+            <p class="font-mono"><strong>Title:</strong> <%= @mock_event.title %></p>
+            <p class="font-mono"><strong>Image:</strong> <%= @mock_event.cover_image_url %></p>
+            <p class="text-xs text-blue-600 mt-1">
+              Phase 2 will allow editing mock data in real-time. For now, showing default mock event.
+            </p>
+          </div>
+        <% end %>
       </div>
     </div>
   </div>
 
   <!-- Preview Grid -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+  <div class="grid grid-cols-1 gap-8 max-w-5xl mx-auto">
     <%= for preview <- @previews do %>
       <div class="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
         <!-- Theme Header -->
@@ -113,7 +127,7 @@
         </div>
 
         <!-- SVG Preview -->
-        <div class="p-4 bg-white">
+        <div class="p-6 bg-white">
           <div class="border border-gray-300 rounded overflow-hidden bg-gray-100">
             <div class="w-full" style="aspect-ratio: 800 / 419;">
               <%= Phoenix.HTML.raw(preview.svg) %>

@@ -617,17 +617,19 @@ defmodule EventasaurusWeb.SocialCardView do
     SVG markup string with gradient definition and background rectangle
   """
   def render_background_gradient(theme_suffix, theme_colors) do
+    id_suffix = safe_svg_id(theme_suffix)
+
     """
     <defs>
       <!-- Gradient background definition (unique per theme) -->
-      <linearGradient id="bgGradient-#{theme_suffix}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="bgGradient-#{id_suffix}" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style="stop-color:#{format_color(theme_colors.primary)};stop-opacity:1" />
         <stop offset="100%" style="stop-color:#{format_color(theme_colors.secondary)};stop-opacity:1" />
       </linearGradient>
     </defs>
 
     <!-- Background gradient -->
-    <rect width="800" height="419" fill="url(#bgGradient-#{theme_suffix})"/>
+    <rect width="800" height="419" fill="url(#bgGradient-#{id_suffix})"/>
     """
   end
 
@@ -643,6 +645,8 @@ defmodule EventasaurusWeb.SocialCardView do
     SVG markup string with image or "No Image" placeholder
   """
   def render_image_section(entity, theme_suffix, _opts \\ []) do
+    id_suffix = safe_svg_id(theme_suffix)
+
     if has_image?(entity) do
       # Check if this is a local static file or external URL
       if String.starts_with?(entity.cover_image_url, "/") do
@@ -654,7 +658,7 @@ defmodule EventasaurusWeb.SocialCardView do
           data_url ->
             """
             <!-- Clip path for rounded corners on image (unique per theme) -->
-            <clipPath id="imageClip-#{theme_suffix}">
+            <clipPath id="imageClip-#{id_suffix}">
               <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
             </clipPath>
 
@@ -662,7 +666,7 @@ defmodule EventasaurusWeb.SocialCardView do
             <image href="#{data_url}"
                    x="418" y="32"
                    width="350" height="350"
-                   clip-path="url(#imageClip-#{theme_suffix})"
+                   clip-path="url(#imageClip-#{id_suffix})"
                    preserveAspectRatio="xMidYMid meet"/>
             """
         end
@@ -675,7 +679,7 @@ defmodule EventasaurusWeb.SocialCardView do
           data_url ->
             """
             <!-- Clip path for rounded corners on image (unique per theme) -->
-            <clipPath id="imageClip-#{theme_suffix}">
+            <clipPath id="imageClip-#{id_suffix}">
               <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
             </clipPath>
 
@@ -683,7 +687,7 @@ defmodule EventasaurusWeb.SocialCardView do
             <image href="#{data_url}"
                    x="418" y="32"
                    width="350" height="350"
-                   clip-path="url(#imageClip-#{theme_suffix})"
+                   clip-path="url(#imageClip-#{id_suffix})"
                    preserveAspectRatio="xMidYMid meet"/>
             """
         end
@@ -713,9 +717,11 @@ defmodule EventasaurusWeb.SocialCardView do
     SVG markup string with CTA bubble
   """
   def render_cta_bubble(cta_text, theme_suffix) do
+    id_suffix = safe_svg_id(theme_suffix)
+
     """
     <!-- Clip path for CTA bubble rounded corners (unique per theme) -->
-    <clipPath id="ctaClip-#{theme_suffix}">
+    <clipPath id="ctaClip-#{id_suffix}">
       <rect x="32" y="355" width="80" height="32" rx="16" ry="16"/>
     </clipPath>
 
@@ -845,6 +851,214 @@ defmodule EventasaurusWeb.SocialCardView do
     """
   end
 
+  # ============================================================================
+  # Poll-Specific Social Card Rendering
+  # ============================================================================
+
+  @doc """
+  Renders SVG social card for a poll.
+  Uses the same component-based architecture as event cards.
+
+  ## Parameters
+    - poll: Map with :title, :poll_type, :event (with :theme) fields
+
+  ## Returns
+    Complete SVG markup as a string
+  """
+  def render_poll_card_svg(poll) do
+    # Get parent event for theme
+    event = poll.event
+
+    # Sanitize poll data
+    sanitized_poll = sanitize_poll(poll)
+
+    # Get theme from parent event
+    theme_name = event.theme || :minimal
+    theme_suffix = to_string(theme_name)
+
+    # Get theme colors
+    theme_colors =
+      case get_theme_colors(theme_name) do
+        %{primary: primary, secondary: secondary} = colors
+        when is_binary(primary) and is_binary(secondary) ->
+          colors
+
+        _ ->
+          %{primary: "#1a1a1a", secondary: "#333333"}
+      end
+
+    # Build poll-specific content
+    poll_content = render_poll_content(sanitized_poll, event, theme_suffix, theme_colors)
+
+    # Use the base function to create complete SVG
+    render_social_card_base(theme_suffix, theme_colors, poll_content)
+  end
+
+  @doc """
+  Renders the poll-specific content for a social card.
+  This includes the logo, poll title, poll type indicator, and VOTE button.
+
+  ## Parameters
+    - poll: Sanitized poll map with :title, :poll_type fields
+    - event: Parent event map (for potential future use)
+    - theme_suffix: Unique theme identifier for IDs
+    - theme_colors: Map with theme color information
+
+  ## Returns
+    SVG markup string with poll-specific content
+  """
+  def render_poll_content(poll, _event, theme_suffix, theme_colors) do
+    # Format poll title (max 3 lines)
+    title_line_1 =
+      if format_title(poll.title, 0) != "" do
+        y_pos = title_line_y_position(0, calculate_font_size(poll.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(poll.title, 0)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_2 =
+      if format_title(poll.title, 1) != "" do
+        y_pos = title_line_y_position(1, calculate_font_size(poll.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(poll.title, 1)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_3 =
+      if format_title(poll.title, 2) != "" do
+        y_pos = title_line_y_position(2, calculate_font_size(poll.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(poll.title, 2)}</tspan>)
+      else
+        ""
+      end
+
+    # Get poll type display name
+    poll_type_text = poll_type_display_text(poll.poll_type)
+
+    """
+    <!-- Logo (top-left) -->
+    #{get_logo_svg_element(theme_suffix, theme_colors)}
+
+    <!-- Poll type indicator (right side, below logo) -->
+    <text x="600" y="110" text-anchor="middle" font-family="Arial, sans-serif"
+          font-size="16" font-weight="600" fill="white" opacity="0.9">
+      #{poll_type_text}
+    </text>
+
+    <!-- Poll title (left-aligned, multi-line) -->
+    <text font-family="Arial, sans-serif" font-weight="bold"
+          font-size="#{calculate_font_size(poll.title)}" fill="white">
+      #{title_line_1}
+      #{title_line_2}
+      #{title_line_3}
+    </text>
+
+    <!-- Poll options list or ballot box fallback (right side) -->
+    #{render_poll_options_list(poll, theme_suffix)}
+
+    #{render_cta_bubble("VOTE", theme_suffix)}
+    """
+  end
+
+  @doc """
+  Sanitizes poll data for safe use in social card generation.
+  Similar to sanitize_event but for poll-specific fields.
+  """
+  def sanitize_poll(poll) do
+    %{
+      title: Sanitizer.sanitize_text(Map.get(poll, :title, "")),
+      poll_type: Map.get(poll, :poll_type, "custom"),
+      poll_options: Map.get(poll, :poll_options, [])
+    }
+  end
+
+  # Helper to get display text for poll type
+  defp poll_type_display_text("movie"), do: "🎬  Movie Poll"
+  defp poll_type_display_text("places"), do: "📍  Places Poll"
+  defp poll_type_display_text("venue"), do: "🏢  Venue Poll"
+  defp poll_type_display_text("date_selection"), do: "📅  Date Poll"
+  defp poll_type_display_text("time"), do: "⏰  Time Poll"
+  defp poll_type_display_text("music_track"), do: "🎵  Music Poll"
+  defp poll_type_display_text("custom"), do: "📊  Poll"
+  defp poll_type_display_text("general"), do: "📊  Poll"
+  defp poll_type_display_text(_), do: "📊  Poll"
+
+  # Renders the poll options list for social cards.
+  # Shows top 3 options or ballot box fallback for empty polls.
+  defp render_poll_options_list(poll, _theme_suffix) do
+    options = Map.get(poll, :poll_options, [])
+
+    case length(options) do
+      0 ->
+        # Fallback to ballot box for empty polls
+        render_ballot_box_fallback()
+
+      count ->
+        # Show top 3 options
+        top_options = Enum.take(options, 3)
+        remaining = max(count - 3, 0)
+
+        option_texts =
+          top_options
+          |> Enum.with_index()
+          |> Enum.map(fn {option, index} ->
+            y_pos = 145 + index * 35
+            truncated_title = truncate_option_title(option.title, 25)
+
+            """
+            <text x="450" y="#{y_pos}" font-family="Arial, sans-serif"
+                  font-size="18" font-weight="600" fill="white" opacity="0.95">
+              ✓ #{svg_escape(truncated_title)}
+            </text>
+            """
+          end)
+          |> Enum.join("\n")
+
+        more_text =
+          if remaining > 0 do
+            plural = if remaining == 1, do: "", else: "s"
+
+            """
+            <text x="450" y="250" font-family="Arial, sans-serif"
+                  font-size="16" font-weight="500" fill="white" opacity="0.8">
+              +#{remaining} more option#{plural}
+            </text>
+            """
+          else
+            ""
+          end
+
+        """
+        #{option_texts}
+        #{more_text}
+        """
+    end
+  end
+
+  # Truncates poll option titles for display in social cards.
+  defp truncate_option_title(title, max_length) when is_binary(title) do
+    if String.length(title) <= max_length do
+      title
+    else
+      String.slice(title, 0, max_length - 3) <> "..."
+    end
+  end
+
+  defp truncate_option_title(_, _), do: ""
+
+  # Renders ballot box fallback for polls with no options.
+  defp render_ballot_box_fallback do
+    """
+    <!-- Vote icon/indicator (right side, large) -->
+    <circle cx="600" cy="240" r="80" fill="white" opacity="0.15"/>
+    <text x="600" y="260" text-anchor="middle" font-family="Arial, sans-serif"
+          font-size="64" font-weight="bold" fill="white" opacity="0.9">
+      🗳️
+    </text>
+    """
+  end
+
   # Private helper to extract colors from theme with error handling
   defp get_theme_colors(theme) do
     try do
@@ -876,4 +1090,21 @@ defmodule EventasaurusWeb.SocialCardView do
   end
 
   defp validate_color_or_default(_, default), do: default
+
+  # Sanitizes theme_suffix for safe use in SVG IDs.
+  # Removes or replaces characters that are not valid in XML IDs.
+  # SVG IDs must start with a letter or underscore and can only contain letters, digits, hyphens, underscores, and periods.
+  defp safe_svg_id(theme_suffix) when is_binary(theme_suffix) do
+    theme_suffix
+    |> String.replace(~r/[^a-zA-Z0-9\-_.]/, "_")
+    |> String.replace(~r/^[^a-zA-Z_]/, "_")
+  end
+
+  defp safe_svg_id(theme_suffix) when is_atom(theme_suffix) do
+    theme_suffix
+    |> to_string()
+    |> safe_svg_id()
+  end
+
+  defp safe_svg_id(_), do: "_default"
 end

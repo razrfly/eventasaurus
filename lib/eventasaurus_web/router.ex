@@ -553,12 +553,17 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Public social card generation (no auth required)
-  scope "/events", EventasaurusWeb do
+  # These routes mirror the public event/poll page structure at root scope
+  scope "/", EventasaurusWeb do
     pipe_through :image
 
-    # Cache-busting social card generation (by slug with hash)
+    # Event social card generation (matches public event route at /:slug)
     get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
       as: :social_card_cached
+
+    # Poll social card generation (matches public poll route at /:slug/polls/:poll_id)
+    get "/:slug/polls/:poll_id/social-card-:hash/*rest", PollSocialCardController, :generate_card_by_id,
+      as: :poll_social_card_cached
   end
 
   # Other scopes may use custom stacks.

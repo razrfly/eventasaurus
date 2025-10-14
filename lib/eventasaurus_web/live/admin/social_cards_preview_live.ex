@@ -14,13 +14,16 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    mock_event = generate_mock_event()
+
     {:ok,
      socket
      |> assign(:page_title, "Social Card Design Preview")
      |> assign(:themes, Themes.valid_themes())
      |> assign(:selected_theme, :all)
      |> assign(:card_type, :event)
-     |> assign(:mock_event, generate_mock_event())
+     |> assign(:mock_event, mock_event)
+     |> assign(:mock_poll, generate_mock_poll(mock_event))
      |> generate_previews()}
   end
 
@@ -47,7 +50,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         _ -> socket.assigns.card_type
       end
 
-    {:noreply, assign(socket, :card_type, card_type)}
+    {:noreply, socket |> assign(:card_type, card_type) |> generate_previews()}
   end
 
   # Generate preview data for all (or selected) themes
@@ -64,8 +67,17 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         # Create event with the specified theme
         event = %{socket.assigns.mock_event | theme: theme}
 
-        # Generate SVG using the public function
-        svg = SocialCardView.render_social_card_svg(event)
+        # Generate SVG based on card type
+        svg =
+          case socket.assigns.card_type do
+            :poll ->
+              # Create poll with event association
+              poll = %{socket.assigns.mock_poll | event: event}
+              SocialCardView.render_poll_card_svg(poll)
+
+            :event ->
+              SocialCardView.render_social_card_svg(event)
+          end
 
         # Get theme colors for display
         colors = Themes.get_default_customizations(theme)
@@ -92,6 +104,19 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       slug: "mock-event-preview",
       # Add any other fields that render_social_card_svg might need
       description: "This is a mock event for testing social card designs",
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Generate mock poll data for preview
+  defp generate_mock_poll(event) do
+    %{
+      id: 999,
+      title: "What movie should we watch for our next movie night?",
+      poll_type: "movie",
+      phase: "voting",
+      event: event,
+      event_id: 1,
       updated_at: DateTime.utc_now()
     }
   end

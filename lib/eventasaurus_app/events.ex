@@ -4203,6 +4203,33 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Gets a single poll with poll_options preloaded for social card generation.
+
+  Returns nil if poll not found.
+  Preloads poll_options ordered by vote count (for social card display).
+  """
+  def get_poll_with_options(id) do
+    poll = Repo.get(Poll, id)
+
+    if poll do
+      # Preload poll_options ordered by vote count (most popular first)
+      # This ensures the social card shows the most relevant options
+      poll_options_query =
+        from(po in PollOption,
+          where: po.poll_id == ^poll.id and po.status == "active",
+          left_join: v in assoc(po, :votes),
+          group_by: po.id,
+          order_by: [desc: count(v.id), asc: po.order_index],
+          limit: 10
+        )
+
+      Repo.preload(poll, poll_options: poll_options_query)
+    else
+      nil
+    end
+  end
+
+  @doc """
   Gets a single poll.
 
   Raises if poll not found.
