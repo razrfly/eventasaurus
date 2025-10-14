@@ -1,0 +1,90 @@
+defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
+  use EventasaurusWeb, :live_view
+
+  alias EventasaurusApp.Themes
+  alias EventasaurusWeb.SocialCardView
+
+  @moduledoc """
+  Admin design tool for previewing social card designs across all themes.
+
+  This LiveView provides a visual preview of social cards without needing
+  external tools like Facebook Sharing Debugger. Supports testing different
+  themes, mock data, and design iterations.
+  """
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     socket
+     |> assign(:page_title, "Social Card Design Preview")
+     |> assign(:themes, Themes.valid_themes())
+     |> assign(:selected_theme, :all)
+     |> assign(:card_type, :event)
+     |> assign(:mock_event, generate_mock_event())
+     |> generate_previews()}
+  end
+
+  @impl true
+  def handle_event("change_theme", %{"theme" => theme}, socket) do
+    selected_theme =
+      if theme == "all" do
+        :all
+      else
+        String.to_existing_atom(theme)
+      end
+
+    {:noreply, socket |> assign(:selected_theme, selected_theme) |> generate_previews()}
+  end
+
+  @impl true
+  def handle_event("change_card_type", %{"type" => type}, socket) do
+    card_type = String.to_existing_atom(type)
+    {:noreply, socket |> assign(:card_type, card_type)}
+  end
+
+  # Generate preview data for all (or selected) themes
+  defp generate_previews(socket) do
+    themes =
+      if socket.assigns.selected_theme == :all do
+        socket.assigns.themes
+      else
+        [socket.assigns.selected_theme]
+      end
+
+    previews =
+      Enum.map(themes, fn theme ->
+        # Create event with the specified theme
+        event = %{socket.assigns.mock_event | theme: theme}
+
+        # Generate SVG using the public function
+        svg = SocialCardView.render_social_card_svg(event)
+
+        # Get theme colors for display
+        colors = Themes.get_default_customizations(theme)
+
+        %{
+          theme: theme,
+          svg: svg,
+          colors: colors,
+          # Format theme name for display
+          display_name: theme |> Atom.to_string() |> String.capitalize()
+        }
+      end)
+
+    assign(socket, :previews, previews)
+  end
+
+  # Generate mock event data for preview
+  defp generate_mock_event do
+    %{
+      title: "Sample Event: Testing Social Card Design Across All Themes",
+      # Use a real image path that exists in the system
+      cover_image_url: "/images/events/abstract/abstract1.png",
+      theme: :minimal,
+      slug: "mock-event-preview",
+      # Add any other fields that render_social_card_svg might need
+      description: "This is a mock event for testing social card designs",
+      updated_at: DateTime.utc_now()
+    }
+  end
+end
