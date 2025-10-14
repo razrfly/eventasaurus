@@ -30,7 +30,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       if theme == "all" do
         :all
       else
-        String.to_existing_atom(theme)
+        # Safely map string to known theme atom to prevent crash from malicious input
+        Enum.find(socket.assigns.themes, fn t -> Atom.to_string(t) == theme end) || :all
       end
 
     {:noreply, socket |> assign(:selected_theme, selected_theme) |> generate_previews()}
@@ -38,8 +39,15 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   @impl true
   def handle_event("change_card_type", %{"type" => type}, socket) do
-    card_type = String.to_existing_atom(type)
-    {:noreply, socket |> assign(:card_type, card_type)}
+    # Safely map to allowed card types to prevent crash from malicious input
+    card_type =
+      case type do
+        "event" -> :event
+        "poll" -> :poll
+        _ -> socket.assigns.card_type
+      end
+
+    {:noreply, assign(socket, :card_type, card_type)}
   end
 
   # Generate preview data for all (or selected) themes
