@@ -489,18 +489,12 @@ defmodule EventasaurusWeb.SocialCardView do
                      "general-op-white.svg"
                    ])
   @logo_svg_dark (case File.read(@logo_path_dark) do
-                    {:ok, svg_content} ->
-                      {:ok, svg_content}
-
-                    {:error, _reason} ->
-                      {:error, :file_not_found}
+                    {:ok, svg_content} -> svg_content
+                    {:error, reason} -> raise "Failed to load dark logo SVG: #{inspect(reason)}"
                   end)
   @logo_svg_light (case File.read(@logo_path_light) do
-                     {:ok, svg_content} ->
-                       {:ok, svg_content}
-
-                     {:error, _reason} ->
-                       {:error, :file_not_found}
+                     {:ok, svg_content} -> svg_content
+                     {:error, reason} -> raise "Failed to load light logo SVG: #{inspect(reason)}"
                    end)
 
   @doc """
@@ -510,7 +504,7 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def get_logo_svg_element(_theme_suffix, theme_colors) do
     # Select the appropriate logo based on background color
-    {:ok, svg_content} =
+    svg_content =
       if is_dark_color?(theme_colors.primary) do
         @logo_svg_light
       else
@@ -570,6 +564,27 @@ defmodule EventasaurusWeb.SocialCardView do
 
       3 ->
         # Short hex format #RGB
+        with {r, ""} <- Integer.parse(String.slice(hex, 0, 1), 16),
+             {g, ""} <- Integer.parse(String.slice(hex, 1, 1), 16),
+             {b, ""} <- Integer.parse(String.slice(hex, 2, 1), 16) do
+          # Convert from 0-15 to 0-255
+          {r * 17, g * 17, b * 17}
+        else
+          _ -> nil
+        end
+
+      8 ->
+        # Hex with alpha #RRGGBBAA (ignore alpha for luminance)
+        with {r, ""} <- Integer.parse(String.slice(hex, 0, 2), 16),
+             {g, ""} <- Integer.parse(String.slice(hex, 2, 2), 16),
+             {b, ""} <- Integer.parse(String.slice(hex, 4, 2), 16) do
+          {r, g, b}
+        else
+          _ -> nil
+        end
+
+      4 ->
+        # Short hex with alpha #RGBA (ignore alpha for luminance)
         with {r, ""} <- Integer.parse(String.slice(hex, 0, 1), 16),
              {g, ""} <- Integer.parse(String.slice(hex, 1, 1), 16),
              {b, ""} <- Integer.parse(String.slice(hex, 2, 1), 16) do
