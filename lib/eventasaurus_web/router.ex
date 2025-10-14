@@ -59,6 +59,9 @@ defmodule EventasaurusWeb.Router do
       live "/sources", Admin.SourceIndexLive, :index
       live "/sources/new", Admin.SourceFormLive, :new
       live "/sources/:id/edit", Admin.SourceFormLive, :edit
+
+      # Design tools (dev - no auth)
+      live "/design/social-cards", Admin.SocialCardsPreviewLive
     end
 
     # Category demo routes for testing
@@ -118,6 +121,9 @@ defmodule EventasaurusWeb.Router do
       live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
       live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
       live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
+
+      # Design tools (with admin authentication)
+      live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive
     end
   end
 

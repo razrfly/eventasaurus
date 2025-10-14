@@ -518,4 +518,189 @@ defmodule EventasaurusWeb.SocialCardView do
         """
     end
   end
+
+  @doc """
+  Renders a complete SVG social card for an event.
+  This is a public function that can be used by both the controller and preview tools.
+
+  ## Parameters
+    - event: Map with :title, :cover_image_url, :theme fields
+
+  ## Returns
+    Complete SVG markup as a string
+  """
+  def render_social_card_svg(event) do
+    # Sanitize event data first
+    sanitized_event = sanitize_event(event)
+
+    # Get theme name for unique IDs
+    theme_name = sanitized_event.theme || :minimal
+    theme_suffix = Atom.to_string(theme_name)
+
+    # Get theme colors from event's theme with error handling
+    theme_colors =
+      case get_theme_colors(theme_name) do
+        %{primary: primary, secondary: secondary} = colors
+        when is_binary(primary) and is_binary(secondary) ->
+          colors
+
+        _ ->
+          %{primary: "#1a1a1a", secondary: "#333333"}
+      end
+
+    theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
+
+    # Build image section - use different approaches for local vs external images
+    image_section =
+      if has_image?(sanitized_event) do
+        # Check if this is a local static file or external URL
+        if String.starts_with?(sanitized_event.cover_image_url, "/") do
+          # Local static file - use base64 data URL (this works)
+          case local_image_data_url(sanitized_event) do
+            nil ->
+              # Fallback to "No Image" if image processing fails
+              """
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+              <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+              """
+
+            data_url ->
+              """
+              <image href="#{data_url}"
+                     x="418" y="32"
+                     width="350" height="350"
+                     clip-path="url(#imageClip-#{theme_suffix})"
+                     preserveAspectRatio="xMidYMid meet"/>
+              """
+          end
+        else
+          # External URL - download, optimize, and use base64 data URL
+          case optimized_external_image_data_url(sanitized_event) do
+            nil ->
+              # Fallback to "No Image" if download/optimization fails
+              """
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+              <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+              """
+
+            data_url ->
+              """
+              <image href="#{data_url}"
+                     x="418" y="32"
+                     width="350" height="350"
+                     clip-path="url(#imageClip-#{theme_suffix})"
+                     preserveAspectRatio="xMidYMid meet"/>
+              """
+          end
+        end
+      else
+        """
+        <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+        <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+        """
+      end
+
+    # Build title sections - positioned lower for better balance
+    title_line_1 =
+      if format_title(sanitized_event.title, 0) != "" do
+        y_pos = title_line_y_position(0, calculate_font_size(sanitized_event.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(sanitized_event.title, 0)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_2 =
+      if format_title(sanitized_event.title, 1) != "" do
+        y_pos = title_line_y_position(1, calculate_font_size(sanitized_event.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(sanitized_event.title, 1)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_3 =
+      if format_title(sanitized_event.title, 2) != "" do
+        y_pos = title_line_y_position(2, calculate_font_size(sanitized_event.title))
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(sanitized_event.title, 2)}</tspan>)
+      else
+        ""
+      end
+
+    # Create the complete SVG with unique IDs per theme
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <svg width="800" height="419" viewBox="0 0 800 419" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Gradient background definition (unique per theme) -->
+        <linearGradient id="bgGradient-#{theme_suffix}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#{format_color(theme.color1)};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#{format_color(theme.color2)};stop-opacity:1" />
+        </linearGradient>
+
+        <!-- Clip path for rounded corners on event image (unique per theme) -->
+        <clipPath id="imageClip-#{theme_suffix}">
+          <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
+        </clipPath>
+
+        <!-- Clip path for RSVP bubble rounded corners (unique per theme) -->
+        <clipPath id="rsvpClip-#{theme_suffix}">
+          <rect x="32" y="355" width="80" height="32" rx="16" ry="16"/>
+        </clipPath>
+      </defs>
+
+      <!-- Background gradient -->
+      <rect width="800" height="419" fill="url(#bgGradient-#{theme_suffix})"/>
+
+      <!-- Event image (positioned top-right with rounded corners) -->
+      #{image_section}
+
+      <!-- Logo (top-left) -->
+      #{get_logo_svg_element()}
+
+      <!-- Event title (left-aligned, multi-line) -->
+      <text font-family="Arial, sans-serif" font-weight="bold"
+            font-size="#{calculate_font_size(sanitized_event.title)}" fill="white">
+        #{title_line_1}
+        #{title_line_2}
+        #{title_line_3}
+      </text>
+
+      <!-- RSVP bubble (bottom-left) -->
+      <rect x="32" y="355" width="80" height="32" rx="16" ry="16" fill="white" opacity="0.95"/>
+      <text x="72" y="375" text-anchor="middle" font-family="Arial, sans-serif"
+            font-size="14" font-weight="bold" fill="#374151">RSVP</text>
+    </svg>
+    """
+  end
+
+  # Private helper to extract colors from theme with error handling
+  defp get_theme_colors(theme) do
+    try do
+      theme_config = EventasaurusApp.Themes.get_default_customizations(theme)
+
+      colors =
+        if is_map(theme_config) do
+          Map.get(theme_config, "colors", %{})
+        else
+          %{}
+        end
+
+      %{
+        primary: validate_color_or_default(Map.get(colors, "primary"), "#1a1a1a"),
+        secondary: validate_color_or_default(Map.get(colors, "secondary"), "#333333"),
+        accent: validate_color_or_default(Map.get(colors, "accent"), "#0066cc"),
+        text: validate_color_or_default(Map.get(colors, "text"), "#ffffff")
+      }
+    rescue
+      error ->
+        require Logger
+        Logger.error("Failed to get theme colors for #{inspect(theme)}: #{inspect(error)}")
+        %{primary: "#1a1a1a", secondary: "#333333", accent: "#0066cc", text: "#ffffff"}
+    end
+  end
+
+  defp validate_color_or_default(color, default) when is_binary(color) do
+    if Regex.match?(~r/^#[0-9A-Fa-f]{3,8}$/i, color), do: color, else: default
+  end
+
+  defp validate_color_or_default(_, default), do: default
 end

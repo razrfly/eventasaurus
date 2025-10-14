@@ -121,6 +121,12 @@ defmodule EventasaurusWeb.EventSocialCardController do
 
   # Private helper to render SVG template with proper context
   defp render_svg_template(event) do
+    # Use the public function from SocialCardView
+    EventasaurusWeb.SocialCardView.render_social_card_svg(event)
+  end
+
+  # Keep old implementation as backup reference (can be removed later)
+  defp render_svg_template_legacy(event) do
     # Get theme colors from event's theme with error handling
     theme_colors =
       case get_theme_colors(event.theme || :minimal) do
