@@ -49,6 +49,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       # Get temp votes from assigns or default to empty
       temp_votes = Map.get(assigns, :temp_votes, %{})
 
+      # Check if we should hide the header (when showing in list view)
+      hide_header = Map.get(assigns, :hide_header, false)
+
       {:ok,
        socket
        |> assign(:event, event)
@@ -58,6 +61,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        |> assign(:poll_stats, poll_stats)
        |> assign(:user_votes, user_votes)
        |> assign(:temp_votes, temp_votes)
+       |> assign(:hide_header, hide_header)
        |> assign(:showing_add_form, false)
        |> assign(:option_title, "")
        |> assign(:adding_option, false)
@@ -324,19 +328,21 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     <div class="public-generic-poll">
       <%= if @poll do %>
         <div class="mb-6">
-          <div class="mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">
-              <%= poll_emoji(@poll.poll_type) %> 
-              <%= get_poll_title_base(@poll) %>
-              <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
-                <span class="text-sm text-gray-500 font-normal">(<%= search_location %>)</span>
-              <% end %>
-            </h3>
-            <p class="text-sm text-gray-600">
-              <%= PollPhaseUtils.get_phase_description(@poll.phase, @poll.poll_type) %>
-            </p>
-            <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
-          </div>
+          <%= if !@hide_header do %>
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-gray-900">
+                <%= poll_emoji(@poll.poll_type) %>
+                <%= get_poll_title_base(@poll) %>
+                <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
+                  <span class="text-sm text-gray-500 font-normal">(<%= search_location %>)</span>
+                <% end %>
+              </h3>
+              <p class="text-sm text-gray-600">
+                <%= PollPhaseUtils.get_phase_description(@poll.phase, @poll.poll_type) %>
+              </p>
+              <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
+            </div>
+          <% end %>
 
           <!-- Poll Options List with Voting -->
           <%= if length(@poll_options) > 0 do %>
@@ -352,6 +358,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                   loading={false}
                   temp_votes={@temp_votes}
                   anonymous_mode={is_nil(@current_user)}
+                  show_header={!@hide_header}
                 />
               </div>
             <% else %>

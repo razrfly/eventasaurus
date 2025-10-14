@@ -4272,6 +4272,67 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Gets a poll by its sequential number within an event.
+
+  ## Examples
+
+      iex> get_poll_by_number!(5, event_id)
+      %Poll{number: 5}
+
+      iex> get_poll_by_number!(999, event_id)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_poll_by_number!(number, event_id) when is_integer(number) do
+    poll =
+      from(p in Poll,
+        where: p.event_id == ^event_id and p.number == ^number,
+        where: is_nil(p.deleted_at)
+      )
+      |> Repo.one!()
+
+    # For date_selection polls, we need to order the options chronologically
+    poll_options_query =
+      if poll.poll_type == "date_selection" do
+        from(po in PollOption,
+          where: po.poll_id == ^poll.id,
+          order_by: [
+            asc:
+              fragment(
+                "
+          CASE
+            WHEN ?->'date' IS NOT NULL THEN
+              CASE
+                WHEN ?->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (?->>'date')::date
+                ELSE '9999-12-31'::date
+              END
+            ELSE '9999-12-31'::date
+          END
+        ",
+                po.metadata,
+                po.metadata,
+                po.metadata
+              )
+          ],
+          preload: [:suggested_by, :votes]
+        )
+      else
+        # For other poll types, use the regular order_index
+        from(po in PollOption,
+          where: po.poll_id == ^poll.id,
+          order_by: [asc: po.order_index],
+          preload: [:suggested_by, :votes]
+        )
+      end
+
+    poll_options = Repo.all(poll_options_query)
+
+    poll
+    |> Repo.preload([:event, :created_by])
+    |> Map.put(:poll_options, poll_options)
+  end
+
+  @doc """
   Gets a poll for a specific event and poll type.
   """
   def get_event_poll(%Event{} = event, poll_type, opts \\ []) do

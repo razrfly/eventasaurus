@@ -974,23 +974,20 @@ defmodule EventasaurusWeb.SocialCardView do
   end
 
   # Renders a colorful badge for poll type indicator
+  # Left-justified layout with larger icon (30x30) and no background
   defp render_poll_type_badge(poll_type) do
     {icon_svg, badge_text} = get_poll_type_badge_info(poll_type)
 
     """
     <g>
-      <!-- Badge background pill -->
-      <rect x="505" y="88" width="190" height="38" rx="19" ry="19"
-            fill="white" opacity="0.2"/>
-
-      <!-- Icon with color -->
-      <g transform="translate(520, 97)">
+      <!-- Icon with color (50% larger: 30x30 instead of 20x20) -->
+      <g transform="translate(450, 88)">
         #{icon_svg}
       </g>
 
-      <!-- Badge text -->
-      <text x="630" y="112" text-anchor="middle"
-            font-family="Arial, sans-serif" font-size="16"
+      <!-- Badge text (left-aligned next to icon) -->
+      <text x="490" y="110" text-anchor="start"
+            font-family="Arial, sans-serif" font-size="18"
             font-weight="600" fill="white" opacity="0.95">
         #{badge_text}
       </text>
@@ -1006,14 +1003,14 @@ defmodule EventasaurusWeb.SocialCardView do
   # License: MIT License - Copyright 2019 Twitter, Inc and other contributors
   # Graphics licensed under CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
   #
-  # These SVG paths are extracted from Twemoji and scaled to fit 20x20 icon space.
-  # Original Twemoji viewBox is 0 0 36 36, scaled here with transform to ~0.556x (20/36).
+  # These SVG paths are extracted from Twemoji and scaled to fit 30x30 icon space.
+  # Original Twemoji viewBox is 0 0 36 36, scaled here with transform to ~0.834x (30/36).
 
   # Returns {icon_svg, text} for each poll type
   defp get_poll_type_badge_info("movie") do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <path fill="#3F7123" d="M35.845 32c0 2.2-1.8 4-4 4h-26c-2.2 0-4-1.8-4-4V19c0-2.2 1.8-4 4-4h26c2.2 0 4 1.8 4 4v13z"/>
         <path fill="#3F7123" d="M1.845 15h34v6h-34z"/>
         <path fill="#CCD6DD" d="M1.845 15h34v7h-34z"/>
@@ -1029,7 +1026,7 @@ defmodule EventasaurusWeb.SocialCardView do
   defp get_poll_type_badge_info("places") do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <ellipse fill="#292F33" cx="18" cy="34.5" rx="4" ry="1.5"/>
         <path fill="#99AAB5" d="M14.339 10.725S16.894 34.998 18.001 35c1.106.001 3.66-24.275 3.66-24.275h-7.322z"/>
         <circle fill="#DD2E44" cx="18" cy="8" r="8"/>
@@ -1042,7 +1039,7 @@ defmodule EventasaurusWeb.SocialCardView do
   defp get_poll_type_badge_info("venue") do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <path fill="#DAC8B1" d="M34 13c0 1.104-.896 2-2 2h-6c-1.104 0-2-.896-2-2v-2c0-1.104.896-2 2-2h6c1.104 0 2 .896 2 2v2zm-22 0c0 1.104-.896 2-2 2H4c-1.104 0-2-.896-2-2v-2c0-1.104.896-2 2-2h6c1.104 0 2 .896 2 2v2z"/>
         <path fill="#F1DCC1" d="M36 34c0 1.104-.896 2-2 2H2c-1.104 0-2-.896-2-2V13c0-1.104.896-2 2-2h32c1.104 0 2 .896 2 2v21z"/>
         <path fill="#DAC8B1" d="M22 9V7c0-.738-.404-1.376-1-1.723V5c0-1.104-.896-2-2-2h-2c-1.104 0-2 .896-2 2v.277c-.595.347-1 .985-1 1.723v2h-1v27h10V9h-1z"/>
@@ -1061,7 +1058,7 @@ defmodule EventasaurusWeb.SocialCardView do
   defp get_poll_type_badge_info("date_selection") do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <path fill="#E0E7EC" d="M36 32c0 2.209-1.791 4-4 4H4c-2.209 0-4-1.791-4-4V9c0-2.209 1.791-4 4-4h28c2.209 0 4 1.791 4 4v23z"/>
         <path d="M23.657 19.12H17.87c-1.22 0-1.673-.791-1.673-1.56 0-.791.429-1.56 1.673-1.56h8.184c1.154 0 1.628 1.04 1.628 1.628 0 .452-.249.927-.52 1.492l-5.607 11.395c-.633 1.266-.882 1.717-1.899 1.717-1.244 0-1.877-.949-1.877-1.605 0-.271.068-.474.226-.791l5.652-10.716zM10.889 19h-.5c-1.085 0-1.538-.731-1.538-1.5 0-.792.565-1.5 1.538-1.5h2.015c.972 0 1.515.701 1.515 1.605V30.47c0 1.13-.558 1.763-1.53 1.763s-1.5-.633-1.5-1.763V19z" fill="#66757F"/>
         <path fill="#DD2F45" d="M34 0h-3.277c.172.295.277.634.277 1 0 1.104-.896 2-2 2s-2-.896-2-2c0-.366.105-.705.277-1H8.723C8.895.295 9 .634 9 1c0 1.104-.896 2-2 2s-2-.896-2-2c0-.366.105-.705.277-1H2C.896 0 0 .896 0 2v11h36V2c0-1.104-.896-2-2-2z"/>
@@ -1076,7 +1073,7 @@ defmodule EventasaurusWeb.SocialCardView do
   defp get_poll_type_badge_info("time") do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <path fill="#FFCC4D" d="M20 6.042c0 1.112-.903 2.014-2 2.014s-2-.902-2-2.014V2.014C16 .901 16.903 0 18 0s2 .901 2 2.014v4.028z"/>
         <path fill="#FFAC33" d="M9.18 36c-.224 0-.452-.052-.666-.159-.736-.374-1.035-1.28-.667-2.027l8.94-18.127c.252-.512.768-.835 1.333-.835s1.081.323 1.333.835l8.941 18.127c.368.747.07 1.653-.666 2.027-.736.372-1.631.07-1.999-.676L18.121 19.74l-7.607 15.425c-.262.529-.788.835-1.334.835z"/>
         <path fill="#58595B" d="M18.121 20.392c-.263 0-.516-.106-.702-.295L3.512 5.998c-.388-.394-.388-1.031 0-1.424s1.017-.393 1.404 0L18.121 17.96 31.324 4.573c.389-.393 1.017-.393 1.405 0 .388.394.388 1.031 0 1.424l-13.905 14.1c-.187.188-.439.295-.703.295z"/>
@@ -1093,7 +1090,7 @@ defmodule EventasaurusWeb.SocialCardView do
   defp get_poll_type_badge_info("music_track") do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <path fill="#5DADEC" d="M34.209.206L11.791 2.793C10.806 2.907 10 3.811 10 4.803v18.782C9.09 23.214 8.075 23 7 23c-3.865 0-7 2.685-7 6 0 3.314 3.135 6 7 6s7-2.686 7-6V10.539l18-2.077v13.124c-.91-.372-1.925-.586-3-.586-3.865 0-7 2.685-7 6 0 3.314 3.135 6 7 6s7-2.686 7-6V1.803c0-.992-.806-1.71-1.791-1.597z"/>
       </g>
       """,
@@ -1104,7 +1101,7 @@ defmodule EventasaurusWeb.SocialCardView do
   defp get_poll_type_badge_info(_) do
     {
       """
-      <g transform="scale(0.556)">
+      <g transform="scale(0.834)">
         <path fill="#CCD6DD" d="M31 2H5C3.343 2 2 3.343 2 5v26c0 1.657 1.343 3 3 3h26c1.657 0 3-1.343 3-3V5c0-1.657-1.343-3-3-3z"/>
         <path fill="#E1E8ED" d="M31 1H5C2.791 1 1 2.791 1 5v26c0 2.209 1.791 4 4 4h26c2.209 0 4-1.791 4-4V5c0-2.209-1.791-4-4-4zm0 2c1.103 0 2 .897 2 2v4h-6V3h4zm-4 16h6v6h-6v-6zm0-2v-6h6v6h-6zM25 3v6h-6V3h6zm-6 8h6v6h-6v-6zm0 8h6v6h-6v-6zM17 3v6h-6V3h6zm-6 8h6v6h-6v-6zm0 8h6v6h-6v-6zM3 5c0-1.103.897-2 2-2h4v6H3V5zm0 6h6v6H3v-6zm0 8h6v6H3v-6zm2 14c-1.103 0-2-.897-2-2v-4h6v6H5zm6 0v-6h6v6h-6zm8 0v-6h6v6h-6zm12 0h-4v-6h6v4c0 1.103-.897 2-2 2z"/>
         <path fill="#5C913B" d="M13 33H7V16c0-1.104.896-2 2-2h2c1.104 0 2 .896 2 2v17z"/>
