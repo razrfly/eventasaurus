@@ -4217,6 +4217,7 @@ defmodule EventasaurusApp.Events do
       poll_options_query =
         from(po in PollOption,
           where: po.poll_id == ^poll.id and po.status == "active",
+          where: is_nil(po.deleted_at),
           left_join: v in assoc(po, :votes),
           group_by: po.id,
           order_by: [desc: count(v.id), asc: po.order_index],

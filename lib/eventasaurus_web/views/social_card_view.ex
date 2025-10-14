@@ -866,8 +866,14 @@ defmodule EventasaurusWeb.SocialCardView do
     Complete SVG markup as a string
   """
   def render_poll_card_svg(poll) do
-    # Get parent event for theme
-    event = poll.event
+    # Get parent event for theme (handle nil/NotLoaded)
+    event =
+      case Map.get(poll, :event) do
+        %Ecto.Association.NotLoaded{} -> %{theme: :minimal}
+        nil -> %{theme: :minimal}
+        ev when is_map(ev) -> ev
+        _ -> %{theme: :minimal}
+      end
 
     # Sanitize poll data
     sanitized_poll = sanitize_poll(poll)
