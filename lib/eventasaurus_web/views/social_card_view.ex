@@ -458,7 +458,7 @@ defmodule EventasaurusWeb.SocialCardView do
 
   # Logo constants for consistent positioning
   @logo_x 32
-  @logo_y 16
+  @logo_y 32
   @logo_width 280
   @logo_height 120
 
@@ -474,36 +474,47 @@ defmodule EventasaurusWeb.SocialCardView do
     @title_base_y + line_number * (font_size_int + @title_line_spacing)
   end
 
-  # Pre-load and encode logo at compile time for better performance
+  # Pre-load logo SVG at compile time for better performance
   @logo_path Path.join([
                :code.priv_dir(:eventasaurus),
                "static",
                "images",
                "logos",
-               "general.png"
+               "general-compressed.svg"
              ])
-  @logo_data (case File.read(@logo_path) do
-                {:ok, image_data} ->
-                  base64_data = Base.encode64(image_data)
-                  data_url = "data:image/png;base64,#{base64_data}"
-                  {:ok, data_url}
+  @logo_svg (case File.read(@logo_path) do
+               {:ok, svg_content} ->
+                 {:ok, svg_content}
 
-                {:error, _reason} ->
-                  {:error, :file_not_found}
-              end)
+               {:error, _reason} ->
+                 {:error, :file_not_found}
+             end)
 
   @doc """
-  Gets the logo as an SVG element with base64 data URL for reliable rendering.
+  Gets the logo as an SVG element.
+  Embeds the logo SVG content directly with proper positioning and scaling.
   Falls back to dinosaur emoji with consistent positioning if logo file cannot be read.
   """
   def get_logo_svg_element do
-    case @logo_data do
-      {:ok, data_url} ->
+    case @logo_svg do
+      {:ok, svg_content} ->
+        # Extract just the inner SVG content (remove <svg> wrapper)
+        # We'll position it using a <g> transform
+        inner_svg =
+          svg_content
+          |> String.replace(~r/^<\?xml[^>]+>\s*/i, "")
+          |> String.replace(~r/<svg[^>]*>/i, "")
+          |> String.replace(~r/<\/svg>\s*$/i, "")
+
+        # Scale uniformly to fit width while maintaining aspect ratio (original is 715x166)
+        # Target width: 280
+        # This maintains the proper aspect ratio: 715/166 ≈ 4.3:1
+        scale = @logo_width / 715
+
         """
-        <image href="#{data_url}"
-               x="#{@logo_x}" y="#{@logo_y}"
-               width="#{@logo_width}" height="#{@logo_height}"
-               preserveAspectRatio="xMidYMid meet"/>
+        <g transform="translate(#{@logo_x}, #{@logo_y}) scale(#{scale})">
+          #{inner_svg}
+        </g>
         """
 
       {:error, :file_not_found} ->
@@ -535,7 +546,8 @@ defmodule EventasaurusWeb.SocialCardView do
 
     # Get theme name for unique IDs
     theme_name = sanitized_event.theme || :minimal
-    theme_suffix = Atom.to_string(theme_name)
+    # Use to_string/1 instead of Atom.to_string/1 to handle both atoms and strings safely
+    theme_suffix = to_string(theme_name)
 
     # Get theme colors from event's theme with error handling
     theme_colors =
