@@ -534,8 +534,8 @@ defmodule EventasaurusWeb.Router do
       # Public polls page (must be before catch-all)
       live "/:slug/polls", PublicPollsLive
 
-      # Individual poll page
-      live "/:slug/polls/:poll_id", PublicPollLive
+      # Individual poll page (by sequential number)
+      live "/:slug/polls/:number", PublicPollLive
 
       # ===== USER-CREATED EVENTS (private events made public) =====
       # PublicEventLive - Individual user-created event with registration
@@ -561,8 +561,8 @@ defmodule EventasaurusWeb.Router do
     get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
       as: :social_card_cached
 
-    # Poll social card generation (matches public poll route at /:slug/polls/:poll_id)
-    get "/:slug/polls/:poll_id/social-card-:hash/*rest", PollSocialCardController, :generate_card_by_id,
+    # Poll social card generation (matches public poll route at /:slug/polls/:number)
+    get "/:slug/polls/:number/social-card-:hash/*rest", PollSocialCardController, :generate_card_by_number,
       as: :poll_social_card_cached
   end
 

@@ -1477,23 +1477,52 @@ defmodule EventasaurusWeb.PublicEventLive do
           <!-- Event Polls Section -->
           <%= if length(@event_polls || []) > 0 do %>
             <div class="space-y-6 mt-12">
+              <!-- Polls Section Header -->
+              <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Event Polls</h2>
+                <.link
+                  navigate={~p"/#{@event.slug}/polls"}
+                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                >
+                  View All Polls
+                  <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                </.link>
+              </div>
+
               <%= for poll <- @event_polls do %>
                 <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mb-8 shadow-sm">
-                  <div class="flex flex-wrap items-center gap-3 mb-4">
-                    <div class="text-2xl">
-                      <%= poll_emoji(poll.poll_type) %>
+                  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div class="flex flex-wrap items-center gap-3 flex-1">
+                      <div class="text-2xl">
+                        <%= poll_emoji(poll.poll_type) %>
+                      </div>
+                      <h2 class="text-xl font-semibold text-gray-900">
+                        <.link navigate={~p"/#{@event.slug}/polls/#{poll.number}"} class="hover:text-blue-600 transition-colors">
+                          <%= poll.title %>
+                        </.link>
+                      </h2>
+                      <div class={"px-3 py-1 rounded-full text-sm font-medium #{poll_phase_class(poll.phase)}"}>
+                        <%= case poll.phase do %>
+                          <% "list_building" -> %>Building Options
+                          <% "voting" -> %>Voting Open
+                          <% "voting_with_suggestions" -> %>Voting Open
+                          <% "voting_only" -> %>Voting Only
+                          <% "closed" -> %>Voting Closed
+                          <% _ -> %>Active
+                        <% end %>
+                      </div>
                     </div>
-                    <h2 class="text-xl font-semibold text-gray-900"><%= poll.title %></h2>
-                    <div class={"px-3 py-1 rounded-full text-sm font-medium #{poll_phase_class(poll.phase)}"}>
-                      <%= case poll.phase do %>
-                        <% "list_building" -> %>Building Options
-                        <% "voting" -> %>Voting Open
-                        <% "voting_with_suggestions" -> %>Voting Open
-                        <% "voting_only" -> %>Voting Only
-                        <% "closed" -> %>Voting Closed
-                        <% _ -> %>Active
-                      <% end %>
-                    </div>
+                    <.link
+                      navigate={~p"/#{@event.slug}/polls/#{poll.number}"}
+                      class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200 border border-gray-300"
+                    >
+                      View Poll
+                      <svg class="ml-1.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                      </svg>
+                    </.link>
                   </div>
 
                   <%= cond do %>

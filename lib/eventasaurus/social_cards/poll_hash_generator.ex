@@ -41,11 +41,11 @@ defmodule Eventasaurus.SocialCards.PollHashGenerator do
   @doc """
   Generates a cache-busting URL path for a poll social card.
 
-  Format: /:event_slug/polls/:poll_id/social-card-{hash}.png
+  Format: /:event_slug/polls/:poll_number/social-card-{hash}.png
 
   ## Examples
 
-      iex> poll = %{id: 1, title: "Movie Poll", updated_at: ~N[2023-01-01 12:00:00]}
+      iex> poll = %{number: 1, title: "Movie Poll", updated_at: ~N[2023-01-01 12:00:00]}
       iex> event = %{slug: "my-event"}
       iex> Eventasaurus.SocialCards.PollHashGenerator.generate_url_path(poll, event)
       "/my-event/polls/1/social-card-a1b2c3d4.png"
@@ -61,11 +61,11 @@ defmodule Eventasaurus.SocialCards.PollHashGenerator do
         _ -> "unknown-event"
       end
 
-    # Get poll ID
-    poll_id = Map.get(poll, :id)
+    # Get poll number (use ID as fallback for backwards compatibility during migration)
+    poll_number = Map.get(poll, :number) || Map.get(poll, :id)
 
     hash = generate_hash(poll)
-    "/#{event_slug}/polls/#{poll_id}/social-card-#{hash}.png"
+    "/#{event_slug}/polls/#{poll_number}/social-card-#{hash}.png"
   end
 
   @doc """

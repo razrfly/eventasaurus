@@ -22,6 +22,9 @@ defmodule EventasaurusApp.Events.Poll do
     field(:max_options_per_user, :integer)
     field(:auto_finalize, :boolean, default: false)
 
+    # Sequential number for this poll within its event (auto-assigned by DB trigger)
+    field(:number, :integer)
+
     # Privacy and ordering fields
     field(:privacy_settings, :map, default: %{})
     field(:order_index, :integer, default: 0)

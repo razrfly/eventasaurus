@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.PublicPollLive do
   import EventasaurusWeb.PollHelpers
 
   @impl true
-  def mount(%{"slug" => slug, "poll_id" => poll_id}, _session, socket) do
+  def mount(%{"slug" => slug, "number" => number}, _session, socket) do
     if ReservedSlugs.reserved?(slug) do
       {:ok,
        socket
@@ -32,7 +32,7 @@ defmodule EventasaurusWeb.PublicPollLive do
            |> redirect(to: ~p"/")}
 
         event ->
-          case get_poll_by_id(event, poll_id) do
+          case get_poll_by_number(event, number) do
             nil ->
               {:ok,
                socket
@@ -56,7 +56,7 @@ defmodule EventasaurusWeb.PublicPollLive do
                )
                |> assign(
                  :canonical_url,
-                 "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls/#{poll.id}"
+                 "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls/#{poll.number}"
                )
                # Anonymous voting state
                |> assign(:show_anonymous_voter, false)
@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.PublicPollLive do
         socket
         |> assign(:meta_image,
           "#{base_url}#{PollHashGenerator.generate_url_path(poll, event)}")
-        |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.id}")
+        |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.number}")
       else
         socket
       end
@@ -242,11 +242,14 @@ defmodule EventasaurusWeb.PublicPollLive do
 
   # Private functions
 
-  defp get_poll_by_id(event, poll_id) do
-    case Integer.parse(poll_id) do
-      {id, ""} ->
-        polls = Events.list_polls(event)
-        Enum.find(polls, &(&1.id == id))
+  defp get_poll_by_number(event, number_str) do
+    case Integer.parse(number_str) do
+      {number, ""} ->
+        try do
+          Events.get_poll_by_number!(number, event.id)
+        rescue
+          Ecto.NoResultsError -> nil
+        end
 
       _ ->
         nil
