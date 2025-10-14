@@ -179,9 +179,11 @@ defmodule Eventasaurus.Sitemap do
   defp calculate_changefreq(starts_at) when is_nil(starts_at), do: :weekly
 
   defp calculate_changefreq(starts_at) do
-    now = DateTime.utc_now()
+    # Convert NaiveDateTime to Date for comparison
+    event_date = to_date(starts_at)
+    today = Date.utc_today()
 
-    case DateTime.compare(starts_at, now) do
+    case Date.compare(event_date, today) do
       # Future event - might change as scrapers run weekly
       comp when comp in [:gt, :eq] -> :weekly
       # Past event - won't change anymore
@@ -194,8 +196,10 @@ defmodule Eventasaurus.Sitemap do
   defp calculate_priority(starts_at) when is_nil(starts_at), do: 0.5
 
   defp calculate_priority(starts_at) do
-    now = DateTime.utc_now()
-    diff_days = DateTime.diff(starts_at, now, :day)
+    # Convert NaiveDateTime to Date for comparison
+    event_date = to_date(starts_at)
+    today = Date.utc_today()
+    diff_days = Date.diff(event_date, today)
 
     cond do
       # Happening today or tomorrow - highest priority
@@ -216,6 +220,11 @@ defmodule Eventasaurus.Sitemap do
       diff_days < -30 -> 0.1
     end
   end
+
+  # Convert NaiveDateTime or DateTime to Date
+  defp to_date(%NaiveDateTime{} = naive_dt), do: NaiveDateTime.to_date(naive_dt)
+  defp to_date(%DateTime{} = dt), do: DateTime.to_date(dt)
+  defp to_date(%Date{} = date), do: date
 
   # Get the base URL for the sitemap
   defp get_base_url(opts) do

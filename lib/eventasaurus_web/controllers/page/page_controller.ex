@@ -118,12 +118,12 @@ defmodule EventasaurusWeb.PageController do
     requested_path =
       case params do
         %{"path" => path_parts} when is_list(path_parts) ->
-          # /sitemaps/* - serve the exact file requested
+          # /sitemaps/* - serve the exact file requested (e.g., sitemap-00001.xml.gz)
           "sitemaps/" <> Enum.join(path_parts, "/")
 
         _ ->
-          # /sitemap or /sitemap.xml - serve the main sitemap chunk
-          "sitemaps/sitemap-00001.xml.gz"
+          # /sitemap or /sitemap.xml - serve the main sitemap index file
+          "sitemaps/sitemap.xml.gz"
       end
 
     storage_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{requested_path}"
