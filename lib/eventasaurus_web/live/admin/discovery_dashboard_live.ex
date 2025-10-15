@@ -455,6 +455,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       "pubquiz-pl",
       "question-one",
       "geeks-who-drink",
+      "quizmeisters",
       "all"
     ]
 
@@ -690,6 +691,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         case source do
           "question-one" -> "UK & Ireland"
           "geeks-who-drink" -> "US & Canada"
+          "quizmeisters" -> "Australia"
           _ -> "Regional"
         end
 

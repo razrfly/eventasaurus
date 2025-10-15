@@ -1,0 +1,55 @@
+{
+  "results": {
+    "locations": [
+      {
+        "name": "The Library Bar",
+        "address": "123 Main St, Brooklyn, NY 11201",
+        "lat": 40.7128,
+        "lng": -74.006,
+        "phone": "555-123-4567",
+        "postcode": "11201",
+        "url": "https://quizmeisters.com/venues/library-bar",
+        "fields": [
+          {
+            "name": "Trivia",
+            "pivot_field_value": "Wednesdays at 7pm"
+          }
+        ]
+      },
+      {
+        "name": "The Rusty Nail",
+        "address": "456 Oak Ave, Portland, OR 97201",
+        "lat": 45.5152,
+        "lng": -122.6784,
+        "phone": "555-987-6543",
+        "postcode": "97201",
+        "url": "https://quizmeisters.com/venues/rusty-nail",
+        "fields": [
+          {
+            "name": "Survey Says",
+            "pivot_field_value": "Thursdays at 8:00 PM"
+          }
+        ]
+      },
+      {
+        "name": "Downtown Pub",
+        "address": "789 Elm Street, Austin, TX 78701",
+        "lat": 30.2672,
+        "lng": -97.7431,
+        "phone": null,
+        "postcode": "78701",
+        "url": "https://quizmeisters.com/venues/downtown-pub",
+        "fields": [
+          {
+            "name": "Trivia",
+            "pivot_field_value": "Tuesdays at 7:30pm"
+          },
+          {
+            "name": "Other",
+            "pivot_field_value": "Some other value"
+          }
+        ]
+      }
+    ]
+  }
+}

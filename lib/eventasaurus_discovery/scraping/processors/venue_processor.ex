@@ -361,13 +361,40 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp create_country(name, code, slug) do
-    %Country{}
-    |> Country.changeset(%{
-      name: name,
-      code: code,
-      slug: slug
-    })
-    |> Repo.insert!()
+    changeset =
+      %Country{}
+      |> Country.changeset(%{
+        name: name,
+        code: code,
+        slug: slug
+      })
+
+    case Repo.insert(changeset) do
+      {:ok, country} ->
+        country
+
+      {:error, changeset} ->
+        # Check if it's a unique constraint violation
+        if has_country_constraint_error?(changeset) do
+          # Another worker created it, fetch and return
+          Logger.info("Country '#{name}' (#{code}) already exists, fetching existing record")
+          Repo.get_by(Country, code: code) || Repo.get_by(Country, slug: slug)
+        else
+          # Some other error, log and return nil
+          Logger.error("Failed to create country '#{name}': #{inspect(changeset.errors)}")
+          nil
+        end
+    end
+  end
+
+  defp has_country_constraint_error?(changeset) do
+    Enum.any?(changeset.errors, fn
+      {:code, {_msg, [constraint: :unique, constraint_name: "countries_code_index"]}} ->
+        true
+
+      _ ->
+        false
+    end)
   end
 
   defp derive_country_code(country_name) when is_binary(country_name) do

@@ -87,6 +87,22 @@ sources = [
     }
   },
   %{
+    name: "Quizmeisters",
+    slug: "quizmeisters",
+    website_url: "https://quizmeisters.com",
+    priority: 35,
+    domains: ["trivia"],
+    aggregate_on_index: true,
+    aggregation_type: "trivia",
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 300,
+      "language" => "en",
+      "supports_recurring_events" => true,
+      "api_endpoint" => "https://storerocket.io/api/user/kDJ3BbK4mn/locations"
+    }
+  },
+  %{
     name: "PubQuiz Poland",
     slug: "pubquiz-pl",
     website_url: "https://pubquiz.pl",
