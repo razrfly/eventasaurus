@@ -218,7 +218,7 @@ defmodule Eventasaurus.Emails do
     <body>
         <div class="email-container">
             <div class="header">
-                <img src="https://wombie.com/images/logos/general-white.png" alt="Wombie - Event Planning Made Easy" style="width: 120px; height: auto; margin: 0 auto 20px auto; display: block;" />
+                <img src="https://wombie.com/images/logos/general-white.png" alt="Wombie - Event Planning Made Easy" style="width: 184px; height: auto; margin: 0 auto 20px auto; display: block;" />
                 <h1>You're Invited!</h1>
                 <p>#{html_escape(get_organizer_name(organizer))} has invited you to an event</p>
             </div>
@@ -260,7 +260,7 @@ defmodule Eventasaurus.Emails do
                 <p>Can't attend? Just ignore this email.</p>
                 <div style="margin-top: 20px;">
                     <a href="https://cirqus.co" target="_blank" rel="noopener noreferrer">
-                        <img src="https://wombie.com/images/logos/cirqus-tent.png" alt="A Cirqus Production" style="width: 60px; height: auto; opacity: 0.6; display: block; margin: 0 auto;" />
+                        <img src="https://wombie.com/images/logos/cirqus-tent.png" alt="A Cirqus Production" style="width: 48px; height: auto; display: block; margin: 0 auto;" />
                     </a>
                 </div>
             </div>
