@@ -52,7 +52,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       # Handle mode prop for consistent rendering approach
       # mode: :full (default) - Component renders with header
       # mode: :content - Component renders content only, parent handles header
-      mode = Map.get(assigns, :mode, :content)
+      mode = Map.get(assigns, :mode, :full)
 
       {:ok,
        socket

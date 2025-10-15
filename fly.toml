@@ -4,7 +4,7 @@
 #
 
 app = 'eventasaurus'
-primary_region = 'waw'
+primary_region = 'ams'
 kill_signal = 'SIGTERM'
 
 [build]
