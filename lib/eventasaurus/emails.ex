@@ -436,7 +436,8 @@ defmodule Eventasaurus.Emails do
         ""
 
       poll ->
-        poll_type_display = get_poll_type_display(poll.poll_type)
+        alias EventasaurusApp.Events.Poll
+        poll_type_display = Poll.poll_type_display(poll.poll_type)
 
         """
         <div style="background: #f8f9fa; padding: 25px; border-radius: 12px; margin: 25px 0; border-left: 4px solid #667eea;">
@@ -461,7 +462,8 @@ defmodule Eventasaurus.Emails do
         ""
 
       poll ->
-        poll_type_display = get_poll_type_display(poll.poll_type)
+        alias EventasaurusApp.Events.Poll
+        poll_type_display = Poll.poll_type_display(poll.poll_type)
         description = render_poll_description_text(poll)
 
         """
@@ -490,20 +492,6 @@ defmodule Eventasaurus.Emails do
       "#{poll.description}\n"
     else
       ""
-    end
-  end
-
-  defp get_poll_type_display(poll_type) do
-    case poll_type do
-      "movie" -> "Movies"
-      "places" -> "Places"
-      "custom" -> "Custom"
-      "time" -> "Time/Schedule"
-      "general" -> "General"
-      "venue" -> "Venue"
-      "date_selection" -> "Date Selection"
-      "music_track" -> "Music"
-      _ -> String.capitalize(poll_type)
     end
   end
 
