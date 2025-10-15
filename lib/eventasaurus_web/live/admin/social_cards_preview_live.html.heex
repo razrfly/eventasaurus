@@ -126,9 +126,9 @@
           </div>
         </div>
 
-        <!-- SVG Preview - Full size container that matches card dimensions -->
-        <div class="bg-white flex items-center justify-center" style="height: 419px;">
-          <div class="border border-gray-300 rounded overflow-hidden bg-gray-100" style="width: 800px; height: 419px; max-width: 100%;">
+        <!-- SVG Preview - Full size container that maintains aspect ratio -->
+        <div class="bg-white flex items-center justify-center">
+          <div class="border border-gray-300 rounded overflow-hidden bg-gray-100" style="width: 800px; max-width: 100%; aspect-ratio: 800 / 419;">
             <%= Phoenix.HTML.raw(preview.svg) %>
           </div>
         </div>

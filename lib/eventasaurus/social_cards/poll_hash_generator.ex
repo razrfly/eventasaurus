@@ -61,8 +61,16 @@ defmodule Eventasaurus.SocialCards.PollHashGenerator do
         _ -> "unknown-event"
       end
 
-    # Get poll number - all polls now have numbers from migration
-    poll_number = Map.get(poll, :number)
+    # Get poll number with fallback to ID for safety
+    poll_number =
+      case Map.get(poll, :number) do
+        number when is_integer(number) and number > 0 ->
+          number
+
+        _ ->
+          Map.get(poll, :id) ||
+            raise ArgumentError, "poll.number not present for social card URL generation"
+      end
 
     hash = generate_hash(poll)
     "/#{event_slug}/polls/#{poll_number}/social-card-#{hash}.png"
