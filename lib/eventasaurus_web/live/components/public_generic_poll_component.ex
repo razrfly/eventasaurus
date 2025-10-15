@@ -49,15 +49,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       # Get temp votes from assigns or default to empty
       temp_votes = Map.get(assigns, :temp_votes, %{})
 
-      # Handle mode prop with backward compatibility for hide_header
+      # Handle mode prop for consistent rendering approach
       # mode: :full (default) - Component renders with header
       # mode: :content - Component renders content only, parent handles header
-      mode =
-        cond do
-          Map.has_key?(assigns, :mode) -> assigns.mode
-          Map.has_key?(assigns, :hide_header) and assigns.hide_header == true -> :content
-          true -> :full
-        end
+      mode = Map.get(assigns, :mode, :content)
 
       {:ok,
        socket
