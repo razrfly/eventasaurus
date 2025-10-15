@@ -83,8 +83,9 @@
             event={@event}
             current_user={@auth_user}
             temp_votes={@temp_votes}
+            mode={:content}
           />
-          
+
           <%= if is_nil(@auth_user) do %>
             <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div class="flex items-center justify-between">
@@ -92,8 +93,8 @@
                   <h4 class="text-sm font-medium text-blue-900">Want to vote?</h4>
                   <p class="text-sm text-blue-700 mt-1">Please sign in to participate</p>
                 </div>
-                <.link 
-                  navigate="/auth/login" 
+                <.link
+                  navigate="/auth/login"
                   class="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
                 >
                   Sign In to Vote
@@ -111,6 +112,7 @@
             current_user={@auth_user}
             temp_votes={%{}}
             results_only={true}
+            mode={:content}
           />
           
           <%= if @poll.finalized_date do %>

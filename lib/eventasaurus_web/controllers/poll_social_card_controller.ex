@@ -135,12 +135,9 @@ defmodule EventasaurusWeb.PollSocialCardController do
   end
 
   # Helper function to get poll with options by number
+  # Delegates to Events context for social card optimized poll fetching
   defp get_poll_with_options_by_number(number, event_id) do
-    try do
-      Events.get_poll_by_number!(number, event_id)
-    rescue
-      Ecto.NoResultsError -> nil
-    end
+    Events.get_poll_with_options_by_number(number, event_id)
   end
 
   @doc """

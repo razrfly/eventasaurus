@@ -49,8 +49,15 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       # Get temp votes from assigns or default to empty
       temp_votes = Map.get(assigns, :temp_votes, %{})
 
-      # Check if we should hide the header (when showing in list view)
-      hide_header = Map.get(assigns, :hide_header, false)
+      # Handle mode prop with backward compatibility for hide_header
+      # mode: :full (default) - Component renders with header
+      # mode: :content - Component renders content only, parent handles header
+      mode =
+        cond do
+          Map.has_key?(assigns, :mode) -> assigns.mode
+          Map.has_key?(assigns, :hide_header) and assigns.hide_header == true -> :content
+          true -> :full
+        end
 
       {:ok,
        socket
@@ -61,7 +68,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        |> assign(:poll_stats, poll_stats)
        |> assign(:user_votes, user_votes)
        |> assign(:temp_votes, temp_votes)
-       |> assign(:hide_header, hide_header)
+       |> assign(:mode, mode)
        |> assign(:showing_add_form, false)
        |> assign(:option_title, "")
        |> assign(:adding_option, false)
@@ -328,7 +335,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     <div class="public-generic-poll">
       <%= if @poll do %>
         <div class="mb-6">
-          <%= if !@hide_header do %>
+          <%= if @mode == :full do %>
             <div class="mb-4">
               <h3 class="text-lg font-semibold text-gray-900">
                 <%= poll_emoji(@poll.poll_type) %>
@@ -358,7 +365,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                   loading={false}
                   temp_votes={@temp_votes}
                   anonymous_mode={is_nil(@current_user)}
-                  show_header={!@hide_header}
+                  mode={@mode}
                 />
               </div>
             <% else %>

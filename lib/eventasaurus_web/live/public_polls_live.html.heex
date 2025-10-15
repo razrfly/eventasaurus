@@ -127,7 +127,7 @@
                     event={@event}
                     current_user={@auth_user}
                     temp_votes={Map.get(@poll_temp_votes, poll.id, %{})}
-                    hide_header={true}
+                    mode={:content}
                   />
                   
                   <%= if is_nil(@auth_user) do %>
@@ -225,7 +225,7 @@
                     current_user={@auth_user}
                     temp_votes={%{}}
                     results_only={true}
-                    hide_header={true}
+                    mode={:content}
                   />
                 </div>
               </div>

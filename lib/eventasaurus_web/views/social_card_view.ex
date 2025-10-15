@@ -987,7 +987,7 @@ defmodule EventasaurusWeb.SocialCardView do
 
       <!-- Badge text (left-aligned next to icon) -->
       <text x="490" y="110" text-anchor="start"
-            font-family="Arial, sans-serif" font-size="18"
+            font-family="Arial, sans-serif" font-size="29"
             font-weight="600" fill="white" opacity="0.95">
         #{badge_text}
       </text>
@@ -1137,7 +1137,7 @@ defmodule EventasaurusWeb.SocialCardView do
 
             """
             <text x="450" y="#{y_pos}" font-family="Arial, sans-serif"
-                  font-size="18" font-weight="600" fill="white" opacity="0.95">
+                  font-size="28" font-weight="600" fill="white" opacity="0.95">
               ✓ #{svg_escape(truncated_title)}
             </text>
             """
@@ -1149,8 +1149,8 @@ defmodule EventasaurusWeb.SocialCardView do
             plural = if remaining == 1, do: "", else: "s"
 
             """
-            <text x="450" y="250" font-family="Arial, sans-serif"
-                  font-size="16" font-weight="500" fill="white" opacity="0.8">
+            <text x="450" y="290" font-family="Arial, sans-serif"
+                  font-size="24" font-weight="500" fill="white" opacity="0.8">
               +#{remaining} more option#{plural}
             </text>
             """
