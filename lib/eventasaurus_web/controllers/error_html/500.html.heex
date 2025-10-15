@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Server Error - Wombie</title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <style>
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+      }
+      .shake-animation {
+        animation: shake 0.5s ease-in-out infinite;
+      }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-2xl w-full text-center">
+      <!-- Dizzy dinosaur with shake animation -->
+      <div class="mb-8 shake-animation">
+        <div class="text-9xl">🦖</div>
+      </div>
+
+      <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-4">
+        Something went wrong!
+      </h1>
+
+      <p class="text-xl md:text-2xl text-gray-700 mb-4">
+        Our dinosaurs are having technical difficulties
+      </p>
+
+      <p class="text-lg text-gray-600 mb-8">
+        It's not you, it's us. Something went wrong on our end.<br />
+        We've been notified and are working to fix it! 🔧
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+        <a
+          href="/"
+          class="inline-block px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition-all hover:scale-105 shadow-lg"
+        >
+          🏠 Go Home
+        </a>
+
+        <button
+          onclick="window.location.reload()"
+          class="inline-block px-8 py-4 bg-white text-red-600 text-lg font-semibold rounded-lg border-2 border-red-600 hover:bg-red-50 transition-all hover:scale-105 shadow-lg"
+        >
+          🔄 Try Again
+        </button>
+      </div>
+
+      <div class="text-sm text-gray-500 bg-white/50 backdrop-blur-sm rounded-lg p-4 inline-block">
+        <div class="font-mono">Error 500 - Internal Server Error</div>
+        <div class="mt-2 text-xs">Don't worry, no dinosaurs were harmed in this error</div>
+        <div class="text-xs">Our team has been notified and is on it! 🦕</div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   require Logger
 
+  alias EventasaurusWeb.NotFoundError
   alias EventasaurusApp.Events
   alias EventasaurusApp.Groups
   alias EventasaurusApp.Venues
@@ -31,17 +32,11 @@ defmodule EventasaurusWeb.PublicEventLive do
     )
 
     if ReservedSlugs.reserved?(slug) do
-      {:ok,
-       socket
-       |> put_flash(:error, "Event not found")
-       |> redirect(to: ~p"/")}
+      raise NotFoundError, "Event not found"
     else
       case Events.get_event_by_slug(slug) do
         nil ->
-          {:ok,
-           socket
-           |> put_flash(:error, "Event not found")
-           |> redirect(to: ~p"/")}
+          raise NotFoundError, "Event not found"
 
         event ->
           # Load venue if needed
