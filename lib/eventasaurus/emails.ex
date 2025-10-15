@@ -248,6 +248,8 @@ defmodule Eventasaurus.Emails do
                     </a>
                 </p>
 
+                #{render_poll_section(event)}
+
                 <p>We're excited to have you join us!</p>
 
                 <p>Best regards,<br>
@@ -288,7 +290,7 @@ defmodule Eventasaurus.Emails do
     #{render_event_price_text(event)}
 
     View the event and RSVP here: #{build_event_url(event)}
-
+    #{render_poll_section_text(event)}
     We're excited to have you join us!
 
     Best regards,
@@ -305,6 +307,204 @@ defmodule Eventasaurus.Emails do
 
   defp get_organizer_name(organizer) do
     organizer.name || organizer.username || "Event Organizer"
+  end
+
+  # Poll-related helper functions
+
+  # Get the first active poll for an event (phase = voting).
+  # Returns nil if no active polls exist.
+  defp get_active_poll(event) do
+    case event.polls do
+      %Ecto.Association.NotLoaded{} ->
+        # Polls not preloaded, query them
+        alias EventasaurusApp.Events.Poll
+        alias EventasaurusApp.Repo
+        require Ecto.Query
+
+        event_id = event.id
+
+        Poll
+        |> Ecto.Query.where([p], p.event_id == ^event_id)
+        |> Ecto.Query.where([p], p.phase in ^["voting_with_suggestions", "voting_only"])
+        |> Ecto.Query.order_by([p], [asc: p.order_index, asc: p.id])
+        |> Ecto.Query.limit(1)
+        |> Ecto.Query.preload([:poll_options])
+        |> Repo.one()
+
+      polls when is_list(polls) ->
+        # Polls already preloaded, filter in memory
+        polls
+        |> Enum.filter(fn poll ->
+          poll.phase in ["voting_with_suggestions", "voting_only"]
+        end)
+        |> Enum.sort_by(fn poll -> {poll.order_index || 0, poll.id} end)
+        |> List.first()
+
+      _ ->
+        nil
+    end
+  end
+
+  # Format poll options for display in email (limit to 3).
+  # Returns HTML list of options with "and X more" if applicable.
+  defp format_poll_options_html(poll, limit \\ 3) do
+    options =
+      case poll.poll_options do
+        %Ecto.Association.NotLoaded{} ->
+          []
+
+        options when is_list(options) ->
+          options
+          |> Enum.filter(fn opt -> opt.status == "active" end)
+          |> Enum.sort_by(fn opt -> {opt.order_index || 0, opt.id} end)
+
+        _ ->
+          []
+      end
+
+    total_count = length(options)
+
+    if total_count == 0 do
+      ""
+    else
+      displayed_options = Enum.take(options, limit)
+
+      options_html =
+        displayed_options
+        |> Enum.map(fn opt ->
+          "<li style=\"margin: 8px 0; color: #555;\">#{html_escape(opt.title)}</li>"
+        end)
+        |> Enum.join("\n")
+
+      more_html =
+        if total_count > limit do
+          remaining = total_count - limit
+          "<li style=\"margin: 8px 0; color: #888; font-style: italic;\">...and #{remaining} more option#{if remaining == 1, do: "", else: "s"}</li>"
+        else
+          ""
+        end
+
+      "<ul style=\"list-style: none; padding: 0; margin: 12px 0;\">\n#{options_html}\n#{more_html}</ul>"
+    end
+  end
+
+  # Format poll options for plain text email (limit to 3).
+  defp format_poll_options_text(poll, limit \\ 3) do
+    options =
+      case poll.poll_options do
+        %Ecto.Association.NotLoaded{} ->
+          []
+
+        options when is_list(options) ->
+          options
+          |> Enum.filter(fn opt -> opt.status == "active" end)
+          |> Enum.sort_by(fn opt -> {opt.order_index || 0, opt.id} end)
+
+        _ ->
+          []
+      end
+
+    total_count = length(options)
+
+    if total_count == 0 do
+      ""
+    else
+      displayed_options = Enum.take(options, limit)
+
+      options_text =
+        displayed_options
+        |> Enum.map(fn opt -> "  • #{opt.title}" end)
+        |> Enum.join("\n")
+
+      more_text =
+        if total_count > limit do
+          remaining = total_count - limit
+          "\n  ...and #{remaining} more option#{if remaining == 1, do: "", else: "s"}"
+        else
+          ""
+        end
+
+      "#{options_text}#{more_text}"
+    end
+  end
+
+  # Render poll preview section for HTML email.
+  # Returns empty string if no active polls.
+  defp render_poll_section(event) do
+    case get_active_poll(event) do
+      nil ->
+        ""
+
+      poll ->
+        poll_type_display = get_poll_type_display(poll.poll_type)
+
+        """
+        <div style="background: #f8f9fa; padding: 25px; border-radius: 12px; margin: 25px 0; border-left: 4px solid #667eea;">
+            <h3 style="margin: 0 0 15px 0; color: #333; font-size: 20px;">📊 #{html_escape(poll.title)}</h3>
+            #{render_poll_description(poll)}
+            <p style="margin: 12px 0 8px 0; font-weight: 600; color: #555;">Current Options:</p>
+            #{format_poll_options_html(poll)}
+            <p style="margin: 16px 0 0 0; color: #666; font-size: 14px;">
+                <strong>Poll Type:</strong> #{html_escape(poll_type_display)} &nbsp;•&nbsp;
+                <strong>Your voice matters!</strong> Vote when you RSVP.
+            </p>
+        </div>
+        """
+    end
+  end
+
+  # Render poll preview section for plain text email.
+  # Returns empty string if no active polls.
+  defp render_poll_section_text(event) do
+    case get_active_poll(event) do
+      nil ->
+        ""
+
+      poll ->
+        poll_type_display = get_poll_type_display(poll.poll_type)
+        description = render_poll_description_text(poll)
+
+        """
+
+        📊 #{poll.title}
+        #{description}
+        Current Options:
+        #{format_poll_options_text(poll)}
+
+        Poll Type: #{poll_type_display} • Your voice matters! Vote when you RSVP.
+
+        """
+    end
+  end
+
+  defp render_poll_description(poll) do
+    if poll.description && poll.description != "" do
+      "<p style=\"margin: 8px 0; color: #666;\">#{html_escape(poll.description)}</p>"
+    else
+      ""
+    end
+  end
+
+  defp render_poll_description_text(poll) do
+    if poll.description && poll.description != "" do
+      "#{poll.description}\n"
+    else
+      ""
+    end
+  end
+
+  defp get_poll_type_display(poll_type) do
+    case poll_type do
+      "movie" -> "Movies"
+      "places" -> "Places"
+      "custom" -> "Custom"
+      "time" -> "Time/Schedule"
+      "general" -> "General"
+      "venue" -> "Venue"
+      "date_selection" -> "Date Selection"
+      "music_track" -> "Music"
+      _ -> String.capitalize(poll_type)
+    end
   end
 
   defp render_personal_message(message) when is_binary(message) and message != "" do
