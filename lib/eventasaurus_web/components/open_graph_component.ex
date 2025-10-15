@@ -71,7 +71,7 @@ defmodule EventasaurusWeb.Components.OpenGraphComponent do
   attr :image_width, :integer, default: 1200, doc: "Image width in pixels"
   attr :image_height, :integer, default: 630, doc: "Image height in pixels"
   attr :url, :string, required: true, doc: "Full canonical URL of the page"
-  attr :site_name, :string, default: "Eventasaurus", doc: "Site name"
+  attr :site_name, :string, default: "Wombie", doc: "Site name"
   attr :locale, :string, default: "en_US", doc: "Content locale (e.g., en_US, pl_PL)"
   attr :twitter_card, :string, default: "summary_large_image", doc: "Twitter card type"
   attr :twitter_site, :string, default: nil, doc: "Twitter @username of site"

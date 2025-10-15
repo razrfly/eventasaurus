@@ -1635,7 +1635,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:url" content="#{escaped_url}" />
-    <meta property="og:site_name" content="Eventasaurus" />
+    <meta property="og:site_name" content="Wombie" />
     <meta property="og:locale" content="#{locale_code}" />
 
     <!-- Twitter Card meta tags -->
@@ -1677,7 +1677,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     url_config = Keyword.get(endpoint, :url, [])
 
     scheme = Keyword.get(url_config, :scheme, "https")
-    host = Keyword.get(url_config, :host, "eventasaurus.com")
+    host = Keyword.get(url_config, :host, "wombie.com")
     port = Keyword.get(url_config, :port)
 
     # Only include port if not standard (80 for http, 443 for https)
