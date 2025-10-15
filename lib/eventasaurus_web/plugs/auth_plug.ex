@@ -359,9 +359,43 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
             end
 
           {:error, reason} ->
-            # If refresh fails, clear the stale tokens to prevent repeated failures
-            Logger.warning("Token refresh failed: #{inspect(reason)}. Clearing session.")
-            Auth.clear_session(conn)
+            # Graceful degradation: Only clear session if token is actually expired
+            # This prevents forced logouts due to transient network issues during deployments
+            if is_token_actually_expired?(token_expires_at) do
+              # Token is truly expired, must clear session
+              Logger.warning("Token expired and refresh failed: #{inspect(reason)}. Clearing session.")
+
+              # Report to Sentry for monitoring deployment-related refresh failures
+              Sentry.capture_message("Token refresh failed with expired token",
+                extra: %{
+                  reason: inspect(reason),
+                  token_expires_at: token_expires_at,
+                  context: "maybe_refresh_token_if_needed"
+                }
+              )
+
+              Auth.clear_session(conn)
+            else
+              # Token still valid, keep session despite refresh failure
+              # This handles transient network issues during Fly.io deployments
+              Logger.warning(
+                "Token refresh failed but token still valid (expires: #{token_expires_at}): #{inspect(reason)}. " <>
+                "Keeping session to prevent logout during deployment."
+              )
+
+              # Report to Sentry for monitoring transient failures
+              Sentry.capture_message("Token refresh failed but session preserved",
+                level: :info,
+                extra: %{
+                  reason: inspect(reason),
+                  token_expires_at: token_expires_at,
+                  time_until_expiry: time_until_expiry(token_expires_at),
+                  context: "maybe_refresh_token_if_needed"
+                }
+              )
+
+              conn
+            end
         end
 
       # Token not near expiry or no refresh token
@@ -385,6 +419,35 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   defp should_refresh_token?(_), do: true
+
+  # Helper to check if token is actually expired (not just near expiry)
+  defp is_token_actually_expired?(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        # Token is expired if current time is past expiry time
+        DateTime.compare(DateTime.utc_now(), expires_at) == :gt
+
+      _ ->
+        # If we can't parse the expiry, assume it's expired for safety
+        true
+    end
+  end
+
+  defp is_token_actually_expired?(_), do: true
+
+  # Helper to calculate time until token expiry (for logging)
+  defp time_until_expiry(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        diff = DateTime.diff(expires_at, DateTime.utc_now(), :second)
+        "#{diff} seconds"
+
+      _ ->
+        "unknown"
+    end
+  end
+
+  defp time_until_expiry(_), do: "unknown"
 
   @doc """
   Proactively refreshes the access token if it's near expiration for API requests.
