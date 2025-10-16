@@ -52,20 +52,26 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
 
   @doc """
   Validates image URLs - allows HTTP/HTTPS URLs and local static file paths.
+  Filters out internal default placeholder images.
   """
   @spec validate_image_url(any()) :: String.t() | nil
   def validate_image_url(url) when is_binary(url) do
-    # Handle local static file paths (e.g., /images/events/general/metaverse.png)
-    if is_local_static_path?(url) do
-      url
+    # Filter out internal default placeholder images that aren't suitable for social cards
+    if is_internal_default_image?(url) do
+      nil
     else
-      # Handle external URLs
-      uri = URI.parse(url)
-
-      if valid_scheme?(uri.scheme) and valid_host?(uri.host) and image_extension?(url) do
+      # Handle local static file paths (e.g., /images/events/general/metaverse.png)
+      if is_local_static_path?(url) do
         url
       else
-        nil
+        # Handle external URLs
+        uri = URI.parse(url)
+
+        if valid_scheme?(uri.scheme) and valid_host?(uri.host) and image_extension?(url) do
+          url
+        else
+          nil
+        end
       end
     end
   end
@@ -94,6 +100,19 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   defp valid_scheme?(scheme), do: scheme in ["http", "https"]
 
   defp valid_host?(host), do: is_binary(host) and String.length(host) > 2
+
+  # Check if URL is an internal default placeholder image
+  defp is_internal_default_image?(url) when is_binary(url) do
+    # These are placeholder/default images we generate internally
+    # They're not suitable for social media sharing
+    String.contains?(url, [
+      "/images/events/abstract/",
+      "invitation-dino",
+      "abstracted"
+    ])
+  end
+
+  defp is_internal_default_image?(_), do: false
 
   defp is_local_static_path?(path) do
     # Check if it's a local path starting with / and has a valid image extension

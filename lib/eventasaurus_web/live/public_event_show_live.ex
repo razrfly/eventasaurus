@@ -14,7 +14,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   import Ecto.Query
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(%{"slug" => slug} = _params, session, socket) do
     # Get language from session (set by LanguagePlug), then connect params, then default to English
     params = get_connect_params(socket) || %{}
     language = session["language"] || params["locale"] || "en"
@@ -22,7 +22,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     socket =
       socket
       |> assign(:language, language)
-      |> assign(:event, nil)
       |> assign(:loading, true)
       |> assign(:selected_occurrence, nil)
       |> assign(:selected_showtime_date, nil)
@@ -35,6 +34,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:bulk_email_input, "")
       |> assign(:modal_organizer, nil)
       |> assign(:nearby_events, [])
+      |> fetch_event(slug)
+      |> assign(:loading, false)
 
     {:ok, socket}
   end
@@ -69,13 +70,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
-  def handle_params(%{"slug" => slug, "date_slug" => date_slug}, _url, socket) do
+  def handle_params(%{"slug" => _slug, "date_slug" => date_slug}, _url, socket) do
     # Handle URL with specific date: /activities/slug/oct-10
-    socket =
-      socket
-      |> fetch_event(slug)
-      |> assign(:loading, false)
-
+    # Event already fetched in mount, just handle date selection
     socket =
       case parse_date_slug(date_slug) do
         {:ok, date} ->
@@ -85,26 +82,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           else
             socket
             |> put_flash(:error, gettext("No events scheduled for this date"))
-            |> push_patch(to: ~p"/activities/#{slug}")
+            |> push_patch(to: ~p"/activities/#{socket.assigns.event.slug}")
           end
 
         :error ->
           # Invalid date slug, show error and redirect to base URL
           socket
           |> put_flash(:error, gettext("Invalid date in URL"))
-          |> push_patch(to: ~p"/activities/#{slug}")
+          |> push_patch(to: ~p"/activities/#{socket.assigns.event.slug}")
       end
 
     {:noreply, socket}
   end
 
-  def handle_params(%{"slug" => slug}, _url, socket) do
+  def handle_params(%{"slug" => _slug}, _url, socket) do
     # Handle base URL without date: /activities/slug
-    socket =
-      socket
-      |> fetch_event(slug)
-      |> assign(:loading, false)
-
+    # Event already fetched in mount, nothing to do here
     {:noreply, socket}
   end
 
@@ -174,6 +167,29 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         # Generate SEO data (includes JSON-LD structured data with breadcrumbs)
         seo_data = generate_seo_data(enriched_event, breadcrumb_items, socket)
 
+        # OpenGraph image for PublicEvents
+        # PublicEvents don't have dynamic social cards like private events do
+        # Use the event's cover image from scraped data, filtering out internal default images
+        image_url =
+          case enriched_event.cover_image_url do
+            url when is_binary(url) ->
+              # Filter out our internal default images that aren't suitable for OpenGraph
+              if is_internal_default_image?(url) do
+                get_placeholder_image_url(enriched_event)
+              else
+                url
+              end
+            _ ->
+              # Use a generic placeholder for events without valid images
+              get_placeholder_image_url(enriched_event)
+          end
+
+        # Get description with fallback
+        description = enriched_event.display_description || truncate_for_description(enriched_event.display_title)
+
+        # Get locale code
+        locale_code = if language == "pl", do: "pl_PL", else: "en_US"
+
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
@@ -184,9 +200,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:aggregated_movie_url, aggregated_url)
         |> assign(:breadcrumb_items, breadcrumb_items)
         |> assign(:json_ld, seo_data.json_ld)
-        |> assign(:open_graph, seo_data.open_graph)
         |> assign(:canonical_url, seo_data.canonical_url)
         |> assign(:page_title, enriched_event.display_title)
+        # New OG assigns for reusable OpenGraphComponent
+        |> assign(:og_type, "event")
+        |> assign(:og_title, enriched_event.display_title)
+        |> assign(:og_description, description)
+        |> assign(:og_image, image_url)
+        |> assign(:og_url, seo_data.canonical_url)
+        |> assign(:og_locale, locale_code)
     end
   end
 
@@ -1602,60 +1624,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     # Combine multiple JSON-LD schemas
     combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
 
-    # Get image URL (fallback to placeholder if none available)
-    image_url = event.cover_image_url || get_placeholder_image_url(event)
-
-    # Build Open Graph meta tags directly
-    description = event.display_description || truncate_for_description(event.display_title)
-    locale = socket.assigns[:language] || "en"
-    locale_code = if locale == "pl", do: "pl_PL", else: "en_US"
-
-    # Escape values for safe HTML attribute usage
-    escaped_title =
-      event.display_title
-      |> to_string()
-      |> Phoenix.HTML.html_escape()
-      |> Phoenix.HTML.safe_to_string()
-
-    escaped_description =
-      description |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-    escaped_image =
-      image_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-    escaped_url =
-      canonical_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-    open_graph_html = """
-    <!-- Open Graph meta tags -->
-    <meta property="og:type" content="event" />
-    <meta property="og:title" content="#{escaped_title}" />
-    <meta property="og:description" content="#{escaped_description}" />
-    <meta property="og:image" content="#{escaped_image}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="#{escaped_url}" />
-    <meta property="og:site_name" content="Wombie" />
-    <meta property="og:locale" content="#{locale_code}" />
-
-    <!-- Twitter Card meta tags -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="#{escaped_title}" />
-    <meta name="twitter:description" content="#{escaped_description}" />
-    <meta name="twitter:image" content="#{escaped_image}" />
-
-    <!-- Standard meta description for SEO -->
-    <meta name="description" content="#{escaped_description}" />
-    """
-
-    # Get current path for hreflang alternate links
-    current_path = uri.path
-
     %{
       json_ld: combined_json_ld,
-      open_graph: open_graph_html,
-      canonical_url: canonical_url,
-      hreflang_path: current_path
+      canonical_url: canonical_url
     }
   end
 
@@ -1688,14 +1659,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  defp get_placeholder_image_url(event) do
-    # Use a placeholder service with the event title
-    name =
-      (event.display_title || event.title || "Event")
-      |> to_string()
-      |> URI.encode()
+  defp is_internal_default_image?(url) when is_binary(url) do
+    # Check if URL contains patterns that indicate internal default images
+    String.contains?(url, ["/images/events/", "invitation-dino", "abstracted"])
+  end
 
-    "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{name}"
+  defp is_internal_default_image?(_), do: false
+
+  defp get_placeholder_image_url(_event) do
+    # Use a static default OpenGraph image from our assets
+    # This ensures the image URL is always valid and accessible
+    base_url = EventasaurusWeb.Endpoint.url()
+    "#{base_url}/images/marketing/meta-surprise.png"
   end
 
   defp truncate_for_description(text, max_length \\ 155) do

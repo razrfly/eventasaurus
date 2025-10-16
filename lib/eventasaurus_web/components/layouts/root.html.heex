@@ -46,10 +46,18 @@
     <% end %>
 
     <!-- Open Graph and Twitter Card meta tags -->
-    <%= if assigns[:open_graph] do %>
-      <!-- Enhanced Open Graph tags from component -->
-      <%= Phoenix.HTML.raw(assigns[:open_graph]) %>
+    <%= if assigns[:og_title] do %>
+      <!-- Using reusable OpenGraphComponent -->
+      <EventasaurusWeb.Components.OpenGraphComponent.open_graph_tags
+        type={assigns[:og_type] || "website"}
+        title={assigns[:og_title]}
+        description={assigns[:og_description]}
+        image_url={assigns[:og_image]}
+        url={assigns[:og_url]}
+        locale={assigns[:og_locale] || "en_US"}
+      />
     <% else %>
+      <!-- Fallback: Check for legacy meta_* assigns -->
       <%= if assigns[:meta_title] do %>
         <meta property="og:title" content={assigns[:meta_title]} />
         <meta property="og:description" content={assigns[:meta_description] || ""} />

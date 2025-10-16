@@ -40,24 +40,30 @@ defmodule EventasaurusWeb.PublicPollLive do
                |> redirect(to: ~p"/#{event.slug}/polls")}
 
             poll ->
+              # Get base URL for social image
+              base_url = EventasaurusWeb.Endpoint.url()
+
               {:ok,
                socket
                |> assign(:event, event)
                |> assign(:poll, poll)
                |> assign(:page_title, "#{poll.title} - #{event.title}")
-               |> assign(:meta_title, "#{poll.title} - #{event.title}")
+               # Standardized OG assigns for OpenGraphComponent
+               |> assign(:og_type, "article")
+               |> assign(:og_title, "#{poll.title} - #{event.title}")
                |> assign(
-                 :meta_description,
+                 :og_description,
                  poll.description || "Participate in this poll for #{event.title}"
                )
                |> assign(
-                 :meta_image,
-                 EventasaurusWeb.PollHelpers.generate_social_image_url(event, poll)
+                 :og_image,
+                 "#{base_url}#{PollHashGenerator.generate_url_path(poll, event)}"
                )
                |> assign(
-                 :canonical_url,
-                 "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls/#{poll.number}"
+                 :og_url,
+                 "#{base_url}/#{event.slug}/polls/#{poll.number}"
                )
+               |> assign(:og_locale, "en_US")
                # Anonymous voting state
                |> assign(:show_anonymous_voter, false)
                |> assign(:temp_votes, %{})
@@ -72,16 +78,16 @@ defmodule EventasaurusWeb.PublicPollLive do
     # Extract base URL from the current request URI for Open Graph tags
     base_url = get_base_url_from_uri(uri)
 
-    # Update meta_image and canonical_url with correct base URL if poll exists
+    # Update OG image and URL with correct base URL if poll exists
     socket =
       if socket.assigns[:poll] && socket.assigns[:event] do
         poll = socket.assigns.poll
         event = socket.assigns.event
 
         socket
-        |> assign(:meta_image,
+        |> assign(:og_image,
           "#{base_url}#{PollHashGenerator.generate_url_path(poll, event)}")
-        |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.number}")
+        |> assign(:og_url, "#{base_url}/#{event.slug}/polls/#{poll.number}")
       else
         socket
       end

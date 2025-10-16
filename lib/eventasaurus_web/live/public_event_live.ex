@@ -99,7 +99,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           # Prepare meta tag data for social sharing
           event_url = url(socket, ~p"/#{event.slug}")
 
-          # Use movie backdrop as social image if available, otherwise use default
+          # Use movie backdrop as social image if available, otherwise use social card
           social_image_url =
             if event.rich_external_data && event.rich_external_data["metadata"] &&
                  event.rich_external_data["metadata"]["backdrop_path"] do
@@ -174,11 +174,13 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:ticket_loading, false)
            |> assign(:subscribed_to_tickets, subscribed_to_tickets)
            |> assign(:should_show_tickets, should_show_tickets)
-           # Meta tag data for social sharing
-           |> assign(:meta_title, event.title)
-           |> assign(:meta_description, description)
-           |> assign(:meta_image, social_image_url)
-           |> assign(:meta_url, event_url)
+           # OpenGraph meta tags for social sharing (standardized format)
+           |> assign(:og_type, "event")
+           |> assign(:og_title, event.title)
+           |> assign(:og_description, description)
+           |> assign(:og_image, social_image_url)
+           |> assign(:og_url, event_url)
+           |> assign(:og_locale, "en_US")
            |> assign(:structured_data, generate_structured_data(event, event_url))
            # Load event polls for display
            |> load_event_polls()

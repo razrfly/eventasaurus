@@ -37,6 +37,9 @@ defmodule EventasaurusWeb.PublicPollsLive do
           # Separate active and historical polls
           {active_polls, historical_polls} = separate_polls_by_status(polls)
 
+          # Get base URL for social images
+          base_url = EventasaurusWeb.Endpoint.url()
+
           {:ok,
            socket
            |> assign(:event, event)
@@ -44,10 +47,13 @@ defmodule EventasaurusWeb.PublicPollsLive do
            |> assign(:active_polls, active_polls)
            |> assign(:historical_polls, historical_polls)
            |> assign(:page_title, "#{event.title} - Polls")
-           |> assign(:meta_title, "#{event.title} - Polls")
-           |> assign(:meta_description, "View and participate in polls for #{event.title}")
-           |> assign(:meta_image, EventasaurusWeb.PollHelpers.generate_social_image_url(event))
-           |> assign(:canonical_url, "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls")
+           # Standardized OG assigns for OpenGraphComponent
+           |> assign(:og_type, "website")
+           |> assign(:og_title, "#{event.title} - Polls")
+           |> assign(:og_description, "View and participate in polls for #{event.title}")
+           |> assign(:og_image, EventasaurusWeb.PollHelpers.generate_social_image_url(event))
+           |> assign(:og_url, "#{base_url}/#{event.slug}/polls")
+           |> assign(:og_locale, "en_US")
            # Anonymous voting state
            |> assign(:show_anonymous_voter, false)
            |> assign(:selected_poll_for_voting, nil)

@@ -283,8 +283,8 @@ defmodule EventasaurusWeb.PollHelpers do
         path = PollHashGenerator.generate_url_path(poll_with_event, event)
         "#{base_url}#{path}"
 
-      # Event-level social card (for poll list pages)
-      not is_nil(Map.get(event, :hash)) ->
+      # Event-level social card (for poll list pages and event pages)
+      not is_nil(event) ->
         base_url = EventasaurusWeb.Endpoint.url()
         path = HashGenerator.generate_url_path(event)
         "#{base_url}#{path}"
