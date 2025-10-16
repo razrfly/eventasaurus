@@ -211,12 +211,22 @@ defmodule EventasaurusWeb.PublicEventLive do
     socket =
       if socket.assigns[:event] do
         event = socket.assigns.event
+        current_meta_image = socket.assigns[:meta_image]
 
-        # Regenerate social card URL with actual base URL
-        hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
+        # Only update meta_image if it's a relative path (social card URL)
+        # Leave external URLs (TMDB backdrops, etc.) untouched
+        updated_meta_image =
+          if is_binary(current_meta_image) && String.starts_with?(current_meta_image, "/") do
+            # It's a relative social card URL - update with correct base URL
+            hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
+            "#{base_url}#{hash_path}"
+          else
+            # It's already a full URL (TMDB backdrop, etc.) - keep it
+            current_meta_image
+          end
 
         socket
-        |> assign(:meta_image, "#{base_url}#{hash_path}")
+        |> assign(:meta_image, updated_meta_image)
         |> assign(:canonical_url, "#{base_url}/#{event.slug}")
       else
         socket
@@ -436,10 +446,27 @@ defmodule EventasaurusWeb.PublicEventLive do
         # Update the event with the new theme
         case Events.update_event_theme(socket.assigns.event, theme_atom) do
           {:ok, updated_event} ->
+            # Regenerate meta_image with new hash based on updated theme
+            # Only regenerate for social cards (relative paths), preserve external URLs (TMDB backdrops)
+            current_meta_image = socket.assigns[:meta_image]
+
+            updated_meta_image =
+              if is_binary(current_meta_image) && String.starts_with?(current_meta_image, "/") do
+                # It's a social card URL - regenerate with new theme hash
+                hash_path = EventasaurusWeb.SocialCardView.social_card_url(updated_event)
+                # Extract base URL from current_uri if available, otherwise reconstruct
+                base_url = extract_base_url(socket.assigns[:current_uri])
+                "#{base_url}#{hash_path}"
+              else
+                # It's an external URL (TMDB backdrop) - keep it unchanged
+                current_meta_image
+              end
+
             {:noreply,
              socket
              |> assign(:event, updated_event)
              |> assign(:theme, theme_atom)
+             |> assign(:meta_image, updated_meta_image)
              |> push_event("switch-theme-css", %{theme: new_theme})
              |> put_flash(:info, "Theme switched to #{String.capitalize(new_theme)}!")}
 
@@ -455,6 +482,10 @@ defmodule EventasaurusWeb.PublicEventLive do
          |> put_flash(:error, "Only event organizers can switch themes.")}
     end
   end
+
+  # Helper function to extract base URL from current_uri or fall back to endpoint URL
+  defp extract_base_url(nil), do: EventasaurusWeb.Endpoint.url()
+  defp extract_base_url(uri) when is_binary(uri), do: get_base_url_from_uri(uri)
 
   def handle_event("manage_event", _params, socket) do
     # Redirect to the event management page
@@ -2124,9 +2155,9 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   # Helper function to generate social card URL
   defp social_card_url(_socket, event) do
-    # Use the new hash-based URL format with external domain
-    hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
-    EventasaurusWeb.UrlHelper.build_url(hash_path)
+    # Return relative path only - handle_params() will add the correct base URL
+    # This prevents localhost URLs and ensures correct domain is used
+    EventasaurusWeb.SocialCardView.social_card_url(event)
   end
 
   # Helper function to truncate description for meta tags

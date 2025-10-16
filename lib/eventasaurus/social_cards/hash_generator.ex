@@ -16,8 +16,8 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - Event title
   - Event description
   - Cover image URL
+  - Theme and customizations
   - Event updated_at timestamp
-  - Any theme/styling data
 
   Returns a short hash suitable for URLs.
 
