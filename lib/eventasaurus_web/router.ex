@@ -33,6 +33,9 @@ defmodule EventasaurusWeb.Router do
       live "/sources", Admin.SourceIndexLive, :index
       live "/sources/new", Admin.SourceFormLive, :new
       live "/sources/:id/edit", Admin.SourceFormLive, :edit
+
+      # Test page for plug-level 404 rendering (matches ValidateCity behavior)
+      get "/test-404", Dev.Test404Controller, :test_plug_404
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
