@@ -79,6 +79,11 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Client do
       when is_binary(body) and body != "" ->
         {:ok, body}
 
+      # 404 Not Found - event page deleted (stale index data)
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        Logger.warning("[SpeedQuizzing] Event page not found (stale index data): #{url}")
+        {:error, :event_not_found}
+
       {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
         Logger.error("[SpeedQuizzing] Server returned status #{status}")
         {:error, {:http_error, status, body}}

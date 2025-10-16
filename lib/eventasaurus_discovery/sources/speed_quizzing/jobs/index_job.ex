@@ -30,7 +30,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     source_id = args["source_id"]
-    events = args["events"]
+    events = args["events"] || []
     limit = args["limit"]
 
     Logger.info("🔄 Processing #{length(events)} Speed Quizzing events")
@@ -49,9 +49,10 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
 
   # Filter out events that were recently updated (default: 7 days)
   defp filter_fresh_events(events, source_id, limit) do
-    # Generate external_ids for each event
+    # Generate external_ids for each event (prefer event_id, fallback to id)
     events_with_external_ids = Enum.map(events, fn event ->
-      Map.put(event, "external_id", "speed-quizzing-#{event["id"]}")
+      id = event["event_id"] || event["id"]
+      Map.put(event, "external_id", "speed-quizzing-#{id}")
     end)
 
     # Filter out events that were recently updated

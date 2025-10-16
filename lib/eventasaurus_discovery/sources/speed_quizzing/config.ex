@@ -27,12 +27,14 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Config do
   def retry_delay_ms, do: 500
 
   # HTTP headers for requests
+  # NOTE: Currently unused - we use empty headers [] like trivia_advisor
+  # HTTPoison (Hackney) v2.0 doesn't decompress brotli by default
   def headers do
     [
       {"User-Agent", "Eventasaurus Discovery Bot (https://eventasaurus.com)"},
       {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
       {"Accept-Language", "en-US,en;q=0.9"},
-      {"Accept-Encoding", "gzip, deflate, br"}
+      {"Accept-Encoding", "gzip, deflate"}
     ]
   end
 end

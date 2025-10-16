@@ -80,9 +80,24 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
   defp merge_event_data(venue_data, event_data) when is_map(event_data) do
     # Use index data as fallback if detail extraction failed
     # CRITICAL: Speed Quizzing removed GPS from detail pages - use index data instead
-    # Convert GPS coordinates to string format (they come as floats from index JSON)
-    lat = if event_data["lat"], do: to_string(event_data["lat"]), else: nil
-    lon = if event_data["lon"], do: to_string(event_data["lon"]), else: nil
+    # Convert GPS coordinates to string format (they may be floats or strings)
+    lat_val =
+      cond do
+        is_binary(event_data["lat"]) or is_float(event_data["lat"]) -> event_data["lat"]
+        is_binary(event_data["latitude"]) or is_float(event_data["latitude"]) -> event_data["latitude"]
+        true -> nil
+      end
+
+    lng_val =
+      cond do
+        is_binary(event_data["lng"]) or is_float(event_data["lng"]) -> event_data["lng"]
+        is_binary(event_data["lon"]) or is_float(event_data["lon"]) -> event_data["lon"]
+        is_binary(event_data["longitude"]) or is_float(event_data["longitude"]) -> event_data["longitude"]
+        true -> nil
+      end
+
+    lat = if lat_val, do: to_string(lat_val), else: nil
+    lon = if lng_val, do: to_string(lng_val), else: nil
 
     venue_data
     |> maybe_replace_unknown(:start_time, event_data["start_time"])

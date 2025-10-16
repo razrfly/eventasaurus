@@ -47,8 +47,8 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Helpers.PerformerCleaner d
           real_name
 
         _ ->
-          # Try more general pattern for other emoji/symbols
-          case Regex.run(~r/^[^\w\s]\d+\s+(.+)$/, name) do
+          # More general pattern: allow multiple symbols (incl. variation selectors like "⭐️")
+          case Regex.run(~r/^[^\w\s]+\d+\s+(.+)$/, name) do
             [_, real_name] -> real_name
             _ -> name
           end

@@ -39,6 +39,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     Transformer
   }
 
+  alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
+
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
@@ -55,7 +57,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     Logger.info("🔍 Processing Geeks Who Drink venue: #{venue_title} (ID: #{venue_id})")
 
     with {:ok, additional_details} <- fetch_additional_details(venue_url),
-         {:ok, {day_of_week, time}} <- parse_time_text(venue_data.time_text),
+         {:ok, {day_of_week, time}} <- parse_time_from_sources(venue_data.time_text, additional_details),
          {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time),
          {:ok, performer} <- process_performer(additional_details[:performer], source_id),
          enriched_venue_data <-
@@ -74,10 +76,20 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
   end
 
   # Convert string keys to atoms for venue_data map
+  # Only convert keys that are already existing atoms, keep others as strings
   defp string_keys_to_atoms(map) when is_map(map) do
     Map.new(map, fn
-      {key, value} when is_binary(key) -> {String.to_existing_atom(key), value}
-      {key, value} -> {key, value}
+      {key, value} when is_binary(key) ->
+        try do
+          {String.to_existing_atom(key), value}
+        rescue
+          ArgumentError ->
+            # Key doesn't exist as atom, keep as string
+            {key, value}
+        end
+
+      {key, value} ->
+        {key, value}
     end)
   end
 
@@ -93,16 +105,35 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     end
   end
 
-  defp parse_time_text(nil), do: {:error, "Missing time_text"}
+  # Parse time from two sources:
+  # 1. Day of week from time_text (e.g., "Thursdays at")
+  # 2. Time from additional_details.start_time (e.g., "20:00")
+  #
+  # Special case: time_text="at" (no day) indicates special one-time events
+  defp parse_time_from_sources(nil, _additional_details), do: {:error, "Missing time_text"}
 
-  defp parse_time_text(time_text) do
-    case TimeParser.parse_time_text(time_text) do
-      {:ok, {day, time}} ->
-        {:ok, {day, time}}
+  defp parse_time_from_sources("at", _additional_details) do
+    Logger.info("ℹ️ Special event with no recurring schedule (time_text='at') - skipping")
+    {:error, "Special event with no recurring schedule"}
+  end
 
+  defp parse_time_from_sources(time_text, additional_details) do
+    with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
+         time_string <- get_time_string(additional_details),
+         {:ok, time} <- RecurringEventParser.parse_time(time_string) do
+      {:ok, {day_of_week, time}}
+    else
       {:error, reason} ->
-        Logger.warning("⚠️ Failed to parse time_text '#{time_text}': #{reason}")
+        Logger.warning("⚠️ Failed to parse time from '#{time_text}': #{inspect(reason)}")
         {:error, reason}
+    end
+  end
+
+  # Get time string from additional_details or use default
+  defp get_time_string(additional_details) do
+    case additional_details[:start_time] do
+      time when is_binary(time) and time != "" -> time
+      _ -> "20:00"  # Default fallback matching trivia_advisor
     end
   end
 
@@ -147,8 +178,16 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
   # Enrich venue data with additional details and event occurrence
   defp enrich_venue_data(venue_data, additional_details, next_occurrence) do
     venue_data
+    |> normalize_coordinates()
     |> Map.merge(additional_details)
     |> Map.put(:starts_at, next_occurrence)
+  end
+
+  # Normalize lat/lon to latitude/longitude for transformer compatibility
+  defp normalize_coordinates(venue_data) do
+    venue_data
+    |> Map.put(:latitude, venue_data[:lat] || venue_data[:latitude])
+    |> Map.put(:longitude, venue_data[:lon] || venue_data[:longitude])
   end
 
   defp transform_and_validate(venue_data) do

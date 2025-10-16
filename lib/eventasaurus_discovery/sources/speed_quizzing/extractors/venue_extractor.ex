@@ -192,32 +192,33 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Extractors.VenueExtractor 
     end
   end
 
-  # Extract fee from description text
+  # Extract fee from description text - preserves currency symbol
+  # Transformer will handle defaults, we just extract what's present
   defp extract_fee(description) when is_binary(description) do
-    fee_patterns = [
-      # £1 to play, £1 per person
-      ~r/(?:£|\$|€)\s*([1-9](?:\.\d{2})?)\s+(?:to\s+play|per\s+person|per\s+player|entry)/i,
-      # £5 per team to play
-      ~r/(?:£|\$|€)\s*([1-9](?:\.\d{2})?)\s+per\s+team/i,
-      # Simple currency amount
-      ~r/(?:£|\$|€)\s*([1-9](?:\.\d{2})?)\b/,
-      # Amount with words
-      ~r/\b([1-9](?:\.\d{2})?)\s+(?:pounds|dollars|euros)\b/i
-    ]
+    # Prefer explicit symbol + amount; fall back to worded amounts
+    with [_, sym, amt] <- Regex.run(~r/(£|\$|€)\s*([1-9]\d*(?:\.\d{2})?)/, description) do
+      "#{sym}#{amt}"
+    else
+      _ ->
+        case Regex.run(~r/\b([1-9]\d*(?:\.\d{2})?)\s+(pounds|dollars|euros)\b/i, description) do
+          [_, amt, unit] ->
+            sym =
+              case String.downcase(unit) do
+                "pounds" -> "£"
+                "dollars" -> "$"
+                "euros" -> "€"
+              end
 
-    result =
-      Enum.find_value(fee_patterns, fn pattern ->
-        case Regex.run(pattern, description) do
-          [_, amount] -> "£#{amount}"
-          _ -> nil
+            "#{sym}#{amt}"
+
+          _ ->
+            # Let Transformer handle default pricing
+            nil
         end
-      end)
-
-    # Default to £2 if no fee found
-    result || "£2"
+    end
   end
 
-  defp extract_fee(_), do: "£2"
+  defp extract_fee(_), do: nil
 
   # Extract date and time from p.mb-0 element with clock icon
   defp extract_date_time(document) do
