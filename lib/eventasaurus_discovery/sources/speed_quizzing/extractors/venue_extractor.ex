@@ -192,24 +192,33 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Extractors.VenueExtractor 
     end
   end
 
-  # Extract fee from description text - preserves currency symbol
-  # Transformer will handle defaults, we just extract what's present
+  # Extract fee from description text - preserves currency symbol/code
+  # Transformer will handle defaults; we only extract what's present
   defp extract_fee(description) when is_binary(description) do
-    # Prefer explicit symbol + amount; fall back to worded amounts
-    with [_, sym, amt] <- Regex.run(~r/(£|\$|€)\s*([1-9]\d*(?:\.\d{2})?)/, description) do
-      "#{sym}#{amt}"
-    else
+    # 1) Prefer explicit currency + amount (supports AED and Arabic symbol)
+    #    - allow 0, 1–2 decimals, dot or comma decimals
+    case Regex.run(~r/(?:AED|د\.إ|£|\$|€)\s*(?:0|[1-9]\d*)(?:[.,]\d{1,2})?/u, description) do
+      [match | _] ->
+        # normalize by removing internal spaces (e.g., "AED 20" -> "AED20")
+        String.replace(match, ~r/\s+/, "")
+
       _ ->
-        case Regex.run(~r/\b([1-9]\d*(?:\.\d{2})?)\s+(pounds|dollars|euros)\b/i, description) do
-          [_, amt, unit] ->
+        # 2) Fallback: worded amounts → symbol/code
+        case Regex.run(
+               ~r/\b(0|[1-9]\d*)(?:[.,](\d{1,2}))?\s+(pounds?|dollars?|euros?|dirhams?)\b/i,
+               description
+             ) do
+          [_, int, dec, unit] ->
             sym =
               case String.downcase(unit) do
-                "pounds" -> "£"
-                "dollars" -> "$"
-                "euros" -> "€"
+                "pound" <> _ -> "£"
+                "dollar" <> _ -> "$"
+                "euro" <> _ -> "€"
+                "dirham" <> _ -> "AED"
               end
 
-            "#{sym}#{amt}"
+            amount = if dec, do: "#{int}.#{dec}", else: int
+            "#{sym}#{amount}"
 
           _ ->
             # Let Transformer handle default pricing
