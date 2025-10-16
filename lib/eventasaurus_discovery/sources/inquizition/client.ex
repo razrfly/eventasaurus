@@ -97,8 +97,13 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
         {:ok, body}
 
       {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
-        Logger.error("[Inquizition] CDN returned status #{status}: #{inspect(body)}")
-        {:error, {:http_error, status, body}}
+        size =
+          case body do
+            b when is_binary(b) -> byte_size(b)
+            _ -> 0
+          end
+        Logger.error("[Inquizition] CDN returned status #{status} (body #{size} bytes)")
+        {:error, {:http_error, status}}
 
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, {:http_error, reason}}
@@ -106,23 +111,24 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
   end
 
   defp parse_jsonp_response(body) do
-    # Strip JSONP wrapper: slw({...}) → {...}
+    # Strip JSONP wrapper: slw({...}) or slw({...}); → {...}
+    trimmed = String.trim(body)
     json_string =
-      body
-      |> String.trim()
-      |> String.replace_prefix("slw(", "")
-      |> String.replace_suffix(")", "")
-      |> String.trim()
+      case Regex.run(~r/^\s*slw\((.*)\)\s*;?\s*$/s, trimmed) do
+        [_, inner] -> String.trim(inner)
+        _ -> trimmed
+      end
 
     case Jason.decode(json_string) do
       {:ok, data} when is_map(data) ->
         # Validate response structure
-        if Map.has_key?(data, "stores") do
-          store_count = length(Map.get(data, "stores", []))
+        stores = Map.get(data, "stores")
+        if is_list(stores) do
+          store_count = length(stores)
           Logger.info("[Inquizition] Successfully fetched #{store_count} venues from CDN")
           {:ok, data}
         else
-          Logger.error("[Inquizition] Invalid response structure: missing 'stores' key")
+          Logger.error("[Inquizition] Invalid response structure: missing 'stores' key or not a list")
           {:error, :invalid_response_structure}
         end
 

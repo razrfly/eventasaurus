@@ -60,8 +60,12 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
     {day_of_week, start_time, starts_at, recurrence_rule} =
       parse_schedule(venue_data[:day_filters], venue_data[:schedule_text])
 
-    # Track whether schedule was inferred
-    schedule_inferred = recurrence_rule["schedule_inferred"] || false
+    # Track whether schedule was inferred (guard against nil recurrence_rule)
+    schedule_inferred =
+      case recurrence_rule do
+        m when is_map(m) -> Map.get(m, "schedule_inferred", false)
+        _ -> false
+      end
 
     # Generate stable external_id from venue_id
     external_id = "inquizition_#{venue_data.venue_id}"
