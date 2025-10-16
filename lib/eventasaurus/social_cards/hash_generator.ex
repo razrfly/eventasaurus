@@ -41,13 +41,13 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   @doc """
   Generates a cache-busting URL path for a social card.
 
-  Format: /events/{slug}/social-card-{hash}.png
+  Format: /{slug}/social-card-{hash}.png
 
   ## Examples
 
       iex> event = %{slug: "my-awesome-event", title: "My Event", updated_at: ~N[2023-01-01 12:00:00]}
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(event)
-      "/events/my-awesome-event/social-card-a1b2c3d4.png"
+      "/my-awesome-event/social-card-a1b2c3d4.png"
 
   """
   @spec generate_url_path(map()) :: String.t()
@@ -61,7 +61,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       end
 
     hash = generate_hash(event)
-    "/events/#{slug}/social-card-#{hash}.png"
+    "/#{slug}/social-card-#{hash}.png"
   end
 
   @doc """
@@ -70,7 +70,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
   ## Examples
 
-      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/events/my-event/social-card-a1b2c3d4.png")
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/my-event/social-card-a1b2c3d4.png")
       "a1b2c3d4"
 
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/invalid/path")
@@ -79,7 +79,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   """
   @spec extract_hash_from_path(String.t()) :: String.t() | nil
   def extract_hash_from_path(path) when is_binary(path) do
-    case Regex.run(~r/\/events\/[^\/]+\/social-card-([a-f0-9]{8})(?:\.png)?$/, path) do
+    case Regex.run(~r/\/[^\/]+\/social-card-([a-f0-9]{8})(?:\.png)?$/, path) do
       [_full_match, hash] -> hash
       _ -> nil
     end

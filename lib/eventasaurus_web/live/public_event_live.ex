@@ -203,6 +203,43 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_params(_params, uri, socket) do
+    # Extract base URL from the current request URI for Open Graph tags
+    base_url = get_base_url_from_uri(uri)
+
+    # Update meta_image and canonical_url with correct base URL if event exists
+    socket =
+      if socket.assigns[:event] do
+        event = socket.assigns.event
+
+        # Regenerate social card URL with actual base URL
+        hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
+
+        socket
+        |> assign(:meta_image, "#{base_url}#{hash_path}")
+        |> assign(:canonical_url, "#{base_url}/#{event.slug}")
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, :current_uri, uri)}
+  end
+
+  # Extract base URL (scheme + host + port) from full URI
+  defp get_base_url_from_uri(uri) when is_binary(uri) do
+    parsed = URI.parse(uri)
+
+    # Guard against missing scheme/host (nil uri, relative paths, etc.)
+    if parsed.scheme && parsed.host do
+      port_part = if parsed.port && parsed.port not in [80, 443], do: ":#{parsed.port}", else: ""
+      "#{parsed.scheme}://#{parsed.host}#{port_part}"
+    else
+      # Fallback to endpoint URL when scheme/host are missing
+      EventasaurusWeb.Endpoint.url()
+    end
+  end
+
+  @impl true
   def terminate(_reason, socket) do
     # Clean up PubSub subscription when LiveView terminates
     if socket.assigns[:subscribed_to_tickets] do
@@ -2087,10 +2124,9 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   # Helper function to generate social card URL
   defp social_card_url(_socket, event) do
-    # Use the new hash-based URL format
-    base_url = EventasaurusWeb.Endpoint.url()
+    # Use the new hash-based URL format with external domain
     hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
-    base_url <> hash_path
+    EventasaurusWeb.UrlHelper.build_url(hash_path)
   end
 
   # Helper function to truncate description for meta tags
