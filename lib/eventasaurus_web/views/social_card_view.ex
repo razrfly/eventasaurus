@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.SocialCardView do
   """
 
   alias Eventasaurus.SocialCards.Sanitizer
-  alias Eventasaurus.SocialCards.HashGenerator
+  alias Eventasaurus.SocialCards.UrlBuilder
 
   @doc """
   Helper function to ensure text fits within specified line limits.
@@ -450,10 +450,11 @@ defmodule EventasaurusWeb.SocialCardView do
   end
 
   @doc """
-  Generates the social card URL for an event using the new hash-based format.
+  Generates the social card URL path for an event using the unified UrlBuilder.
+  Returns just the path component; use with UrlHelper.build_url/1 for full URL.
   """
   def social_card_url(event) do
-    HashGenerator.generate_url_path(event)
+    UrlBuilder.build_path(:event, event)
   end
 
   # Logo constants for consistent positioning

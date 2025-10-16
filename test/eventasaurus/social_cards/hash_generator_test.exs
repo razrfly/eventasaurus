@@ -150,9 +150,9 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
 
       path = HashGenerator.generate_url_path(event)
 
-      assert String.starts_with?(path, "/events/awesome-tech-meetup/social-card-")
+      assert String.starts_with?(path, "/awesome-tech-meetup/social-card-")
       assert String.ends_with?(path, ".png")
-      assert Regex.match?(~r/\/events\/awesome-tech-meetup\/social-card-[a-f0-9]{8}\.png$/, path)
+      assert Regex.match?(~r/\/awesome-tech-meetup\/social-card-[a-f0-9]{8}\.png$/, path)
     end
 
     test "falls back to ID-based slug when slug is missing" do
@@ -164,7 +164,7 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
 
       path = HashGenerator.generate_url_path(event)
 
-      assert String.starts_with?(path, "/events/event-42/social-card-")
+      assert String.starts_with?(path, "/event-42/social-card-")
       assert String.ends_with?(path, ".png")
     end
 
@@ -182,14 +182,14 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
 
       assert path1 != path2
       # Both should use same slug but different hashes
-      assert String.starts_with?(path1, "/events/test-event/social-card-")
-      assert String.starts_with?(path2, "/events/test-event/social-card-")
+      assert String.starts_with?(path1, "/test-event/social-card-")
+      assert String.starts_with?(path2, "/test-event/social-card-")
     end
   end
 
   describe "extract_hash_from_path/1" do
     test "extracts hash from valid social card path" do
-      path = "/events/my-event/social-card-a1b2c3d4.png"
+      path = "/my-event/social-card-a1b2c3d4.png"
 
       hash = HashGenerator.extract_hash_from_path(path)
 
@@ -199,16 +199,16 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
     test "returns nil for invalid paths" do
       invalid_paths = [
         # Wrong format
-        "/events/my-event/social_card.png",
+        "/my-event/social_card.png",
         # Missing hash
-        "/events/my-event/social-card-.png",
+        "/my-event/social-card-.png",
         # Hash too short
-        "/events/my-event/social-card-abc.png",
+        "/my-event/social-card-abc.png",
         # Hash too long
-        "/events/my-event/social-card-a1b2c3d4e5.png",
+        "/my-event/social-card-a1b2c3d4e5.png",
         "/invalid/path",
         "",
-        "/events/my-event/other-file.png"
+        "/my-event/other-file.png"
       ]
 
       for path <- invalid_paths do
@@ -217,7 +217,7 @@ defmodule Eventasaurus.SocialCards.HashGeneratorTest do
     end
 
     test "handles complex event slugs" do
-      path = "/events/my-awesome-tech-event-2023/social-card-f1e2d3c4.png"
+      path = "/my-awesome-tech-event-2023/social-card-f1e2d3c4.png"
 
       hash = HashGenerator.extract_hash_from_path(path)
 
