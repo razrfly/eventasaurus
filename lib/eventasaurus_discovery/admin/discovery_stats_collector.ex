@@ -517,4 +517,234 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       last_error: nil
     }
   end
+
+  # Helper to convert NaiveDateTime to DateTime (assumes UTC)
+  defp to_datetime(%DateTime{} = dt), do: dt
+  defp to_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
+  defp to_datetime(nil), do: nil
+
+  @doc """
+  Get the run history for a specific source.
+
+  Returns a list of recent job executions with their status and metadata.
+
+  ## Parameters
+
+    * `source_slug` - The source name (string)
+    * `limit` - Maximum number of runs to return (default: 10)
+
+  ## Returns
+
+  A list of maps with job execution details.
+
+  ## Examples
+
+      iex> get_run_history("bandsintown", 5)
+      [
+        %{
+          completed_at: ~U[2025-01-07 12:00:00Z],
+          state: "completed",
+          duration_seconds: 125,
+          errors: nil,
+          city_id: 1
+        },
+        ...
+      ]
+  """
+  def get_run_history(source_slug, limit \\ 10)
+      when is_binary(source_slug) and is_integer(limit) do
+    case SourceRegistry.get_worker_name(source_slug) do
+      {:error, :not_found} ->
+        []
+
+      {:ok, worker_name} ->
+        query =
+          from(j in "oban_jobs",
+            where: j.worker == ^worker_name,
+            where: j.state in ["completed", "discarded"],
+            order_by: [
+              desc:
+                fragment(
+                  "COALESCE(?, ?)",
+                  j.completed_at,
+                  j.discarded_at
+                )
+            ],
+            limit: ^limit,
+            select: %{
+              completed_at:
+                fragment(
+                  "COALESCE(?, ?)",
+                  j.completed_at,
+                  j.discarded_at
+                ),
+              attempted_at: j.attempted_at,
+              state: j.state,
+              errors: j.errors,
+              args: j.args
+            }
+          )
+
+        query
+        |> Repo.all()
+        |> Enum.map(&enrich_job_history/1)
+    end
+  end
+
+  defp enrich_job_history(job) do
+    # Calculate duration in seconds
+    duration_seconds =
+      if job.completed_at && job.attempted_at do
+        # Convert NaiveDateTime to DateTime for diff calculation
+        completed = to_datetime(job.completed_at)
+        attempted = to_datetime(job.attempted_at)
+        DateTime.diff(completed, attempted)
+      else
+        nil
+      end
+
+    # Extract city_id from args if present
+    city_id =
+      case job.args do
+        %{"city_id" => city_id} when is_integer(city_id) -> city_id
+        %{"city_id" => city_id} when is_binary(city_id) -> String.to_integer(city_id)
+        _ -> nil
+      end
+
+    # Format errors
+    formatted_error =
+      case job.errors do
+        nil -> nil
+        [] -> nil
+        errors when is_list(errors) -> format_error(List.first(errors))
+        _ -> nil
+      end
+
+    %{
+      completed_at: job.completed_at,
+      attempted_at: job.attempted_at,
+      state: job.state,
+      duration_seconds: duration_seconds,
+      errors: formatted_error,
+      city_id: city_id
+    }
+  end
+
+  @doc """
+  Get the average runtime for a source over the last N days.
+
+  ## Parameters
+
+    * `source_slug` - The source name (string)
+    * `days` - Number of days to look back (default: 30)
+
+  ## Returns
+
+  Average runtime in seconds, or nil if no data available.
+
+  ## Examples
+
+      iex> get_average_runtime("bandsintown", 7)
+      142.5
+  """
+  def get_average_runtime(source_slug, days \\ 30)
+      when is_binary(source_slug) and is_integer(days) do
+    case SourceRegistry.get_worker_name(source_slug) do
+      {:error, :not_found} ->
+        nil
+
+      {:ok, worker_name} ->
+        cutoff = DateTime.utc_now() |> DateTime.add(-days, :day)
+
+        query =
+          from(j in "oban_jobs",
+            where: j.worker == ^worker_name,
+            where: j.state == "completed",
+            where: j.completed_at >= ^cutoff,
+            select:
+              avg(
+                fragment(
+                  "EXTRACT(EPOCH FROM (? - ?))",
+                  j.completed_at,
+                  j.attempted_at
+                )
+              )
+          )
+
+        case Repo.one(query) do
+          nil -> nil
+          avg when is_float(avg) or is_integer(avg) -> avg
+          %Decimal{} = decimal -> Decimal.to_float(decimal)
+          _ -> nil
+        end
+    end
+  end
+
+  @doc """
+  Get events by city for a specific source.
+
+  Returns a list of cities with event counts for city-scoped sources.
+
+  ## Parameters
+
+    * `source_slug` - The source name (string)
+    * `limit` - Maximum number of cities to return (default: 20)
+
+  ## Returns
+
+  A list of maps with city and event count data.
+
+  ## Examples
+
+      iex> get_events_by_city_for_source("bandsintown", 10)
+      [
+        %{city_id: 1, city_name: "Krakow", event_count: 234, new_this_week: 12},
+        ...
+      ]
+  """
+  def get_events_by_city_for_source(source_slug, limit \\ 20)
+      when is_binary(source_slug) and is_integer(limit) do
+    # Get the source ID from the database
+    source_query =
+      from(s in EventasaurusDiscovery.Sources.Source,
+        where: s.name == ^source_slug,
+        select: s.id
+      )
+
+    case Repo.one(source_query) do
+      nil ->
+        []
+
+      source_id ->
+        week_ago = DateTime.utc_now() |> DateTime.add(-7, :day)
+
+        # Query for city-level event counts
+        query =
+          from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+            join: e in EventasaurusDiscovery.PublicEvents.PublicEvent,
+            on: e.id == pes.event_id,
+            join: v in EventasaurusApp.Venues.Venue,
+            on: v.id == e.venue_id,
+            join: c in EventasaurusDiscovery.Locations.City,
+            on: c.id == v.city_id,
+            where: pes.source_id == ^source_id,
+            group_by: [c.id, c.name],
+            order_by: [desc: count(e.id)],
+            limit: ^limit,
+            select: %{
+              city_id: c.id,
+              city_name: c.name,
+              event_count: count(e.id),
+              new_this_week:
+                fragment(
+                  "COUNT(CASE WHEN ? >= ? THEN 1 END)",
+                  e.inserted_at,
+                  ^week_ago
+                )
+            }
+          )
+
+        Repo.all(query)
+    end
+  end
 end
