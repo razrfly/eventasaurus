@@ -457,6 +457,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       "geeks-who-drink",
       "quizmeisters",
       "inquizition",
+      "speed-quizzing",
       "all"
     ]
 
@@ -694,6 +695,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           "question-one" -> "UK & Ireland"
           "geeks-who-drink" -> "US & Canada"
           "quizmeisters" -> "Australia"
+          "speed-quizzing" -> "International (UK, US, UAE)"
           _ -> "Regional"
         end
 

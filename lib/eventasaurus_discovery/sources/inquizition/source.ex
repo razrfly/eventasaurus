@@ -110,8 +110,9 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Source do
     # Check if StoreLocatorWidgets CDN is accessible
     case HTTPoison.get(Config.cdn_url(), Config.headers(), timeout: 10_000) do
       {:ok, %{status_code: 200, body: body}} when is_binary(body) and body != "" ->
-        # Verify JSONP format
-        if String.starts_with?(body, "slw(") and String.ends_with?(body, ")") do
+        # Verify JSONP format (allow trailing semicolon: slw(...) or slw(...);)
+        trimmed = String.trim(body)
+        if String.starts_with?(trimmed, "slw(") and Regex.match?(~r/\)\s*;?\s*$/, trimmed) do
           :ok
         else
           {:error, "CDN response is not valid JSONP format"}
