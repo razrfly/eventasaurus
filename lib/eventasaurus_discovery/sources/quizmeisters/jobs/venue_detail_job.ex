@@ -37,9 +37,10 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
 
   alias EventasaurusDiscovery.Sources.Quizmeisters.{
     Extractors.VenueDetailsExtractor,
-    Helpers.TimeParser,
     Transformer
   }
+
+  alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
 
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Performers.PerformerStore
@@ -98,19 +99,19 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
   defp parse_time_text(nil), do: {:error, "Missing time_text"}
 
   defp parse_time_text(time_text) do
-    case TimeParser.parse_time_text(time_text) do
-      {:ok, {day, time}} ->
-        {:ok, {day, time}}
-
+    with {:ok, day} <- RecurringEventParser.parse_day_of_week(time_text),
+         {:ok, time} <- RecurringEventParser.parse_time(time_text) do
+      {:ok, {day, time}}
+    else
       {:error, reason} ->
-        Logger.warning("⚠️ Failed to parse time_text '#{time_text}': #{reason}")
+        Logger.warning("⚠️ Failed to parse time_text '#{time_text}': #{inspect(reason)}")
         {:error, reason}
     end
   end
 
   defp calculate_next_occurrence(day_of_week, time) do
     # Calculate next occurrence in Australia/Sydney timezone
-    next_dt = TimeParser.next_occurrence(day_of_week, time, "Australia/Sydney")
+    next_dt = RecurringEventParser.next_occurrence(day_of_week, time, "Australia/Sydney")
     {:ok, next_dt}
   rescue
     error ->

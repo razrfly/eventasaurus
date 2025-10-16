@@ -5,19 +5,22 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
   CRITICAL: Uses EventFreshnessChecker to avoid re-scraping fresh venues.
 
   ## Workflow
-  1. Call WordPress AJAX API with nonce and map bounds
-  2. Parse venue HTML blocks from response
-  3. Extract venue data (GPS coordinates provided directly)
-  4. Generate external_ids for venues
-  5. Filter using EventFreshnessChecker (skip fresh venues within 7 days)
-  6. Schedule detail jobs for stale venues only
+  1. Fetch fresh nonce from venues page (expires in 12-24 hours)
+  2. Call WordPress AJAX API with GET request, nonce, and map bounds
+  3. Parse venue HTML blocks from response
+  4. Extract venue data (GPS coordinates provided directly)
+  5. Generate external_ids for venues
+  6. Filter using EventFreshnessChecker (skip fresh venues within 7 days)
+  7. Schedule detail jobs for stale venues only
 
   ## API Details
   - Endpoint: /wp-admin/admin-ajax.php
-  - Action: mb_display_quizzes
+  - Method: GET request (not POST)
+  - Action: mb_display_mapped_events
   - Returns HTML blocks (one per venue)
   - GPS coordinates in data-lat/data-lon attributes
   - No pagination needed (single request with bounds)
+  - Parameter format: Array notation for bounds ("bounds[northLat]", etc.)
   """
 
   use Oban.Worker,
@@ -29,6 +32,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
 
   alias EventasaurusDiscovery.Sources.GeeksWhoDrink.{
     Client,
+    Config,
     Extractors.VenueExtractor,
     Jobs.VenueDetailJob
   }
@@ -38,48 +42,89 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     source_id = args["source_id"]
-    nonce = args["nonce"]
     bounds = args["bounds"]
     limit = args["limit"]
 
     Logger.info("🔄 Fetching Geeks Who Drink venues from map API")
 
-    # Construct AJAX request parameters
-    params = %{
-      "action" => "mb_display_quizzes",
-      "nonce" => nonce,
-      "northLat" => bounds["northLat"],
-      "southLat" => bounds["southLat"],
-      "westLong" => bounds["westLong"],
-      "eastLong" => bounds["eastLong"],
-      "week" => "*",
-      "city" => "*",
-      "team" => "*"
-    }
+    # CRITICAL: Fetch fresh nonce (WordPress nonces expire in 12-24 hours)
+    # Do NOT reuse nonce from args - it may be stale
+    with {:ok, nonce} <- fetch_fresh_nonce() do
+      # Construct AJAX request parameters matching trivia_advisor's working format
+      # CRITICAL: Use array notation for bounds and include all required parameters
+      params = %{
+        "action" => "mb_display_mapped_events",
+        "nonce" => nonce,
+        "bounds[northLat]" => bounds["northLat"],
+        "bounds[southLat]" => bounds["southLat"],
+        "bounds[westLong]" => bounds["westLong"],
+        "bounds[eastLong]" => bounds["eastLong"],
+        "days" => "",
+        "brands" => "",
+        "search" => "",
+        "startLat" => "44.967243",
+        "startLong" => "-103.771556",
+        "searchInit" => "true",
+        "tlCoord" => "",
+        "brCoord" => "",
+        "tlMapCoord" => "[#{bounds["westLong"]}, #{bounds["northLat"]}]",
+        "brMapCoord" => "[#{bounds["eastLong"]}, #{bounds["southLat"]}]",
+        "hasAll" => "true"
+      }
 
-    case Client.post_ajax(params) do
-      {:ok, html_response} ->
-        venues = parse_venue_blocks(html_response)
+      # Build URL with query parameters and use GET request (not POST)
+      ajax_url = Config.ajax_url()
+      url = ajax_url <> "?" <> URI.encode_query(params)
 
-        if Enum.empty?(venues) do
-          Logger.info("✅ No venues found in response")
-          {:ok, :complete}
-        else
-          Logger.info("📋 Found #{length(venues)} venues")
+      Logger.debug("🔍 GET #{ajax_url} with action: mb_display_mapped_events")
 
-          # CRITICAL: EventFreshnessChecker filters out fresh venues
-          scheduled_count = schedule_detail_jobs(venues, source_id, limit)
+      case Client.fetch_page(url) do
+        {:ok, %{body: html_response}} ->
+          venues = parse_venue_blocks(html_response)
 
-          Logger.info("""
-          📤 Scheduled #{scheduled_count} detail jobs
-          (#{length(venues) - scheduled_count} venues skipped - recently updated)
-          """)
+          if Enum.empty?(venues) do
+            Logger.info("✅ No venues found in response")
+            {:ok, :complete}
+          else
+            Logger.info("📋 Found #{length(venues)} venues")
 
-          {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
-        end
+            # CRITICAL: EventFreshnessChecker filters out fresh venues
+            scheduled_count = schedule_detail_jobs(venues, source_id, limit)
+
+            Logger.info("""
+            📤 Scheduled #{scheduled_count} detail jobs
+            (#{length(venues) - scheduled_count} venues skipped - recently updated)
+            """)
+
+            {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
+          end
+
+        {:error, reason} = error ->
+          Logger.error("❌ Failed to fetch venues from map API: #{inspect(reason)}")
+          error
+
+        {:ok, response} ->
+          Logger.error("❌ Unexpected response format from map API: #{inspect(response)}")
+          {:error, :unexpected_response_format}
+      end
+    else
+      {:error, reason} = error ->
+        Logger.error("❌ Failed to fetch fresh nonce: #{inspect(reason)}")
+        error
+    end
+  end
+
+  # Private function to fetch fresh nonce
+  defp fetch_fresh_nonce do
+    alias EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.NonceExtractor
+
+    case NonceExtractor.fetch_nonce() do
+      {:ok, nonce} ->
+        Logger.info("✅ Successfully fetched fresh nonce")
+        {:ok, nonce}
 
       {:error, reason} = error ->
-        Logger.error("❌ Failed to fetch venues from map API: #{inspect(reason)}")
+        Logger.error("❌ Failed to fetch nonce: #{inspect(reason)}")
         error
     end
   end
@@ -88,9 +133,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
   # Response contains multiple HTML blocks, each representing one venue
   defp parse_venue_blocks(html) do
     # Split HTML into individual venue blocks
-    # Each block starts with <div id="quizBlock-{venue_id}" ...>
+    # Each block starts with <a id="quizBlock-{venue_id}" ...> (not <div>)
     html
-    |> String.split(~r/<div[^>]*id="quizBlock-\d+"/)
+    |> String.split(~r/<a[^>]*id="quizBlock-/)
     # First element is empty or header content
     |> Enum.drop(1)
     |> Enum.map(&restore_opening_tag/1)
@@ -98,16 +143,16 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
     |> Enum.reject(&is_nil/1)
   end
 
-  # Restore the opening <div> tag that was removed during split
+  # Restore the opening <a> tag that was removed during split
   defp restore_opening_tag(block_html) do
-    # Extract the venue ID from the block
-    case Regex.run(~r/data-venue-id="(\d+)"/, block_html) do
+    # Extract the venue ID from the block (matches patterns like quizBlock-12345 or quizBlock-virtual-0)
+    case Regex.run(~r/^([^"]+)"/, block_html) do
       [_, venue_id] ->
-        "<div id=\"quizBlock-#{venue_id}\" #{block_html}"
+        "<a id=\"quizBlock-#{venue_id}\" #{block_html}"
 
       nil ->
-        # Fallback: just prepend a generic div
-        "<div #{block_html}"
+        # Fallback: just prepend a generic <a> tag
+        "<a id=\"quizBlock-#{block_html}"
     end
   end
 

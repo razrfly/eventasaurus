@@ -3,14 +3,15 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
   Main orchestration job for Geeks Who Drink scraper.
 
   Responsibilities:
-  - Fetch WordPress nonce from venues page
-  - Enqueue index job with nonce and US map bounds
+  - Enqueue index job with US map bounds
   - Supports limit parameter for testing
 
   ## Workflow
-  1. Extract WordPress nonce (required for AJAX API)
-  2. Enqueue IndexJob with nonce and map bounds
+  1. Enqueue IndexJob with map bounds
+  2. IndexJob fetches fresh nonce (WordPress nonces expire in 12-24 hours)
   3. IndexJob handles venue discovery and schedules detail jobs
+
+  Note: IndexJob fetches its own fresh nonce to avoid stale nonce issues
   """
 
   use Oban.Worker,
@@ -28,32 +29,22 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
     limit = args["limit"]
     source = SourceStore.get_by_key!(GeeksWhoDrink.Source.key())
 
-    # Extract nonce for WordPress AJAX API authentication
-    case GeeksWhoDrink.Extractors.NonceExtractor.fetch_nonce() do
-      {:ok, nonce} ->
-        Logger.info("✅ Successfully fetched WordPress nonce")
-
-        # Enqueue index job with nonce and US bounds
-        %{
-          "source_id" => source.id,
-          "nonce" => nonce,
-          "bounds" => GeeksWhoDrink.Config.us_bounds(),
-          "limit" => limit
-        }
-        |> GeeksWhoDrink.Jobs.IndexJob.new()
-        |> Oban.insert()
-        |> case do
-          {:ok, _job} ->
-            Logger.info("✅ Enqueued index job for Geeks Who Drink")
-            {:ok, %{source_id: source.id, limit: limit}}
-
-          {:error, reason} = error ->
-            Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
-            error
-        end
+    # Enqueue index job with US bounds
+    # Note: IndexJob fetches its own fresh nonce to avoid expiration issues
+    %{
+      "source_id" => source.id,
+      "bounds" => GeeksWhoDrink.Config.us_bounds(),
+      "limit" => limit
+    }
+    |> GeeksWhoDrink.Jobs.IndexJob.new()
+    |> Oban.insert()
+    |> case do
+      {:ok, _job} ->
+        Logger.info("✅ Enqueued index job for Geeks Who Drink")
+        {:ok, %{source_id: source.id, limit: limit}}
 
       {:error, reason} = error ->
-        Logger.error("❌ Failed to fetch nonce: #{inspect(reason)}")
+        Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
         error
     end
   end

@@ -32,6 +32,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Source do
   alias EventasaurusDiscovery.Sources.SpeedQuizzing.{
     Config,
     Jobs.SyncJob,
+    Jobs.IndexJob,
     Jobs.DetailJob
   }
 
@@ -60,9 +61,9 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Source do
       timezone: "Europe/London",
       locale: "en",
 
-      # Job configuration (two-stage scraper: sync + detail)
+      # Job configuration (two-stage scraper: sync + index + detail)
       sync_job: SyncJob,
-      index_job: SyncJob,
+      index_job: IndexJob,
       detail_job: DetailJob,
 
       # Queue settings
@@ -106,7 +107,9 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Source do
 
   def detail_job_args(event_data, metadata \\ %{}) do
     %{
-      "event_id" => event_data["event_id"] || event_data[:event_id],
+      "event_id" =>
+        event_data["event_id"] || event_data[:event_id] ||
+        event_data["id"] || event_data[:id],
       "source_id" => metadata[:source_id],
       "lat" => event_data["lat"] || event_data[:lat],
       "lng" => event_data["lon"] || event_data["lng"] || event_data[:lng],
@@ -144,7 +147,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Source do
   end
 
   defp validate_job_modules do
-    modules = [SyncJob, DetailJob]
+    modules = [SyncJob, IndexJob, DetailJob]
 
     missing =
       Enum.filter(modules, fn module ->
