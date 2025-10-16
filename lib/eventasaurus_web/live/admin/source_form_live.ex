@@ -65,6 +65,7 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
         updated_params =
           params
           |> normalize_params()
+          |> maybe_put_removed_logo(socket)
           |> maybe_put_url(:logo_url, logo_url || socket.assigns.logo_url)
 
         save_source(socket, socket.assigns.source.id, updated_params)
@@ -91,7 +92,15 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
 
   @impl true
   def handle_event("remove_logo", _params, socket) do
-    {:noreply, assign(socket, :logo_url, nil)}
+    changeset =
+      socket.assigns.source
+      |> Source.changeset(%{"logo_url" => nil})
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+     socket
+     |> assign(:logo_url, nil)
+     |> assign(:form, to_form(changeset))}
   end
 
   defp save_source(socket, nil, params) do
@@ -172,6 +181,15 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
     has_aggregation = aggregation_type && aggregation_type != ""
 
     Map.put(params, "aggregate_on_index", has_aggregation)
+  end
+
+  defp maybe_put_removed_logo(params, socket) do
+    # If logo_url was removed (assign is nil but source has a value), set it to nil in params
+    if is_nil(socket.assigns.logo_url) and not is_nil(socket.assigns.source.logo_url) do
+      Map.put(params, "logo_url", nil)
+    else
+      params
+    end
   end
 
   # Upload handling functions
