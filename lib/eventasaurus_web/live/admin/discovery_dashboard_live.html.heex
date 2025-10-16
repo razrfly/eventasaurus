@@ -108,10 +108,13 @@
                   <span class="text-sm text-blue-600 ml-2">(Unbounded)</span>
                 </div>
                 <p class="mt-1 text-sm text-gray-500">
-                  <%= if @selected_source == "question-one" do %>
-                    Discovers all venues from RSS feed. Cities are auto-created via geocoding.
-                  <% else %>
-                    <%= String.capitalize(@selected_source) %> imports all venues across {source_coverage(@selected_source)}
+                  <%= cond do %>
+                    <% @selected_source == "question-one" -> %>
+                      Discovers all venues from RSS feed. Cities are auto-created via geocoding.
+                    <% @selected_source == "inquizition" -> %>
+                      Imports all Inquizition trivia venues across the United Kingdom. Cities are auto-created via geocoding.
+                    <% true -> %>
+                      <%= String.capitalize(@selected_source) %> imports all venues across {source_coverage(@selected_source)}
                   <% end %>
                 </p>
               </div>
