@@ -37,6 +37,7 @@ defmodule EventasaurusDiscovery.Sources.Source do
     field(:domains, {:array, :string}, default: ["general"])
     field(:aggregate_on_index, :boolean, default: false)
     field(:aggregation_type, :string)
+    field(:logo_url, :string)
 
     has_many(:public_event_sources, EventasaurusDiscovery.PublicEvents.PublicEventSource)
 
@@ -55,12 +56,16 @@ defmodule EventasaurusDiscovery.Sources.Source do
       :metadata,
       :domains,
       :aggregate_on_index,
-      :aggregation_type
+      :aggregation_type,
+      :logo_url
     ])
     |> validate_required([:name, :slug])
     |> update_change(:slug, &(&1 && String.downcase(&1)))
     |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i,
       message: "must start with http:// or https://"
+    )
+    |> validate_format(:logo_url, ~r/^https?:\/\/\S+$/i,
+      message: "must be a valid URL"
     )
     |> validate_number(:priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> validate_domains()

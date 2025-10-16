@@ -46,8 +46,10 @@
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Logo</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aggregation</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domains</th>
           <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
@@ -57,6 +59,19 @@
       <tbody class="bg-white divide-y divide-gray-200">
         <%= for source <- @sources do %>
           <tr class={unless source.is_active, do: "opacity-50 bg-gray-50"}>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <%= if source.logo_url do %>
+                <img
+                  src={source.logo_url}
+                  alt={"#{source.name} logo"}
+                  class="h-8 w-auto object-contain"
+                />
+              <% else %>
+                <div class="h-8 w-8 bg-gray-100 rounded flex items-center justify-center text-xs text-gray-400">
+                  No logo
+                </div>
+              <% end %>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm font-medium text-gray-900"><%= source.name %></div>
               <%= if source.website_url do %>
@@ -69,6 +84,17 @@
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm text-gray-500"><%= source.slug %></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <%= if source.aggregate_on_index do %>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded font-medium">
+                    <%= source.aggregation_type || "events" %>
+                  </span>
+                </div>
+              <% else %>
+                <span class="text-xs text-gray-400">—</span>
+              <% end %>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span class={
