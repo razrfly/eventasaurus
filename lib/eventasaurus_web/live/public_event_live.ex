@@ -225,16 +225,18 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, assign(socket, :current_uri, uri)}
   end
 
-  # Extract base URL (scheme + host + port) from full URI
+  # Extract base URL from URI, forcing HTTPS for non-localhost hosts
+  # This works with ngrok, Cloudflare, and other proxies that terminate SSL
   defp get_base_url_from_uri(uri) when is_binary(uri) do
     parsed = URI.parse(uri)
 
-    # Guard against missing scheme/host (nil uri, relative paths, etc.)
     if parsed.scheme && parsed.host do
+      # Force HTTPS for external domains (ngrok, production), allow HTTP for localhost
+      scheme = if parsed.host in ["localhost", "127.0.0.1"], do: parsed.scheme, else: "https"
       port_part = if parsed.port && parsed.port not in [80, 443], do: ":#{parsed.port}", else: ""
-      "#{parsed.scheme}://#{parsed.host}#{port_part}"
+      "#{scheme}://#{parsed.host}#{port_part}"
     else
-      # Fallback to endpoint URL when scheme/host are missing
+      # Fallback to endpoint URL
       EventasaurusWeb.Endpoint.url()
     end
   end
