@@ -29,7 +29,7 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Transformer do
   require Logger
 
   alias EventasaurusDiscovery.Helpers.CityResolver
-  alias EventasaurusDiscovery.Sources.Quizmeisters.Helpers.TimeParser
+  alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
 
   @doc """
   Transform venue data to unified event format.
@@ -161,38 +161,30 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Transformer do
   def parse_schedule_to_recurrence(time_text, starts_at \\ nil, venue_data \\ %{})
 
   def parse_schedule_to_recurrence(time_text, starts_at, venue_data) when is_binary(time_text) do
-    case TimeParser.parse_time_text(time_text) do
-      {:ok, {day_of_week, time_struct}} ->
-        # Convert Time struct to HH:MM string format
-        time_string = Time.to_string(time_struct) |> String.slice(0, 5)
+    with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
+         {:ok, time_struct} <- RecurringEventParser.parse_time(time_text) do
+      # Detect timezone with priority: starts_at > venue_data > default
+      timezone =
+        cond do
+          # Priority 1: Extract from starts_at DateTime (most accurate)
+          match?(%DateTime{}, starts_at) ->
+            starts_at.time_zone
 
-        # Detect timezone with priority: starts_at > venue_data > default
-        timezone =
-          cond do
-            # Priority 1: Extract from starts_at DateTime (most accurate)
-            match?(%DateTime{}, starts_at) ->
-              starts_at.time_zone
+          # Priority 2: Use explicit timezone from venue metadata
+          is_binary(venue_data[:timezone]) ->
+            venue_data[:timezone]
 
-            # Priority 2: Use explicit timezone from venue metadata
-            is_binary(venue_data[:timezone]) ->
-              venue_data[:timezone]
+          # Priority 3: Fallback to Australia/Sydney (most common for Australian trivia)
+          true ->
+            "Australia/Sydney"
+        end
 
-            # Priority 3: Fallback to Australia/Sydney (most common for Australian trivia)
-            true ->
-              "Australia/Sydney"
-          end
-
-        recurrence_rule = %{
-          "frequency" => "weekly",
-          "days_of_week" => [Atom.to_string(day_of_week)],
-          "time" => time_string,
-          "timezone" => timezone
-        }
-
-        {:ok, recurrence_rule}
-
+      # Build recurrence rule using shared helper
+      recurrence_rule = RecurringEventParser.build_recurrence_rule(day_of_week, time_struct, timezone)
+      {:ok, recurrence_rule}
+    else
       {:error, _reason} ->
-        {:error, "Could not extract day of week from time_text: #{time_text}"}
+        {:error, "Could not extract day of week or time from time_text: #{time_text}"}
     end
   end
 

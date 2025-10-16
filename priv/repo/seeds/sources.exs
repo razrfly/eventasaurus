@@ -118,6 +118,21 @@ sources = [
     }
   },
   %{
+    name: "Inquizition",
+    slug: "inquizition",
+    website_url: "https://inquizition.com",
+    priority: 35,
+    domains: ["trivia"],
+    aggregate_on_index: true,
+    aggregation_type: "trivia",
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 300,
+      "language" => "en",
+      "supports_recurring_events" => true
+    }
+  },
+  %{
     name: "Cinema City",
     slug: "cinema-city",
     website_url: "https://www.cinema-city.pl",

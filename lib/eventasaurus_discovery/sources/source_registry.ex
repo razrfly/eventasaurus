@@ -33,7 +33,8 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
     "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob,
     "geeks-who-drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob,
-    "quizmeisters" => EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob
+    "quizmeisters" => EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob,
+    "inquizition" => EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob
   }
 
   @doc """
@@ -153,6 +154,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   defp get_default_scope_for_slug("question-one"), do: "regional"
   defp get_default_scope_for_slug("geeks-who-drink"), do: "regional"
   defp get_default_scope_for_slug("quizmeisters"), do: "regional"
+  defp get_default_scope_for_slug("inquizition"), do: "country"
   defp get_default_scope_for_slug("pubquiz-pl"), do: "country"
   defp get_default_scope_for_slug("ticketmaster"), do: "city"
   defp get_default_scope_for_slug("bandsintown"), do: "city"

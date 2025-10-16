@@ -1279,95 +1279,141 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Initialize or get existing occurrences
     current_occurrences = parent_event.occurrences || initialize_occurrences()
 
-    # Create new date entry
-    new_date = %{
-      "date" => format_date_only(new_occurrence.start_at),
-      "time" => format_time_only(new_occurrence.start_at)
-    }
-
-    # Add external_id if present
-    new_date =
-      if new_occurrence.external_id do
-        Map.put(new_date, "external_id", new_occurrence.external_id)
-      else
-        new_date
-      end
-
-    # Add source_id if present - this will help with more reliable source lookup
-    new_date =
-      if new_occurrence[:source_id] || new_occurrence["source_id"] do
-        Map.put(new_date, "source_id", new_occurrence[:source_id] || new_occurrence["source_id"])
-      else
-        new_date
-      end
-
-    # CRITICAL FIX: Add label from event title to distinguish ticket types
-    # When events like "VIP Experience" and "General Admission" are consolidated,
-    # preserve their names so users can see what each time option represents
-    new_date =
-      if new_occurrence.title && String.trim(new_occurrence.title) != "" do
-        Map.put(new_date, "label", new_occurrence.title)
-      else
-        new_date
-      end
-
-    # Update occurrences
-    updated_occurrences =
-      update_in(
-        current_occurrences,
-        ["dates"],
-        fn dates ->
-          # Check if this date/time already exists
-          if Enum.any?(dates, fn d ->
-               d["date"] == new_date["date"] && d["time"] == new_date["time"]
-             end) do
-            # Don't add duplicate
-            dates
-          else
-            # Add new occurrence
-            dates ++ [new_date]
-          end
-        end
-      )
-
-    # Update the event with new occurrences and adjust start/end dates
-    # For recurring events:
-    # - starts_at should be the earliest occurrence date/time (typically GA time, not VIP)
-    # - ends_at should be the latest occurrence date/time
-    # Never allow ends_at < starts_at; guard nil starts_at to avoid crashes.
-
-    # Calculate earliest start time (fixes issue #1343 - wrong main time)
-    new_start_date =
-      if is_nil(parent_event.starts_at) do
-        new_occurrence.start_at
-      else
-        earliest_date([parent_event.starts_at, new_occurrence.start_at])
-      end
-
-    new_end_date =
-      cond do
-        is_nil(parent_event.starts_at) ->
-          if parent_event.ends_at,
-            do: latest_date([parent_event.ends_at, new_occurrence.start_at]),
-            else: nil
-
-        parent_event.ends_at ->
-          latest_date([parent_event.ends_at, new_occurrence.start_at, parent_event.starts_at])
-
-        DateTime.compare(new_occurrence.start_at, parent_event.starts_at) == :gt ->
+    # Check if this is a pattern-type occurrence (recurring events like PubQuiz, Inquizition)
+    # Pattern-type events don't store individual dates - they use recurrence rules
+    if current_occurrences["type"] == "pattern" do
+      # Pattern-type events already have the recurrence rule set
+      # No need to add individual occurrences
+      # Just update the parent event's dates if needed
+      new_start_date =
+        if is_nil(parent_event.starts_at) do
           new_occurrence.start_at
+        else
+          earliest_date([parent_event.starts_at, new_occurrence.start_at])
+        end
 
-        true ->
-          nil
-      end
+      new_end_date =
+        cond do
+          is_nil(parent_event.starts_at) ->
+            if parent_event.ends_at,
+              do: latest_date([parent_event.ends_at, new_occurrence.start_at]),
+              else: nil
 
-    parent_event
-    |> PublicEvent.changeset(%{
-      starts_at: new_start_date,
-      occurrences: updated_occurrences,
-      ends_at: new_end_date
-    })
-    |> Repo.update()
+          parent_event.ends_at ->
+            latest_date([parent_event.ends_at, new_occurrence.start_at, parent_event.starts_at])
+
+          DateTime.compare(new_occurrence.start_at, parent_event.starts_at) == :gt ->
+            new_occurrence.start_at
+
+          true ->
+            nil
+        end
+
+      parent_event
+      |> PublicEvent.changeset(%{
+        starts_at: new_start_date,
+        ends_at: new_end_date
+      })
+      |> Repo.update()
+    else
+      # Explicit-type occurrence - add to dates array
+      # Create new date entry
+      new_date = %{
+        "date" => format_date_only(new_occurrence.start_at),
+        "time" => format_time_only(new_occurrence.start_at)
+      }
+
+      # Add external_id if present
+      new_date =
+        if new_occurrence.external_id do
+          Map.put(new_date, "external_id", new_occurrence.external_id)
+        else
+          new_date
+        end
+
+      # Add source_id if present - this will help with more reliable source lookup
+      new_date =
+        if new_occurrence[:source_id] || new_occurrence["source_id"] do
+          Map.put(
+            new_date,
+            "source_id",
+            new_occurrence[:source_id] || new_occurrence["source_id"]
+          )
+        else
+          new_date
+        end
+
+      # CRITICAL FIX: Add label from event title to distinguish ticket types
+      # When events like "VIP Experience" and "General Admission" are consolidated,
+      # preserve their names so users can see what each time option represents
+      new_date =
+        if new_occurrence.title && String.trim(new_occurrence.title) != "" do
+          Map.put(new_date, "label", new_occurrence.title)
+        else
+          new_date
+        end
+
+      # Update occurrences - ensure dates list exists before updating
+      updated_occurrences =
+        update_in(
+          current_occurrences,
+          ["dates"],
+          fn dates ->
+            # Handle nil dates (shouldn't happen but defensive)
+            dates = dates || []
+
+            # Check if this date/time already exists
+            if Enum.any?(dates, fn d ->
+                 d["date"] == new_date["date"] && d["time"] == new_date["time"]
+               end) do
+              # Don't add duplicate
+              dates
+            else
+              # Add new occurrence
+              dates ++ [new_date]
+            end
+          end
+        )
+
+      # Update the event with new occurrences and adjust start/end dates
+      # For recurring events:
+      # - starts_at should be the earliest occurrence date/time (typically GA time, not VIP)
+      # - ends_at should be the latest occurrence date/time
+      # Never allow ends_at < starts_at; guard nil starts_at to avoid crashes.
+
+      # Calculate earliest start time (fixes issue #1343 - wrong main time)
+      new_start_date =
+        if is_nil(parent_event.starts_at) do
+          new_occurrence.start_at
+        else
+          earliest_date([parent_event.starts_at, new_occurrence.start_at])
+        end
+
+      new_end_date =
+        cond do
+          is_nil(parent_event.starts_at) ->
+            if parent_event.ends_at,
+              do: latest_date([parent_event.ends_at, new_occurrence.start_at]),
+              else: nil
+
+          parent_event.ends_at ->
+            latest_date([parent_event.ends_at, new_occurrence.start_at, parent_event.starts_at])
+
+          DateTime.compare(new_occurrence.start_at, parent_event.starts_at) == :gt ->
+            new_occurrence.start_at
+
+          true ->
+            nil
+        end
+
+      parent_event
+      |> PublicEvent.changeset(%{
+        starts_at: new_start_date,
+        occurrences: updated_occurrences,
+        ends_at: new_end_date
+      })
+      |> Repo.update()
+    end
   end
 
   defp initialize_occurrences do
