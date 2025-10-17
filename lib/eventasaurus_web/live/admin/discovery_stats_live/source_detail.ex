@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker}
+  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, DataQualityChecker, TrendAnalyzer}
   alias EventasaurusDiscovery.Locations.City
 
   import Ecto.Query
@@ -112,6 +112,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     percentage_change = EventChangeTracker.calculate_percentage_change(source_slug, first_city)
     {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(percentage_change)
 
+    # Get data quality metrics (Phase 5)
+    quality_data = DataQualityChecker.check_quality(source_slug)
+    {quality_emoji, quality_text, quality_class} = DataQualityChecker.quality_status(quality_data.quality_score)
+    recommendations = DataQualityChecker.get_recommendations(source_slug)
+
+    # Get trend data (Phase 6)
+    event_trend = TrendAnalyzer.get_event_trend(source_slug, 30)
+    event_chart_data = TrendAnalyzer.format_for_chartjs(event_trend, :count, "Events", "#3B82F6")
+
+    success_rate_trend = TrendAnalyzer.get_success_rate_trend(source_slug, 30)
+    success_chart_data = TrendAnalyzer.format_for_chartjs(success_rate_trend, :success_rate, "Success Rate", "#10B981")
+
     socket
     |> assign(:scope, scope)
     |> assign(:coverage, coverage)
@@ -128,6 +140,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     |> assign(:trend_emoji, trend_emoji)
     |> assign(:trend_text, trend_text)
     |> assign(:trend_class, trend_class)
+    |> assign(:quality_data, quality_data)
+    |> assign(:quality_emoji, quality_emoji)
+    |> assign(:quality_text, quality_text)
+    |> assign(:quality_class, quality_class)
+    |> assign(:recommendations, recommendations)
+    |> assign(:event_chart_data, Jason.encode!(event_chart_data))
+    |> assign(:success_chart_data, Jason.encode!(success_chart_data))
   end
 
   defp count_events_for_source(source_slug) do
@@ -318,6 +337,130 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                   </p>
                   <p class="text-xs text-blue-600 mt-1"><%= @trend_text %></p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Quality Dashboard (Phase 5) -->
+        <div class="bg-white rounded-lg shadow mb-8">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">🎯 Data Quality Dashboard</h2>
+            <p class="mt-1 text-sm text-gray-500">Completeness metrics and quality score</p>
+          </div>
+          <div class="p-6">
+            <!-- Overall Quality Score -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-500">Overall Quality Score</p>
+                  <div class="flex items-center mt-1">
+                    <span class="text-3xl mr-2"><%= @quality_emoji %></span>
+                    <span class={"text-3xl font-bold #{@quality_class}"}><%= @quality_data.quality_score %>%</span>
+                    <span class={"ml-2 text-sm font-medium #{@quality_class}"}><%= @quality_text %></span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs text-gray-500">Total Events</p>
+                  <p class="text-2xl font-semibold text-gray-900"><%= format_number(@quality_data.total_events) %></p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Completeness Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <!-- Venue Completeness -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Venues</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.venue_completeness %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-blue-600 h-2.5 rounded-full" style={"width: #{@quality_data.venue_completeness}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.missing_venues %> events missing venue data
+                </p>
+              </div>
+
+              <!-- Image Completeness -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Images</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.image_completeness %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-green-600 h-2.5 rounded-full" style={"width: #{@quality_data.image_completeness}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.missing_images %> events missing image data
+                </p>
+              </div>
+
+              <!-- Category Completeness -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Categories</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.category_completeness %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-purple-600 h-2.5 rounded-full" style={"width: #{@quality_data.category_completeness}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.missing_categories %> events missing category data
+                </p>
+              </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="border-t pt-4">
+              <h3 class="text-sm font-semibold text-gray-900 mb-3">💡 Recommendations</h3>
+              <ul class="space-y-2">
+                <%= for rec <- @recommendations do %>
+                  <li class="flex items-start">
+                    <span class="flex-shrink-0 w-1.5 h-1.5 mt-2 bg-blue-600 rounded-full mr-3"></span>
+                    <span class="text-sm text-gray-700"><%= rec %></span>
+                  </li>
+                <% end %>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historical Trends (Phase 6) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <!-- Event Count Trend -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-900">📈 Event Count Trend</h2>
+              <p class="mt-1 text-sm text-gray-500">Last 30 days</p>
+            </div>
+            <div class="p-6">
+              <div style="height: 300px;">
+                <canvas
+                  id="event-trend-chart"
+                  phx-hook="ChartHook"
+                  data-chart-data={@event_chart_data}
+                  data-chart-type="line"
+                ></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Success Rate Trend -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-900">✅ Success Rate Trend</h2>
+              <p class="mt-1 text-sm text-gray-500">Last 30 days</p>
+            </div>
+            <div class="p-6">
+              <div style="height: 300px;">
+                <canvas
+                  id="success-rate-chart"
+                  phx-hook="ChartHook"
+                  data-chart-data={@success_chart_data}
+                  data-chart-type="line"
+                ></canvas>
               </div>
             </div>
           </div>
