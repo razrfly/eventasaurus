@@ -24,38 +24,32 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   @refresh_interval 30_000  # 30 seconds
 
   @impl true
-  def mount(%{"city_id" => city_id_str}, _session, socket) do
-    case Integer.parse(city_id_str) do
-      {city_id, ""} ->
-        case Repo.get(City, city_id) do
-          nil ->
-            {:ok,
-             socket
-             |> put_flash(:error, "City not found")
-             |> push_navigate(to: ~p"/admin/discovery/stats")}
+  def mount(%{"city_slug" => city_slug}, _session, socket) do
+    query = from(c in City, where: c.slug == ^city_slug, select: c)
 
-          city ->
-            if connected?(socket) do
-              Process.send_after(self(), :refresh, @refresh_interval)
-            end
-
-            socket =
-              socket
-              |> assign(:city_id, city_id)
-              |> assign(:city, city)
-              |> assign(:page_title, "#{city.name} Discovery Statistics")
-              |> assign(:loading, true)
-              |> load_city_data()
-              |> assign(:loading, false)
-
-            {:ok, socket}
-        end
-
-      _ ->
+    case Repo.one(query) do
+      nil ->
         {:ok,
          socket
-         |> put_flash(:error, "Invalid city ID")
+         |> put_flash(:error, "City not found")
          |> push_navigate(to: ~p"/admin/discovery/stats")}
+
+      city ->
+        if connected?(socket) do
+          Process.send_after(self(), :refresh, @refresh_interval)
+        end
+
+        socket =
+          socket
+          |> assign(:city_id, city.id)
+          |> assign(:city, city)
+          |> assign(:page_title, "#{city.name} Discovery Statistics")
+          |> assign(:date_range, 30)
+          |> assign(:loading, true)
+          |> load_city_data()
+          |> assign(:loading, false)
+
+        {:ok, socket}
     end
   end
 
@@ -72,8 +66,31 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("change_date_range", %{"date_range" => date_range}, socket) do
+    date_range = String.to_integer(date_range)
+
+    city_id = socket.assigns.city_id
+
+    # Get new trend data
+    city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
+    city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
+
+    socket =
+      socket
+      |> assign(:date_range, date_range)
+      |> assign(:city_chart_data, Jason.encode!(city_chart_data))
+      |> push_event("update-chart", %{
+        chart_id: "city-event-trend-chart",
+        chart_data: city_chart_data
+      })
+
+    {:noreply, socket}
+  end
+
   defp load_city_data(socket) do
     city_id = socket.assigns.city_id
+    date_range = socket.assigns.date_range
 
     # Get all sources active in this city
     sources_data = get_sources_for_city(city_id)
@@ -90,8 +107,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     # Get events added this week
     events_this_week = count_city_events_this_week(city_id)
 
-    # Get trend data (Phase 6)
-    city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, 30)
+    # Get trend data (Phase 6) - uses date_range
+    city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
     city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
 
     socket
@@ -266,16 +283,36 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         </div>
       <% else %>
         <!-- City Event Trend (Phase 6) -->
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">📊 Event Count Trend</h2>
+            <p class="text-sm text-gray-500">Events over time for <%= @city.name %></p>
+          </div>
+          <form phx-change="change_date_range" class="flex items-center gap-2">
+            <label for="date-range" class="text-sm font-medium text-gray-700">Time Range:</label>
+            <select
+              id="date-range"
+              name="date_range"
+              class="block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="7" selected={@date_range == 7}>Last 7 days</option>
+              <option value="14" selected={@date_range == 14}>Last 14 days</option>
+              <option value="30" selected={@date_range == 30}>Last 30 days</option>
+              <option value="90" selected={@date_range == 90}>Last 90 days</option>
+            </select>
+          </form>
+        </div>
         <div class="bg-white rounded-lg shadow mb-8">
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">📈 Event Count Trend</h2>
-            <p class="mt-1 text-sm text-gray-500">Last 30 days for <%= @city.name %></p>
+            <p class="mt-1 text-sm text-gray-500">Last <%= @date_range %> days for <%= @city.name %></p>
           </div>
           <div class="p-6">
             <div style="height: 300px;">
               <canvas
                 id="city-event-trend-chart"
                 phx-hook="ChartHook"
+                phx-update="ignore"
                 data-chart-data={@city_chart_data}
                 data-chart-type="line"
               ></canvas>

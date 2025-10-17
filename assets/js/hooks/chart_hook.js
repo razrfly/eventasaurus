@@ -62,13 +62,28 @@ export const ChartHook = {
     });
 
     console.log('Chart created successfully!', this.el.id, this.chart);
+
+    // Listen for chart update events from LiveView
+    this.handleEvent("update-chart", ({chart_id, chart_data}) => {
+      if (chart_id === this.el.id && this.chart) {
+        console.log('Updating chart via event:', chart_id);
+        this.chart.data = chart_data;
+        this.chart.update('none'); // Update without animation
+      }
+    });
   },
 
   updated() {
     if (!this.chart) return;
 
+    const raw = this.el.dataset.chartData;
+    if (!raw) {
+      console.warn('ChartHook: missing data-chart-data on update', this.el.id);
+      return;
+    }
+
     try {
-      const chartData = JSON.parse(this.el.dataset.chartData || '{}');
+      const chartData = JSON.parse(raw);
       this.chart.data = chartData;
       this.chart.update('none'); // Update without animation for smoother LiveView updates
     } catch (e) {

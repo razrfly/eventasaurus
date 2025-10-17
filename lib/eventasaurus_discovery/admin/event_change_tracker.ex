@@ -28,7 +28,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   ## Parameters
 
     * `source_slug` - The source name (string)
-    * `window_hours` - Time window to consider (default: 24 hours)
+    * `window_hours` - Time window to consider (default: from config)
 
   ## Returns
 
@@ -39,8 +39,9 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       iex> calculate_new_events("bandsintown", 24)
       15
   """
-  def calculate_new_events(source_slug, window_hours \\ 24)
-      when is_binary(source_slug) and is_integer(window_hours) do
+  def calculate_new_events(source_slug, window_hours \\ nil)
+      when is_binary(source_slug) and (is_integer(window_hours) or is_nil(window_hours)) do
+    window_hours = window_hours || get_new_events_window()
     case get_source_id(source_slug) do
       nil ->
         0
@@ -69,7 +70,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   ## Parameters
 
     * `source_slug` - The source name (string)
-    * `window_hours` - Time window to consider stale (default: 48 hours)
+    * `window_hours` - Time window to consider stale (default: from config)
 
   ## Returns
 
@@ -80,8 +81,9 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       iex> calculate_dropped_events("bandsintown", 48)
       3
   """
-  def calculate_dropped_events(source_slug, window_hours \\ 48)
-      when is_binary(source_slug) and is_integer(window_hours) do
+  def calculate_dropped_events(source_slug, window_hours \\ nil)
+      when is_binary(source_slug) and (is_integer(window_hours) or is_nil(window_hours)) do
+    window_hours = window_hours || get_dropped_events_window()
     case get_source_id(source_slug) do
       nil ->
         0
@@ -220,11 +222,11 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
         |> Enum.map(fn slug -> {slug, default_change_stats()} end)
         |> Map.new()
       else
-        # Batch fetch new events (24h window)
-        new_events_by_id = batch_calculate_new_events(source_ids, 24)
+        # Batch fetch new events (configured window)
+        new_events_by_id = batch_calculate_new_events(source_ids, get_new_events_window())
 
-        # Batch fetch dropped events (48h window)
-        dropped_events_by_id = batch_calculate_dropped_events(source_ids, 48)
+        # Batch fetch dropped events (configured window)
+        dropped_events_by_id = batch_calculate_dropped_events(source_ids, get_dropped_events_window())
 
         # Batch fetch percentage changes
         percentage_changes_by_id = batch_calculate_percentage_changes(source_ids, city_id)
@@ -409,5 +411,15 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
     query
     |> Repo.all()
     |> Map.new()
+  end
+
+  defp get_new_events_window do
+    config = Application.get_env(:eventasaurus_discovery, :change_tracking, [])
+    Keyword.get(config, :new_events_window_hours, 24)
+  end
+
+  defp get_dropped_events_window do
+    config = Application.get_env(:eventasaurus_discovery, :change_tracking, [])
+    Keyword.get(config, :dropped_events_window_hours, 48)
   end
 end

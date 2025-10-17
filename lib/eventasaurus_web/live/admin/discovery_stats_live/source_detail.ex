@@ -39,6 +39,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           socket
           |> assign(:source_slug, source_slug)
           |> assign(:page_title, "#{source_slug |> String.capitalize()} Statistics")
+          |> assign(:date_range, 30)
           |> assign(:loading, true)
           |> load_source_data()
           |> assign(:loading, false)
@@ -60,8 +61,39 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("change_date_range", %{"date_range" => date_range}, socket) do
+    date_range = String.to_integer(date_range)
+
+    source_slug = socket.assigns.source_slug
+
+    # Get new trend data only
+    event_trend = TrendAnalyzer.get_event_trend(source_slug, date_range)
+    event_chart_data = TrendAnalyzer.format_for_chartjs(event_trend, :count, "Events", "#3B82F6")
+
+    success_rate_trend = TrendAnalyzer.get_success_rate_trend(source_slug, date_range)
+    success_chart_data = TrendAnalyzer.format_for_chartjs(success_rate_trend, :success_rate, "Success Rate", "#10B981")
+
+    socket =
+      socket
+      |> assign(:date_range, date_range)
+      |> assign(:event_chart_data, Jason.encode!(event_chart_data))
+      |> assign(:success_chart_data, Jason.encode!(success_chart_data))
+      |> push_event("update-chart", %{
+        chart_id: "event-trend-chart",
+        chart_data: event_chart_data
+      })
+      |> push_event("update-chart", %{
+        chart_id: "success-rate-chart",
+        chart_data: success_chart_data
+      })
+
+    {:noreply, socket}
+  end
+
   defp load_source_data(socket) do
     source_slug = socket.assigns.source_slug
+    date_range = socket.assigns.date_range
 
     # Get source scope
     scope =
@@ -88,8 +120,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     # Get run history (last 10 runs)
     run_history = DiscoveryStatsCollector.get_run_history(source_slug, 10)
 
-    # Get average runtime (last 30 days)
-    avg_runtime = DiscoveryStatsCollector.get_average_runtime(source_slug, 30)
+    # Get average runtime (uses date_range)
+    avg_runtime = DiscoveryStatsCollector.get_average_runtime(source_slug, date_range)
 
     # Get events by city (if city-scoped source)
     events_by_city =
@@ -117,19 +149,41 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
     # Get data quality metrics (Phase 5)
     quality_data = DataQualityChecker.check_quality(source_slug)
+
+    # Ensure all required fields exist when not_found is true
+    quality_data =
+      if Map.get(quality_data, :not_found, false) do
+        Map.merge(
+          %{
+            quality_score: 0,
+            total_events: 0,
+            venue_completeness: 0,
+            image_completeness: 0,
+            category_completeness: 0,
+            missing_venues: 0,
+            missing_images: 0,
+            missing_categories: 0
+          },
+          quality_data
+        )
+      else
+        quality_data
+      end
+
     {quality_emoji, quality_text, quality_class} =
       if Map.get(quality_data, :not_found, false) do
         {"⚪", "N/A", "text-gray-600"}
       else
         DataQualityChecker.quality_status(quality_data.quality_score)
       end
+
     recommendations = DataQualityChecker.get_recommendations(source_slug)
 
-    # Get trend data (Phase 6)
-    event_trend = TrendAnalyzer.get_event_trend(source_slug, 30)
+    # Get trend data (Phase 6) - uses date_range
+    event_trend = TrendAnalyzer.get_event_trend(source_slug, date_range)
     event_chart_data = TrendAnalyzer.format_for_chartjs(event_trend, :count, "Events", "#3B82F6")
 
-    success_rate_trend = TrendAnalyzer.get_success_rate_trend(source_slug, 30)
+    success_rate_trend = TrendAnalyzer.get_success_rate_trend(source_slug, date_range)
     success_chart_data = TrendAnalyzer.format_for_chartjs(success_rate_trend, :success_rate, "Success Rate", "#10B981")
 
     socket
@@ -162,7 +216,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
       from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
         join: s in EventasaurusDiscovery.Sources.Source,
         on: s.id == pes.source_id,
-        where: s.name == ^source_slug,
+        where: s.slug == ^source_slug,
         select: count(pes.id)
       )
 
@@ -436,18 +490,38 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         </div>
 
         <!-- Historical Trends (Phase 6) -->
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">📊 Historical Trends</h2>
+            <p class="text-sm text-gray-500">Event counts and success rates over time</p>
+          </div>
+          <form phx-change="change_date_range" class="flex items-center gap-2">
+            <label for="date-range" class="text-sm font-medium text-gray-700">Time Range:</label>
+            <select
+              id="date-range"
+              name="date_range"
+              class="block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="7" selected={@date_range == 7}>Last 7 days</option>
+              <option value="14" selected={@date_range == 14}>Last 14 days</option>
+              <option value="30" selected={@date_range == 30}>Last 30 days</option>
+              <option value="90" selected={@date_range == 90}>Last 90 days</option>
+            </select>
+          </form>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           <!-- Event Count Trend -->
           <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-gray-200">
               <h2 class="text-lg font-semibold text-gray-900">📈 Event Count Trend</h2>
-              <p class="mt-1 text-sm text-gray-500">Last 30 days</p>
+              <p class="mt-1 text-sm text-gray-500">Last <%= @date_range %> days</p>
             </div>
             <div class="p-6">
               <div style="height: 300px;">
                 <canvas
                   id="event-trend-chart"
                   phx-hook="ChartHook"
+                  phx-update="ignore"
                   data-chart-data={@event_chart_data}
                   data-chart-type="line"
                 ></canvas>
@@ -459,13 +533,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-gray-200">
               <h2 class="text-lg font-semibold text-gray-900">✅ Success Rate Trend</h2>
-              <p class="mt-1 text-sm text-gray-500">Last 30 days</p>
+              <p class="mt-1 text-sm text-gray-500">Last <%= @date_range %> days</p>
             </div>
             <div class="p-6">
               <div style="height: 300px;">
                 <canvas
                   id="success-rate-chart"
                   phx-hook="ChartHook"
+                  phx-update="ignore"
                   data-chart-data={@success_chart_data}
                   data-chart-type="line"
                 ></canvas>

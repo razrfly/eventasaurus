@@ -193,11 +193,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         on: v.id == e.venue_id,
         join: c in City,
         on: c.id == v.city_id,
-        group_by: [c.id, c.name],
+        group_by: [c.id, c.name, c.slug],
         having: count(e.id) >= 10,
         select: %{
           city_id: c.id,
           city_name: c.name,
+          city_slug: c.slug,
           event_count: count(e.id)
         },
         order_by: [desc: count(e.id)],
@@ -427,7 +428,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                 <%= for city <- @city_stats do %>
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <.link navigate={~p"/admin/discovery/stats/city/#{city.city_id}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                      <.link navigate={~p"/admin/discovery/stats/city/#{city.city_slug}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                         <%= city.city_name %>
                       </.link>
                     </td>

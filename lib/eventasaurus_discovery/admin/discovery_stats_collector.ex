@@ -713,7 +713,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     # Get the source ID from the database
     source_query =
       from(s in EventasaurusDiscovery.Sources.Source,
-        where: s.name == ^source_slug,
+        where: s.slug == ^source_slug,
         select: s.id
       )
 
