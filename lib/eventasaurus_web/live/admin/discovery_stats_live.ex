@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator}
+  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker}
 
   import Ecto.Query
   require Logger
@@ -69,6 +69,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         %{}
       end
 
+    # Get change tracking data (Phase 3)
+    change_stats = EventChangeTracker.get_all_source_changes(source_names, first_city)
+
     # Calculate enriched source data with health metrics
     sources_data =
       source_names
@@ -90,13 +93,28 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         # Count events for this source
         event_count = count_events_for_source(source_name)
 
+        # Get change tracking data
+        changes = Map.get(change_stats, source_name, %{
+          new_events: 0,
+          dropped_events: 0,
+          percentage_change: 0
+        })
+
+        {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(changes.percentage_change)
+
         %{
           name: source_name,
           scope: scope,
           stats: stats,
           health_status: health_status,
           success_rate: success_rate,
-          event_count: event_count
+          event_count: event_count,
+          new_events: changes.new_events,
+          dropped_events: changes.dropped_events,
+          percentage_change: changes.percentage_change,
+          trend_emoji: trend_emoji,
+          trend_text: trend_text,
+          trend_class: trend_class
         }
       end)
       |> Enum.sort_by(& &1.name)
@@ -299,6 +317,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scope</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">New</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dropped</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Change %</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Run</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -308,7 +329,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                 <%= for source <- @sources_data do %>
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="text-sm font-medium text-gray-900"><%= source.name %></div>
+                      <.link navigate={~p"/admin/discovery/stats/source/#{source.name}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                        <%= source.name %>
+                      </.link>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
@@ -317,6 +340,23 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= format_number(source.event_count) %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="text-sm font-medium text-green-600">+<%= source.new_events %></span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <%= if source.dropped_events > 0 do %>
+                        <span class="text-sm font-medium text-red-600">-<%= source.dropped_events %></span>
+                      <% else %>
+                        <span class="text-sm text-gray-400">0</span>
+                      <% end %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="flex items-center">
+                        <span class={"text-sm font-medium #{source.trend_class}"}>
+                          <%= source.trend_emoji %> <%= format_change(source.percentage_change) %>
+                        </span>
+                      </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <%= format_last_run(source.stats.last_run_at) %>
@@ -363,7 +403,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                 <%= for city <- @city_stats do %>
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="text-sm font-medium text-gray-900"><%= city.city_name %></div>
+                      <.link navigate={~p"/admin/discovery/stats/city/#{city.city_id}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                        <%= city.city_name %>
+                      </.link>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= format_number(city.event_count) %>
