@@ -45,6 +45,9 @@ defmodule EventasaurusWeb.Router do
       # Discovery Dashboard (dev - no auth)
       live "/imports", Admin.DiscoveryDashboardLive
 
+      # Discovery Stats Dashboard (dev - no auth)
+      live "/discovery/stats", Admin.DiscoveryStatsLive, :index
+
       # Geocoding Cost Dashboard (dev - no auth)
       live "/geocoding", Admin.GeocodingDashboardLive
       live "/geocoding/providers", Admin.GeocodingProviderLive, :index
@@ -106,6 +109,9 @@ defmodule EventasaurusWeb.Router do
 
       # Discovery Dashboard with admin authentication
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
+
+      # Discovery Stats Dashboard with admin authentication
+      live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
 
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
