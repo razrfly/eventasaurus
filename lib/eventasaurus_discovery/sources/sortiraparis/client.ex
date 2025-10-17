@@ -177,10 +177,23 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
 
   defp decode_response_body(body, headers) do
     # Check if response is compressed
-    case get_header(headers, "content-encoding") do
-      "gzip" -> :zlib.gunzip(body)
-      "deflate" -> :zlib.uncompress(body)
-      "br" -> :brotli.decode(body)  # Brotli compression
+    try do
+      case get_header(headers, "content-encoding") do
+        "gzip" ->
+          :zlib.gunzip(body)
+        "deflate" ->
+          :zlib.uncompress(body)
+        "br" ->
+          # Check if Brotli is available before attempting decode
+          if Code.ensure_loaded?(:brotli) and function_exported?(:brotli, :decode, 1) do
+            :brotli.decode(body)
+          else
+            body
+          end
+        _ ->
+          body
+      end
+    rescue
       _ -> body
     end
   end

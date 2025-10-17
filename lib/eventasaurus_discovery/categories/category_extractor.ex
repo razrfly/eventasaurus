@@ -188,7 +188,11 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
     # Fallback: check for explicit category field
     category_values =
       if category = event_data[:category] || event_data["category"] do
-        [{"sortiraparis", nil, String.downcase(category)} | category_values]
+        if is_binary(category) do
+          [{"sortiraparis", nil, String.downcase(category)} | category_values]
+        else
+          category_values
+        end
       else
         category_values
       end

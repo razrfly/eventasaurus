@@ -209,23 +209,28 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
           delay_seconds = idx * Config.rate_limit()
           scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
-          article_id = Config.extract_article_id(url)
+          case Config.extract_article_id(url) do
+            nil ->
+              Logger.warning("⏭️ Skipping URL without article_id: #{url}")
+              {:skip, :missing_article_id}
 
-          job_args = %{
-            "source" => "sortiraparis",
-            "url" => url,
-            "event_metadata" => %{
-              "article_id" => article_id,
-              "external_id_base" => Config.generate_external_id(article_id)
-            }
-          }
+            article_id ->
+              job_args = %{
+                "source" => "sortiraparis",
+                "url" => url,
+                "event_metadata" => %{
+                  "article_id" => article_id,
+                  "external_id_base" => Config.generate_external_id(article_id)
+                }
+              }
 
-          EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob.new(
-            job_args,
-            queue: :scraper_detail,
-            scheduled_at: scheduled_at
-          )
-          |> Oban.insert()
+              EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob.new(
+                job_args,
+                queue: :scraper_detail,
+                scheduled_at: scheduled_at
+              )
+              |> Oban.insert()
+          end
         end)
 
       # Count successful insertions

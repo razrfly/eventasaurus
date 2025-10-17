@@ -207,19 +207,26 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   """
   def extract_pricing(html) do
     text = clean_html(html)
+    down = String.downcase(text)
 
     is_free =
-      String.contains?(text, "free") or
-        String.contains?(text, "Free admission") or
-        String.contains?(text, "no charge")
+      String.contains?(down, "free") or
+        String.contains?(down, "free admission") or
+        String.contains?(down, "no charge") or
+        String.contains?(down, "gratuit") or
+        String.contains?(down, "entrée libre")
 
     # Look for price patterns: "€15", "$20", "15€", "20 euros"
+    # Handle EU formats with comma decimals and thousand separators
     prices =
-      Regex.scan(~r/(?:€|EUR|euros?)\s*(\d+(?:\.\d{2})?)|(\d+(?:\.\d{2})?)\s*(?:€|EUR|euros?)/, text)
+      Regex.scan(
+        ~r/(?:(?:€|EUR|euros?)\s*([\d\s.,]+)|([\d\s.,]+)\s*(?:€|EUR|euros?))/i,
+        text
+      )
       |> Enum.flat_map(fn
-        [_, price1, ""] -> [parse_price(price1)]
-        [_, "", price2] -> [parse_price(price2)]
-        [_, price] -> [parse_price(price)]  # When group 2 is omitted (€15 format)
+        [_, p1, ""] when p1 != "" -> [parse_price(p1)]
+        [_, "", p2] when p2 != "" -> [parse_price(p2)]
+        [_, p1, p2] -> [p1, p2] |> Enum.reject(&is_nil_or_empty/1) |> Enum.map(&parse_price/1)
         _ -> []
       end)
       |> Enum.reject(&is_nil/1)
@@ -383,11 +390,22 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   end
 
   defp parse_price(price_string) when is_binary(price_string) do
-    case Decimal.parse(price_string) do
+    # Normalize EU number formats (e.g., "1.500,50" → "1500.50")
+    normalized =
+      price_string
+      |> String.replace(~r/\s+/, "")          # Remove spaces
+      |> String.replace(~r/\.(?=\d{3}\b)/, "") # Remove thousand dots
+      |> String.replace(",", ".")             # Convert comma to dot
+
+    case Decimal.parse(normalized) do
       {decimal, _} -> decimal
       :error -> nil
     end
   end
 
   defp parse_price(_), do: nil
+
+  defp is_nil_or_empty(nil), do: true
+  defp is_nil_or_empty(""), do: true
+  defp is_nil_or_empty(_), do: false
 end
