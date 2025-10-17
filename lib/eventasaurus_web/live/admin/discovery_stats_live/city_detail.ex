@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
   alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker}
+  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, TrendAnalyzer}
   alias EventasaurusApp.Venues.Venue
 
   import Ecto.Query
@@ -90,12 +90,17 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     # Get events added this week
     events_this_week = count_city_events_this_week(city_id)
 
+    # Get trend data (Phase 6)
+    city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, 30)
+    city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
+
     socket
     |> assign(:sources_data, sources_data)
     |> assign(:top_venues, top_venues)
     |> assign(:category_distribution, category_distribution)
     |> assign(:total_events, total_events)
     |> assign(:events_this_week, events_this_week)
+    |> assign(:city_chart_data, Jason.encode!(city_chart_data))
   end
 
   defp get_sources_for_city(city_id) do
@@ -260,6 +265,24 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
         </div>
       <% else %>
+        <!-- City Event Trend (Phase 6) -->
+        <div class="bg-white rounded-lg shadow mb-8">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">📈 Event Count Trend</h2>
+            <p class="mt-1 text-sm text-gray-500">Last 30 days for <%= @city.name %></p>
+          </div>
+          <div class="p-6">
+            <div style="height: 300px;">
+              <canvas
+                id="city-event-trend-chart"
+                phx-hook="ChartHook"
+                data-chart-data={@city_chart_data}
+                data-chart-type="line"
+              ></canvas>
+            </div>
+          </div>
+        </div>
+
         <!-- Sources Active in This City -->
         <div class="bg-white rounded-lg shadow mb-8">
           <div class="px-6 py-4 border-b border-gray-200">

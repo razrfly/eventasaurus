@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker}
+  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, DataQualityChecker}
 
   import Ecto.Query
   require Logger
@@ -102,6 +102,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
         {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(changes.percentage_change)
 
+        # Get data quality metrics (Phase 5)
+        quality_data = DataQualityChecker.check_quality(source_name)
+        {quality_emoji, quality_text, quality_class} = DataQualityChecker.quality_status(quality_data.quality_score)
+
         %{
           name: source_name,
           scope: scope,
@@ -114,7 +118,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
           percentage_change: changes.percentage_change,
           trend_emoji: trend_emoji,
           trend_text: trend_text,
-          trend_class: trend_class
+          trend_class: trend_class,
+          quality_score: quality_data.quality_score,
+          quality_emoji: quality_emoji,
+          quality_text: quality_text,
+          quality_class: quality_class
         }
       end)
       |> Enum.sort_by(& &1.name)
@@ -320,6 +328,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">New</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dropped</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Change %</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quality</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Run</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -356,6 +365,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                         <span class={"text-sm font-medium #{source.trend_class}"}>
                           <%= source.trend_emoji %> <%= format_change(source.percentage_change) %>
                         </span>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="flex items-center">
+                        <span class="text-lg mr-1"><%= source.quality_emoji %></span>
+                        <span class={"text-sm font-medium #{source.quality_class}"}><%= source.quality_score %>%</span>
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
