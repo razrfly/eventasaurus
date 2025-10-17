@@ -12,6 +12,7 @@
 - The official specification for all event scrapers
 - Directory structure and naming conventions
 - Unified data format and transformation standards
+- **Category mapping system (YAML-based)** 🆕
 - Deduplication strategies
 - GPS coordinate handling
 - Job patterns and architectures
@@ -64,8 +65,9 @@
 **Build a new scraper**
 1. Read [SCRAPER_SPECIFICATION.md](./SCRAPER_SPECIFICATION.md)
 2. Copy reference: `lib/eventasaurus_discovery/sources/resident_advisor/`
-3. Check [SCRAPER_QUICK_REFERENCE.md](./SCRAPER_QUICK_REFERENCE.md) for patterns
-4. Test: Run twice, verify no duplicates
+3. Create YAML category mapping: `priv/category_mappings/{source}.yml` (if applicable)
+4. Check [SCRAPER_QUICK_REFERENCE.md](./SCRAPER_QUICK_REFERENCE.md) for patterns
+5. Test: Run twice, verify no duplicates
 
 **Fix an existing scraper**
 1. Check [SCRAPER_AUDIT_REPORT.md](./SCRAPER_AUDIT_REPORT.md) for issues
