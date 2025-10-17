@@ -31,6 +31,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   - venue_completeness: Venue data completeness percentage
   - image_completeness: Image data completeness percentage
   - category_completeness: Category data completeness percentage
+  - not_found: true when the source slug does not exist
   """
   def check_quality(source_slug) when is_binary(source_slug) do
     case get_source_id(source_slug) do
@@ -101,36 +102,39 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   Get quality improvement recommendations for a source.
 
   Returns a list of recommendation strings based on data quality issues.
+  Returns empty list if source not found.
   """
   def get_recommendations(source_slug) when is_binary(source_slug) do
     quality = check_quality(source_slug)
-    recommendations = []
 
-    recommendations =
-      if quality.venue_completeness < 90 do
-        ["Improve venue matching - #{quality.missing_venues} events missing venues" | recommendations]
-      else
-        recommendations
-      end
-
-    recommendations =
-      if quality.image_completeness < 80 do
-        ["Add more event images - #{quality.missing_images} events missing images" | recommendations]
-      else
-        recommendations
-      end
-
-    recommendations =
-      if quality.category_completeness < 85 do
-        ["Improve category classification - #{quality.missing_categories} events missing categories" | recommendations]
-      else
-        recommendations
-      end
-
-    if Enum.empty?(recommendations) do
-      ["Data quality is excellent! 🎉"]
+    if Map.get(quality, :not_found, false) do
+      []
     else
-      recommendations
+      thresholds = get_quality_thresholds()
+      recommendations = []
+
+      recommendations =
+        if quality.venue_completeness < thresholds.venue_completeness do
+          ["Improve venue matching - #{quality.missing_venues} events missing venues" | recommendations]
+        else
+          recommendations
+        end
+
+      recommendations =
+        if quality.image_completeness < thresholds.image_completeness do
+          ["Add more event images - #{quality.missing_images} events missing images" | recommendations]
+        else
+          recommendations
+        end
+
+      recommendations =
+        if quality.category_completeness < thresholds.category_completeness do
+          ["Improve category classification - #{quality.missing_categories} events missing categories" | recommendations]
+        else
+          recommendations
+        end
+
+      if Enum.empty?(recommendations), do: ["Data quality is excellent! 🎉"], else: recommendations
     end
   end
 
@@ -138,10 +142,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   Get quality status indicator (emoji and text) based on quality score.
   """
   def quality_status(quality_score) when is_integer(quality_score) do
+    thresholds = get_quality_thresholds()
+
     cond do
-      quality_score >= 90 -> {"🟢", "Excellent", "text-green-600"}
-      quality_score >= 75 -> {"🟡", "Good", "text-yellow-600"}
-      quality_score >= 60 -> {"🟠", "Fair", "text-orange-600"}
+      quality_score >= thresholds.excellent_score -> {"🟢", "Excellent", "text-green-600"}
+      quality_score >= thresholds.good_score -> {"🟡", "Good", "text-yellow-600"}
+      quality_score >= thresholds.fair_score -> {"🟠", "Fair", "text-orange-600"}
       true -> {"🔴", "Poor", "text-red-600"}
     end
   end
@@ -220,5 +226,18 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     # Weighted average: venues 40%, images 30%, categories 30%
     (venue_completeness * 0.4 + image_completeness * 0.3 + category_completeness * 0.3)
     |> round()
+  end
+
+  defp get_quality_thresholds do
+    config = Application.get_env(:eventasaurus_discovery, :quality_thresholds, [])
+
+    %{
+      venue_completeness: Keyword.get(config, :venue_completeness, 90),
+      image_completeness: Keyword.get(config, :image_completeness, 80),
+      category_completeness: Keyword.get(config, :category_completeness, 85),
+      excellent_score: Keyword.get(config, :excellent_score, 90),
+      good_score: Keyword.get(config, :good_score, 75),
+      fair_score: Keyword.get(config, :fair_score, 60)
+    }
   end
 end
