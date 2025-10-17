@@ -40,10 +40,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           missing_venues: 0,
           missing_images: 0,
           missing_categories: 0,
-          quality_score: 100,
-          venue_completeness: 100,
-          image_completeness: 100,
-          category_completeness: 100
+          quality_score: 0,
+          venue_completeness: 0,
+          image_completeness: 0,
+          category_completeness: 0,
+          not_found: true
         }
 
       source_id ->

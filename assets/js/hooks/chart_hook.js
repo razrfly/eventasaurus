@@ -6,7 +6,20 @@ export const ChartHook = {
     console.log('Chart data:', this.el.dataset.chartData?.substring(0, 100));
     console.log('Chart available?', typeof Chart !== 'undefined');
 
-    const chartData = JSON.parse(this.el.dataset.chartData);
+    const raw = this.el.dataset.chartData;
+    if (!raw) {
+      console.warn('ChartHook: missing data-chart-data on', this.el.id);
+      return;
+    }
+
+    let chartData;
+    try {
+      chartData = JSON.parse(raw);
+    } catch (e) {
+      console.error('ChartHook: invalid chartData JSON', e);
+      return;
+    }
+
     const chartType = this.el.dataset.chartType || 'line';
 
     console.log('Creating chart with type:', chartType, 'labels:', chartData.labels?.length);
@@ -52,10 +65,14 @@ export const ChartHook = {
   },
 
   updated() {
-    if (this.chart) {
-      const chartData = JSON.parse(this.el.dataset.chartData);
+    if (!this.chart) return;
+
+    try {
+      const chartData = JSON.parse(this.el.dataset.chartData || '{}');
       this.chart.data = chartData;
       this.chart.update('none'); // Update without animation for smoother LiveView updates
+    } catch (e) {
+      console.error('ChartHook: invalid updated chartData JSON', e);
     }
   },
 

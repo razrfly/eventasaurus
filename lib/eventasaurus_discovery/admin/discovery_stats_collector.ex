@@ -606,9 +606,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     # Extract city_id from args if present
     city_id =
       case job.args do
-        %{"city_id" => city_id} when is_integer(city_id) -> city_id
-        %{"city_id" => city_id} when is_binary(city_id) -> String.to_integer(city_id)
-        _ -> nil
+        %{"city_id" => city_id} when is_integer(city_id) ->
+          city_id
+        %{"city_id" => city_id} when is_binary(city_id) ->
+          case Integer.parse(city_id) do
+            {id, ""} -> id
+            _ -> nil
+          end
+        _ ->
+          nil
       end
 
     # Format errors
