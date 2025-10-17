@@ -186,6 +186,8 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
 
   Returns a map of source_slug => change stats.
 
+  Optimized to batch queries instead of making individual queries per source (N+1 fix).
+
   ## Parameters
 
     * `source_slugs` - List of source names (list of strings)
@@ -205,17 +207,49 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   """
   def get_all_source_changes(source_slugs, city_id \\ nil)
       when is_list(source_slugs) and (is_integer(city_id) or is_nil(city_id)) do
-    source_slugs
-    |> Enum.map(fn slug ->
-      stats = %{
-        new_events: calculate_new_events(slug, 24),
-        dropped_events: calculate_dropped_events(slug, 48),
-        percentage_change: calculate_percentage_change(slug, city_id)
-      }
+    if Enum.empty?(source_slugs) do
+      %{}
+    else
+      # Batch fetch source IDs
+      slug_to_id = get_all_source_ids(source_slugs)
+      source_ids = Map.values(slug_to_id)
 
-      {slug, stats}
-    end)
-    |> Map.new()
+      if Enum.empty?(source_ids) do
+        # No valid sources found, return default stats
+        source_slugs
+        |> Enum.map(fn slug -> {slug, default_change_stats()} end)
+        |> Map.new()
+      else
+        # Batch fetch new events (24h window)
+        new_events_by_id = batch_calculate_new_events(source_ids, 24)
+
+        # Batch fetch dropped events (48h window)
+        dropped_events_by_id = batch_calculate_dropped_events(source_ids, 48)
+
+        # Batch fetch percentage changes
+        percentage_changes_by_id = batch_calculate_percentage_changes(source_ids, city_id)
+
+        # Map results back to source slugs
+        source_slugs
+        |> Enum.map(fn slug ->
+          source_id = Map.get(slug_to_id, slug)
+
+          stats =
+            if source_id do
+              %{
+                new_events: Map.get(new_events_by_id, source_id, 0),
+                dropped_events: Map.get(dropped_events_by_id, source_id, 0),
+                percentage_change: Map.get(percentage_changes_by_id, source_id, 0)
+              }
+            else
+              default_change_stats()
+            end
+
+          {slug, stats}
+        end)
+        |> Map.new()
+      end
+    end
   end
 
   # Private Functions
@@ -259,5 +293,121 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       end
 
     Repo.one(query) || 0
+  end
+
+  # Batched query helpers for get_all_source_changes/2
+
+  defp default_change_stats do
+    %{new_events: 0, dropped_events: 0, percentage_change: 0}
+  end
+
+  defp get_all_source_ids(source_slugs) do
+    query =
+      from(s in Source,
+        where: s.slug in ^source_slugs,
+        select: {s.slug, s.id}
+      )
+
+    query
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp batch_calculate_new_events(source_ids, window_hours) do
+    cutoff = DateTime.utc_now() |> DateTime.add(-window_hours, :hour)
+
+    query =
+      from(pes in PublicEventSource,
+        where: pes.source_id in ^source_ids,
+        where: pes.last_seen_at >= ^cutoff,
+        where: pes.inserted_at >= ^cutoff,
+        group_by: pes.source_id,
+        select: {pes.source_id, count(pes.id)}
+      )
+
+    query
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp batch_calculate_dropped_events(source_ids, window_hours) do
+    cutoff = DateTime.utc_now() |> DateTime.add(-window_hours, :hour)
+    now = DateTime.utc_now()
+
+    query =
+      from(pes in PublicEventSource,
+        join: e in PublicEvent,
+        on: e.id == pes.event_id,
+        where: pes.source_id in ^source_ids,
+        where: pes.last_seen_at < ^cutoff,
+        where: e.starts_at > ^now,
+        group_by: pes.source_id,
+        select: {pes.source_id, count(pes.id)}
+      )
+
+    query
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp batch_calculate_percentage_changes(source_ids, city_id) do
+    now = DateTime.utc_now()
+
+    # Current week (last 7 days)
+    current_week_start = DateTime.add(now, -7, :day)
+    current_week_counts = batch_get_event_counts(source_ids, city_id, current_week_start, now)
+
+    # Previous week (7-14 days ago)
+    previous_week_start = DateTime.add(now, -14, :day)
+    previous_week_end = DateTime.add(now, -7, :day)
+    previous_week_counts = batch_get_event_counts(source_ids, city_id, previous_week_start, previous_week_end)
+
+    # Calculate percentage change for each source
+    source_ids
+    |> Enum.map(fn source_id ->
+      current = Map.get(current_week_counts, source_id, 0)
+      previous = Map.get(previous_week_counts, source_id, 0)
+
+      percentage_change =
+        if previous > 0 do
+          ((current - previous) / previous * 100) |> round()
+        else
+          if current > 0, do: 100, else: 0
+        end
+
+      {source_id, percentage_change}
+    end)
+    |> Map.new()
+  end
+
+  defp batch_get_event_counts(source_ids, city_id, start_date, end_date) do
+    base_query =
+      from(pes in PublicEventSource,
+        where: pes.source_id in ^source_ids,
+        where: pes.inserted_at >= ^start_date,
+        where: pes.inserted_at < ^end_date
+      )
+
+    query =
+      if city_id do
+        from([pes] in base_query,
+          join: e in PublicEvent,
+          on: e.id == pes.event_id,
+          join: v in EventasaurusApp.Venues.Venue,
+          on: v.id == e.venue_id,
+          where: v.city_id == ^city_id,
+          group_by: pes.source_id,
+          select: {pes.source_id, count(pes.id)}
+        )
+      else
+        from([pes] in base_query,
+          group_by: pes.source_id,
+          select: {pes.source_id, count(pes.id)}
+        )
+      end
+
+    query
+    |> Repo.all()
+    |> Map.new()
   end
 end

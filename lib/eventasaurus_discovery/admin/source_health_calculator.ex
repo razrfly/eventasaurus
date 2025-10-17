@@ -63,21 +63,19 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
     if Enum.empty?(source_stats_list) do
       0
     else
-      total_success_rate =
-        source_stats_list
-        |> Enum.map(fn stats ->
+      {total_success, total_runs} =
+        Enum.reduce(source_stats_list, {0, 0}, fn stats, {success_acc, run_acc} ->
           run_count = Map.get(stats, :run_count, 0)
-
-          if run_count > 0 do
-            Map.get(stats, :success_count, 0) / run_count * 100
-          else
-            0
-          end
+          success_count = Map.get(stats, :success_count, 0)
+          {success_acc + success_count, run_acc + run_count}
         end)
-        |> Enum.sum()
 
-      (total_success_rate / length(source_stats_list))
-      |> round()
+      if total_runs > 0 do
+        total_success / total_runs * 100
+        |> round()
+      else
+        0
+      end
     end
   end
 

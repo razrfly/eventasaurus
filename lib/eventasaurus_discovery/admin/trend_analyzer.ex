@@ -43,19 +43,21 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
         []
 
       source_id ->
-        now = DateTime.utc_now()
+        today = Date.utc_today()
 
         0..(days - 1)
         |> Enum.map(fn days_ago ->
-          date = DateTime.add(now, -days_ago, :day) |> DateTime.to_date()
+          date = Date.add(today, -days_ago)
           next_date = Date.add(date, 1)
+
+          # Convert dates to datetime bounds for indexed query
+          date_start = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+          date_end = DateTime.new!(next_date, ~T[00:00:00], "Etc/UTC")
 
           count =
             from(pes in PublicEventSource,
               where: pes.source_id == ^source_id,
-              where:
-                fragment("?::date", pes.inserted_at) >= ^date and
-                  fragment("?::date", pes.inserted_at) < ^next_date,
+              where: pes.inserted_at >= ^date_start and pes.inserted_at < ^date_end,
               select: count(pes.id)
             )
             |> Repo.one() || 0
@@ -82,21 +84,23 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
   """
   def get_city_event_trend(city_id, days \\ 30)
       when is_integer(city_id) and is_integer(days) do
-    now = DateTime.utc_now()
+    today = Date.utc_today()
 
     0..(days - 1)
     |> Enum.map(fn days_ago ->
-      date = DateTime.add(now, -days_ago, :day) |> DateTime.to_date()
+      date = Date.add(today, -days_ago)
       next_date = Date.add(date, 1)
+
+      # Convert dates to datetime bounds for indexed query
+      date_start = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+      date_end = DateTime.new!(next_date, ~T[00:00:00], "Etc/UTC")
 
       count =
         from(e in PublicEvent,
           join: v in EventasaurusApp.Venues.Venue,
           on: v.id == e.venue_id,
           where: v.city_id == ^city_id,
-          where:
-            fragment("?::date", e.inserted_at) >= ^date and
-              fragment("?::date", e.inserted_at) < ^next_date,
+          where: e.inserted_at >= ^date_start and e.inserted_at < ^date_end,
           select: count(e.id)
         )
         |> Repo.one() || 0
@@ -136,11 +140,11 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
         []
 
       {:ok, worker_name} ->
-        now = DateTime.utc_now()
+        today = Date.utc_today()
 
         0..(days - 1)
         |> Enum.map(fn days_ago ->
-          date = DateTime.add(now, -days_ago, :day) |> DateTime.to_date()
+          date = Date.add(today, -days_ago)
           next_date = Date.add(date, 1)
 
           # Convert dates to datetime for comparison

@@ -70,7 +70,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
       end
 
     # Get change tracking data (Phase 3)
-    change_stats = EventChangeTracker.get_all_source_changes(source_names, first_city)
+    change_stats =
+      case first_city do
+        nil -> %{}
+        city_id -> EventChangeTracker.get_all_source_changes(source_names, city_id)
+      end
 
     # Calculate enriched source data with health metrics
     sources_data =
@@ -104,7 +108,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
         # Get data quality metrics (Phase 5)
         quality_data = DataQualityChecker.check_quality(source_name)
-        {quality_emoji, quality_text, quality_class} = DataQualityChecker.quality_status(quality_data.quality_score)
+        {quality_emoji, quality_text, quality_class} =
+          if Map.get(quality_data, :not_found, false) do
+            {"⚪", "N/A", "text-gray-600"}
+          else
+            DataQualityChecker.quality_status(quality_data.quality_score)
+          end
 
         %{
           name: source_name,

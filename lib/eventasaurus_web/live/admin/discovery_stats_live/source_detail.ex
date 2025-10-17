@@ -64,22 +64,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     source_slug = socket.assigns.source_slug
 
     # Get source scope
-    {:ok, scope} = SourceRegistry.get_scope(source_slug)
+    scope =
+      case SourceRegistry.get_scope(source_slug) do
+        {:ok, scope} -> scope
+        {:error, _} -> :unknown
+      end
 
     # Get basic stats for the source (using first city as reference)
     first_city = Repo.one(from(c in City, limit: 1, select: c.id))
 
     stats =
-      if first_city do
-        DiscoveryStatsCollector.get_source_stats(first_city, source_slug)
-      else
-        %{
-          run_count: 0,
-          success_count: 0,
-          error_count: 0,
-          last_run_at: nil,
-          last_error: nil
-        }
+      case first_city do
+        nil ->
+          %{run_count: 0, success_count: 0, error_count: 0, last_run_at: nil, last_error: nil}
+        city_id ->
+          DiscoveryStatsCollector.get_source_stats(city_id, source_slug)
       end
 
     # Calculate health and success rate
@@ -109,12 +108,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     # Get change tracking data (Phase 3)
     new_events = EventChangeTracker.calculate_new_events(source_slug, 24)
     dropped_events = EventChangeTracker.calculate_dropped_events(source_slug, 48)
-    percentage_change = EventChangeTracker.calculate_percentage_change(source_slug, first_city)
+    percentage_change =
+      case first_city do
+        nil -> 0
+        city_id -> EventChangeTracker.calculate_percentage_change(source_slug, city_id)
+      end
     {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(percentage_change)
 
     # Get data quality metrics (Phase 5)
     quality_data = DataQualityChecker.check_quality(source_slug)
-    {quality_emoji, quality_text, quality_class} = DataQualityChecker.quality_status(quality_data.quality_score)
+    {quality_emoji, quality_text, quality_class} =
+      if Map.get(quality_data, :not_found, false) do
+        {"⚪", "N/A", "text-gray-600"}
+      else
+        DataQualityChecker.quality_status(quality_data.quality_score)
+      end
     recommendations = DataQualityChecker.get_recommendations(source_slug)
 
     # Get trend data (Phase 6)
