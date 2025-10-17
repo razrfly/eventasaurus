@@ -318,10 +318,27 @@ See [Quick Reference](docs/scrapers/SCRAPER_QUICK_REFERENCE.md) for code example
 ### Key Features
 
 - **Automatic Deduplication**: Venues matched by GPS coordinates (50m/200m radius), events by external_id
-- **GPS Geocoding**: Automatic Google Places API integration when coordinates missing
+- **Multi-Provider Geocoding**: Automatic address geocoding with 6 free providers and intelligent fallback (see [Geocoding System](docs/geocoding/GEOCODING_SYSTEM.md))
 - **Priority System**: Higher-priority sources win deduplication conflicts
 - **Daily Operation**: All scrapers designed to run daily without duplicates
 - **Unified Format**: All sources transform data into standard format for processing
+
+### Geocoding System
+
+Eventasaurus includes a sophisticated multi-provider geocoding system that automatically converts venue addresses to GPS coordinates:
+
+- **6 Free Providers**: Mapbox, HERE, Geoapify, LocationIQ, OpenStreetMap, Photon
+- **Automatic Fallback**: Tries providers in priority order until one succeeds
+- **Built-in Rate Limiting**: Respects provider quotas to stay within free tiers
+- **Admin Dashboard**: Configure provider priority and monitor performance at `/admin/geocoding`
+- **Cost-Effective**: Google Maps/Places APIs are disabled by default (only free providers used)
+
+**Documentation**: See [docs/geocoding/GEOCODING_SYSTEM.md](docs/geocoding/GEOCODING_SYSTEM.md) for complete documentation, including:
+- How to use geocoding in scrapers
+- Provider details and rate limits
+- Error handling strategies
+- Cost management and monitoring
+- Adding new providers
 
 ---
 
