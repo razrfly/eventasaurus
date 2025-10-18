@@ -88,13 +88,67 @@ defmodule EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob do
     end
   end
 
-  defp calculate_coordinates(%City{id: city_id}) do
-    # Calculate average coordinates from all venues in this city
+  defp calculate_coordinates(%City{id: city_id, discovery_enabled: discovery_enabled} = city) do
+    if discovery_enabled and not is_nil(city.latitude) and not is_nil(city.longitude) do
+      # For active cities with coordinates, use geographic radius matching
+      calculate_coordinates_geographic(city)
+    else
+      # For inactive cities or cities without initial coordinates, use city_id matching
+      calculate_coordinates_by_city_id(city_id)
+    end
+  end
+
+  defp calculate_coordinates_by_city_id(city_id) do
+    # Calculate average coordinates from all venues linked to this city_id
     # that have valid coordinates
     query =
       from(v in Venue,
         where: v.city_id == ^city_id,
         where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        select: %{
+          avg_lat: type(avg(v.latitude), :decimal),
+          avg_lng: type(avg(v.longitude), :decimal),
+          count: count(v.id)
+        }
+      )
+
+    case Repo.one(query) do
+      %{avg_lat: lat, avg_lng: lng, count: count} when not is_nil(lat) and count > 0 ->
+        {:ok, %{latitude: lat, longitude: lng, venue_count: count}}
+
+      _ ->
+        {:error, :no_venues}
+    end
+  end
+
+  defp calculate_coordinates_geographic(%City{
+         latitude: city_lat,
+         longitude: city_lng
+       }) do
+    # For active cities, find all venues within geographic radius
+    # Default radius: 20km (suitable for major cities)
+    # TODO: Add radius_km field to cities table for per-city configuration
+    radius = 20.0
+
+    # Calculate bounding box (approximate, faster than ST_DWithin)
+    # 1 degree latitude ≈ 111km, 1 degree longitude ≈ 111km * cos(latitude)
+    # Convert to float for Ecto query compatibility
+    lat_float = Decimal.to_float(city_lat)
+    lng_float = Decimal.to_float(city_lng)
+
+    lat_delta = radius / 111.0
+    lng_delta = radius / (111.0 * :math.cos(lat_float * :math.pi() / 180.0))
+
+    min_lat = lat_float - lat_delta
+    max_lat = lat_float + lat_delta
+    min_lng = lng_float - lng_delta
+    max_lng = lng_float + lng_delta
+
+    query =
+      from(v in Venue,
+        where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        where: v.latitude >= ^min_lat and v.latitude <= ^max_lat,
+        where: v.longitude >= ^min_lng and v.longitude <= ^max_lng,
         select: %{
           avg_lat: type(avg(v.latitude), :decimal),
           avg_lng: type(avg(v.longitude), :decimal),

@@ -88,7 +88,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
             <!-- Event Image -->
             <div class={image_container_class(@layout)}>
               <%= if @event.cover_image_url do %>
-                <img src={@event.cover_image_url} alt={"Cover image for #{@event.title}"} class="w-full h-full object-cover" loading="lazy">
+                <img src={@event.cover_image_url} alt={"Cover image for #{@event.title}"} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
               <% else %>
                 <div class="w-full h-full bg-gray-100 flex items-center justify-center" aria-label="No image available">
                   <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">

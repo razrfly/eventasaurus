@@ -246,7 +246,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       # Optional but recommended
       ends_at: Map.get(raw_event, "ends_at"),
-      description: Map.get(raw_event, "description"),
+      description_translations:
+        case Map.get(raw_event, "description") do
+          nil -> nil
+          "" -> nil
+          desc -> %{"en" => desc}
+        end,
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 

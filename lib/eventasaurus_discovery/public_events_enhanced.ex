@@ -356,11 +356,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   defp preload_with_sources(events, language) do
     events
     |> Repo.preload([
-      :venue,
       :categories,
       :performers,
-      :movies,
-      :sources
+      sources: :source,           # Load nested source association for aggregate_events
+      venue: [city_ref: :country], # Load nested venue associations for aggregate_events
+      movies: []                   # Load movies association (empty nested for now)
     ])
     |> Enum.map(fn event ->
       # Add display fields based on language
@@ -920,9 +920,27 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   """
   def aggregate_events(events, opts \\ []) do
-    # Preload sources, movies, venue, and venue associations for timezone conversion
+    # Events already have sources preloaded from list_events/1 (via preload_with_sources/2)
+    # which adds virtual fields like cover_image_url. Don't re-preload or we'll lose them!
+    # Only preload if the associations are not already loaded.
     events_with_sources =
-      Repo.preload(events, sources: :source, venue: [city_ref: :country], movies: [])
+      if Enum.empty?(events) do
+        events
+      else
+        first_event = List.first(events)
+        # Check if sources are already loaded (from preload_with_sources)
+        sources_loaded = match?(%Ecto.Association.NotLoaded{}, first_event.sources) == false
+        venue_loaded = match?(%Ecto.Association.NotLoaded{}, first_event.venue) == false
+        movies_loaded = match?(%Ecto.Association.NotLoaded{}, first_event.movies) == false
+
+        if sources_loaded and venue_loaded and movies_loaded do
+          # Already preloaded, don't reload to preserve virtual fields
+          events
+        else
+          # Not preloaded, need to load associations
+          Repo.preload(events, sources: :source, venue: [city_ref: :country], movies: [])
+        end
+      end
 
     # Separate movie events from other events
     {movie_events, other_events} = Enum.split_with(events_with_sources, &has_movie?/1)
