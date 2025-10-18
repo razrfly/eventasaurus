@@ -166,7 +166,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
     # Look up Sortiraparis source by slug
     source = Repo.one(from s in Source, where: s.slug == "sortiraparis")
 
-    if !source do
+    if is_nil(source) do
       Logger.error("❌ Sortiraparis source not found in database")
       {:error, :source_not_found}
     else

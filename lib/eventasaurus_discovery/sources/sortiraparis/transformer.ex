@@ -115,8 +115,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       end)
 
     if Enum.empty?(missing) do
-      # Validate venue_data has required fields
-      validate_venue_data(event.venue_data)
+      # Validate types
+      if match?(%DateTime{}, event.starts_at) do
+        validate_venue_data(event.venue_data)
+      else
+        {:error, :invalid_starts_at_type}
+      end
     else
       {:error, {:missing_fields, missing}}
     end
@@ -170,10 +174,22 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
   defp extract_title(_), do: {:error, :missing_title}
 
-  defp extract_and_parse_dates(%{"dates" => dates}, _options)
+  defp extract_and_parse_dates(%{"dates" => dates}, options)
        when is_list(dates) and length(dates) > 0 do
-    # Dates already parsed (from previous processing)
-    {:ok, dates}
+    # Coerce entries to UTC DateTime; accept %DateTime{} or ISO8601 strings
+    coerced =
+      dates
+      |> Enum.flat_map(fn
+        %DateTime{} = dt -> [dt]
+        bin when is_binary(bin) ->
+          case DateParser.parse_dates(bin, options) do
+            {:ok, [dt | _]} -> [dt]
+            _ -> []
+          end
+        _ -> []
+      end)
+
+    if coerced == [], do: {:error, :no_dates_extracted}, else: {:ok, coerced}
   end
 
   defp extract_and_parse_dates(%{"date_string" => date_string}, options)

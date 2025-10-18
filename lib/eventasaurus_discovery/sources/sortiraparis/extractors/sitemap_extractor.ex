@@ -242,7 +242,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
   defp parse_priority(:error), do: nil
 
   defp valid_url?(url) when is_binary(url) do
-    String.starts_with?(url, "http://") or String.starts_with?(url, "https://")
+    case URI.parse(url) do
+      %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) and host != "" -> true
+      _ -> false
+    end
   end
 
   defp valid_url?(_), do: false
