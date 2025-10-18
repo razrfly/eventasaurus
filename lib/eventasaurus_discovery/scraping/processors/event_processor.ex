@@ -129,7 +129,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       is_free: data[:is_free] || data["is_free"],
       # Movie data for movie events (Kino Krakow)
       movie_id: data[:movie_id] || data["movie_id"],
-      movie_data: data[:movie_data] || data["movie_data"]
+      movie_data: data[:movie_data] || data["movie_data"],
+      # Article data for article-based events (Sortiraparis)
+      article_id: data[:article_id] || data["article_id"],
+      # Event type for Sortiraparis (one_time, exhibition, recurring)
+      event_type: data[:event_type] || data["event_type"]
     }
 
     cond do
@@ -234,7 +238,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     Logger.info("🔄 Checking for recurring event pattern...")
 
     recurring_parent =
-      find_recurring_parent(data.title, venue, data.external_id, source_id, data[:movie_id])
+      find_recurring_parent(data.title, venue, data.external_id, source_id, data[:movie_id], data[:article_id], data[:event_type])
 
     case {existing_from_source, recurring_parent} do
       # No existing event and no recurring parent - check for collision then create new
@@ -1010,14 +1014,29 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     String.replace(title, ~r/\s+/, " ")
   end
 
-  defp find_recurring_parent(title, venue, external_id, source_id, movie_id) do
+  # Modified to accept event_type parameter to handle exhibitions and recurring events
+  defp find_recurring_parent(title, venue, external_id, source_id, movie_id, article_id, event_type \\ nil) do
     if venue do
-      # For movie events, use a different consolidation strategy
-      # Movies should consolidate by movie_id + venue only, not by fuzzy title matching
-      if movie_id do
-        find_movie_event_parent(movie_id, venue, external_id, source_id)
-      else
-        find_non_movie_recurring_parent(title, venue, external_id, source_id)
+      cond do
+        # Skip consolidation for exhibitions and recurring events - they're already properly structured
+        event_type in [:exhibition, :recurring] ->
+          Logger.debug("⏭️  Skipping consolidation for #{event_type} event type")
+          nil
+
+        # Article events (Sortiraparis): exact article_id matching at same venue
+        # This consolidates ONE-TIME events from the same article with different dates
+        article_id ->
+          find_article_event_parent(article_id, venue, external_id, source_id)
+
+        # Movie events (Karnet): exact movie_id matching at same venue
+        # This consolidates showtimes for the same movie
+        movie_id ->
+          find_movie_event_parent(movie_id, venue, external_id, source_id)
+
+        # Other events: fuzzy title matching for recurring events
+        # This uses string similarity to find series/recurring events
+        true ->
+          find_non_movie_recurring_parent(title, venue, external_id, source_id)
       end
     else
       # Without venue, we can't reliably match recurring events
@@ -1075,143 +1094,195 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
+  # Find existing article-based event (Sortiraparis) at the same venue
+  # Similar to movie consolidation but for article-based events
+  defp find_article_event_parent(article_id, venue, external_id, source_id) do
+    # Strategy: Find events at this venue from same article
+    # Match by checking external_id starts with "sortiraparis_{article_id}_"
+    pattern = "sortiraparis_#{article_id}_%"
+
+    query =
+      from(e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        where: pes.source_id == ^source_id,
+        where: pes.external_id != ^external_id,
+        where: like(pes.external_id, ^pattern),
+        where: e.venue_id == ^venue.id,
+        order_by: [asc: e.starts_at],
+        limit: 1
+      )
+
+    case Repo.one(query) do
+      nil ->
+        Logger.debug("No article parent found for article #{article_id} at venue #{venue.id}")
+        nil
+
+      event ->
+        # Don't consolidate if parent is from different source
+        case Repo.one(
+               from pes in PublicEventSource,
+                 where: pes.event_id == ^event.id and pes.source_id == ^source_id
+           ) do
+          nil ->
+            Logger.debug("Article parent found but from different source, skipping consolidation")
+            nil
+
+          _source ->
+            Logger.info("📰 Found article parent for article #{article_id} at venue #{venue.id}: event ##{event.id}")
+            event
+        end
+    end
+  end
+
   # Original fuzzy matching logic for non-movie events
   defp find_non_movie_recurring_parent(title, venue, external_id, source_id) do
-    # Ensure UTF-8 validity before any string operations
-    # PostgreSQL may have stored corrupt data that crashes jaro_distance
-    clean_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
+    # Get source configuration to check aggregate_on_index setting
+    source = Repo.get(Source, source_id)
 
-    # Normalize the incoming title for matching
-    normalized_title = normalize_for_matching(clean_title)
+    # Skip fuzzy matching consolidation for sources with aggregate_on_index: false
+    # These sources (like Sortiraparis) want individual event instances, not consolidated occurrences
+    if source && source.aggregate_on_index == false do
+      Logger.debug("⏭️  Skipping consolidation for non-aggregatable source: #{source.name}")
+      nil
+    else
+      # Continue with fuzzy matching consolidation
+      # Ensure UTF-8 validity before any string operations
+      # PostgreSQL may have stored corrupt data that crashes jaro_distance
+      clean_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(title)
 
-    # Extract series base for better matching
-    series_base = extract_series_base(clean_title)
+      # Normalize the incoming title for matching
+      normalized_title = normalize_for_matching(clean_title)
 
-    # Calculate dynamic threshold based on title patterns
-    similarity_threshold = calculate_similarity_threshold(clean_title, venue)
+      # Extract series base for better matching
+      series_base = extract_series_base(clean_title)
 
-    # Step 1: Get all events at the same venue
-    same_venue_query =
-      from(e in PublicEvent,
-        where: e.venue_id == ^venue.id,
-        order_by: [asc: e.starts_at]
-      )
+      # Calculate dynamic threshold based on title patterns
+      similarity_threshold = calculate_similarity_threshold(clean_title, venue)
 
-    same_venue_matches = Repo.all(same_venue_query)
-
-    # Step 2: Find similar venues and get events there too (for cross-venue matching)
-    similar_venue_ids =
-      from(v in EventasaurusApp.Venues.Venue,
-        where: v.city_id == ^venue.city_id,
-        where: v.id != ^venue.id,
-        where: fragment("similarity(?, ?) > ?", v.name, ^venue.name, 0.7),
-        select: v.id
-      )
-      |> Repo.all()
-
-    similar_venue_matches =
-      if length(similar_venue_ids) > 0 do
+      # Step 1: Get all events at the same venue
+      same_venue_query =
         from(e in PublicEvent,
-          where: e.venue_id in ^similar_venue_ids,
-          where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
+          where: e.venue_id == ^venue.id,
           order_by: [asc: e.starts_at]
         )
-        |> Repo.all()
-      else
-        []
-      end
 
-    # Combine all potential matches
-    all_potential_matches = same_venue_matches ++ similar_venue_matches
+      same_venue_matches = Repo.all(same_venue_query)
 
-    # Find the best match using fuzzy matching
-    # We want to find the BEST parent (earliest date with highest score)
-    # Don't exclude events from same source - we WANT to consolidate siblings
-    best_match =
-      all_potential_matches
-      |> Enum.uniq_by(& &1.id)
-      |> Enum.map(fn event ->
-        # Check if this exact event is the one being processed
-        # Only skip if it's the exact same event (same external_id AND source)
-        is_exact_same =
-          if external_id && source_id do
-            from(s in PublicEventSource,
-              where: s.event_id == ^event.id,
-              where: s.external_id == ^external_id,
-              where: s.source_id == ^source_id,
-              select: count(s.id)
-            )
-            |> Repo.one() > 0
-          else
-            false
-          end
-
-        # Calculate match score with multiple strategies
-        # Clean event title from database - may contain invalid UTF-8
-        clean_event_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(event.title)
-        normalized_event_title = normalize_for_matching(clean_event_title)
-        event_series_base = extract_series_base(clean_event_title)
-
-        # Try multiple matching strategies
-        title_score = String.jaro_distance(normalized_title, normalized_event_title)
-        series_score = String.jaro_distance(series_base, event_series_base)
-
-        # Use the best score from either strategy
-        base_score = max(title_score, series_score)
-
-        # Bonus for same venue
-        venue_bonus = if event.venue_id == venue.id, do: 0.05, else: 0.0
-
-        # Bonus for series patterns
-        series_bonus =
-          if is_series_event?(clean_title) && is_series_event?(clean_event_title),
-            do: 0.05,
-            else: 0.0
-
-        final_score = base_score + venue_bonus + series_bonus
-
-        # Check if this is a different event from the same source
-        # For concert events, don't merge different external IDs from same source
-        is_different_from_same_source =
-          if external_id && source_id && String.contains?(clean_title, "@") do
-            # For concert events, check if it's from same source but different external_id
-            from(s in PublicEventSource,
-              where: s.event_id == ^event.id,
-              where: s.source_id == ^source_id,
-              where: s.external_id != ^external_id,
-              select: count(s.id)
-            )
-            |> Repo.one() > 0
-          else
-            false
-          end
-
-        # We want high score matches, but not the exact same event instance
-        # For concerts, don't allow same-source siblings with different external_ids
-        if is_exact_same || is_different_from_same_source do
-          # Skip if it's the exact same event OR a different concert from same source
-          {event, 0.0}
-        else
-          {event, final_score}
-        end
-      end)
-      |> Enum.filter(fn {_, score} -> score >= similarity_threshold end)
-      |> Enum.sort_by(fn {event, score} ->
-        # Sort by score (desc) then by date (asc) to get best, earliest match
-        {-score, event.starts_at}
-      end)
-      |> List.first()
-
-    case best_match do
-      {event, score} ->
-        Logger.info(
-          "🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)}, threshold: #{similarity_threshold})"
+      # Step 2: Find similar venues and get events there too (for cross-venue matching)
+      similar_venue_ids =
+        from(v in EventasaurusApp.Venues.Venue,
+          where: v.city_id == ^venue.city_id,
+          where: v.id != ^venue.id,
+          where: fragment("similarity(?, ?) > ?", v.name, ^venue.name, 0.7),
+          select: v.id
         )
+        |> Repo.all()
 
-        event
+      similar_venue_matches =
+        if length(similar_venue_ids) > 0 do
+          from(e in PublicEvent,
+            where: e.venue_id in ^similar_venue_ids,
+            where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
+            order_by: [asc: e.starts_at]
+          )
+          |> Repo.all()
+        else
+          []
+        end
 
-      nil ->
-        nil
+      # Combine all potential matches
+      all_potential_matches = same_venue_matches ++ similar_venue_matches
+
+      # Find the best match using fuzzy matching
+      # We want to find the BEST parent (earliest date with highest score)
+      # Don't exclude events from same source - we WANT to consolidate siblings
+      best_match =
+        all_potential_matches
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.map(fn event ->
+          # Check if this exact event is the one being processed
+          # Only skip if it's the exact same event (same external_id AND source)
+          is_exact_same =
+            if external_id && source_id do
+              from(s in PublicEventSource,
+                where: s.event_id == ^event.id,
+                where: s.external_id == ^external_id,
+                where: s.source_id == ^source_id,
+                select: count(s.id)
+              )
+              |> Repo.one() > 0
+            else
+              false
+            end
+
+          # Calculate match score with multiple strategies
+          # Clean event title from database - may contain invalid UTF-8
+          clean_event_title = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(event.title)
+          normalized_event_title = normalize_for_matching(clean_event_title)
+          event_series_base = extract_series_base(clean_event_title)
+
+          # Try multiple matching strategies
+          title_score = String.jaro_distance(normalized_title, normalized_event_title)
+          series_score = String.jaro_distance(series_base, event_series_base)
+
+          # Use the best score from either strategy
+          base_score = max(title_score, series_score)
+
+          # Bonus for same venue
+          venue_bonus = if event.venue_id == venue.id, do: 0.05, else: 0.0
+
+          # Bonus for series patterns
+          series_bonus =
+            if is_series_event?(clean_title) && is_series_event?(clean_event_title),
+              do: 0.05,
+              else: 0.0
+
+          final_score = base_score + venue_bonus + series_bonus
+
+          # Check if this is a different event from the same source
+          # For concert events, don't merge different external IDs from same source
+          is_different_from_same_source =
+            if external_id && source_id && String.contains?(clean_title, "@") do
+              # For concert events, check if it's from same source but different external_id
+              from(s in PublicEventSource,
+                where: s.event_id == ^event.id,
+                where: s.source_id == ^source_id,
+                where: s.external_id != ^external_id,
+                select: count(s.id)
+              )
+              |> Repo.one() > 0
+            else
+              false
+            end
+
+          # We want high score matches, but not the exact same event instance
+          # For concerts, don't allow same-source siblings with different external_ids
+          if is_exact_same || is_different_from_same_source do
+            # Skip if it's the exact same event OR a different concert from same source
+            {event, 0.0}
+          else
+            {event, final_score}
+          end
+        end)
+        |> Enum.filter(fn {_, score} -> score >= similarity_threshold end)
+        |> Enum.sort_by(fn {event, score} ->
+          # Sort by score (desc) then by date (asc) to get best, earliest match
+          {-score, event.starts_at}
+        end)
+        |> List.first()
+
+      case best_match do
+        {event, score} ->
+          Logger.info(
+            "🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)}, threshold: #{similarity_threshold})"
+          )
+
+          event
+
+        nil ->
+          nil
+      end
     end
   end
 

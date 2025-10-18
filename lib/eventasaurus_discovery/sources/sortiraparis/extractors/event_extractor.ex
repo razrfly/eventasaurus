@@ -56,6 +56,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
       pricing = extract_pricing(html)
       performers = extract_performers(html)
 
+      # Classify event type based on date pattern, title, and description
+      event_type = classify_event_type(date_string, title, description)
+
       event_data = %{
         "url" => url,
         "title" => title,
@@ -68,10 +71,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         "max_price" => pricing[:max_price],
         "currency" => pricing[:currency] || "EUR",
         "performers" => performers,
-        "original_date_string" => date_string
+        "original_date_string" => date_string,
+        "event_type" => event_type
       }
 
-      Logger.debug("✅ Successfully extracted event data: #{title}")
+      Logger.debug("✅ Successfully extracted event data: #{title} (type: #{event_type})")
       {:ok, event_data}
     else
       {:error, reason} = error ->
@@ -403,4 +407,78 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   defp is_nil_or_empty(nil), do: true
   defp is_nil_or_empty(""), do: true
   defp is_nil_or_empty(_), do: false
+
+  # Classify event type based on date pattern, title, and description.
+  # Returns one of:
+  # - `:one_time` - Single specific date event (concerts, performances)
+  # - `:exhibition` - Continuous access during a period (museums, galleries)
+  # - `:recurring` - Pattern-based events (weekly/monthly)
+  defp classify_event_type(date_string, title, description) do
+    date_pattern = classify_by_date_pattern(date_string)
+    text = "#{title} #{description}" |> String.downcase()
+
+    cond do
+      # Recurring indicators
+      recurring_pattern?(text) ->
+        :recurring
+
+      # Exhibition indicators - check date pattern AND keywords
+      date_pattern == :potential_exhibition && exhibition_keywords?(text) ->
+        :exhibition
+
+      # One-time events - single date detected
+      date_pattern == :one_time ->
+        :one_time
+
+      # Ambiguous - default to exhibition (safer than creating duplicates)
+      true ->
+        :exhibition
+    end
+  end
+
+  defp classify_by_date_pattern(date_string) when is_binary(date_string) do
+    text = String.downcase(date_string)
+
+    cond do
+      # Range pattern: "October 15, 2025 to January 19, 2026"
+      text =~ ~r/\d{4}\s+to\s+\w+\s+\d+,\s*\d{4}/ ->
+        :potential_exhibition
+
+      # Multi-date pattern: "February 25, 27, 28, 2026"
+      text =~ ~r/\w+\s+\d+(?:,\s*\d+)+,\s*\d{4}/ ->
+        :one_time
+
+      # Single date with day: "Friday, October 31, 2025"
+      text =~ ~r/(monday|tuesday|wednesday|thursday|friday|saturday|sunday),\s*\w+\s+\d+,\s*\d{4}/i ->
+        :one_time
+
+      # Default to potential exhibition for safety
+      true ->
+        :potential_exhibition
+    end
+  end
+
+  defp classify_by_date_pattern(_), do: :potential_exhibition
+
+  defp recurring_pattern?(text) when is_binary(text) do
+    text =~ ~r/every (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i ||
+      text =~ ~r/every \w+ evening/i ||
+      text =~ ~r/every \w+ night/i ||
+      text =~ ~r/\d+ times? (per|a) (week|month)/i ||
+      text =~ ~r/tous les (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)/i ||
+      text =~ ~r/chaque (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)/i
+  end
+
+  defp recurring_pattern?(_), do: false
+
+  defp exhibition_keywords?(text) when is_binary(text) do
+    text =~ ~r/exhibition/i ||
+      text =~ ~r/musée|museum/i ||
+      text =~ ~r/gallery|galerie/i ||
+      text =~ ~r/exposition/i ||
+      text =~ ~r/installat/i ||
+      text =~ ~r/retrospective/i
+  end
+
+  defp exhibition_keywords?(_), do: false
 end
