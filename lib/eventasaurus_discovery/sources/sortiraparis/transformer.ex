@@ -75,13 +75,28 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
          {:ok, title} <- extract_title(raw_event),
          {:ok, dates} <- extract_and_parse_dates(raw_event, options),
          {:ok, venue_data} <- extract_venue(raw_event) do
-      # Create separate event for each date
-      events =
-        Enum.map(dates, fn date ->
-          create_event(article_id, title, date, venue_data, raw_event, options)
-        end)
 
-      Logger.info("✅ Transformed into #{length(events)} event instance(s): #{title}")
+      event_type = Map.get(raw_event, "event_type", :one_time)
+
+      # Handle different event types
+      events = case event_type do
+        :exhibition ->
+          # For exhibitions, create ONE event with start/end dates
+          [create_exhibition_event(article_id, title, dates, venue_data, raw_event, options)]
+
+        :recurring ->
+          # For recurring, create ONE event (EventProcessor will handle recurrence)
+          # Use first date as anchor date
+          [create_recurring_event(article_id, title, List.first(dates), venue_data, raw_event, options)]
+
+        :one_time ->
+          # For one-time events, create separate event for each date
+          Enum.map(dates, fn date ->
+            create_event(article_id, title, date, venue_data, raw_event, options)
+          end)
+      end
+
+      Logger.info("✅ Transformed into #{length(events)} #{event_type} event instance(s): #{title}")
       {:ok, events}
     else
       {:error, reason} = error ->
@@ -228,8 +243,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     %{
       # Required fields
       external_id: external_id,
+      article_id: article_id,  # Article ID for consolidation (similar to movie_id)
       title: title,
       starts_at: date,  # Assumes date is already DateTime in UTC
+      event_type: :one_time,
 
       # Venue data (REQUIRED - VenueProcessor handles geocoding)
       venue_data: %{
@@ -276,6 +293,146 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Raw event data for CategoryExtractor (includes URL for category extraction)
       raw_event_data: raw_event
     }
+  end
+
+  defp create_exhibition_event(article_id, title, dates, venue_data, raw_event, _options) do
+    # For exhibitions, use start date for starts_at, end date for ends_at
+    [start_date | rest] = dates
+    end_date = List.last(rest) || start_date
+
+    # Generate external_id WITHOUT date suffix (exhibitions don't have multiple instances)
+    external_id = Config.generate_external_id(article_id)
+
+    %{
+      # Required fields
+      external_id: external_id,
+      article_id: article_id,
+      title: title,
+      starts_at: start_date,
+      ends_at: end_date,  # Exhibition closing date
+      event_type: :exhibition,
+
+      # Venue data
+      venue_data: %{
+        name: venue_data["name"],
+        address: Map.get(venue_data, "address"),
+        city: venue_data["city"],
+        country: Map.get(venue_data, "country", "France"),
+        latitude: Map.get(venue_data, "latitude"),
+        longitude: Map.get(venue_data, "longitude"),
+        external_id: Map.get(venue_data, "external_id"),
+        metadata: Map.get(venue_data, "metadata", %{})
+      },
+
+      description_translations:
+        case Map.get(raw_event, "description") do
+          nil -> nil
+          "" -> nil
+          desc -> %{"en" => desc}
+        end,
+      source_url: Config.build_url(raw_event["url"]),
+      image_url: Map.get(raw_event, "image_url"),
+
+      # Pricing
+      is_ticketed: Map.get(raw_event, "is_ticketed", false),
+      is_free: Map.get(raw_event, "is_free", false),
+      min_price: Map.get(raw_event, "min_price"),
+      max_price: Map.get(raw_event, "max_price"),
+      currency: Map.get(raw_event, "currency", "EUR"),
+
+      performers: Map.get(raw_event, "performers", []),
+
+      # Metadata
+      metadata: %{
+        article_id: article_id,
+        original_date_string: Map.get(raw_event, "original_date_string"),
+        category_url: Map.get(raw_event, "category"),
+        language: "en",
+        exhibition_range: %{
+          start_date: format_date_for_id(start_date),
+          end_date: format_date_for_id(end_date)
+        }
+      },
+
+      raw_event_data: raw_event
+    }
+  end
+
+  defp create_recurring_event(article_id, title, anchor_date, venue_data, raw_event, _options) do
+    # For recurring events, use anchor date and store recurrence pattern in metadata
+    external_id = Config.generate_external_id(article_id)
+
+    # Extract recurrence pattern from title/description
+    recurrence_pattern = extract_recurrence_pattern(raw_event)
+
+    %{
+      # Required fields
+      external_id: external_id,
+      article_id: article_id,
+      title: title,
+      starts_at: anchor_date,
+      event_type: :recurring,
+
+      # Venue data
+      venue_data: %{
+        name: venue_data["name"],
+        address: Map.get(venue_data, "address"),
+        city: venue_data["city"],
+        country: Map.get(venue_data, "country", "France"),
+        latitude: Map.get(venue_data, "latitude"),
+        longitude: Map.get(venue_data, "longitude"),
+        external_id: Map.get(venue_data, "external_id"),
+        metadata: Map.get(venue_data, "metadata", %{})
+      },
+
+      description_translations:
+        case Map.get(raw_event, "description") do
+          nil -> nil
+          "" -> nil
+          desc -> %{"en" => desc}
+        end,
+      source_url: Config.build_url(raw_event["url"]),
+      image_url: Map.get(raw_event, "image_url"),
+
+      # Pricing
+      is_ticketed: Map.get(raw_event, "is_ticketed", false),
+      is_free: Map.get(raw_event, "is_free", false),
+      min_price: Map.get(raw_event, "min_price"),
+      max_price: Map.get(raw_event, "max_price"),
+      currency: Map.get(raw_event, "currency", "EUR"),
+
+      performers: Map.get(raw_event, "performers", []),
+
+      # Metadata - include recurrence pattern
+      metadata: %{
+        article_id: article_id,
+        original_date_string: Map.get(raw_event, "original_date_string"),
+        category_url: Map.get(raw_event, "category"),
+        language: "en",
+        recurrence_pattern: recurrence_pattern
+      },
+
+      raw_event_data: raw_event
+    }
+  end
+
+  defp extract_recurrence_pattern(raw_event) do
+    text = "#{Map.get(raw_event, "title", "")} #{Map.get(raw_event, "description", "")}"
+    text_lower = String.downcase(text)
+
+    cond do
+      text_lower =~ ~r/every (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i ->
+        %{type: "weekly", description: text}
+
+      text_lower =~ ~r/every \w+ (evening|night)/i ->
+        %{type: "weekly", description: text}
+
+      text_lower =~ ~r/\d+ times? (per|a) (week|month)/i ->
+        %{type: "custom", description: text}
+
+      true ->
+        %{type: "unknown", description: text}
+    end
   end
 
   defp format_date_for_id(%DateTime{} = date) do
