@@ -298,8 +298,14 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   defp create_exhibition_event(article_id, title, dates, venue_data, raw_event, _options) do
     # For exhibitions, use start date for starts_at, end date for ends_at
     # Sort dates to ensure correct chronological order (defensive programming)
-    sorted_dates = Enum.sort(dates, DateTime)
-    [start_date | rest] = sorted_dates
+    sorted_dates = Enum.sort(dates, &(DateTime.compare(&1, &2) != :gt))
+
+    # Guard against empty dates list
+    [start_date | rest] = case sorted_dates do
+      [] -> raise ArgumentError, "Exhibition requires at least one date"
+      dates -> dates
+    end
+
     end_date = List.last(rest) || start_date
 
     # Generate external_id WITHOUT date suffix (exhibitions don't have multiple instances)
