@@ -297,7 +297,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
   defp create_exhibition_event(article_id, title, dates, venue_data, raw_event, _options) do
     # For exhibitions, use start date for starts_at, end date for ends_at
-    [start_date | rest] = dates
+    # Sort dates to ensure correct chronological order (defensive programming)
+    sorted_dates = Enum.sort(dates, DateTime)
+    [start_date | rest] = sorted_dates
     end_date = List.last(rest) || start_date
 
     # Generate external_id WITHOUT date suffix (exhibitions don't have multiple instances)
