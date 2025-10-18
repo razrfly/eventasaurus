@@ -186,7 +186,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
         "br" ->
           # Check if Brotli is available before attempting decode
           if Code.ensure_loaded?(:brotli) and function_exported?(:brotli, :decode, 1) do
-            :brotli.decode(body)
+            apply(:brotli, :decode, [body])
           else
             body
           end
