@@ -380,6 +380,28 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   @impl true
+  def handle_event("recalculate_coordinates", _params, socket) do
+    # Queue the coordinate recalculation worker
+    case EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker.new(%{})
+         |> Oban.insert() do
+      {:ok, job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Queued city coordinate recalculation job ##{job.id}")
+          |> assign(:import_running, true)
+          |> assign(:import_progress, "Recalculating city coordinates...")
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          put_flash(socket, :error, "Failed to queue coordinate recalculation: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("trigger_city_discovery", %{"city_id" => city_id}, socket) do
     city_id = String.to_integer(city_id)
     city = Enum.find(socket.assigns.discovery_cities, &(&1.id == city_id))
@@ -581,12 +603,81 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   defp get_city_statistics do
+    # Get statistics for active (discovery-enabled) cities using geographic matching
+    active_city_stats = get_active_city_statistics()
+
+    # Get statistics for inactive cities using traditional city_id matching
+    inactive_city_stats = get_inactive_city_statistics()
+
+    # Combine and sort by count
+    (active_city_stats ++ inactive_city_stats)
+    |> Enum.sort_by(& &1.count, :desc)
+  end
+
+  defp get_active_city_statistics do
+    # Get all active cities with coordinates
+    active_cities =
+      Repo.all(
+        from(c in City,
+          where: c.discovery_enabled == true,
+          where: not is_nil(c.latitude) and not is_nil(c.longitude),
+          select: %{
+            id: c.id,
+            name: c.name,
+            latitude: c.latitude,
+            longitude: c.longitude
+          }
+        )
+      )
+
+    # For each active city, count events within geographic radius
+    Enum.flat_map(active_cities, fn city ->
+      # Default radius: 20km (TODO: make configurable per city)
+      radius = 20.0
+
+      # Calculate bounding box (convert to float for Ecto query compatibility)
+      city_lat = Decimal.to_float(city.latitude)
+      city_lng = Decimal.to_float(city.longitude)
+
+      lat_delta = radius / 111.0
+      lng_delta = radius / (111.0 * :math.cos(city_lat * :math.pi() / 180.0))
+
+      min_lat = city_lat - lat_delta
+      max_lat = city_lat + lat_delta
+      min_lng = city_lng - lng_delta
+      max_lng = city_lng + lng_delta
+
+      # Count events with venues in this radius
+      count =
+        Repo.one(
+          from(e in PublicEvent,
+            join: v in EventasaurusApp.Venues.Venue,
+            on: v.id == e.venue_id,
+            where: not is_nil(v.latitude) and not is_nil(v.longitude),
+            where: v.latitude >= ^min_lat and v.latitude <= ^max_lat,
+            where: v.longitude >= ^min_lng and v.longitude <= ^max_lng,
+            select: count(e.id)
+          )
+        ) || 0
+
+      # Only include cities with >= 10 events
+      if count >= 10 do
+        [%{city_id: city.id, city_name: city.name, count: count}]
+      else
+        []
+      end
+    end)
+  end
+
+  defp get_inactive_city_statistics do
+    # Get statistics for inactive cities using traditional city_id matching
     Repo.all(
       from(e in PublicEvent,
         join: v in EventasaurusApp.Venues.Venue,
         on: v.id == e.venue_id,
         join: c in City,
         on: c.id == v.city_id,
+        where: c.discovery_enabled == false or is_nil(c.discovery_enabled),
         group_by: [c.id, c.name],
         having: count(e.id) >= 10,
         select: %{

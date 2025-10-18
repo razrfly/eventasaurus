@@ -380,12 +380,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
     text
     |> String.replace(~r{<[^>]+>}, "")
     |> String.replace(~r{\s+}, " ")
-    |> String.replace("&nbsp;", " ")
-    |> String.replace("&amp;", "&")
-    |> String.replace("&lt;", "<")
-    |> String.replace("&gt;", ">")
-    |> String.replace("&quot;", "\"")
-    |> String.replace("&#39;", "'")
+    |> HtmlEntities.decode()  # Handles ALL HTML entities including &#039;, &#39;, &eacute;, etc.
     |> String.trim()
   end
 
