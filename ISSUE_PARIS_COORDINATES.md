@@ -53,7 +53,7 @@ Run coordinate calculation job or add coordinates manually.
 
 ### Current State (Database Evidence)
 
-```elixir
+```text
 # Main Paris city - NO VENUES, NO COORDINATES
 %{id: 371, name: "Paris", slug: "paris", latitude: nil, longitude: nil}
 
@@ -150,7 +150,7 @@ The job **cannot** calculate coordinates for Paris because Paris has no venues. 
 
 **Change**: Modify `VenueExtractor.parse_address/1` to strip arrondissement numbers.
 
-```elixir
+```text
 # Current (line 417-421):
 city = case Regex.run(~r/Paris(?:\s+\d{1,2})?/, address_string) do
   [match] -> match  # Returns "Paris 5"
@@ -348,7 +348,7 @@ This unblocks `/c/paris` immediately while we design a proper solution.
 ### Verification Steps
 
 1. **Check Current State**:
-```bash
+```elixir
 # Verify Paris has no coordinates
 mix run -e "EventasaurusDiscovery.Locations.get_city_by_slug!(\"paris\") |> IO.inspect()"
 
