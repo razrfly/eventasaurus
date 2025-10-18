@@ -1,0 +1,393 @@
+defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor do
+  @moduledoc """
+  Extracts event data from Sortiraparis HTML pages.
+
+  ## Extraction Strategy
+
+  Uses CSS selectors and regex patterns to extract:
+  - Event title from h1 or meta tags
+  - Date information from multiple possible locations
+  - Description from article body
+  - Image URL from og:image or first article image
+  - Pricing information from text content
+  - Performer information (for concerts)
+
+  ## HTML Structure
+
+  Sortiraparis uses semantic HTML with:
+  - `<article>` wrapper for event content
+  - `<h1>` for title
+  - Date info in various formats and locations
+  - `<figure>` for images
+  - Pricing info embedded in text content
+
+  ## Date Handling
+
+  Date strings are extracted raw and passed to DateParser.
+  Common patterns:
+  - "February 25, 27, 28, 2026" (multi-date)
+  - "October 15, 2025 to January 19, 2026" (range)
+  - "Friday, October 31, 2025" (single with day)
+  """
+
+  require Logger
+
+  @doc """
+  Extract event data from HTML page.
+
+  ## Parameters
+
+  - `html` - HTML content as string
+  - `url` - Page URL for context
+
+  ## Returns
+
+  - `{:ok, event_data}` - Map with extracted fields
+  - `{:error, reason}` - Extraction failed
+  """
+  def extract(html, url) when is_binary(html) and is_binary(url) do
+    Logger.debug("🔍 Extracting event data from HTML (#{byte_size(html)} bytes)")
+
+    with {:ok, title} <- extract_title(html),
+         {:ok, date_string} <- extract_date_string(html),
+         {:ok, description} <- extract_description(html),
+         {:ok, image_url} <- extract_image_url(html) do
+      # Extract optional fields (don't fail if missing)
+      pricing = extract_pricing(html)
+      performers = extract_performers(html)
+
+      event_data = %{
+        "url" => url,
+        "title" => title,
+        "date_string" => date_string,
+        "description" => description,
+        "image_url" => image_url,
+        "is_ticketed" => pricing[:is_ticketed],
+        "is_free" => pricing[:is_free],
+        "min_price" => pricing[:min_price],
+        "max_price" => pricing[:max_price],
+        "currency" => pricing[:currency] || "EUR",
+        "performers" => performers,
+        "original_date_string" => date_string
+      }
+
+      Logger.debug("✅ Successfully extracted event data: #{title}")
+      {:ok, event_data}
+    else
+      {:error, reason} = error ->
+        Logger.warning("⚠️ Failed to extract event data: #{inspect(reason)}")
+        error
+    end
+  end
+
+  def extract(_, _), do: {:error, :invalid_input}
+
+  @doc """
+  Extract event title from HTML.
+
+  Tries multiple strategies:
+  1. <h1> tag in article
+  2. og:title meta tag
+  3. <title> tag (fallback)
+  """
+  def extract_title(html) do
+    cond do
+      # Strategy 1: <h1> tag
+      title = extract_h1_title(html) ->
+        {:ok, title}
+
+      # Strategy 2: og:title
+      title = extract_meta_title(html) ->
+        {:ok, title}
+
+      # Strategy 3: <title> tag (fallback)
+      title = extract_page_title(html) ->
+        {:ok, title}
+
+      true ->
+        {:error, :title_not_found}
+    end
+  end
+
+  @doc """
+  Extract date string from HTML.
+
+  Dates can appear in multiple locations:
+  1. Dedicated date section with class "date" or "datetime"
+  2. Within article metadata
+  3. In structured data (JSON-LD)
+  """
+  def extract_date_string(html) do
+    cond do
+      # Strategy 1: Look for date-specific elements
+      date = extract_date_element(html) ->
+        {:ok, date}
+
+      # Strategy 2: Search article text for date patterns
+      date = extract_date_from_text(html) ->
+        {:ok, date}
+
+      # Strategy 3: Check structured data
+      date = extract_date_from_json_ld(html) ->
+        {:ok, date}
+
+      true ->
+        {:error, :date_not_found}
+    end
+  end
+
+  @doc """
+  Extract event description from article body.
+
+  Extracts first paragraph or two for summary.
+  Cleans HTML tags and normalizes whitespace.
+  """
+  def extract_description(html) do
+    # Look for article content paragraphs
+    case Regex.run(~r{<article[^>]*>(.*?)</article>}s, html) do
+      [_, article_content] ->
+        # Extract first 2-3 paragraphs
+        paragraphs =
+          Regex.scan(~r{<p[^>]*>(.*?)</p>}s, article_content, capture: :all_but_first)
+          |> Enum.take(2)
+          |> Enum.map(fn [p] -> clean_html(p) end)
+          |> Enum.reject(&(&1 == ""))
+
+        if length(paragraphs) > 0 do
+          {:ok, Enum.join(paragraphs, "\n\n")}
+        else
+          {:error, :description_not_found}
+        end
+
+      _ ->
+        # Fallback: try meta description
+        case extract_meta_description(html) do
+          nil -> {:error, :description_not_found}
+          desc -> {:ok, desc}
+        end
+    end
+  end
+
+  @doc """
+  Extract image URL from page.
+
+  Priority:
+  1. og:image meta tag
+  2. First <figure> image in article
+  3. First <img> in article
+  """
+  def extract_image_url(html) do
+    cond do
+      # Strategy 1: og:image
+      url = extract_og_image(html) ->
+        {:ok, url}
+
+      # Strategy 2: First figure image
+      url = extract_figure_image(html) ->
+        {:ok, url}
+
+      # Strategy 3: First article image
+      url = extract_first_image(html) ->
+        {:ok, url}
+
+      true ->
+        {:ok, nil}  # Image is optional
+    end
+  end
+
+  @doc """
+  Extract pricing information from text content.
+
+  Returns map with:
+  - `:is_ticketed` - Boolean
+  - `:is_free` - Boolean
+  - `:min_price` - Decimal (if found)
+  - `:max_price` - Decimal (if found)
+  - `:currency` - String (EUR, USD, etc.)
+  """
+  def extract_pricing(html) do
+    text = clean_html(html)
+
+    is_free =
+      String.contains?(text, "free") or
+        String.contains?(text, "Free admission") or
+        String.contains?(text, "no charge")
+
+    # Look for price patterns: "€15", "$20", "15€", "20 euros"
+    prices =
+      Regex.scan(~r/(?:€|EUR|euros?)\s*(\d+(?:\.\d{2})?)|(\d+(?:\.\d{2})?)\s*(?:€|EUR|euros?)/, text)
+      |> Enum.flat_map(fn
+        [_, price1, ""] -> [parse_price(price1)]
+        [_, "", price2] -> [parse_price(price2)]
+        [_, price] -> [parse_price(price)]  # When group 2 is omitted (€15 format)
+        _ -> []
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    # Database constraint: if is_free = true, then min_price and max_price must be NULL
+    # So when event is free, ignore any extracted prices
+    {min_price, max_price} =
+      if is_free do
+        {nil, nil}
+      else
+        {
+          if(length(prices) > 0, do: Enum.min(prices), else: nil),
+          if(length(prices) > 1, do: Enum.max(prices), else: nil)
+        }
+      end
+
+    %{
+      is_free: is_free,
+      is_ticketed: not is_free and length(prices) > 0,
+      min_price: min_price,
+      max_price: max_price,
+      currency: "EUR"
+    }
+  end
+
+  @doc """
+  Extract performer information (mainly for concerts).
+
+  Returns list of performer names.
+  """
+  def extract_performers(_html) do
+    # Look for common performer patterns
+    # This is basic - can be enhanced based on actual HTML structure
+    []  # TODO: Implement if needed based on real HTML structure
+  end
+
+  # Private helper functions
+
+  defp extract_h1_title(html) do
+    case Regex.run(~r{<h1[^>]*>(.*?)</h1>}s, html) do
+      [_, title] -> clean_html(title)
+      _ -> nil
+    end
+  end
+
+  defp extract_meta_title(html) do
+    case Regex.run(~r{<meta\s+property="og:title"\s+content="([^"]+)"}i, html) do
+      [_, title] -> String.trim(title)
+      _ -> nil
+    end
+  end
+
+  defp extract_page_title(html) do
+    case Regex.run(~r{<title[^>]*>(.*?)</title>}s, html) do
+      [_, title] ->
+        title
+        |> String.trim()
+        |> String.replace(~r{\s*\|\s*Sortiraparis\.com.*$}, "")
+
+      _ ->
+        nil
+    end
+  end
+
+  defp extract_date_element(html) do
+    # Look for common date element patterns
+    patterns = [
+      ~r{<time[^>]*>(.*?)</time>}s,
+      ~r{<div[^>]*class="[^"]*date[^"]*"[^>]*>(.*?)</div>}s,
+      ~r{<span[^>]*class="[^"]*datetime[^"]*"[^>]*>(.*?)</span>}s
+    ]
+
+    patterns
+    |> Enum.find_value(fn pattern ->
+      case Regex.run(pattern, html) do
+        [_, date] -> clean_html(date)
+        _ -> nil
+      end
+    end)
+  end
+
+  defp extract_date_from_text(html) do
+    # Look for common date patterns in text
+    # "February 25, 27, 28, 2026"
+    # "October 15, 2025 to January 19, 2026"
+    # "Friday, October 31, 2025"
+
+    patterns = [
+      # Range: "October 15, 2025 to January 19, 2026" (check first - most specific)
+      ~r/((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,\s*\d{4}\s+to\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,\s*\d{4})/i,
+      # Multi-date: "February 25, 27, 28, 2026"
+      ~r/((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:,\s*\d+)*,\s*\d{4})/i,
+      # Single with day: "Friday, October 31, 2025"
+      ~r/((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,\s*\d{4})/i
+    ]
+
+    text = clean_html(html)
+
+    patterns
+    |> Enum.find_value(fn pattern ->
+      case Regex.run(pattern, text) do
+        [_, date] -> String.trim(date)
+        _ -> nil
+      end
+    end)
+  end
+
+  defp extract_date_from_json_ld(html) do
+    case Regex.run(~r{<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>}s, html) do
+      [_, json] ->
+        # Try to parse JSON and extract startDate
+        case Jason.decode(json) do
+          {:ok, %{"startDate" => start_date}} -> start_date
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp extract_meta_description(html) do
+    case Regex.run(~r{<meta\s+(?:name|property)="description"\s+content="([^"]+)"}i, html) do
+      [_, desc] -> String.trim(desc)
+      _ -> nil
+    end
+  end
+
+  defp extract_og_image(html) do
+    case Regex.run(~r{<meta\s+property="og:image"\s+content="([^"]+)"}i, html) do
+      [_, url] -> String.trim(url)
+      _ -> nil
+    end
+  end
+
+  defp extract_figure_image(html) do
+    case Regex.run(~r{<figure[^>]*>.*?<img[^>]*src="([^"]+)".*?</figure>}s, html) do
+      [_, url] -> String.trim(url)
+      _ -> nil
+    end
+  end
+
+  defp extract_first_image(html) do
+    case Regex.run(~r{<article[^>]*>.*?<img[^>]*src="([^"]+)"}s, html) do
+      [_, url] -> String.trim(url)
+      _ -> nil
+    end
+  end
+
+  defp clean_html(text) when is_binary(text) do
+    text
+    |> String.replace(~r{<[^>]+>}, "")
+    |> String.replace(~r{\s+}, " ")
+    |> String.replace("&nbsp;", " ")
+    |> String.replace("&amp;", "&")
+    |> String.replace("&lt;", "<")
+    |> String.replace("&gt;", ">")
+    |> String.replace("&quot;", "\"")
+    |> String.replace("&#39;", "'")
+    |> String.trim()
+  end
+
+  defp parse_price(price_string) when is_binary(price_string) do
+    case Decimal.parse(price_string) do
+      {decimal, _} -> decimal
+      :error -> nil
+    end
+  end
+
+  defp parse_price(_), do: nil
+end

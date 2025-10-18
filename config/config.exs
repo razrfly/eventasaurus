@@ -157,21 +157,21 @@ config :eventasaurus, :avatars,
 # Discovery source configuration
 config :eventasaurus,
   pubquiz_enabled: true,
-  question_one_enabled: true
-
-# Discovery quality thresholds configuration
-config :eventasaurus_discovery, :quality_thresholds,
-  venue_completeness: 90,
-  image_completeness: 80,
-  category_completeness: 85,
-  excellent_score: 90,
-  good_score: 75,
-  fair_score: 60
-
-# Discovery change tracking configuration
-config :eventasaurus_discovery, :change_tracking,
-  new_events_window_hours: 24,
-  dropped_events_window_hours: 48
+  question_one_enabled: true,
+  # Discovery quality thresholds
+  quality_thresholds: [
+    venue_completeness: 90,
+    image_completeness: 80,
+    category_completeness: 85,
+    excellent_score: 90,
+    good_score: 75,
+    fair_score: 60
+  ],
+  # Discovery change tracking
+  change_tracking: [
+    new_events_window_hours: 24,
+    dropped_events_window_hours: 48
+  ]
 
 # Configure geocoder for forward geocoding (address → city/coordinates)
 config :geocoder, :worker, provider: Geocoder.Providers.OpenStreetMaps

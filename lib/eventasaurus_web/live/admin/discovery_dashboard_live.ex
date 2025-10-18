@@ -27,7 +27,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @city_specific_sources %{
     "karnet" => "krakow",
     "kino-krakow" => "krakow",
-    "cinema-city" => "krakow"
+    "cinema-city" => "krakow",
+    "sortiraparis" => "paris"
   }
 
   @impl true
@@ -452,6 +453,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       "karnet",
       "kino-krakow",
       "cinema-city",
+      "sortiraparis",
       "pubquiz-pl",
       "question-one",
       "geeks-who-drink",

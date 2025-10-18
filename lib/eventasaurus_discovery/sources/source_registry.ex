@@ -30,6 +30,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
     "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
+    "sortiraparis" => EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
     "question-one" => EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob,
     "geeks-who-drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob,
@@ -158,6 +159,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   defp get_default_scope_for_slug("speed-quizzing"), do: "regional"
   defp get_default_scope_for_slug("inquizition"), do: "country"
   defp get_default_scope_for_slug("pubquiz-pl"), do: "country"
+  defp get_default_scope_for_slug("sortiraparis"), do: "city"
   defp get_default_scope_for_slug("ticketmaster"), do: "city"
   defp get_default_scope_for_slug("bandsintown"), do: "city"
   defp get_default_scope_for_slug("resident-advisor"), do: "city"

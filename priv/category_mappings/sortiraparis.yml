@@ -1,0 +1,158 @@
+# Sortiraparis Category Mappings
+# Maps Sortiraparis URL path segments to internal category system
+#
+# URL Pattern: /what-to-{see|visit}-in-paris/{category}/articles/{id}-{title}
+# Example: /what-to-see-in-paris/concerts-music-festival/articles/334325-booba-concert
+#
+# The category segment appears before "/articles/" in the URL path
+
+mappings:
+  # Music & Concerts (URL path: /concerts-music-festival/)
+  concerts-music-festival: concerts
+  concerts: concerts
+  music-festival: concerts
+  jazz: concerts
+  rock: concerts
+  electro: concerts
+  electronic: concerts
+  classical-music: concerts
+  classical: concerts
+  pop: concerts
+  hip-hop: concerts
+  world-music: concerts
+
+  # Arts & Exhibitions (URL path: /exhibit-museum/)
+  exhibit-museum: arts
+  exhibition: arts
+  museum: arts
+  art-gallery: arts
+  contemporary-art: arts
+  gallery: arts
+  exposition: arts
+  modern-art: arts
+
+  # Performing Arts (URL path: /shows/, /theater/)
+  shows: theatre
+  theater: theatre
+  theatre: theatre
+  spectacle: theatre
+  circus: theatre
+  performance: theatre
+
+  # Dance, Opera, Ballet (arts/theatre hybrid)
+  dance: arts
+  opera: arts
+  ballet: arts
+
+  # Comedy
+  comedy: comedy
+  stand-up: comedy
+  humour: comedy
+
+  # Film & Cinema (URL path: /cinema/)
+  cinema: film
+  movie: film
+  film: film
+  film-screening: film
+  film-festival: film
+
+  # Sports
+  sports: sports
+  sport: sports
+  football: sports
+  rugby: sports
+  tennis: sports
+  running: sports
+  marathon: sports
+  race: sports
+  match: sports
+
+  # Food & Drink
+  food: food-drink
+  restaurant: food-drink
+  tasting: food-drink
+  wine: food-drink
+  gastronomy: food-drink
+  culinary: food-drink
+
+  # Nightlife
+  nightlife: nightlife
+  club: nightlife
+  dj: nightlife
+  party: nightlife
+
+  # Family & Kids
+  family: family
+  kids: family
+  children: family
+  enfant: family
+  animation: family
+
+  # Community & Education
+  community: community
+  meetup: community
+  conference: business
+  workshop: education
+  seminar: education
+  cours: education
+
+# Pattern-based mappings for flexible matching
+# These patterns catch variations and multi-word categories
+patterns:
+  # French/English concert variations
+  - match: "concert|music|musique|jazz|rock|electro|pop|classical"
+    categories: [concerts]
+
+  # Exhibition variations (French/English)
+  - match: "exhibit|museum|gallery|exposition|musée|art"
+    categories: [arts]
+
+  # Theater/performance variations
+  - match: "theater|theatre|show|spectacle|performance|scène"
+    categories: [theatre]
+
+  # Film variations (French/English)
+  - match: "film|cinema|ciné|movie"
+    categories: [film]
+
+  # Comedy variations
+  - match: "comedy|stand.?up|humour|humor|comique"
+    categories: [comedy]
+
+  # Family/kids events (French/English)
+  - match: "family|kids|children|enfant|famille|jeune"
+    categories: [family]
+
+  # Festival events (can be multiple categories)
+  - match: "festival.*music|music.*festival|festival.*musique"
+    categories: [concerts, festivals]
+
+  - match: "festival.*film|film.*festival"
+    categories: [film, festivals]
+
+  - match: "festival.*art|art.*festival"
+    categories: [arts, festivals]
+
+  # Food/gastronomy (French/English)
+  - match: "food|gastronom|culinaire|tasting|dégustation|wine|vin"
+    categories: [food-drink]
+
+  # Dance and movement arts
+  - match: "dance|danse|ballet|choreograph"
+    categories: [arts, theatre]
+
+  # Opera and classical music
+  - match: "opera|opéra|classical|classique|symphon"
+    categories: [arts, concerts]
+
+  # Sports variations
+  - match: "sport|football|rugby|tennis|marathon|race|course"
+    categories: [sports]
+
+  # Nightlife and clubs
+  - match: "night|club|party|soirée|dj"
+    categories: [nightlife]
+
+  # Educational and workshops
+  - match: "workshop|atelier|cours|class|seminar|séminaire"
+    categories: [education]

@@ -458,20 +458,47 @@ performers: [
 
 ## GPS Coordinates & Geocoding
 
+### Multi-Provider Geocoding System
+
+Eventasaurus uses a **sophisticated multi-provider geocoding orchestrator** that automatically handles address geocoding with intelligent fallback across 8 providers. **You do not need to geocode manually** - the system handles this automatically.
+
+**Key Points**:
+- ✅ 6 free providers (Mapbox, HERE, Geoapify, LocationIQ, OpenStreetMap, Photon)
+- ✅ 2 paid providers disabled by default (Google Maps, Google Places)
+- ✅ Automatic failover when providers are rate-limited or unavailable
+- ✅ Built-in rate limiting to respect provider quotas
+- ✅ Comprehensive metadata tracking for debugging
+
+**See [Geocoding System Documentation](../geocoding/GEOCODING_SYSTEM.md) for complete details.**
+
 ### When to Geocode
 
 **Never geocode manually in transformers**. VenueProcessor handles this automatically:
 
 1. Check if venue exists by name/city
-2. If new venue without GPS → Call Google Places API
-3. If API fails → Job is **discarded** (prevents bad data)
-4. Cache place_id for future runs
+2. If new venue without GPS → Call multi-provider geocoding orchestrator
+3. Orchestrator tries providers in priority order (free providers first)
+4. If all providers fail → Job is **discarded** (prevents bad data)
+5. Cache coordinates and metadata for future runs
 
 ### Fallback Strategy
 
 1. **Scraper provides GPS** → Use directly (best case)
-2. **Scraper provides address** → VenueProcessor geocodes via Google Places
+2. **Scraper provides address** → VenueProcessor geocodes via multi-provider system
 3. **No GPS or address** → Job fails with {:discard, reason}
+
+**Geocoding Flow**:
+```
+Address String
+  ↓
+VenueProcessor.geocode_venue_address/2
+  ↓
+AddressGeocoder.geocode_address_with_metadata/1
+  ↓
+Orchestrator.geocode/1 (tries providers: Mapbox → HERE → Geoapify → LocationIQ → OSM → Photon)
+  ↓
+{:ok, coordinates + metadata} OR {:error, :all_failed, metadata}
+```
 
 ### GPS Coordinate Format
 
@@ -480,10 +507,20 @@ performers: [
 latitude: 50.0647    # NOT "50.0647" or 50
 longitude: 19.9450
 
-# nil is acceptable (VenueProcessor will geocode)
+# nil is acceptable (VenueProcessor will geocode via multi-provider system)
 latitude: nil
 longitude: nil
 ```
+
+### Geocoding Best Practices for Scrapers
+
+1. **Provide full addresses** - Include street, city, country for best geocoding results
+2. **Include GPS if available** - Bypass geocoding entirely when coordinates are provided
+3. **Don't implement custom geocoding** - Use the multi-provider system
+4. **Check geocoding metadata** - Available in venue records for debugging
+5. **Monitor geocoding costs** - Use admin dashboard at `/admin/geocoding`
+
+For implementation examples and troubleshooting, see [Geocoding System Documentation](../geocoding/GEOCODING_SYSTEM.md).
 
 ---
 
@@ -606,6 +643,450 @@ min_price: nil,
 max_price: nil,
 currency: nil      # Or default to "PLN" for Poland
 ```
+
+---
+
+## Category Mapping System
+
+### Overview
+
+Eventasaurus uses a **unified category taxonomy** with **YAML-based mappings** to normalize source-specific categories across all scrapers. This system ensures consistent categorization regardless of how different sources label their events.
+
+### Why Use YAML Category Mappings?
+
+- ✅ **Consistent taxonomy** across all sources (concerts, theatre, arts, etc.)
+- ✅ **Easy maintenance** - Update mappings without code changes
+- ✅ **Multi-language support** - Handle Polish, French, English categories
+- ✅ **Pattern matching** - Flexible regex-based fallback rules
+- ✅ **Source-specific customization** - Each scraper can have unique mappings
+
+### Internal Category Taxonomy
+
+Our standardized categories (stored in `categories` table):
+
+| Slug | Description | Examples |
+|------|-------------|----------|
+| `concerts` | Music events, live performances | Concerts, festivals, music shows |
+| `theatre` | Theater, plays, performance art | Drama, musicals, stage shows |
+| `arts` | Visual arts, exhibitions | Galleries, museums, art shows |
+| `film` | Cinema, film screenings | Movies, film festivals |
+| `comedy` | Stand-up, comedy shows | Comedy nights, improv |
+| `sports` | Sports events, competitions | Games, matches, races |
+| `food-drink` | Food events, tastings | Wine tastings, food festivals |
+| `nightlife` | Clubs, DJ events, parties | Club nights, raves |
+| `family` | Family-friendly events | Kids activities, family shows |
+| `community` | Community events, meetups | Local gatherings, meetups |
+| `education` | Workshops, classes, seminars | Educational events |
+| `business` | Conferences, networking | Business events, expos |
+| `trivia` | Trivia nights, quiz events | Pub quiz, trivia competitions |
+| `festivals` | Multi-day festival events | Music festivals, art festivals |
+| `other` | Uncategorized (fallback) | Events without clear category |
+
+### YAML Mapping Files
+
+#### File Location
+
+`priv/category_mappings/{source-slug}.yml`
+
+**Examples**:
+- `priv/category_mappings/karnet.yml` - Polish categories
+- `priv/category_mappings/sortiraparis.yml` - French categories
+- `priv/category_mappings/ticketmaster.yml` - Ticketmaster API categories
+- `priv/category_mappings/_defaults.yml` - Universal fallback mappings
+
+#### File Structure
+
+```yaml
+# {source-slug}.yml - Category mappings for {Source Name}
+# Maps source-specific category names/codes to internal category slugs
+
+mappings:
+  # Direct string-to-category mappings
+  # Format: source_category: internal_category_slug
+
+  koncerty: concerts        # Polish "concerts" → internal "concerts"
+  festiwale: festivals      # Polish "festivals" → internal "festivals"
+  teatr: theatre           # Polish "theater" → internal "theatre"
+  wystawa: arts            # Polish "exhibition" → internal "arts"
+  kino: film              # Polish "cinema" → internal "film"
+
+  # Multi-language support
+  concert: concerts
+  concert-music: concerts
+  music-festival: concerts
+
+  # URL segment mappings (for scrapers that use URL paths)
+  concerts-music-festival: concerts
+  exhibit-museum: arts
+  theater: theatre
+
+# Pattern-based mappings (optional)
+# Use regex patterns for flexible matching when direct mappings aren't sufficient
+patterns:
+  # Music genres → concerts
+  - match: "jazz|blues|rock|pop|electronic"
+    categories: [concerts]
+
+  # Art-related keywords → arts
+  - match: "gallery|exhibition|museum|art"
+    categories: [arts]
+
+  # Theater variations → theatre
+  - match: "theater|theatre|play|drama"
+    categories: [theatre]
+
+  # Multi-category events (festival can be concerts + festivals)
+  - match: "festival.*music|music.*festival"
+    categories: [concerts, festivals]
+
+  # Family events (can have multiple categories)
+  - match: "child|kid|family|dziec"
+    categories: [family, community]
+```
+
+#### Default Fallback Mappings
+
+The `_defaults.yml` file provides common English mappings used when source-specific mappings don't match:
+
+```yaml
+# _defaults.yml - Universal fallback mappings
+
+mappings:
+  concert: concerts
+  music: concerts
+  theatre: theatre
+  theater: theatre
+  exhibition: arts
+  museum: arts
+  film: film
+  movie: film
+  comedy: comedy
+  sports: sports
+  # ... more common English terms
+
+patterns:
+  - match: "concert|musik|music"
+    categories: [concerts]
+  - match: "theater|theatre|play"
+    categories: [theatre]
+  # ... universal patterns
+```
+
+### Integration Pattern
+
+#### Step 1: Create YAML Mapping File
+
+Create `priv/category_mappings/{your-source}.yml` with mappings specific to your source.
+
+#### Step 2: Pass Category Data in Transformer
+
+Your transformer should extract category information from the source data and pass it in the unified format:
+
+```elixir
+# lib/eventasaurus_discovery/sources/{your_source}/transformer.ex
+
+def transform_event(raw_event) do
+  %{
+    # ... other fields ...
+
+    # Pass category data for CategoryExtractor
+    category: extract_category_from_source(raw_event),
+
+    # Include raw event data so CategoryExtractor can access all fields
+    raw_event_data: raw_event,
+
+    # ... rest of fields ...
+  }
+end
+
+# Extract category from source-specific location
+defp extract_category_from_source(raw_event) do
+  cond do
+    # Strategy 1: Direct category field
+    category = raw_event[:category] || raw_event["category"] ->
+      String.downcase(category)
+
+    # Strategy 2: Extract from URL path
+    url = raw_event[:url] || raw_event["url"] ->
+      extract_category_from_url(url)
+
+    # Strategy 3: Tags or genre fields
+    tags = raw_event[:tags] || raw_event["tags"] ->
+      List.first(tags)
+
+    true ->
+      nil
+  end
+end
+```
+
+#### Step 3: Add CategoryExtractor Case
+
+Update `lib/eventasaurus_discovery/categories/category_extractor.ex` to handle your source:
+
+```elixir
+def assign_categories_to_event(event_id, source, external_data) do
+  categories =
+    case source do
+      # ... existing sources ...
+
+      # ADD YOUR SOURCE
+      "your-source" ->
+        extract_your_source_categories(external_data)
+
+      # Fallback for sources without specific handling
+      _ ->
+        classifications = extract_generic_categories(external_data)
+        map_to_categories(source, classifications)
+    end
+
+  # ... rest of function assigns categories to event
+end
+
+# Add extraction function for your source
+def extract_your_source_categories(event_data) when is_map(event_data) do
+  category_values = []
+
+  # Extract from category field
+  category_values =
+    if category = event_data[:category] || event_data["category"] do
+      [{"your-source", nil, String.downcase(category)} | category_values]
+    else
+      category_values
+    end
+
+  # Extract from URL or other fields
+  category_values =
+    if url = event_data[:url] || event_data["url"] do
+      extracted = extract_category_from_your_source_url(url)
+
+      if extracted do
+        [{"your-source", nil, extracted} | category_values]
+      else
+        category_values
+      end
+    else
+      category_values
+    end
+
+  # Add secondary categories from title/description (optional)
+  category_values = extract_your_source_secondary_categories(event_data, category_values)
+
+  # Map to internal categories using YAML
+  # CategoryMapper automatically loads your YAML file and applies mappings
+  map_to_categories("your-source", category_values)
+end
+```
+
+#### How CategoryMapper Works
+
+The `CategoryMapper` module automatically:
+
+1. **Loads YAML files** from `priv/category_mappings/` at runtime
+2. **Tries source-specific mappings first** (`{source}.yml`)
+3. **Falls back to defaults** (`_defaults.yml`) if no match
+4. **Applies pattern matching** using regex patterns
+5. **Returns category IDs** with primary/secondary flags
+
+You don't need to modify `CategoryMapper` - it automatically discovers and uses your YAML file.
+
+### Reference Implementations
+
+#### Karnet (Polish Categories)
+
+**File**: `priv/category_mappings/karnet.yml`
+
+```yaml
+mappings:
+  koncerty: concerts
+  festiwale: festivals
+  spektakle: theatre
+  wystawa: arts
+  film: film
+  literatura: education
+  warsztaty: education
+
+patterns:
+  - match: "jazz"
+    categories: [concerts, arts]
+  - match: "dzieci|rodzin"
+    categories: [family, education]
+```
+
+**Integration**: `lib/eventasaurus_discovery/categories/category_extractor.ex:70-101`
+
+#### Resident Advisor (Electronic Music)
+
+**File**: `priv/category_mappings/resident-advisor.yml`
+
+```yaml
+mappings:
+  electronic: concerts
+  techno: concerts
+  house: concerts
+  club: nightlife
+
+patterns:
+  - match: "festival|fest"
+    categories: [festivals, concerts, nightlife]
+```
+
+#### Sortiraparis (French/English Categories)
+
+**File**: `priv/category_mappings/sortiraparis.yml`
+
+```yaml
+mappings:
+  concerts-music-festival: concerts
+  exhibit-museum: arts
+  theater: theatre
+  cinema: film
+
+patterns:
+  - match: "concert|music"
+    categories: [concerts]
+  - match: "exposition|museum"
+    categories: [arts]
+```
+
+### When to Use Category Mappings
+
+#### ✅ Use YAML Category Mappings When:
+
+- Source provides categorical data (genres, event types, tags, classifications)
+- Categories need normalization across multiple sources
+- Multiple category formats exist (strings, codes, hierarchies, URL segments)
+- Non-English categories need mapping (Polish, French, etc.)
+- Categories change over time (YAML is easier to update than code)
+
+#### ❌ Don't Use When:
+
+- Source has no category information → Use "other" fallback category
+- Categories are already in our internal format → Pass through directly
+- One-off mapping that won't change → Simple code mapping is fine
+
+### Testing Category Mappings
+
+#### Verify YAML Loading
+
+```elixir
+iex> CategoryMapper.map_categories("karnet", ["koncerty"], category_lookup)
+[{1, true}]  # Returns category ID for "concerts" with primary flag
+```
+
+#### Test Extraction
+
+```elixir
+iex> CategoryExtractor.extract_karnet_categories(%{category: "koncert"})
+[{1, true}]  # Mapped to "concerts" category ID
+```
+
+#### Integration Test
+
+```elixir
+# In your transformer test
+test "assigns correct category from YAML mapping" do
+  raw_event = %{"category" => "koncerty", "title" => "Jazz Concert"}
+
+  {:ok, transformed} = Transformer.transform_event(raw_event)
+
+  # Category field should be lowercase
+  assert transformed.category == "koncerty"
+
+  # After EventProcessor.process_event(), verify category assigned
+  # (This happens in EventProcessor, not transformer)
+end
+```
+
+### Validation
+
+After implementing category mappings, verify coverage:
+
+```sql
+-- Check category coverage for your source
+SELECT
+  s.slug as source,
+  COUNT(DISTINCT pe.id) as total_events,
+  COUNT(DISTINCT pe.category_id) as events_with_category,
+  ROUND(100.0 * COUNT(DISTINCT pe.category_id) / COUNT(DISTINCT pe.id), 1) as coverage_pct
+FROM public_events pe
+JOIN event_sources es ON es.event_id = pe.id
+JOIN sources s ON s.id = es.source_id
+WHERE s.slug = 'your-source'
+GROUP BY s.slug;
+```
+
+**Target**: >90% category coverage for A grade
+
+### Common Patterns
+
+#### URL-Based Categories (Sortiraparis, Karnet)
+
+```elixir
+# Extract category from URL path segments
+defp extract_category_from_url(url) when is_binary(url) do
+  case Regex.run(~r{/what-to-see-in-paris/([^/]+)/articles/}, url) do
+    [_, category_segment] -> String.downcase(category_segment)
+    _ -> nil
+  end
+end
+```
+
+#### Tag-Based Categories (Bandsintown, Resident Advisor)
+
+```elixir
+# Extract from tags array
+def extract_categories_from_tags(event_data) do
+  tags = event_data[:tags] || event_data["tags"] || []
+
+  tags
+  |> Enum.map(&String.downcase/1)
+  |> Enum.map(fn tag -> {"source", nil, tag} end)
+end
+```
+
+#### API Classification Hierarchies (Ticketmaster)
+
+```elixir
+# Handle multi-level classifications (segment > genre > subgenre)
+def extract_ticketmaster_categories(tm_event) do
+  classifications = tm_event["classifications"] || []
+
+  classifications
+  |> Enum.flat_map(fn class ->
+    [
+      get_in(class, ["segment", "name"]),
+      get_in(class, ["genre", "name"]),
+      get_in(class, ["subGenre", "name"])
+    ]
+    |> Enum.filter(&(&1 != nil))
+    |> Enum.map(fn name -> {"ticketmaster", nil, String.downcase(name)} end)
+  end)
+end
+```
+
+### Troubleshooting
+
+#### Categories Not Being Assigned
+
+1. **Check YAML file exists**: `ls priv/category_mappings/{source}.yml`
+2. **Verify CategoryExtractor case**: Look for your source in `assign_categories_to_event/3`
+3. **Check logs**: Look for CategoryMapper errors in logs
+4. **Test mapping directly**: Use `iex` to test `CategoryMapper.map_categories/3`
+
+#### Wrong Categories Assigned
+
+1. **Check mapping precedence**: Source-specific YAML overrides defaults
+2. **Verify pattern matching**: Regex patterns in YAML must be valid
+3. **Check category slugs**: Must match exactly what's in `categories` table
+4. **Test with sample data**: Use real source data to verify mappings
+
+#### Low Category Coverage
+
+1. **Add more mappings**: Cover edge cases and variations
+2. **Use pattern matching**: Catch similar terms with regex
+3. **Check extraction logic**: Ensure category data is being extracted from source
+4. **Review logs**: Look for "category not found" warnings
 
 ---
 

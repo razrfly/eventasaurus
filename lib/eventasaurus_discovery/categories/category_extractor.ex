@@ -164,6 +164,43 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   end
 
   @doc """
+  Extract categories from Sortiraparis event data.
+  Sortiraparis events have categories embedded in URL paths.
+  URL pattern: /what-to-{see|visit}-in-paris/{category}/articles/{id}-{title}
+  """
+  def extract_sortiraparis_categories(event_data) when is_map(event_data) do
+    category_values = []
+
+    # Extract from URL path (primary method)
+    category_values =
+      if url = event_data[:url] || event_data["url"] do
+        extracted = extract_category_from_sortiraparis_url(url)
+
+        if extracted do
+          [{"sortiraparis", nil, extracted} | category_values]
+        else
+          category_values
+        end
+      else
+        category_values
+      end
+
+    # Fallback: check for explicit category field
+    category_values =
+      if category = event_data[:category] || event_data["category"] do
+        [{"sortiraparis", nil, String.downcase(category)} | category_values]
+      else
+        category_values
+      end
+
+    # Extract secondary categories from title/description
+    category_values = extract_sortiraparis_secondary_categories(event_data, category_values)
+
+    # Map to internal categories using YAML
+    map_to_categories("sortiraparis", category_values)
+  end
+
+  @doc """
   Extract categories from generic event data with a category string field.
   Used for sources like PubQuiz that provide a simple category string.
   """
@@ -232,6 +269,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
         "resident-advisor" ->
           extract_resident_advisor_categories(external_data)
+
+        "sortiraparis" ->
+          extract_sortiraparis_categories(external_data)
 
         # For other sources (like PubQuiz), try to extract from generic category field
         _ ->
@@ -617,6 +657,66 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
       additional_categories
       |> Enum.reject(fn {_, _, value} -> value in existing_values end)
       |> Enum.uniq()
+
+    existing_categories ++ new_categories
+  end
+
+  # Helper to extract category from Sortiraparis URL
+  defp extract_category_from_sortiraparis_url(url) when is_binary(url) do
+    # URL pattern: /what-to-{see|visit}-in-paris/{category}/articles/{id}
+    # or: /en/what-to-{see|visit}-in-paris/{category}/articles/{id}
+    case Regex.run(~r{/what-to-(?:see|visit)-in-paris/([^/]+)/articles/}, url) do
+      [_, category_segment] -> String.downcase(category_segment)
+      _ -> nil
+    end
+  end
+
+  defp extract_category_from_sortiraparis_url(_), do: nil
+
+  # Extract secondary categories from title and description for Sortiraparis
+  defp extract_sortiraparis_secondary_categories(event_data, existing_categories) do
+    title = event_data[:title] || event_data["title"] || ""
+    description = event_data[:description] || event_data["description"] || ""
+    text = "#{title} #{description}" |> String.downcase()
+
+    # Pattern-based secondary category extraction
+    secondary_patterns = [
+      {"concert", ["concert", "nightlife"]},
+      {"festival", ["festival"]},
+      {"exhibition", ["exhibition", "arts"]},
+      {"museum", ["museum", "arts"]},
+      {"theater", ["theatre", "arts"]},
+      {"theatre", ["theatre", "arts"]},
+      {"cinema", ["film"]},
+      {"comedy", ["comedy", "nightlife"]},
+      {"jazz", ["concert", "arts"]},
+      {"opera", ["arts", "theatre"]},
+      {"ballet", ["arts", "dance"]},
+      {"family", ["family", "community"]},
+      {"kids", ["family", "education"]},
+      {"enfant", ["family", "education"]},
+      {"workshop", ["education", "community"]},
+      {"atelier", ["education", "community"]},
+      {"tasting", ["food-drink"]},
+      {"dégustation", ["food-drink"]},
+      {"gastronomy", ["food-drink"]},
+      {"gastronomie", ["food-drink"]}
+    ]
+
+    additional_categories =
+      secondary_patterns
+      |> Enum.filter(fn {pattern, _} -> String.contains?(text, pattern) end)
+      |> Enum.flat_map(fn {_, categories} ->
+        categories |> Enum.map(fn cat -> {"sortiraparis", nil, cat} end)
+      end)
+      |> Enum.uniq()
+
+    # Only add if not already present
+    existing_values = existing_categories |> Enum.map(fn {_, _, value} -> value end)
+
+    new_categories =
+      additional_categories
+      |> Enum.reject(fn {_, _, value} -> value in existing_values end)
 
     existing_categories ++ new_categories
   end
