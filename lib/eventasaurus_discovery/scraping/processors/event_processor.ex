@@ -1101,6 +1101,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     # Match by checking external_id starts with "sortiraparis_{article_id}_"
     pattern = "sortiraparis_#{article_id}_%"
 
+    # Query already filters by source_id, so we don't need to check again
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
@@ -1119,19 +1120,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         nil
 
       event ->
-        # Don't consolidate if parent is from different source
-        case Repo.one(
-               from pes in PublicEventSource,
-                 where: pes.event_id == ^event.id and pes.source_id == ^source_id
-           ) do
-          nil ->
-            Logger.debug("Article parent found but from different source, skipping consolidation")
-            nil
-
-          _source ->
-            Logger.info("📰 Found article parent for article #{article_id} at venue #{venue.id}: event ##{event.id}")
-            event
-        end
+        Logger.info("📰 Found article parent for article #{article_id} at venue #{venue.id}: event ##{event.id}")
+        event
     end
   end
 
