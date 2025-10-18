@@ -32,16 +32,26 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
   - `:attempt` - Current attempt number (default: 1)
   - `:skip_rate_limit` - Skip rate limiting for redirects (default: false)
   - `:use_playwright` - Use Playwright for stubborn 401 errors (default: false, TODO: Phase 3+)
+  - `:language` - Language code ("en" or "fr") - auto-localizes URL if needed
 
   ## Examples
 
       iex> fetch_page("https://www.sortiraparis.com/articles/319282-indochine-concert")
       {:ok, "<html>...</html>"}
 
+      iex> fetch_page("https://www.sortiraparis.com/articles/319282-concert", language: "en")
+      {:ok, "<html>...</html>"}  # Fetches /en/articles/319282-concert
+
       iex> fetch_page("https://www.sortiraparis.com/nonexistent")
       {:error, :not_found}
   """
   def fetch_page(url, opts \\ []) do
+    # Localize URL if language specified
+    localized_url = case Keyword.get(opts, :language) do
+      nil -> url
+      language -> localize_url(url, language)
+    end
+
     retries = Keyword.get(opts, :retries, 3)
     attempt = Keyword.get(opts, :attempt, 1)
 
@@ -50,9 +60,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
       apply_rate_limit()
     end
 
-    Logger.debug("🌐 Fetching Sortiraparis page: #{url} (attempt #{attempt}/#{retries})")
+    Logger.debug("🌐 Fetching Sortiraparis page: #{localized_url} (attempt #{attempt}/#{retries})")
 
-    case HTTPoison.get(url, Config.headers(),
+    case HTTPoison.get(localized_url, Config.headers(),
            timeout: Config.timeout(),
            recv_timeout: Config.timeout()
          ) do
@@ -116,19 +126,90 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
   end
 
   @doc """
-  Fetch sitemap XML from given URL.
+  Fetch page in specific language.
 
-  Returns parsed sitemap with list of URLs.
+  Automatically localizes URL based on language code:
+  - English ("en"): Ensures /en/ prefix
+  - French ("fr"): Removes /en/ prefix (French is default)
 
   ## Examples
 
-      iex> fetch_sitemap("https://www.sortiraparis.com/sitemap-en-1.xml")
-      {:ok, ["https://...", "https://...", ...]}
+      iex> fetch_page_with_language("/articles/319282-concert", "en")
+      {:ok, "<html>...</html>"}  # Fetches /en/articles/319282-concert
+
+      iex> fetch_page_with_language("/en/articles/319282-concert", "fr")
+      {:ok, "<html>...</html>"}  # Fetches /articles/319282-concert
+  """
+  def fetch_page_with_language(url, language, opts \\ []) do
+    fetch_page(url, Keyword.put(opts, :language, language))
+  end
+
+  @doc """
+  Localize URL for specific language.
+
+  ## URL Patterns
+
+  - English: `/en/articles/{id}` (explicit language prefix)
+  - French: `/articles/{id}` (default, no prefix)
+
+  ## Examples
+
+      iex> localize_url("/articles/123-event", "en")
+      "/en/articles/123-event"
+
+      iex> localize_url("/en/articles/123-event", "fr")
+      "/articles/123-event"
+
+      iex> localize_url("https://www.sortiraparis.com/articles/123", "en")
+      "https://www.sortiraparis.com/en/articles/123"
+  """
+  def localize_url(url, language) when is_binary(url) do
+    cond do
+      # English: ensure /en/ prefix
+      language == "en" ->
+        if String.contains?(url, "/en/") do
+          url
+        else
+          # Add /en/ before /articles/
+          String.replace(url, "/articles/", "/en/articles/")
+          |> String.replace("/concerts-music-festival/", "/en/concerts-music-festival/")
+          |> String.replace("/exhibit-museum/", "/en/exhibit-museum/")
+          |> String.replace("/shows/", "/en/shows/")
+          |> String.replace("/theater/", "/en/theater/")
+        end
+
+      # French: remove /en/ prefix (French is default)
+      language == "fr" ->
+        String.replace(url, "/en/", "/")
+
+      # Unknown language: return as-is
+      true ->
+        url
+    end
+  end
+
+  @doc """
+  Fetch sitemap XML from given URL and extract URLs with metadata.
+
+  Returns parsed sitemap with list of URL entries including language metadata.
+
+  ## Options
+
+  - `language` - Language code ("en" or "fr") to tag all URLs
+
+  ## Examples
+
+      iex> fetch_sitemap("https://www.sortiraparis.com/sitemap-en-1.xml", language: "en")
+      {:ok, [%{url: "https://...", language: "en", article_id: "123", ...}, ...]}
   """
   def fetch_sitemap(url, opts \\ []) do
+    alias EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
+
+    language = Keyword.get(opts, :language)
+
     case fetch_page(url, opts) do
       {:ok, xml_body} ->
-        parse_sitemap(xml_body)
+        SitemapExtractor.extract_urls_with_metadata(xml_body, language: language)
 
       {:error, reason} ->
         {:error, reason}

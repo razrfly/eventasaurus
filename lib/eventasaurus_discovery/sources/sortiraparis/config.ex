@@ -38,18 +38,53 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Config do
   def timeout, do: @timeout
 
   @doc """
-  List of English sitemap URLs to scrape.
+  List of sitemap URLs to scrape for bilingual content (English + French).
 
-  Using English sitemaps for consistency and easier parsing.
-  French sitemaps (sitemap-fr-*.xml) contain same events but in French.
+  ## Language Structure
+
+  - **English sitemaps**: `sitemap-en-{1,2,3,4}.xml` - Contains English article URLs
+  - **French sitemaps**: `sitemap-fr-{1,2}.xml` - Contains French article URLs (same events)
+
+  Each article has consistent article_id across both languages:
+  - English: `/en/articles/{article_id}-event-title`
+  - French: `/articles/{article_id}-event-title` (default, no language prefix)
+
+  ## Returns
+
+  Returns a list of maps with sitemap URL and language metadata:
+  ```elixir
+  [
+    %{url: "https://www.sortiraparis.com/sitemap-en-1.xml", language: "en"},
+    %{url: "https://www.sortiraparis.com/sitemap-fr-1.xml", language: "fr"},
+    ...
+  ]
+  ```
+
+  ## Options
+
+  - `language: :en` - Only English sitemaps
+  - `language: :fr` - Only French sitemaps
+  - `language: :all` - Both languages (default)
   """
-  def sitemap_urls do
-    [
-      "#{@base_url}/sitemap-en-1.xml",
-      "#{@base_url}/sitemap-en-2.xml",
-      "#{@base_url}/sitemap-en-3.xml",
-      "#{@base_url}/sitemap-en-4.xml"
-    ]
+  def sitemap_urls(language \\ :all) do
+    case language do
+      :en ->
+        [
+          %{url: "#{@base_url}/sitemap-en-1.xml", language: "en"},
+          %{url: "#{@base_url}/sitemap-en-2.xml", language: "en"},
+          %{url: "#{@base_url}/sitemap-en-3.xml", language: "en"},
+          %{url: "#{@base_url}/sitemap-en-4.xml", language: "en"}
+        ]
+
+      :fr ->
+        [
+          %{url: "#{@base_url}/sitemap-fr-1.xml", language: "fr"},
+          %{url: "#{@base_url}/sitemap-fr-2.xml", language: "fr"}
+        ]
+
+      :all ->
+        sitemap_urls(:en) ++ sitemap_urls(:fr)
+    end
   end
 
   @doc """
@@ -79,9 +114,16 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Config do
   @doc """
   Extract article ID from URL.
 
+  Works with both English and French URL patterns:
+  - English: `/en/articles/319282-title`
+  - French: `/articles/319282-title` (no /en/ prefix)
+
   ## Examples
 
       iex> extract_article_id("/articles/319282-indochine-concert")
+      "319282"
+
+      iex> extract_article_id("/en/articles/319282-indochine-concert")
       "319282"
 
       iex> extract_article_id("https://www.sortiraparis.com/articles/319282-indochine-concert")
@@ -91,6 +133,33 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Config do
     case Regex.run(~r{/articles/(\d+)-}, url) do
       [_, id] -> id
       _ -> nil
+    end
+  end
+
+  @doc """
+  Detect language from URL pattern.
+
+  ## URL Patterns
+
+  - English: `/en/articles/{id}` or contains `/en/`
+  - French: `/articles/{id}` without `/en/` (default language)
+
+  ## Examples
+
+      iex> detect_language("/en/articles/319282-event")
+      "en"
+
+      iex> detect_language("/articles/319282-event")
+      "fr"
+
+      iex> detect_language("https://www.sortiraparis.com/en/concerts/319282")
+      "en"
+  """
+  def detect_language(url) when is_binary(url) do
+    if String.contains?(url, "/en/") do
+      "en"
+    else
+      "fr"
     end
   end
 
@@ -165,21 +234,39 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Config do
   @doc """
   Check if URL is likely an event page.
 
-  Uses URL pattern matching based on POC findings.
-  Accuracy: ~90%+ (refined during implementation)
+  Works with both English and French URLs by checking for article ID pattern.
+
+  ## Detection Strategy
+
+  Event articles have the pattern `/articles/{digit}-{slug}` which is consistent
+  across both English and French versions. This is more reliable than category
+  keywords which differ between languages:
+  - English: `/en/what-to-see-in-paris/shows/articles/123-event`
+  - French: `/scenes/spectacle/articles/123-event`
+
+  We exclude guide pages, news, and listicles which don't represent specific events.
 
   ## Examples
 
-      iex> is_event_url?("https://www.sortiraparis.com/concerts-music-festival/articles/319282-indochine-concert")
+      iex> is_event_url?("https://www.sortiraparis.com/en/what-to-see-in-paris/shows/articles/319282-event")
       true
 
-      iex> is_event_url?("https://www.sortiraparis.com/guides/best-restaurants-paris")
+      iex> is_event_url?("https://www.sortiraparis.com/scenes/spectacle/articles/319282-event")
+      true
+
+      iex> is_event_url?("https://www.sortiraparis.com/en/news/guides/53380-what-to-do-this-week")
+      false
+
+      iex> is_event_url?("https://www.sortiraparis.com")
       false
   """
   def is_event_url?(url) when is_binary(url) do
-    has_event_category = Enum.any?(event_categories(), &String.contains?(url, &1))
+    # Check if URL has article ID pattern: /articles/{digits}-
+    has_article_pattern = Regex.match?(~r{/articles/\d+-}, url)
+
+    # Exclude non-event content patterns
     has_exclude_pattern = Enum.any?(exclude_patterns(), &String.contains?(url, &1))
 
-    has_event_category and not has_exclude_pattern
+    has_article_pattern and not has_exclude_pattern
   end
 end
