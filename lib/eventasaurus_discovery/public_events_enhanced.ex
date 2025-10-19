@@ -174,13 +174,43 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # By default, exclude past events
     # An event is considered active/upcoming if:
     # - It has an end date that hasn't passed yet, OR
-    # - It has no end date and hasn't started yet
+    # - It has no end date and hasn't started yet, OR
+    # - It has occurrence_type = "unknown" and was seen in the last 7 days (freshness tracking)
     current_time = DateTime.utc_now()
+    freshness_threshold = DateTime.add(current_time, -7, :day)
 
     from(pe in query,
+      left_join: es in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+      on: es.event_id == pe.id,
       where:
+        # Known dates: check starts_at/ends_at
         (not is_nil(pe.ends_at) and pe.ends_at > ^current_time) or
-          (is_nil(pe.ends_at) and pe.starts_at > ^current_time)
+          (is_nil(pe.ends_at) and pe.starts_at > ^current_time) or
+          # Unknown occurrence type: check last_seen_at for freshness (JSONB query)
+          (fragment("? ->> 'occurrence_type'", es.metadata) == "unknown" and
+             es.last_seen_at >= ^freshness_threshold),
+      distinct: pe.id
+    )
+  end
+
+  # Version of filter_past_events without `distinct: pe.id` for use in count queries
+  # The COUNT(DISTINCT pe.id) in count_events handles deduplication instead
+  defp filter_past_events_for_count(query, true), do: query
+
+  defp filter_past_events_for_count(query, _) do
+    current_time = DateTime.utc_now()
+    freshness_threshold = DateTime.add(current_time, -7, :day)
+
+    from(pe in query,
+      left_join: es in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+      on: es.event_id == pe.id,
+      where:
+        # Known dates: check starts_at/ends_at
+        (not is_nil(pe.ends_at) and pe.ends_at > ^current_time) or
+          (is_nil(pe.ends_at) and pe.starts_at > ^current_time) or
+          # Unknown occurrence type: check last_seen_at for freshness (JSONB query)
+          (fragment("? ->> 'occurrence_type'", es.metadata) == "unknown" and
+             es.last_seen_at >= ^freshness_threshold)
     )
   end
 
@@ -550,9 +580,18 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   @doc """
   Count total events matching filters (for pagination metadata).
+
+  Uses COUNT(DISTINCT pe.id) to handle cases where filter_past_events
+  joins with event_sources (for unknown occurrence tracking), which can
+  create duplicate rows.
+
+  NOTE: We use filter_past_events_for_count instead of filter_past_events
+  to avoid the `distinct: pe.id` clause, which conflicts with COUNT(DISTINCT pe.id).
   """
   def count_events(opts \\ []) do
-    base_query = from(pe in PublicEvent, select: count(pe.id))
+    # Use DISTINCT count to handle joins that may create duplicate rows
+    # (e.g., filter_past_events joins with event_sources for unknown occurrence tracking)
+    base_query = from(pe in PublicEvent, select: fragment("COUNT(DISTINCT ?)", pe.id))
 
     # Apply geographic filter if coordinates are provided
     query =
@@ -563,7 +602,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end
 
     query
-    |> filter_past_events(opts[:show_past])
+    |> filter_past_events_for_count(opts[:show_past])
     |> filter_by_categories(opts[:categories])
     |> filter_by_date_range(opts[:start_date], opts[:end_date])
     |> filter_by_price_range(opts[:min_price], opts[:max_price])

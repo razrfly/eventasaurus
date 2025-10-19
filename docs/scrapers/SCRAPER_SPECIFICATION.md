@@ -1090,6 +1090,325 @@ end
 
 ---
 
+## Multilingual Date Parsing
+
+### Overview
+
+Eventasaurus provides a **shared multilingual date parsing system** for scrapers that need to extract and normalize dates from non-English content. This system supports multiple languages (English, French, Polish, etc.) with a plugin architecture that makes adding new languages a 30-minute task.
+
+**Key Principle**: When your scraper handles multilingual content (e.g., French event listings, Polish cinema sites), **defer to the shared parser** rather than implementing source-specific date parsing logic.
+
+### Why Use Multilingual Date Parser?
+
+- ✅ **Reusable across sources** - Polish date parsing for all 3 Krakow cinema scrapers
+- ✅ **Language plugins** - Add German, Spanish, Italian by creating single module
+- ✅ **Three-stage pipeline** - Extract → Normalize → Parse for reliability
+- ✅ **Unknown occurrence fallback** - Gracefully handles unparseable dates (See Issue #1839, #1841)
+- ✅ **Easy maintenance** - Update date patterns without touching scraper code
+
+### When to Use
+
+#### ✅ Use Shared Multilingual Parser When:
+
+- Source content is in non-English languages (French, Polish, German, etc.)
+- Multiple sources share the same language (e.g., 3 Polish cinema scrapers)
+- Date formats vary within same source (e.g., "19 mars 2025", "du 19 au 21 mars")
+- You want "unknown occurrence" fallback for unparseable dates
+
+#### ❌ Don't Use When:
+
+- Source provides ISO 8601 dates (2025-10-19) → Use `DateTime.from_iso8601/1` directly
+- Source is English-only with simple formats → Consider simpler regex-based parsing
+- One-off date format that won't appear elsewhere → Source-specific helper is acceptable
+
+### Architecture
+
+#### Three-Stage Pipeline
+
+```
+Raw Text (multilingual)
+  ↓
+Stage 1: Extract Date Components
+  - Regex patterns for date ranges, single dates, relative dates
+  - Language-specific month names (mars, marca, März)
+  - Return: %{type: :range, start_day: 19, start_month: 3, end_day: 21, end_month: 3, year: 2025}
+  ↓
+Stage 2: Normalize to ISO Format
+  - Convert language-specific components to YYYY-MM-DD
+  - Handle multi-day events, recurring patterns, relative dates
+  - Return: {:ok, %{starts_at: "2025-03-19", ends_at: "2025-03-21"}}
+  ↓
+Stage 3: Parse & Validate
+  - Convert ISO strings to DateTime structs (UTC timezone)
+  - Validate with Timex/NaiveDateTime
+  - Return: {:ok, %{starts_at: ~U[2025-03-19 00:00:00Z], ends_at: ~U[2025-03-21 23:59:59Z]}}
+```
+
+#### Language Plugin System
+
+Each language implements the `DatePatternProvider` behavior:
+
+```elixir
+# lib/eventasaurus_discovery/sources/shared/parsers/date_pattern_provider.ex
+
+@doc """
+Behavior for language-specific date pattern providers.
+Each language module (English, French, Polish) implements this behavior.
+"""
+@callback month_names() :: %{String.t() => integer()}
+@callback patterns() :: list(Regex.t())
+@callback extract_components(String.t()) :: {:ok, map()} | {:error, atom()}
+```
+
+**Plugin Structure**:
+```
+lib/eventasaurus_discovery/sources/shared/parsers/
+├── multilingual_date_parser.ex     # Core orchestration
+├── date_pattern_provider.ex        # Behavior definition
+└── date_patterns/
+    ├── english.ex                  # English patterns + month names
+    ├── french.ex                   # French patterns + month names (implemented)
+    ├── polish.ex                   # Polish patterns (FUTURE - Issue #1846)
+    ├── german.ex                   # German patterns (FUTURE)
+    └── ...
+```
+
+### API Usage
+
+#### Single Language
+
+```elixir
+# French event listing
+{:ok, result} = MultilingualDateParser.extract_and_parse(
+  "du 19 mars au 7 juillet 2025",
+  languages: [:french]
+)
+
+# Returns:
+# {:ok, %{
+#   starts_at: ~U[2025-03-19 00:00:00Z],
+#   ends_at: ~U[2025-07-07 23:59:59Z]
+# }}
+```
+
+#### Multiple Languages (Fallback)
+
+```elixir
+# Try French first, fallback to English
+{:ok, result} = MultilingualDateParser.extract_and_parse(
+  "From March 19 to July 7, 2025",
+  languages: [:french, :english]
+)
+```
+
+#### Polish Cinema Scraper Example
+
+```elixir
+# Kino Krakow, Karnet, Cinema City (all Polish)
+{:ok, result} = MultilingualDateParser.extract_and_parse(
+  "od 19 marca do 21 marca 2025",  # Polish date format
+  languages: [:polish, :english]     # Try Polish first, English fallback
+)
+```
+
+#### Unknown Occurrence Fallback
+
+When date parsing fails, the transformer creates an "unknown occurrence" event:
+
+```elixir
+case MultilingualDateParser.extract_and_parse(date_text, languages: [:french]) do
+  {:ok, %{starts_at: starts_at, ends_at: ends_at}} ->
+    # Normal event with known dates
+    %{
+      starts_at: starts_at,
+      ends_at: ends_at,
+      metadata: %{occurrence_type: "one_time"}
+    }
+
+  {:error, :unsupported_date_format} ->
+    # Fallback: Unknown occurrence event
+    Logger.info("📅 Date parsing failed, using unknown occurrence fallback")
+    %{
+      starts_at: DateTime.utc_now(),  # Use first_seen as starts_at
+      ends_at: nil,
+      metadata: %{
+        occurrence_type: "unknown",
+        occurrence_fallback: true,
+        original_date_string: date_text
+      }
+    }
+end
+```
+
+**Unknown Events Behavior**:
+- Stored in database with `occurrence_type = "unknown"` in JSONB metadata
+- Appear in public listings based on `last_seen_at` freshness (7-day threshold)
+- Allow events with unparseable dates to be discovered without blocking scrapers
+- See Implementation in `lib/eventasaurus_discovery/sources/sortiraparis/transformer.ex:106-117`
+
+### Current Implementation Status
+
+#### ✅ Implemented (Shared Parser - Phase 1-4 Complete)
+
+**Location**: `lib/eventasaurus_discovery/sources/shared/parsers/multilingual_date_parser.ex`
+
+**Supported Languages**: French, English (via language plugins)
+
+**Language Plugins**:
+- `shared/parsers/date_patterns/french.ex` - French date patterns and month names
+- `shared/parsers/date_patterns/english.ex` - English date patterns and month names
+
+**Date Formats**:
+- **French**: "17 octobre 2025", "du 19 mars au 7 juillet 2025", "Le 1er janvier 2026"
+- **English**: "October 15, 2025", "October 15, 2025 to January 19, 2026", "October 1st, 2025"
+- **Multi-language fallback**: Tries languages in order (e.g., French → English)
+- **Unknown dates**: Fallback to `occurrence_type = "unknown"` for unparseable dates
+
+**Features**:
+- ✅ Three-stage pipeline (Extract → Normalize → Parse)
+- ✅ Language plugin architecture with `DatePatternProvider` behavior
+- ✅ Unknown occurrence fallback (Issue #1841)
+- ✅ Timezone support (converts to UTC)
+- ✅ Comprehensive logging for debugging
+- ✅ Integrated with Sortiraparis transformer (Phase 4)
+
+**Currently Used By**: Sortiraparis scraper (French/English bilingual content)
+
+#### 🚀 Production Ready Architecture
+
+**How to Use**:
+```elixir
+# Shared parser with multi-language support
+alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
+
+# Sortiraparis (French/English)
+MultilingualDateParser.extract_and_parse(
+  "du 19 mars au 7 juillet 2025",
+  languages: [:french, :english],
+  timezone: "Europe/Paris"
+)
+
+# Returns: {:ok, %{starts_at: ~U[2025-03-19 00:00:00Z], ends_at: ~U[2025-07-07 23:59:59Z]}}
+```
+
+#### 📋 Future Enhancements
+
+**Polish Language Plugin** (Ready for implementation when needed):
+- Location: `shared/parsers/date_patterns/polish.ex`
+- Will unlock: Kino Krakow, Karnet, Cinema City scrapers
+- Estimated time: 30 minutes to implement
+
+**Additional Languages** (German, Spanish, Italian):
+- Same plugin architecture
+- 30 minutes per language to implement
+
+### Adding a New Language
+
+**Estimated Time**: 30 minutes per language
+
+**Steps**:
+
+1. **Create language plugin** (`lib/eventasaurus_discovery/sources/shared/parsers/date_patterns/polish.ex`):
+
+```elixir
+defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
+  @behaviour EventasaurusDiscovery.Sources.Shared.Parsers.DatePatternProvider
+
+  @impl true
+  def month_names do
+    %{
+      # Polish month names (lowercase for case-insensitive matching)
+      "stycznia" => 1, "lutego" => 2, "marca" => 3, "kwietnia" => 4,
+      "maja" => 5, "czerwca" => 6, "lipca" => 7, "sierpnia" => 8,
+      "września" => 9, "października" => 10, "listopada" => 11, "grudnia" => 12,
+
+      # Abbreviated forms
+      "sty" => 1, "lut" => 2, "mar" => 3, "kwi" => 4,
+      "maj" => 5, "cze" => 6, "lip" => 7, "sie" => 8,
+      "wrz" => 9, "paź" => 10, "lis" => 11, "gru" => 12
+    }
+  end
+
+  @impl true
+  def patterns do
+    months = Enum.join(Map.keys(month_names()), "|")
+
+    [
+      # Single date: "19 marca 2025"
+      ~r/(\d{1,2})\s+(#{months})\s+(\d{4})/i,
+
+      # Date range: "od 19 do 21 marca 2025"
+      ~r/od\s+(\d{1,2})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})/i,
+
+      # Cross-month range: "od 19 marca do 7 lipca 2025"
+      ~r/od\s+(\d{1,2})\s+(#{months})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})/i
+    ]
+  end
+
+  @impl true
+  def extract_components(text) do
+    # Pattern matching logic to extract date components
+    # Returns: {:ok, %{type: :range, start_day: 19, ...}} | {:error, :no_match}
+  end
+end
+```
+
+2. **Register in MultilingualDateParser**:
+
+```elixir
+# lib/eventasaurus_discovery/sources/shared/parsers/multilingual_date_parser.ex
+
+@language_modules %{
+  french: DatePatterns.French,
+  english: DatePatterns.English,
+  polish: DatePatterns.Polish  # ADD THIS
+}
+```
+
+3. **Use in your scraper's transformer**:
+
+```elixir
+# lib/eventasaurus_discovery/sources/kino_krakow/transformer.ex
+
+case MultilingualDateParser.extract_and_parse(date_text, languages: [:polish, :english]) do
+  {:ok, dates} -> # Use extracted dates
+  {:error, _} -> # Fallback to unknown occurrence
+end
+```
+
+### Reference Documentation
+
+- **Original Vision**: GitHub Issue #1839 (multilingual date parser for all scrapers)
+- **Unknown Occurrence Implementation**: GitHub Issue #1841, #1842
+- **Refactoring Plan**: GitHub Issue #1846 (move to shared architecture)
+- **Current Implementation**: `lib/eventasaurus_discovery/sources/sortiraparis/parsers/date_parser.ex`
+- **Production Validation**: `PHASE_4_VALIDATION_SUMMARY.md`, `UNKNOWN_OCCURRENCE_AUDIT.md`
+
+### Testing
+
+```elixir
+# Test language plugin
+test "polish date parsing" do
+  {:ok, result} = MultilingualDateParser.extract_and_parse(
+    "od 19 marca do 21 marca 2025",
+    languages: [:polish]
+  )
+
+  assert result.starts_at == ~U[2025-03-19 00:00:00Z]
+  assert result.ends_at == ~U[2025-03-21 23:59:59Z]
+end
+
+# Test unknown fallback
+test "unknown occurrence fallback for unparseable dates" do
+  {:error, :unsupported_date_format} = MultilingualDateParser.extract_and_parse(
+    "sometime in spring",
+    languages: [:english]
+  )
+end
+```
+
+---
+
 ## Configuration Standards
 
 ### Source Configuration Map

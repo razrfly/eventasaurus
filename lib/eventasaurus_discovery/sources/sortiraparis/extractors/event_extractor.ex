@@ -313,41 +313,50 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   end
 
   defp extract_date_from_text(html) do
-    # Look for common date patterns in text (English and French)
-    # English: "February 25, 27, 28, 2026" or "Friday, October 31, 2025" or "October 15, 2025 to January 19, 2026"
-    # French: "15 décembre 2025" or "vendredi 31 octobre 2025" or "Du 1er janvier au 15 février 2026"
+    # Clean HTML and look for date patterns
+    # NOTE: This function only EXTRACTS date text from HTML.
+    # Actual date PARSING happens in the Transformer using MultilingualDateParser.
+    text = clean_html(html)
 
     # Month names (English|French)
-    months = "(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)"
+    months =
+      "(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)"
 
     # Day names (English|French)
-    days = "(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)"
+    days =
+      "(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)"
 
     # Date range connectors (English: "to" | French: "au")
     connector = "(?:to|au)"
 
+    # Broad patterns to extract date text
     patterns = [
-      # Range with "Du...au": "Du 1er janvier au 15 février 2026" (check first - most specific)
+      # Range with "Du...au": "Du 1er janvier au 15 février 2026"
       ~r/(?:Du|From)\s+\d+(?:er|st|nd|rd|th)?\s+#{months}\s+#{connector}\s+\d+(?:er|st|nd|rd|th)?\s+#{months}\s+\d{4}/i,
       # Range: "October 15, 2025 to January 19, 2026" or "15 octobre 2025 au 19 janvier 2026"
       ~r/(#{months}\s+\d+,?\s*\d{4}\s+#{connector}\s+#{months}\s+\d+,?\s*\d{4})/i,
+      # Range with shared year: "15 octobre au 20 novembre 2025"
+      ~r/(#{months}\s+\d+\s+#{connector}\s+#{months}\s+\d+,?\s*\d{4})/i,
+      ~r/(\d+\s+#{months}\s+#{connector}\s+\d+\s+#{months}\s+\d{4})/i,
       # Multi-date: "February 25, 27, 28, 2026"
-      ~r/(#{months}\s+\d+(?:,\s*\d+)*,\s*\d{4})/i,
+      ~r/(#{months}\s+\d+(?:,\s*\d+)+,\s*\d{4})/i,
       # Single with day: "Friday, October 31, 2025" or "vendredi 31 octobre 2025"
       ~r/(#{days},?\s*\d+\s+#{months}\s+\d{4})/i,
+      ~r/(#{days},?\s*#{months}\s+\d+,?\s*\d{4})/i,
       # French date with article: "Le 19 avril 2025"
       ~r/(?:Le|The)\s+(\d+(?:er|st|nd|rd|th)?\s+#{months}\s+\d{4})/i,
-      # Simple French date: "15 décembre 2025" or "December 15, 2025"
+      # Simple French date: "15 décembre 2025"
       ~r/(\d+(?:er|e)?\s+#{months}\s+\d{4})/i,
+      # Simple English date: "December 15, 2025"
       ~r/(#{months}\s+\d+(?:er|st|nd|rd|th)?,?\s+\d{4})/i
     ]
 
-    text = clean_html(html)
-
+    # Find and return date text (no parsing here - that happens in Transformer)
     patterns
     |> Enum.find_value(fn pattern ->
       case Regex.run(pattern, text) do
         [_, date] -> String.trim(date)
+        [date] -> String.trim(date)
         _ -> nil
       end
     end)
