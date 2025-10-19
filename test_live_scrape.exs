@@ -42,7 +42,7 @@ case ListingsFetcher.fetch_events() do
         ├─ Title: #{event.title}
         ├─ Occurrence Type: #{occurrence_type || "nil"}
         ├─ Original Date String: #{event.metadata["original_date_string"] || "N/A"}
-        ├─ Starts At: #{DateTime.to_iso8601(event.starts_at)}
+        ├─ Starts At: #{if event.starts_at, do: DateTime.to_iso8601(event.starts_at), else: "nil"}
         ├─ Ends At: #{if event.ends_at, do: DateTime.to_iso8601(event.ends_at), else: "nil"}
         └─ Fallback Used: #{event.metadata["occurrence_fallback"] || "false"}
         """)

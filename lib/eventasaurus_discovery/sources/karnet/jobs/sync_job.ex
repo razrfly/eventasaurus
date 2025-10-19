@@ -105,9 +105,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     end
 
     # Get city (should be Kraków)
-    case Repo.get(City, city_id) do
+    city = if city_id do
+      Repo.get(City, city_id)
+    else
+      # If no city_id provided, look up Kraków by name
+      import Ecto.Query
+      Repo.one(from c in City, where: c.name in ["Kraków", "Krakow", "Cracow"], limit: 1)
+    end
+
+    case city do
       nil ->
-        Logger.error("City not found: #{inspect(city_id)}")
+        Logger.error("City not found: #{inspect(city_id)} (tried lookup by name: Kraków)")
         {:error, :city_not_found}
 
       city ->

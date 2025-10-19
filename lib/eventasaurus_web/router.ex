@@ -676,4 +676,11 @@ defmodule EventasaurusWeb.Router do
 
     post "/sentry-test", SentryTestController, :test_production_error
   end
+
+  # Admin API routes for discovery/stats
+  scope "/api/admin", EventasaurusWeb.Admin, as: :admin_api do
+    pipe_through [:secure_api, :api_authenticated]
+
+    get "/stats/source/:source_slug", SourceStatsController, :show
+  end
 end

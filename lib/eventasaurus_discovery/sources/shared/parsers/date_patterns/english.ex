@@ -114,12 +114,12 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.English do
   # Parse regex matches based on the pattern that matched
   defp parse_matches(matches, pattern, _original_text) do
     cond do
-      # Date range with full dates: [full, month1, day1, year1, month2, day2, year2]
-      length(matches) == 7 and Regex.match?(~r/to.*to/i, Regex.source(pattern)) ->
+      # Date range with full dates (may span years): [full, month1, day1, year1, month2, day2, year2]
+      length(matches) == 7 ->
         [_, start_month, start_day, start_year, end_month, end_day, end_year] = matches
 
         with {start_day_int, _} <- Integer.parse(start_day),
-             {_start_year_int, _} <- Integer.parse(start_year),
+             {start_year_int, _} <- Integer.parse(start_year),
              {end_day_int, _} <- Integer.parse(end_day),
              {end_year_int, _} <- Integer.parse(end_year),
              {:ok, start_month_num} <- validate_month(start_month),
@@ -129,9 +129,10 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.English do
              type: :range,
              start_day: start_day_int,
              start_month: start_month_num,
+             start_year: start_year_int,
              end_day: end_day_int,
              end_month: end_month_num,
-             year: end_year_int
+             end_year: end_year_int
            }}
         else
           _ -> {:error, :invalid_date_components}

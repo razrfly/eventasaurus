@@ -130,11 +130,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
   end
 
   defp fetch_and_extract_event(primary_url, secondary_url, event_metadata) do
-    # Bilingual mode: fetch both language versions
+    # Bilingual mode: fetch both language versions with retry logic for secondary URL
     Logger.debug("🌐 Bilingual mode: fetching #{primary_url} + #{secondary_url}")
 
     with {:ok, primary_html} <- fetch_page(primary_url),
-         {:ok, secondary_html} <- fetch_page(secondary_url),
+         {:ok, secondary_html} <- fetch_secondary_with_retry(secondary_url),
          {:ok, primary_data} <- extract_single_language(primary_html, primary_url, event_metadata),
          {:ok, secondary_data} <- extract_single_language(secondary_html, secondary_url, event_metadata),
          {:ok, merged_event} <- merge_translations(primary_data, secondary_data, primary_url, secondary_url) do
@@ -142,9 +142,24 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
       {:ok, merged_event}
     else
       {:error, reason} ->
-        Logger.warning("⚠️ Bilingual fetch failed, attempting fallback to primary URL only: #{inspect(reason)}")
-        # Fallback: fetch primary language only
-        fetch_and_extract_event(primary_url, nil, event_metadata)
+        Logger.warning("⚠️ Bilingual fetch failed after retries (#{inspect(reason)}), attempting fallback to primary URL only: #{primary_url}")
+        Logger.warning("   Secondary URL that failed: #{secondary_url}")
+
+        # Fallback: fetch primary language only, but track the failure
+        case fetch_and_extract_event(primary_url, nil, event_metadata) do
+          {:ok, raw_event} ->
+            # Add metadata to track that bilingual fetch failed
+            tracked_event = Map.merge(raw_event, %{
+              "bilingual_fetch_attempted" => true,
+              "bilingual_fetch_failed" => true,
+              "bilingual_fetch_failure_reason" => inspect(reason),
+              "attempted_secondary_url" => secondary_url
+            })
+            {:ok, tracked_event}
+
+          {:error, _} = error ->
+            error
+        end
     end
   end
 
@@ -158,6 +173,37 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
       {:error, reason} = error ->
         Logger.warning("⚠️ Failed to fetch #{url}: #{inspect(reason)}")
+        error
+    end
+  end
+
+  defp fetch_secondary_with_retry(secondary_url, attempt \\ 1, max_attempts \\ 3) do
+    case fetch_page(secondary_url) do
+      {:ok, html} ->
+        if attempt > 1 do
+          Logger.info("🎉 Secondary URL fetch succeeded on attempt #{attempt}/#{max_attempts}")
+        end
+        {:ok, html}
+
+      {:error, :bot_protection} when attempt < max_attempts ->
+        # Exponential backoff for bot protection (2^attempt seconds)
+        delay = round(:math.pow(2, attempt) * 1000)
+        Logger.info("🔄 Bot protection detected, retrying secondary URL after #{delay}ms (attempt #{attempt + 1}/#{max_attempts})")
+        Process.sleep(delay)
+        fetch_secondary_with_retry(secondary_url, attempt + 1, max_attempts)
+
+      {:error, :timeout} when attempt < max_attempts ->
+        # Linear backoff for timeouts (attempt * 2 seconds)
+        delay = attempt * 2000
+        Logger.info("🔄 Timeout detected, retrying secondary URL after #{delay}ms (attempt #{attempt + 1}/#{max_attempts})")
+        Process.sleep(delay)
+        fetch_secondary_with_retry(secondary_url, attempt + 1, max_attempts)
+
+      {:error, _reason} = error ->
+        # Other errors don't retry (404, network errors, etc.)
+        if attempt > 1 do
+          Logger.warning("❌ Secondary URL fetch failed after #{attempt} attempts")
+        end
         error
     end
   end
@@ -218,11 +264,13 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
       secondary_lang => secondary_data["description"] || ""
     }
 
-    # Use primary data as base, add translation map
+    # Use primary data as base, add translation map and success tracking
     merged =
       primary_data
       |> Map.put("description_translations", description_translations)
       |> Map.put("source_language", primary_lang)
+      |> Map.put("bilingual_fetch_attempted", true)
+      |> Map.put("bilingual_fetch_succeeded", true)
 
     Logger.debug("✅ Merged translations: #{map_size(description_translations)} languages")
     {:ok, merged}

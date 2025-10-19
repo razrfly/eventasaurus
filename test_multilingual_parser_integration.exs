@@ -30,7 +30,7 @@ case Transformer.transform_event(french_single_date) do
     IO.puts("   Title: #{event.title}")
     IO.puts("   Starts at: #{event.starts_at}")
     IO.puts("   External ID: #{event.external_id}")
-    IO.puts("   Original date string: #{inspect(event.metadata.original_date_string)}")
+    IO.puts("   Original date string: #{inspect(event.metadata["original_date_string"])}")
 
   {:error, reason} ->
     IO.puts("❌ FAILED: #{inspect(reason)}")
@@ -139,9 +139,9 @@ case Transformer.transform_event(unknown_occurrence) do
   {:ok, [event]} ->
     IO.puts("✅ SUCCESS: Unknown occurrence fallback triggered")
     IO.puts("   Title: #{event.title}")
-    IO.puts("   Occurrence type: #{event.metadata.occurrence_type}")
-    IO.puts("   Occurrence fallback: #{event.metadata.occurrence_fallback}")
-    IO.puts("   Original date string: #{inspect(event.metadata.original_date_string)}")
+    IO.puts("   Occurrence type: #{event.metadata["occurrence_type"]}")
+    IO.puts("   Occurrence fallback: #{event.metadata["occurrence_fallback"]}")
+    IO.puts("   Original date string: #{inspect(event.metadata["original_date_string"])}")
 
   {:error, reason} ->
     IO.puts("❌ FAILED: #{inspect(reason)}")

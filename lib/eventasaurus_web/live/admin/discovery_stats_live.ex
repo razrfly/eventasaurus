@@ -158,11 +158,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
   defp count_events_for_source(source_name) do
     # Count events from this source using the public_event_sources join table
+    # Note: source_name is actually the source SLUG (e.g., "bandsintown", not "Bandsintown")
     query =
       from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
         join: s in EventasaurusDiscovery.Sources.Source,
         on: s.id == pes.source_id,
-        where: s.name == ^source_name,
+        where: s.slug == ^source_name,
         select: count(pes.id)
       )
 
@@ -243,10 +244,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
       |> Repo.one() || 0
 
     # Calculate percentage change
+    # Note: When there's no baseline (last_week = 0), return nil instead of 100%
+    # This will be displayed as "New" in the UI
     if last_week > 0 do
       ((this_week - last_week) / last_week * 100) |> round()
     else
-      if this_week > 0, do: 100, else: 0
+      # No baseline data - return nil to indicate "New" city
+      nil
     end
   end
 
@@ -504,14 +508,17 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     end
   end
 
+  defp format_change(nil), do: "New"
   defp format_change(change) when change > 0, do: "+#{change}%"
   defp format_change(change) when change < 0, do: "#{change}%"
-  defp format_change(_), do: "0%"
+  defp format_change(0), do: "0%"
 
+  defp change_color(nil), do: "text-blue-600"
   defp change_color(change) when change > 0, do: "text-green-600"
   defp change_color(change) when change < 0, do: "text-red-600"
   defp change_color(_), do: "text-gray-600"
 
+  defp status_emoji_for_change(nil), do: "🆕"
   defp status_emoji_for_change(change) when change > 5, do: "🟢"
   defp status_emoji_for_change(change) when change < -5, do: "🔴"
   defp status_emoji_for_change(_), do: "🟡"
