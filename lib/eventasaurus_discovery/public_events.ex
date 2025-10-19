@@ -719,4 +719,175 @@ defmodule EventasaurusDiscovery.PublicEvents do
     |> Enum.take(display_count)
     |> Repo.preload([:venue, :categories, :performers, sources: :source])
   end
+
+  @doc """
+  Get occurrence type distribution statistics.
+
+  Returns a map with counts for each occurrence type stored in event_sources.metadata JSONB.
+
+  ## Examples
+
+      iex> get_occurrence_type_stats()
+      %{
+        "one_time" => 150,
+        "exhibition" => 25,
+        "unknown" => 12,
+        total: 187
+      }
+  """
+  def get_occurrence_type_stats do
+    alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+
+    # Query occurrence_type from JSONB metadata field
+    results =
+      from(es in PublicEventSource,
+        select: {fragment("? ->> 'occurrence_type'", es.metadata), count(es.id)},
+        group_by: fragment("? ->> 'occurrence_type'", es.metadata)
+      )
+      |> Repo.all()
+
+    # Convert to map with string keys
+    stats_map = Enum.into(results, %{})
+
+    # Add total count
+    total = Enum.reduce(stats_map, 0, fn {_type, count}, acc -> acc + count end)
+
+    Map.put(stats_map, :total, total)
+  end
+
+  @doc """
+  Get freshness statistics for unknown occurrence type events.
+
+  Returns counts of fresh vs stale unknown events based on last_seen_at timestamp.
+
+  ## Options
+    * `:freshness_days` - Number of days to consider "fresh" (default: 7)
+
+  ## Examples
+
+      iex> get_unknown_event_freshness_stats()
+      %{
+        total_unknown: 15,
+        fresh: 12,
+        stale: 3,
+        freshness_threshold: ~U[2025-10-12 10:00:00Z]
+      }
+  """
+  def get_unknown_event_freshness_stats(opts \\ []) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+
+    freshness_days = Keyword.get(opts, :freshness_days, 7)
+    current_time = DateTime.utc_now()
+    freshness_threshold = DateTime.add(current_time, -freshness_days, :day)
+
+    # Count total unknown events
+    total_unknown =
+      from(es in PublicEventSource,
+        where: fragment("? ->> 'occurrence_type'", es.metadata) == "unknown",
+        select: count(es.id)
+      )
+      |> Repo.one()
+
+    # Count fresh unknown events (seen within threshold)
+    fresh =
+      from(es in PublicEventSource,
+        where:
+          fragment("? ->> 'occurrence_type'", es.metadata) == "unknown" and
+            es.last_seen_at >= ^freshness_threshold,
+        select: count(es.id)
+      )
+      |> Repo.one()
+
+    # Calculate stale count
+    stale = total_unknown - fresh
+
+    %{
+      total_unknown: total_unknown,
+      fresh: fresh,
+      stale: stale,
+      freshness_threshold: freshness_threshold,
+      freshness_days: freshness_days
+    }
+  end
+
+  @doc """
+  Get detailed list of unknown occurrence events with freshness status.
+
+  Returns list of events with unknown occurrence_type, including freshness indicators.
+
+  ## Options
+    * `:freshness_days` - Number of days to consider "fresh" (default: 7)
+    * `:only_stale` - If true, only return stale events (default: false)
+    * `:limit` - Maximum events to return (default: 100)
+
+  ## Examples
+
+      iex> list_unknown_occurrence_events(only_stale: true)
+      [
+        %{
+          event_id: 123,
+          title: "Biennale Multitude",
+          external_id: "sortiraparis_329086",
+          last_seen_at: ~U[2025-10-10 08:00:00Z],
+          is_fresh: false,
+          days_since_seen: 9
+        }
+      ]
+  """
+  def list_unknown_occurrence_events(opts \\ []) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+
+    freshness_days = Keyword.get(opts, :freshness_days, 7)
+    only_stale = Keyword.get(opts, :only_stale, false)
+    limit = Keyword.get(opts, :limit, 100)
+
+    current_time = DateTime.utc_now()
+    freshness_threshold = DateTime.add(current_time, -freshness_days, :day)
+
+    query =
+      from(es in PublicEventSource,
+        join: pe in PublicEvent,
+        on: es.event_id == pe.id,
+        where: fragment("? ->> 'occurrence_type'", es.metadata) == "unknown",
+        select: %{
+          event_id: es.event_id,
+          external_id: es.external_id,
+          title: pe.title,
+          starts_at: pe.starts_at,
+          last_seen_at: es.last_seen_at,
+          original_date_string: fragment("? ->> 'original_date_string'", es.metadata)
+        },
+        order_by: [desc: es.last_seen_at],
+        limit: ^limit
+      )
+
+    # Filter by freshness if only_stale requested
+    query =
+      if only_stale do
+        from(q in query,
+          where: q.last_seen_at < ^freshness_threshold
+        )
+      else
+        query
+      end
+
+    results = Repo.all(query)
+
+    # Add freshness indicators
+    Enum.map(results, fn event ->
+      days_since_seen =
+        if event.last_seen_at do
+          DateTime.diff(current_time, event.last_seen_at, :day)
+        else
+          nil
+        end
+
+      is_fresh = days_since_seen && days_since_seen <= freshness_days
+
+      Map.merge(event, %{
+        is_fresh: is_fresh,
+        days_since_seen: days_since_seen
+      })
+    end)
+  end
 end

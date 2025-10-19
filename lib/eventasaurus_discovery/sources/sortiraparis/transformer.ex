@@ -51,12 +51,18 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
   require Logger
   alias EventasaurusDiscovery.Sources.Sortiraparis.Config
-  alias EventasaurusDiscovery.Sources.Sortiraparis.Helpers.DateParser
+  alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
 
   @doc """
   Transform raw event data into unified format.
 
   Returns a list of events (multiple for multi-date events).
+
+  Supports **unknown occurrence fallback** for unparseable dates:
+  - When date parsing fails, creates event with occurrence_type = "unknown"
+  - Uses first_seen timestamp as starts_at
+  - Stores occurrence_type in metadata JSONB field
+  - Prevents ~15-20% data loss from unparseable dates
 
   ## Parameters
 
@@ -66,38 +72,55 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   ## Returns
 
   - `{:ok, [event, ...]}` - List of transformed events
-  - `{:error, reason}` - Transformation failed
+  - `{:error, reason}` - Transformation failed (only for critical errors)
   """
   def transform_event(raw_event, options \\ %{}) do
     Logger.debug("🔄 Transforming raw event data")
 
     with {:ok, article_id} <- extract_article_id(raw_event),
          {:ok, title} <- extract_title(raw_event),
-         {:ok, dates} <- extract_and_parse_dates(raw_event, options),
          {:ok, venue_data} <- extract_venue(raw_event) do
 
-      event_type = Map.get(raw_event, "event_type", :one_time)
+      # Try to parse dates - if it fails, use unknown occurrence fallback
+      case extract_and_parse_dates(raw_event, options) do
+        {:ok, dates} ->
+          # SUCCESS: Create events with parsed dates
+          event_type = Map.get(raw_event, "event_type", :one_time)
 
-      # Handle different event types
-      events = case event_type do
-        :exhibition ->
-          # For exhibitions, create ONE event with start/end dates
-          [create_exhibition_event(article_id, title, dates, venue_data, raw_event, options)]
+          events = case event_type do
+            :exhibition ->
+              [create_exhibition_event(article_id, title, dates, venue_data, raw_event, options)]
 
-        :recurring ->
-          # For recurring, create ONE event (EventProcessor will handle recurrence)
-          # Use first date as anchor date
-          [create_recurring_event(article_id, title, List.first(dates), venue_data, raw_event, options)]
+            :recurring ->
+              [create_recurring_event(article_id, title, List.first(dates), venue_data, raw_event, options)]
 
-        :one_time ->
-          # For one-time events, create separate event for each date
-          Enum.map(dates, fn date ->
-            create_event(article_id, title, date, venue_data, raw_event, options)
-          end)
+            :one_time ->
+              Enum.map(dates, fn date ->
+                create_event(article_id, title, date, venue_data, raw_event, options)
+              end)
+          end
+
+          Logger.info("✅ Transformed into #{length(events)} #{event_type} event instance(s): #{title}")
+          {:ok, events}
+
+        {:error, :unsupported_date_format} ->
+          # FALLBACK: Create unknown occurrence event
+          Logger.info("""
+          📅 Date parsing failed for Sortiraparis event - using unknown occurrence fallback
+          Title: #{title}
+          Date string: #{inspect(Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"))}
+          Creating event with occurrence_type = "unknown" (stored in metadata JSONB)
+          """)
+
+          event = create_unknown_occurrence_event(article_id, title, venue_data, raw_event, options)
+          Logger.info("✅ Created unknown occurrence event: #{title}")
+          {:ok, [event]}
+
+        {:error, other_reason} ->
+          # Other errors (missing dates entirely, etc.) still fail
+          Logger.warning("⚠️ Failed to transform event: #{inspect(other_reason)}")
+          {:error, other_reason}
       end
-
-      Logger.info("✅ Transformed into #{length(events)} #{event_type} event instance(s): #{title}")
-      {:ok, events}
     else
       {:error, reason} = error ->
         Logger.warning("⚠️ Failed to transform event: #{inspect(reason)}")
@@ -197,7 +220,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       |> Enum.flat_map(fn
         %DateTime{} = dt -> [dt]
         bin when is_binary(bin) ->
-          case DateParser.parse_dates(bin, options) do
+          case parse_with_multilingual_parser(bin, options) do
             {:ok, [dt | _]} -> [dt]
             _ -> []
           end
@@ -209,12 +232,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
   defp extract_and_parse_dates(%{"date_string" => date_string}, options)
        when is_binary(date_string) do
-    # Parse date string using DateParser
-    case DateParser.parse_dates(date_string, options) do
-      {:ok, [_ | _] = dates} -> {:ok, dates}
-      {:ok, []} -> {:error, :no_dates_extracted}
-      {:error, _} = error -> error
-    end
+    # Parse date string using MultilingualDateParser
+    parse_with_multilingual_parser(date_string, options)
   end
 
   defp extract_and_parse_dates(%{"date" => date}, options) when is_binary(date) do
@@ -277,15 +296,75 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Performers (if available)
       performers: Map.get(raw_event, "performers", []),
 
-      # Metadata
+      # Metadata (include occurrence_type for consistency)
       metadata: %{
         article_id: article_id,
+        occurrence_type: "one_time",  # Store in metadata JSONB
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: "en"
       },
 
       # Raw event data for CategoryExtractor (includes URL for category extraction)
+      raw_event_data: raw_event
+    }
+  end
+
+  defp create_unknown_occurrence_event(article_id, title, venue_data, raw_event, _options) do
+    # Use "first seen" timestamp as starts_at (required field)
+    first_seen = DateTime.utc_now()
+
+    # Generate external_id WITHOUT date suffix (unknown occurrence, single instance)
+    external_id = Config.generate_external_id(article_id)
+
+    %{
+      # Required fields
+      external_id: external_id,
+      article_id: article_id,
+      title: title,
+      starts_at: first_seen,  # Use first_seen as starts_at
+      event_type: :one_time,  # Keep as one_time for compatibility
+
+      # Venue data (REQUIRED - VenueProcessor handles geocoding)
+      venue_data: %{
+        name: venue_data["name"],
+        address: Map.get(venue_data, "address"),
+        city: venue_data["city"],
+        country: Map.get(venue_data, "country", "France"),
+        latitude: Map.get(venue_data, "latitude"),
+        longitude: Map.get(venue_data, "longitude"),
+        external_id: Map.get(venue_data, "external_id"),
+        metadata: Map.get(venue_data, "metadata", %{})
+      },
+
+      # Optional but recommended
+      ends_at: nil,  # Unknown
+      description_translations: get_description_translations(raw_event),
+      source_url: Config.build_url(raw_event["url"]),
+      image_url: Map.get(raw_event, "image_url"),
+
+      # Pricing
+      is_ticketed: Map.get(raw_event, "is_ticketed", false),
+      is_free: Map.get(raw_event, "is_free", false),
+      min_price: Map.get(raw_event, "min_price"),
+      max_price: Map.get(raw_event, "max_price"),
+      currency: Map.get(raw_event, "currency", "EUR"),
+
+      # Performers (if available)
+      performers: Map.get(raw_event, "performers", []),
+
+      # Metadata - CRITICAL: Store occurrence_type = "unknown" in JSONB
+      metadata: %{
+        article_id: article_id,
+        occurrence_type: "unknown",  # JSONB storage for occurrence type
+        occurrence_fallback: true,    # Flag indicating fallback was used
+        first_seen_at: DateTime.to_iso8601(first_seen),
+        original_date_string: Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"),
+        category_url: Map.get(raw_event, "category"),
+        language: get_source_language(raw_event)
+      },
+
+      # Raw event data for CategoryExtractor
       raw_event_data: raw_event
     }
   end
@@ -340,9 +419,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       performers: Map.get(raw_event, "performers", []),
 
-      # Metadata
+      # Metadata (include occurrence_type for consistency)
       metadata: %{
         article_id: article_id,
+        occurrence_type: "exhibition",  # Store in metadata JSONB
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: get_source_language(raw_event),
@@ -396,9 +476,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       performers: Map.get(raw_event, "performers", []),
 
-      # Metadata - include recurrence pattern
+      # Metadata - include recurrence pattern and occurrence_type
       metadata: %{
         article_id: article_id,
+        occurrence_type: "recurring",  # Store in metadata JSONB
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: get_source_language(raw_event),
@@ -460,5 +541,34 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   defp get_source_language(raw_event) do
     # Get source language from metadata (set by EventDetailJob during bilingual fetching)
     Map.get(raw_event, "source_language", "en")
+  end
+
+  # Wrapper to adapt MultilingualDateParser API to Transformer's expected format
+  defp parse_with_multilingual_parser(date_string, options) do
+    # Get timezone from options (defaults to Europe/Paris for Sortiraparis)
+    timezone = Map.get(options, :timezone, "Europe/Paris")
+
+    # Call MultilingualDateParser with French and English fallback
+    # Try French first since Sortiraparis is primarily French content
+    case MultilingualDateParser.extract_and_parse(date_string,
+           languages: [:french, :english],
+           timezone: timezone) do
+      {:ok, %{starts_at: starts_at, ends_at: nil}} ->
+        # Single date - return list with one DateTime
+        {:ok, [starts_at]}
+
+      {:ok, %{starts_at: starts_at, ends_at: ends_at}} when not is_nil(ends_at) ->
+        # Date range - return list with start and end DateTimes
+        {:ok, [starts_at, ends_at]}
+
+      {:error, :unsupported_date_format} = error ->
+        # Pass through unsupported_date_format for unknown occurrence fallback
+        error
+
+      {:error, reason} ->
+        # Other errors
+        Logger.debug("MultilingualDateParser error: #{inspect(reason)}")
+        {:error, :unsupported_date_format}
+    end
   end
 end

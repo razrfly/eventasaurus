@@ -340,6 +340,69 @@ Eventasaurus includes a sophisticated multi-provider geocoding system that autom
 - Cost management and monitoring
 - Adding new providers
 
+### Event Occurrence Types
+
+Events are classified by occurrence type, stored in the `event_sources.metadata` JSONB field:
+
+#### 1. one_time (default)
+Single event with specific date and time.
+- **Example**: "October 26, 2025 at 8pm"
+- **Storage**: `metadata->>'occurrence_type' = 'one_time'`
+- **starts_at**: Specific datetime
+- **Display**: Show exact date and time
+
+#### 2. recurring
+Repeating event with pattern-based schedule.
+- **Example**: "Every Tuesday at 7pm"
+- **Storage**: `metadata->>'occurrence_type' = 'recurring'`
+- **starts_at**: First occurrence
+- **Display**: Show pattern and next occurrence
+- **Status**: Future enhancement
+
+#### 3. exhibition
+Continuous event over date range.
+- **Example**: "October 15, 2025 to January 19, 2026"
+- **Storage**: `metadata->>'occurrence_type' = 'exhibition'`
+- **starts_at**: Range start date
+- **Display**: Show date range
+
+#### 4. unknown (fallback)
+Event with unparseable date - graceful degradation strategy.
+- **Example**: "from July 4 to 6" (parsing failed)
+- **Storage**: `metadata->>'occurrence_type' = 'unknown'`
+- **starts_at**: First seen timestamp (when event was discovered)
+- **Display**: Show `original_date_string` with "Ongoing" badge
+- **Freshness**: Auto-hide if `last_seen_at` older than 7 days
+
+**Trusted Sources Using Unknown Fallback:**
+- **Sortiraparis**: Curated events with editorial oversight
+  - If an event appears on the site, we trust it's current/active
+  - Prefer showing event with raw date text over losing it entirely
+- **Future**: ResidentAdvisor, Songkick (after trust evaluation)
+
+**JSONB Storage Example**:
+```json
+{
+  "occurrence_type": "unknown",
+  "occurrence_fallback": true,
+  "first_seen_at": "2025-10-18T15:30:00Z"
+}
+```
+
+**Querying Events by Occurrence Type**:
+```sql
+-- Find unknown occurrence events
+SELECT * FROM public_events e
+JOIN public_event_sources es ON e.id = es.event_id
+WHERE es.metadata->>'occurrence_type' = 'unknown';
+
+-- Find fresh unknown events (seen in last 7 days)
+SELECT * FROM public_events e
+JOIN public_event_sources es ON e.id = es.event_id
+WHERE es.metadata->>'occurrence_type' = 'unknown'
+  AND es.last_seen_at > NOW() - INTERVAL '7 days';
+```
+
 ---
 
 ## Project Structure

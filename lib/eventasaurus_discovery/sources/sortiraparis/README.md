@@ -161,11 +161,10 @@ lib/eventasaurus_discovery/sources/sortiraparis/
 ├── config.ex                    # Runtime configuration & helpers
 ├── client.ex                    # HTTP client with rate limiting & bot protection
 ├── transformer.ex               # Event data transformation (skeleton)
-├── extractors/                  # HTML extraction modules (Phase 4)
+├── extractors/                  # HTML extraction modules
 │   ├── event_extractor.ex      # Extract event details from HTML
-│   ├── venue_extractor.ex      # Extract venue information
-│   └── date_parser.ex          # Parse 5+ date format variations
-├── helpers/                     # Helper modules (Phase 4)
+│   └── venue_extractor.ex      # Extract venue information
+├── helpers/                     # Helper modules
 │   └── category_mapper.ex      # Map URL categories to unified format
 └── jobs/                        # Oban job modules
     ├── sync_job.ex             # Sitemap discovery orchestrator (Phase 2 skeleton)
@@ -205,21 +204,26 @@ lib/eventasaurus_discovery/sources/sortiraparis/
 
 **Integration**: EventFreshnessChecker prevents re-processing events updated within 7 days
 
-### ⏳ Phase 4: Event Extraction (Planned)
+### ✅ Phase 4: Event Extraction (Completed)
 
-**Planned modules**:
-- `extractors/date_parser.ex` - Handle 5+ date format variations
-- `extractors/event_extractor.ex` - Extract event data from HTML
-- `extractors/venue_extractor.ex` - Extract venue information
-- `transformer.ex` - Complete transformation logic
-- `jobs/event_detail_job.ex` - Fetch and transform event details
+**Implemented modules**:
+- ✅ `extractors/event_extractor.ex` - Extract event data from HTML
+- ✅ `extractors/venue_extractor.ex` - Extract venue information
+- ✅ `transformer.ex` - Complete transformation logic with MultilingualDateParser integration
+- ✅ `jobs/event_detail_job.ex` - Fetch and transform event details
 
-**Date Formats to Handle**:
-1. Multi-date list: "February 25, 27, 28, 2026"
-2. Date range: "October 15, 2025 to January 19, 2026"
-3. Single date with day: "Friday, October 31, 2025"
-4. Date with time: "Saturday October 11 at 12 noon"
-5. Ticket sale dates: "on Saturday October 11 at 12 noon"
+**Date Parsing**:
+Uses shared `MultilingualDateParser` (see `lib/eventasaurus_discovery/sources/shared/parsers/multilingual_date_parser.ex`) with language plugins:
+- ✅ French plugin - Handles French date formats (primary)
+- ✅ English plugin - Handles English date formats (fallback)
+- ✅ Multi-language fallback - Tries French first, then English
+- ✅ Unknown occurrence fallback - Creates events with `occurrence_type = "unknown"` for unparseable dates
+
+**Supported Date Formats**:
+1. **French**: "17 octobre 2025", "du 19 mars au 7 juillet 2025", "Le 1er janvier 2026"
+2. **English**: "October 15, 2025", "October 15, 2025 to January 19, 2026"
+3. **Multi-date**: Handled by date range extraction
+4. **Unknown**: Fallback to unknown occurrence type with original date string stored
 
 ### ⏳ Phase 5: Integration & Testing (Planned)
 
@@ -363,16 +367,22 @@ mix test test/eventasaurus_discovery/sources/
 
 **Future Solution**: Playwright fallback (Phase 3+)
 
-### Date Parsing Complexity
+### Multilingual Date Parsing
 
-**Issue**: 5+ date format variations in French and English
+**Solution**: Shared `MultilingualDateParser` with language-specific plugins
 
-**Status**: Deferred to Phase 4 (extractors/date_parser.ex)
+**Architecture**:
+- **Reusable**: Any scraper can use the same date parser
+- **Language Plugins**: French and English plugins with extensible architecture
+- **Fallback Chain**: French → English → Unknown occurrence fallback
+- **Timezone Support**: Converts dates to UTC from specified timezone (default: Europe/Paris)
 
-**Examples**:
-- "February 25, 27, 28, 2026"
-- "Du 15 octobre 2025 au 19 janvier 2026"
-- "Vendredi 31 octobre 2025"
+**Examples Handled**:
+- French: "17 octobre 2025", "du 19 mars au 7 juillet 2025", "Le 1er janvier 2026"
+- English: "October 15, 2025", "October 15, 2025 to January 19, 2026"
+- Unknown: "TBA", "à définir", "sometime in spring 2025" (creates event with `occurrence_type = "unknown"`)
+
+**Documentation**: See Phase 1-4 completion documents in project root
 
 ### Event vs Article Classification
 
