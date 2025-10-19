@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Pubquiz
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   alias EventasaurusDiscovery.Sources.Pubquiz.{
     Client,
@@ -24,7 +25,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   }
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     venue_url = args["venue_url"]
     venue_name = args["venue_name"]
     source_id = args["source_id"]
@@ -48,22 +49,41 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
 
     Logger.info("🎭 Processing PubQuiz venue: #{venue_name} (#{city_name})")
 
-    with {:ok, html} <- Client.fetch_venue_page(venue_url),
-         details <- DetailExtractor.extract_venue_details(html),
-         source <- Repo.get!(Source, source_id) do
-      # Combine data from job args and extracted details
-      venue_data = Map.merge(args, details)
+    result =
+      with {:ok, html} <- Client.fetch_venue_page(venue_url),
+           details <- DetailExtractor.extract_venue_details(html),
+           source <- Repo.get!(Source, source_id) do
+        # Combine data from job args and extracted details
+        venue_data = Map.merge(args, details)
 
-      # Process through pipeline
-      process_through_pipeline(venue_data, source, city_name, external_id)
-    else
-      {:error, :not_found} ->
-        Logger.warning("Venue page not found: #{venue_url}")
-        {:ok, :not_found}
+        # Process through pipeline
+        process_through_pipeline(venue_data, source, city_name, external_id)
+      else
+        {:error, :not_found} ->
+          Logger.warning("Venue page not found: #{venue_url}")
+          {:ok, :not_found}
 
-      {:error, reason} = error ->
-        Logger.error("Failed to process venue #{venue_name}: #{inspect(reason)}")
-        error
+        {:error, reason} = error ->
+          Logger.error("Failed to process venue #{venue_name}: #{inspect(reason)}")
+          error
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:discard, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        result
     end
   end
 

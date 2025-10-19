@@ -45,33 +45,52 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     venue_id = args["venue_id"]
     venue_url = args["venue_url"]
     venue_title = args["venue_title"]
     venue_data = string_keys_to_atoms(args["venue_data"])
     source_id = args["source_id"]
 
+    # Use venue_url as external_id for metrics tracking
+    external_id = venue_url
+
     Logger.info("🔍 Processing Geeks Who Drink venue: #{venue_title} (ID: #{venue_id})")
 
-    with {:ok, additional_details} <- fetch_additional_details(venue_url),
-         {:ok, {day_of_week, time}} <- parse_time_from_sources(venue_data.time_text, additional_details),
-         {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time),
-         {:ok, performer} <- process_performer(additional_details[:performer], source_id),
-         enriched_venue_data <-
-           enrich_venue_data(venue_data, additional_details, next_occurrence),
-         {:ok, transformed} <- transform_and_validate(enriched_venue_data),
-         {:ok, events} <- process_event(transformed, source_id),
-         :ok <- link_performer_to_events(performer, events) do
-      Logger.info("✅ Successfully processed venue: #{venue_title}")
-      log_results(events, performer)
-      {:ok, %{events: length(events), performer: performer != nil}}
-    else
-      {:error, reason} = error ->
-        Logger.error("❌ Failed to process venue #{venue_url}: #{inspect(reason)}")
-        error
+    result =
+      with {:ok, additional_details} <- fetch_additional_details(venue_url),
+           {:ok, {day_of_week, time}} <- parse_time_from_sources(venue_data.time_text, additional_details),
+           {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time),
+           {:ok, performer} <- process_performer(additional_details[:performer], source_id),
+           enriched_venue_data <-
+             enrich_venue_data(venue_data, additional_details, next_occurrence),
+           {:ok, transformed} <- transform_and_validate(enriched_venue_data),
+           {:ok, events} <- process_event(transformed, source_id),
+           :ok <- link_performer_to_events(performer, events) do
+        Logger.info("✅ Successfully processed venue: #{venue_title}")
+        log_results(events, performer)
+        {:ok, %{events: length(events), performer: performer != nil}}
+      else
+        {:error, reason} = error ->
+          Logger.error("❌ Failed to process venue #{venue_url}: #{inspect(reason)}")
+          error
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        result
     end
   end
 

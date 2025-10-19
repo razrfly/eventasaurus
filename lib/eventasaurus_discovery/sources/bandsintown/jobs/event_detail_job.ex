@@ -31,9 +31,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Sources.Bandsintown.{Client, DetailExtractor, Transformer}
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     event_data = args["event_data"]
     source_id = args["source_id"]
     city_id = args["city_id"]
@@ -53,49 +54,61 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob do
     """)
 
     # Get source and city
-    with {:ok, source} <- get_source(source_id),
-         {:ok, city} <- get_city(city_id),
-         # Fetch event detail page to get GPS coordinates from JSON-LD
-         enriched_event_data <- enrich_with_detail_page(event_data),
-         # Transform the event data with city context for proper venue association
-         {:ok, transformed_event} <- transform_event(enriched_event_data, city),
-         # Check for duplicates from higher-priority sources (pass source struct)
-         {:ok, dedup_result} <- check_deduplication(transformed_event, source),
-         # Process through unified Processor for venue validation
-         {:ok, result} <- process_event_if_unique(transformed_event, source, dedup_result) do
-      case result do
-        event when is_struct(event) ->
-          # Successfully processed and created/updated event
-          {:ok, event}
+    result =
+      with {:ok, source} <- get_source(source_id),
+           {:ok, city} <- get_city(city_id),
+           # Fetch event detail page to get GPS coordinates from JSON-LD
+           enriched_event_data <- enrich_with_detail_page(event_data),
+           # Transform the event data with city context for proper venue association
+           {:ok, transformed_event} <- transform_event(enriched_event_data, city),
+           # Check for duplicates from higher-priority sources (pass source struct)
+           {:ok, dedup_result} <- check_deduplication(transformed_event, source),
+           # Process through unified Processor for venue validation
+           {:ok, result} <- process_event_if_unique(transformed_event, source, dedup_result) do
+        case result do
+          event when is_struct(event) ->
+            # Successfully processed and created/updated event
+            {:ok, event}
 
-        :skipped_duplicate ->
-          # Event was skipped due to deduplication
-          {:ok, :skipped_duplicate}
+          :skipped_duplicate ->
+            # Event was skipped due to deduplication
+            {:ok, :skipped_duplicate}
 
-        :filtered ->
-          # Event was filtered out during processing
-          {:ok, :filtered}
+          :filtered ->
+            # Event was filtered out during processing
+            {:ok, :filtered}
 
-        :discarded ->
-          # Event was discarded (e.g., missing GPS coordinates)
-          {:ok, :discarded}
+          :discarded ->
+            # Event was discarded (e.g., missing GPS coordinates)
+            {:ok, :discarded}
 
-        other ->
-          Logger.warning("⚠️ Unexpected processing result: #{inspect(other)}")
-          {:ok, other}
+          other ->
+            Logger.warning("⚠️ Unexpected processing result: #{inspect(other)}")
+            {:ok, other}
+        end
+      else
+        {:error, :source_not_found} ->
+          Logger.error("❌ Source not found: #{source_id}")
+          {:error, :source_not_found}
+
+        {:error, :city_not_found} ->
+          Logger.error("❌ City not found: #{city_id}")
+          {:error, :city_not_found}
+
+        {:error, reason} ->
+          Logger.error("❌ Failed to process event: #{inspect(reason)}")
+          {:error, reason}
       end
-    else
-      {:error, :source_not_found} ->
-        Logger.error("❌ Source not found: #{source_id}")
-        {:error, :source_not_found}
 
-      {:error, :city_not_found} ->
-        Logger.error("❌ City not found: #{city_id}")
-        {:error, :city_not_found}
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
 
       {:error, reason} ->
-        Logger.error("❌ Failed to process event: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 

@@ -15,9 +15,15 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
   Returns one of: `:healthy`, `:warning`, `:error`, `:no_data`
 
+  Supports both old job-level stats (run_count/success_count) and new metadata-based stats
+  (events_processed/events_succeeded). Metadata-based stats are preferred when available.
+
   ## Examples
 
       iex> calculate_health_score(%{run_count: 100, success_count: 95})
+      :healthy
+
+      iex> calculate_health_score(%{events_processed: 100, events_succeeded: 95})
       :healthy
 
       iex> calculate_health_score(%{run_count: 100, success_count: 75})
@@ -28,7 +34,25 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
       iex> calculate_health_score(%{run_count: 0, success_count: 0})
       :no_data
+
+      iex> calculate_health_score(%{events_processed: 0})
+      :no_data
   """
+  # Metadata-based stats (preferred)
+  def calculate_health_score(%{events_processed: 0}), do: :no_data
+
+  def calculate_health_score(%{events_processed: processed, events_succeeded: succeeded})
+      when is_integer(processed) and is_integer(succeeded) and processed > 0 do
+    success_rate = succeeded / processed
+
+    cond do
+      success_rate >= 0.90 -> :healthy
+      success_rate >= 0.70 -> :warning
+      true -> :error
+    end
+  end
+
+  # Legacy job-level stats (backward compatibility)
   def calculate_health_score(%{run_count: 0}), do: :no_data
 
   def calculate_health_score(%{run_count: run_count, success_count: success_count})
@@ -49,11 +73,21 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
   Returns an integer percentage (0-100).
 
+  Supports both old job-level stats (run_count/success_count) and new metadata-based stats
+  (events_processed/events_succeeded). Metadata-based stats are preferred when available.
+
   ## Examples
 
       iex> stats = %{
       ...>   "bandsintown" => %{run_count: 100, success_count: 98},
       ...>   "ticketmaster" => %{run_count: 50, success_count: 45}
+      ...> }
+      iex> overall_health_score(stats)
+      87
+
+      iex> stats = %{
+      ...>   "bandsintown" => %{events_processed: 100, events_succeeded: 98},
+      ...>   "ticketmaster" => %{events_processed: 50, events_succeeded: 45}
       ...> }
       iex> overall_health_score(stats)
       87
@@ -66,9 +100,20 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
     else
       {total_success, total_runs} =
         Enum.reduce(source_stats_list, {0, 0}, fn stats, {success_acc, run_acc} ->
-          run_count = Map.get(stats, :run_count, 0)
-          success_count = Map.get(stats, :success_count, 0)
-          {success_acc + success_count, run_acc + run_count}
+          # Prefer metadata-based stats
+          {processed, succeeded} =
+            cond do
+              Map.has_key?(stats, :events_processed) ->
+                {Map.get(stats, :events_processed, 0), Map.get(stats, :events_succeeded, 0)}
+
+              Map.has_key?(stats, :run_count) ->
+                {Map.get(stats, :run_count, 0), Map.get(stats, :success_count, 0)}
+
+              true ->
+                {0, 0}
+            end
+
+          {success_acc + succeeded, run_acc + processed}
         end)
 
       if total_runs > 0 do
@@ -87,14 +132,33 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
   Returns an integer percentage (0-100).
 
+  Supports both old job-level stats (run_count/success_count) and new metadata-based stats
+  (events_processed/events_succeeded). Metadata-based stats are preferred when available.
+
   ## Examples
 
       iex> success_rate_percentage(%{run_count: 100, success_count: 95})
       95
 
+      iex> success_rate_percentage(%{events_processed: 100, events_succeeded: 95})
+      95
+
       iex> success_rate_percentage(%{run_count: 0, success_count: 0})
       0
+
+      iex> success_rate_percentage(%{events_processed: 0})
+      0
   """
+  # Metadata-based stats (preferred)
+  def success_rate_percentage(%{events_processed: 0}), do: 0
+
+  def success_rate_percentage(%{events_processed: processed, events_succeeded: succeeded})
+      when is_integer(processed) and is_integer(succeeded) and processed > 0 do
+    (succeeded / processed * 100)
+    |> round()
+  end
+
+  # Legacy job-level stats (backward compatibility)
   def success_rate_percentage(%{run_count: 0}), do: 0
 
   def success_rate_percentage(%{run_count: run_count, success_count: success_count})

@@ -29,8 +29,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     Transformer
   }
 
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
+
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     showtime = args["showtime"]
     source_id = args["source_id"]
 
@@ -38,20 +40,40 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     # We do NOT generate it here to avoid drift (BandsInTown A+ pattern)
     external_id = showtime["external_id"]
 
-    if is_nil(external_id) do
-      Logger.error("""
-      🚨 CRITICAL: Missing external_id in showtime job args.
-      This indicates a bug in DayPageJob or job serialization.
-      Showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}
-      """)
+    result =
+      if is_nil(external_id) do
+        Logger.error("""
+        🚨 CRITICAL: Missing external_id in showtime job args.
+        This indicates a bug in DayPageJob or job serialization.
+        Showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}
+        """)
 
-      {:error, :missing_external_id}
-    else
-      # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
-      # This ensures last_seen_at is updated even if processing fails
-      EventProcessor.mark_event_as_seen(external_id, source_id)
+        {:error, :missing_external_id}
+      else
+        # CRITICAL: Mark event as seen BEFORE processing (BandsInTown pattern)
+        # This ensures last_seen_at is updated even if processing fails
+        EventProcessor.mark_event_as_seen(external_id, source_id)
 
-      process_showtime(showtime, source_id)
+        process_showtime(showtime, source_id)
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:discard, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        # Pass through any other return types unchanged
+        result
     end
   end
 

@@ -37,30 +37,49 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     source_id = args["source_id"]
     event_id = args["event_id"]
     event_data = args["event_data"]
 
+    # Use event_id as external_id for metrics tracking
+    external_id = event_id
+
     Logger.info("🔍 Processing Speed Quizzing event: #{event_id}")
 
-    with {:ok, html} <- Client.fetch_event_details(event_id),
-         {:ok, document} <- parse_html(html),
-         venue_data <- VenueExtractor.extract(document, event_id),
-         venue_data <- merge_event_data(venue_data, event_data),
-         {:ok, performer} <- process_performer(venue_data.performer, source_id),
-         {:ok, transformed} <- transform_and_validate(venue_data, source_id),
-         {:ok, events} <- process_event(transformed, source_id),
-         :ok <- link_performer_to_events(performer, events) do
-      Logger.info("✅ Successfully processed event: #{event_id}")
-      log_results(events, performer)
-      {:ok, %{events: length(events), performer: performer != nil}}
-    else
-      {:error, reason} = error ->
-        Logger.error("❌ Failed to process event #{event_id}: #{inspect(reason)}")
-        error
+    result =
+      with {:ok, html} <- Client.fetch_event_details(event_id),
+           {:ok, document} <- parse_html(html),
+           venue_data <- VenueExtractor.extract(document, event_id),
+           venue_data <- merge_event_data(venue_data, event_data),
+           {:ok, performer} <- process_performer(venue_data.performer, source_id),
+           {:ok, transformed} <- transform_and_validate(venue_data, source_id),
+           {:ok, events} <- process_event(transformed, source_id),
+           :ok <- link_performer_to_events(performer, events) do
+        Logger.info("✅ Successfully processed event: #{event_id}")
+        log_results(events, performer)
+        {:ok, %{events: length(events), performer: performer != nil}}
+      else
+        {:error, reason} = error ->
+          Logger.error("❌ Failed to process event #{event_id}: #{inspect(reason)}")
+          error
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        result
     end
   end
 

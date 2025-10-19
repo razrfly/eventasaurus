@@ -66,15 +66,19 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   import Ecto.Query
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     url = args["url"]
     secondary_url = args["secondary_url"]
     event_metadata = args["event_metadata"] || %{}
     is_bilingual = event_metadata["bilingual"] || false
+
+    # Extract external_id for metrics tracking (use external_id_base or article_id)
+    external_id = event_metadata["external_id_base"] || event_metadata["article_id"] || url
 
     if is_bilingual do
       Logger.info("🌐 Fetching bilingual Sortiraparis event: #{url} + #{secondary_url}")
@@ -82,38 +86,53 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
       Logger.info("🔍 Fetching Sortiraparis event details: #{url}")
     end
 
-    with {:ok, raw_event} <- fetch_and_extract_event(url, secondary_url, event_metadata),
-         {:ok, transformed_events} <- transform_events(raw_event),
-         {:ok, processed_count} <- process_events(transformed_events) do
-      Logger.info("""
-      ✅ Sortiraparis event detail job completed
-      Primary URL: #{url}
-      Secondary URL: #{secondary_url || "none"}
-      Bilingual: #{is_bilingual}
-      Events created: #{processed_count}
-      """)
+    result =
+      with {:ok, raw_event} <- fetch_and_extract_event(url, secondary_url, event_metadata),
+           {:ok, transformed_events} <- transform_events(raw_event),
+           {:ok, processed_count} <- process_events(transformed_events) do
+        Logger.info("""
+        ✅ Sortiraparis event detail job completed
+        Primary URL: #{url}
+        Secondary URL: #{secondary_url || "none"}
+        Bilingual: #{is_bilingual}
+        Events created: #{processed_count}
+        """)
 
-      {:ok,
-       %{
-         url: url,
-         secondary_url: secondary_url,
-         bilingual: is_bilingual,
-         events_created: processed_count,
-         article_id: event_metadata["article_id"]
-       }}
-    else
-      {:error, :bot_protection} = error ->
-        Logger.warning("🚫 Bot protection 401 on event page: #{url}")
-        # TODO Phase 4: Implement Playwright fallback
-        error
+        {:ok,
+         %{
+           url: url,
+           secondary_url: secondary_url,
+           bilingual: is_bilingual,
+           events_created: processed_count,
+           article_id: event_metadata["article_id"]
+         }}
+      else
+        {:error, :bot_protection} = error ->
+          Logger.warning("🚫 Bot protection 401 on event page: #{url}")
+          # TODO Phase 4: Implement Playwright fallback
+          error
 
-      {:error, :not_found} = error ->
-        Logger.warning("❌ Event page not found: #{url}")
-        error
+        {:error, :not_found} = error ->
+          Logger.warning("❌ Event page not found: #{url}")
+          error
 
-      {:error, reason} = error ->
-        Logger.error("❌ Failed to process event #{url}: #{inspect(reason)}")
-        error
+        {:error, reason} = error ->
+          Logger.error("❌ Failed to process event #{url}: #{inspect(reason)}")
+          error
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        result
     end
   end
 

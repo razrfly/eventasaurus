@@ -32,28 +32,47 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
 
   alias EventasaurusDiscovery.Sources.Processor
   alias EventasaurusDiscovery.Helpers.AddressGeocoder
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     venue_url = args["venue_url"]
     venue_title = args["venue_title"]
     source_id = args["source_id"]
 
+    # Use venue_url as external_id for metrics tracking
+    external_id = venue_url
+
     Logger.info("🔍 Processing Question One venue: #{venue_title}")
 
-    with {:ok, body} <- Client.fetch_venue_page(venue_url),
-         {:ok, document} <- parse_document(body),
-         {:ok, venue_data} <- VenueExtractor.extract_venue_data(document, venue_url, venue_title),
-         {:ok, enriched_venue_data} <- enrich_with_geocoding(venue_data),
-         {:ok, transformed} <- transform_and_validate(enriched_venue_data),
-         {:ok, results} <- process_event(transformed, source_id) do
-      Logger.info("✅ Successfully processed venue: #{venue_title}")
-      log_results(results)
-      {:ok, results}
-    else
-      {:error, reason} = error ->
-        Logger.error("❌ Failed to process venue #{venue_url}: #{inspect(reason)}")
-        error
+    result =
+      with {:ok, body} <- Client.fetch_venue_page(venue_url),
+           {:ok, document} <- parse_document(body),
+           {:ok, venue_data} <- VenueExtractor.extract_venue_data(document, venue_url, venue_title),
+           {:ok, enriched_venue_data} <- enrich_with_geocoding(venue_data),
+           {:ok, transformed} <- transform_and_validate(enriched_venue_data),
+           {:ok, results} <- process_event(transformed, source_id) do
+        Logger.info("✅ Successfully processed venue: #{venue_title}")
+        log_results(results)
+        {:ok, results}
+      else
+        {:error, reason} = error ->
+          Logger.error("❌ Failed to process venue #{venue_url}: #{inspect(reason)}")
+          error
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        result
     end
   end
 

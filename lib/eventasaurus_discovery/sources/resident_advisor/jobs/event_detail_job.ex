@@ -22,9 +22,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Sources.ResidentAdvisor
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     event_data = args["event_data"] || %{}
     source_id = args["source_id"]
     external_id = Map.get(event_data, "external_id") || Map.get(event_data, :external_id)
@@ -44,7 +45,23 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
         # CRITICAL: Mark event as seen BEFORE processing
         # This ensures last_seen_at is updated even if processing fails
         EventProcessor.mark_event_as_seen(external_id, source_id)
-        process_event(event_data, source_id, external_id)
+
+        # Process event and track metrics
+        result = process_event(event_data, source_id, external_id)
+
+        case result do
+          {:ok, _} ->
+            MetricsTracker.record_success(job, external_id)
+            result
+
+          {:discard, reason} ->
+            MetricsTracker.record_failure(job, reason, external_id)
+            result
+
+          {:error, reason} ->
+            MetricsTracker.record_failure(job, reason, external_id)
+            result
+        end
     end
   end
 
