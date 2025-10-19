@@ -305,19 +305,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
     end
   end
 
-  defp parse_sitemap(xml_body) do
-    # Simple XML parsing for <loc> tags
-    # Returns list of URLs from sitemap
-    case Regex.scan(~r{<loc>(.*?)</loc>}, xml_body, capture: :all_but_first) do
-      [] ->
-        {:error, :no_urls_found}
-
-      matches ->
-        urls = Enum.map(matches, fn [url] -> url end)
-        {:ok, urls}
-    end
-  end
-
   defp parse_sitemap_index(xml_body) do
     # Parse sitemap index to extract sitemap URLs
     case Regex.scan(~r{<loc>(.*?)</loc>}, xml_body, capture: :all_but_first) do

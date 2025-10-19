@@ -151,7 +151,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
       {:error, :parse_error}
   end
 
-  defp parse_sitemap_with_metadata(xml_content, language \\ nil) do
+  defp parse_sitemap_with_metadata(xml_content, language) do
     # Extract full <url> blocks with all metadata
     case Regex.scan(~r{<url>(.*?)</url>}s, xml_content, capture: :all_but_first) do
       [] ->
@@ -197,7 +197,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
       {:error, :parse_error}
   end
 
-  defp parse_url_entry(url_block, language \\ nil) do
+  defp parse_url_entry(url_block, language) do
     alias EventasaurusDiscovery.Sources.Sortiraparis.Config
 
     with {:ok, url} <- extract_tag_content(url_block, "loc"),
