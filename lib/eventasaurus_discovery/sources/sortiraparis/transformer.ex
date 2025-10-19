@@ -263,12 +263,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
       # Optional but recommended
       ends_at: Map.get(raw_event, "ends_at"),
-      description_translations:
-        case Map.get(raw_event, "description") do
-          nil -> nil
-          "" -> nil
-          desc -> %{"en" => desc}
-        end,
+      description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
@@ -298,8 +293,14 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   defp create_exhibition_event(article_id, title, dates, venue_data, raw_event, _options) do
     # For exhibitions, use start date for starts_at, end date for ends_at
     # Sort dates to ensure correct chronological order (defensive programming)
-    sorted_dates = Enum.sort(dates, DateTime)
-    [start_date | rest] = sorted_dates
+    sorted_dates = Enum.sort(dates, &(DateTime.compare(&1, &2) != :gt))
+
+    # Guard against empty dates list
+    [start_date | rest] = case sorted_dates do
+      [] -> raise ArgumentError, "Exhibition requires at least one date"
+      dates -> dates
+    end
+
     end_date = List.last(rest) || start_date
 
     # Generate external_id WITHOUT date suffix (exhibitions don't have multiple instances)
@@ -326,12 +327,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         metadata: Map.get(venue_data, "metadata", %{})
       },
 
-      description_translations:
-        case Map.get(raw_event, "description") do
-          nil -> nil
-          "" -> nil
-          desc -> %{"en" => desc}
-        end,
+      description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
@@ -349,7 +345,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         article_id: article_id,
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
-        language: "en",
+        language: get_source_language(raw_event),
         exhibition_range: %{
           start_date: format_date_for_id(start_date),
           end_date: format_date_for_id(end_date)
@@ -387,12 +383,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         metadata: Map.get(venue_data, "metadata", %{})
       },
 
-      description_translations:
-        case Map.get(raw_event, "description") do
-          nil -> nil
-          "" -> nil
-          desc -> %{"en" => desc}
-        end,
+      description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
@@ -410,7 +401,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         article_id: article_id,
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
-        language: "en",
+        language: get_source_language(raw_event),
         recurrence_pattern: recurrence_pattern
       },
 
@@ -444,5 +435,30 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   defp format_date_for_id(date_string) when is_binary(date_string) do
     # Assume YYYY-MM-DD format
     date_string
+  end
+
+  defp get_description_translations(raw_event) do
+    # Check if bilingual translations were merged (from EventDetailJob)
+    case Map.get(raw_event, "description_translations") do
+      nil ->
+        # No translations map, check for single language description
+        case Map.get(raw_event, "description") do
+          nil -> nil
+          "" -> nil
+          desc ->
+            # Single language description - use source_language if available
+            lang = Map.get(raw_event, "source_language", "en")
+            %{lang => desc}
+        end
+
+      translations when is_map(translations) ->
+        # Bilingual translations already merged
+        translations
+    end
+  end
+
+  defp get_source_language(raw_event) do
+    # Get source language from metadata (set by EventDetailJob during bilingual fetching)
+    Map.get(raw_event, "source_language", "en")
   end
 end

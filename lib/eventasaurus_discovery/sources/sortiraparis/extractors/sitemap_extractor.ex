@@ -76,20 +76,28 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
 
   Returns a list of maps with URL and metadata fields.
 
+  ## Options
+
+  - `language` - Language code ("en" or "fr") to tag all URLs with
+
   ## Examples
 
       iex> xml = "<urlset><url><loc>https://example.com/1</loc><lastmod>2025-01-15</lastmod></url></urlset>"
-      iex> extract_urls_with_metadata(xml)
-      {:ok, [%{url: "https://example.com/1", last_modified: ~D[2025-01-15], ...}]}
+      iex> extract_urls_with_metadata(xml, language: "en")
+      {:ok, [%{url: "https://example.com/1", language: "en", last_modified: ~D[2025-01-15], ...}]}
   """
-  def extract_urls_with_metadata(xml_content) when is_binary(xml_content) do
-    case parse_sitemap_with_metadata(xml_content) do
+  def extract_urls_with_metadata(xml_content, opts \\ [])
+
+  def extract_urls_with_metadata(xml_content, opts) when is_binary(xml_content) do
+    language = Keyword.get(opts, :language)
+
+    case parse_sitemap_with_metadata(xml_content, language) do
       {:ok, url_entries} -> {:ok, url_entries}
       {:error, _reason} = error -> error
     end
   end
 
-  def extract_urls_with_metadata(_), do: {:error, :invalid_xml_content}
+  def extract_urls_with_metadata(_xml_content, _opts), do: {:error, :invalid_xml_content}
 
   @doc """
   Extract sitemap index URLs from sitemap index XML.
@@ -143,7 +151,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
       {:error, :parse_error}
   end
 
-  defp parse_sitemap_with_metadata(xml_content) do
+  defp parse_sitemap_with_metadata(xml_content, language \\ nil) do
     # Extract full <url> blocks with all metadata
     case Regex.scan(~r{<url>(.*?)</url>}s, xml_content, capture: :all_but_first) do
       [] ->
@@ -153,10 +161,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
       matches ->
         url_entries =
           matches
-          |> Enum.map(fn [url_block] -> parse_url_entry(url_block) end)
+          |> Enum.map(fn [url_block] -> parse_url_entry(url_block, language) end)
           |> Enum.reject(&is_nil/1)
 
-        Logger.debug("Extracted #{length(url_entries)} URL entries with metadata")
+        Logger.debug("Extracted #{length(url_entries)} URL entries with metadata (language: #{language || "auto"})")
         {:ok, url_entries}
     end
   rescue
@@ -189,11 +197,18 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
       {:error, :parse_error}
   end
 
-  defp parse_url_entry(url_block) do
+  defp parse_url_entry(url_block, language \\ nil) do
+    alias EventasaurusDiscovery.Sources.Sortiraparis.Config
+
     with {:ok, url} <- extract_tag_content(url_block, "loc"),
          true <- valid_url?(url) do
+      # Use provided language or auto-detect from URL
+      detected_language = language || Config.detect_language(url)
+
       %{
         url: url,
+        language: detected_language,
+        article_id: Config.extract_article_id(url),
         last_modified: extract_tag_content(url_block, "lastmod") |> parse_date(),
         change_frequency: extract_tag_content(url_block, "changefreq") |> extract_value(),
         priority: extract_tag_content(url_block, "priority") |> parse_priority()

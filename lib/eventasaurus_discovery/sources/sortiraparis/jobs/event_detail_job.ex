@@ -72,23 +72,32 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     url = args["url"]
+    secondary_url = args["secondary_url"]
     event_metadata = args["event_metadata"] || %{}
+    is_bilingual = event_metadata["bilingual"] || false
 
-    Logger.info("🔍 Fetching Sortiraparis event details: #{url}")
+    if is_bilingual do
+      Logger.info("🌐 Fetching bilingual Sortiraparis event: #{url} + #{secondary_url}")
+    else
+      Logger.info("🔍 Fetching Sortiraparis event details: #{url}")
+    end
 
-    with {:ok, html} <- fetch_event_page(url),
-         {:ok, raw_event} <- extract_event_data(html, url, event_metadata),
+    with {:ok, raw_event} <- fetch_and_extract_event(url, secondary_url, event_metadata),
          {:ok, transformed_events} <- transform_events(raw_event),
          {:ok, processed_count} <- process_events(transformed_events) do
       Logger.info("""
       ✅ Sortiraparis event detail job completed
-      URL: #{url}
+      Primary URL: #{url}
+      Secondary URL: #{secondary_url || "none"}
+      Bilingual: #{is_bilingual}
       Events created: #{processed_count}
       """)
 
       {:ok,
        %{
          url: url,
+         secondary_url: secondary_url,
+         bilingual: is_bilingual,
          events_created: processed_count,
          article_id: event_metadata["article_id"]
        }}
@@ -110,39 +119,120 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
   # Private functions
 
-  defp fetch_event_page(url) do
-    Logger.debug("📄 Fetching event page: #{url}")
+  defp fetch_and_extract_event(primary_url, nil = _secondary_url, event_metadata) do
+    # Single language mode (backwards compatible)
+    Logger.debug("📄 Single language mode: fetching #{primary_url}")
+
+    with {:ok, html} <- fetch_page(primary_url),
+         {:ok, raw_event} <- extract_single_language(html, primary_url, event_metadata) do
+      {:ok, raw_event}
+    end
+  end
+
+  defp fetch_and_extract_event(primary_url, secondary_url, event_metadata) do
+    # Bilingual mode: fetch both language versions
+    Logger.debug("🌐 Bilingual mode: fetching #{primary_url} + #{secondary_url}")
+
+    with {:ok, primary_html} <- fetch_page(primary_url),
+         {:ok, secondary_html} <- fetch_page(secondary_url),
+         {:ok, primary_data} <- extract_single_language(primary_html, primary_url, event_metadata),
+         {:ok, secondary_data} <- extract_single_language(secondary_html, secondary_url, event_metadata),
+         {:ok, merged_event} <- merge_translations(primary_data, secondary_data, primary_url, secondary_url) do
+      Logger.info("✅ Successfully merged bilingual event data")
+      {:ok, merged_event}
+    else
+      {:error, reason} ->
+        Logger.warning("⚠️ Bilingual fetch failed, attempting fallback to primary URL only: #{inspect(reason)}")
+        # Fallback: fetch primary language only
+        fetch_and_extract_event(primary_url, nil, event_metadata)
+    end
+  end
+
+  defp fetch_page(url) do
+    Logger.debug("📄 Fetching page: #{url}")
 
     case Client.fetch_page(url) do
       {:ok, html} ->
-        Logger.debug("✅ Successfully fetched #{byte_size(html)} bytes")
+        Logger.debug("✅ Fetched #{byte_size(html)} bytes from #{url}")
         {:ok, html}
 
       {:error, reason} = error ->
-        Logger.warning("⚠️ Failed to fetch event page: #{inspect(reason)}")
+        Logger.warning("⚠️ Failed to fetch #{url}: #{inspect(reason)}")
         error
     end
   end
 
-  defp extract_event_data(html, url, event_metadata) do
-    Logger.debug("📄 Extracting event data from HTML page")
+  defp extract_single_language(html, url, event_metadata) do
+    Logger.debug("📄 Extracting event data from #{url}")
 
-    with {:ok, event_data} <- EventExtractor.extract(html, url),
-         {:ok, venue_data} <- VenueExtractor.extract(html) do
-      # Merge event and venue data
-      raw_event =
-        Map.merge(event_data, %{
-          "url" => url,
-          "venue" => venue_data,
-          "article_id" => event_metadata["article_id"]
-        })
+    case EventExtractor.extract(html, url) do
+      {:ok, event_data} ->
+        # Try to extract venue data, but don't fail if it's missing
+        # Some events (outdoor exhibitions, walking tours) don't have specific venues
+        venue_data = case VenueExtractor.extract(html) do
+          {:ok, venue} ->
+            Logger.debug("✅ Venue extracted: #{venue["name"]}")
+            venue
 
-      Logger.debug("✅ Successfully extracted raw event data")
-      {:ok, raw_event}
-    else
+          {:error, :venue_name_not_found} ->
+            Logger.debug("ℹ️ No venue data (outdoor/district event)")
+            nil
+
+          {:error, :address_not_found} ->
+            Logger.debug("ℹ️ No venue address found")
+            nil
+
+          {:error, reason} ->
+            Logger.warning("⚠️ Venue extraction failed: #{inspect(reason)}")
+            nil
+        end
+
+        raw_event =
+          Map.merge(event_data, %{
+            "url" => url,
+            "venue" => venue_data,
+            "article_id" => event_metadata["article_id"]
+          })
+
+        Logger.debug("✅ Extracted event data from #{url}")
+        {:ok, raw_event}
+
       {:error, reason} = error ->
-        Logger.warning("⚠️ Failed to extract event data: #{inspect(reason)}")
+        Logger.warning("⚠️ Failed to extract event data from #{url}: #{inspect(reason)}")
         error
+    end
+  end
+
+  defp merge_translations(primary_data, secondary_data, primary_url, secondary_url) do
+    Logger.debug("🔄 Merging translations from #{primary_url} + #{secondary_url}")
+
+    # Detect languages from URLs
+    primary_lang = detect_language(primary_url)
+    secondary_lang = detect_language(secondary_url)
+
+    Logger.debug("🌐 Detected languages: primary=#{primary_lang}, secondary=#{secondary_lang}")
+
+    # Merge description translations
+    description_translations = %{
+      primary_lang => primary_data["description"] || "",
+      secondary_lang => secondary_data["description"] || ""
+    }
+
+    # Use primary data as base, add translation map
+    merged =
+      primary_data
+      |> Map.put("description_translations", description_translations)
+      |> Map.put("source_language", primary_lang)
+
+    Logger.debug("✅ Merged translations: #{map_size(description_translations)} languages")
+    {:ok, merged}
+  end
+
+  defp detect_language(url) when is_binary(url) do
+    if String.contains?(url, "/en/") do
+      "en"
+    else
+      "fr"
     end
   end
 
