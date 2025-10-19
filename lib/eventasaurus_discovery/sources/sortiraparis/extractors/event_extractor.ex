@@ -313,18 +313,33 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   end
 
   defp extract_date_from_text(html) do
-    # Look for common date patterns in text
-    # "February 25, 27, 28, 2026"
-    # "October 15, 2025 to January 19, 2026"
-    # "Friday, October 31, 2025"
+    # Look for common date patterns in text (English and French)
+    # English: "February 25, 27, 28, 2026" or "Friday, October 31, 2025" or "October 15, 2025 to January 19, 2026"
+    # French: "15 décembre 2025" or "vendredi 31 octobre 2025" or "Du 1er janvier au 15 février 2026"
+
+    # Month names (English|French)
+    months = "(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)"
+
+    # Day names (English|French)
+    days = "(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)"
+
+    # Date range connectors (English: "to" | French: "au")
+    connector = "(?:to|au)"
 
     patterns = [
-      # Range: "October 15, 2025 to January 19, 2026" (check first - most specific)
-      ~r/((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,\s*\d{4}\s+to\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,\s*\d{4})/i,
+      # Range with "Du...au": "Du 1er janvier au 15 février 2026" (check first - most specific)
+      ~r/(?:Du|From)\s+\d+(?:er|st|nd|rd|th)?\s+#{months}\s+#{connector}\s+\d+(?:er|st|nd|rd|th)?\s+#{months}\s+\d{4}/i,
+      # Range: "October 15, 2025 to January 19, 2026" or "15 octobre 2025 au 19 janvier 2026"
+      ~r/(#{months}\s+\d+,?\s*\d{4}\s+#{connector}\s+#{months}\s+\d+,?\s*\d{4})/i,
       # Multi-date: "February 25, 27, 28, 2026"
-      ~r/((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:,\s*\d+)*,\s*\d{4})/i,
-      # Single with day: "Friday, October 31, 2025"
-      ~r/((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,\s*\d{4})/i
+      ~r/(#{months}\s+\d+(?:,\s*\d+)*,\s*\d{4})/i,
+      # Single with day: "Friday, October 31, 2025" or "vendredi 31 octobre 2025"
+      ~r/(#{days},?\s*\d+\s+#{months}\s+\d{4})/i,
+      # French date with article: "Le 19 avril 2025"
+      ~r/(?:Le|The)\s+(\d+(?:er|st|nd|rd|th)?\s+#{months}\s+\d{4})/i,
+      # Simple French date: "15 décembre 2025" or "December 15, 2025"
+      ~r/(\d+(?:er|e)?\s+#{months}\s+\d{4})/i,
+      ~r/(#{months}\s+\d+(?:er|st|nd|rd|th)?,?\s+\d{4})/i
     ]
 
     text = clean_html(html)

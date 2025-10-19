@@ -1015,7 +1015,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   # Modified to accept event_type parameter to handle exhibitions and recurring events
-  defp find_recurring_parent(title, venue, external_id, source_id, movie_id, article_id, event_type \\ nil) do
+  defp find_recurring_parent(title, venue, external_id, source_id, movie_id, article_id, event_type) do
     if venue do
       cond do
         # Skip consolidation for exhibitions and recurring events - they're already properly structured
