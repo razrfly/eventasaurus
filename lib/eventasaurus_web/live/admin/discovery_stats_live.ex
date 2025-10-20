@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
-  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, DataQualityChecker}
 
@@ -34,6 +34,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
       socket
       |> assign(:page_title, "Discovery Source Statistics")
       |> assign(:loading, true)
+      |> assign(:expanded_metro_areas, MapSet.new())
       |> load_stats()
       |> assign(:loading, false)
 
@@ -51,6 +52,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
       end)
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
+    city_id_int = String.to_integer(city_id)
+    expanded = socket.assigns.expanded_metro_areas
+
+    new_expanded =
+      if MapSet.member?(expanded, city_id_int) do
+        MapSet.delete(expanded, city_id_int)
+      else
+        MapSet.put(expanded, city_id_int)
+      end
+
+    {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
   end
 
   defp load_stats(socket) do
@@ -194,19 +210,25 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
           city_id: c.id,
           city_name: c.name,
           city_slug: c.slug,
-          event_count: count(e.id)
+          count: count(e.id)
         },
-        order_by: [desc: count(e.id)],
-        limit: 10
+        order_by: [desc: count(e.id)]
       )
 
     cities = Repo.all(query)
 
-    # Calculate week-over-week change for each city
-    Enum.map(cities, fn city ->
+    # Apply geographic clustering to group metro areas
+    clustered_cities = CityHierarchy.aggregate_stats_by_cluster(cities, 20.0)
+
+    # Take top 10 after clustering and calculate week-over-week change
+    clustered_cities
+    |> Enum.take(10)
+    |> Enum.map(fn city ->
       change = calculate_city_change(city.city_id)
 
-      Map.put(city, :weekly_change, change)
+      city
+      |> Map.put(:event_count, city.count)
+      |> Map.put(:weekly_change, change)
     end)
   end
 
@@ -410,7 +432,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         <div class="bg-white rounded-lg shadow">
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">Cities Performance</h2>
-            <p class="mt-1 text-sm text-gray-500">Top 10 cities by event count</p>
+            <p class="mt-1 text-sm text-gray-500">Top 10 cities by event count (metro areas aggregated)</p>
           </div>
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -424,11 +446,28 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 <%= for city <- @city_stats do %>
+                  <!-- Primary City Row -->
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
+                      <%= if length(city.subcities) > 0 do %>
+                        <button
+                          phx-click="toggle_metro_area"
+                          phx-value-city-id={city.city_id}
+                          class="text-gray-500 hover:text-gray-700 mr-2"
+                        >
+                          <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
+                            ▼
+                          <% else %>
+                            ▶
+                          <% end %>
+                        </button>
+                      <% end %>
                       <.link navigate={~p"/admin/discovery/stats/city/#{city.city_slug}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                         <%= city.city_name %>
                       </.link>
+                      <%= if length(city.subcities) > 0 do %>
+                        <span class="ml-2 text-xs text-gray-500">(<%= length(city.subcities) %> areas)</span>
+                      <% end %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= format_number(city.event_count) %>
@@ -442,6 +481,30 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                       <%= status_emoji_for_change(city.weekly_change) %>
                     </td>
                   </tr>
+
+                  <!-- Subcity Rows (Expandable) -->
+                  <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
+                    <%= for subcity <- city.subcities do %>
+                      <tr class="hover:bg-gray-50 bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap pl-12">
+                          <.link navigate={~p"/admin/discovery/stats/city/#{subcity.city_slug}"} class="text-sm text-gray-700 hover:text-indigo-900">
+                            ↳ <%= subcity.city_name %>
+                          </.link>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <%= format_number(subcity.count) %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <div class="text-sm text-gray-500">
+                            —
+                          </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <span class="text-gray-400">—</span>
+                        </td>
+                      </tr>
+                    <% end %>
+                  <% end %>
                 <% end %>
               </tbody>
             </table>

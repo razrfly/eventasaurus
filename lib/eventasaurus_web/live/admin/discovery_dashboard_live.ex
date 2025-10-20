@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
-  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
 
   alias EventasaurusDiscovery.Admin.{
     DataManager,
@@ -53,6 +53,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:import_radius, 50)
       |> assign(:city_specific_sources, @city_specific_sources)
       |> assign(:expanded_source_jobs, MapSet.new())
+      |> assign(:expanded_metro_areas, MapSet.new())
       |> load_data()
       |> schedule_refresh()
 
@@ -463,6 +464,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     {:noreply, assign(socket, :expanded_source_jobs, new_expanded)}
   end
 
+  @impl true
+  def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
+    city_id_int = String.to_integer(city_id)
+    expanded = socket.assigns.expanded_metro_areas
+
+    new_expanded =
+      if MapSet.member?(expanded, city_id_int) do
+        MapSet.delete(expanded, city_id_int)
+      else
+        MapSet.put(expanded, city_id_int)
+      end
+
+    {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+  end
+
   defp load_data(socket) do
     # Get overall statistics
     stats = %{
@@ -634,9 +650,15 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     # Get statistics for inactive cities using traditional city_id matching
     inactive_city_stats = get_inactive_city_statistics()
 
-    # Combine and sort by count
-    (active_city_stats ++ inactive_city_stats)
-    |> Enum.sort_by(& &1.count, :desc)
+    # Combine stats
+    combined_stats = active_city_stats ++ inactive_city_stats
+
+    # Apply geographic clustering to group nearby cities (e.g., Paris + Paris 8 + Paris 16)
+    # This uses a 20km distance threshold to detect metropolitan areas
+    clustered_stats = CityHierarchy.aggregate_stats_by_cluster(combined_stats, 20.0)
+
+    # Sort by count descending
+    Enum.sort_by(clustered_stats, & &1.count, :desc)
   end
 
   defp get_active_city_statistics do

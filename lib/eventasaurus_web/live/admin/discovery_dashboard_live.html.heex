@@ -789,9 +789,32 @@
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <%= for stat <- @city_stats do %>
-            <tr>
+            <% is_expanded = MapSet.member?(@expanded_metro_areas, stat.city_id) %>
+            <% has_subcities = not Enum.empty?(stat.subcities) %>
+            <!-- Primary city row -->
+            <tr class={if has_subcities, do: "hover:bg-gray-50", else: ""}>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {stat.city_name}
+                <%= if has_subcities do %>
+                  <button
+                    phx-click="toggle_metro_area"
+                    phx-value-city-id={stat.city_id}
+                    class="flex items-center gap-2 w-full text-left"
+                  >
+                    <span class="text-gray-400">
+                      <%= if is_expanded do %>
+                        ▼
+                      <% else %>
+                        ▶
+                      <% end %>
+                    </span>
+                    <span>{stat.city_name}</span>
+                    <span class="text-xs text-gray-500">
+                      ({length(stat.subcities) + 1} areas)
+                    </span>
+                  </button>
+                <% else %>
+                  {stat.city_name}
+                <% end %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {format_number(stat.count)}
@@ -814,6 +837,37 @@
                 </button>
               </td>
             </tr>
+
+            <!-- Subcity rows (expandable) -->
+            <%= if is_expanded and has_subcities do %>
+              <%= for subcity <- stat.subcities do %>
+                <tr class="bg-gray-50">
+                  <td class="pl-16 pr-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {subcity.city_name}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {format_number(subcity.count)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                    <button
+                      phx-click="show_clear_modal"
+                      phx-value-target={"city:#{subcity.city_id}"}
+                      class="text-red-600 hover:text-red-900"
+                    >
+                      Clear All
+                    </button>
+                    <span class="text-gray-300">|</span>
+                    <button
+                      phx-click="show_clear_modal"
+                      phx-value-target={"city-future:#{subcity.city_id}"}
+                      class="text-orange-600 hover:text-orange-900"
+                    >
+                      Clear Future
+                    </button>
+                  </td>
+                </tr>
+              <% end %>
+            <% end %>
           <% end %>
           <%= if Enum.empty?(@city_stats) do %>
             <tr>
