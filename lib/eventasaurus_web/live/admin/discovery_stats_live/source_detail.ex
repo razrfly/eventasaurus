@@ -536,7 +536,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </div>
 
             <!-- Completeness Metrics -->
-            <div class={"grid grid-cols-1 md:grid-cols-#{if @quality_data.supports_translations, do: "4", else: "3"} gap-6 mb-6"}>
+            <div class={[
+              "grid grid-cols-1 gap-6 mb-6",
+              if(@quality_data.supports_translations, do: "md:grid-cols-4", else: "md:grid-cols-3")
+            ]}>
               <!-- Venue Completeness -->
               <div class="p-4 border rounded-lg">
                 <div class="flex items-center justify-between mb-2">
@@ -1156,7 +1159,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         Enum.at(colors, index, "#9CA3AF")
 
       # Check if it's "Other Categories" (categories beyond top 5)
-      category_name == "Other" && length(rest) > 0 ->
+      category_name == "Other Categories" && length(rest) > 0 ->
         # Use the 6th color (gray)
         "#D1D5DB"
 
