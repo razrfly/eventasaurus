@@ -461,6 +461,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     # Get per-source statistics
     source_stats = get_source_statistics()
 
+    # Get detailed source statistics with success rates (NEW)
+    detailed_source_stats = DiscoveryStatsCollector.get_detailed_source_statistics(min_events: 1)
+
     # Get per-city statistics
     city_stats = get_city_statistics()
 
@@ -513,6 +516,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     socket
     |> assign(:stats, stats)
     |> assign(:source_stats, source_stats)
+    |> assign(:detailed_source_stats, detailed_source_stats)
     |> assign(:city_stats, city_stats)
     |> assign(:cities, cities)
     |> assign(:sources, sources)
@@ -861,4 +865,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     do: "all future events for this city (preserving historical data)"
 
   def format_clear_target(_), do: "selected data"
+
+  @doc """
+  Returns CSS classes for success rate color coding.
+  """
+  def success_rate_color(rate) when rate >= 95, do: "bg-green-100 text-green-800"
+  def success_rate_color(rate) when rate >= 80, do: "bg-yellow-100 text-yellow-800"
+  def success_rate_color(_), do: "bg-red-100 text-red-800"
+
+  @doc """
+  Formats error category for display.
+  """
+  def format_error_category(category) do
+    category
+    |> String.replace("_", " ")
+    |> String.split()
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
 end

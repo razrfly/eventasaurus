@@ -57,30 +57,24 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     # Get all registered sources
     source_names = SourceRegistry.all_sources()
 
-    # Get all sources with their stats
-    # For simplicity in Phase 1, we'll use the first city as reference
-    # In future phases, we'll make this more sophisticated
-    first_city = Repo.one(from(c in City, limit: 1, select: c.id))
+    # Query stats aggregated across ALL cities (like Imports page does)
+    # This avoids the issue of filtering by a city that has no jobs
+    # Note: get_metadata_based_source_stats with nil city_id will aggregate across all cities
+    source_stats = DiscoveryStatsCollector.get_metadata_based_source_stats(nil, source_names)
 
-    source_stats =
-      if first_city do
-        DiscoveryStatsCollector.get_all_source_stats(first_city, source_names)
-      else
-        %{}
-      end
-
-    # Get change tracking data (Phase 3)
-    change_stats =
-      case first_city do
-        nil -> %{}
-        city_id -> EventChangeTracker.get_all_source_changes(source_names, city_id)
-      end
+    # Get change tracking data aggregated across all cities
+    change_stats = EventChangeTracker.get_all_source_changes(source_names, nil)
 
     # Calculate enriched source data with health metrics
     sources_data =
       source_names
       |> Enum.map(fn source_name ->
         stats = Map.get(source_stats, source_name, %{
+          # Metadata-based stats (NEW format)
+          events_processed: 0,
+          events_succeeded: 0,
+          events_failed: 0,
+          # Legacy stats (OLD format) - kept for backward compatibility
           run_count: 0,
           success_count: 0,
           error_count: 0,

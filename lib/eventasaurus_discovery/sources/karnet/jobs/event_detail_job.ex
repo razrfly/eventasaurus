@@ -17,9 +17,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor, DateParser}
   alias EventasaurusDiscovery.Sources.Karnet
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     # Clean the data that comes from job storage (may have been corrupted during serialization)
     clean_args = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(args)
     url = clean_args["url"]
@@ -38,23 +39,43 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     Logger.info("🎭 Processing Karnet event: #{url} (External ID: #{external_id})")
 
     # Check if we can extract event ID for bilingual processing
-    case extract_event_id_from_external_id(external_id) do
-      nil ->
-        Logger.warning(
-          "Cannot extract event ID from external_id: #{external_id}, falling back to single language"
-        )
+    result =
+      case extract_event_id_from_external_id(external_id) do
+        nil ->
+          Logger.warning(
+            "Cannot extract event ID from external_id: #{external_id}, falling back to single language"
+          )
 
-        fallback_to_single_language(url, source_id, event_metadata)
-
-      event_id ->
-        # Validate that the event ID is numeric
-        if is_binary(event_id) and event_id =~ ~r/^\d+$/ do
-          Logger.info("🌐 Processing bilingual event ID: #{event_id}")
-          process_bilingual_event(url, event_id, source_id, event_metadata)
-        else
-          Logger.warning("Invalid event ID format: #{event_id}, falling back to single language")
           fallback_to_single_language(url, source_id, event_metadata)
-        end
+
+        event_id ->
+          # Validate that the event ID is numeric
+          if is_binary(event_id) and event_id =~ ~r/^\d+$/ do
+            Logger.info("🌐 Processing bilingual event ID: #{event_id}")
+            process_bilingual_event(url, event_id, source_id, event_metadata)
+          else
+            Logger.warning("Invalid event ID format: #{event_id}, falling back to single language")
+            fallback_to_single_language(url, source_id, event_metadata)
+          end
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:discard, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
+
+      _other ->
+        # Handle any other return values (like :not_found)
+        result
     end
   end
 

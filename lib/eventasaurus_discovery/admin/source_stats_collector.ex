@@ -181,7 +181,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
   """
   def get_translation_coverage(source_slug) when is_binary(source_slug) do
     # Get events with title translations
-    title_translations_query =
+    _title_translations_query =
       from pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
@@ -195,7 +195,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         }
 
     # Get events with description translations
-    desc_translations_query =
+    _desc_translations_query =
       from pes in PublicEventSource,
         join: s in Source,
         on: s.id == pes.source_id,

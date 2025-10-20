@@ -599,6 +599,94 @@
     </div>
   </div>
 
+  <!-- Event Processing Success Rates (NEW) -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div class="flex justify-between items-center mb-4">
+      <div>
+        <h2 class="text-xl font-semibold">Event Processing Success Rates</h2>
+        <p class="text-sm text-gray-600 mt-1">Real-time scraper performance metrics from job metadata</p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Processed</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Succeeded</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Top Errors</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <%= for stats <- @detailed_source_stats do %>
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                {String.capitalize(stats.source)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {format_number(stats.events_processed)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                {format_number(stats.events_succeeded)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                {format_number(stats.events_failed)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class={"px-2 py-1 rounded text-sm font-semibold #{success_rate_color(stats.success_rate)}"}>
+                  {stats.success_rate}%
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <div class="text-sm">
+                  <%= for {category, count} <- stats.failure_breakdown |> Enum.sort_by(&elem(&1, 1), :desc) |> Enum.take(3) do %>
+                    <div class="text-gray-700">
+                      <span class="font-medium">{format_error_category(category)}:</span>
+                      <span class="text-gray-600">{count}</span>
+                    </div>
+                  <% end %>
+                  <%= if Enum.empty?(stats.failure_breakdown) do %>
+                    <span class="text-gray-400 text-xs">No failures</span>
+                  <% end %>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+          <%= if Enum.empty?(@detailed_source_stats) do %>
+            <tr>
+              <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+                No event processing data available yet. Metrics will appear after scraper runs complete.
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-blue-800">About Success Rates</h3>
+          <div class="mt-2 text-sm text-blue-700 space-y-1">
+            <p>• <span class="font-semibold">Success Rate ≥95%</span>: Excellent scraper health (green)</p>
+            <p>• <span class="font-semibold">Success Rate 80-95%</span>: Good performance with some issues (yellow)</p>
+            <p>• <span class="font-semibold">Success Rate &lt;80%</span>: Needs attention (red)</p>
+            <p>• Metrics track event-level processing (EventDetailJob, ShowtimeProcessJob, etc.)</p>
+            <p>• Error categories help identify common failure patterns for debugging</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- City Statistics -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">City Statistics</h2>

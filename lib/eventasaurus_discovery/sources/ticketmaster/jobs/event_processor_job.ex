@@ -18,6 +18,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
   alias EventasaurusDiscovery.Sources.Ticketmaster
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Utils.ObanHelpers
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   # Override to truncate args in Oban Web display
   def __meta__(:display_args) do
@@ -25,7 +26,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     # Clean UTF-8 from potentially corrupted job args stored in DB
     # This handles jobs that were stored with bad UTF-8 before our fixes
     clean_args = EventasaurusDiscovery.Utils.UTF8.validate_map_strings(args)
@@ -41,29 +42,45 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
     Logger.info("🎫 Processing Ticketmaster event: #{external_id}")
 
     # Get the source
-    with {:ok, source} <- get_source(source_id),
-         # Check for duplicates (within Ticketmaster itself, pass source struct)
-         {:ok, dedup_result} <- check_deduplication(event_data, source),
-         # Process the event if unique
-         {:ok, _processed_event} <- process_event_if_unique(event_data, source, dedup_result) do
-      Logger.info("✅ Successfully processed Ticketmaster event: #{external_id}")
-      {:ok, %{event_id: external_id, status: "processed"}}
-    else
-      {:error, :source_not_found} ->
-        Logger.error("🚫 Discarding event #{external_id}: source #{source_id} not found")
-        {:discard, :source_not_found}
+    result =
+      with {:ok, source} <- get_source(source_id),
+           # Check for duplicates (within Ticketmaster itself, pass source struct)
+           {:ok, dedup_result} <- check_deduplication(event_data, source),
+           # Process the event if unique
+           {:ok, _processed_event} <- process_event_if_unique(event_data, source, dedup_result) do
+        Logger.info("✅ Successfully processed Ticketmaster event: #{external_id}")
+        {:ok, %{event_id: external_id, status: "processed"}}
+      else
+        {:error, :source_not_found} ->
+          Logger.error("🚫 Discarding event #{external_id}: source #{source_id} not found")
+          {:discard, :source_not_found}
 
-      {:error, {:discard, reason}} ->
-        # Critical failure (e.g., missing GPS coordinates) - discard the job
-        Logger.error("🚫 Discarding event #{external_id}: #{reason}")
-        {:discard, reason}
+        {:error, {:discard, reason}} ->
+          # Critical failure (e.g., missing GPS coordinates) - discard the job
+          Logger.error("🚫 Discarding event #{external_id}: #{reason}")
+          {:discard, reason}
+
+        {:error, reason} ->
+          # Regular error - allow retry
+          truncated_args = ObanHelpers.truncate_job_args(args)
+          Logger.error("❌ Failed to process event #{external_id}: #{inspect(reason)}")
+          Logger.debug("Truncated job args: #{inspect(truncated_args)}")
+          {:error, reason}
+      end
+
+    # Track metrics in job metadata
+    case result do
+      {:ok, _} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:discard, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
 
       {:error, reason} ->
-        # Regular error - allow retry
-        truncated_args = ObanHelpers.truncate_job_args(args)
-        Logger.error("❌ Failed to process event #{external_id}: #{inspect(reason)}")
-        Logger.debug("Truncated job args: #{inspect(truncated_args)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 

@@ -90,6 +90,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   @doc """
   Get statistics for all sources for a given city.
 
+  **DEPRECATED**: Use `get_metadata_based_source_stats/2` instead for accurate event-level tracking.
+
+  This function queries job.state (completed/discarded) which only reflects job execution outcomes,
+  not actual event processing success/failure. After MetricsTracker was implemented, the correct
+  approach is to query meta->>'status' (success/failed) for event-level accuracy.
+
   Automatically handles both city-specific and country-wide sources.
   Returns a map of source_name => stats.
 
@@ -133,6 +139,68 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   def get_all_source_stats(_city_id, _source_names) do
     Logger.warning("Invalid input to get_all_source_stats")
+    %{}
+  end
+
+  @doc """
+  Get metadata-based source statistics for all sources.
+
+  RECOMMENDED: Use this instead of get_all_source_stats for accurate success/failure tracking.
+
+  Queries meta->>'status' (success/failed) from job metadata instead of job.state (completed/discarded).
+  This provides accurate event-level processing outcomes rather than just job execution outcomes.
+
+  ## Parameters
+
+    * `city_id` - The city ID to filter by (integer or nil for all cities aggregated)
+    * `source_names` - List of source names to query (list of strings)
+
+  ## Returns
+
+  A map where keys are source names and values are enhanced stats maps including:
+    * `:events_processed` - Total events processed (from metadata)
+    * `:events_succeeded` - Events that succeeded (from metadata)
+    * `:events_failed` - Events that failed (from metadata)
+    * `:success_rate` - Success rate percentage
+    * `:failure_breakdown` - Map of error_category => count
+    * `:last_run_at` - Most recent job completion timestamp
+
+  ## Examples
+
+      iex> get_metadata_based_source_stats(1, ["bandsintown", "karnet"])
+      %{
+        "bandsintown" => %{
+          events_processed: 1250,
+          events_succeeded: 1180,
+          events_failed: 70,
+          success_rate: 94.4,
+          failure_breakdown: %{"validation_error" => 42},
+          last_run_at: ~U[2025-01-07 12:00:00Z]
+        },
+        "karnet" => %{...}
+      }
+
+      iex> get_metadata_based_source_stats(nil, ["bandsintown"])
+      %{
+        "bandsintown" => %{
+          events_processed: 2500,  # Aggregated across all cities
+          events_succeeded: 2300,
+          ...
+        }
+      }
+  """
+  def get_metadata_based_source_stats(city_id, source_names)
+      when (is_integer(city_id) or is_nil(city_id)) and is_list(source_names) do
+    source_names
+    |> Enum.map(fn source_name ->
+      stats = get_detailed_source_stats(city_id, source_name)
+      {source_name, stats}
+    end)
+    |> Enum.into(%{})
+  end
+
+  def get_metadata_based_source_stats(_city_id, _source_names) do
+    Logger.warning("Invalid input to get_metadata_based_source_stats")
     %{}
   end
 
@@ -532,6 +600,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   Returns a list of recent job executions with their status and metadata.
 
+  Queries DETAIL workers (e.g., EventDetailJob, VenueDetailJob) instead of sync workers,
+  and uses metadata status (meta->>'status') instead of job state for accurate event-level tracking.
+
   ## Parameters
 
     * `source_slug` - The source name (string)
@@ -539,7 +610,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   ## Returns
 
-  A list of maps with job execution details.
+  A list of maps with job execution details from metadata.
 
   ## Examples
 
@@ -547,7 +618,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       [
         %{
           completed_at: ~U[2025-01-07 12:00:00Z],
-          state: "completed",
+          state: "success",
           duration_seconds: 125,
           errors: nil,
           city_id: 1
@@ -561,11 +632,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       {:error, :not_found} ->
         []
 
-      {:ok, worker_name} ->
+      {:ok, sync_worker} ->
+        # Get the detail worker instead of sync worker
+        detail_worker = determine_detail_worker(sync_worker)
+
         query =
           from(j in "oban_jobs",
-            where: j.worker == ^worker_name,
+            where: j.worker == ^detail_worker,
             where: j.state in ["completed", "discarded"],
+            where: fragment("meta->>'status' IS NOT NULL"),
             order_by: [
               desc:
                 fragment(
@@ -583,9 +658,10 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
                   j.discarded_at
                 ),
               attempted_at: j.attempted_at,
-              state: j.state,
-              errors: j.errors,
-              args: j.args
+              state: fragment("meta->>'status'"),
+              errors: fragment("meta->>'error_message'"),
+              args: j.args,
+              meta: j.meta
             }
           )
 
@@ -621,14 +697,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           nil
       end
 
-    # Format errors
-    formatted_error =
-      case job.errors do
-        nil -> nil
-        [] -> nil
-        errors when is_list(errors) -> format_error(List.first(errors))
-        _ -> nil
-      end
+    # Errors come from metadata now (already extracted as string)
+    # No need to format since it's already meta->>'error_message'
+    formatted_error = job.errors
 
     %{
       completed_at: job.completed_at,
@@ -756,5 +827,230 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
         Repo.all(query)
     end
+  end
+
+  @doc """
+  Get detailed metrics for a source including success/failure breakdown from job metadata.
+
+  Returns both job-level stats and event-level stats from metadata.
+
+  ## Parameters
+
+    * `city_id` - The city ID to filter by (integer or nil for country-wide)
+    * `source_name` - The source name (string)
+
+  ## Returns
+
+  Enhanced stats map with:
+    * `:events_processed` - Total events processed (from metadata)
+    * `:events_succeeded` - Events that succeeded (from metadata)
+    * `:events_failed` - Events that failed (from metadata)
+    * `:success_rate` - Success rate percentage
+    * `:failure_breakdown` - Map of error_category => count
+
+  ## Examples
+
+      iex> get_detailed_source_stats(1, "bandsintown")
+      %{
+        run_count: 5,
+        success_count: 4,
+        error_count: 1,
+        events_processed: 1250,
+        events_succeeded: 1180,
+        events_failed: 70,
+        success_rate: 94.4,
+        failure_breakdown: %{
+          "validation_error" => 42,
+          "geocoding_error" => 28
+        }
+      }
+  """
+  def get_detailed_source_stats(city_id, source_name) do
+    base_stats = get_source_stats(city_id, source_name)
+
+    # Get event-level metrics from job metadata
+    case SourceRegistry.get_worker_name(source_name) do
+      {:ok, worker} ->
+        detail_worker = determine_detail_worker(worker)
+        event_stats = get_event_level_stats(detail_worker, city_id, source_name)
+        failure_summary = get_failure_breakdown(source_name)
+
+        Map.merge(base_stats, %{
+          # New metadata-based fields
+          events_processed: event_stats.processed,
+          events_succeeded: event_stats.succeeded,
+          events_failed: event_stats.failed,
+          success_rate: calculate_success_rate(event_stats.succeeded, event_stats.processed),
+          failure_breakdown: failure_summary,
+          # Legacy fields for backward compatibility with Stats page template
+          run_count: event_stats.processed,
+          success_count: event_stats.succeeded,
+          error_count: event_stats.failed
+        })
+
+      {:error, _} ->
+        base_stats
+    end
+  end
+
+  @doc """
+  Get event-level statistics for all sources.
+
+  Returns a list of detailed stats for each source, sorted by success rate.
+
+  ## Parameters
+
+    * `opts` - Options (keyword list)
+      * `:city_id` - Filter by city (nil for aggregate)
+      * `:min_events` - Minimum events to include (default: 0)
+
+  ## Returns
+
+  List of maps with detailed source stats.
+
+  ## Examples
+
+      iex> get_detailed_source_statistics(min_events: 10)
+      [
+        %{
+          source: "bandsintown",
+          events_processed: 1250,
+          events_succeeded: 1180,
+          events_failed: 70,
+          success_rate: 94.4,
+          failure_breakdown: %{"validation_error" => 42},
+          last_run_at: ~U[2025-01-07 12:00:00Z]
+        },
+        ...
+      ]
+  """
+  def get_detailed_source_statistics(opts \\ []) do
+    city_id = Keyword.get(opts, :city_id)
+    min_events = Keyword.get(opts, :min_events, 0)
+
+    # Get all sources
+    sources = SourceRegistry.all_sources()
+
+    # For each source, get detailed stats
+    sources
+    |> Enum.map(fn source_name ->
+      stats = get_detailed_source_stats(city_id, source_name)
+
+      %{
+        source: source_name,
+        events_processed: stats[:events_processed] || 0,
+        events_succeeded: stats[:events_succeeded] || 0,
+        events_failed: stats[:events_failed] || 0,
+        success_rate: stats[:success_rate] || 0.0,
+        failure_breakdown: stats[:failure_breakdown] || %{},
+        last_run_at: stats[:last_run_at]
+      }
+    end)
+    |> Enum.filter(fn stats -> stats.events_processed >= min_events end)
+    |> Enum.sort_by(& &1.success_rate, :desc)
+  end
+
+  # Private helper functions for event-level stats
+
+  defp get_event_level_stats(detail_worker, city_id, source_name) do
+    # Build the appropriate query based on whether source requires city_id
+    stats_query =
+      if SourceRegistry.requires_city_id?(source_name) && city_id do
+        from(j in "oban_jobs",
+          where: j.worker == ^detail_worker,
+          where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
+          where: j.state in ["completed", "discarded"],
+          select: %{
+            processed: count(j.id),
+            succeeded:
+              fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
+            failed: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'failed')")
+          }
+        )
+      else
+        from(j in "oban_jobs",
+          where: j.worker == ^detail_worker,
+          where: j.state in ["completed", "discarded"],
+          select: %{
+            processed: count(j.id),
+            succeeded:
+              fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
+            failed: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'failed')")
+          }
+        )
+      end
+
+    Repo.one(stats_query) || %{processed: 0, succeeded: 0, failed: 0}
+  end
+
+  defp determine_detail_worker(sync_worker) do
+    # Map SyncJob workers to their corresponding detail job workers
+    cond do
+      String.contains?(sync_worker, "Bandsintown.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob"
+
+      String.contains?(sync_worker, "ResidentAdvisor.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob"
+
+      String.contains?(sync_worker, "Karnet.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob"
+
+      String.contains?(sync_worker, "Sortiraparis.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob"
+
+      String.contains?(sync_worker, "Ticketmaster.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob"
+
+      String.contains?(sync_worker, "KinoKrakow.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob"
+
+      String.contains?(sync_worker, "CinemaCity.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob"
+
+      String.contains?(sync_worker, "Pubquiz.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob"
+
+      String.contains?(sync_worker, "QuestionOne.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob"
+
+      String.contains?(sync_worker, "GeeksWhoDrink.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob"
+
+      String.contains?(sync_worker, "Quizmeisters.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob"
+
+      String.contains?(sync_worker, "Inquizition.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob"
+
+      String.contains?(sync_worker, "SpeedQuizzing.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob"
+
+      true ->
+        # Fallback to sync worker if no mapping found
+        sync_worker
+    end
+  end
+
+  defp calculate_success_rate(_succeeded, 0), do: 0.0
+
+  defp calculate_success_rate(succeeded, processed) when processed > 0 do
+    (succeeded / processed * 100) |> Float.round(1)
+  end
+
+  defp get_failure_breakdown(source_name) do
+    alias EventasaurusDiscovery.Metrics.FailureTracker
+
+    case get_source_id_by_slug(source_name) do
+      nil -> %{}
+      source_id -> FailureTracker.get_failure_summary(source_id)
+    end
+  end
+
+  defp get_source_id_by_slug(source_slug) do
+    Repo.one(
+      from s in EventasaurusDiscovery.Sources.Source,
+        where: s.slug == ^source_slug,
+        select: s.id
+    )
   end
 end
