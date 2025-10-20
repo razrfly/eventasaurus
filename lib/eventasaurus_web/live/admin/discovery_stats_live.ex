@@ -451,10 +451,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                     <td class="px-6 py-4 whitespace-nowrap">
                       <%= if length(city.subcities) > 0 do %>
                         <button
+                          type="button"
                           phx-click="toggle_metro_area"
                           phx-value-city-id={city.city_id}
+                          aria-expanded={to_string(MapSet.member?(@expanded_metro_areas, city.city_id))}
                           class="text-gray-500 hover:text-gray-700 mr-2"
                         >
+                          <span class="sr-only">Toggle subcities for <%= city.city_name %></span>
                           <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
                             ▼
                           <% else %>

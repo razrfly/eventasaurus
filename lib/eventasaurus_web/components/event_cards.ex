@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.Components.EventCards do
 
   use Phoenix.Component
   use EventasaurusWeb, :verified_routes
+  use Gettext, backend: EventasaurusWeb.Gettext
 
   alias EventasaurusDiscovery.PublicEvents.{
     PublicEvent,
@@ -108,14 +109,18 @@ defmodule EventasaurusWeb.Components.EventCards do
             <Heroicons.calendar class="w-4 h-4 mr-1" />
             <%= cond do %>
               <% PublicEvent.recurring?(@event) -> %>
-                <span class="text-green-600 font-medium">
-                  <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_local_datetime(PublicEvent.next_occurrence_date(@event), @event.venue, :short) %>
-                </span>
+                <%= if next = PublicEvent.next_occurrence_date(@event) do %>
+                  <span class="text-green-600 font-medium">
+                    <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_local_datetime(next, @event.venue, :short) %>
+                  </span>
+                <% else %>
+                  <span class="text-green-600 font-medium"><%= PublicEvent.frequency_label(@event) %></span>
+                <% end %>
               <% is_exhibition?(@event) -> %>
                 <%= if exhibition_datetime = format_exhibition_datetime(@event) do %>
                   <span><%= exhibition_datetime %></span>
                 <% else %>
-                  <span>Currently showing</span>
+                  <span><%= gettext("Currently showing") %></span>
                 <% end %>
               <% true -> %>
                 <%= format_local_datetime(@event.starts_at, @event.venue, :short) %>

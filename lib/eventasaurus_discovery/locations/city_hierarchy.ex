@@ -153,6 +153,8 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
   end
 
   defp build_adjacency_map(cities, threshold) do
+    has_coords? = fn c -> not is_nil(c.latitude) and not is_nil(c.longitude) end
+
     cities
     |> Enum.reduce(%{}, fn city, acc ->
       # Find all cities within threshold distance
@@ -161,6 +163,7 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
         |> Enum.filter(fn other ->
           city.id != other.id and
             city.country_id == other.country_id and
+            has_coords?.(city) and has_coords?.(other) and
             haversine_distance(city.latitude, city.longitude, other.latitude, other.longitude) <
               threshold
         end)
