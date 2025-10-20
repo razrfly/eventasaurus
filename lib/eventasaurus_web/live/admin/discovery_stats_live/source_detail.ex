@@ -191,17 +191,23 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
   @impl true
   def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
-    city_id_int = String.to_integer(city_id)
-    expanded = socket.assigns.expanded_metro_areas
+    case Integer.parse(city_id) do
+      {city_id_int, _} ->
+        expanded = socket.assigns.expanded_metro_areas
 
-    new_expanded =
-      if MapSet.member?(expanded, city_id_int) do
-        MapSet.delete(expanded, city_id_int)
-      else
-        MapSet.put(expanded, city_id_int)
-      end
+        new_expanded =
+          if MapSet.member?(expanded, city_id_int) do
+            MapSet.delete(expanded, city_id_int)
+          else
+            MapSet.put(expanded, city_id_int)
+          end
 
-    {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+        {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+
+      :error ->
+        # Invalid city-id, no-op gracefully
+        {:noreply, socket}
+    end
   end
 
   defp load_source_data(socket) do
@@ -235,28 +241,41 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
       if scope == :city do
         raw_city_data = DiscoveryStatsCollector.get_events_by_city_for_source(source_slug, 20)
 
+        # Load city slugs separately since raw data doesn't include them
+        city_ids = Enum.map(raw_city_data, & &1.city_id)
+        city_slugs = load_city_slugs(city_ids)
+
         # Transform to format expected by clustering (with :count field)
         city_stats = Enum.map(raw_city_data, fn city ->
           %{
             city_id: city.city_id,
             city_name: city.city_name,
-            city_slug: city.city_slug,
+            city_slug: Map.get(city_slugs, city.city_id),
             count: city.event_count,
             new_this_week: city.new_this_week
           }
         end)
 
+        # Create a lookup map for new_this_week values by city_id
+        new_this_week_map = Map.new(city_stats, fn stat -> {stat.city_id, stat.new_this_week} end)
+
         # Apply geographic clustering
         clustered = CityHierarchy.aggregate_stats_by_cluster(city_stats, 20.0)
 
-        # Transform back to expected format with event_count
+        # Transform back to expected format with event_count and aggregate new_this_week
         Enum.map(clustered, fn city ->
+          # Sum new_this_week for primary city and all subcities
+          primary_new = Map.get(new_this_week_map, city.city_id, 0)
+          subcities_new = Enum.reduce(city.subcities, 0, fn sub, acc ->
+            acc + Map.get(new_this_week_map, sub.city_id, 0)
+          end)
+
           %{
             city_id: city.city_id,
             city_name: city.city_name,
             city_slug: city.city_slug,
             event_count: city.count,
-            new_this_week: city.new_this_week || 0,
+            new_this_week: primary_new + subcities_new,
             subcities: city.subcities || []
           }
         end)
@@ -300,7 +319,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             category_completeness: 0,
             missing_venues: 0,
             missing_images: 0,
-            missing_categories: 0
+            missing_categories: 0,
+            category_specificity: 0,
+            specificity_metrics: %{
+              generic_event_count: 0,
+              diversity_score: 0,
+              total_categories: 0
+            }
           },
           quality_data
         )
@@ -1188,10 +1213,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <%= if length(city.subcities) > 0 do %>
                           <button
+                            type="button"
                             phx-click="toggle_metro_area"
                             phx-value-city-id={city.city_id}
+                            aria-expanded={to_string(MapSet.member?(@expanded_metro_areas, city.city_id))}
                             class="mr-2 text-gray-600 hover:text-gray-900"
                           >
+                            <span class="sr-only">Toggle subcities for <%= city.city_name %></span>
                             <%= if MapSet.member?(@expanded_metro_areas, city.city_id), do: "▼", else: "▶" %>
                           </button>
                         <% end %>
@@ -1469,4 +1497,20 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   defp safe_sort_atom("percentage", :category), do: :percentage
   # Default fallback
   defp safe_sort_atom(_, _), do: :count
+
+  # Load city slugs from database for given city IDs
+  # Returns a map of city_id => city_slug
+  defp load_city_slugs([]), do: %{}
+
+  defp load_city_slugs(city_ids) do
+    query =
+      from(c in EventasaurusDiscovery.Locations.City,
+        where: c.id in ^city_ids,
+        select: {c.id, c.slug}
+      )
+
+    query
+    |> Repo.all()
+    |> Map.new()
+  end
 end

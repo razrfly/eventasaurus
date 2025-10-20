@@ -796,8 +796,10 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 <%= if has_subcities do %>
                   <button
+                    type="button"
                     phx-click="toggle_metro_area"
                     phx-value-city-id={stat.city_id}
+                    aria-expanded={to_string(is_expanded)}
                     class="flex items-center gap-2 w-full text-left"
                   >
                     <span class="text-gray-400">
@@ -807,6 +809,7 @@
                         ▶
                       <% end %>
                     </span>
+                    <span class="sr-only">Toggle subcities for</span>
                     <span>{stat.city_name}</span>
                     <span class="text-xs text-gray-500">
                       ({length(stat.subcities) + 1} areas)
