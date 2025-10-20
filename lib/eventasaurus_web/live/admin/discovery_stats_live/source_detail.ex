@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.SourceRegistry
+  alias EventasaurusDiscovery.Locations.CityHierarchy
 
   alias EventasaurusDiscovery.Admin.{
     DiscoveryStatsCollector,
@@ -57,6 +58,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           # Phase 3: Job history filtering and expansion
           |> assign(:job_history_filter, :all)
           |> assign(:expanded_job_ids, MapSet.new())
+          |> assign(:expanded_metro_areas, MapSet.new())
           |> load_source_data()
           |> assign(:loading, false)
 
@@ -187,6 +189,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     {:noreply, assign(socket, :expanded_job_ids, new_expanded_ids)}
   end
 
+  @impl true
+  def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
+    city_id_int = String.to_integer(city_id)
+    expanded = socket.assigns.expanded_metro_areas
+
+    new_expanded =
+      if MapSet.member?(expanded, city_id_int) do
+        MapSet.delete(expanded, city_id_int)
+      else
+        MapSet.put(expanded, city_id_int)
+      end
+
+    {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+  end
+
   defp load_source_data(socket) do
     source_slug = socket.assigns.source_slug
     date_range = socket.assigns.date_range
@@ -216,7 +233,33 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     # Get events by city (if city-scoped source)
     events_by_city =
       if scope == :city do
-        DiscoveryStatsCollector.get_events_by_city_for_source(source_slug, 20)
+        raw_city_data = DiscoveryStatsCollector.get_events_by_city_for_source(source_slug, 20)
+
+        # Transform to format expected by clustering (with :count field)
+        city_stats = Enum.map(raw_city_data, fn city ->
+          %{
+            city_id: city.city_id,
+            city_name: city.city_name,
+            city_slug: city.city_slug,
+            count: city.event_count,
+            new_this_week: city.new_this_week
+          }
+        end)
+
+        # Apply geographic clustering
+        clustered = CityHierarchy.aggregate_stats_by_cluster(city_stats, 20.0)
+
+        # Transform back to expected format with event_count
+        Enum.map(clustered, fn city ->
+          %{
+            city_id: city.city_id,
+            city_name: city.city_name,
+            city_slug: city.city_slug,
+            event_count: city.count,
+            new_this_week: city.new_this_week || 0,
+            subcities: city.subcities || []
+          }
+        end)
       else
         []
       end
@@ -568,7 +611,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             <!-- Completeness Metrics -->
             <div class={[
               "grid grid-cols-1 gap-6 mb-6",
-              if(@quality_data.supports_translations, do: "md:grid-cols-4", else: "md:grid-cols-3")
+              if(@quality_data.supports_translations, do: "md:grid-cols-5", else: "md:grid-cols-4")
             ]}>
               <!-- Venue Completeness -->
               <div class="p-4 border rounded-lg">
@@ -610,6 +653,28 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 <p class="mt-2 text-xs text-gray-500">
                   <%= @quality_data.missing_categories %> events missing category data
                 </p>
+              </div>
+
+              <!-- Category Specificity (Phase 1.7) -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Cat. Specificity</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.category_specificity %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-indigo-600 h-2.5 rounded-full" style={"width: #{@quality_data.category_specificity}%"}></div>
+                </div>
+                <%= if @quality_data.specificity_metrics do %>
+                  <p class="mt-2 text-xs text-gray-500">
+                    <%= @quality_data.specificity_metrics.generic_event_count %> events in generic categories
+                  </p>
+                  <div class="mt-2 pt-2 border-t border-gray-200">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="text-gray-600">Diversity: <%= @quality_data.specificity_metrics.diversity_score %>%</span>
+                      <span class="text-gray-600"><%= @quality_data.specificity_metrics.total_categories %> cats</span>
+                    </div>
+                  </div>
+                <% end %>
               </div>
 
               <!-- Translation Completeness (conditionally displayed) -->
@@ -1104,7 +1169,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           <div class="bg-white rounded-lg shadow mb-8">
             <div class="px-6 py-4 border-b border-gray-200">
               <h2 class="text-lg font-semibold text-gray-900">Events by City</h2>
-              <p class="text-sm text-gray-500 mt-1">Total events: <%= format_number(@total_events) %></p>
+              <p class="text-sm text-gray-500 mt-1">Total events: <%= format_number(@total_events) %> (metro areas aggregated)</p>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full divide-y divide-gray-200">
@@ -1118,9 +1183,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                   <%= for city <- @events_by_city do %>
+                    <!-- Primary City Row -->
                     <tr class="hover:bg-gray-50">
                       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <%= if length(city.subcities) > 0 do %>
+                          <button
+                            phx-click="toggle_metro_area"
+                            phx-value-city-id={city.city_id}
+                            class="mr-2 text-gray-600 hover:text-gray-900"
+                          >
+                            <%= if MapSet.member?(@expanded_metro_areas, city.city_id), do: "▼", else: "▶" %>
+                          </button>
+                        <% end %>
                         <%= city.city_name %>
+                        <%= if length(city.subcities) > 0 do %>
+                          <span class="text-xs text-gray-500 ml-1">(<%= length(city.subcities) %> areas)</span>
+                        <% end %>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <%= format_number(city.event_count) %>
@@ -1132,6 +1210,26 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                         🟢
                       </td>
                     </tr>
+
+                    <!-- Subcity Rows (Expandable) -->
+                    <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
+                      <%= for subcity <- city.subcities do %>
+                        <tr class="bg-gray-50">
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 pl-12">
+                            ↳ <%= subcity.city_name %>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            <%= format_number(subcity.count) %>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            —
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            —
+                          </td>
+                        </tr>
+                      <% end %>
+                    <% end %>
                   <% end %>
                 </tbody>
               </table>

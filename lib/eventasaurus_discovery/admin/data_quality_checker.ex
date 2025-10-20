@@ -98,11 +98,16 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       image_completeness = calculate_completeness(total_events, missing_images)
       category_completeness = calculate_completeness(total_events, missing_categories)
 
+      # Calculate category specificity metrics
+      specificity_metrics = calculate_category_specificity(source_id)
+      category_specificity = specificity_metrics.score
+
       quality_score =
         calculate_quality_score(
           venue_completeness,
           image_completeness,
           category_completeness,
+          category_specificity,
           translation_completeness
         )
 
@@ -118,6 +123,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         venue_completeness: venue_completeness,
         image_completeness: image_completeness,
         category_completeness: category_completeness,
+        category_specificity: category_specificity,
+        specificity_metrics: specificity_metrics,
         translation_completeness: translation_completeness,
         supports_translations: has_translations
       }
@@ -279,6 +286,155 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     Repo.one(query) || 0
   end
 
+  defp get_category_distribution(source_id) do
+    # Get distribution of categories for events from this source
+    # Returns list of maps with category_name, count, and percentage
+    query =
+      from(e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        join: pec in "public_event_categories",
+        on: pec.event_id == e.id,
+        join: c in "categories",
+        on: c.id == pec.category_id,
+        where: pes.source_id == ^source_id,
+        group_by: [c.id, c.name],
+        select: %{
+          category_name: c.name,
+          count: count(e.id)
+        },
+        order_by: [desc: count(e.id)]
+      )
+
+    results = Repo.all(query)
+    total_events = Enum.reduce(results, 0, fn cat, acc -> cat.count + acc end)
+
+    # Add percentage to each category
+    Enum.map(results, fn cat ->
+      percentage =
+        if total_events > 0 do
+          Float.round(cat.count / total_events * 100, 1)
+        else
+          0.0
+        end
+
+      Map.put(cat, :percentage, percentage)
+    end)
+  end
+
+  defp count_generic_categories(source_id) do
+    # Count events categorized with generic category names
+    # Returns count of events in categories like "Other", "Miscellaneous", etc.
+    generic_list = Application.get_env(:eventasaurus, :generic_categories, [])
+
+    if Enum.empty?(generic_list) do
+      0
+    else
+      # Convert to lowercase for case-insensitive matching
+      generic_lower = Enum.map(generic_list, &String.downcase/1)
+
+      query =
+        from(e in PublicEvent,
+          join: pes in PublicEventSource,
+          on: pes.event_id == e.id,
+          join: pec in "public_event_categories",
+          on: pec.event_id == e.id,
+          join: c in "categories",
+          on: c.id == pec.category_id,
+          where: pes.source_id == ^source_id,
+          where: fragment("LOWER(?)", c.name) in ^generic_lower,
+          select: count(fragment("DISTINCT ?", e.id))
+        )
+
+      Repo.one(query) || 0
+    end
+  end
+
+  defp calculate_category_entropy(distribution, total_events) do
+    # Calculate Shannon entropy for category distribution
+    # Returns a diversity score from 0-100 where:
+    # - 0 = all events in one category (no diversity)
+    # - 100 = events perfectly distributed across all categories (maximum diversity)
+    if total_events == 0 or Enum.empty?(distribution) do
+      0
+    else
+      # Calculate Shannon entropy: H = -Σ(p_i * log2(p_i))
+      entropy =
+        distribution
+        |> Enum.reduce(0, fn cat, acc ->
+          p = cat.count / total_events
+
+          if p > 0 do
+            acc - p * :math.log2(p)
+          else
+            acc
+          end
+        end)
+
+      # Normalize to 0-100 scale
+      # Maximum entropy is log2(number of categories)
+      max_entropy = :math.log2(length(distribution))
+
+      if max_entropy > 0 do
+        round(entropy / max_entropy * 100)
+      else
+        0
+      end
+    end
+  end
+
+  defp calculate_category_specificity(source_id) do
+    # Calculate category specificity score combining:
+    # - Generic category avoidance (60% weight)
+    # - Category diversity (40% weight)
+    # Returns map with score and detailed metrics
+    total_events = count_events(source_id)
+
+    if total_events == 0 do
+      %{
+        score: 100,
+        generic_event_count: 0,
+        generic_avoidance_score: 100,
+        diversity_score: 100,
+        total_categories: 0
+      }
+    else
+      # Get category distribution
+      distribution = get_category_distribution(source_id)
+
+      # Count generic categories
+      generic_count = count_generic_categories(source_id)
+
+      # Calculate generic avoidance score (0-100)
+      # 100% = no generic categories, 0% = all events in generic categories
+      generic_avoidance_score =
+        if total_events > 0 do
+          round((total_events - generic_count) / total_events * 100)
+        else
+          100
+        end
+
+      # Calculate diversity score using Shannon entropy
+      # Note: distribution contains category assignment counts (can exceed total_events
+      # since events can have multiple categories), so we need to calculate total
+      # assignments separately for entropy calculation
+      total_assignments = Enum.reduce(distribution, 0, fn cat, acc -> cat.count + acc end)
+      diversity_score = calculate_category_entropy(distribution, total_assignments)
+
+      # Calculate final specificity score
+      # Generic avoidance: 60%, Diversity: 40%
+      specificity_score = round(generic_avoidance_score * 0.6 + diversity_score * 0.4)
+
+      %{
+        score: specificity_score,
+        generic_event_count: generic_count,
+        generic_avoidance_score: generic_avoidance_score,
+        diversity_score: diversity_score,
+        total_categories: length(distribution)
+      }
+    end
+  end
+
   defp count_multilingual_events(source_id) do
     # Count events that have multiple languages in title_translations OR description_translations
     # Uses jsonb_object_keys() to count the number of language keys
@@ -399,16 +555,18 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
          venue_completeness,
          image_completeness,
          category_completeness,
+         category_specificity,
          translation_completeness
        ) do
     if translation_completeness do
-      # Multilingual source: venues 30%, images 25%, categories 25%, translations 20%
-      (venue_completeness * 0.3 + image_completeness * 0.25 + category_completeness * 0.25 +
-         translation_completeness * 0.2)
+      # Multilingual source: venues 25%, images 20%, categories 20%, specificity 20%, translations 15%
+      (venue_completeness * 0.25 + image_completeness * 0.20 + category_completeness * 0.20 +
+         category_specificity * 0.20 + translation_completeness * 0.15)
       |> round()
     else
-      # Single-language source: venues 40%, images 30%, categories 30%
-      (venue_completeness * 0.4 + image_completeness * 0.3 + category_completeness * 0.3)
+      # Single-language source: venues 30%, images 25%, categories 20%, specificity 25%
+      (venue_completeness * 0.30 + image_completeness * 0.25 + category_completeness * 0.20 +
+         category_specificity * 0.25)
       |> round()
     end
   end
