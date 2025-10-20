@@ -54,6 +54,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           |> assign(:show_category_details, false)
           |> assign(:show_venue_details, false)
           |> assign(:loading, true)
+          # Phase 3: Job history filtering and expansion
+          |> assign(:job_history_filter, :all)
+          |> assign(:expanded_job_ids, MapSet.new())
           |> load_source_data()
           |> assign(:loading, false)
 
@@ -157,6 +160,33 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("filter_job_history", %{"filter" => filter}, socket) do
+    filter_atom =
+      case filter do
+        "all" -> :all
+        "successes" -> :successes
+        "failures" -> :failures
+        _ -> :all
+      end
+
+    {:noreply, assign(socket, :job_history_filter, filter_atom)}
+  end
+
+  @impl true
+  def handle_event("toggle_job_details", %{"job_id" => job_id}, socket) do
+    expanded_ids = socket.assigns.expanded_job_ids
+
+    new_expanded_ids =
+      if MapSet.member?(expanded_ids, job_id) do
+        MapSet.delete(expanded_ids, job_id)
+      else
+        MapSet.put(expanded_ids, job_id)
+      end
+
+    {:noreply, assign(socket, :expanded_job_ids, new_expanded_ids)}
+  end
+
   defp load_source_data(socket) do
     source_slug = socket.assigns.source_slug
     date_range = socket.assigns.date_range
@@ -177,8 +207,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     health_status = SourceHealthCalculator.calculate_health_score(stats)
     success_rate = SourceHealthCalculator.success_rate_percentage(stats)
 
-    # Get run history (last 10 runs)
-    run_history = DiscoveryStatsCollector.get_run_history(source_slug, 10)
+    # Get complete run history (last 20 runs - successes AND failures)
+    run_history = DiscoveryStatsCollector.get_complete_run_history(source_slug, 20)
 
     # Get average runtime (uses date_range)
     avg_runtime = DiscoveryStatsCollector.get_average_runtime(source_slug, date_range)
@@ -933,29 +963,59 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           </div>
         </div>
 
-        <!-- Run History -->
+        <!-- Run History (Phase 3) -->
         <div class="bg-white rounded-lg shadow mb-8">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Recent Job History (Last 10)</h2>
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div class="flex-1">
+              <h2 class="text-lg font-semibold text-gray-900">Recent Job History (Last 20)</h2>
+              <p class="mt-1 text-sm text-gray-500">
+                Complete job execution history showing both successes and failures for accurate context.
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-600">Filter:</label>
+              <form phx-change="filter_job_history">
+                <select
+                  name="filter"
+                  class="text-xs border-gray-300 rounded-md"
+                >
+                  <option value="all" selected={@job_history_filter == :all}>All</option>
+                  <option value="successes" selected={@job_history_filter == :successes}>Successes</option>
+                  <option value="failures" selected={@job_history_filter == :failures}>Failures</option>
+                </select>
+              </form>
+            </div>
           </div>
           <div class="overflow-x-auto">
+            <% filtered_history = case @job_history_filter do
+              :successes -> Enum.filter(@run_history, fn run -> run.state == "success" end)
+              :failures -> Enum.filter(@run_history, fn run -> run.state != "success" end)
+              _ -> @run_history
+            end %>
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Errors</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Summary</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <%= for run <- @run_history do %>
-                  <tr class="hover:bg-gray-50">
+                <%= for run <- filtered_history do %>
+                  <% job_id = "job-#{format_datetime(run.completed_at) |> String.replace(~r/[^0-9]/, "")}" %>
+                  <% is_expanded = MapSet.member?(@expanded_job_ids, job_id) %>
+                  <% is_failure = run.state != "success" %>
+
+                  <tr class={[
+                    if(run.state == "success", do: "bg-green-50", else: ""),
+                    if(is_failure && run.errors, do: "cursor-pointer", else: "")
+                  ]}>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= format_datetime(run.completed_at) %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <%= if run.state == "completed" do %>
+                      <%= if run.state == "success" do %>
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                           ✅ Success
                         </span>
@@ -968,19 +1028,61 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <%= format_duration(run.duration_seconds) %>
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-500">
-                      <%= if run.errors do %>
-                        <span class="text-red-600 text-xs"><%= run.errors %></span>
+                    <td class="px-6 py-4 text-sm">
+                      <%= if run.state == "success" do %>
+                        <span class="text-gray-600">Job completed successfully</span>
                       <% else %>
-                        <span class="text-gray-400">None</span>
+                        <%= if run.errors do %>
+                          <div class="flex items-center justify-between">
+                            <span class="text-red-600 text-xs truncate max-w-md"><%= run.errors %></span>
+                            <button
+                              phx-click="toggle_job_details"
+                              phx-value-job_id={job_id}
+                              class="ml-2 text-blue-600 hover:text-blue-800 text-xs font-medium flex-shrink-0"
+                            >
+                              <%= if is_expanded, do: "Hide Details ▲", else: "Show Details ▼" %>
+                            </button>
+                          </div>
+                        <% else %>
+                          <span class="text-orange-600">Failed with warnings</span>
+                        <% end %>
                       <% end %>
                     </td>
                   </tr>
+
+                  <%= if is_expanded && is_failure && run.errors do %>
+                    <tr class="bg-red-50">
+                      <td colspan="4" class="px-6 py-4">
+                        <div class="space-y-3">
+                          <div>
+                            <h4 class="text-xs font-semibold text-gray-700 mb-1">Full Error Message:</h4>
+                            <p class="text-xs text-red-700 font-mono bg-red-100 p-2 rounded whitespace-pre-wrap"><%= run.errors %></p>
+                          </div>
+                          <%= if run.meta do %>
+                            <div>
+                              <h4 class="text-xs font-semibold text-gray-700 mb-1">Job Metadata:</h4>
+                              <pre class="text-xs text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto"><%= format_json(run.meta) %></pre>
+                            </div>
+                          <% end %>
+                          <%= if run.args do %>
+                            <div>
+                              <h4 class="text-xs font-semibold text-gray-700 mb-1">Job Arguments:</h4>
+                              <pre class="text-xs text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto"><%= format_json(run.args) %></pre>
+                            </div>
+                          <% end %>
+                        </div>
+                      </td>
+                    </tr>
+                  <% end %>
                 <% end %>
-                <%= if Enum.empty?(@run_history) do %>
+                <%= if Enum.empty?(filtered_history) do %>
                   <tr>
                     <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">
-                      No run history available
+                      <%= case @job_history_filter do %>
+                        <% :successes -> %> No successful jobs found
+                        <% :failures -> %> No failed jobs found
+                        <% _ -> %> No run history available
+                      <% end %>
                     </td>
                   </tr>
                 <% end %>
@@ -1251,6 +1353,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   end
 
   defp format_duration(_), do: "N/A"
+
+  # Format JSON data for display (handles both maps and strings)
+  defp format_json(data) when is_map(data) do
+    Jason.encode!(data, pretty: true)
+  end
+
+  defp format_json(data) when is_binary(data) do
+    # If it's already a JSON string, try to decode and re-encode it pretty
+    case Jason.decode(data) do
+      {:ok, decoded} -> Jason.encode!(decoded, pretty: true)
+      {:error, _} -> data
+    end
+  end
+
+  defp format_json(nil), do: "null"
+  defp format_json(_), do: "N/A"
 
   # Safe atom conversion for sort parameters
   # Prevents LiveView crashes from unexpected client input
