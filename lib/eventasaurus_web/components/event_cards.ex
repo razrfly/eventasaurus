@@ -106,12 +106,19 @@ defmodule EventasaurusWeb.Components.EventCards do
 
           <div class="mt-2 flex items-center text-sm text-gray-600">
             <Heroicons.calendar class="w-4 h-4 mr-1" />
-            <%= if PublicEvent.recurring?(@event) do %>
-              <span class="text-green-600 font-medium">
-                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_local_datetime(PublicEvent.next_occurrence_date(@event), @event.venue, :short) %>
-              </span>
-            <% else %>
-              <%= format_local_datetime(@event.starts_at, @event.venue, :short) %>
+            <%= cond do %>
+              <% PublicEvent.recurring?(@event) -> %>
+                <span class="text-green-600 font-medium">
+                  <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_local_datetime(PublicEvent.next_occurrence_date(@event), @event.venue, :short) %>
+                </span>
+              <% is_exhibition?(@event) -> %>
+                <%= if exhibition_datetime = format_exhibition_datetime(@event) do %>
+                  <span><%= exhibition_datetime %></span>
+                <% else %>
+                  <span>Currently showing</span>
+                <% end %>
+              <% true -> %>
+                <%= format_local_datetime(@event.starts_at, @event.venue, :short) %>
             <% end %>
           </div>
 

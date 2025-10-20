@@ -77,16 +77,25 @@ defmodule EventasaurusWeb.Components.Events.EventScheduleDisplay do
       <span class="font-medium"><%= gettext("Date & Time") %></span>
     </div>
     <p class="text-gray-900">
-      <%= if @selected_occurrence do %>
-        <%= format_occurrence_datetime(@selected_occurrence, @event.venue) %>
-      <% else %>
-        <%= format_local_datetime(@event.starts_at, @event.venue, :full) %>
-        <%= if @event.ends_at do %>
-          <br />
-          <span class="text-sm text-gray-600">
-            <%= gettext("Until") %> <%= format_local_datetime(@event.ends_at, @event.venue, :full) %>
-          </span>
-        <% end %>
+      <%= cond do %>
+        <% is_exhibition?(@event) -> %>
+          <%= if exhibition_datetime = format_exhibition_datetime(@event) do %>
+            <%= exhibition_datetime %>
+          <% else %>
+            <%= gettext("Currently showing") %>
+          <% end %>
+
+        <% @selected_occurrence -> %>
+          <%= format_occurrence_datetime(@selected_occurrence, @event.venue) %>
+
+        <% true -> %>
+          <%= format_local_datetime(@event.starts_at, @event.venue, :full) %>
+          <%= if @event.ends_at do %>
+            <br />
+            <span class="text-sm text-gray-600">
+              <%= gettext("Until") %> <%= format_local_datetime(@event.ends_at, @event.venue, :full) %>
+            </span>
+          <% end %>
       <% end %>
     </p>
     """
