@@ -69,9 +69,17 @@ end
 - Each city is independent in the database
 - Venues belong to specific cities (including suburbs)
 
-## Solution Approach: Runtime City Hierarchy Detection
+## Solution Approach: Pure Geographic Clustering
 
-**Goal**: Solve this problem WITHOUT database migrations by using runtime computation based on existing geo-coordinates and name patterns.
+**Goal**: Solve this problem WITHOUT database migrations using pure geographic proximity detection. No regex patterns needed.
+
+### Why Pure Geographic?
+
+✅ **100% objective** - no ambiguous name pattern matching
+✅ **Works globally** - any naming convention (Paris 9, Brooklyn, Kraków-Nowa Huta, etc.)
+✅ **Self-correcting** - adapts automatically as data grows
+✅ **Simpler code** - no regex patterns to maintain
+✅ **Data-driven** - cities with more events naturally become primaries
 
 ### Proposed Module: `CityHierarchy`
 
@@ -82,46 +90,44 @@ Location: `lib/eventasaurus_discovery/locations/city_hierarchy.ex`
 ```elixir
 defmodule EventasaurusDiscovery.Locations.CityHierarchy do
   @moduledoc """
-  Runtime detection of city-suburb relationships using geographic
-  coordinates and naming patterns. No database changes required.
+  Runtime detection of metropolitan areas using pure geographic clustering.
+  No database changes or regex patterns required.
   """
 
-  # Detection
-  def get_parent_city(city)
-  def get_suburb_cities(parent_city)
-  def is_suburb?(city)
+  # Clustering
+  def cluster_nearby_cities(cities, distance_km \\ 20.0)
+  def get_primary_city(cluster)
 
   # Statistics
-  def aggregate_stats_by_parent(city_stats)
-  def get_city_with_suburbs(city_id)
+  def aggregate_stats_by_cluster(city_stats)
 
   # Navigation
-  def build_breadcrumbs(city)
-  def get_canonical_city(city)
+  def build_breadcrumbs(city, all_cities)
+  def get_metro_area_cities(city_id)
 end
 ```
 
-#### Detection Algorithm
+#### Clustering Algorithm
 
-**Step 1: Pattern Matching**
-- Regex: `~r/^(.+?)\s+\d+$/` (e.g., "Paris 9" → "Paris")
-- Regex: `~r/^(.+?)\s+\d{1,2}(st|nd|rd|th)?$/` (e.g., "Paris 8th" → "Paris")
-- Additional patterns for other naming conventions
+**Step 1: Calculate Distance Matrix**
+- For each pair of cities, calculate Haversine distance
+- Only consider cities in the same country
+- Build adjacency list where distance < threshold (20-30km)
 
-**Step 2: Geographic Validation**
-- Calculate distance between potential suburb and parent using Haversine formula
-- Threshold: Suburbs must be within 50km of parent city center
-- Prevents false matches (e.g., "Springfield 1" in different states)
+**Step 2: Form Clusters**
+- Use connected components algorithm to group nearby cities
+- All cities within threshold distance are in same cluster
+- Each cluster represents a metropolitan area
 
-**Step 3: Database Lookup**
-- Check if parent city exists in database by name and country
-- Match must be in same country
-- Return parent city if found and distance check passes
+**Step 3: Select Primary City**
+- Within each cluster, the city with MOST EVENTS becomes primary
+- This naturally makes "Paris" (302 events) primary over "Paris 8" (21 events)
+- Self-correcting as data grows
 
-**Step 4: Caching**
-- Cache results in ETS table keyed by city_id
-- TTL: 1 hour (suburbs don't change frequently)
-- Invalidate on city updates
+**Step 4: Display-Time Aggregation**
+- Compute clusters on-demand when loading statistics
+- No caching needed initially (optimization can come later if needed)
+- Simple, stateless transformation
 
 #### Distance Calculation (Haversine)
 
@@ -131,10 +137,10 @@ defp haversine_distance(lat1, lon1, lat2, lon2) do
   r = 6371.0
 
   # Convert to radians
-  lat1_rad = degrees_to_radians(lat1)
-  lat2_rad = degrees_to_radians(lat2)
-  delta_lat = degrees_to_radians(lat2 - lat1)
-  delta_lon = degrees_to_radians(lon2 - lon1)
+  lat1_rad = degrees_to_radians(Decimal.to_float(lat1))
+  lat2_rad = degrees_to_radians(Decimal.to_float(lat2))
+  delta_lat = degrees_to_radians(Decimal.to_float(lat2) - Decimal.to_float(lat1))
+  delta_lon = degrees_to_radians(Decimal.to_float(lon2) - Decimal.to_float(lon1))
 
   # Haversine formula
   a = :math.sin(delta_lat / 2) * :math.sin(delta_lat / 2) +
@@ -145,6 +151,68 @@ defp haversine_distance(lat1, lon1, lat2, lon2) do
 
   r * c
 end
+
+defp degrees_to_radians(degrees), do: degrees * :math.pi() / 180.0
+```
+
+#### Complete Algorithm Example
+
+```elixir
+def aggregate_stats_by_cluster(city_stats, distance_threshold \\ 20.0) do
+  # Load all cities with their coordinates
+  cities = load_cities_with_coords(city_stats)
+
+  # Build clusters based on geographic proximity
+  clusters = cluster_nearby_cities(cities, distance_threshold)
+
+  # For each cluster, aggregate stats
+  Enum.map(clusters, fn cluster ->
+    # Find primary city (most events)
+    city_stats_in_cluster = Enum.filter(city_stats, fn stat ->
+      Enum.any?(cluster, & &1.id == stat.city_id)
+    end)
+
+    primary_stat = Enum.max_by(city_stats_in_cluster, & &1.count)
+    primary_city = Enum.find(cluster, & &1.id == primary_stat.city_id)
+
+    # Build aggregated result
+    %{
+      city_id: primary_city.id,
+      city_name: primary_city.name,
+      city_slug: primary_city.slug,
+      count: Enum.sum(Enum.map(city_stats_in_cluster, & &1.count)),
+      subcities: Enum.reject(city_stats_in_cluster, & &1.city_id == primary_city.id)
+    }
+  end)
+  |> Enum.sort_by(& &1.count, :desc)
+end
+
+defp cluster_nearby_cities(cities, distance_threshold) do
+  # Build adjacency map: city_id -> [nearby_city_ids]
+  adjacency = build_adjacency_map(cities, distance_threshold)
+
+  # Find connected components (clusters)
+  find_connected_components(adjacency)
+end
+
+defp build_adjacency_map(cities, threshold) do
+  cities
+  |> Enum.reduce(%{}, fn city, acc ->
+    nearby = Enum.filter(cities, fn other ->
+      city.id != other.id and
+      city.country_id == other.country_id and
+      haversine_distance(city.latitude, city.longitude, other.latitude, other.longitude) < threshold
+    end)
+
+    Map.put(acc, city.id, Enum.map(nearby, & &1.id))
+  end)
+end
+
+defp find_connected_components(adjacency) do
+  # Standard graph traversal to find all connected components
+  # Each component becomes a metropolitan area cluster
+  # Implementation: BFS or DFS from each unvisited node
+end
 ```
 
 ### Application Points
@@ -154,53 +222,66 @@ end
 **File**: `lib/eventasaurus_web/live/admin/discovery_dashboard_live.ex`
 
 ```elixir
-# Before rendering city_stats
-defp aggregate_city_stats(city_stats) do
-  city_stats
-  |> Enum.group_by(fn stat ->
-    city = Repo.get(City, stat.city_id)
-    parent = CityHierarchy.get_parent_city(city)
-    if parent, do: parent.id, else: stat.city_id
-  end)
-  |> Enum.map(fn {parent_id, stats} ->
-    parent_city = Repo.get(City, parent_id)
-    suburbs = Enum.map(stats, fn s ->
-      city = Repo.get(City, s.city_id)
-      %{id: city.id, name: city.name, count: s.count}
-    end)
+# In mount or handle_params
+defp load_city_stats do
+  city_stats = query_city_event_counts() # Existing query
 
-    %{
-      city_id: parent_id,
-      city_name: parent_city.name,
-      count: Enum.sum(Enum.map(stats, & &1.count)),
-      suburbs: suburbs
-    }
-  end)
-  |> Enum.sort_by(& &1.count, :desc)
+  # Apply clustering aggregation
+  CityHierarchy.aggregate_stats_by_cluster(city_stats, 20.0)
 end
 ```
 
-**UI Change**: Expandable rows showing suburb breakdown
+**UI Change**: Expandable rows showing metro area breakdown
+
 ```heex
-<tr>
-  <td>
-    <button phx-click="toggle_suburb_details" phx-value-city-id={stat.city_id}>
-      {stat.city_name}
-      <%= if length(stat.suburbs) > 0 do %>
-        <span class="text-xs text-gray-500">({length(stat.suburbs)} areas)</span>
+<%= for stat <- @city_stats do %>
+  <tr>
+    <td>
+      <%= if length(stat.subcities) > 0 do %>
+        <button phx-click="toggle_metro_details" phx-value-city-id={stat.city_id}
+                class="flex items-center gap-2">
+          <span>{stat.city_name}</span>
+          <span class="text-xs text-gray-500">
+            ({length(stat.subcities) + 1} areas)
+          </span>
+          <%= if @expanded_metro_id == stat.city_id do %>
+            ▼
+          <% else %>
+            ▶
+          <% end %>
+        </button>
+      <% else %>
+        {stat.city_name}
       <% end %>
-    </button>
-  </td>
-  <td>{format_number(stat.count)}</td>
-</tr>
-<%= if @expanded_city_id == stat.city_id do %>
-  <%= for suburb <- stat.suburbs do %>
-    <tr class="bg-gray-50">
-      <td class="pl-12">{suburb.name}</td>
-      <td>{format_number(suburb.count)}</td>
-    </tr>
+    </td>
+    <td>{format_number(stat.count)}</td>
+    <td><!-- actions --></td>
+  </tr>
+
+  <%= if @expanded_metro_id == stat.city_id do %>
+    <%= for subcity <- stat.subcities do %>
+      <tr class="bg-gray-50">
+        <td class="pl-12 text-sm">{subcity.city_name}</td>
+        <td class="text-sm">{format_number(subcity.count)}</td>
+        <td class="text-sm"><!-- actions --></td>
+      </tr>
+    <% end %>
   <% end %>
 <% end %>
+```
+
+**Before**:
+```
+Paris    302
+Paris 8   21
+Paris 16  21
+Paris 1   16
+```
+
+**After**:
+```
+▶ Paris    360  (4 areas)
+  [Click to expand and see: Paris 302, Paris 8 21, Paris 16 21, Paris 1 16]
 ```
 
 #### 2. Breadcrumb Navigation
@@ -211,19 +292,27 @@ end
 defmodule EventasaurusWeb.Helpers.BreadcrumbHelper do
   alias EventasaurusDiscovery.Locations.CityHierarchy
 
-  def city_breadcrumbs(city) do
-    case CityHierarchy.get_parent_city(city) do
-      nil ->
-        [
-          %{label: "Home", path: "/"},
-          %{label: city.name, path: "/city/#{city.slug}"}
-        ]
-      parent ->
-        [
-          %{label: "Home", path: "/"},
-          %{label: parent.name, path: "/city/#{parent.slug}"},
-          %{label: city.name, path: "/city/#{city.slug}"}
-        ]
+  @doc """
+  Builds breadcrumb trail for a city, including metro area primary if applicable.
+  """
+  def city_breadcrumbs(city, all_nearby_cities) do
+    # Find if this city is part of a metro cluster
+    cluster = CityHierarchy.find_cluster_for_city(city, all_nearby_cities)
+    primary = CityHierarchy.get_primary_city(cluster)
+
+    if primary && primary.id != city.id do
+      # City is in a metro area with different primary
+      [
+        %{label: "Home", path: "/"},
+        %{label: primary.name, path: "/city/#{primary.slug}"},
+        %{label: city.name, path: "/city/#{city.slug}"}
+      ]
+    else
+      # City is standalone or is the primary
+      [
+        %{label: "Home", path: "/"},
+        %{label: city.name, path: "/city/#{city.slug}"}
+      ]
     end
   end
 end
@@ -231,62 +320,47 @@ end
 
 **Apply to**: All city live views (events, venues, container_detail)
 
-#### 3. SEO Improvements
+#### 3. SEO Improvements (Optional)
 
-**Canonical URLs**: Point suburb pages to parent city
+For non-primary cities in a metro area, optionally add:
+
 ```heex
-<%= if parent = CityHierarchy.get_parent_city(@city) do %>
-  <link rel="canonical" href={url(~p"/city/#{parent.slug}")} />
+<%= if primary_city = get_metro_primary(@city) do %>
+  <link rel="canonical" href={url(~p"/city/#{primary_city.slug}")} />
+  <meta name="description" content={"Events in #{@city.name}, #{primary_city.name} area"} />
 <% end %>
-```
-
-**Meta Descriptions**: Include parent city context
-```heex
-<meta name="description" content={"Events in #{@city.name}, #{parent.name}"} />
 ```
 
 ## Implementation Phases
 
 ### Phase 0: Core Module (No UI Changes)
-**Goal**: Build and test the hierarchy detection logic
+**Goal**: Build and test the clustering logic
 
-- [ ] Create `CityHierarchy` module with detection functions
+- [ ] Create `CityHierarchy` module with clustering functions
 - [ ] Implement Haversine distance calculation
-- [ ] Add ETS caching for performance
+- [ ] Implement connected components algorithm for clustering
 - [ ] Write comprehensive tests covering:
-  - Pattern matching (Paris 9, New York 1, etc.)
-  - Distance validation (prevent false matches)
+  - Distance calculation accuracy
+  - Clustering with various thresholds (10km, 20km, 30km)
+  - Primary city selection (most events wins)
   - Same-country validation
-  - Edge cases (single-word cities, similar names)
-- [ ] Performance testing (should be <5ms per lookup with cache)
+  - Edge cases (isolated cities, equal event counts)
+- [ ] Performance testing with real Paris data
 
 **Deliverable**: Fully tested module, no UI changes
 
 ### Phase 1: Statistics Page
 **Goal**: Fix the fragmented city statistics display
 
-- [ ] Implement `aggregate_city_stats/1` in dashboard live
-- [ ] Add expandable suburb rows in UI
+- [ ] Integrate `aggregate_stats_by_cluster/1` in dashboard live
+- [ ] Add expandable metro area rows in UI
 - [ ] Add toggle state management
 - [ ] Test with real Paris data
 
-**Before**:
-```
-Paris    302
-Paris 8   21
-Paris 16  21
-```
-
-**After**:
-```
-Paris    344  (3 areas) [expandable]
-  ├─ Paris      302
-  ├─ Paris 8     21
-  └─ Paris 16    21
-```
+**Validation**: Paris shows as single entry (360 events, 4 areas)
 
 ### Phase 2: Breadcrumb Navigation
-**Goal**: Show city hierarchy in navigation
+**Goal**: Show metro area hierarchy in navigation
 
 - [ ] Create `BreadcrumbHelper` module
 - [ ] Update all city LiveViews to use breadcrumbs
@@ -295,156 +369,134 @@ Paris    344  (3 areas) [expandable]
 
 **Result**: Events in Paris 9 show: Home > Paris > Paris 9 > Event Name
 
-### Phase 3: SEO & Metadata
-**Goal**: Improve search engine understanding
-
-- [ ] Add canonical URL links for suburbs
-- [ ] Update meta descriptions to include parent city
-- [ ] Generate schema.org structured data with city hierarchy
-- [ ] Update sitemap generation to understand relationships
-
-### Phase 4: Discovery Stats Page
+### Phase 3: Discovery Stats Page
 **Goal**: Consistent aggregation across all stats views
 
-- [ ] Update city detail page to show parent city context
-- [ ] Add "View all [Parent City] areas" link
-- [ ] Aggregate source statistics by parent city
-- [ ] Update trend charts to show parent city trends
+- [ ] Update city detail page to show metro area context
+- [ ] Add "View all [Primary City] areas" link
+- [ ] Update trend charts for metro aggregation
+
+### Phase 4: SEO & Optimization (Optional)
+**Goal**: Performance and search engine optimization
+
+- [ ] Add canonical URLs for non-primary cities
+- [ ] Add caching if performance becomes an issue
+- [ ] Update sitemap generation
+
+## Distance Threshold Selection
+
+**Recommended**: 20-25km for most metropolitan areas
+
+**Analysis by City Type**:
+- **Compact Cities** (Paris, Barcelona): 10-15km captures all districts
+- **Medium Cities** (London, Berlin): 20-25km for boroughs
+- **Large Cities** (NYC, Tokyo): 30-40km for outer boroughs
+
+**Configurable Options**:
+1. Start with 20km default
+2. Add per-country override if needed
+3. Make it a config value for easy tuning
 
 ## Alternative Approaches Considered
 
 ### ❌ Approach 1: Add parent_city_id to Database
 **Pros**:
 - Explicit relationships
-- Easy queries
-- No runtime computation
+- Fast queries
 
 **Cons**:
 - Requires migration
-- Need to populate existing data
-- Manual maintenance when cities added
-- What about cities that change (historical data)?
-- Doesn't leverage existing coordinate data
+- Manual maintenance
+- Doesn't leverage coordinate data
 
-**Verdict**: Rejected due to migration requirement and maintenance burden
+**Verdict**: Rejected - requires migration
 
-### ❌ Approach 2: Pre-compute and Store in discovery_config
+### ❌ Approach 2: Regex Pattern Matching + Geographic
 **Pros**:
-- No query-time computation
-- Explicit storage
+- Can detect specific naming patterns
 
 **Cons**:
-- Still requires updates to all existing cities
-- Redundant with coordinate data
-- Discovery_config is for different purpose
-- Harder to maintain
+- Complex to maintain across languages/cultures
+- Regex can create false positives/negatives
+- Adds unnecessary complexity
+- Geographic proximity alone is sufficient
 
-**Verdict**: Rejected - overloads config field
+**Verdict**: Rejected - unnecessary complexity
 
-### ✅ Approach 3: Runtime Detection (Proposed)
+### ✅ Approach 3: Pure Geographic Clustering (Proposed)
 **Pros**:
 - No migrations required ✅
-- Uses existing coordinate data
-- Automatically works for new cities
-- Can be improved over time without data changes
-- Performance acceptable with caching (<5ms)
+- No regex patterns to maintain ✅
+- 100% objective, data-driven ✅
+- Works globally for any naming convention ✅
+- Self-correcting as data grows ✅
 
 **Cons**:
-- Requires computation (mitigated by ETS cache)
-- Slightly more complex logic
-- Pattern matching might need tuning for different cities
+- Requires computation (negligible for <100 cities)
+- May need threshold tuning
 
-**Verdict**: Best fit for requirements
+**Verdict**: Best fit - simple, robust, maintainable
 
-## Edge Cases to Handle
+## Edge Cases Handled
 
 1. **Cities with same name in different countries**
-   - Solution: Always check country_id matches
-   - Example: Springfield, USA vs Springfield, UK
+   - ✅ Solution: Always check country_id matches in clustering
 
-2. **Cities that legitimately have numbers**
-   - Solution: Distance check will fail if not related
-   - Example: "City 1" that's 1000km from "City"
+2. **Isolated cities**
+   - ✅ Solution: Form single-city clusters (no subcities)
 
-3. **False positives**
-   - Solution: Require both pattern match AND distance check
-   - Can add manual override list if needed
+3. **Equal event counts**
+   - ✅ Solution: Tie-breaker using city_id or name length
 
-4. **Multiple parent candidates**
-   - Solution: Choose closest parent by distance
-   - Example: If "Paris 9" and another "Paris" both exist, use closer one
+4. **Three cities in a line**
+   - ✅ Solution: All join same cluster if within threshold
 
-5. **Circular references**
-   - Solution: Pattern only matches parent if parent has NO number suffix
-   - "Paris 9" → "Paris" ✅
-   - "Paris" → nothing ✅
-
-6. **Performance with many cities**
-   - Solution: ETS cache with 1-hour TTL
-   - Lazy loading (only compute when needed)
-   - Consider preloading on app startup for active cities
+5. **Performance with many cities**
+   - ✅ Solution: O(n²) distance matrix, acceptable for <500 cities
+   - Can optimize with spatial indexing if needed later
 
 ## Testing Strategy
 
 ### Unit Tests
-- Pattern matching logic
-- Distance calculation accuracy
-- Cache hit/miss behavior
+- Distance calculation accuracy (known lat/lon pairs)
+- Clustering algorithm correctness
+- Primary city selection logic
 - Edge case handling
 
 ### Integration Tests
-- Statistics aggregation with real data
-- Breadcrumb generation for various city types
-- Performance benchmarks (should be <5ms cached)
+- Real Paris data aggregation
+- Statistics page rendering
+- Breadcrumb generation
 
 ### Manual Testing
-- Verify Paris districts aggregate correctly
-- Check London boroughs (when added)
-- Ensure Kraków shows correctly (no suburbs)
+- Verify Paris districts cluster correctly
+- Check isolated cities (Kraków) remain standalone
+- Test with London boroughs (when added)
 
-## Performance Considerations
+## Performance Analysis
 
-**Cache Strategy**:
-- ETS table: `:city_hierarchy_cache`
-- Key: `{:parent, city_id}` and `{:suburbs, city_id}`
-- TTL: 1 hour (configurable)
-- Invalidation: On city updates (via Ecto callbacks)
+**Computational Complexity**:
+- Distance matrix: O(n²) where n = number of cities
+- Connected components: O(n + e) where e = edges
+- For 100 cities: ~10,000 distance calculations
+- Each Haversine: ~1μs
+- **Total: ~10ms** for full clustering (acceptable)
 
-**Expected Performance**:
-- Uncached lookup: ~10-20ms (DB + computation)
-- Cached lookup: <1ms (ETS)
-- Cache hit rate: >95% for active cities
+**Optimization Options** (if needed later):
+- Cache clustering results (refresh hourly)
+- Use spatial indexing (PostGIS) for faster neighbor queries
+- Precompute clusters on city updates
 
 **Memory Usage**:
-- ~100 bytes per cached relationship
-- 1000 cities = ~100KB in cache
+- Distance matrix: 100 cities × 100 cities × 8 bytes = ~80KB
 - Negligible impact
-
-## Future Enhancements
-
-1. **Admin UI for Manual Overrides**
-   - Allow admins to explicitly set parent-child relationships
-   - Override automatic detection for edge cases
-
-2. **Multi-level Hierarchy**
-   - Support: Country > Region > City > Suburb
-   - Example: France > Île-de-France > Paris > Paris 9
-
-3. **City Merging Tool**
-   - Admin interface to merge duplicate cities
-   - Migrate events from suburb to parent
-
-4. **Analytics**
-   - Track which cities are most fragmented
-   - Identify detection failures
-   - Optimize patterns based on real data
 
 ## Success Metrics
 
 - ✅ Statistics page shows <50 city entries (currently ~100+)
-- ✅ All Paris events aggregate under "Paris" (currently split across 10+ entries)
-- ✅ Breadcrumbs show parent city on all suburb event pages
-- ✅ Performance: <5ms per city hierarchy lookup (cached)
+- ✅ All Paris areas aggregate under "Paris" (currently split across 10+ entries)
+- ✅ Breadcrumbs show metro area on non-primary city pages
+- ✅ Clustering computation: <20ms for 100 cities
 - ✅ Zero database migrations required
 
 ## Related Files
@@ -452,7 +504,6 @@ Paris    344  (3 areas) [expandable]
 ### To Modify
 - `lib/eventasaurus_web/live/admin/discovery_dashboard_live.ex` - Statistics aggregation
 - `lib/eventasaurus_web/live/city_live/*.ex` - Breadcrumb integration
-- `lib/eventasaurus_web/helpers/public_event_display_helpers.ex` - Display helpers
 
 ### To Create
 - `lib/eventasaurus_discovery/locations/city_hierarchy.ex` - Core module
@@ -465,14 +516,21 @@ Paris    344  (3 areas) [expandable]
 
 ## Questions for Discussion
 
-1. Should we show aggregated stats by default with expand option, or show suburbs with aggregate option?
-2. Distance threshold: 50km reasonable? Should vary by country/region?
-3. Should suburban event pages redirect to parent city, or show with breadcrumbs?
-4. Do we need a way for admins to manually override hierarchy detection?
-5. Should we preload hierarchy for all cities on app start, or lazy load?
+1. **Distance threshold**: Start with 20km? Make configurable per-country?
+2. **UI display**: Aggregated by default with expand, or list all with grouping header?
+3. **Breadcrumbs**: Always show primary city, or only when viewing non-primary?
+4. **Caching**: Implement immediately or wait for performance needs?
+5. **Admin override**: Need manual cluster override interface?
 
 ## Conclusion
 
-This approach solves the city/suburb aggregation problem without database migrations by using runtime detection based on existing geographic coordinates and naming patterns. It's performant (with ETS caching), maintainable (pure functions), and extensible (can add patterns over time).
+This simplified approach uses **pure geographic clustering** to solve city/suburb aggregation without database migrations or complex regex patterns. It's:
 
-The phased implementation approach allows us to validate the core logic before rolling out UI changes, minimizing risk.
+- **Simple**: Just distance calculations and clustering
+- **Objective**: Based on coordinates and event counts
+- **Global**: Works for any city naming convention worldwide
+- **Maintainable**: No patterns to update for new cities
+- **Performant**: <20ms for typical city counts
+- **Self-correcting**: Automatically adapts as data grows
+
+The phased implementation validates core logic before UI changes, minimizing risk.
