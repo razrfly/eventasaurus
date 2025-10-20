@@ -362,7 +362,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   # Get occurrence_type from metadata or detect from data
   defp get_occurrence_type(data) do
     cond do
-      # Check metadata for occurrence_type (Sortiraparis)
+      # Check event_type first (Sortiraparis uses :exhibition, :recurring, :one_time)
+      data.event_type == :exhibition ->
+        "exhibition"
+
+      data.event_type == :recurring ->
+        "recurring"
+
+      # Check metadata for occurrence_type (Sortiraparis legacy)
       data.metadata && data.metadata["occurrence_type"] ->
         data.metadata["occurrence_type"]
 

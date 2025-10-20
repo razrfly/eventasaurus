@@ -306,31 +306,6 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     Repo.one(query) || 0
   end
 
-  defp count_single_language_events(source_id) do
-    # Count events that have exactly one language in title_translations OR description_translations
-    query =
-      from(e in PublicEvent,
-        join: pes in PublicEventSource,
-        on: pes.event_id == e.id,
-        where: pes.source_id == ^source_id,
-        where:
-          (not is_nil(e.title_translations) and
-             fragment("jsonb_typeof(?) = 'object'", e.title_translations) and
-             fragment(
-               "(SELECT COUNT(*) FROM jsonb_object_keys(?)) = 1",
-               e.title_translations
-             )) or
-            (not is_nil(pes.description_translations) and
-               fragment("jsonb_typeof(?) = 'object'", pes.description_translations) and
-               fragment(
-                 "(SELECT COUNT(*) FROM jsonb_object_keys(?)) = 1",
-                 pes.description_translations
-               )),
-        select: count(pes.id)
-      )
-
-    Repo.one(query) || 0
-  end
 
   defp count_genuine_translations(source_id) do
     # Count events that have multiple languages with DIFFERENT text values
@@ -424,7 +399,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
          venue_completeness,
          image_completeness,
          category_completeness,
-         translation_completeness \\ nil
+         translation_completeness
        ) do
     if translation_completeness do
       # Multilingual source: venues 30%, images 25%, categories 25%, translations 20%
