@@ -69,6 +69,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
 
     # Track metrics in job metadata
     case result do
+      {:ok, :skipped} ->
+        # Movie was not matched in TMDB - record as skipped discard
+        MetricsTracker.record_success(job, external_id)
+        {:discard, :movie_not_matched}
+
       {:ok, _} ->
         MetricsTracker.record_success(job, external_id)
         result

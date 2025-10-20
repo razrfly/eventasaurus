@@ -85,45 +85,36 @@ defmodule EventasaurusDiscovery.Metrics.FailureTracker do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     error_category_str = to_string(error_category)
     error_message_truncated = String.slice(error_message, 0, 500)
+    external_id_str = to_string(external_id)
 
-    # Find existing failure record
-    existing =
-      Repo.one(
-        from f in EventFailure,
-          where:
-            f.source_id == ^source_id and
-              f.error_category == ^error_category_str and
-              f.error_message == ^error_message_truncated,
-          limit: 1
-      )
-
-    case existing do
-      nil ->
-        # Create new failure record
-        %EventFailure{}
-        |> EventFailure.changeset(%{
-          source_id: source_id,
-          error_category: error_category_str,
-          error_message: error_message_truncated,
-          sample_external_ids: [to_string(external_id)],
-          occurrence_count: 1,
-          first_seen_at: now,
+    # Use atomic upsert with on_conflict to avoid race conditions
+    # instead of find-then-insert pattern
+    %EventFailure{}
+    |> EventFailure.changeset(%{
+      source_id: source_id,
+      error_category: error_category_str,
+      error_message: error_message_truncated,
+      sample_external_ids: [external_id_str],
+      occurrence_count: 1,
+      first_seen_at: now,
+      last_seen_at: now
+    })
+    |> Repo.insert(
+      on_conflict: [
+        set: [
+          sample_external_ids:
+            fragment(
+              "CASE WHEN ? = ANY(sample_external_ids) THEN sample_external_ids ELSE array_append(sample_external_ids[greatest(0, array_length(sample_external_ids, 1) - ? + 1):], ?) END",
+              ^external_id_str,
+              ^@max_sample_ids,
+              ^external_id_str
+            ),
+          occurrence_count: fragment("event_failures.occurrence_count + 1"),
           last_seen_at: now
-        })
-        |> Repo.insert()
-
-      failure ->
-        # Update existing record
-        new_samples = update_sample_ids(failure.sample_external_ids, to_string(external_id))
-
-        failure
-        |> EventFailure.changeset(%{
-          sample_external_ids: new_samples,
-          occurrence_count: failure.occurrence_count + 1,
-          last_seen_at: now
-        })
-        |> Repo.update()
-    end
+        ]
+      ],
+      conflict_target: [:source_id, :error_category, :error_message]
+    )
   rescue
     error ->
       Logger.error("""
@@ -161,7 +152,7 @@ defmodule EventasaurusDiscovery.Metrics.FailureTracker do
 
     from(f in EventFailure,
       where: f.source_id == ^source_id,
-      order_by: [{^order, ^order_by_field}],
+      order_by: [{^order, field(f, ^order_by_field)}],
       limit: ^limit
     )
     |> Repo.all()
@@ -252,12 +243,14 @@ defmodule EventasaurusDiscovery.Metrics.FailureTracker do
       157
   """
   def get_total_failure_count(source_id) do
-    from(f in EventFailure,
-      where: f.source_id == ^source_id,
-      select: sum(f.occurrence_count)
-    )
-    |> Repo.one()
-    |> Kernel.||(0)
+    result =
+      from(f in EventFailure,
+        where: f.source_id == ^source_id,
+        select: sum(f.occurrence_count)
+      )
+      |> Repo.one()
+
+    result || 0
   end
 
   @doc """

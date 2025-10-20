@@ -21,7 +21,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreateDiscoveryEventFailures do
     create index(:discovery_event_failures, [:last_seen_at])
 
     # Unique index for upsert operations (group by source + category + message)
-    create index(:discovery_event_failures, [:source_id, :error_category, :error_message],
+    create unique_index(:discovery_event_failures, [:source_id, :error_category, :error_message],
              name: :discovery_event_failures_unique_idx
            )
   end
