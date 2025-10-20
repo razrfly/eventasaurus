@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.Components.Events.EventScheduleDisplay
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+  alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
@@ -19,9 +20,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     params = get_connect_params(socket) || %{}
     language = session["language"] || params["locale"] || "en"
 
+    # Store URI from connect_info for SEO (only available during mount)
+    request_uri = get_connect_info(socket, :uri)
+
     socket =
       socket
       |> assign(:language, language)
+      |> assign(:request_uri, request_uri)
       |> assign(:event, nil)
       |> assign(:loading, true)
       |> assign(:selected_occurrence, nil)
@@ -174,6 +179,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         # Generate SEO data (includes JSON-LD structured data with breadcrumbs)
         seo_data = generate_seo_data(enriched_event, breadcrumb_items, socket)
 
+        # Get available languages for this activity's city (dynamic based on country + DB translations)
+        available_languages =
+          if city && city.slug do
+            LanguageDiscovery.get_available_languages_for_city(city.slug)
+          else
+            ["en"]
+          end
+
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
@@ -187,6 +200,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:open_graph, seo_data.open_graph)
         |> assign(:canonical_url, seo_data.canonical_url)
         |> assign(:page_title, enriched_event.display_title)
+        |> assign(:available_languages, available_languages)
     end
   end
 
@@ -637,25 +651,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       <% else %>
         <%= if @event do %>
           <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Language Switcher -->
+            <!-- Language Switcher - Dynamic based on city -->
             <div class="flex justify-end mb-4">
               <div class="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  phx-click="change_language"
-                  phx-value-language="en"
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "en", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title="English"
-                >
-                  🇬🇧 EN
-                </button>
-                <button
-                  phx-click="change_language"
-                  phx-value-language="pl"
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "pl", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title="Polski"
-                >
-                  🇵🇱 PL
-                </button>
+                <%= for lang <- @available_languages do %>
+                  <button
+                    phx-click="change_language"
+                    phx-value-language={lang}
+                    class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                    title={String.upcase(lang)}
+                  >
+                    <%= language_flag(lang) %> <%= String.upcase(lang) %>
+                  </button>
+                <% end %>
               </div>
             </div>
 
@@ -1569,8 +1577,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # SEO helper functions
   defp generate_seo_data(event, breadcrumb_items, socket) do
-    # Get the request URI for canonical URL
-    uri = get_connect_info(socket, :uri) || URI.new!("/activities/#{event.slug}")
+    # Get the request URI for canonical URL (stored in assigns during mount)
+    uri = socket.assigns[:request_uri] || URI.new!("/activities/#{event.slug}")
     base_url = get_base_url()
     canonical_url = "#{base_url}#{uri.path}"
 
@@ -1838,4 +1846,71 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       _ -> nil
     end
   end
+
+  # Language display helper functions (for dynamic language switcher)
+  defp language_flag(lang) do
+    country_code = language_to_country_code(lang)
+    country_code_to_flag(country_code)
+  end
+
+  # Convert 2-letter language code to 2-letter country code for flag representation
+  # This is the ONLY acceptable hard-coding (visual flag representation)
+  defp language_to_country_code(lang) do
+    case String.downcase(lang) do
+      "en" -> "GB"
+      "fr" -> "FR"
+      "es" -> "ES"
+      "de" -> "DE"
+      "it" -> "IT"
+      "pt" -> "PT"
+      "pl" -> "PL"
+      "nl" -> "NL"
+      "ru" -> "RU"
+      "ja" -> "JP"
+      "zh" -> "CN"
+      "ko" -> "KR"
+      "ar" -> "SA"
+      "tr" -> "TR"
+      "sv" -> "SE"
+      "da" -> "DK"
+      "fi" -> "FI"
+      "no" -> "NO"
+      "cs" -> "CZ"
+      "el" -> "GR"
+      "he" -> "IL"
+      "hi" -> "IN"
+      "id" -> "ID"
+      "ms" -> "MY"
+      "th" -> "TH"
+      "vi" -> "VN"
+      "uk" -> "UA"
+      "ro" -> "RO"
+      "hu" -> "HU"
+      "sk" -> "SK"
+      "bg" -> "BG"
+      "hr" -> "HR"
+      "sr" -> "RS"
+      "sl" -> "SI"
+      "lt" -> "LT"
+      "lv" -> "LV"
+      "et" -> "EE"
+      # Default: use language code as country code (may not always be correct)
+      lang -> String.upcase(lang)
+    end
+  end
+
+  # Convert 2-letter country code to Unicode flag emoji using Regional Indicator Symbols
+  defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
+    code
+    |> String.upcase()
+    |> String.to_charlist()
+    |> Enum.map(fn char ->
+      # Convert A-Z (65-90) to Regional Indicator Symbols (127462-127487)
+      # This creates flag emojis algorithmically without hard-coding
+      char - ?A + 0x1F1E6
+    end)
+    |> List.to_string()
+  end
+
+  defp country_code_to_flag(_), do: "🏳️"
 end

@@ -942,15 +942,67 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
             <!-- Top Venues List -->
             <%= if @show_venue_details do %>
-              <div class="space-y-2">
+              <div class="space-y-3">
                 <%= for venue <- @comprehensive_stats.venue_stats.top_venues do %>
-                  <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                    <div class="flex-1">
-                      <p class="text-sm font-medium text-gray-900"><%= venue.venue_name %></p>
+                  <div class="p-4 border rounded-lg hover:bg-gray-50 space-y-2">
+                    <!-- Venue Name & Event Count -->
+                    <div class="flex items-center justify-between">
+                      <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900"><%= venue.venue_name %></p>
+                        <!-- Quality Badges -->
+                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                          <%= if venue.address do %>
+                            <span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded" title="Address available">✅ Address</span>
+                          <% end %>
+                          <%= if venue.place_id do %>
+                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded" title="Google Place ID">🆔 Place ID</span>
+                          <% end %>
+                          <%= if venue.source do %>
+                            <span class="text-xs bg-gray-100 text-gray-800 px-2 py-0.5 rounded" title="Data source">
+                              🔍 <%= venue.source %>
+                            </span>
+                          <% end %>
+                        </div>
+                      </div>
+                      <div class="ml-4 text-right flex-shrink-0">
+                        <p class="text-lg font-bold text-gray-900"><%= venue.event_count %></p>
+                        <p class="text-xs text-gray-500">events</p>
+                      </div>
                     </div>
-                    <div class="ml-4 text-right">
-                      <p class="text-lg font-bold text-gray-900"><%= venue.event_count %></p>
-                      <p class="text-xs text-gray-500">events</p>
+
+                    <!-- Venue Details -->
+                    <div class="text-xs text-gray-600 space-y-1 pt-2 border-t">
+                      <%= if venue.address do %>
+                        <div class="flex items-start">
+                          <span class="font-medium w-24 flex-shrink-0">Address:</span>
+                          <span class="flex-1"><%= venue.address %></span>
+                        </div>
+                      <% end %>
+                      <%= if venue.latitude && venue.longitude do %>
+                        <div class="flex items-start">
+                          <span class="font-medium w-24 flex-shrink-0">GPS:</span>
+                          <span class="flex-1"><%= Float.round(venue.latitude, 6) %>, <%= Float.round(venue.longitude, 6) %></span>
+                        </div>
+                      <% end %>
+                      <%= if venue.place_id do %>
+                        <div class="flex items-start">
+                          <span class="font-medium w-24 flex-shrink-0">Place ID:</span>
+                          <span class="flex-1 font-mono text-xs break-all"><%= venue.place_id %></span>
+                        </div>
+                      <% end %>
+                      <%= if venue.geocoding_performance do %>
+                        <div class="flex items-start">
+                          <span class="font-medium w-24 flex-shrink-0">Geocoding:</span>
+                          <span class="flex-1">
+                            <%= case venue.geocoding_performance do %>
+                              <% %{"match_type" => match_type} -> %>
+                                <span class="text-xs bg-gray-100 px-1.5 py-0.5 rounded"><%= match_type %></span>
+                              <% _ -> %>
+                                <span class="text-gray-400">N/A</span>
+                            <% end %>
+                          </span>
+                        </div>
+                      <% end %>
                     </div>
                   </div>
                 <% end %>

@@ -466,17 +466,23 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   @impl true
   def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
-    city_id_int = String.to_integer(city_id)
-    expanded = socket.assigns.expanded_metro_areas
+    case Integer.parse(city_id) do
+      {city_id_int, _} ->
+        expanded = socket.assigns.expanded_metro_areas
 
-    new_expanded =
-      if MapSet.member?(expanded, city_id_int) do
-        MapSet.delete(expanded, city_id_int)
-      else
-        MapSet.put(expanded, city_id_int)
-      end
+        new_expanded =
+          if MapSet.member?(expanded, city_id_int) do
+            MapSet.delete(expanded, city_id_int)
+          else
+            MapSet.put(expanded, city_id_int)
+          end
 
-    {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+        {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
+
+      :error ->
+        # Invalid city-id, no-op gracefully
+        {:noreply, socket}
+    end
   end
 
   defp load_data(socket) do
