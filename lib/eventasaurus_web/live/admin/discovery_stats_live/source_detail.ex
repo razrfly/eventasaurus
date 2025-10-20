@@ -13,7 +13,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, DataQualityChecker, TrendAnalyzer, SourceStatsCollector}
-  alias EventasaurusDiscovery.Locations.City
 
   import Ecto.Query
   require Logger
@@ -153,16 +152,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         {:error, _} -> :unknown
       end
 
-    # Get basic stats for the source (using first city as reference)
-    first_city = Repo.one(from(c in City, limit: 1, select: c.id))
-
-    stats =
-      case first_city do
-        nil ->
-          %{run_count: 0, success_count: 0, error_count: 0, last_run_at: nil, last_error: nil}
-        city_id ->
-          DiscoveryStatsCollector.get_source_stats(city_id, source_slug)
-      end
+    # Get detailed stats for the source using detail workers and metadata
+    # Use nil for city_id to aggregate across all cities for accurate global stats
+    # This ensures we query detail workers with meta->>'status' instead of sync workers
+    stats = DiscoveryStatsCollector.get_detailed_source_stats(nil, source_slug)
 
     # Calculate health and success rate
     health_status = SourceHealthCalculator.calculate_health_score(stats)
@@ -189,13 +182,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     coverage = get_coverage_description(source_slug, scope)
 
     # Get change tracking data (Phase 3)
-    new_events = EventChangeTracker.calculate_new_events(source_slug, 24)
-    dropped_events = EventChangeTracker.calculate_dropped_events(source_slug, 48)
-    percentage_change =
-      case first_city do
-        nil -> 0
-        city_id -> EventChangeTracker.calculate_percentage_change(source_slug, city_id)
-      end
+    # Pass nil for city_id to aggregate across all cities for source-wide stats
+    # Use configured window values to ensure labels match actual timeframes
+    new_events_window = get_new_events_window()
+    dropped_events_window = get_dropped_events_window()
+    new_events = EventChangeTracker.calculate_new_events(source_slug, new_events_window)
+    dropped_events = EventChangeTracker.calculate_dropped_events(source_slug, dropped_events_window)
+    percentage_change = EventChangeTracker.calculate_percentage_change(source_slug, nil)
     {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(percentage_change)
 
     # Get data quality metrics (Phase 5)
@@ -256,6 +249,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     |> assign(:total_events, total_events)
     |> assign(:new_events, new_events)
     |> assign(:dropped_events, dropped_events)
+    |> assign(:new_events_window, new_events_window)
+    |> assign(:dropped_events_window, dropped_events_window)
     |> assign(:percentage_change, percentage_change)
     |> assign(:trend_emoji, trend_emoji)
     |> assign(:trend_text, trend_text)
@@ -270,6 +265,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     |> assign(:comprehensive_stats, comprehensive_stats)
     |> assign(:occurrence_chart_data, Jason.encode!(occurrence_chart_data))
     |> assign(:category_chart_data, Jason.encode!(category_chart_data))
+  end
+
+  # Get configured window for new events detection
+  defp get_new_events_window do
+    config = Application.get_env(:eventasaurus_discovery, :change_tracking, [])
+    Keyword.get(config, :new_events_window_hours, 24)
+  end
+
+  # Get configured window for dropped events detection
+  defp get_dropped_events_window do
+    config = Application.get_env(:eventasaurus_discovery, :change_tracking, [])
+    Keyword.get(config, :dropped_events_window_hours, 48)
   end
 
   defp count_events_for_source(source_slug) do
@@ -432,7 +439,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 <div class="ml-4">
                   <p class="text-sm font-medium text-green-900">New Events</p>
                   <p class="text-2xl font-semibold text-green-700">+<%= @new_events %></p>
-                  <p class="text-xs text-green-600 mt-1">Last 24 hours</p>
+                  <p class="text-xs text-green-600 mt-1">Last <%= @new_events_window %> hours</p>
                 </div>
               </div>
 
@@ -443,8 +450,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 </div>
                 <div class="ml-4">
                   <p class="text-sm font-medium text-red-900">Dropped Events</p>
-                  <p class="text-2xl font-semibold text-red-700">-<%= @dropped_events %></p>
-                  <p class="text-xs text-red-600 mt-1">Not seen (48h)</p>
+                  <p class="text-2xl font-semibold text-red-700">
+                    <%= if @dropped_events == 0 do %>
+                      0
+                    <% else %>
+                      -<%= @dropped_events %>
+                    <% end %>
+                  </p>
+                  <p class="text-xs text-red-600 mt-1">Not seen (<%= @dropped_events_window %>h)</p>
                 </div>
               </div>
 
@@ -456,7 +469,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 <div class="ml-4">
                   <p class="text-sm font-medium text-blue-900">Week-over-Week</p>
                   <p class={"text-2xl font-semibold #{@trend_class}"}>
-                    <%= if @percentage_change > 0 do %>+<% end %><%= @percentage_change %>%
+                    <%= if @percentage_change == :first_scrape do %>
+                      N/A
+                    <% else %>
+                      <%= if @percentage_change > 0 do %>+<% end %><%= @percentage_change %>%
+                    <% end %>
                   </p>
                   <p class="text-xs text-blue-600 mt-1"><%= @trend_text %></p>
                 </div>
@@ -856,7 +873,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         <!-- Run History -->
         <div class="bg-white rounded-lg shadow mb-8">
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Run History (Last 10)</h2>
+            <h2 class="text-lg font-semibold text-gray-900">Recent Job History (Last 10)</h2>
           </div>
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
