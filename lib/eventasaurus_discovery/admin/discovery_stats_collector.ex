@@ -140,10 +140,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   defp get_city_stats(worker, city_id) do
     # Query for aggregate stats with city filter
+    # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
     stats_query =
       from(j in "oban_jobs",
         where: j.worker == ^worker,
-        where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
+        where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
         where: j.state in ["completed", "discarded"],
         select: %{
           run_count: count(j.id),
@@ -225,10 +226,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       |> Map.new()
     else
       # Single batched query for all workers
+      # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
       stats_query =
         from(j in "oban_jobs",
           where: j.worker in ^workers,
-          where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
+          where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
           where: j.state in ["completed", "discarded"],
           group_by: j.worker,
           select: %{
@@ -375,10 +377,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   end
 
   defp get_last_error(worker, city_id) do
+    # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
     error_query =
       from(j in "oban_jobs",
         where: j.worker == ^worker,
-        where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
+        where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
         where: j.state == "discarded",
         order_by: [
           desc:
@@ -437,10 +440,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   defp get_last_errors_batch(workers, city_id) do
     # Fetch latest error for each worker in a single query
+    # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
     error_query =
       from(j in "oban_jobs",
         where: j.worker in ^workers,
-        where: fragment("? ->> 'city_id' = ?", j.args, ^to_string(city_id)),
+        where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
         where: j.state == "discarded",
         distinct: [j.worker],
         order_by: [

@@ -6,13 +6,14 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
   Health is determined by success rate over total runs:
   - Healthy (🟢): ≥90% success rate
   - Warning (🟡): 70-89% success rate
-  - Error (🔴): <70% success rate or no runs
+  - Error (🔴): <70% success rate
+  - No Data (⚪): No runs available (e.g., city-scoped source in city with no jobs)
   """
 
   @doc """
   Calculate the health status for a source based on its statistics.
 
-  Returns one of: `:healthy`, `:warning`, `:error`
+  Returns one of: `:healthy`, `:warning`, `:error`, `:no_data`
 
   ## Examples
 
@@ -26,9 +27,9 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
       :error
 
       iex> calculate_health_score(%{run_count: 0, success_count: 0})
-      :error
+      :no_data
   """
-  def calculate_health_score(%{run_count: 0}), do: :error
+  def calculate_health_score(%{run_count: 0}), do: :no_data
 
   def calculate_health_score(%{run_count: run_count, success_count: success_count})
       when is_integer(run_count) and is_integer(success_count) and run_count > 0 do
@@ -117,10 +118,14 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
       iex> status_emoji(:error)
       "🔴"
+
+      iex> status_emoji(:no_data)
+      "⚪"
   """
   def status_emoji(:healthy), do: "🟢"
   def status_emoji(:warning), do: "🟡"
   def status_emoji(:error), do: "🔴"
+  def status_emoji(:no_data), do: "⚪"
   def status_emoji(_), do: "⚪"
 
   @doc """
@@ -136,10 +141,14 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
       iex> status_text(:error)
       "Error"
+
+      iex> status_text(:no_data)
+      "No Data"
   """
   def status_text(:healthy), do: "Healthy"
   def status_text(:warning), do: "Warning"
   def status_text(:error), do: "Error"
+  def status_text(:no_data), do: "No Data"
   def status_text(_), do: "Unknown"
 
   @doc """
@@ -155,9 +164,13 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
 
       iex> status_classes(:error)
       "bg-red-100 text-red-800"
+
+      iex> status_classes(:no_data)
+      "bg-gray-100 text-gray-800"
   """
   def status_classes(:healthy), do: "bg-green-100 text-green-800"
   def status_classes(:warning), do: "bg-yellow-100 text-yellow-800"
   def status_classes(:error), do: "bg-red-100 text-red-800"
+  def status_classes(:no_data), do: "bg-gray-100 text-gray-800"
   def status_classes(_), do: "bg-gray-100 text-gray-800"
 end

@@ -30,8 +30,8 @@ result1 = with {:ok, html} <- Client.fetch_page(url),
   ├─ Title: #{event.title}
   ├─ Occurrence Type: #{event.metadata["occurrence_type"]}
   ├─ Original Date String: #{event.metadata["original_date_string"]}
-  ├─ Starts At: #{DateTime.to_iso8601(event.starts_at)}
-  ├─ Ends At: #{inspect(event.ends_at)}
+  ├─ Starts At: #{if event.starts_at, do: DateTime.to_iso8601(event.starts_at), else: "nil"}
+  ├─ Ends At: #{if event.ends_at, do: DateTime.to_iso8601(event.ends_at), else: "nil"}
   ├─ Fallback Flag: #{event.metadata["occurrence_fallback"]}
   └─ First Seen: #{event.metadata["first_seen_at"]}
 

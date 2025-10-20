@@ -338,6 +338,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
       # Range with shared year: "15 octobre au 20 novembre 2025"
       ~r/(#{months}\s+\d+\s+#{connector}\s+#{months}\s+\d+,?\s*\d{4})/i,
       ~r/(\d+\s+#{months}\s+#{connector}\s+\d+\s+#{months}\s+\d{4})/i,
+      # Short-range with shared month: "from July 4 to 6, 2025" or "du 4 au 6 juillet 2025"
+      ~r/(?:from|du)\s+#{months}\s+\d+\s+#{connector}\s+\d+,?\s*\d{4}/i,
+      ~r/(?:from|du)\s+\d+\s+#{connector}\s+\d+\s+#{months}\s+\d{4}/i,
       # Multi-date: "February 25, 27, 28, 2026"
       ~r/(#{months}\s+\d+(?:,\s*\d+)+,\s*\d{4})/i,
       # Single with day: "Friday, October 31, 2025" or "vendredi 31 octobre 2025"
@@ -378,7 +381,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
 
   defp extract_meta_description(html) do
     case Regex.run(~r{<meta\s+(?:name|property)="description"\s+content="([^"]+)"}i, html) do
-      [_, desc] -> String.trim(desc)
+      [_, desc] -> desc |> String.trim() |> HtmlEntities.decode()
       _ -> nil
     end
   end
