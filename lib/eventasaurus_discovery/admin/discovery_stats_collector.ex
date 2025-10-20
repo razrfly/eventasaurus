@@ -604,7 +604,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp to_datetime(nil), do: nil
 
   @doc """
-  Get the run history for a specific source.
+  Get the run history for a specific source (DEPRECATED - shows failures only).
+
+  **DEPRECATED**: Use `get_complete_run_history/2` for accurate success + failure history.
 
   Returns a list of recent job executions with their status and metadata.
 
@@ -679,6 +681,96 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     end
   end
 
+  @doc """
+  Get complete run history for a specific source (successes AND failures).
+
+  Returns a list of recent job executions including BOTH successful and failed runs.
+  This provides accurate context by showing the complete pattern of job execution,
+  not just failures.
+
+  Queries DETAIL workers (e.g., EventDetailJob, VenueDetailJob) instead of sync workers,
+  and uses metadata status (meta->>'status') for accurate event-level tracking.
+
+  ## Parameters
+
+    * `source_slug` - The source name (string)
+    * `limit` - Maximum number of runs to return (default: 20)
+
+  ## Returns
+
+  A list of maps with complete job execution details (successes + failures).
+
+  ## Examples
+
+      iex> get_complete_run_history("bandsintown", 20)
+      [
+        %{
+          completed_at: ~U[2025-01-07 12:00:00Z],
+          state: "completed",
+          duration_seconds: 125,
+          errors: nil,
+          city_id: 1
+        },
+        %{
+          completed_at: ~U[2025-01-07 11:55:00Z],
+          state: "failed",
+          duration_seconds: 5,
+          errors: "Network timeout",
+          city_id: 1
+        },
+        ...
+      ]
+  """
+  def get_complete_run_history(source_slug, limit \\ 20)
+      when is_binary(source_slug) and is_integer(limit) do
+    case SourceRegistry.get_worker_name(source_slug) do
+      {:error, :not_found} ->
+        []
+
+      {:ok, sync_worker} ->
+        # Get the detail worker instead of sync worker
+        detail_worker = determine_detail_worker(sync_worker)
+
+        # Query ALL jobs (with or without metadata status) to show complete history
+        query =
+          from(j in "oban_jobs",
+            where: j.worker == ^detail_worker,
+            where: j.state in ["completed", "discarded"],
+            order_by: [
+              desc:
+                fragment(
+                  "COALESCE(?, ?)",
+                  j.completed_at,
+                  j.discarded_at
+                )
+            ],
+            limit: ^limit,
+            select: %{
+              completed_at:
+                fragment(
+                  "COALESCE(?, ?)",
+                  j.completed_at,
+                  j.discarded_at
+                ),
+              attempted_at: j.attempted_at,
+              # Use metadata status if available, otherwise map job state
+              state:
+                fragment(
+                  "COALESCE(meta->>'status', CASE WHEN ? = 'completed' THEN 'completed' ELSE 'failed' END)",
+                  j.state
+                ),
+              errors: fragment("meta->>'error_message'"),
+              args: j.args,
+              meta: j.meta
+            }
+          )
+
+        query
+        |> Repo.all()
+        |> Enum.map(&enrich_job_history/1)
+    end
+  end
+
   defp enrich_job_history(job) do
     # Calculate duration in seconds
     duration_seconds =
@@ -715,7 +807,9 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       state: job.state,
       duration_seconds: duration_seconds,
       errors: formatted_error,
-      city_id: city_id
+      city_id: city_id,
+      meta: job.meta,
+      args: job.args
     }
   end
 
