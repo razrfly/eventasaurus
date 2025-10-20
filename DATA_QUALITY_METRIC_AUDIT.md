@@ -266,9 +266,11 @@ SELECT
   s.slug as source,
   COUNT(pes.id) as total_events,
   COUNT(CASE WHEN e.title_translations IS NOT NULL AND
+              jsonb_typeof(e.title_translations) = 'object' AND
               (SELECT count(*) FROM jsonb_object_keys(e.title_translations)) > 1
          THEN 1 END) as multilingual_events,
   ROUND(100.0 * COUNT(CASE WHEN e.title_translations IS NOT NULL AND
+                            jsonb_typeof(e.title_translations) = 'object' AND
                             (SELECT count(*) FROM jsonb_object_keys(e.title_translations)) > 1
                        THEN 1 END)::numeric / NULLIF(COUNT(pes.id), 0), 1) as multilingual_pct
 FROM sources s
@@ -283,9 +285,11 @@ SELECT
   s.slug as source,
   COUNT(pes.id) as total_events,
   COUNT(CASE WHEN pes.description_translations IS NOT NULL AND
+              jsonb_typeof(pes.description_translations) = 'object' AND
               (SELECT count(*) FROM jsonb_object_keys(pes.description_translations)) > 1
          THEN 1 END) as multilingual_descriptions,
   ROUND(100.0 * COUNT(CASE WHEN pes.description_translations IS NOT NULL AND
+                            jsonb_typeof(pes.description_translations) = 'object' AND
                             (SELECT count(*) FROM jsonb_object_keys(pes.description_translations)) > 1
                        THEN 1 END)::numeric / NULLIF(COUNT(pes.id), 0), 1) as desc_multilingual_pct
 FROM sources s
