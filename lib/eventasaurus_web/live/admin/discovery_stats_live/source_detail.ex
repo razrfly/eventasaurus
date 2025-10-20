@@ -685,23 +685,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             <!-- Detailed Breakdown -->
             <div class="space-y-4">
               <%= for occurrence <- @comprehensive_stats.occurrence_types do %>
+                <% {emoji, color} = case occurrence.type do
+                  "explicit" -> {"🎯", "#3B82F6"}
+                  "pattern" -> {"🔄", "#8B5CF6"}
+                  "exhibition" -> {"🖼️", "#EC4899"}
+                  "recurring" -> {"📅", "#10B981"}
+                  _ -> {"❓", "#6B7280"}
+                end %>
                 <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div class="flex items-center flex-1">
-                    <span class="text-2xl mr-3">
-                      <%= case occurrence.type do %>
-                        <% "explicit" -> %>🎯
-                        <% "pattern" -> %>🔄
-                        <% "exhibition" -> %>🖼️
-                        <% "movie" -> %>🎬
-                        <% "recurring" -> %>📅
-                        <% _ -> %>❓
-                      <% end %>
-                    </span>
+                    <span class="text-2xl mr-3"><%= emoji %></span>
                     <div class="flex-1">
                       <p class="text-sm font-medium text-gray-900 capitalize"><%= occurrence.type %></p>
                       <%= if @show_occurrence_details do %>
                         <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
-                          <div class="bg-indigo-600 h-2 rounded-full" style={"width: #{occurrence.percentage}%"}></div>
+                          <div class="h-2 rounded-full" style={"width: #{occurrence.percentage}%; background-color: #{color}"}></div>
                         </div>
                       <% end %>
                     </div>
@@ -1153,20 +1151,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   # Helper functions
 
   defp format_occurrence_pie_chart(occurrence_types) do
-    # Color palette for occurrence types
+    # Color palette for occurrence types (4 valid types)
     colors = %{
-      # Blue
+      # Blue - One-time events with specific date/time
       "explicit" => "#3B82F6",
-      # Purple
+      # Purple - Recurring events with strict schedule
       "pattern" => "#8B5CF6",
-      # Pink
+      # Pink - Open-ended periods with continuous access
       "exhibition" => "#EC4899",
-      # Amber
-      "movie" => "#F59E0B",
-      # Green
-      "recurring" => "#10B981",
-      # Gray
-      "unknown" => "#6B7280"
+      # Green - Recurring events without strict pattern
+      "recurring" => "#10B981"
     }
 
     labels =
