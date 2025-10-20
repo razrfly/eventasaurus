@@ -52,6 +52,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   require Logger
   alias EventasaurusDiscovery.Sources.Sortiraparis.Config
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
+  alias Eventasaurus.Discovery.OccurrenceValidator
 
   @doc """
   Transform raw event data into unified format.
@@ -299,7 +300,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Metadata (include occurrence_type for consistency)
       metadata: %{
         article_id: article_id,
-        occurrence_type: "one_time",  # Store in metadata JSONB
+        occurrence_type: "explicit",  # Store in metadata JSONB (validated type)
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: "en"
@@ -353,10 +354,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Performers (if available)
       performers: Map.get(raw_event, "performers", []),
 
-      # Metadata - CRITICAL: Store occurrence_type = "unknown" in JSONB
+      # Metadata - CRITICAL: Store occurrence_type = "exhibition" in JSONB
+      # Events with unparseable dates are treated as exhibitions (open-ended)
       metadata: %{
         article_id: article_id,
-        occurrence_type: "unknown",  # JSONB storage for occurrence type
+        occurrence_type: "exhibition",  # JSONB storage for occurrence type (validated)
         occurrence_fallback: true,    # Flag indicating fallback was used
         first_seen_at: DateTime.to_iso8601(first_seen),
         original_date_string: Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"),

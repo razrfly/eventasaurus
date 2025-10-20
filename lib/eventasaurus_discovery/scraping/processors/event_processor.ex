@@ -17,6 +17,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Services.CollisionDetector
   alias EventasaurusDiscovery.Categories.CategoryExtractor
   alias EventasaurusDiscovery.Sources.Source
+  alias Eventasaurus.Discovery.OccurrenceValidator
   alias Ecto.Multi
 
   import Ecto.Query
@@ -341,43 +342,149 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp initialize_occurrence_with_source(data) do
-    # Check if this is a recurring event with a recurrence pattern
-    if data.recurrence_rule do
-      # Create pattern-type occurrences for recurring events (e.g., PubQuiz)
-      %{
-        "type" => "pattern",
-        "pattern" => data.recurrence_rule
-      }
-    else
-      # Create explicit-type occurrences for one-off events
-      date_entry = %{
-        "date" => format_date_only(data.start_at),
-        "time" => format_time_only(data.start_at),
-        "external_id" => data.external_id
-      }
+    # Get occurrence_type from metadata first, then fall back to detection logic
+    occurrence_type = get_occurrence_type(data)
 
-      # Add source_id if available
-      date_entry =
-        if data[:source_id] || Map.get(data, :source_id) do
-          Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
-        else
-          date_entry
-        end
+    # Validate the occurrence type using OccurrenceValidator
+    case OccurrenceValidator.validate_type(occurrence_type) do
+      {:ok, validated_type} ->
+        build_occurrence_structure(validated_type, data)
 
-      # CRITICAL FIX: Add label from event title to distinguish ticket types
-      # This ensures the first occurrence also has a label, not just consolidated ones
-      date_entry =
-        if data.title && String.trim(data.title) != "" do
-          Map.put(date_entry, "label", data.title)
-        else
-          date_entry
-        end
+      {:error, reason} ->
+        Logger.warning(
+          "[EventProcessor] Invalid occurrence type: #{reason}. Defaulting to 'explicit'"
+        )
 
-      %{
-        "type" => "explicit",
-        "dates" => [date_entry]
-      }
+        build_occurrence_structure("explicit", data)
     end
+  end
+
+  # Get occurrence_type from metadata or detect from data
+  defp get_occurrence_type(data) do
+    cond do
+      # Check metadata for occurrence_type (Sortiraparis)
+      data.metadata && data.metadata["occurrence_type"] ->
+        data.metadata["occurrence_type"]
+
+      # Check for recurrence_rule (pattern type)
+      data.recurrence_rule ->
+        "pattern"
+
+      # Default to explicit for one-time events
+      true ->
+        "explicit"
+    end
+  end
+
+  # Build occurrence structure based on validated type
+  defp build_occurrence_structure("pattern", data) do
+    %{
+      "type" => "pattern",
+      "pattern" => data.recurrence_rule
+    }
+  end
+
+  defp build_occurrence_structure("exhibition", data) do
+    date_entry = %{
+      "date" => format_date_only(data.start_at),
+      "external_id" => data.external_id
+    }
+
+    # Add end_date for exhibitions if available
+    date_entry =
+      if data.ends_at do
+        Map.put(date_entry, "end_date", format_date_only(data.ends_at))
+      else
+        date_entry
+      end
+
+    # Add source_id if available
+    date_entry =
+      if data[:source_id] || Map.get(data, :source_id) do
+        Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
+      else
+        date_entry
+      end
+
+    # Add label from event title
+    date_entry =
+      if data.title && String.trim(data.title) != "" do
+        Map.put(date_entry, "label", data.title)
+      else
+        date_entry
+      end
+
+    %{
+      "type" => "exhibition",
+      "dates" => [date_entry]
+    }
+  end
+
+  defp build_occurrence_structure("recurring", data) do
+    date_entry = %{
+      "date" => format_date_only(data.start_at),
+      "time" => format_time_only(data.start_at),
+      "external_id" => data.external_id
+    }
+
+    # Add source_id if available
+    date_entry =
+      if data[:source_id] || Map.get(data, :source_id) do
+        Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
+      else
+        date_entry
+      end
+
+    # Add label from event title
+    date_entry =
+      if data.title && String.trim(data.title) != "" do
+        Map.put(date_entry, "label", data.title)
+      else
+        date_entry
+      end
+
+    # Get pattern description from metadata if available
+    pattern_description =
+      if data.metadata && data.metadata["recurrence_pattern"] do
+        data.metadata["recurrence_pattern"]
+      else
+        "Recurring event"
+      end
+
+    %{
+      "type" => "recurring",
+      "dates" => [date_entry],
+      "pattern_description" => pattern_description
+    }
+  end
+
+  defp build_occurrence_structure("explicit", data) do
+    date_entry = %{
+      "date" => format_date_only(data.start_at),
+      "time" => format_time_only(data.start_at),
+      "external_id" => data.external_id
+    }
+
+    # Add source_id if available
+    date_entry =
+      if data[:source_id] || Map.get(data, :source_id) do
+        Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
+      else
+        date_entry
+      end
+
+    # Add label from event title to distinguish ticket types
+    date_entry =
+      if data.title && String.trim(data.title) != "" do
+        Map.put(date_entry, "label", data.title)
+      else
+        date_entry
+      end
+
+    %{
+      "type" => "explicit",
+      "dates" => [date_entry]
+    }
   end
 
   defp maybe_update_event(event, data, venue) do
