@@ -111,6 +111,9 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
 
   Compares events discovered this week vs. last week.
 
+  Returns :first_scrape atom for brand new sources (no events older than 14 days),
+  which allows the UI to display "N/A - First Scrape" instead of misleading percentages.
+
   ## Parameters
 
     * `source_slug` - The source name (string)
@@ -118,12 +121,16 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
 
   ## Returns
 
-  Percentage change as an integer (-100 to +infinity), or 0 if no previous data.
+  Percentage change as an integer (-100 to +infinity), 0 if no data, or :first_scrape
+  for sources with their first scrape.
 
   ## Examples
 
       iex> calculate_percentage_change("bandsintown", 1)
       15
+
+      iex> calculate_percentage_change("brand-new-source", nil)
+      :first_scrape
 
       iex> calculate_percentage_change("bandsintown", nil)
       -5
@@ -138,10 +145,26 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
         current_week = get_event_count(source_id, city_id, 0, 7)
         previous_week = get_event_count(source_id, city_id, 7, 14)
 
-        if previous_week > 0 do
-          ((current_week - previous_week) / previous_week * 100) |> round()
-        else
-          if current_week > 0, do: 100, else: 0
+        # Check if this is truly a first scrape by looking at total historical events
+        # If no events exist older than 14 days, this is the first scrape
+        historical_count = get_event_count(source_id, city_id, 14, 365)
+
+        cond do
+          # First scrape: has current events but no previous or historical events
+          previous_week == 0 && historical_count == 0 && current_week > 0 ->
+            :first_scrape
+
+          # Normal week-over-week calculation
+          previous_week > 0 ->
+            ((current_week - previous_week) / previous_week * 100) |> round()
+
+          # No previous week but has historical data - treat as 100% growth
+          historical_count > 0 && current_week > 0 ->
+            100
+
+          # No data at all
+          true ->
+            0
         end
     end
   end
@@ -151,7 +174,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
 
   ## Parameters
 
-    * `percentage_change` - The percentage change value
+    * `percentage_change` - The percentage change value (integer or :first_scrape atom)
 
   ## Returns
 
@@ -167,7 +190,14 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
 
       iex> get_trend_indicator(0)
       {"→", "Stable", "text-gray-600"}
+
+      iex> get_trend_indicator(:first_scrape)
+      {"🆕", "First Scrape", "text-blue-600"}
   """
+  def get_trend_indicator(:first_scrape) do
+    {"🆕", "First Scrape", "text-blue-600"}
+  end
+
   def get_trend_indicator(percentage_change) when is_integer(percentage_change) do
     cond do
       percentage_change > 5 ->

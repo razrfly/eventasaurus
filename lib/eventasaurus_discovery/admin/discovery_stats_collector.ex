@@ -722,6 +722,10 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   @doc """
   Get the average runtime for a source over the last N days.
 
+  Queries DETAIL workers (e.g., EventDetailJob, VenueDetailJob) instead of sync workers,
+  and uses metadata status (meta->>'status' = 'success') to ensure only successful
+  event-level processing runs are included in the average.
+
   ## Parameters
 
     * `source_slug` - The source name (string)
@@ -729,12 +733,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   ## Returns
 
-  Average runtime in seconds, or nil if no data available.
+  Average runtime in seconds, or nil if no successful runs available.
 
   ## Examples
 
       iex> get_average_runtime("bandsintown", 7)
       142.5
+
+      iex> get_average_runtime("sortiraparis", 30)
+      nil  # Returns nil when no successful detail worker runs exist
   """
   def get_average_runtime(source_slug, days \\ 30)
       when is_binary(source_slug) and is_integer(days) do
@@ -742,13 +749,17 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       {:error, :not_found} ->
         nil
 
-      {:ok, worker_name} ->
+      {:ok, sync_worker} ->
+        # Get the detail worker instead of sync worker
+        detail_worker = determine_detail_worker(sync_worker)
         cutoff = DateTime.utc_now() |> DateTime.add(-days, :day)
 
+        # Query detail workers with successful metadata status
         query =
           from(j in "oban_jobs",
-            where: j.worker == ^worker_name,
+            where: j.worker == ^detail_worker,
             where: j.state == "completed",
+            where: fragment("meta->>'status' = 'success'"),
             where: j.completed_at >= ^cutoff,
             select:
               avg(
