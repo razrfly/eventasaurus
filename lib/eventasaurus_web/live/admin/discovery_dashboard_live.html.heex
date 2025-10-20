@@ -599,74 +599,165 @@
     </div>
   </div>
 
-  <!-- Event Processing Success Rates (NEW) -->
+  <!-- Discovery Source Health Overview -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <div class="flex justify-between items-center mb-4">
+    <div class="flex justify-between items-center mb-6">
       <div>
-        <h2 class="text-xl font-semibold">Event Processing Success Rates</h2>
-        <p class="text-sm text-gray-600 mt-1">Real-time scraper performance metrics from job metadata</p>
+        <h2 class="text-xl font-semibold">Discovery Source Health</h2>
+        <p class="text-sm text-gray-600 mt-1">Quick overview of scraper performance across all sources</p>
+      </div>
+      <.link
+        navigate={~p"/admin/discovery/stats"}
+        class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        📊 View Detailed Stats
+      </.link>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <% total_sources = length(@detailed_source_stats) %>
+      <% healthy_sources = Enum.count(@detailed_source_stats, fn s -> s.success_rate >= 95 end) %>
+      <% warning_sources = Enum.count(@detailed_source_stats, fn s -> s.success_rate >= 80 and s.success_rate < 95 end) %>
+      <% critical_sources = Enum.count(@detailed_source_stats, fn s -> s.success_rate < 80 end) %>
+
+      <div class="p-4 bg-blue-50 rounded-lg text-center">
+        <p class="text-2xl font-bold text-blue-900">{total_sources}</p>
+        <p class="text-sm text-blue-700 mt-1">Active Sources</p>
+      </div>
+
+      <div class="p-4 bg-green-50 rounded-lg text-center">
+        <p class="text-2xl font-bold text-green-900">{healthy_sources}</p>
+        <p class="text-sm text-green-700 mt-1">Healthy (≥95%)</p>
+      </div>
+
+      <div class="p-4 bg-yellow-50 rounded-lg text-center">
+        <p class="text-2xl font-bold text-yellow-900">{warning_sources}</p>
+        <p class="text-sm text-yellow-700 mt-1">Warning (80-95%)</p>
+      </div>
+
+      <div class="p-4 bg-red-50 rounded-lg text-center">
+        <p class="text-2xl font-bold text-red-900">{critical_sources}</p>
+        <p class="text-sm text-red-700 mt-1">Critical (&lt;80%)</p>
       </div>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Processed</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Succeeded</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Top Errors</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          <%= for stats <- @detailed_source_stats do %>
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {String.capitalize(stats.source)}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {format_number(stats.events_processed)}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                {format_number(stats.events_succeeded)}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                {format_number(stats.events_failed)}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class={"px-2 py-1 rounded text-sm font-semibold #{success_rate_color(stats.success_rate)}"}>
-                  {stats.success_rate}%
-                </span>
-              </td>
-              <td class="px-6 py-4">
-                <div class="text-sm">
-                  <%= for {category, count} <- stats.failure_breakdown |> Enum.sort_by(&elem(&1, 1), :desc) |> Enum.take(3) do %>
-                    <div class="text-gray-700">
-                      <span class="font-medium">{format_error_category(category)}:</span>
-                      <span class="text-gray-600">{count}</span>
+    <%= if Enum.empty?(@detailed_source_stats) do %>
+      <div class="text-center py-8 bg-gray-50 rounded-lg">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <p class="mt-2 text-sm text-gray-600">No source performance data available yet.</p>
+        <p class="mt-1 text-xs text-gray-500">Metrics will appear after scraper runs complete.</p>
+        <div class="mt-4">
+          <.link
+            navigate={~p"/admin/discovery/stats"}
+            class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          >
+            View all sources →
+          </.link>
+        </div>
+      </div>
+    <% else %>
+      <div class="space-y-3">
+        <%= for stats <- @detailed_source_stats |> Enum.sort_by(& &1.success_rate) |> Enum.take(5) do %>
+          <% is_expanded = MapSet.member?(@expanded_source_jobs, stats.source) %>
+          <div class="border rounded-lg overflow-hidden">
+            <!-- Source header (always visible) -->
+            <div class="p-3 bg-white hover:bg-gray-50 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-1">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                      <p class="text-sm font-medium text-gray-900">{String.capitalize(stats.source)}</p>
+                      <.link
+                        navigate={~p"/admin/discovery/stats/#{stats.source}"}
+                        class="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        View Details →
+                      </.link>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                      {format_number(stats.events_processed)} events processed
+                    </p>
+                  </div>
+                </div>
+                <div class="ml-4 flex items-center gap-3">
+                  <span class={"px-3 py-1 rounded text-sm font-semibold #{success_rate_color(stats.success_rate)}"}>
+                    {stats.success_rate}%
+                  </span>
+                  <button
+                    phx-click="toggle_source_jobs"
+                    phx-value-source={stats.source}
+                    class="text-gray-500 hover:text-gray-700 transition-colors"
+                    title={if is_expanded, do: "Hide job history", else: "Show job history"}
+                  >
+                    <%= if is_expanded do %>
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                      </svg>
+                    <% else %>
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    <% end %>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Expandable job history -->
+            <%= if is_expanded and not Enum.empty?(stats.recent_jobs) do %>
+              <div class="border-t bg-gray-50 p-3">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-xs font-medium text-gray-700">Recent Job History (Last 10)</p>
+                  <p class="text-xs text-gray-500">{length(stats.recent_jobs)} runs shown</p>
+                </div>
+                <!-- Job timeline -->
+                <div class="flex items-center gap-1 mb-3">
+                  <%= for job <- stats.recent_jobs do %>
+                    <% is_success = job.state == "success" %>
+                    <div
+                      class={"flex-1 h-8 rounded flex items-center justify-center text-xs #{if is_success, do: "bg-green-100 text-green-800", else: "bg-red-100 text-red-800"}"}
+                      title={"#{if is_success, do: "✅", else: "❌"} #{format_datetime(job.completed_at)} - #{job.duration_seconds}s"}
+                    >
+                      <%= if is_success, do: "✅", else: "❌" %>
                     </div>
                   <% end %>
-                  <%= if Enum.empty?(stats.failure_breakdown) do %>
-                    <span class="text-gray-400 text-xs">No failures</span>
-                  <% end %>
                 </div>
-              </td>
-            </tr>
-          <% end %>
-          <%= if Enum.empty?(@detailed_source_stats) do %>
-            <tr>
-              <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
-                No event processing data available yet. Metrics will appear after scraper runs complete.
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    </div>
+                <!-- Failure details (if any) -->
+                <% failures = Enum.filter(stats.recent_jobs, fn j -> j.state != "success" end) %>
+                <%= if not Enum.empty?(failures) do %>
+                  <div class="mt-2 space-y-1">
+                    <p class="text-xs font-medium text-gray-700">{length(failures)} Recent Failures:</p>
+                    <%= for failure <- Enum.take(failures, 3) do %>
+                      <div class="text-xs text-red-700 bg-red-50 p-2 rounded">
+                        <span class="font-mono">{format_datetime(failure.completed_at)}</span>
+                        <%= if failure.errors do %>
+                          - <span class="font-medium">{failure.errors}</span>
+                        <% else %>
+                          - <span class="text-orange-700">Failed with warnings</span>
+                        <% end %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
 
-    <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div class="mt-4 text-center">
+        <.link
+          navigate={~p"/admin/discovery/stats"}
+          class="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
+        >
+          View all sources and detailed metrics →
+        </.link>
+      </div>
+    <% end %>
+
+    <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
       <div class="flex">
         <div class="flex-shrink-0">
           <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -674,13 +765,9 @@
           </svg>
         </div>
         <div class="ml-3">
-          <h3 class="text-sm font-medium text-blue-800">About Success Rates</h3>
-          <div class="mt-2 text-sm text-blue-700 space-y-1">
-            <p>• <span class="font-semibold">Success Rate ≥95%</span>: Excellent scraper health (green)</p>
-            <p>• <span class="font-semibold">Success Rate 80-95%</span>: Good performance with some issues (yellow)</p>
-            <p>• <span class="font-semibold">Success Rate &lt;80%</span>: Needs attention (red)</p>
-            <p>• Metrics track event-level processing (EventDetailJob, ShowtimeProcessJob, etc.)</p>
-            <p>• Error categories help identify common failure patterns for debugging</p>
+          <h3 class="text-sm font-medium text-blue-800">About Source Health</h3>
+          <div class="mt-2 text-sm text-blue-700">
+            <p>This dashboard shows a high-level overview of scraper performance. For detailed metrics including job history, error breakdowns, data quality analysis, and trends, visit the <strong>Discovery Stats</strong> page.</p>
           </div>
         </div>
       </div>

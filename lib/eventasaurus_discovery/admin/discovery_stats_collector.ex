@@ -746,6 +746,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
             ],
             limit: ^limit,
             select: %{
+              id: j.id,
               completed_at:
                 fragment(
                   "COALESCE(?, ?)",
@@ -756,7 +757,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
               # Use metadata status if available, otherwise map job state
               state:
                 fragment(
-                  "COALESCE(meta->>'status', CASE WHEN ? = 'completed' THEN 'completed' ELSE 'failed' END)",
+                  "COALESCE(meta->>'status', CASE WHEN ? = 'completed' THEN 'success' ELSE 'failed' END)",
                   j.state
                 ),
               errors: fragment("meta->>'error_message'"),
@@ -802,6 +803,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     formatted_error = job.errors
 
     %{
+      id: job.id,
       completed_at: job.completed_at,
       attempted_at: job.attempted_at,
       state: job.state,

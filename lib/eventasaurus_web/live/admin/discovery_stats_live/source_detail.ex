@@ -1003,7 +1003,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 <%= for run <- filtered_history do %>
-                  <% job_id = "job-#{format_datetime(run.completed_at) |> String.replace(~r/[^0-9]/, "")}" %>
+                  <% job_id = "job-#{run.id}" %>
                   <% is_expanded = MapSet.member?(@expanded_job_ids, job_id) %>
                   <% is_failure = run.state != "success" %>
 

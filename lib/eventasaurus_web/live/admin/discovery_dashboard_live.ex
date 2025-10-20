@@ -52,6 +52,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:import_limit, 100)
       |> assign(:import_radius, 50)
       |> assign(:city_specific_sources, @city_specific_sources)
+      |> assign(:expanded_source_jobs, MapSet.new())
       |> load_data()
       |> schedule_refresh()
 
@@ -448,6 +449,20 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     end
   end
 
+  @impl true
+  def handle_event("toggle_source_jobs", %{"source" => source}, socket) do
+    expanded = socket.assigns.expanded_source_jobs
+
+    new_expanded =
+      if MapSet.member?(expanded, source) do
+        MapSet.delete(expanded, source)
+      else
+        MapSet.put(expanded, source)
+      end
+
+    {:noreply, assign(socket, :expanded_source_jobs, new_expanded)}
+  end
+
   defp load_data(socket) do
     # Get overall statistics
     stats = %{
@@ -462,7 +477,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     source_stats = get_source_statistics()
 
     # Get detailed source statistics with success rates (NEW)
-    detailed_source_stats = DiscoveryStatsCollector.get_detailed_source_statistics(min_events: 1)
+    detailed_source_stats =
+      DiscoveryStatsCollector.get_detailed_source_statistics(min_events: 1)
+      |> Enum.map(fn stats ->
+        # Fetch last 10 jobs for each source
+        job_history = DiscoveryStatsCollector.get_complete_run_history(stats.source, 10)
+        Map.put(stats, :recent_jobs, job_history)
+      end)
 
     # Get per-city statistics
     city_stats = get_city_statistics()
