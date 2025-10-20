@@ -95,6 +95,40 @@ mappings:
   workshop: education
   seminar: education
   cours: education
+  salon: community
+  gaming: community
+  getaways-from-paris: community
+  shopping-mode: community
+  hotel: community
+
+  # General discovery/tourist content
+  what-to-visit-in-paris: community
+  what-to-see-in-paris: arts
+
+  # Heritage & Cultural Events
+  journees-du-patrimoine: arts
+  nuit-blanche: arts
+  nuit-des-musees: arts
+
+  # Major Festivals & Holidays
+  14-juillet: festivals
+  fete-de-la-musique: concerts
+  halloween: family
+  paques: family
+  noel-et-fetes: family
+  nouvel-an-chinois: festivals
+  saint-patrick: festivals
+
+  # Food & Beverages (specific)
+  tendances-food: food-drink
+  cafe-tea-time: food-drink
+  bar-cafes: nightlife
+
+  # Family (specific)
+  child-and-family: family
+
+  # Nightlife (specific)
+  where-to-party-in-paris: nightlife
 
 # Pattern-based mappings for flexible matching
 # These patterns catch variations and multi-word categories

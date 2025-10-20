@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   Polymorphic component for displaying event occurrences.
 
   Routes to appropriate display component based on occurrence type:
+  - :exhibition -> date range display (no time selection)
   - :daily_show -> ShowtimeSelector (movies with many showtimes)
   - :same_day_multiple -> time selection list
   - :recurring_pattern -> pattern display with upcoming dates
@@ -11,6 +12,7 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
   alias EventasaurusWeb.Components.Events.OccurrenceDisplays.ShowtimeSelector
+  alias EventasaurusWeb.Helpers.PublicEventDisplayHelpers
 
   attr :event, :map, required: true
   attr :occurrence_list, :list, required: true
@@ -26,7 +28,10 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
         <%= display_title(assigns) %>
       </h3>
 
-      <%= case occurrence_display_type(@occurrence_list, @is_movie_screening) do %>
+      <%= case occurrence_display_type(@occurrence_list, @is_movie_screening, @event) do %>
+        <% :exhibition -> %>
+          <.exhibition_display event={@event} />
+
         <% :daily_show -> %>
           <ShowtimeSelector.showtime_selector
             event={@event}
@@ -45,23 +50,50 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
           <.multi_day_display occurrence_list={@occurrence_list} selected={@selected_occurrence} />
       <% end %>
 
-      <div class="mt-4 p-3 bg-blue-50 rounded-lg">
-        <p class="text-sm text-blue-900">
-          <span class="font-medium"><%= gettext("Selected:") %></span>
-          <%= format_occurrence_datetime(@selected_occurrence || List.first(@occurrence_list)) %>
-        </p>
-      </div>
+      <%= unless PublicEventDisplayHelpers.is_exhibition?(@event) do %>
+        <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+          <p class="text-sm text-blue-900">
+            <span class="font-medium"><%= gettext("Selected:") %></span>
+            <%= format_occurrence_datetime(@selected_occurrence || List.first(@occurrence_list)) %>
+          </p>
+        </div>
+      <% end %>
     </div>
     """
   end
 
   defp display_title(assigns) do
-    case occurrence_display_type(assigns.occurrence_list, assigns.is_movie_screening) do
+    case occurrence_display_type(assigns.occurrence_list, assigns.is_movie_screening, assigns.event) do
+      :exhibition -> gettext("Exhibition Dates")
       :daily_show -> gettext("Daily Shows Available")
       :same_day_multiple -> gettext("Select a Time")
       :multi_day -> gettext("Multiple Dates Available")
       _ -> gettext("Select Date & Time")
     end
+  end
+
+  # Exhibition display - shows date range without time selection
+  attr :event, :map, required: true
+
+  defp exhibition_display(assigns) do
+    ~H"""
+    <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+      <div class="flex items-start">
+        <Heroicons.calendar class="w-6 h-6 mr-3 text-purple-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p class="text-lg font-semibold text-purple-900 mb-1">
+            <%= gettext("Open Exhibition") %>
+          </p>
+          <p class="text-purple-800">
+            <%= PublicEventDisplayHelpers.format_exhibition_datetime(@event) || gettext("Ongoing") %>
+          </p>
+          <p class="text-sm text-purple-700 mt-2">
+            <%= gettext("Visit anytime during exhibition hours") %>
+          </p>
+        </div>
+      </div>
+    </div>
+    """
   end
 
   # Recurring pattern display
@@ -142,11 +174,15 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   end
 
   # Determine display type based on occurrences and event type
-  defp occurrence_display_type(nil, _), do: :none
-  defp occurrence_display_type([], _), do: :none
+  defp occurrence_display_type(nil, _, _), do: :none
+  defp occurrence_display_type([], _, _), do: :none
 
-  defp occurrence_display_type(occurrences, is_movie_screening) do
+  defp occurrence_display_type(occurrences, is_movie_screening, event) do
     cond do
+      # Exhibition type - show date range without time selection
+      PublicEventDisplayHelpers.is_exhibition?(event) ->
+        :exhibition
+
       # Pattern-based recurring events
       is_pattern_occurrence?(occurrences) ->
         :recurring_pattern

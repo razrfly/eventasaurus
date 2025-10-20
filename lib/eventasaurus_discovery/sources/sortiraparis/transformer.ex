@@ -52,7 +52,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   require Logger
   alias EventasaurusDiscovery.Sources.Sortiraparis.Config
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
-  alias Eventasaurus.Discovery.OccurrenceValidator
 
   @doc """
   Transform raw event data into unified format.

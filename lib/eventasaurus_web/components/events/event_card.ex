@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   }
 
   alias EventasaurusApp.DateTimeHelper
+  alias EventasaurusWeb.Helpers.PublicEventDisplayHelpers
   import EventasaurusWeb.Helpers.LanguageHelpers
 
   attr :event, :map, required: true
@@ -54,12 +55,12 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
               <div class="space-y-1.5 text-sm text-gray-600">
                 <!-- Time and Location -->
                 <div class="flex gap-4">
-                  <!-- Time -->
+                  <!-- Time or Exhibition Date Range -->
                   <div class="flex items-center">
                     <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <%= format_time(@event.start_at, @event.timezone) %>
+                    <%= format_event_datetime(@event) %>
                   </div>
                   
                   <!-- Location -->
@@ -178,6 +179,23 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
       View
     </a>
     """
+  end
+
+  # Format event datetime - exhibitions show date range, others show time
+  defp format_event_datetime(event) do
+    cond do
+      # Exhibition type - show date range
+      PublicEventDisplayHelpers.is_exhibition?(event) ->
+        PublicEventDisplayHelpers.format_exhibition_datetime(event) || "Exhibition"
+
+      # Regular events - show time
+      event.start_at ->
+        format_time(event.start_at, event.timezone)
+
+      # Fallback
+      true ->
+        "Time TBD"
+    end
   end
 
   defp format_time(nil, _timezone), do: "Time TBD"
