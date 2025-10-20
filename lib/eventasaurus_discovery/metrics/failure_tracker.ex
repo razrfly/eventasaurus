@@ -87,34 +87,36 @@ defmodule EventasaurusDiscovery.Metrics.FailureTracker do
     error_message_truncated = String.slice(error_message, 0, 500)
     external_id_str = to_string(external_id)
 
-    # Use atomic upsert with on_conflict to avoid race conditions
-    # instead of find-then-insert pattern
-    %EventFailure{}
-    |> EventFailure.changeset(%{
-      source_id: source_id,
-      error_category: error_category_str,
-      error_message: error_message_truncated,
-      sample_external_ids: [external_id_str],
-      occurrence_count: 1,
-      first_seen_at: now,
-      last_seen_at: now
-    })
-    |> Repo.insert(
-      on_conflict: [
-        set: [
-          sample_external_ids:
-            fragment(
-              "CASE WHEN ? = ANY(sample_external_ids) THEN sample_external_ids ELSE array_append(sample_external_ids[greatest(0, array_length(sample_external_ids, 1) - ? + 1):], ?) END",
-              ^external_id_str,
-              ^@max_sample_ids,
-              ^external_id_str
-            ),
-          occurrence_count: fragment("event_failures.occurrence_count + 1"),
+    # Find or create failure record
+    # Note: Using find-then-update pattern instead of atomic upsert because
+    # Ecto's on_conflict doesn't support pin operators in set values
+    case find_failure(source_id, error_category_str, error_message_truncated) do
+      nil ->
+        # First occurrence - insert new record
+        %EventFailure{}
+        |> EventFailure.changeset(%{
+          source_id: source_id,
+          error_category: error_category_str,
+          error_message: error_message_truncated,
+          sample_external_ids: [external_id_str],
+          occurrence_count: 1,
+          first_seen_at: now,
           last_seen_at: now
-        ]
-      ],
-      conflict_target: [:source_id, :error_category, :error_message]
-    )
+        })
+        |> Repo.insert()
+
+      existing ->
+        # Subsequent occurrence - update existing record
+        updated_samples = update_sample_ids(existing.sample_external_ids, external_id_str)
+
+        existing
+        |> EventFailure.changeset(%{
+          sample_external_ids: updated_samples,
+          occurrence_count: existing.occurrence_count + 1,
+          last_seen_at: now
+        })
+        |> Repo.update()
+    end
   rescue
     error ->
       Logger.error("""
@@ -272,6 +274,15 @@ defmodule EventasaurusDiscovery.Metrics.FailureTracker do
   end
 
   # Private helper functions
+
+  defp find_failure(source_id, error_category, error_message) do
+    from(f in EventFailure,
+      where: f.source_id == ^source_id,
+      where: f.error_category == ^error_category,
+      where: f.error_message == ^error_message
+    )
+    |> Repo.one()
+  end
 
   defp update_sample_ids(existing_samples, new_id) do
     # Add new_id if not already present, keep max 5 samples (most recent)
