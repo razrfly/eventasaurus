@@ -52,7 +52,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
     result =
       with {:ok, html} <- Client.fetch_venue_page(venue_url),
            details <- DetailExtractor.extract_venue_details(html),
-           source <- Repo.get!(Source, source_id) do
+           {:ok, source} <- get_source(source_id) do
         # Combine data from job args and extracted details
         venue_data = Map.merge(args, details)
 
@@ -62,6 +62,10 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
         {:error, :not_found} ->
           Logger.warning("Venue page not found: #{venue_url}")
           {:ok, :not_found}
+
+        {:error, :source_not_found} ->
+          Logger.error("Source not found: #{source_id}")
+          {:error, :source_not_found}
 
         {:error, reason} = error ->
           Logger.error("Failed to process venue #{venue_name}: #{inspect(reason)}")
@@ -231,6 +235,15 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   end
 
   defp atomize_event_data(value), do: value
+
+  # Safe source lookup that returns {:ok, source} or {:error, :source_not_found}
+  # instead of raising an error
+  defp get_source(source_id) do
+    case Repo.get(Source, source_id) do
+      nil -> {:error, :source_not_found}
+      source -> {:ok, source}
+    end
+  end
 
   # FALLBACK: Only used if CityJob didn't pass external_id in job args
   # Normally, external_id is generated once in CityJob and passed through (BandsInTown A+ pattern)

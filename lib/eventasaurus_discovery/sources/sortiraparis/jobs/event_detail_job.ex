@@ -71,14 +71,16 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
   import Ecto.Query
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args} = job) do
+  def perform(%Oban.Job{args: args, id: job_id} = job) do
     url = args["url"]
     secondary_url = args["secondary_url"]
     event_metadata = args["event_metadata"] || %{}
     is_bilingual = event_metadata["bilingual"] || false
 
-    # Extract external_id for metrics tracking (use external_id_base or article_id)
-    external_id = event_metadata["external_id_base"] || event_metadata["article_id"] || url
+    # Extract external_id for metrics tracking with fallback to job.id
+    # Ensures external_id is always a string
+    external_id =
+      to_string(event_metadata["external_id_base"] || event_metadata["article_id"] || url || job_id)
 
     if is_bilingual do
       Logger.info("🌐 Fetching bilingual Sortiraparis event: #{url} + #{secondary_url}")

@@ -49,15 +49,16 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args} = job) do
+  def perform(%Oban.Job{args: args, id: job_id} = job) do
     venue_id = args["venue_id"]
     venue_url = args["venue_url"]
     venue_name = args["venue_name"]
     venue_data = string_keys_to_atoms(args["venue_data"])
     source_id = args["source_id"]
 
-    # Use venue_url as external_id for metrics tracking
-    external_id = venue_url
+    # Use venue_url as external_id for metrics tracking, fallback to job.id
+    # Ensures external_id is always a string
+    external_id = to_string(venue_url || job_id)
 
     Logger.info("🔍 Processing Quizmeisters venue: #{venue_name} (ID: #{venue_id})")
 

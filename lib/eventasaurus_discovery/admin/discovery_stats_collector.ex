@@ -209,9 +209,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp get_city_stats(worker, city_id) do
     # Query for aggregate stats with city filter
     # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
+    # Guard: only cast if value is numeric to prevent query crashes
     stats_query =
       from(j in "oban_jobs",
         where: j.worker == ^worker,
+        where: fragment("?->>'city_id' ~ '^[0-9]+$'", j.args),
         where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
         where: j.state in ["completed", "discarded"],
         select: %{
@@ -295,9 +297,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     else
       # Single batched query for all workers
       # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
+      # Guard: only cast if value is numeric to prevent query crashes
       stats_query =
         from(j in "oban_jobs",
           where: j.worker in ^workers,
+          where: fragment("?->>'city_id' ~ '^[0-9]+$'", j.args),
           where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
           where: j.state in ["completed", "discarded"],
           group_by: j.worker,
@@ -446,9 +450,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   defp get_last_error(worker, city_id) do
     # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
+    # Guard: only cast if value is numeric to prevent query crashes
     error_query =
       from(j in "oban_jobs",
         where: j.worker == ^worker,
+        where: fragment("?->>'city_id' ~ '^[0-9]+$'", j.args),
         where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
         where: j.state == "discarded",
         order_by: [
@@ -509,9 +515,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
   defp get_last_errors_batch(workers, city_id) do
     # Fetch latest error for each worker in a single query
     # Note: args->>'city_id' returns TEXT, so we cast to integer for comparison
+    # Guard: only cast if value is numeric to prevent query crashes
     error_query =
       from(j in "oban_jobs",
         where: j.worker in ^workers,
+        where: fragment("?->>'city_id' ~ '^[0-9]+$'", j.args),
         where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
         where: j.state == "discarded",
         distinct: [j.worker],
@@ -875,6 +883,10 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         event_stats = get_event_level_stats(detail_worker, city_id, source_name)
         failure_summary = get_failure_breakdown(source_name)
 
+        # Compute last_run_at from detail worker instead of sync worker
+        # This is especially important when city_id is nil (aggregating across all cities)
+        last_run_at = get_last_run_at(detail_worker, city_id, source_name)
+
         Map.merge(base_stats, %{
           # New metadata-based fields
           events_processed: event_stats.processed,
@@ -882,6 +894,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           events_failed: event_stats.failed,
           success_rate: calculate_success_rate(event_stats.succeeded, event_stats.processed),
           failure_breakdown: failure_summary,
+          last_run_at: last_run_at || base_stats.last_run_at,
           # Legacy fields for backward compatibility with Stats page template
           run_count: event_stats.processed,
           success_count: event_stats.succeeded,
@@ -958,10 +971,11 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       if SourceRegistry.requires_city_id?(source_name) && city_id do
         from(j in "oban_jobs",
           where: j.worker == ^detail_worker,
+          where: fragment("?->>'city_id' ~ '^[0-9]+$'", j.args),
           where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
           where: j.state in ["completed", "discarded"],
           select: %{
-            processed: count(j.id),
+            processed: fragment("COUNT(*) FILTER (WHERE meta->>'status' IS NOT NULL)"),
             succeeded:
               fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
             failed: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'failed')")
@@ -972,7 +986,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           where: j.worker == ^detail_worker,
           where: j.state in ["completed", "discarded"],
           select: %{
-            processed: count(j.id),
+            processed: fragment("COUNT(*) FILTER (WHERE meta->>'status' IS NOT NULL)"),
             succeeded:
               fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
             failed: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'failed')")
@@ -981,6 +995,41 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       end
 
     Repo.one(stats_query) || %{processed: 0, succeeded: 0, failed: 0}
+  end
+
+  defp get_last_run_at(detail_worker, city_id, source_name) do
+    # Query for most recent job completion timestamp from detail worker
+    # This fixes the issue where city_id=nil aggregation would return nil last_run_at
+    timestamp_query =
+      if SourceRegistry.requires_city_id?(source_name) && city_id do
+        from(j in "oban_jobs",
+          where: j.worker == ^detail_worker,
+          where: fragment("?->>'city_id' ~ '^[0-9]+$'", j.args),
+          where: fragment("(? ->> 'city_id')::integer = ?", j.args, ^city_id),
+          where: j.state in ["completed", "discarded"],
+          select:
+            fragment(
+              "MAX(COALESCE(?, ?, ?))",
+              j.completed_at,
+              j.discarded_at,
+              j.attempted_at
+            )
+        )
+      else
+        from(j in "oban_jobs",
+          where: j.worker == ^detail_worker,
+          where: j.state in ["completed", "discarded"],
+          select:
+            fragment(
+              "MAX(COALESCE(?, ?, ?))",
+              j.completed_at,
+              j.discarded_at,
+              j.attempted_at
+            )
+        )
+      end
+
+    Repo.one(timestamp_query)
   end
 
   defp determine_detail_worker(sync_worker) do

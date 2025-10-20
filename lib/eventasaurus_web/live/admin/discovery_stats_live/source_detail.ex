@@ -113,7 +113,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
   @impl true
   def handle_event("sort_categories", %{"by" => sort_by}, socket) do
-    sort_atom = String.to_existing_atom(sort_by)
+    sort_atom = safe_sort_atom(sort_by, :category)
     categories = sort_categories(socket.assigns.comprehensive_stats.top_categories, sort_atom)
 
     comprehensive_stats = Map.put(socket.assigns.comprehensive_stats, :top_categories, categories)
@@ -128,7 +128,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
   @impl true
   def handle_event("sort_venues", %{"by" => sort_by}, socket) do
-    sort_atom = String.to_existing_atom(sort_by)
+    sort_atom = safe_sort_atom(sort_by, :venue)
     venues = sort_venues(socket.assigns.comprehensive_stats.venue_stats.top_venues, sort_atom)
 
     venue_stats = Map.put(socket.assigns.comprehensive_stats.venue_stats, :top_venues, venues)
@@ -1117,4 +1117,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     end
   end
   defp format_duration(_), do: "N/A"
+
+  # Safe atom conversion for sort parameters
+  # Prevents LiveView crashes from unexpected client input
+  defp safe_sort_atom("count", _), do: :count
+  defp safe_sort_atom("name", _), do: :name
+  defp safe_sort_atom("percentage", :category), do: :percentage
+  defp safe_sort_atom(_, _), do: :count  # Default fallback
 end
