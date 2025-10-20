@@ -12,12 +12,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, DataQualityChecker, TrendAnalyzer, SourceStatsCollector}
+
+  alias EventasaurusDiscovery.Admin.{
+    DiscoveryStatsCollector,
+    SourceHealthCalculator,
+    EventChangeTracker,
+    DataQualityChecker,
+    TrendAnalyzer,
+    SourceStatsCollector
+  }
 
   import Ecto.Query
   require Logger
 
-  @refresh_interval 30_000  # 30 seconds
+  # 30 seconds
+  @refresh_interval 30_000
 
   @impl true
   def mount(%{"source_slug" => source_slug}, _session, socket) do
@@ -76,7 +85,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     event_chart_data = TrendAnalyzer.format_for_chartjs(event_trend, :count, "Events", "#3B82F6")
 
     success_rate_trend = TrendAnalyzer.get_success_rate_trend(source_slug, date_range)
-    success_chart_data = TrendAnalyzer.format_for_chartjs(success_rate_trend, :success_rate, "Success Rate", "#10B981")
+
+    success_chart_data =
+      TrendAnalyzer.format_for_chartjs(
+        success_rate_trend,
+        :success_rate,
+        "Success Rate",
+        "#10B981"
+      )
 
     socket =
       socket
@@ -187,9 +203,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     new_events_window = get_new_events_window()
     dropped_events_window = get_dropped_events_window()
     new_events = EventChangeTracker.calculate_new_events(source_slug, new_events_window)
-    dropped_events = EventChangeTracker.calculate_dropped_events(source_slug, dropped_events_window)
+
+    dropped_events =
+      EventChangeTracker.calculate_dropped_events(source_slug, dropped_events_window)
+
     percentage_change = EventChangeTracker.calculate_percentage_change(source_slug, nil)
-    {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(percentage_change)
+
+    {trend_emoji, trend_text, trend_class} =
+      EventChangeTracker.get_trend_indicator(percentage_change)
 
     # Get data quality metrics (Phase 5)
     quality_data = DataQualityChecker.check_quality(source_slug)
@@ -228,7 +249,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     event_chart_data = TrendAnalyzer.format_for_chartjs(event_trend, :count, "Events", "#3B82F6")
 
     success_rate_trend = TrendAnalyzer.get_success_rate_trend(source_slug, date_range)
-    success_chart_data = TrendAnalyzer.format_for_chartjs(success_rate_trend, :success_rate, "Success Rate", "#10B981")
+
+    success_chart_data =
+      TrendAnalyzer.format_for_chartjs(
+        success_rate_trend,
+        :success_rate,
+        "Success Rate",
+        "#10B981"
+      )
 
     # Get comprehensive stats from Phase 1 (occurrence types, categories, translations, images, venues)
     comprehensive_stats = SourceStatsCollector.get_comprehensive_stats(source_slug)
@@ -508,7 +536,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </div>
 
             <!-- Completeness Metrics -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class={"grid grid-cols-1 md:grid-cols-#{if @quality_data.supports_translations, do: "4", else: "3"} gap-6 mb-6"}>
               <!-- Venue Completeness -->
               <div class="p-4 border rounded-lg">
                 <div class="flex items-center justify-between mb-2">
@@ -550,6 +578,32 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                   <%= @quality_data.missing_categories %> events missing category data
                 </p>
               </div>
+
+              <!-- Translation Completeness (conditionally displayed) -->
+              <%= if @quality_data.supports_translations do %>
+                <div class="p-4 border rounded-lg">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-medium text-gray-700">Translations</p>
+                    <span class="text-lg font-bold text-gray-900"><%= @quality_data.translation_completeness %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div class="bg-orange-600 h-2.5 rounded-full" style={"width: #{@quality_data.translation_completeness}%"}></div>
+                  </div>
+                  <p class="mt-2 text-xs text-gray-500">
+                    <%= @quality_data.missing_translations %> events missing translations
+                  </p>
+                  <%= if @quality_data.genuine_translations && @quality_data.duplicate_translations do %>
+                    <div class="mt-2 pt-2 border-t border-gray-200">
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="text-green-600">✓ <%= @quality_data.genuine_translations %> genuine</span>
+                        <%= if @quality_data.duplicate_translations > 0 do %>
+                          <span class="text-orange-600">⚠ <%= @quality_data.duplicate_translations %> duplicates</span>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
             </div>
 
             <!-- Recommendations -->
@@ -690,28 +744,34 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </div>
 
             <!-- Top Categories List -->
-            <div class="space-y-3">
-              <%= for category <- @comprehensive_stats.top_categories do %>
-                <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                  <div class="flex-1">
-                    <p class="text-sm font-medium text-gray-900">
-                      <%= if category.category_name do %>
-                        <%= category.category_name %>
-                      <% else %>
-                        <span class="text-gray-400 italic">Uncategorized</span>
-                      <% end %>
-                    </p>
-                    <div class="mt-1 w-full bg-gray-200 rounded-full h-1.5">
-                      <div class="bg-purple-600 h-1.5 rounded-full" style={"width: #{category.percentage}%"}></div>
+            <%= if @show_category_details do %>
+              <div class="space-y-3">
+                <%= for category <- @comprehensive_stats.top_categories do %>
+                  <% color = get_category_color(@comprehensive_stats.top_categories, category.category_name) %>
+                  <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                    <div class="flex items-center flex-1">
+                      <div class="w-4 h-4 rounded-full mr-3 flex-shrink-0" style={"background-color: #{color}"}></div>
+                      <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900">
+                          <%= if category.category_name do %>
+                            <%= category.category_name %>
+                          <% else %>
+                            <span class="text-gray-400 italic">Uncategorized</span>
+                          <% end %>
+                        </p>
+                        <div class="mt-1 w-full bg-gray-200 rounded-full h-1.5">
+                          <div class="h-1.5 rounded-full" style={"width: #{category.percentage}%; background-color: #{color}"}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="ml-4 text-right">
+                      <p class="text-lg font-bold text-gray-900"><%= category.count %></p>
+                      <p class="text-xs text-gray-500"><%= category.percentage %>%</p>
                     </div>
                   </div>
-                  <div class="ml-4 text-right">
-                    <p class="text-lg font-bold text-gray-900"><%= category.count %></p>
-                    <p class="text-xs text-gray-500"><%= category.percentage %>%</p>
-                  </div>
-                </div>
-              <% end %>
-            </div>
+                <% end %>
+              </div>
+            <% end %>
           </div>
         </div>
 
@@ -990,23 +1050,31 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   defp format_occurrence_pie_chart(occurrence_types) do
     # Color palette for occurrence types
     colors = %{
-      "explicit" => "#3B82F6",      # Blue
-      "pattern" => "#8B5CF6",       # Purple
-      "exhibition" => "#EC4899",    # Pink
-      "movie" => "#F59E0B",         # Amber
-      "recurring" => "#10B981",     # Green
-      "unknown" => "#6B7280"        # Gray
+      # Blue
+      "explicit" => "#3B82F6",
+      # Purple
+      "pattern" => "#8B5CF6",
+      # Pink
+      "exhibition" => "#EC4899",
+      # Amber
+      "movie" => "#F59E0B",
+      # Green
+      "recurring" => "#10B981",
+      # Gray
+      "unknown" => "#6B7280"
     }
 
-    labels = Enum.map(occurrence_types, fn occ ->
-      String.capitalize(occ.type)
-    end)
+    labels =
+      Enum.map(occurrence_types, fn occ ->
+        String.capitalize(occ.type)
+      end)
 
     data = Enum.map(occurrence_types, & &1.count)
 
-    background_colors = Enum.map(occurrence_types, fn occ ->
-      Map.get(colors, occ.type, "#6B7280")
-    end)
+    background_colors =
+      Enum.map(occurrence_types, fn occ ->
+        Map.get(colors, occ.type, "#6B7280")
+      end)
 
     %{
       labels: labels,
@@ -1034,19 +1102,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     data = Enum.map(top_5, & &1.count)
 
     # Add "Other" for remaining categorized events
-    {labels, data} = if length(rest) > 0 do
-      other_count = Enum.reduce(rest, 0, fn cat, acc -> acc + cat.count end)
-      {labels ++ ["Other Categories"], data ++ [other_count]}
-    else
-      {labels, data}
-    end
+    {labels, data} =
+      if length(rest) > 0 do
+        other_count = Enum.reduce(rest, 0, fn cat, acc -> acc + cat.count end)
+        {labels ++ ["Other Categories"], data ++ [other_count]}
+      else
+        {labels, data}
+      end
 
     # Optionally add "Uncategorized" as final slice to show full picture
-    {labels, data} = if uncategorized do
-      {labels ++ ["Uncategorized"], data ++ [uncategorized.count]}
-    else
-      {labels, data}
-    end
+    {labels, data} =
+      if uncategorized do
+        {labels ++ ["Uncategorized"], data ++ [uncategorized.count]}
+      else
+        {labels, data}
+      end
 
     # Color palette (extended to include gray for uncategorized)
     colors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#D1D5DB", "#9CA3AF"]
@@ -1064,12 +1134,49 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     }
   end
 
+  # Get the color for a category based on its position in the sorted list
+  # This ensures the list colors match the pie chart colors
+  defp get_category_color(categories, category_name) do
+    # Filter out uncategorized entries
+    categorized_only = Enum.filter(categories, fn cat -> cat.category_id != nil end)
+
+    # Take top 5 categorized
+    {top_5, rest} = Enum.split(categorized_only, 5)
+
+    # Color palette matching the pie chart
+    colors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#D1D5DB", "#9CA3AF"]
+
+    # Find the index of this category in the top 5
+    top_5_names = Enum.map(top_5, & &1.category_name)
+
+    cond do
+      # Check if it's in the top 5
+      category_name in top_5_names ->
+        index = Enum.find_index(top_5_names, &(&1 == category_name))
+        Enum.at(colors, index, "#9CA3AF")
+
+      # Check if it's "Other Categories" (categories beyond top 5)
+      category_name == "Other" && length(rest) > 0 ->
+        # Use the 6th color (gray)
+        "#D1D5DB"
+
+      # Uncategorized
+      category_name == nil ->
+        # Use the 7th color (darker gray)
+        "#9CA3AF"
+
+      # Default fallback
+      true ->
+        "#9CA3AF"
+    end
+  end
+
   defp sort_categories(categories, :count) do
     Enum.sort_by(categories, & &1.count, :desc)
   end
 
   defp sort_categories(categories, :name) do
-    Enum.sort_by(categories, & &1.category_name || "", :asc)
+    Enum.sort_by(categories, &(&1.category_name || ""), :asc)
   end
 
   defp sort_categories(categories, :percentage) do
@@ -1085,6 +1192,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   end
 
   defp format_number(nil), do: "0"
+
   defp format_number(num) when is_integer(num) do
     num
     |> Integer.to_string()
@@ -1092,11 +1200,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
     |> String.reverse()
   end
+
   defp format_number(num) when is_float(num), do: format_number(round(num))
   defp format_number(_), do: "0"
 
   defp format_last_run(nil), do: "Never"
   defp format_last_run(%DateTime{} = dt), do: time_ago_in_words(dt)
+
   defp format_last_run(%NaiveDateTime{} = dt) do
     dt
     |> DateTime.from_naive!("Etc/UTC")
@@ -1116,9 +1226,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   end
 
   defp format_datetime(nil), do: "Never"
+
   defp format_datetime(%DateTime{} = dt) do
     Calendar.strftime(dt, "%b %d, %Y %I:%M %p")
   end
+
   defp format_datetime(%NaiveDateTime{} = dt) do
     dt
     |> DateTime.from_naive!("Etc/UTC")
@@ -1126,6 +1238,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   end
 
   defp format_duration(nil), do: "N/A"
+
   defp format_duration(seconds) when is_number(seconds) do
     cond do
       seconds < 60 -> "#{round(seconds)}s"
@@ -1133,6 +1246,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
       true -> "#{Float.round(seconds / 3600, 1)}h"
     end
   end
+
   defp format_duration(_), do: "N/A"
 
   # Safe atom conversion for sort parameters
@@ -1140,5 +1254,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   defp safe_sort_atom("count", _), do: :count
   defp safe_sort_atom("name", _), do: :name
   defp safe_sort_atom("percentage", :category), do: :percentage
-  defp safe_sort_atom(_, _), do: :count  # Default fallback
+  # Default fallback
+  defp safe_sort_atom(_, _), do: :count
 end
