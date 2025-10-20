@@ -173,6 +173,14 @@ config :eventasaurus,
   change_tracking: [
     new_events_window_hours: 24,
     dropped_events_window_hours: 48
+  ],
+  # Generic categories that indicate poor categorization specificity
+  generic_categories: [
+    "other",
+    "miscellaneous",
+    "general",
+    "events",
+    "various"
   ]
 
 # Configure geocoder for forward geocoding (address → city/coordinates)
