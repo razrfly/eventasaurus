@@ -109,6 +109,7 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:source, :string, default: "user")
     field(:metadata, :map)
     field(:geocoding_performance, :map)
+    field(:provider_ids, :map, default: %{})
 
     belongs_to(:city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id)
     has_many(:events, EventasaurusApp.Events.Event)
@@ -136,7 +137,8 @@ defmodule EventasaurusApp.Venues.Venue do
       :source,
       :city_id,
       :metadata,
-      :geocoding_performance
+      :geocoding_performance,
+      :provider_ids
     ])
     |> validate_required_by_type()
     |> validate_inclusion(:venue_type, @valid_venue_types,
@@ -260,12 +262,12 @@ defmodule EventasaurusApp.Venues.Venue do
     source = get_field(changeset, :source)
     place_id = get_field(changeset, :place_id)
 
+    # Provider-agnostic validation
+    # place_id is optional for all sources (providers store IDs in provider_ids field)
+    # Only validate that user-created venues don't have place_ids (they should be geocoded first)
     cond do
-      source == "google" and is_nil(place_id) ->
-        add_error(changeset, :place_id, "is required when source is 'google'")
-
       not is_nil(place_id) and source == "user" ->
-        add_error(changeset, :source, "cannot be 'user' when place_id is present")
+        add_error(changeset, :source, "cannot be 'user' when place_id is present (venue should be geocoded)")
 
       true ->
         changeset
@@ -325,5 +327,101 @@ defmodule EventasaurusApp.Venues.Venue do
       [] -> nil
       parts -> Enum.join(parts, ", ")
     end
+  end
+
+  @doc """
+  Find venue by provider-specific ID.
+
+  ## Parameters
+  - `provider_name` - Name of the provider (e.g., "google_places", "foursquare")
+  - `provider_id` - Provider-specific place identifier
+
+  ## Examples
+
+      iex> Venue.find_by_provider_id("google_places", "ChIJN1t_tDeuEmsRUsoyG83frY4")
+      %Venue{...}
+
+      iex> Venue.find_by_provider_id("foursquare", "4b1234abcd...")
+      %Venue{...}
+  """
+  def find_by_provider_id(provider_name, provider_id) do
+    import Ecto.Query
+    alias EventasaurusApp.Repo
+
+    from(v in __MODULE__,
+      where: fragment("? @> ?", v.provider_ids, ^%{provider_name => provider_id})
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Check if venue has an ID from a specific provider.
+
+  ## Parameters
+  - `venue` - Venue struct
+  - `provider_name` - Name of the provider to check
+
+  ## Examples
+
+      iex> Venue.has_provider_id?(venue, "google_places")
+      true
+
+      iex> Venue.has_provider_id?(venue, "foursquare")
+      false
+  """
+  def has_provider_id?(%__MODULE__{provider_ids: provider_ids}, provider_name)
+      when is_map(provider_ids) do
+    Map.has_key?(provider_ids, provider_name) ||
+      Map.has_key?(provider_ids, String.to_atom(provider_name))
+  end
+
+  def has_provider_id?(_, _), do: false
+
+  @doc """
+  Get provider ID for a specific provider.
+
+  ## Parameters
+  - `venue` - Venue struct
+  - `provider_name` - Name of the provider
+
+  ## Examples
+
+      iex> Venue.get_provider_id(venue, "google_places")
+      "ChIJN1t_tDeuEmsRUsoyG83frY4"
+
+      iex> Venue.get_provider_id(venue, "unknown_provider")
+      nil
+  """
+  def get_provider_id(%__MODULE__{provider_ids: provider_ids}, provider_name)
+      when is_map(provider_ids) do
+    Map.get(provider_ids, provider_name) || Map.get(provider_ids, String.to_atom(provider_name))
+  end
+
+  def get_provider_id(_, _), do: nil
+
+  @doc """
+  Add or update a provider ID for a venue.
+
+  Returns a changeset with the updated provider_ids map.
+
+  ## Parameters
+  - `venue` - Venue struct or changeset
+  - `provider_name` - Name of the provider
+  - `provider_id` - Provider-specific place identifier
+
+  ## Examples
+
+      iex> venue |> Venue.put_provider_id("foursquare", "4b1234abcd...") |> Repo.update()
+      {:ok, %Venue{...}}
+  """
+  def put_provider_id(%Ecto.Changeset{} = changeset, provider_name, provider_id) do
+    current_ids = Ecto.Changeset.get_field(changeset, :provider_ids) || %{}
+    updated_ids = Map.put(current_ids, provider_name, provider_id)
+    Ecto.Changeset.put_change(changeset, :provider_ids, updated_ids)
+  end
+
+  def put_provider_id(%__MODULE__{} = venue, provider_name, provider_id) do
+    changeset(venue, %{})
+    |> put_provider_id(provider_name, provider_id)
   end
 end

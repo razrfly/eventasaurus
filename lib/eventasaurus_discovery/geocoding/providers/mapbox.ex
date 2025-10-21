@@ -137,6 +137,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Mapbox do
            longitude: lng,
            city: city,
            country: country || "Unknown",
+           # New multi-provider field
+           provider_id: place_id,
+           # Keep for backwards compatibility
            place_id: place_id,
            # Store entire Mapbox feature object
            raw_response: feature

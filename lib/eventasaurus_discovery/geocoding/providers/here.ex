@@ -144,6 +144,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
            longitude: lng * 1.0,
            city: city,
            country: country || "Unknown",
+           # New multi-provider field
+           provider_id: place_id,
+           # Keep for backwards compatibility
            place_id: place_id,
            # Store entire HERE item object
            raw_response: item

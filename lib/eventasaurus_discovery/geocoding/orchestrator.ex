@@ -20,6 +20,9 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
         country: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278,
+        provider_ids: %{
+          "mapbox" => "poi.123456789"
+        },
         geocoding_metadata: %{
           provider: "mapbox",
           attempted_providers: ["mapbox"],
@@ -105,16 +108,31 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
         # Success!
         Logger.info("✅ Geocoded via #{provider_name}: #{lat}, #{lng}")
 
+        # Extract provider_id from result
+        provider_id = Map.get(result, :provider_id) || Map.get(result, :place_id)
+
+        # Build provider_ids map (only include if provider returned an ID)
+        provider_ids =
+          if provider_id do
+            %{provider_name => provider_id}
+          else
+            %{}
+          end
+
         metadata = %{
           provider: provider_name,
           attempted_providers: Enum.reverse([provider_name | attempted]),
           attempts: length(attempted) + 1,
           geocoded_at: DateTime.utc_now(),
-          place_id: Map.get(result, :place_id),
+          # Keep for backwards compatibility
+          place_id: provider_id,
           raw_response: Map.get(result, :raw_response)
         }
 
-        {:ok, Map.put(result, :geocoding_metadata, metadata)}
+        result
+        |> Map.put(:geocoding_metadata, metadata)
+        |> Map.put(:provider_ids, provider_ids)
+        |> then(&{:ok, &1})
 
       {:error, reason} ->
         # Failed, try next provider

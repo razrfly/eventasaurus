@@ -47,9 +47,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
       # Step 1: Text Search to find place_id
       case text_search(address, api_key) do
-        {:ok, place_id} ->
+        {:ok, google_place_id} ->
           # Step 2: Place Details to get full information
-          place_details(place_id, api_key)
+          place_details(google_place_id, api_key)
 
         {:error, reason} ->
           {:error, reason}
@@ -135,7 +135,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
     case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        parse_place_details_response(body)
+        parse_place_details_response(body, place_id)
 
       {:ok, %HTTPoison.Response{status_code: 429}} ->
         Logger.warning("⚠️ Google Places Details rate limited")
@@ -162,10 +162,10 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
     end
   end
 
-  defp parse_place_details_response(body) do
+  defp parse_place_details_response(body, place_id) do
     case Jason.decode(body) do
       {:ok, %{"result" => result, "status" => "OK"}} ->
-        extract_result(result)
+        extract_result(result, place_id)
 
       {:ok, %{"status" => status}} ->
         Logger.error("❌ Google Places Details error status: #{status}")
@@ -177,7 +177,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
     end
   end
 
-  defp extract_result(result) do
+  defp extract_result(result, place_id) do
     # Extract coordinates
     lat = get_in(result, ["geometry", "location", "lat"])
     lng = get_in(result, ["geometry", "location", "lng"])
@@ -207,7 +207,13 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
            latitude: lat * 1.0,
            longitude: lng * 1.0,
            city: city,
-           country: country || "Unknown"
+           country: country || "Unknown",
+           # New multi-provider field
+           provider_id: place_id,
+           # Keep for backwards compatibility
+           place_id: place_id,
+           # Store entire Google Places result object
+           raw_response: result
          }}
     end
   end

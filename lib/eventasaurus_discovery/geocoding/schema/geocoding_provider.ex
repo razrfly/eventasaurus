@@ -1,12 +1,13 @@
 defmodule EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider do
   @moduledoc """
-  Schema for geocoding provider configuration.
+  Schema for venue data provider configuration.
 
   Stores provider configuration including:
-  - name: Provider identifier (e.g., "mapbox", "openstreetmap")
-  - priority: Lower = higher priority (1 is highest)
+  - name: Provider identifier (e.g., "mapbox", "openstreetmap", "google_places")
   - is_active: Whether provider is enabled
   - metadata: JSONB field containing rate limits and other config
+  - capabilities: JSONB field indicating provider capabilities (geocoding, images, reviews, hours)
+  - priorities: JSONB field with operation-specific priorities (geocoding, images, etc.)
 
   ## Metadata Structure
 
@@ -20,15 +21,36 @@ defmodule EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider do
     "timeout_ms": 5000
   }
   ```
+
+  ## Capabilities Structure
+
+  ```json
+  {
+    "geocoding": true,
+    "images": true,
+    "reviews": false,
+    "hours": false
+  }
+  ```
+
+  ## Priorities Structure
+
+  ```json
+  {
+    "geocoding": 1,
+    "images": 8
+  }
+  ```
   """
   use Ecto.Schema
   import Ecto.Changeset
 
-  schema "geocoding_providers" do
+  schema "venue_data_providers" do
     field(:name, :string)
-    field(:priority, :integer)
     field(:is_active, :boolean, default: true)
     field(:metadata, :map, default: %{})
+    field(:capabilities, :map, default: %{})
+    field(:priorities, :map, default: %{})
 
     timestamps()
   end
@@ -36,11 +58,60 @@ defmodule EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider do
   @doc false
   def changeset(provider, attrs) do
     provider
-    |> cast(attrs, [:name, :priority, :is_active, :metadata])
-    |> validate_required([:name, :priority])
-    |> validate_number(:priority, greater_than: 0, less_than: 100)
+    |> cast(attrs, [:name, :is_active, :metadata, :capabilities, :priorities])
+    |> validate_required([:name])
     |> validate_metadata()
+    |> validate_capabilities()
+    |> validate_priorities()
     |> unique_constraint(:name)
+  end
+
+  defp validate_capabilities(changeset) do
+    changeset
+    |> validate_change(:capabilities, fn :capabilities, capabilities ->
+      capabilities = capabilities || %{}
+
+      if is_map(capabilities) do
+        valid_keys = ["geocoding", "images", "reviews", "hours"]
+        invalid_keys = Map.keys(capabilities) -- valid_keys
+
+        if Enum.empty?(invalid_keys) do
+          []
+        else
+          [capabilities: "contains invalid keys: #{Enum.join(invalid_keys, ", ")}"]
+        end
+      else
+        [capabilities: "must be a map"]
+      end
+    end)
+  end
+
+  defp validate_priorities(changeset) do
+    changeset
+    |> validate_change(:priorities, fn :priorities, priorities ->
+      priorities = priorities || %{}
+
+      if is_map(priorities) do
+        # All values should be positive integers representing priority order
+        invalid_priorities =
+          Enum.filter(priorities, fn {_key, value} ->
+            not (is_integer(value) and value > 0)
+          end)
+
+        if Enum.empty?(invalid_priorities) do
+          []
+        else
+          invalid_keys = Enum.map(invalid_priorities, fn {key, _} -> key end)
+
+          [
+            priorities:
+              "contains invalid priority values for: #{Enum.join(invalid_keys, ", ")} (must be positive integers)"
+          ]
+        end
+      else
+        [priorities: "must be a map"]
+      end
+    end)
   end
 
   defp validate_metadata(changeset) do

@@ -464,6 +464,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
       :city ->
         "Global (requires city selection)"
+
+      :unknown ->
+        "Unknown coverage (not registered)"
     end
   end
 

@@ -107,12 +107,15 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
         Map.get(location, "country_name") ||
         "Unknown"
 
-    # Extract OpenStreetMap place ID
+    # Extract OpenStreetMap place ID and convert to string (may be integer in response)
     place_id =
-      Map.get(location, :osm_id) ||
-        Map.get(location, "osm_id") ||
-        Map.get(location, :place_id) ||
-        Map.get(location, "place_id")
+      case Map.get(location, :osm_id) || Map.get(location, "osm_id") ||
+             Map.get(location, :place_id) || Map.get(location, "place_id") do
+        nil -> nil
+        id when is_integer(id) -> Integer.to_string(id)
+        id when is_binary(id) -> id
+        other -> to_string(other)
+      end
 
     cond do
       is_nil(lat) or is_nil(lon) ->
@@ -137,6 +140,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
            longitude: lon,
            city: city,
            country: country,
+           # New multi-provider field
+           provider_id: place_id,
+           # Keep for backwards compatibility
            place_id: place_id,
            # Store entire Geocoder coordinates struct
            raw_response: coordinates
