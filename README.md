@@ -67,6 +67,7 @@ export POSTHOG_PUBLIC_API_KEY=your_posthog_key
 export GOOGLE_MAPS_API_KEY=your_google_maps_key
 export TMDB_API_KEY=your_tmdb_api_key
 export RESEND_API_KEY=your_resend_api_key
+export UNSPLASH_ACCESS_KEY=your_unsplash_access_key
 ```
 
 ### 4. Start Supabase locally
@@ -339,6 +340,71 @@ Eventasaurus includes a sophisticated multi-provider geocoding system that autom
 - Error handling strategies
 - Cost management and monitoring
 - Adding new providers
+
+### Unsplash City Images
+
+Eventasaurus integrates with Unsplash to automatically fetch and cache high-quality city images for visual enhancement:
+
+- **Automatic Caching**: Fetches 10 landscape-oriented images per active city (discovery_enabled = true)
+- **Daily Rotation**: Images rotate daily based on day of year for variety
+- **Popularity-Based**: Images sorted by popularity (likes) from Unsplash
+- **Batch Queries**: Optimized batch fetching to prevent N+1 query issues
+- **Automatic Refresh**: Daily refresh worker runs at 3 AM UTC via Oban
+- **Proper Attribution**: All images include photographer credits and UTM parameters
+
+#### Setup
+
+1. **Get an Unsplash API Access Key**:
+   - Visit [Unsplash Developers](https://unsplash.com/oauth/applications)
+   - Create a new application
+   - Copy your Access Key
+
+2. **Add to environment variables**:
+   ```bash
+   export UNSPLASH_ACCESS_KEY=your_access_key_here
+   ```
+
+3. **Test the integration**:
+   ```bash
+   # Test fetching for a specific city
+   mix unsplash.test London
+
+   # Test fetching for all active cities
+   mix unsplash.test
+   ```
+
+#### Usage in Code
+
+```elixir
+# Get today's image for a city
+{:ok, image} = UnsplashService.get_city_image("London")
+# Returns: %{url: "...", thumb_url: "...", color: "#...", attribution: %{...}}
+
+# Get images for multiple cities (batch, no N+1)
+images = UnsplashService.get_city_images_batch(["London", "Paris", "Kraków"])
+# Returns: %{"London" => %{url: "...", ...}, "Paris" => %{...}, ...}
+
+# Manually refresh a city's images
+{:ok, gallery} = UnsplashService.refresh_city_images("London")
+
+# Get all cities with cached galleries
+cities = UnsplashService.cities_with_galleries()
+```
+
+#### Rate Limits
+
+- **Demo**: 50 requests/hour
+- **Production**: 5,000 requests/hour
+- The automatic refresh worker handles rate limiting gracefully with retry logic
+
+#### Attribution Requirements
+
+All Unsplash images must display:
+- Photographer name and link
+- Link to the Unsplash photo page
+- UTM parameters: `utm_source=eventasaurus&utm_medium=referral`
+
+The service automatically includes proper attribution data in all returned images.
 
 ### Event Occurrence Types
 
