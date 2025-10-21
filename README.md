@@ -333,7 +333,7 @@ mix quality.check --all --json
 ```
 
 **Example Output**:
-```
+```text
 Quality Report: sortiraparis
 ============================================================
 Overall Score: 84% 😊 Good
@@ -385,7 +385,7 @@ mix category.analyze sortiraparis --json
 ```
 
 **Example Output**:
-```
+```text
 Category Analysis: sortiraparis
 ============================================================
 
