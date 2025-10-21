@@ -391,9 +391,9 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
             <% end %>
             <%= if @photo[:attribution] do %>
               <p class="text-xs text-gray-300 mt-1">
-                <%= if @photo[:attribution_url] do %>
+                <%= if safe_external_url(@photo[:attribution_url]) do %>
                   <a
-                    href={@photo.attribution_url}
+                    href={safe_external_url(@photo[:attribution_url])}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="underline hover:text-white transition-colors"
@@ -528,6 +528,15 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
 
   # Private functions
 
+  defp safe_external_url(nil), do: nil
+
+  defp safe_external_url(url) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme} when scheme in ["http", "https"] -> url
+      _ -> nil
+    end
+  end
+
   defp assign_computed_data(socket) do
     # Priority order for photo sources:
     # 1. venue_images (new provider-agnostic aggregation)
@@ -546,8 +555,11 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
           normalize_venue_images(venue["venue_images"])
 
         # Standardized format from rich_data
-        is_map(rich_data) && match?(%{sections: %{photos: %{photos: photos}}} when is_list(photos), rich_data) ->
-          normalize_standardized_photos(rich_data.sections.photos.photos)
+        is_map(rich_data) ->
+          case get_in(rich_data, [:sections, :photos, :photos]) do
+            photos when is_list(photos) -> normalize_standardized_photos(photos)
+            _ -> nil
+          end || []
 
         # Legacy rich_data.images format
         is_map(rich_data) && Map.has_key?(rich_data, :images) && is_list(rich_data.images) ->

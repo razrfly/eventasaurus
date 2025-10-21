@@ -48,6 +48,7 @@
               </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
+              <% geocoding_priority = get_in(provider.priorities, ["geocoding"]) || get_in(provider.priorities, [:geocoding]) || 99 %>
               <%= if @editing_provider_id == provider.id do %>
                 <div>
                   <form phx-submit="update_priority" class="flex gap-2 items-center">
@@ -55,7 +56,7 @@
                     <input
                       type="number"
                       name="priority"
-                      value={provider.priority}
+                      value={geocoding_priority}
                       min="1"
                       max="99"
                       class={
@@ -86,14 +87,14 @@
                 <span class={
                   "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
                   cond do
-                    provider.priority >= 90 -> "bg-purple-100 text-purple-800"
-                    provider.priority >= 70 -> "bg-blue-100 text-blue-800"
-                    provider.priority >= 50 -> "bg-green-100 text-green-800"
-                    provider.priority >= 10 -> "bg-yellow-100 text-yellow-800"
+                    geocoding_priority >= 90 -> "bg-purple-100 text-purple-800"
+                    geocoding_priority >= 70 -> "bg-blue-100 text-blue-800"
+                    geocoding_priority >= 50 -> "bg-green-100 text-green-800"
+                    geocoding_priority >= 10 -> "bg-yellow-100 text-yellow-800"
                     true -> "bg-gray-100 text-gray-800"
                   end
                 }>
-                  <%= provider.priority %>
+                  <%= geocoding_priority %>
                 </span>
               <% end %>
             </td>

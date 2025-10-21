@@ -97,7 +97,7 @@ defmodule EventasaurusDiscovery.VenueImages.Monitor do
     stats = get_all_stats()
 
     Enum.each(stats, fn stat ->
-      usage = stat.rate_limit_stats
+      usage = stat.rate_limit_stats || %{last_second: 0, last_minute: 0, last_hour: 0}
 
       Logger.info("""
       📊 Provider: #{stat.name}
@@ -140,7 +140,8 @@ defmodule EventasaurusDiscovery.VenueImages.Monitor do
   end
 
   defp get_rate_limit_stats(provider_name) do
-    RateLimiter.get_stats(provider_name)
+    RateLimiter.get_stats(provider_name) ||
+      %{last_second: 0, last_minute: 0, last_hour: 0, blocked: 0}
   end
 
   defp get_configured_limits(provider) do
@@ -168,7 +169,10 @@ defmodule EventasaurusDiscovery.VenueImages.Monitor do
     # Check per-second limit
     alerts =
       if per_second = get_in(limits, ["per_second"]) || get_in(limits, [:per_second]) do
-        usage_pct = stats.last_second / per_second * 100
+        usage_pct =
+          if is_number(per_second) and per_second > 0,
+            do: stats.last_second / per_second * 100,
+            else: 0
 
         if usage_pct >= 80 do
           [
@@ -195,7 +199,10 @@ defmodule EventasaurusDiscovery.VenueImages.Monitor do
     # Check per-minute limit
     alerts =
       if per_minute = get_in(limits, ["per_minute"]) || get_in(limits, [:per_minute]) do
-        usage_pct = stats.last_minute / per_minute * 100
+        usage_pct =
+          if is_number(per_minute) and per_minute > 0,
+            do: stats.last_minute / per_minute * 100,
+            else: 0
 
         if usage_pct >= 80 do
           [
@@ -222,7 +229,10 @@ defmodule EventasaurusDiscovery.VenueImages.Monitor do
     # Check per-hour limit
     alerts =
       if per_hour = get_in(limits, ["per_hour"]) || get_in(limits, [:per_hour]) do
-        usage_pct = stats.last_hour / per_hour * 100
+        usage_pct =
+          if is_number(per_hour) and per_hour > 0,
+            do: stats.last_hour / per_hour * 100,
+            else: 0
 
         if usage_pct >= 80 do
           [

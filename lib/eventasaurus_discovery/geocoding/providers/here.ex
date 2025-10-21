@@ -189,12 +189,10 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
   def get_images(_), do: {:error, :invalid_place_id}
 
   defp fetch_place_images(place_id, api_key) do
-    # HERE Browse API to get images for a place
-    url = "https://browse.search.hereapi.com/v1/browse"
+    # HERE Lookup API to get place details including images
+    url = "https://lookup.search.hereapi.com/v1/lookup"
 
     params = [
-      at: "0,0",
-      # Will be overridden by place_id lookup
       id: place_id,
       apiKey: api_key
     ]
@@ -231,46 +229,28 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
 
   defp parse_images_response(body) do
     case Jason.decode(body) do
-      {:ok, %{"items" => [item | _]}} ->
-        # Extract images from contacts or categories if available
-        images =
-          case get_in(item, ["contacts"]) do
-            contacts when is_list(contacts) ->
-              Enum.flat_map(contacts, fn contact ->
-                case Map.get(contact, "www") do
-                  urls when is_list(urls) ->
-                    Enum.map(urls, fn url_info ->
-                      %{
-                        url: Map.get(url_info, "value"),
-                        width: nil,
-                        height: nil,
-                        attribution: "HERE",
-                        source_url: nil
-                      }
-                    end)
+      {:ok, %{"images" => images}} when is_list(images) ->
+        # Extract images from top-level images array
+        mapped_images =
+          Enum.map(images, fn img ->
+            %{
+              url: Map.get(img, "url") || Map.get(img, "src"),
+              width: nil,
+              height: nil,
+              attribution: "HERE",
+              source_url: nil
+            }
+          end)
 
-                  _ ->
-                    []
-                end
-              end)
-
-            _ ->
-              []
-          end
-
-        if Enum.empty?(images) do
+        if Enum.empty?(mapped_images) do
           Logger.debug("📸 HERE: no images available for this place")
           {:error, :no_images}
         else
-          {:ok, images}
+          {:ok, mapped_images}
         end
 
-      {:ok, %{"items" => []}} ->
-        Logger.debug("📸 HERE: no results found")
-        {:error, :no_results}
-
-      {:ok, _other} ->
-        Logger.debug("📸 HERE: place has no images")
+      {:ok, _} ->
+        Logger.debug("📸 HERE: no results found or no images available")
         {:error, :no_images}
 
       {:error, reason} ->
