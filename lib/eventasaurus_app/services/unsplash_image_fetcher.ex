@@ -27,11 +27,11 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
 
     cond do
       is_nil(city) ->
-        Logger.warn("City not found: #{city_name}")
+        Logger.warning("City not found: #{city_name}")
         {:error, :not_found}
 
       !city.discovery_enabled ->
-        Logger.warn("City #{city_name} is not active (discovery_enabled = false)")
+        Logger.warning("City #{city_name} is not active (discovery_enabled = false)")
         {:error, :inactive_city}
 
       true ->
@@ -88,7 +88,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
         if String.contains?(body, "Rate Limit Exceeded") do
           if attempt < max_attempts do
             backoff = attempt * 1500  # 1.5s, 3s, 4.5s
-            Logger.warn("Rate limited for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
+            Logger.warning("Rate limited for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
             Process.sleep(backoff)
             fetch_with_retry(url, city_name, attempt + 1)
           else
@@ -103,7 +103,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       {:ok, %{status_code: 429}} ->
         if attempt < max_attempts do
           backoff = attempt * 2000  # 2s, 4s, 6s
-          Logger.warn("Rate limited (429) for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
+          Logger.warning("Rate limited (429) for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
           Process.sleep(backoff)
           fetch_with_retry(url, city_name, attempt + 1)
         else
@@ -134,7 +134,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
         {:ok, images}
 
       {:ok, %{"results" => _}} ->
-        Logger.warn("No images found in Unsplash results")
+        Logger.warning("No images found in Unsplash results")
         {:error, :no_images}
 
       {:ok, data} ->
