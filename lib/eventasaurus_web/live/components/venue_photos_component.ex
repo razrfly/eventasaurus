@@ -384,6 +384,27 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
                 <%= @photo.width %> × <%= @photo.height %> pixels
               </p>
             <% end %>
+            <%= if @photo[:provider] do %>
+              <p class="text-xs text-gray-400 mt-2">
+                Source: <%= String.capitalize(@photo.provider) %>
+              </p>
+            <% end %>
+            <%= if @photo[:attribution] do %>
+              <p class="text-xs text-gray-300 mt-1">
+                <%= if @photo[:attribution_url] do %>
+                  <a
+                    href={@photo.attribution_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="underline hover:text-white transition-colors"
+                  >
+                    <%= @photo.attribution %>
+                  </a>
+                <% else %>
+                  <%= @photo.attribution %>
+                <% end %>
+              </p>
+            <% end %>
           </div>
         </div>
       </div>
@@ -508,21 +529,34 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
   # Private functions
 
   defp assign_computed_data(socket) do
+    # Priority order for photo sources:
+    # 1. venue_images (new provider-agnostic aggregation)
+    # 2. rich_data.sections.photos (standardized format)
+    # 3. rich_data.images (legacy format)
+    venue = Map.get(socket.assigns, :venue)
     rich_data = socket.assigns.rich_data
 
-    # Support both standardized format (new) and old format (for backward compatibility)
     all_photos =
-      case rich_data do
-        %{sections: %{photos: %{photos: photos}}} when is_list(photos) ->
-          normalize_standardized_photos(photos)
+      cond do
+        # New venue_images JSONB field from provider aggregation
+        venue && is_map(venue) && Map.has_key?(venue, :venue_images) ->
+          normalize_venue_images(venue.venue_images)
 
-        %{images: images} when is_list(images) ->
-          normalize_photos(images)
+        venue && is_map(venue) && Map.has_key?(venue, "venue_images") ->
+          normalize_venue_images(venue["venue_images"])
 
-        %{"images" => images} when is_list(images) ->
-          normalize_photos(images)
+        # Standardized format from rich_data
+        is_map(rich_data) && match?(%{sections: %{photos: %{photos: photos}}} when is_list(photos), rich_data) ->
+          normalize_standardized_photos(rich_data.sections.photos.photos)
 
-        _ ->
+        # Legacy rich_data.images format
+        is_map(rich_data) && Map.has_key?(rich_data, :images) && is_list(rich_data.images) ->
+          normalize_photos(rich_data.images)
+
+        is_map(rich_data) && Map.has_key?(rich_data, "images") && is_list(rich_data["images"]) ->
+          normalize_photos(rich_data["images"])
+
+        true ->
           []
       end
 
@@ -616,6 +650,38 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
       thumbnail_url: Map.get(image, "thumbnail_url"),
       width: Map.get(image, "width"),
       height: Map.get(image, "height")
+    }
+  end
+
+  # Normalize venue_images from provider aggregation
+  defp normalize_venue_images(venue_images) when is_list(venue_images) do
+    venue_images
+    |> Enum.filter(&is_valid_venue_image?/1)
+    |> Enum.map(&normalize_venue_image/1)
+  end
+
+  defp normalize_venue_images(_), do: []
+
+  defp is_valid_venue_image?(image) when is_map(image) do
+    # Support both atom and string keys
+    url = Map.get(image, :url) || Map.get(image, "url")
+    is_binary(url) && String.length(url) > 0
+  end
+
+  defp is_valid_venue_image?(_), do: false
+
+  defp normalize_venue_image(image) when is_map(image) do
+    # Support both atom and string keys from JSONB
+    %{
+      url: Map.get(image, :url) || Map.get(image, "url"),
+      alt: Map.get(image, :alt) || Map.get(image, "alt") || "Photo",
+      thumbnail_url: Map.get(image, :thumbnail_url) || Map.get(image, "thumbnail_url"),
+      width: Map.get(image, :width) || Map.get(image, "width"),
+      height: Map.get(image, :height) || Map.get(image, "height"),
+      provider: Map.get(image, :provider) || Map.get(image, "provider"),
+      attribution: Map.get(image, :attribution) || Map.get(image, "attribution"),
+      attribution_url: Map.get(image, :attribution_url) || Map.get(image, "attribution_url"),
+      position: Map.get(image, :position) || Map.get(image, "position") || 0
     }
   end
 end

@@ -47,6 +47,9 @@ defmodule EventasaurusWeb.Router do
       live "/geocoding", Admin.GeocodingDashboardLive
       live "/geocoding/providers", Admin.GeocodingProviderLive, :index
 
+      # Venue Images Stats Dashboard (dev - no auth)
+      live "/venue-images/stats", Admin.VenueImagesStatsLive
+
       # City Discovery Configuration (dev - no auth)
       live "/discovery/config", Admin.CityDiscoveryConfigLive, :index
       live "/discovery/config/:slug", Admin.CityDiscoveryConfigLive, :show
@@ -121,6 +124,9 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
       live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
+
+      # Venue Images Stats Dashboard with admin authentication
+      live "/venue-images/stats", EventasaurusWeb.Admin.VenueImagesStatsLive
 
       # City Discovery Configuration
       live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index

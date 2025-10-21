@@ -23,17 +23,34 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
   - Place Details: $0.017 per request
   - **Total**: $0.034 per geocode
 
+  ## Capabilities
+
+  - **Geocoding**: Text Search + Place Details for coordinates
+  - **Images**: Place Photos API for venue images (up to 10 photos)
+  - **Reviews**: Not implemented (available in API)
+  - **Hours**: Not implemented (available in API)
+
   ## Response Format
 
   Returns standardized geocode result with coordinates, city, and country.
   """
 
-  @behaviour EventasaurusDiscovery.Geocoding.Provider
+  @behaviour EventasaurusDiscovery.Geocoding.MultiProvider
 
   require Logger
 
-  @impl true
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
   def name, do: "google_places"
+
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
+  def capabilities do
+    %{
+      "geocoding" => true,
+      "images" => true,
+      "reviews" => false,
+      "hours" => false
+    }
+  end
 
   @impl true
   def geocode(address) when is_binary(address) do
@@ -242,6 +259,113 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
       if "country" in types, do: long_name
     end)
+  end
+
+  # Images Implementation
+
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
+  def get_images(place_id) when is_binary(place_id) do
+    api_key = get_api_key()
+
+    if is_nil(api_key) do
+      Logger.error("❌ GOOGLE_PLACES_API_KEY not configured")
+      {:error, :api_key_missing}
+    else
+      Logger.debug("📸 Google Places Photos request: #{place_id}")
+      fetch_place_photos(place_id, api_key)
+    end
+  end
+
+  def get_images(_), do: {:error, :invalid_place_id}
+
+  defp fetch_place_photos(place_id, api_key) do
+    # First get photo references from Place Details
+    url = "https://maps.googleapis.com/maps/api/place/details/json"
+
+    params = [
+      place_id: place_id,
+      fields: "photos",
+      key: api_key
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_photos_response(body, api_key)
+
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        Logger.debug("📍 Google Places: place not found")
+        {:error, :no_results}
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ Google Places Photos rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: 403}} ->
+        Logger.error("❌ Google Places Photos authentication failed")
+        {:error, :api_error}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ Google Places Photos HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Google Places Photos request timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ Google Places Photos request failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_photos_response(body, api_key) do
+    case Jason.decode(body) do
+      {:ok, %{"result" => %{"photos" => photos}, "status" => "OK"}} when is_list(photos) ->
+        images =
+          photos
+          |> Enum.take(10)
+          |> Enum.map(fn photo ->
+            photo_reference = Map.get(photo, "photo_reference")
+            width = Map.get(photo, "width")
+            height = Map.get(photo, "height")
+            attributions = Map.get(photo, "html_attributions", [])
+
+            # Construct Google Places Photo URL
+            # Note: This requires an API call per photo in production, or use static URL with maxwidth
+            url =
+              "https://maps.googleapis.com/maps/api/place/photo?maxwidth=#{width || 1600}&photo_reference=#{photo_reference}&key=#{api_key}"
+
+            %{
+              url: url,
+              width: width,
+              height: height,
+              attribution: Enum.join(attributions, " | "),
+              source_url: nil
+            }
+          end)
+
+        if Enum.empty?(images) do
+          {:error, :no_images}
+        else
+          {:ok, images}
+        end
+
+      {:ok, %{"result" => %{}, "status" => "OK"}} ->
+        Logger.debug("📸 Google Places: no photos available")
+        {:error, :no_images}
+
+      {:ok, %{"status" => "ZERO_RESULTS"}} ->
+        Logger.debug("📸 Google Places: place has no photos")
+        {:error, :no_images}
+
+      {:ok, %{"status" => status}} ->
+        Logger.error("❌ Google Places Photos error status: #{status}")
+        {:error, :api_error}
+
+      {:error, reason} ->
+        Logger.error("❌ Google Places Photos: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
   end
 
   defp get_api_key do
