@@ -545,18 +545,44 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     parts
   end
 
+  # Extracts provider_ids map from geocoding metadata
+  # The Orchestrator returns provider_ids in the result, which gets passed through
+  # the geocoding_metadata field in AddressGeocoder
+  defp extract_provider_ids_from_metadata(nil), do: %{}
+
+  defp extract_provider_ids_from_metadata(metadata) when is_map(metadata) do
+    # The geocoding result from Orchestrator.geocode includes provider_ids
+    # This function extracts it, or builds it from legacy place_id if needed
+    case Map.get(metadata, :provider_ids) do
+      provider_ids when is_map(provider_ids) and map_size(provider_ids) > 0 ->
+        provider_ids
+
+      _ ->
+        # Fallback: build from place_id and provider for backwards compatibility
+        provider_name = Map.get(metadata, :provider)
+        place_id = Map.get(metadata, :place_id)
+
+        if provider_name && place_id do
+          %{provider_name => place_id}
+        else
+          %{}
+        end
+    end
+  end
+
   defp create_venue(data, city, _source, source_scraper) do
     # Check if we need to geocode the venue address
-    {latitude, longitude, geocoding_metadata, geocoding_place_id} =
+    {latitude, longitude, geocoding_metadata, geocoding_place_id, provider_ids} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
         # Try to geocode using multi-provider system
         {lat, lng, metadata} = geocode_venue_address(data, city)
-        # Extract place_id from geocoding metadata if available
+        # Extract place_id and provider_ids from geocoding metadata if available
         place_id = if metadata, do: Map.get(metadata, :place_id), else: nil
-        {lat, lng, metadata, place_id}
+        provider_ids_map = extract_provider_ids_from_metadata(metadata)
+        {lat, lng, metadata, place_id, provider_ids_map}
       else
         # Use provided coordinates
-        {data.latitude, data.longitude, nil, nil}
+        {data.latitude, data.longitude, nil, nil, %{}}
       end
 
     # Use scraped name and place_id
@@ -564,75 +590,99 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Prefer geocoding provider's place_id over scraper's place_id
     final_place_id = geocoding_place_id || data.place_id
 
-    # RACE CONDITION FIX: Re-check if place_id now exists after geocoding
+    # RACE CONDITION FIX: Re-check if venue already exists after geocoding
     # This prevents duplicates when multiple Oban workers geocode the same venue in parallel
-    if final_place_id do
-      case find_existing_venue(%{place_id: final_place_id}) do
-        nil ->
-          # Safe to insert, no existing venue with this place_id
-          # However, another worker could still insert between the check and insert (TOCTOU gap)
-          # The database unique constraint will catch this, so we handle constraint violations
-          case insert_new_venue(
-                 data,
-                 city,
-                 final_name,
-                 final_place_id,
-                 latitude,
-                 longitude,
-                 geocoding_metadata,
-                 source_scraper
-               ) do
-            {:ok, venue} ->
-              {:ok, venue}
-
-            {:error, changeset} ->
-              # Check if it's a unique constraint violation on place_id
-              if has_place_id_constraint_error?(changeset) do
-                # Another worker beat us to the insert, fetch and return the existing venue
-                case find_existing_venue(%{place_id: final_place_id}) do
-                  nil ->
-                    # Unlikely: constraint fired but we can't find the venue
-                    Logger.error(
-                      "🏛️ ❌ Unique constraint violation but venue not found: place_id=#{final_place_id}"
-                    )
-
-                    {:error, changeset}
-
-                  existing ->
-                    Logger.info(
-                      "🏛️ ✅ Resolved race condition via constraint: '#{existing.name}' (place_id: #{final_place_id})"
-                    )
-
-                    {:ok, existing}
-                end
-              else
-                # Some other error, propagate it
-                {:error, changeset}
-              end
-          end
-
-        existing ->
-          # Another worker just created it, return existing venue
-          Logger.info(
-            "🏛️ ✅ Found existing venue after geocoding: '#{existing.name}' (place_id: #{final_place_id})"
-          )
-
-          {:ok, existing}
+    # Check provider_ids first (more reliable), then fall back to place_id
+    existing_venue =
+      if map_size(provider_ids) > 0 do
+        # Try to find by any provider ID we have
+        Enum.find_value(provider_ids, fn {provider_name, provider_id} ->
+          find_existing_venue_by_provider_id(provider_name, provider_id)
+        end)
+      else
+        nil
       end
-    else
-      # No place_id, proceed with normal insert
-      insert_new_venue(
-        data,
-        city,
-        final_name,
-        final_place_id,
-        latitude,
-        longitude,
-        geocoding_metadata,
-        source_scraper
+
+    # Fallback to place_id lookup if no provider_ids match
+    existing_venue = existing_venue || if final_place_id, do: find_existing_venue(%{place_id: final_place_id}), else: nil
+
+    if existing_venue do
+      # Another worker just created it, return existing venue
+      Logger.info(
+        "🏛️ ✅ Found existing venue after geocoding: '#{existing_venue.name}' (provider_ids: #{inspect(provider_ids)}, place_id: #{final_place_id})"
       )
+
+      {:ok, existing_venue}
+    else
+      # Safe to insert, no existing venue found
+      # However, another worker could still insert between the check and insert (TOCTOU gap)
+      # The database unique constraint will catch this, so we handle constraint violations
+      case insert_new_venue(
+             data,
+             city,
+             final_name,
+             final_place_id,
+             latitude,
+             longitude,
+             geocoding_metadata,
+             source_scraper,
+             provider_ids
+           ) do
+        {:ok, venue} ->
+          {:ok, venue}
+
+        {:error, changeset} ->
+          # Check if it's a unique constraint violation on place_id
+          if has_place_id_constraint_error?(changeset) do
+            # Another worker beat us to the insert, fetch and return the existing venue
+            # Try provider_ids first, then place_id
+            refetch_existing =
+              if map_size(provider_ids) > 0 do
+                Enum.find_value(provider_ids, fn {provider_name, provider_id} ->
+                  find_existing_venue_by_provider_id(provider_name, provider_id)
+                end)
+              else
+                nil
+              end
+
+            refetch_existing = refetch_existing || find_existing_venue(%{place_id: final_place_id})
+
+            case refetch_existing do
+              nil ->
+                # Unlikely: constraint fired but we can't find the venue
+                Logger.error(
+                  "🏛️ ❌ Unique constraint violation but venue not found: provider_ids=#{inspect(provider_ids)}, place_id=#{final_place_id}"
+                )
+
+                {:error, changeset}
+
+              existing ->
+                Logger.info(
+                  "🏛️ ✅ Resolved race condition via constraint: '#{existing.name}' (provider_ids: #{inspect(provider_ids)}, place_id: #{final_place_id})"
+                )
+
+                {:ok, existing}
+            end
+          else
+            # Some other error, propagate it
+            {:error, changeset}
+          end
+      end
     end
   end
+
+  # Find existing venue by provider ID using GIN index
+  # Uses the JSONB containment operator @> for efficient lookups
+  defp find_existing_venue_by_provider_id(provider_name, provider_id)
+       when is_binary(provider_name) and is_binary(provider_id) do
+    from(v in Venue,
+      where: fragment("? @> ?", v.provider_ids, ^%{provider_name => provider_id}),
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
+  defp find_existing_venue_by_provider_id(_, _), do: nil
 
   # Detects venue source from geocoding metadata
   # Returns the geocoding provider name (mapbox, google, geoapify, etc.)
@@ -652,7 +702,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          latitude,
          longitude,
          geocoding_metadata,
-         source_scraper
+         source_scraper,
+         provider_ids
        ) do
     # All discovery sources use "scraper" as the venue source
     # Clean UTF-8 for venue name before database insert
@@ -743,6 +794,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       place_id: final_place_id,
       source: source,
       city_id: city.id,
+      provider_ids: provider_ids,
       geocoding_performance: geocoding_performance,
       metadata: %{
         geocoding: final_geocoding_metadata,

@@ -158,6 +158,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
            longitude: lng,
            city: city,
            country: country || "Unknown",
+           # New multi-provider field
+           provider_id: place_id,
+           # Keep for backwards compatibility
            place_id: place_id,
            # Store entire LocationIQ result object
            raw_response: result

@@ -115,10 +115,14 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
 
     country = Map.get(properties, "country")
 
-    # Extract Photon/OSM place ID
+    # Extract Photon/OSM place ID and convert to string (may be integer in response)
     place_id =
-      Map.get(properties, "osm_id") ||
-        Map.get(properties, "place_id")
+      case Map.get(properties, "osm_id") || Map.get(properties, "place_id") do
+        nil -> nil
+        id when is_integer(id) -> Integer.to_string(id)
+        id when is_binary(id) -> id
+        other -> to_string(other)
+      end
 
     cond do
       is_nil(lat) or is_nil(lng) ->
@@ -141,6 +145,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
            longitude: lng * 1.0,
            city: city,
            country: country || "Unknown",
+           # New multi-provider field
+           provider_id: place_id,
+           # Keep for backwards compatibility
            place_id: place_id,
            # Store entire Photon GeoJSON feature
            raw_response: feature
