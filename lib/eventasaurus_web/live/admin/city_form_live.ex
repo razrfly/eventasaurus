@@ -47,7 +47,8 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
   @impl true
   def handle_event("geocode", %{"name" => name, "country_id" => country_id}, socket)
       when name != "" and country_id != "" do
-    country = Repo.get!(Country, country_id)
+    country_id_int = String.to_integer(country_id)
+    country = Repo.get!(Country, country_id_int)
 
     socket = assign(socket, :geocoding, true)
 
@@ -96,8 +97,8 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
   end
 
   @impl true
-  def handle_event("toggle_discovery", %{"value" => value}, socket) do
-    enable_discovery = value == "true"
+  def handle_event("toggle_discovery", _params, socket) do
+    enable_discovery = !socket.assigns.enable_discovery
     {:noreply, assign(socket, :enable_discovery, enable_discovery)}
   end
 
@@ -110,20 +111,28 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
     case CityManager.create_city(params) do
       {:ok, city} ->
         # Enable discovery if checkbox was checked
-        _city =
+        result =
           if socket.assigns.enable_discovery do
-            {:ok, updated_city} = Repo.update(City.enable_discovery_changeset(city))
-            updated_city
+            case Repo.update(City.enable_discovery_changeset(city)) do
+              {:ok, updated_city} -> {:ok, updated_city}
+              {:error, changeset} -> {:error, changeset}
+            end
           else
-            city
+            {:ok, city}
           end
 
-        socket =
-          socket
-          |> put_flash(:info, "City created successfully")
-          |> push_navigate(to: ~p"/admin/cities")
+        case result do
+          {:ok, _city} ->
+            socket =
+              socket
+              |> put_flash(:info, "City created successfully")
+              |> push_navigate(to: ~p"/admin/cities")
 
-        {:noreply, socket}
+            {:noreply, socket}
+
+          {:error, changeset} ->
+            {:noreply, assign(socket, :form, to_form(changeset))}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
