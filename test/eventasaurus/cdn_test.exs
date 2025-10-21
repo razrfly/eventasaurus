@@ -5,14 +5,14 @@ defmodule Eventasaurus.CDNTest do
 
   # Store original config to restore after tests
   setup do
-    original_enabled = Application.get_env(:eventasaurus, :cdn)[:enabled]
-    original_domain = Application.get_env(:eventasaurus, :cdn)[:domain]
+    original_cdn = Application.get_env(:eventasaurus, :cdn, nil)
 
     on_exit(fn ->
-      Application.put_env(:eventasaurus, :cdn,
-        enabled: original_enabled,
-        domain: original_domain
-      )
+      if is_nil(original_cdn) do
+        Application.delete_env(:eventasaurus, :cdn)
+      else
+        Application.put_env(:eventasaurus, :cdn, original_cdn)
+      end
     end)
 
     :ok

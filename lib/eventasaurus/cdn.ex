@@ -110,12 +110,14 @@ defmodule Eventasaurus.CDN do
 
   # Check if CDN is enabled via configuration
   defp enabled? do
-    Application.get_env(:eventasaurus, :cdn)[:enabled] || false
+    Application.get_env(:eventasaurus, :cdn, [])
+    |> Keyword.get(:enabled, false)
   end
 
   # Get configured CDN domain
   defp domain do
-    Application.get_env(:eventasaurus, :cdn)[:domain] || "cdn.wombie.com"
+    Application.get_env(:eventasaurus, :cdn, [])
+    |> Keyword.get(:domain, "cdn.wombie.com")
   end
 
   # Check if URL is already a CDN URL (avoid double-wrapping)

@@ -142,12 +142,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.Normalizer do
   def clean_html(html) when is_binary(html) do
     html
     |> String.replace(~r/<[^>]+>/, " ")
-    |> String.replace(~r/&nbsp;/, " ")
-    |> String.replace(~r/&amp;/, "&")
-    |> String.replace(~r/&lt;/, "<")
-    |> String.replace(~r/&gt;/, ">")
-    |> String.replace(~r/&quot;/, "\"")
-    |> String.replace(~r/&#39;/, "'")
+    |> HtmlEntities.decode()  # Handles ALL HTML entities (400+ entities)
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
   end
