@@ -104,6 +104,22 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           total_performers: 0,
           avg_performers_per_event: 0.0
         },
+        occurrence_richness: 100,
+        occurrence_metrics: %{
+          events_with_occurrences: 0,
+          events_without_occurrences: 0,
+          events_single_date: 0,
+          events_multiple_dates: 0,
+          avg_dates_per_event: 0.0,
+          type_distribution: %{},
+          validation_issues: %{
+            pattern_missing_dates: 0,
+            explicit_single_date: 0,
+            exhibition_single_date: 0,
+            total_validity_issues: 0
+          },
+          validity_score: 100
+        },
         supports_translations: false
       }
     else
@@ -146,6 +162,9 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       # Calculate performer completeness
       performer_metrics = calculate_performer_completeness(source_id)
 
+      # Calculate occurrence richness
+      occurrence_metrics = calculate_occurrence_richness(source_id)
+
       quality_score =
         calculate_quality_score(
           venue_completeness,
@@ -155,6 +174,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           price_metrics.price_completeness,
           description_metrics.description_quality,
           performer_metrics.performer_completeness,
+          occurrence_metrics.occurrence_richness,
           translation_completeness
         )
 
@@ -198,6 +218,17 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           events_multiple_performers: performer_metrics.events_multiple_performers,
           total_performers: performer_metrics.total_performers,
           avg_performers_per_event: performer_metrics.avg_performers_per_event
+        },
+        occurrence_richness: occurrence_metrics.occurrence_richness,
+        occurrence_metrics: %{
+          events_with_occurrences: occurrence_metrics.events_with_occurrences,
+          events_without_occurrences: occurrence_metrics.events_without_occurrences,
+          events_single_date: occurrence_metrics.events_single_date,
+          events_multiple_dates: occurrence_metrics.events_multiple_dates,
+          avg_dates_per_event: occurrence_metrics.avg_dates_per_event,
+          type_distribution: occurrence_metrics.type_distribution,
+          validation_issues: occurrence_metrics.validation_issues,
+          validity_score: occurrence_metrics.validity_score
         },
         translation_completeness: translation_completeness,
         supports_translations: has_translations
@@ -323,6 +354,28 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
             "Add performer information - #{missing} events missing artist/performer data"
             | recommendations
           ]
+        else
+          recommendations
+        end
+
+      # Add occurrence richness recommendation if richness is low
+      recommendations =
+        if quality.occurrence_richness < 70 do
+          missing = quality.occurrence_metrics.events_without_occurrences
+          [
+            "Improve occurrence data - #{missing} events missing occurrence information"
+            | recommendations
+          ]
+        else
+          recommendations
+        end
+
+      # Add occurrence validity warning if there are structural issues
+      recommendations =
+        if quality.occurrence_metrics.validity_score < 80 do
+          issues = quality.occurrence_metrics.validation_issues
+          msg = "⚠️ Occurrence data issues: #{issues.pattern_missing_dates} pattern events missing dates, #{issues.explicit_single_date} explicit events with single date"
+          [msg | recommendations]
         else
           recommendations
         end
@@ -943,6 +996,209 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     end
   end
 
+  # Calculate occurrence richness and validity.
+  #
+  # Measures both richness and structural validity of occurrence data:
+  #
+  # Richness metrics:
+  # - Events with occurrences vs without
+  # - Single vs multiple dates
+  # - Average dates per event
+  # - Distribution by occurrence type (explicit, pattern, exhibition, recurring)
+  #
+  # Validation metrics:
+  # - Pattern events missing required 'dates' field
+  # - Explicit events with only 1 date (may be miscategorized)
+  # - Exhibition events with only 1 date (should have ranges)
+  # - Overall structural validity score
+  #
+  # Occurrence data is crucial for event scheduling and user experience.
+  defp calculate_occurrence_richness(source_id) do
+    # Get occurrence data per event
+    query =
+      from e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        where: pes.source_id == ^source_id,
+        select: %{
+          event_id: e.id,
+          occurrences: e.occurrences
+        }
+
+    occurrence_data = Repo.all(query)
+    total_events = length(occurrence_data)
+
+    if total_events == 0 do
+      %{
+        occurrence_richness: 100,
+        total_events: 0,
+        events_with_occurrences: 0,
+        events_without_occurrences: 0,
+        events_single_date: 0,
+        events_multiple_dates: 0,
+        avg_dates_per_event: 0.0,
+        type_distribution: %{},
+        validation_issues: %{
+          pattern_missing_dates: 0,
+          explicit_single_date: 0,
+          exhibition_single_date: 0,
+          total_validity_issues: 0
+        },
+        validity_score: 100
+      }
+    else
+      # Analyze each event's occurrence data using reduce
+      initial_state = %{
+        events_with_occurrences: 0,
+        events_without_occurrences: 0,
+        events_single_date: 0,
+        events_multiple_dates: 0,
+        total_dates: 0,
+        type_counts: %{},
+        pattern_missing_dates: 0,
+        explicit_single_date: 0,
+        exhibition_single_date: 0
+      }
+
+      stats = Enum.reduce(occurrence_data, initial_state, fn event, acc ->
+        case event.occurrences do
+          nil ->
+            %{acc | events_without_occurrences: acc.events_without_occurrences + 1}
+
+          %{"type" => type, "dates" => dates} when is_list(dates) ->
+            date_count = length(dates)
+
+            acc
+            |> Map.update!(:events_with_occurrences, &(&1 + 1))
+            |> Map.update!(:total_dates, &(&1 + date_count))
+            |> then(fn acc ->
+              if date_count == 1 do
+                acc
+                |> Map.update!(:events_single_date, &(&1 + 1))
+                |> then(fn acc ->
+                  # Validation: explicit and exhibition with 1 date may be issues
+                  acc = if type == "explicit",
+                    do: Map.update!(acc, :explicit_single_date, &(&1 + 1)),
+                    else: acc
+                  if type == "exhibition",
+                    do: Map.update!(acc, :exhibition_single_date, &(&1 + 1)),
+                    else: acc
+                end)
+              else
+                Map.update!(acc, :events_multiple_dates, &(&1 + 1))
+              end
+            end)
+            |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
+
+          %{"type" => type} ->
+            # Has type but missing dates field - validation issue
+            acc
+            |> Map.update!(:events_with_occurrences, &(&1 + 1))
+            |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
+            |> then(fn acc ->
+              if type == "pattern",
+                do: Map.update!(acc, :pattern_missing_dates, &(&1 + 1)),
+                else: acc
+            end)
+
+          _ ->
+            # Invalid structure
+            %{acc | events_without_occurrences: acc.events_without_occurrences + 1}
+        end
+      end)
+
+      # Calculate averages
+      avg_dates =
+        if stats.events_with_occurrences > 0 do
+          Float.round(stats.total_dates / stats.events_with_occurrences, 1)
+        else
+          0.0
+        end
+
+      # Calculate richness score (weighted)
+      # - 50%: Has occurrences
+      # - 30%: Multiple dates (for explicit events)
+      # - 20%: Type distribution diversity
+      has_occurrence_score =
+        if total_events > 0,
+          do: (stats.events_with_occurrences / total_events) * 100,
+          else: 100
+
+      multiple_date_score =
+        if stats.events_with_occurrences > 0,
+          do: (stats.events_multiple_dates / stats.events_with_occurrences) * 100,
+          else: 100
+
+      # Type diversity using Shannon entropy
+      type_diversity_score = calculate_type_diversity(stats.type_counts, stats.events_with_occurrences)
+
+      occurrence_richness =
+        round(
+          has_occurrence_score * 0.5 +
+          multiple_date_score * 0.3 +
+          type_diversity_score * 0.2
+        )
+
+      # Calculate validity score
+      total_validity_issues = stats.pattern_missing_dates + stats.explicit_single_date + stats.exhibition_single_date
+
+      validity_score =
+        if stats.events_with_occurrences > 0 do
+          round(((stats.events_with_occurrences - total_validity_issues) / stats.events_with_occurrences) * 100)
+        else
+          100
+        end
+
+      %{
+        occurrence_richness: occurrence_richness,
+        total_events: total_events,
+        events_with_occurrences: stats.events_with_occurrences,
+        events_without_occurrences: stats.events_without_occurrences,
+        events_single_date: stats.events_single_date,
+        events_multiple_dates: stats.events_multiple_dates,
+        avg_dates_per_event: avg_dates,
+        type_distribution: stats.type_counts,
+        validation_issues: %{
+          pattern_missing_dates: stats.pattern_missing_dates,
+          explicit_single_date: stats.explicit_single_date,
+          exhibition_single_date: stats.exhibition_single_date,
+          total_validity_issues: total_validity_issues
+        },
+        validity_score: validity_score
+      }
+    end
+  end
+
+  # Calculate type diversity using Shannon entropy
+  defp calculate_type_diversity(type_counts, total_events) do
+    if total_events == 0 or map_size(type_counts) == 0 do
+      100
+    else
+      # Calculate Shannon entropy: H = -Σ(p_i * log2(p_i))
+      entropy =
+        type_counts
+        |> Enum.reduce(0, fn {_type, count}, acc ->
+          p = count / total_events
+
+          if p > 0 do
+            acc - p * :math.log2(p)
+          else
+            acc
+          end
+        end)
+
+      # Normalize to 0-100 scale
+      # Maximum entropy is log2(4) since we have 4 occurrence types
+      max_entropy = :math.log2(4)
+
+      if max_entropy > 0 do
+        round(entropy / max_entropy * 100)
+      else
+        100
+      end
+    end
+  end
+
   defp count_multilingual_events(source_id) do
     # Count events that have multiple languages in title_translations OR description_translations
     # Uses jsonb_object_keys() to count the number of language keys
@@ -1067,29 +1323,34 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
          price_completeness,
          description_quality,
          performer_completeness,
+         occurrence_richness,
          translation_completeness
        ) do
     if translation_completeness do
-      # 8 dimensions (with translations)
-      # Weights: venue 18%, image 16%, category 16%, specificity 16%, price 12%, description 12%, performer 8%, translation 2%
-      (venue_completeness * 0.18 +
-       image_completeness * 0.16 +
-       category_completeness * 0.16 +
-       category_specificity * 0.16 +
-       price_completeness * 0.12 +
-       description_quality * 0.12 +
-       performer_completeness * 0.08 +
+      # 9 dimensions (with translations)
+      # Weights: venue 16%, image 15%, category 15%, specificity 15%,
+      # occurrence 13%, price 10%, description 8%, performer 6%, translation 2%
+      (venue_completeness * 0.16 +
+       image_completeness * 0.15 +
+       category_completeness * 0.15 +
+       category_specificity * 0.15 +
+       occurrence_richness * 0.13 +
+       price_completeness * 0.10 +
+       description_quality * 0.08 +
+       performer_completeness * 0.06 +
        translation_completeness * 0.02)
       |> round()
     else
-      # 7 dimensions (without translations)
-      # Weights: venue 23%, image 20%, category 18%, specificity 18%, price 12%, description 9%, performer 0%
-      (venue_completeness * 0.23 +
-       image_completeness * 0.20 +
-       category_completeness * 0.18 +
-       category_specificity * 0.18 +
-       price_completeness * 0.12 +
-       description_quality * 0.09 +
+      # 8 dimensions (without translations)
+      # Weights: venue 20%, image 18%, category 16%, specificity 16%,
+      # occurrence 14%, price 10%, description 6%, performer 0%
+      (venue_completeness * 0.20 +
+       image_completeness * 0.18 +
+       category_completeness * 0.16 +
+       category_specificity * 0.16 +
+       occurrence_richness * 0.14 +
+       price_completeness * 0.10 +
+       description_quality * 0.06 +
        performer_completeness * 0.00)
       |> round()
     end

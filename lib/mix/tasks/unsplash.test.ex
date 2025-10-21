@@ -18,10 +18,11 @@ defmodule Mix.Tasks.Unsplash.Test do
     alias EventasaurusDiscovery.Locations.City
     import Ecto.Query
 
-    city_name = case args do
-      [name] -> name
-      _ -> nil
-    end
+    city_name =
+      case Enum.map(args, &String.trim/1) |> Enum.reject(&(&1 == "")) do
+        [] -> nil
+        parts -> Enum.join(parts, " ")
+      end
 
     if city_name do
       # Test single city
@@ -62,8 +63,10 @@ defmodule Mix.Tasks.Unsplash.Test do
             IO.puts("  ❌ Error: #{inspect(reason)}")
         end
 
-        # Rate limiting - 5000/hour = ~1.4 per second
-        Process.sleep(1000)
+        # Rate limiting - configurable via env, defaults to production rate (5000/hour = ~1.4/sec = 720ms)
+        # For dev environment (50/hour), set UNSPLASH_TEST_THROTTLE_MS=72000
+        throttle_ms = System.get_env("UNSPLASH_TEST_THROTTLE_MS", "1000") |> String.to_integer()
+        Process.sleep(throttle_ms)
       end)
 
       IO.puts("\n✨ Done!")

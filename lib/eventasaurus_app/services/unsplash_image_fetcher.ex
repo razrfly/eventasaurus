@@ -27,11 +27,11 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
 
     cond do
       is_nil(city) ->
-        Logger.warning("City not found: #{city_name}")
+        Logger.warn("City not found: #{city_name}")
         {:error, :not_found}
 
       !city.discovery_enabled ->
-        Logger.warning("City #{city_name} is not active (discovery_enabled = false)")
+        Logger.warn("City #{city_name} is not active (discovery_enabled = false)")
         {:error, :inactive_city}
 
       true ->
@@ -88,7 +88,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
         if String.contains?(body, "Rate Limit Exceeded") do
           if attempt < max_attempts do
             backoff = attempt * 1500  # 1.5s, 3s, 4.5s
-            Logger.warning("Rate limited for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
+            Logger.warn("Rate limited for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
             Process.sleep(backoff)
             fetch_with_retry(url, city_name, attempt + 1)
           else
@@ -103,7 +103,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       {:ok, %{status_code: 429}} ->
         if attempt < max_attempts do
           backoff = attempt * 2000  # 2s, 4s, 6s
-          Logger.warning("Rate limited (429) for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
+          Logger.warn("Rate limited (429) for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
           Process.sleep(backoff)
           fetch_with_retry(url, city_name, attempt + 1)
         else
@@ -134,7 +134,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
         {:ok, images}
 
       {:ok, %{"results" => _}} ->
-        Logger.warning("No images found in Unsplash results")
+        Logger.warn("No images found in Unsplash results")
         {:error, :no_images}
 
       {:ok, data} ->
@@ -153,6 +153,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       "url" => get_in(result, ["urls", "regular"]),
       "thumb_url" => get_in(result, ["urls", "thumb"]),
       "download_url" => get_in(result, ["links", "download"]),
+      "download_location" => get_in(result, ["links", "download_location"]),
       "color" => get_in(result, ["color"]),
       "width" => get_in(result, ["width"]),
       "height" => get_in(result, ["height"]),
@@ -175,7 +176,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
 
     Logger.info("Storing gallery with #{length(images)} images for city: #{city.name}")
 
-    case Repo.update(City.changeset(city, %{unsplash_gallery: gallery})) do
+    case Repo.update(City.gallery_changeset(city, gallery)) do
       {:ok, updated_city} ->
         Logger.info("Successfully stored gallery for city: #{city.name}")
         {:ok, updated_city.unsplash_gallery}

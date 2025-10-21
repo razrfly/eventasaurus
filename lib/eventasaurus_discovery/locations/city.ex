@@ -31,13 +31,22 @@ defmodule EventasaurusDiscovery.Locations.City do
       :latitude,
       :longitude,
       :discovery_enabled,
-      :discovery_config,
-      :unsplash_gallery
+      :discovery_config
     ])
     |> validate_required([:name, :country_id])
     |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)
     |> unique_constraint([:country_id, :slug])
+  end
+
+  @doc """
+  Changeset for updating the Unsplash gallery.
+  This is a dedicated, internal changeset to prevent mass-assignment vulnerabilities.
+  """
+  def gallery_changeset(city, gallery_map) when is_map(gallery_map) do
+    city
+    |> cast(%{}, [])
+    |> put_change(:unsplash_gallery, gallery_map)
   end
 
   @doc """
