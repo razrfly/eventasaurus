@@ -1,0 +1,227 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="sm:flex sm:items-center sm:justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold text-gray-900">Cities</h1>
+      <p class="mt-2 text-sm text-gray-700">
+        Manage cities for event discovery and scraper configuration.
+      </p>
+    </div>
+    <div class="mt-4 sm:mt-0">
+      <.link
+        navigate={~p"/admin/cities/new"}
+        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        <svg
+          class="-ml-1 mr-2 h-5 w-5"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+            clip-rule="evenodd"
+          />
+        </svg>
+        Create City
+      </.link>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg">
+    <!-- Filters -->
+    <div class="border-b border-gray-200 bg-gray-50 px-4 py-4 sm:px-6">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <!-- Search -->
+        <div>
+          <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
+            Search
+          </label>
+          <form phx-change="search" phx-submit="search">
+            <input
+              type="text"
+              name="search"
+              id="search"
+              value={@search}
+              placeholder="Search by name..."
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+          </form>
+        </div>
+        <!-- Country Filter -->
+        <div>
+          <label for="country_filter" class="block text-sm font-medium text-gray-700 mb-1">
+            Country
+          </label>
+          <form phx-change="filter_country">
+            <select
+              name="country_id"
+              id="country_filter"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">All Countries</option>
+              <%= for country <- @countries do %>
+                <option value={country.id} selected={to_string(country.id) == @country_filter}>
+                  <%= country.name %>
+                </option>
+              <% end %>
+            </select>
+          </form>
+        </div>
+        <!-- Discovery Filter -->
+        <div>
+          <label for="discovery_filter" class="block text-sm font-medium text-gray-700 mb-1">
+            Discovery
+          </label>
+          <form phx-change="filter_discovery">
+            <select
+              name="discovery_enabled"
+              id="discovery_filter"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">All</option>
+              <option value="true" selected={@discovery_filter == "true"}>Enabled</option>
+              <option value="false" selected={@discovery_filter == "false"}>Disabled</option>
+            </select>
+          </form>
+        </div>
+      </div>
+    </div>
+    <!-- Table -->
+    <div class="flow-root">
+      <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+        <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+          <%= if Enum.empty?(@cities) do %>
+            <div class="text-center py-12">
+              <svg
+                class="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-gray-900">No cities</h3>
+              <p class="mt-1 text-sm text-gray-500">
+                Get started by creating a new city.
+              </p>
+              <div class="mt-6">
+                <.link
+                  navigate={~p"/admin/cities/new"}
+                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <svg
+                    class="-ml-1 mr-2 h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  Create City
+                </.link>
+              </div>
+            </div>
+          <% else %>
+            <table class="min-w-full divide-y divide-gray-300">
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6"
+                  >
+                    City
+                  </th>
+                  <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    Country
+                  </th>
+                  <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    Coordinates
+                  </th>
+                  <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    Venues
+                  </th>
+                  <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    Discovery
+                  </th>
+                  <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                    <span class="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                <%= for city <- @cities do %>
+                  <tr>
+                    <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                      <%= city.name %>
+                    </td>
+                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <%= city.country.name %>
+                    </td>
+                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <%= if city.latitude && city.longitude do %>
+                        <span class="font-mono text-xs">
+                          <%= Float.round(Decimal.to_float(city.latitude), 4) %>,
+                          <%= Float.round(Decimal.to_float(city.longitude), 4) %>
+                        </span>
+                      <% else %>
+                        <span class="text-gray-400 italic">No coordinates</span>
+                      <% end %>
+                    </td>
+                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <%= city.venue_count %>
+                    </td>
+                    <td class="whitespace-nowrap px-3 py-4 text-sm">
+                      <%= if city.discovery_enabled do %>
+                        <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">
+                          Enabled
+                        </span>
+                      <% else %>
+                        <span class="inline-flex rounded-full bg-gray-100 px-2 text-xs font-semibold leading-5 text-gray-800">
+                          Disabled
+                        </span>
+                      <% end %>
+                    </td>
+                    <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                      <div class="flex justify-end gap-2">
+                        <.link
+                          navigate={~p"/admin/cities/#{city.id}/edit"}
+                          class="text-blue-600 hover:text-blue-900"
+                        >
+                          Edit
+                        </.link>
+                        <.link
+                          navigate={~p"/admin/discovery/config/#{city.slug}"}
+                          class="text-blue-600 hover:text-blue-900"
+                        >
+                          Configure
+                        </.link>
+                        <button
+                          phx-click="delete"
+                          phx-value-id={city.id}
+                          data-confirm={"Are you sure you want to delete #{city.name}?"}
+                          class="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -3,8 +3,8 @@ defmodule EventasaurusWeb.Router do
 
   import EventasaurusWeb.Plugs.AuthPlug
 
-  # Development-only routes
-  if Mix.env() == :dev do
+  # Development and test routes
+  if Mix.env() in [:dev, :test] do
     # Hot-reloading themes
     get "/themes/:theme_name", EventasaurusWeb.ThemeController, :show
 
@@ -73,6 +73,11 @@ defmodule EventasaurusWeb.Router do
       live "/sources", Admin.SourceIndexLive, :index
       live "/sources/new", Admin.SourceFormLive, :new
       live "/sources/:id/edit", Admin.SourceFormLive, :edit
+
+      # City Management (dev - no auth)
+      live "/cities", Admin.CityIndexLive, :index
+      live "/cities/new", Admin.CityFormLive, :new
+      live "/cities/:id/edit", Admin.CityFormLive, :edit
 
       # Design tools (dev - no auth)
       live "/design/social-cards", Admin.SocialCardsPreviewLive
@@ -143,6 +148,11 @@ defmodule EventasaurusWeb.Router do
       live "/sources", EventasaurusWeb.Admin.SourceIndexLive, :index
       live "/sources/new", EventasaurusWeb.Admin.SourceFormLive, :new
       live "/sources/:id/edit", EventasaurusWeb.Admin.SourceFormLive, :edit
+
+      # City Management (with admin authentication)
+      live "/cities", EventasaurusWeb.Admin.CityIndexLive, :index
+      live "/cities/new", EventasaurusWeb.Admin.CityFormLive, :new
+      live "/cities/:id/edit", EventasaurusWeb.Admin.CityFormLive, :edit
 
       # Design tools (with admin authentication)
       live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive

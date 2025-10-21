@@ -1,0 +1,201 @@
+<div class="container mx-auto px-4 py-8 max-w-2xl">
+  <!-- Back Navigation -->
+  <div class="mb-4">
+    <.link navigate="/admin/cities" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
+      ← Back to Cities
+    </.link>
+  </div>
+
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold"><%= @page_title %></h1>
+    <%= if @city.id do %>
+      <p class="mt-2 text-sm text-gray-600">
+        Edit city details and coordinates. Changes will be reflected immediately.
+      </p>
+    <% else %>
+      <p class="mt-2 text-sm text-gray-600">
+        Create a new city with auto-geocoding for accurate city center coordinates.
+      </p>
+    <% end %>
+  </div>
+
+  <.form
+    for={@form}
+    phx-change="validate"
+    phx-submit="save"
+    class="bg-white shadow rounded-lg p-6"
+  >
+    <!-- SECTION 1: Basic Information -->
+    <div class="mb-6 pb-6 border-b border-gray-200">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
+
+      <!-- City Name -->
+      <div class="mb-4">
+        <label for="city_name" class="block text-sm font-medium text-gray-700 mb-2">
+          City Name *
+        </label>
+        <.input field={@form[:name]} type="text" placeholder="e.g., Sydney" required />
+        <p class="mt-1 text-sm text-gray-500">
+          Enter the full city name as it should appear publicly
+        </p>
+      </div>
+
+      <!-- Country -->
+      <div class="mb-4">
+        <label for="city_country_id" class="block text-sm font-medium text-gray-700 mb-2">
+          Country *
+        </label>
+        <select
+          id="city_country_id"
+          name="city[country_id]"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          required
+        >
+          <option value="">Select a country</option>
+          <optgroup label="Popular Countries">
+            <%= for country <- @countries.popular do %>
+              <option value={country.id} selected={to_string(country.id) == to_string(@form[:country_id].value)}>
+                <%= country.name %>
+              </option>
+            <% end %>
+          </optgroup>
+          <optgroup label="All Countries">
+            <%= for country <- @countries.other do %>
+              <option value={country.id} selected={to_string(country.id) == to_string(@form[:country_id].value)}>
+                <%= country.name %>
+              </option>
+            <% end %>
+          </optgroup>
+        </select>
+        <p class="mt-1 text-sm text-gray-500">
+          Select the country where this city is located
+        </p>
+      </div>
+    </div>
+
+    <!-- SECTION 2: Coordinates -->
+    <div class="mb-6 pb-6 border-b border-gray-200">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Coordinates</h3>
+      <p class="text-sm text-gray-600 mb-4">
+        City center coordinates are used as the search radius origin for event discovery.
+        Use the "Get Coordinates" button to auto-geocode, or enter manually.
+      </p>
+
+      <!-- Geocode Button -->
+      <div class="mb-4">
+        <button
+          type="button"
+          phx-click="geocode"
+          phx-value-name={@form[:name].value}
+          phx-value-country_id={@form[:country_id].value}
+          disabled={@geocoding}
+          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          <%= if @geocoding do %>
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Geocoding...
+          <% else %>
+            <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+            </svg>
+            Get Coordinates
+          <% end %>
+        </button>
+        <p class="mt-2 text-xs text-gray-500">
+          This will geocode "<%= @form[:name].value || "City Name" %>, <%= if @form[:country_id].value, do: Enum.find(@countries.popular ++ @countries.other, fn c -> to_string(c.id) == to_string(@form[:country_id].value) end) |> then(fn c -> if c, do: c.name, else: "Country" end), else: "Country" %>"
+        </p>
+      </div>
+
+      <!-- Latitude -->
+      <div class="mb-4">
+        <label for="city_latitude" class="block text-sm font-medium text-gray-700 mb-2">
+          Latitude
+        </label>
+        <.input
+          field={@form[:latitude]}
+          type="text"
+          placeholder="e.g., -33.8688"
+          step="any"
+        />
+        <p class="mt-1 text-sm text-gray-500">
+          Valid range: -90 to 90
+        </p>
+      </div>
+
+      <!-- Longitude -->
+      <div class="mb-4">
+        <label for="city_longitude" class="block text-sm font-medium text-gray-700 mb-2">
+          Longitude
+        </label>
+        <.input
+          field={@form[:longitude]}
+          type="text"
+          placeholder="e.g., 151.2093"
+          step="any"
+        />
+        <p class="mt-1 text-sm text-gray-500">
+          Valid range: -180 to 180
+        </p>
+      </div>
+
+      <%= if @form[:latitude].value && @form[:longitude].value do %>
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p class="text-sm text-blue-800">
+            <strong>Coordinates:</strong>
+            <%= @form[:latitude].value %>, <%= @form[:longitude].value %>
+          </p>
+          <p class="mt-1 text-xs text-blue-600">
+            <a
+              href={"https://www.google.com/maps?q=#{@form[:latitude].value},#{@form[:longitude].value}"}
+              target="_blank"
+              class="underline hover:text-blue-800"
+            >
+              View on Google Maps ↗
+            </a>
+          </p>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- SECTION 3: Discovery Settings (only for new cities) -->
+    <%= if !@city.id do %>
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Discovery Settings</h3>
+
+        <div class="mb-4">
+          <label class="flex items-center">
+            <input
+              type="checkbox"
+              name="enable_discovery"
+              phx-click="toggle_discovery"
+              value={@enable_discovery}
+              checked={@enable_discovery}
+              class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            <span class="ml-2 text-sm font-medium text-gray-700">Enable discovery immediately</span>
+          </label>
+          <p class="mt-1 text-sm text-gray-500">
+            If checked, discovery will be enabled for this city after creation.
+            You can configure sources and schedules on the next page.
+          </p>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Form Actions -->
+    <div class="flex justify-between">
+      <.link
+        navigate={~p"/admin/cities"}
+        class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+      >
+        Cancel
+      </.link>
+      <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        <%= if @city.id, do: "Update City", else: "Create City" %>
+      </button>
+    </div>
+  </.form>
+</div>
