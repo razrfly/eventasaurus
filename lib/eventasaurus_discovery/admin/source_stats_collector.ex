@@ -304,7 +304,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
           unique_venues: count(pe.venue_id, :distinct)
         }
 
-    # Top venues by event count
+    # Top venues by event count with quality indicators
     top_venues_query =
       from pe in PublicEvent,
         join: pes in PublicEventSource,
@@ -314,10 +314,17 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         join: v in Venue,
         on: v.id == pe.venue_id,
         where: s.slug == ^source_slug,
-        group_by: [v.id, v.name],
+        group_by: [v.id, v.name, v.address, v.latitude, v.longitude, v.source, v.place_id, v.geocoding_performance, v.metadata],
         select: %{
           venue_id: v.id,
           venue_name: v.name,
+          address: v.address,
+          latitude: v.latitude,
+          longitude: v.longitude,
+          source: v.source,
+          place_id: v.place_id,
+          geocoding_performance: v.geocoding_performance,
+          metadata: v.metadata,
           event_count: count(pe.id)
         },
         order_by: [desc: count(pe.id)],

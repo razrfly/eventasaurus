@@ -3,16 +3,19 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
   Plug for handling user language preferences.
 
   Sets the current language based on:
-  1. Query parameter (?lang=pl)
+  1. Query parameter (?lang=fr)
   2. Session storage
   3. Cookie (language_preference)
   4. Accept-Language header
   5. Default to "en"
+
+  Note: This plug no longer hard-codes supported languages.
+  Language availability is determined dynamically by the LanguageDiscovery module
+  based on country data and available translations.
   """
 
   import Plug.Conn
 
-  @supported_languages ["en", "pl"]
   @default_language "en"
 
   def init(opts), do: opts
@@ -23,32 +26,34 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
     conn
     |> put_session(:language, language)
     |> assign(:language, language)
-    |> assign(:supported_languages, @supported_languages)
   end
 
   defp determine_language(conn) do
     # 1. Check query parameter
-    case conn.params["lang"] do
-      lang when lang in @supported_languages ->
+    case get_normalized_language(conn.params["lang"]) do
+      lang when is_binary(lang) and byte_size(lang) == 2 ->
         lang
 
       _ ->
         # 2. Check session
-        case get_session(conn, :language) do
-          lang when lang in @supported_languages ->
+        case get_normalized_language(get_session(conn, :language)) do
+          lang when is_binary(lang) and byte_size(lang) == 2 ->
             lang
 
           _ ->
             # 3. Check cookie
             case extract_language_from_cookie(conn) do
-              lang when lang in @supported_languages ->
+              lang when is_binary(lang) and byte_size(lang) == 2 ->
                 lang
 
               _ ->
                 # 4. Check Accept-Language header
                 case extract_language_from_header(conn) do
-                  lang when lang in @supported_languages -> lang
-                  _ -> @default_language
+                  lang when is_binary(lang) and byte_size(lang) == 2 ->
+                    lang
+
+                  _ ->
+                    @default_language
                 end
             end
         end
@@ -57,8 +62,8 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
 
   defp extract_language_from_cookie(conn) do
     case conn.req_cookies do
-      %{"language_preference" => lang} when lang in @supported_languages ->
-        lang
+      %{"language_preference" => lang} ->
+        get_normalized_language(lang)
 
       _ ->
         nil
@@ -75,13 +80,21 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
           lang
           |> String.split(";")
           |> List.first()
-          |> String.downcase()
-          |> String.slice(0..1)
+          |> get_normalized_language()
         end)
-        |> Enum.find(&(&1 in @supported_languages))
+        |> Enum.find(&(&1 && byte_size(&1) == 2))
 
       _ ->
         nil
     end
   end
+
+  # Normalize language code to lowercase 2-letter ISO code
+  defp get_normalized_language(nil), do: nil
+  defp get_normalized_language(lang) when is_binary(lang) do
+    lang
+    |> String.downcase()
+    |> String.slice(0..1)
+  end
+  defp get_normalized_language(_), do: nil
 end

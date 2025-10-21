@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
+  alias EventasaurusWeb.Helpers.LanguageDiscovery
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.Components.EventCards
@@ -33,12 +34,16 @@ defmodule EventasaurusWeb.CityLive.Index do
       city ->
         if city.latitude && city.longitude do
           # Get language from session or default to English
-          language = get_connect_params(socket)["locale"] || "en"
+          language = get_connect_params(socket)["locale"] || socket.assigns[:language] || "en"
+
+          # Get dynamically available languages for this city
+          available_languages = LanguageDiscovery.get_available_languages_for_city(city_slug)
 
           {:ok,
            socket
            |> assign(:city, city)
            |> assign(:language, language)
+           |> assign(:available_languages, available_languages)
            |> assign(:radius_km, @default_radius_km)
            |> assign(:view_mode, "grid")
            |> assign(:filters, default_filters())
@@ -243,24 +248,18 @@ defmodule EventasaurusWeb.CityLive.Index do
               <%= gettext("Events in %{city}", city: @city.name) %>
             </h1>
             <div class="flex items-center space-x-4">
-              <!-- Language Switcher -->
+              <!-- Language Switcher - Dynamic based on city -->
               <div class="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  phx-click="change_language"
-                  phx-value-language="en"
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "en", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title="English"
-                >
-                  🇬🇧 EN
-                </button>
-                <button
-                  phx-click="change_language"
-                  phx-value-language="pl"
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "pl", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title="Polski"
-                >
-                  🇵🇱 PL
-                </button>
+                <%= for lang <- @available_languages do %>
+                  <button
+                    phx-click="change_language"
+                    phx-value-language={lang}
+                    class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                    title={language_name(lang)}
+                  >
+                    <%= language_flag(lang) %> <%= String.upcase(lang) %>
+                  </button>
+                <% end %>
               </div>
 
               <!-- View Mode Toggle -->
@@ -865,4 +864,60 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp parse_boolean(true), do: true
   defp parse_boolean(false), do: false
   defp parse_boolean(_), do: false
+
+  # Language helper functions - NO HARD-CODING
+  # Uses ISO 639-1 to ISO 3166-1 alpha-2 mapping for flag emojis
+  defp language_flag(lang) do
+    # Map common language codes to their primary country code for flag emoji
+    # This uses Unicode Regional Indicator Symbols (U+1F1E6 to U+1F1FF)
+    country_code = language_to_country_code(lang)
+    country_code_to_flag(country_code)
+  end
+
+  defp language_name(lang) do
+    # Just return uppercase language code - no hard-coded names
+    # The browser and OS will display the language name in user's locale
+    String.upcase(lang)
+  end
+
+  # Map language codes to their most common country codes for flag display
+  # This is the ONLY acceptable mapping since it's about visual representation
+  defp language_to_country_code(lang) do
+    case lang do
+      "en" -> "GB"  # English -> UK flag (most common)
+      "es" -> "ES"  # Spanish -> Spain
+      "fr" -> "FR"  # French -> France
+      "de" -> "DE"  # German -> Germany
+      "it" -> "IT"  # Italian -> Italy
+      "pt" -> "PT"  # Portuguese -> Portugal
+      "pl" -> "PL"  # Polish -> Poland
+      "nl" -> "NL"  # Dutch -> Netherlands
+      "ru" -> "RU"  # Russian -> Russia
+      "ja" -> "JP"  # Japanese -> Japan
+      "zh" -> "CN"  # Chinese -> China
+      "ko" -> "KR"  # Korean -> Korea
+      "ar" -> "SA"  # Arabic -> Saudi Arabia
+      "tr" -> "TR"  # Turkish -> Turkey
+      "sv" -> "SE"  # Swedish -> Sweden
+      "da" -> "DK"  # Danish -> Denmark
+      "no" -> "NO"  # Norwegian -> Norway
+      "fi" -> "FI"  # Finnish -> Finland
+      _ -> "XX"     # Unknown - will show globe
+    end
+  end
+
+  # Convert 2-letter country code to Unicode flag emoji
+  # Uses Regional Indicator Symbols (🇦 = U+1F1E6, 🇿 = U+1F1FF)
+  defp country_code_to_flag("XX"), do: "🌐"
+  defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
+    code
+    |> String.upcase()
+    |> String.to_charlist()
+    |> Enum.map(fn char ->
+      # Convert A-Z (65-90) to Regional Indicator Symbols (127462-127487)
+      char - ?A + 0x1F1E6
+    end)
+    |> List.to_string()
+  end
+  defp country_code_to_flag(_), do: "🌐"
 end
