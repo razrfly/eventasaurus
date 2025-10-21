@@ -69,6 +69,25 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         venue_completeness: 100,
         image_completeness: 100,
         category_completeness: 100,
+        category_specificity: 100,
+        specificity_metrics: %{
+          score: 100,
+          generic_event_count: 0,
+          generic_avoidance_score: 100,
+          diversity_score: 100,
+          total_categories: 0
+        },
+        price_completeness: 100,
+        price_metrics: %{
+          events_with_price_info: 0,
+          events_free: 0,
+          events_paid: 0,
+          events_with_currency: 0,
+          events_with_price_range: 0,
+          unique_prices: 0,
+          price_diversity_score: 100,
+          price_diversity_warning: nil
+        },
         supports_translations: false
       }
     else
@@ -102,12 +121,16 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       specificity_metrics = calculate_category_specificity(source_id)
       category_specificity = specificity_metrics.score
 
+      # Calculate price completeness
+      price_metrics = calculate_price_completeness(source_id)
+
       quality_score =
         calculate_quality_score(
           venue_completeness,
           image_completeness,
           category_completeness,
           category_specificity,
+          price_metrics.price_completeness,
           translation_completeness
         )
 
@@ -125,6 +148,17 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         category_completeness: category_completeness,
         category_specificity: category_specificity,
         specificity_metrics: specificity_metrics,
+        price_completeness: price_metrics.price_completeness,
+        price_metrics: %{
+          events_with_price_info: price_metrics.events_with_price_info,
+          events_free: price_metrics.events_free,
+          events_paid: price_metrics.events_paid,
+          events_with_currency: price_metrics.events_with_currency,
+          events_with_price_range: price_metrics.events_with_price_range,
+          unique_prices: price_metrics.unique_prices,
+          price_diversity_score: price_metrics.price_diversity_score,
+          price_diversity_warning: price_metrics.price_diversity_warning
+        },
         translation_completeness: translation_completeness,
         supports_translations: has_translations
       }
@@ -200,6 +234,29 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
              quality.duplicate_translations > quality.genuine_translations do
           [
             "Translation quality issue - #{quality.duplicate_translations} events have identical text in multiple languages"
+            | recommendations
+          ]
+        else
+          recommendations
+        end
+
+      # Add price data recommendation if completeness is low
+      recommendations =
+        if quality.price_completeness < 70 do
+          missing = quality.total_events - quality.price_metrics.events_with_price_info
+          [
+            "Add price information - #{missing} events missing price data"
+            | recommendations
+          ]
+        else
+          recommendations
+        end
+
+      # Add price diversity warning if present
+      recommendations =
+        if quality.price_metrics.price_diversity_warning do
+          [
+            "⚠️ #{quality.price_metrics.price_diversity_warning}"
             | recommendations
           ]
         else
@@ -435,6 +492,176 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     end
   end
 
+  # Calculate price data completeness.
+  #
+  # Measures how well pricing information is populated:
+  # - Events with any price info (min_price OR is_free)
+  # - Currency presence
+  # - Price range completeness
+  # - Free vs paid breakdown
+  # - Price diversity (detects if all prices are identical)
+  #
+  # Returns map with completeness score and detailed metrics.
+  defp calculate_price_completeness(source_id) do
+    query =
+      from pes in PublicEventSource,
+        where: pes.source_id == ^source_id,
+        select: %{
+          total: count(pes.id),
+          has_price_info: fragment(
+            "COUNT(CASE WHEN ? IS NOT NULL OR ? = true THEN 1 END)",
+            pes.min_price,
+            pes.is_free
+          ),
+          has_currency: fragment(
+            "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
+            pes.currency
+          ),
+          has_min_price: fragment(
+            "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
+            pes.min_price
+          ),
+          has_max_price: fragment(
+            "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
+            pes.max_price
+          ),
+          has_price_range: fragment(
+            "COUNT(CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN 1 END)",
+            pes.min_price,
+            pes.max_price
+          ),
+          is_free_count: fragment(
+            "COUNT(CASE WHEN ? = true THEN 1 END)",
+            pes.is_free
+          )
+        }
+
+    stats = Repo.one(query)
+
+    if stats.total == 0 do
+      %{
+        price_completeness: 100,
+        total_events: 0,
+        events_with_price_info: 0,
+        events_free: 0,
+        events_paid: 0,
+        events_with_currency: 0,
+        events_with_price_range: 0,
+        unique_prices: 0,
+        price_diversity_score: 100,
+        price_diversity_warning: nil
+      }
+    else
+      # Price completeness = % of events with ANY price information
+      price_completeness = round((stats.has_price_info / stats.total) * 100)
+
+      # Calculate price diversity for paid events
+      {unique_prices, price_diversity_score, price_diversity_warning} =
+        calculate_price_diversity(source_id, stats.has_min_price)
+
+      %{
+        price_completeness: price_completeness,
+        total_events: stats.total,
+        events_with_price_info: stats.has_price_info,
+        events_free: stats.is_free_count,
+        events_paid: stats.has_min_price,
+        events_with_currency: stats.has_currency,
+        events_with_price_range: stats.has_price_range,
+        unique_prices: unique_prices,
+        price_diversity_score: price_diversity_score,
+        price_diversity_warning: price_diversity_warning
+      }
+    end
+  end
+
+  # Calculate price diversity metrics to detect if prices are too uniform
+  # (e.g., scraper hardcoded all prices to the same value)
+  #
+  # Returns {unique_count, diversity_score, warning_message}
+  defp calculate_price_diversity(source_id, paid_event_count) do
+    if paid_event_count == 0 do
+      # No paid events, diversity is N/A
+      {0, 100, nil}
+    else
+      # Get distribution of prices (only for paid events)
+      price_query =
+        from pes in PublicEventSource,
+          where: pes.source_id == ^source_id,
+          where: not is_nil(pes.min_price),
+          group_by: pes.min_price,
+          select: %{
+            price: pes.min_price,
+            count: count(pes.id)
+          },
+          order_by: [desc: count(pes.id)]
+
+      price_distribution = Repo.all(price_query)
+      unique_prices = length(price_distribution)
+
+      # Calculate diversity score and warning
+      cond do
+        # All prices are identical
+        unique_prices == 1 ->
+          {1, 0, "All #{paid_event_count} paid events have identical price (#{List.first(price_distribution).price})"}
+
+        # Low diversity: >80% of events have the same price
+        unique_prices >= 2 ->
+          top_price = List.first(price_distribution)
+          top_percentage = top_price.count / paid_event_count * 100
+
+          cond do
+            top_percentage > 90 ->
+              {unique_prices, 10,
+               "#{round(top_percentage)}% of paid events (#{top_price.count}/#{paid_event_count}) have identical price (#{top_price.price})"}
+
+            top_percentage > 80 ->
+              {unique_prices, 25,
+               "#{round(top_percentage)}% of paid events (#{top_price.count}/#{paid_event_count}) have identical price (#{top_price.price})"}
+
+            # Good diversity
+            true ->
+              # Calculate Shannon entropy for price diversity
+              diversity_score = calculate_price_entropy(price_distribution, paid_event_count)
+              {unique_prices, diversity_score, nil}
+          end
+
+        true ->
+          {unique_prices, 100, nil}
+      end
+    end
+  end
+
+  # Calculate Shannon entropy for price distribution
+  # Similar to category entropy but for prices
+  defp calculate_price_entropy(distribution, total_events) do
+    if total_events == 0 or Enum.empty?(distribution) do
+      100
+    else
+      # Calculate Shannon entropy: H = -Σ(p_i * log2(p_i))
+      entropy =
+        distribution
+        |> Enum.reduce(0, fn price_data, acc ->
+          p = price_data.count / total_events
+
+          if p > 0 do
+            acc - p * :math.log2(p)
+          else
+            acc
+          end
+        end)
+
+      # Normalize to 0-100 scale
+      # Maximum entropy is log2(number of unique prices)
+      max_entropy = :math.log2(length(distribution))
+
+      if max_entropy > 0 do
+        round(entropy / max_entropy * 100)
+      else
+        100
+      end
+    end
+  end
+
   defp count_multilingual_events(source_id) do
     # Count events that have multiple languages in title_translations OR description_translations
     # Uses jsonb_object_keys() to count the number of language keys
@@ -556,17 +783,27 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
          image_completeness,
          category_completeness,
          category_specificity,
+         price_completeness,
          translation_completeness
        ) do
     if translation_completeness do
-      # Multilingual source: venues 25%, images 20%, categories 20%, specificity 20%, translations 15%
-      (venue_completeness * 0.25 + image_completeness * 0.20 + category_completeness * 0.20 +
-         category_specificity * 0.20 + translation_completeness * 0.15)
+      # 6 dimensions (with translations)
+      # Weights: venue 20%, image 18%, category 18%, specificity 18%, price 13%, translation 13%
+      (venue_completeness * 0.20 +
+       image_completeness * 0.18 +
+       category_completeness * 0.18 +
+       category_specificity * 0.18 +
+       price_completeness * 0.13 +
+       translation_completeness * 0.13)
       |> round()
     else
-      # Single-language source: venues 30%, images 25%, categories 20%, specificity 25%
-      (venue_completeness * 0.30 + image_completeness * 0.25 + category_completeness * 0.20 +
-         category_specificity * 0.25)
+      # 5 dimensions (without translations)
+      # Weights: venue 25%, image 22%, category 20%, specificity 20%, price 13%
+      (venue_completeness * 0.25 +
+       image_completeness * 0.22 +
+       category_completeness * 0.20 +
+       category_specificity * 0.20 +
+       price_completeness * 0.13)
       |> round()
     end
   end
