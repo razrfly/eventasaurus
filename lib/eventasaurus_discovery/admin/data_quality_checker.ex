@@ -1072,19 +1072,37 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
             |> Map.update!(:events_with_occurrences, &(&1 + 1))
             |> Map.update!(:total_dates, &(&1 + date_count))
             |> then(fn acc ->
+              # Special handling for exhibition events: single-date arrays with end_date ranges
+              # should be treated as rich data (date ranges), not single dates
               if date_count == 1 do
-                acc
-                |> Map.update!(:events_single_date, &(&1 + 1))
-                |> then(fn acc ->
-                  # Validation: explicit and exhibition with 1 date may be issues
-                  acc = if type == "explicit",
-                    do: Map.update!(acc, :explicit_single_date, &(&1 + 1)),
-                    else: acc
-                  if type == "exhibition",
-                    do: Map.update!(acc, :exhibition_single_date, &(&1 + 1)),
-                    else: acc
-                end)
+                if type == "exhibition" do
+                  # Check if this is a proper date range
+                  has_end_date = case List.first(dates) do
+                    %{"end_date" => end_date} when not is_nil(end_date) -> true
+                    _ -> false
+                  end
+
+                  if has_end_date do
+                    # Exhibition with date range: treat as "multiple dates" for richness scoring
+                    Map.update!(acc, :events_multiple_dates, &(&1 + 1))
+                  else
+                    # Invalid exhibition: missing end_date
+                    acc
+                    |> Map.update!(:events_single_date, &(&1 + 1))
+                    |> Map.update!(:exhibition_single_date, &(&1 + 1))
+                  end
+                else
+                  # Explicit or other types: single date is genuinely single
+                  acc
+                  |> Map.update!(:events_single_date, &(&1 + 1))
+                  |> then(fn acc ->
+                    if type == "explicit",
+                      do: Map.update!(acc, :explicit_single_date, &(&1 + 1)),
+                      else: acc
+                  end)
+                end
               else
+                # Multiple dates in array
                 Map.update!(acc, :events_multiple_dates, &(&1 + 1))
               end
             end)
@@ -1115,10 +1133,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           0.0
         end
 
-      # Calculate richness score (weighted)
-      # - 50%: Has occurrences
-      # - 30%: Multiple dates (for explicit events)
-      # - 20%: Type distribution diversity
+      # Calculate richness score (adaptive weighting based on source type)
+      # Base components:
+      # - Has occurrences: 50%
+      # - Multiple dates/ranges: 30%
+      # - Type diversity OR validity: 20% (adaptive)
       has_occurrence_score =
         if total_events > 0,
           do: (stats.events_with_occurrences / total_events) * 100,
@@ -1129,17 +1148,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           do: (stats.events_multiple_dates / stats.events_with_occurrences) * 100,
           else: 100
 
-      # Type diversity using Shannon entropy
-      type_diversity_score = calculate_type_diversity(stats.type_counts, stats.events_with_occurrences)
-
-      occurrence_richness =
-        round(
-          has_occurrence_score * 0.5 +
-          multiple_date_score * 0.3 +
-          type_diversity_score * 0.2
-        )
-
-      # Calculate validity score
+      # Calculate validity score for the diversity/validity component
       total_validity_issues = stats.pattern_missing_dates + stats.explicit_single_date + stats.exhibition_single_date
 
       validity_score =
@@ -1148,6 +1157,28 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         else
           100
         end
+
+      # Type diversity using Shannon entropy
+      type_diversity_score = calculate_type_diversity(stats.type_counts, stats.events_with_occurrences)
+
+      # Adaptive weighting: For specialized sources (low diversity), use validity instead
+      # If type diversity < 50%, it indicates a specialized source (e.g., exhibition-only)
+      # In this case, use validity score instead of penalizing for specialization
+      diversity_component =
+        if type_diversity_score < 50 do
+          # Specialized source: use validity score (structural correctness matters more)
+          validity_score
+        else
+          # Diverse source: use type diversity score
+          type_diversity_score
+        end
+
+      occurrence_richness =
+        round(
+          has_occurrence_score * 0.5 +
+          multiple_date_score * 0.3 +
+          diversity_component * 0.2
+        )
 
       %{
         occurrence_richness: occurrence_richness,

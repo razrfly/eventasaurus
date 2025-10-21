@@ -132,10 +132,46 @@ defmodule EventasaurusWeb.Helpers.PublicEventDisplayHelpers do
   @doc """
   Format exhibition datetime from event occurrences.
 
-  Extracts dates from occurrences field and formats as a range.
+  First tries to use the original date string from the source (as scraped),
+  which is more accurate for exhibitions with unparseable dates.
+  Falls back to parsed dates if original string is not available.
   """
-  def format_exhibition_datetime(%{occurrences: %{"type" => "exhibition", "dates" => dates}})
-      when is_list(dates) and length(dates) > 0 do
+  def format_exhibition_datetime(
+        %{occurrences: %{"type" => "exhibition"}, sources: sources} = event
+      )
+      when is_list(sources) and length(sources) > 0 do
+    # Try to get original_date_string from first source's metadata
+    original_date =
+      sources
+      |> List.first()
+      |> case do
+        %{metadata: %{"original_date_string" => original}} when is_binary(original) ->
+          String.slice(original, 0, 50)
+
+        _ ->
+          nil
+      end
+
+    if original_date do
+      original_date
+    else
+      # Fallback to parsed dates from occurrences
+      format_exhibition_datetime_from_occurrences(event)
+    end
+  end
+
+  def format_exhibition_datetime(%{occurrences: %{"type" => "exhibition"}} = event) do
+    # No sources preloaded - try to format from occurrences
+    format_exhibition_datetime_from_occurrences(event)
+  end
+
+  def format_exhibition_datetime(_), do: nil
+
+  # Private helper to format from parsed occurrence dates
+  defp format_exhibition_datetime_from_occurrences(%{
+         occurrences: %{"type" => "exhibition", "dates" => dates}
+       })
+       when is_list(dates) and length(dates) > 0 do
     first_date = List.first(dates)
 
     with {:ok, start_date} <- parse_date(first_date["date"]),
@@ -146,7 +182,7 @@ defmodule EventasaurusWeb.Helpers.PublicEventDisplayHelpers do
     end
   end
 
-  def format_exhibition_datetime(_), do: nil
+  defp format_exhibition_datetime_from_occurrences(_), do: "Exhibition dates available"
 
   # Private helpers
 
