@@ -444,12 +444,20 @@
         <h2 class="text-xl font-semibold">Automated Discovery</h2>
         <p class="text-sm text-gray-600 mt-1">Cities configured for automated event discovery (runs daily at midnight UTC)</p>
       </div>
-      <.link
-        navigate="/admin/discovery/config"
-        class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-      >
-        Manage Cities
-      </.link>
+      <div class="flex gap-2">
+        <.link
+          navigate="/admin/cities"
+          class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+        >
+          Add/Edit Cities
+        </.link>
+        <.link
+          navigate="/admin/discovery/config"
+          class="px-4 py-2 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+        >
+          Configure Sources
+        </.link>
+      </div>
     </div>
 
     <%= if Enum.empty?(@discovery_cities) do %>
