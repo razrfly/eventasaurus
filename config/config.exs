@@ -137,6 +137,8 @@ config :eventasaurus, Oban,
        {"0 0 * * *", EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator},
        # City coordinate recalculation runs daily at 1 AM UTC
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
+       # Unsplash city images refresh daily at 3 AM UTC
+       {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker},
        # Monthly geocoding cost report on 1st of month at 8 AM UTC
        {"0 8 1 * *", EventasaurusDiscovery.Workers.GeocodingCostReportWorker}
      ]}

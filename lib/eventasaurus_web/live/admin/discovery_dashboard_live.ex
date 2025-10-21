@@ -404,6 +404,27 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   @impl true
+  def handle_event("refresh_unsplash_images", _params, socket) do
+    # Queue the Unsplash refresh worker
+    case EventasaurusApp.Workers.UnsplashRefreshWorker.new(%{}) |> Oban.insert() do
+      {:ok, job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Queued Unsplash image refresh job ##{job.id}")
+          |> assign(:import_running, true)
+          |> assign(:import_progress, "Refreshing city images...")
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          put_flash(socket, :error, "Failed to queue Unsplash refresh: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("trigger_city_discovery", %{"city_id" => city_id}, socket) do
     city_id = String.to_integer(city_id)
     city = Enum.find(socket.assigns.discovery_cities, &(&1.id == city_id))
