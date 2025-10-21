@@ -130,8 +130,15 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
 
             {:noreply, socket}
 
-          {:error, changeset} ->
-            {:noreply, assign(socket, :form, to_form(changeset))}
+          {:error, _changeset} ->
+            # City was created but discovery enablement failed
+            # Navigate to index with warning instead of showing form error
+            socket =
+              socket
+              |> put_flash(:error, "City created successfully, but failed to enable discovery")
+              |> push_navigate(to: ~p"/admin/cities")
+
+            {:noreply, socket}
         end
 
       {:error, changeset} ->
