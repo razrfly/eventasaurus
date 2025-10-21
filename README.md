@@ -299,6 +299,144 @@ mix discovery.sync --city krakow --source all
 mix discovery.sync --city krakow --source resident-advisor --limit 50
 ```
 
+### Quality Assessment & Analysis
+
+Eventasaurus provides command-line tools for assessing data quality and analyzing category patterns across event sources. These tools are designed for programmatic access (ideal for Claude Code and other AI agents) with both human-readable and JSON output formats.
+
+#### Quality Check (`mix quality.check`)
+
+Evaluate data quality across 9 dimensions for event sources:
+
+**Quality Dimensions**:
+1. **Venue Completeness** (16%) - Events with valid venue information
+2. **Image Completeness** (15%) - Events with images
+3. **Category Completeness** (15%) - Events with at least one category
+4. **Category Specificity** (15%) - Category diversity and appropriateness
+5. **Occurrence Richness** (13%) - Events with detailed occurrence/scheduling data
+6. **Price Completeness** (10%) - Events with pricing information
+7. **Description Quality** (8%) - Events with descriptions
+8. **Performer Completeness** (6%) - Events with performer/artist information
+9. **Translation Completeness** (2%) - Multi-language support (if applicable)
+
+**Usage**:
+
+```bash
+# Check quality for a specific source (formatted output)
+mix quality.check sortiraparis
+
+# List all sources with quality scores
+mix quality.check --all
+
+# Get machine-readable JSON output
+mix quality.check sortiraparis --json
+mix quality.check --all --json
+```
+
+**Example Output**:
+```
+Quality Report: sortiraparis
+============================================================
+Overall Score: 84% 😊 Good
+
+Dimensions:
+  Venue:          100% ✅
+  Image:          100% ✅
+  Category:       100% ✅
+  Specificity:     91% ✅
+  Price:          100% ✅
+  Description:     92% ✅
+  Performer:        0% 🔴
+  Occurrence:      52% 🔴
+  Translation:     25% 🔴
+
+Issues Found:
+  • Low performer completeness (0%) - Consider adding performer extraction
+  • Moderate occurrence richness (52%) - Many events lack detailed scheduling
+  • Low translation completeness (25%) - Multi-language support incomplete
+
+Total Events: 343
+```
+
+**Quality Score Interpretation**:
+- **90-100%**: Excellent ✅ - Production-ready data quality
+- **75-89%**: Good 😊 - Minor improvements needed
+- **60-74%**: Fair ⚠️ - Significant gaps to address
+- **Below 60%**: Poor 🔴 - Major quality issues
+
+#### Category Analysis (`mix category.analyze`)
+
+Analyze events categorized as "Other" to identify patterns and suggest category mapping improvements:
+
+**Analysis Includes**:
+- **URL Patterns**: Common path segments in event source URLs
+- **Title Keywords**: Frequently appearing words in event titles
+- **Venue Types**: Distribution of venue types for uncategorized events
+- **AI Suggestions**: Category mapping recommendations with confidence levels
+- **YAML Snippets**: Ready-to-use configuration for category mappings
+
+**Usage**:
+
+```bash
+# Analyze a specific source (formatted output)
+mix category.analyze sortiraparis
+
+# Get machine-readable JSON output with full pattern data
+mix category.analyze sortiraparis --json
+```
+
+**Example Output**:
+```
+Category Analysis: sortiraparis
+============================================================
+
+Summary Statistics:
+  Total Events:    343
+  'Other' Events:  32
+  Percentage:      9.3% ✓ Good (Target: <10%)
+
+💡 Suggested Category Mappings:
+
+  Festivals
+    Confidence: Low
+    Would categorize: 2 events
+    Keywords: festival
+
+  Film
+    Confidence: Low
+    Would categorize: 2 events
+    Keywords: film
+
+🔗 Top URL Patterns:
+  /what-to-visit-in-paris/ - 30 events (93.8%)
+  /hotels-unusual-accommodation/ - 12 events (37.5%)
+
+🏷️  Top Title Keywords:
+  paris - 28 events (87.5%)
+  hotel - 12 events (37.5%)
+  unusual - 11 events (34.4%)
+
+Next Steps:
+  1. Review patterns and suggestions above
+  2. Update priv/category_mappings/sortiraparis.yml
+  3. Run: mix eventasaurus.recategorize_events --source sortiraparis
+  4. Re-run this analysis to verify improvements
+```
+
+**Categorization Quality Standards**:
+- **<10%**: Excellent - Most events are properly categorized
+- **10-20%**: Good - Minor categorization gaps
+- **20-30%**: Needs improvement - Significant uncategorized events
+- **>30%**: Poor - Major categorization issues
+
+**JSON Output**: The `--json` flag provides complete structured data including:
+- Full pattern analysis with sample events
+- AI-generated suggestions with confidence scores
+- Ready-to-use YAML snippets for category mappings
+- Categorization status and recommendations
+
+**Integration with Category Mappings**:
+The analysis output directly informs updates to category mapping files in `priv/category_mappings/{source}.yml`. Review the suggested patterns and keywords, then update the mapping configuration accordingly.
+
 ### Adding a New Scraper
 
 1. **Read the specification**: Start with `docs/scrapers/SCRAPER_SPECIFICATION.md`
