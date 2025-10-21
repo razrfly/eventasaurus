@@ -325,6 +325,33 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
               generic_event_count: 0,
               diversity_score: 0,
               total_categories: 0
+            },
+            price_completeness: 0,
+            price_metrics: %{
+              events_with_price_info: 0,
+              events_free: 0,
+              events_paid: 0,
+              events_with_currency: 0,
+              events_with_price_range: 0,
+              unique_prices: 0,
+              price_diversity_score: 0,
+              price_diversity_warning: nil
+            },
+            description_quality: 0,
+            description_metrics: %{
+              has_description: 0,
+              short_descriptions: 0,
+              adequate_descriptions: 0,
+              detailed_descriptions: 0,
+              avg_length: 0
+            },
+            performer_completeness: 0,
+            performer_metrics: %{
+              events_with_performers: 0,
+              events_single_performer: 0,
+              events_multiple_performers: 0,
+              total_performers: 0,
+              avg_performers_per_event: 0.0
             }
           },
           quality_data
@@ -634,10 +661,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </div>
 
             <!-- Completeness Metrics -->
-            <div class={[
-              "grid grid-cols-1 gap-6 mb-6",
-              if(@quality_data.supports_translations, do: "md:grid-cols-6", else: "md:grid-cols-5")
-            ]}>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
               <!-- Venue Completeness -->
               <div class="p-4 border rounded-lg">
                 <div class="flex items-center justify-between mb-2">
@@ -741,6 +765,49 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                     </div>
                   </div>
                 <% end %>
+              </div>
+
+              <!-- Description Quality Card (Phase 2B.4) -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Description Quality</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.description_quality %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-purple-600 h-2.5 rounded-full" style={"width: #{@quality_data.description_quality}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.description_metrics.has_description %> / <%= @quality_data.total_events %> have descriptions
+                </p>
+                <div class="mt-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>Short: <%= @quality_data.description_metrics.short_descriptions %></span>
+                  <span>Adequate: <%= @quality_data.description_metrics.adequate_descriptions %></span>
+                  <span>Detailed: <%= @quality_data.description_metrics.detailed_descriptions %></span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">
+                  Avg length: <%= @quality_data.description_metrics.avg_length %> chars
+                </p>
+              </div>
+
+              <!-- Performer Completeness Card (Phase 2D.4) -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Performer Data</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.performer_completeness %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-pink-600 h-2.5 rounded-full" style={"width: #{@quality_data.performer_completeness}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.performer_metrics.events_with_performers %> / <%= @quality_data.total_events %> have performers
+                </p>
+                <div class="mt-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>Single: <%= @quality_data.performer_metrics.events_single_performer %></span>
+                  <span>Multiple: <%= @quality_data.performer_metrics.events_multiple_performers %></span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">
+                  Total: <%= @quality_data.performer_metrics.total_performers %> performers (avg: <%= @quality_data.performer_metrics.avg_performers_per_event %>)
+                </p>
               </div>
 
               <!-- Translation Completeness (conditionally displayed) -->
