@@ -1,0 +1,284 @@
+<div class="min-h-screen bg-gray-50 py-8">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">Unsplash City Images Integration</h1>
+      <p class="mt-2 text-gray-600">
+        Visual verification of cached Unsplash images with daily rotation for active cities
+      </p>
+    </div>
+
+    <!-- Configuration Status -->
+    <div class="mb-8 p-6 bg-white rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4">Configuration Status</h2>
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div>
+          <span class="font-medium">API Key:</span>
+          <span class={"ml-2 px-3 py-1 rounded-full text-sm font-medium #{if @api_key_configured, do: "bg-green-100 text-green-800", else: "bg-red-100 text-red-800"}"}>
+            <%= if @api_key_configured, do: "Configured", else: "Missing" %>
+          </span>
+        </div>
+        <div>
+          <span class="font-medium">Active Cities:</span>
+          <span class="ml-2 text-gray-700"><%= @total_active_cities %></span>
+        </div>
+        <div>
+          <span class="font-medium">Cities with Galleries:</span>
+          <span class="ml-2 text-gray-700"><%= @cities_with_galleries_count %></span>
+        </div>
+        <div>
+          <span class="font-medium">Total Images:</span>
+          <span class="ml-2 text-gray-700"><%= @total_images %></span>
+        </div>
+        <div>
+          <span class="font-medium">Day of Year:</span>
+          <span class="ml-2 text-gray-700"><%= @day_of_year %></span>
+        </div>
+      </div>
+
+      <%= if not @api_key_configured do %>
+        <div class="mt-4 p-4 bg-red-50 border-l-4 border-red-400">
+          <div class="flex">
+            <div class="ml-3">
+              <p class="text-sm text-red-700">
+                <strong>UNSPLASH_ACCESS_KEY is not configured.</strong> Set it in your .env file to enable image fetching.
+              </p>
+              <code class="block mt-2 p-2 bg-red-100 rounded text-xs">
+                UNSPLASH_ACCESS_KEY=your_key_here
+              </code>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <div class="mt-4 p-4 bg-blue-50 border-l-4 border-blue-400">
+        <p class="text-sm text-blue-700">
+          <strong>Daily Rotation:</strong> Images rotate based on day of year (day <%= @day_of_year %>).
+          The same image is shown all day, cycling through the 10 cached images per city.
+        </p>
+      </div>
+    </div>
+
+    <%= if @cities_with_galleries_count == 0 do %>
+      <!-- No Cities Message -->
+      <div class="p-8 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+        <h3 class="text-lg font-semibold text-yellow-900 mb-2">No Cached Image Galleries Yet</h3>
+        <p class="text-sm text-yellow-700 mb-4">
+          <%= @total_active_cities %> <%= if @total_active_cities == 1, do: "city has", else: "cities have" %> discovery_enabled = true, but no Unsplash galleries have been cached yet.
+        </p>
+        <div class="text-left max-w-2xl mx-auto">
+          <p class="text-sm text-yellow-800 font-medium mb-2">To populate galleries:</p>
+          <ol class="list-decimal list-inside space-y-1 text-sm text-yellow-700">
+            <li>Ensure UNSPLASH_ACCESS_KEY is set in .env</li>
+            <li>Run: <code class="px-1 bg-yellow-100 rounded">mix unsplash.test</code> to fetch for all active cities</li>
+            <li>Or: <code class="px-1 bg-yellow-100 rounded">mix unsplash.test London</code> to test a specific city</li>
+            <li>Or wait for the daily cron job at 3 AM UTC</li>
+          </ol>
+        </div>
+      </div>
+    <% else %>
+      <!-- City Galleries -->
+      <%= for city <- @cities do %>
+        <div class="mb-8 bg-white rounded-lg shadow overflow-hidden">
+          <!-- City Header -->
+          <div class="px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xl font-bold"><%= city.name %></h3>
+                <p class="text-sm text-indigo-100 mt-1">
+                  <%= city.image_count %> images cached
+                  <%= if city.last_refreshed do %>
+                    · Last refreshed: <%= format_date(city.last_refreshed) %>
+                  <% end %>
+                </p>
+              </div>
+              <div class="text-right">
+                <div class="text-sm text-indigo-100">Current Image Index</div>
+                <div class="text-3xl font-bold"><%= city.current_index %></div>
+                <div class="text-xs text-indigo-200">of <%= city.image_count - 1 %></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Current Daily Image (Large) -->
+          <%= if city.current_image do %>
+            <div class="p-6 bg-gray-50 border-b">
+              <h4 class="text-lg font-semibold text-gray-900 mb-4">
+                📅 Today's Featured Image (Day <%= @day_of_year %>)
+              </h4>
+              <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="aspect-video bg-gray-100 relative">
+                  <img
+                    src={city.current_image["url"]}
+                    alt={"#{city.name} - Image #{city.current_index}"}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                    <div class="text-white text-sm">
+                      <div class="font-medium">
+                        Photo by
+                        <a
+                          href={city.current_image["attribution"]["photographer_url"]}
+                          target="_blank"
+                          class="underline hover:text-indigo-200"
+                        >
+                          <%= city.current_image["attribution"]["photographer_name"] %>
+                        </a>
+                      </div>
+                      <a
+                        href={city.current_image["attribution"]["unsplash_url"]}
+                        target="_blank"
+                        class="text-xs text-gray-300 hover:text-white underline"
+                      >
+                        View on Unsplash
+                      </a>
+                    </div>
+                  </div>
+                </div>
+                <div class="p-4 bg-gray-50 border-t">
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span class="font-medium text-gray-700">Dimensions:</span>
+                      <span class="ml-2 text-gray-600">
+                        <%= city.current_image["width"] %>×<%= city.current_image["height"] %>
+                      </span>
+                    </div>
+                    <div>
+                      <span class="font-medium text-gray-700">Color:</span>
+                      <span class="ml-2 inline-block w-6 h-6 rounded border border-gray-300" style={"background-color: #{city.current_image["color"]}"}></span>
+                    </div>
+                    <div>
+                      <span class="font-medium text-gray-700">ID:</span>
+                      <span class="ml-2 text-gray-600 font-mono text-xs"><%= city.current_image["id"] %></span>
+                    </div>
+                    <div>
+                      <span class="font-medium text-gray-700">Fetched:</span>
+                      <span class="ml-2 text-gray-600"><%= format_date(city.current_image["fetched_at"]) %></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- All Images Gallery (Thumbnails) -->
+          <div class="p-6">
+            <h4 class="text-lg font-semibold text-gray-900 mb-4">All Cached Images (<%= city.image_count %>)</h4>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <%= for {image, index} <- Enum.with_index(city.images) do %>
+                <div class={"border rounded-lg overflow-hidden #{if index == city.current_index, do: "ring-4 ring-indigo-500", else: ""}"}>
+                  <div class="aspect-video bg-gray-100 relative">
+                    <img
+                      src={image["thumb_url"]}
+                      alt={"#{city.name} - Image #{index}"}
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <%= if index == city.current_index do %>
+                      <div class="absolute top-2 right-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">
+                        TODAY
+                      </div>
+                    <% end %>
+                  </div>
+                  <div class="px-2 py-2 bg-gray-50 border-t">
+                    <div class="text-xs text-gray-600">
+                      <div class="font-medium">Index: <%= index %></div>
+                      <div class="truncate">
+                        by <%= image["attribution"]["photographer_name"] %>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- Gallery Metadata -->
+          <div class="px-6 py-4 bg-gray-50 border-t">
+            <details>
+              <summary class="cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                View Gallery Metadata
+              </summary>
+              <div class="mt-4 p-4 bg-white rounded border text-xs">
+                <pre class="overflow-x-auto"><code><%= Jason.encode!(city.images, pretty: true) %></code></pre>
+              </div>
+            </details>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+
+    <!-- Testing Instructions -->
+    <div class="mt-8 p-6 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+      <h3 class="text-lg font-semibold text-blue-900 mb-2">Testing & Usage Instructions</h3>
+      <div class="space-y-4 text-sm text-blue-800">
+        <div>
+          <h4 class="font-semibold mb-1">Manual Image Refresh:</h4>
+          <code class="block p-2 bg-blue-100 rounded">mix unsplash.test</code>
+          <p class="mt-1 text-xs">Refreshes images for all active cities</p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-1">Test Specific City:</h4>
+          <code class="block p-2 bg-blue-100 rounded">mix unsplash.test London</code>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-1">Usage in Templates:</h4>
+          <pre class="block p-2 bg-blue-100 rounded font-mono text-xs">alias EventasaurusApp.Services.UnsplashService
+
+# Get today's image
+case UnsplashService.get_city_image("London") do
+  <%= "{:ok, image}" %> -> image.url
+  <%= "{:error, _}" %> -> nil
+end</pre>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-1">Batch Loading (Prevent N+1):</h4>
+          <pre class="block p-2 bg-blue-100 rounded font-mono text-xs">images = UnsplashService.get_city_images_batch(["London", "Paris"])
+# Returns: %<%= "{\"London\" => %{url: \"...\", ...}, \"Paris\" => %{...}}" %></pre>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-1">Automatic Refresh:</h4>
+          <p>Images are automatically refreshed daily at 3 AM UTC via Oban worker</p>
+          <p class="mt-1 text-xs">Worker: <code class="px-1 bg-blue-100 rounded">EventasaurusApp.Workers.UnsplashRefreshWorker</code></p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-1">Daily Rotation:</h4>
+          <p>
+            Images rotate based on day of year (<%= @day_of_year %>).
+            The rotation index is calculated as: <code class="px-1 bg-blue-100 rounded">rem(day_of_year, image_count)</code>
+          </p>
+          <p class="mt-1 text-xs">This ensures the same image displays all day, cycling through the 10 cached images over time.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Reference -->
+    <div class="mt-8 p-6 bg-white rounded-lg shadow">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">API Reference</h3>
+      <div class="space-y-3 text-sm">
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">UnsplashService.get_city_image/1</code>
+          <p class="text-gray-600 mt-1">Get today's image for a specific city</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">UnsplashService.get_city_images_batch/1</code>
+          <p class="text-gray-600 mt-1">Get today's images for multiple cities (prevents N+1)</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">UnsplashService.refresh_city_images/1</code>
+          <p class="text-gray-600 mt-1">Manually refresh images for a city</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">UnsplashService.cities_with_galleries/0</code>
+          <p class="text-gray-600 mt-1">List all active cities with cached galleries</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

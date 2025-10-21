@@ -14,6 +14,7 @@ defmodule EventasaurusDiscovery.Locations.City do
     field(:longitude, :decimal)
     field(:discovery_enabled, :boolean, default: false)
     field(:discovery_config, :map)
+    field(:unsplash_gallery, :map)
 
     belongs_to(:country, EventasaurusDiscovery.Locations.Country)
     has_many(:venues, EventasaurusApp.Venues.Venue)
@@ -30,7 +31,8 @@ defmodule EventasaurusDiscovery.Locations.City do
       :latitude,
       :longitude,
       :discovery_enabled,
-      :discovery_config
+      :discovery_config,
+      :unsplash_gallery
     ])
     |> validate_required([:name, :country_id])
     |> Slug.maybe_generate_slug()

@@ -20,6 +20,9 @@ defmodule EventasaurusWeb.Router do
 
       # CDN testing page (dev - no auth)
       get "/cdn-test", Dev.CdnTestController, :index
+
+      # Unsplash integration testing page (dev - no auth)
+      get "/unsplash", Dev.UnsplashTestController, :index
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
