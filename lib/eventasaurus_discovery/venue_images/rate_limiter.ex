@@ -63,6 +63,24 @@ defmodule EventasaurusDiscovery.VenueImages.RateLimiter do
   end
 
   @doc """
+  Atomically checks limits and records one request if allowed.
+
+  Returns :ok if allowed and recorded, {:error, :rate_limited} if blocked.
+  This prevents race conditions from separate check + record calls.
+  """
+  def allow_and_record(provider) when is_map(provider) do
+    rate_limits = get_rate_limits(provider)
+
+    if Enum.empty?(rate_limits) do
+      # No limits configured - just record and allow
+      GenServer.cast(__MODULE__, {:record_request, provider.name})
+      :ok
+    else
+      GenServer.call(__MODULE__, {:allow_and_record, provider.name, rate_limits})
+    end
+  end
+
+  @doc """
   Gets current usage stats for a provider.
   """
   def get_stats(provider_name) when is_binary(provider_name) do
@@ -107,6 +125,19 @@ defmodule EventasaurusDiscovery.VenueImages.RateLimiter do
     }
 
     {:reply, stats, state}
+  end
+
+  @impl true
+  def handle_call({:allow_and_record, provider_name, rate_limits}, _from, state) do
+    case check_limits(provider_name, rate_limits) do
+      :ok ->
+        now = System.system_time(:second)
+        :ets.insert(@table_name, {provider_name, now})
+        {:reply, :ok, state}
+
+      {:error, :rate_limited} = err ->
+        {:reply, err, state}
+    end
   end
 
   @impl true

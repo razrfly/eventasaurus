@@ -73,10 +73,14 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     case Repo.get(Venue, venue_id) do
       nil ->
         Logger.warning("⚠️ Venue #{venue_id} not found")
-        {:error, :not_found}
+        {:discard, :not_found}
 
       venue ->
-        enrich_single_venue(venue)
+        case enrich_single_venue(venue) do
+          {:ok, _} -> :ok
+          {:skip, _} -> :ok
+          {:error, _} -> :ok
+        end
     end
   end
 
@@ -85,7 +89,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     Logger.info("🖼️  Processing batch venue enrichment: #{length(venue_ids)} venues")
 
     venues = Repo.all(from v in Venue, where: v.id in ^venue_ids)
-    enrich_venues_batch(venues)
+    _ = enrich_venues_batch(venues)
+    :ok
   end
 
   @impl Oban.Worker
@@ -100,31 +105,36 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       :ok
     else
       Logger.info("📊 Found #{length(stale_venues)} stale venues to enrich")
-      enrich_venues_batch(stale_venues)
+      _ = enrich_venues_batch(stale_venues)
+      :ok
     end
   end
 
   # Private Functions
 
   defp find_stale_venues(limit) do
-    cutoff_date = DateTime.utc_now() |> DateTime.add(-30, :day)
+    cutoff_date =
+      DateTime.utc_now()
+      |> DateTime.add(-30, :day)
+      |> DateTime.to_naive()
 
     from(v in Venue,
       where:
         # Never enriched
         is_nil(fragment("? ->> 'last_enriched_at'", v.image_enrichment_metadata)) or
-          # No images
-          fragment("jsonb_array_length(?) = 0", v.venue_images) or
+          # No images (handle NULL venue_images)
+          fragment("COALESCE(jsonb_array_length(?), 0) = 0", v.venue_images) or
           # Stale images (>30 days)
           fragment(
-            "(? ->> 'last_enriched_at')::timestamp < ?",
+            "(? ->> 'last_enriched_at')::timestamp < ?::timestamp",
             v.image_enrichment_metadata,
             ^cutoff_date
           ),
       # Prioritize venues with coordinates and provider IDs
       where: not is_nil(v.latitude) and not is_nil(v.longitude),
       where: fragment("jsonb_typeof(?) = 'object'", v.provider_ids),
-      where: fragment("jsonb_object_keys(?) IS NOT NULL", v.provider_ids),
+      # Check if provider_ids has at least one key (use jsonb_object_length instead of jsonb_object_keys)
+      where: fragment("jsonb_object_length(?) > 0", v.provider_ids),
       order_by: [
         desc:
           fragment(
@@ -176,11 +186,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
        - Failed: #{final_results.failed}
     """)
 
-    if final_results.failed > 0 do
-      {:error, %{results: final_results, errors: Enum.reverse(final_results.errors)}}
-    else
-      {:ok, final_results}
-    end
+    # Always return :ok for batch jobs - failures are logged internally
+    {:ok, final_results}
   end
 
   defp enrich_single_venue(venue) do

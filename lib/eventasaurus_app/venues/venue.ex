@@ -110,6 +110,8 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:metadata, :map)
     field(:geocoding_performance, :map)
     field(:provider_ids, :map, default: %{})
+    field(:venue_images, {:array, :map})
+    field(:image_enrichment_metadata, :map)
 
     belongs_to(:city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id)
     has_many(:events, EventasaurusApp.Events.Event)
@@ -138,7 +140,9 @@ defmodule EventasaurusApp.Venues.Venue do
       :city_id,
       :metadata,
       :geocoding_performance,
-      :provider_ids
+      :provider_ids,
+      :venue_images,
+      :image_enrichment_metadata
     ])
     |> validate_required_by_type()
     |> validate_inclusion(:venue_type, @valid_venue_types,
