@@ -126,9 +126,7 @@ defmodule EventasaurusDiscovery.Admin.CityManagerTest do
     end
 
     test "returns error for non-existent city" do
-      assert_raise Ecto.NoResultsError, fn ->
-        CityManager.delete_city(999_999)
-      end
+      assert {:error, :not_found} = CityManager.delete_city(999_999)
     end
   end
 

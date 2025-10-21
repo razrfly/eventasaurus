@@ -63,16 +63,21 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       {:error, :has_venues}
   """
   def delete_city(city_id) do
-    city = Repo.get!(City, city_id)
-    changeset = City.delete_changeset(city)
+    case Repo.get(City, city_id) do
+      nil ->
+        {:error, :not_found}
 
-    case Repo.delete(changeset) do
-      {:ok, _} = result -> result
-      {:error, changeset} ->
-        if Keyword.has_key?(changeset.errors, :id) do
-          {:error, :has_venues}
-        else
-          {:error, changeset}
+      city ->
+        changeset = City.delete_changeset(city)
+
+        case Repo.delete(changeset) do
+          {:ok, _} = result -> result
+          {:error, changeset} ->
+            if Keyword.has_key?(changeset.errors, :id) do
+              {:error, :has_venues}
+            else
+              {:error, changeset}
+            end
         end
     end
   end
