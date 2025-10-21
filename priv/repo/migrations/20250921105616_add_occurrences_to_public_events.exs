@@ -3,7 +3,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddOccurrencesToPublicEvents do
 
   def change do
     alter table(:public_events) do
-      add :occurrences, :map
+      add :occurrences, :jsonb, default: "{}"
     end
   end
 end

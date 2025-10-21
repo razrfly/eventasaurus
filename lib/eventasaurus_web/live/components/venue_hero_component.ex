@@ -277,17 +277,36 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
         _ -> []
       end
 
-    # Extract images from standardized format or fallback to old format
-    primary_image =
-      case rich_data do
-        %{primary_image: %{url: url}} -> %{"url" => url}
-        _ -> nil
-      end
+    # Extract images with priority order:
+    # 1. venue_images (new provider-agnostic aggregation)
+    # 2. rich_data standardized format
+    # 3. old format (backward compatibility)
+    venue = Map.get(socket.assigns, :venue)
 
-    secondary_image =
-      case rich_data do
-        %{secondary_image: %{url: url}} -> %{"url" => url}
-        _ -> nil
+    {primary_image, secondary_image} =
+      cond do
+        # New venue_images JSONB field
+        venue && is_map(venue) && Map.has_key?(venue, :venue_images) ->
+          extract_hero_images_from_venue_images(venue.venue_images)
+
+        venue && is_map(venue) && Map.has_key?(venue, "venue_images") ->
+          extract_hero_images_from_venue_images(venue["venue_images"])
+
+        # Standardized format
+        match?(%{primary_image: %{url: _}}, rich_data) ->
+          primary = %{"url" => rich_data.primary_image.url}
+
+          secondary =
+            case rich_data do
+              %{secondary_image: %{url: url}} -> %{"url" => url}
+              _ -> nil
+            end
+
+          {primary, secondary}
+
+        # No images
+        true ->
+          {nil, nil}
       end
 
     _images = [primary_image, secondary_image] |> Enum.filter(& &1)
@@ -384,5 +403,49 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
       _ when is_binary(price_level) -> "Price level: #{String.replace(price_level, ~r/💰|💸/, "")}"
       _ -> "Price level"
     end
+  end
+
+  # Extract primary and secondary images from venue_images JSONB field
+  defp extract_hero_images_from_venue_images(venue_images) when is_list(venue_images) do
+    # Take first two images by position
+    sorted_images =
+      venue_images
+      |> Enum.filter(&is_valid_venue_image?/1)
+      |> Enum.sort_by(&get_image_position/1)
+      |> Enum.take(2)
+
+    case sorted_images do
+      [primary, secondary | _] ->
+        {normalize_hero_image(primary), normalize_hero_image(secondary)}
+
+      [primary] ->
+        {normalize_hero_image(primary), nil}
+
+      [] ->
+        {nil, nil}
+    end
+  end
+
+  defp extract_hero_images_from_venue_images(_), do: {nil, nil}
+
+  defp is_valid_venue_image?(image) when is_map(image) do
+    url = Map.get(image, :url) || Map.get(image, "url")
+    is_binary(url) && String.length(url) > 0
+  end
+
+  defp is_valid_venue_image?(_), do: false
+
+  defp get_image_position(image) do
+    Map.get(image, :position) || Map.get(image, "position") || 999
+  end
+
+  defp normalize_hero_image(image) when is_map(image) do
+    %{
+      "url" => Map.get(image, :url) || Map.get(image, "url"),
+      "provider" => Map.get(image, :provider) || Map.get(image, "provider"),
+      "attribution" => Map.get(image, :attribution) || Map.get(image, "attribution"),
+      "attribution_url" =>
+        Map.get(image, :attribution_url) || Map.get(image, "attribution_url")
+    }
   end
 end

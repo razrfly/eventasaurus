@@ -16,17 +16,34 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
 
   Sign up at: https://www.geoapify.com/
 
+  ## Capabilities
+
+  - **Geocoding**: Geocode API for coordinates
+  - **Images**: Places API for venue images (limited)
+  - **Reviews**: Not implemented
+  - **Hours**: Not implemented
+
   ## Response Format
 
   Returns standardized geocode result with coordinates, city, and country.
   """
 
-  @behaviour EventasaurusDiscovery.Geocoding.Provider
+  @behaviour EventasaurusDiscovery.Geocoding.MultiProvider
 
   require Logger
 
-  @impl true
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
   def name, do: "geoapify"
+
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
+  def capabilities do
+    %{
+      "geocoding" => true,
+      "images" => true,
+      "reviews" => false,
+      "hours" => false
+    }
+  end
 
   @impl true
   def geocode(address) when is_binary(address) do
@@ -149,6 +166,106 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
            # Store entire Geoapify result object
            raw_response: result
          }}
+    end
+  end
+
+  # Images Implementation
+
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
+  def get_images(place_id) when is_binary(place_id) do
+    api_key = get_api_key()
+
+    if is_nil(api_key) do
+      Logger.error("❌ GEOAPIFY_API_KEY not configured")
+      {:error, :api_key_missing}
+    else
+      Logger.debug("📸 Geoapify images request: #{place_id}")
+      fetch_place_images(place_id, api_key)
+    end
+  end
+
+  def get_images(_), do: {:error, :invalid_place_id}
+
+  defp fetch_place_images(place_id, api_key) do
+    # Geoapify Places Details API
+    url = "https://api.geoapify.com/v2/place-details"
+
+    params = [
+      id: place_id,
+      apiKey: api_key
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_images_response(body)
+
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        Logger.debug("📍 Geoapify: place not found")
+        {:error, :no_results}
+
+      {:ok, %HTTPoison.Response{status_code: 401}} ->
+        Logger.error("❌ Geoapify images authentication failed")
+        {:error, :api_error}
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ Geoapify images rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ Geoapify images HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Geoapify images request timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ Geoapify images request failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_images_response(body) do
+    case Jason.decode(body) do
+      {:ok, %{"features" => [feature | _]}} ->
+        properties = get_in(feature, ["properties"]) || %{}
+
+        # Geoapify may have image URLs in properties
+        images =
+          case Map.get(properties, "image") do
+            url when is_binary(url) ->
+              [
+                %{
+                  url: url,
+                  width: nil,
+                  height: nil,
+                  attribution: "Geoapify",
+                  source_url: nil
+                }
+              ]
+
+            _ ->
+              []
+          end
+
+        if Enum.empty?(images) do
+          Logger.debug("📸 Geoapify: no images available")
+          {:error, :no_images}
+        else
+          {:ok, images}
+        end
+
+      {:ok, %{"features" => []}} ->
+        Logger.debug("📸 Geoapify: no results found")
+        {:error, :no_results}
+
+      {:ok, _other} ->
+        Logger.debug("📸 Geoapify: place has no images")
+        {:error, :no_images}
+
+      {:error, reason} ->
+        Logger.error("❌ Geoapify images: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
     end
   end
 

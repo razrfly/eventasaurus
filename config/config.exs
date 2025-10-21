@@ -114,6 +114,9 @@ config :eventasaurus, Oban,
     # Google API queue for places lookups
     # Single concurrency to respect Google's rate limits
     google_lookup: 1,
+    # Venue enrichment queue for image fetching
+    # Low concurrency to respect provider rate limits
+    venue_enrichment: 2,
     # Default queue for other background jobs
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation
@@ -139,6 +142,8 @@ config :eventasaurus, Oban,
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
        {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker},
+       # Venue image enrichment runs daily at 4 AM UTC
+       {"0 4 * * *", EventasaurusDiscovery.VenueImages.EnrichmentJob},
        # Monthly geocoding cost report on 1st of month at 8 AM UTC
        {"0 8 1 * *", EventasaurusDiscovery.Workers.GeocodingCostReportWorker}
      ]}
@@ -192,6 +197,11 @@ config :eventasaurus,
 
 # Configure geocoder for forward geocoding (address → city/coordinates)
 config :geocoder, :worker, provider: Geocoder.Providers.OpenStreetMaps
+
+# Configure venue image enrichment job
+config :eventasaurus, EventasaurusDiscovery.VenueImages.EnrichmentJob,
+  batch_size: 100,
+  max_retries: 3
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
