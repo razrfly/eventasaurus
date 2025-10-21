@@ -636,7 +636,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             <!-- Completeness Metrics -->
             <div class={[
               "grid grid-cols-1 gap-6 mb-6",
-              if(@quality_data.supports_translations, do: "md:grid-cols-5", else: "md:grid-cols-4")
+              if(@quality_data.supports_translations, do: "md:grid-cols-6", else: "md:grid-cols-5")
             ]}>
               <!-- Venue Completeness -->
               <div class="p-4 border rounded-lg">
@@ -712,6 +712,37 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 <% end %>
               </div>
 
+              <!-- Price Completeness Card (Phase 2A.4) -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Price Data</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.price_completeness %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-green-600 h-2.5 rounded-full" style={"width: #{@quality_data.price_completeness}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.price_metrics.events_with_price_info %> / <%= @quality_data.total_events %> events with pricing
+                </p>
+                <div class="mt-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>Free: <%= @quality_data.price_metrics.events_free %></span>
+                  <span>Paid: <%= @quality_data.price_metrics.events_paid %></span>
+                </div>
+                <%= if @quality_data.price_metrics.events_with_currency > 0 do %>
+                  <p class="mt-1 text-xs text-gray-500">
+                    <%= @quality_data.price_metrics.events_with_currency %> with currency info
+                  </p>
+                <% end %>
+                <%= if @quality_data.price_metrics.events_paid > 0 do %>
+                  <div class="mt-2 pt-2 border-t border-gray-200">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="text-gray-600">Diversity: <%= @quality_data.price_metrics.price_diversity_score %>%</span>
+                      <span class="text-gray-600"><%= @quality_data.price_metrics.unique_prices %> prices</span>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+
               <!-- Translation Completeness (conditionally displayed) -->
               <%= if @quality_data.supports_translations do %>
                 <div class="p-4 border rounded-lg">
@@ -769,18 +800,20 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </button>
           </div>
           <div class="p-6">
-            <!-- Pie Chart -->
-            <div class="mb-6">
-              <div style="height: 300px; max-width: 500px; margin: 0 auto;">
-                <canvas
-                  id="occurrence-type-chart"
-                  phx-hook="ChartHook"
-                  phx-update="ignore"
-                  data-chart-data={@occurrence_chart_data}
-                  data-chart-type="pie"
-                ></canvas>
+            <!-- Pie Chart (only show if 2+ occurrence types) -->
+            <%= if length(@comprehensive_stats.occurrence_types) >= 2 do %>
+              <div class="mb-6">
+                <div style="height: 300px; max-width: 500px; margin: 0 auto;">
+                  <canvas
+                    id="occurrence-type-chart"
+                    phx-hook="ChartHook"
+                    phx-update="ignore"
+                    data-chart-data={@occurrence_chart_data}
+                    data-chart-type="pie"
+                  ></canvas>
+                </div>
               </div>
-            </div>
+            <% end %>
 
             <!-- Detailed Breakdown -->
             <div class="space-y-4">
@@ -844,18 +877,20 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </div>
           </div>
           <div class="p-6">
-            <!-- Pie Chart (Top 5 + Other) -->
-            <div class="mb-6">
-              <div style="height: 300px; max-width: 500px; margin: 0 auto;">
-                <canvas
-                  id="category-pie-chart"
-                  phx-hook="ChartHook"
-                  phx-update="ignore"
-                  data-chart-data={@category_chart_data}
-                  data-chart-type="pie"
-                ></canvas>
+            <!-- Pie Chart (Top 5 + Other) - only show if 2+ categories -->
+            <%= if @comprehensive_stats.category_stats.total_categories >= 2 do %>
+              <div class="mb-6">
+                <div style="height: 300px; max-width: 500px; margin: 0 auto;">
+                  <canvas
+                    id="category-pie-chart"
+                    phx-hook="ChartHook"
+                    phx-update="ignore"
+                    data-chart-data={@category_chart_data}
+                    data-chart-type="pie"
+                  ></canvas>
+                </div>
               </div>
-            </div>
+            <% end %>
 
             <!-- Category Stats Summary -->
             <div class="grid grid-cols-3 gap-4 mb-6">

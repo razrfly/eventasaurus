@@ -286,12 +286,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
-      # Pricing
-      is_ticketed: Map.get(raw_event, "is_ticketed", false),
-      is_free: Map.get(raw_event, "is_free", false),
+      # Pricing - DO NOT set defaults, nil = no data available
+      is_ticketed: Map.get(raw_event, "is_ticketed"),
+      is_free: Map.get(raw_event, "is_free"),
       min_price: Map.get(raw_event, "min_price"),
       max_price: Map.get(raw_event, "max_price"),
-      currency: Map.get(raw_event, "currency", "EUR"),
+      currency: Map.get(raw_event, "currency"),
 
       # Performers (if available)
       performers: Map.get(raw_event, "performers", []),
@@ -343,12 +343,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
-      # Pricing
-      is_ticketed: Map.get(raw_event, "is_ticketed", false),
-      is_free: Map.get(raw_event, "is_free", false),
+      # Pricing - DO NOT set defaults, nil = no data available
+      is_ticketed: Map.get(raw_event, "is_ticketed"),
+      is_free: Map.get(raw_event, "is_free"),
       min_price: Map.get(raw_event, "min_price"),
       max_price: Map.get(raw_event, "max_price"),
-      currency: Map.get(raw_event, "currency", "EUR"),
+      currency: Map.get(raw_event, "currency"),
 
       # Performers (if available)
       performers: Map.get(raw_event, "performers", []),
@@ -411,12 +411,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
-      # Pricing
-      is_ticketed: Map.get(raw_event, "is_ticketed", false),
-      is_free: Map.get(raw_event, "is_free", false),
+      # Pricing - DO NOT set defaults, nil = no data available
+      is_ticketed: Map.get(raw_event, "is_ticketed"),
+      is_free: Map.get(raw_event, "is_free"),
       min_price: Map.get(raw_event, "min_price"),
       max_price: Map.get(raw_event, "max_price"),
-      currency: Map.get(raw_event, "currency", "EUR"),
+      currency: Map.get(raw_event, "currency"),
 
       performers: Map.get(raw_event, "performers", []),
 
@@ -468,12 +468,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
 
-      # Pricing
-      is_ticketed: Map.get(raw_event, "is_ticketed", false),
-      is_free: Map.get(raw_event, "is_free", false),
+      # Pricing - DO NOT set defaults, nil = no data available
+      is_ticketed: Map.get(raw_event, "is_ticketed"),
+      is_free: Map.get(raw_event, "is_free"),
       min_price: Map.get(raw_event, "min_price"),
       max_price: Map.get(raw_event, "max_price"),
-      currency: Map.get(raw_event, "currency", "EUR"),
+      currency: Map.get(raw_event, "currency"),
 
       performers: Map.get(raw_event, "performers", []),
 

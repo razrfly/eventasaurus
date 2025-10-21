@@ -70,7 +70,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         "is_free" => pricing[:is_free],
         "min_price" => pricing[:min_price],
         "max_price" => pricing[:max_price],
-        "currency" => pricing[:currency] || "EUR",
+        "currency" => pricing[:currency],  # No default - nil means no data
         "performers" => performers,
         "original_date_string" => date_string,
         "event_type" => event_type
@@ -203,57 +203,28 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   @doc """
   Extract pricing information from text content.
 
-  Returns map with:
-  - `:is_ticketed` - Boolean
-  - `:is_free` - Boolean
-  - `:min_price` - Decimal (if found)
-  - `:max_price` - Decimal (if found)
-  - `:currency` - String (EUR, USD, etc.)
+  **IMPORTANT**: Sortiraparis does NOT provide reliable pricing information.
+  This scraper should NOT extract or set pricing data.
+
+  Returns map with all pricing fields as nil/false:
+  - `:is_ticketed` - false
+  - `:is_free` - nil (unknown, not false)
+  - `:min_price` - nil
+  - `:max_price` - nil
+  - `:currency` - nil
+
+  DO NOT set defaults for pricing fields when data is unavailable.
+  Null values correctly indicate "no pricing data available".
   """
-  def extract_pricing(html) do
-    text = Normalizer.clean_html(html)
-    down = String.downcase(text)
-
-    is_free =
-      String.contains?(down, "free") or
-        String.contains?(down, "free admission") or
-        String.contains?(down, "no charge") or
-        String.contains?(down, "gratuit") or
-        String.contains?(down, "entrée libre")
-
-    # Look for price patterns: "€15", "$20", "15€", "20 euros"
-    # Handle EU formats with comma decimals and thousand separators
-    prices =
-      Regex.scan(
-        ~r/(?:(?:€|EUR|euros?)\s*([\d\s.,]+)|([\d\s.,]+)\s*(?:€|EUR|euros?))/i,
-        text
-      )
-      |> Enum.flat_map(fn
-        [_, p1, ""] when p1 != "" -> [parse_price(p1)]
-        [_, "", p2] when p2 != "" -> [parse_price(p2)]
-        [_, p1, p2] -> [p1, p2] |> Enum.reject(&is_nil_or_empty/1) |> Enum.map(&parse_price/1)
-        _ -> []
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    # Database constraint: if is_free = true, then min_price and max_price must be NULL
-    # So when event is free, ignore any extracted prices
-    {min_price, max_price} =
-      if is_free do
-        {nil, nil}
-      else
-        {
-          if(length(prices) > 0, do: Enum.min(prices), else: nil),
-          if(length(prices) > 1, do: Enum.max(prices), else: nil)
-        }
-      end
-
+  def extract_pricing(_html) do
+    # Sortiraparis does NOT provide reliable pricing information
+    # Do NOT extract or guess pricing - leave as nil
     %{
-      is_free: is_free,
-      is_ticketed: not is_free and length(prices) > 0,
-      min_price: min_price,
-      max_price: max_price,
-      currency: "EUR"
+      is_free: nil,        # Unknown, not false
+      is_ticketed: false,  # No ticketing info available
+      min_price: nil,
+      max_price: nil,
+      currency: nil        # No currency info - do NOT default to EUR
     }
   end
 
@@ -407,26 +378,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
       _ -> nil
     end
   end
-
-  defp parse_price(price_string) when is_binary(price_string) do
-    # Normalize EU number formats (e.g., "1.500,50" → "1500.50")
-    normalized =
-      price_string
-      |> String.replace(~r/\s+/, "")          # Remove spaces
-      |> String.replace(~r/\.(?=\d{3}\b)/, "") # Remove thousand dots
-      |> String.replace(",", ".")             # Convert comma to dot
-
-    case Decimal.parse(normalized) do
-      {decimal, _} -> decimal
-      :error -> nil
-    end
-  end
-
-  defp parse_price(_), do: nil
-
-  defp is_nil_or_empty(nil), do: true
-  defp is_nil_or_empty(""), do: true
-  defp is_nil_or_empty(_), do: false
 
   # Classify event type based on date pattern, title, and description.
   # Returns one of:
