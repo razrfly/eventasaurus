@@ -156,6 +156,11 @@ config :eventasaurus, :avatars,
     backgroundBorderRadius: 50
   }
 
+# CDN configuration for Cloudflare Image Resizing
+config :eventasaurus, :cdn,
+  enabled: false,
+  domain: "cdn.wombie.com"
+
 # Discovery source configuration
 config :eventasaurus,
   pubquiz_enabled: true,

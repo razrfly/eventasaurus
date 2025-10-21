@@ -31,6 +31,11 @@ config :eventasaurus, :turnstile,
   site_key: System.get_env("TURNSTILE_SITE_KEY"),
   secret_key: System.get_env("TURNSTILE_SECRET_KEY")
 
+# Configure CDN with environment variable override for testing
+config :eventasaurus, :cdn,
+  enabled: System.get_env("CDN_ENABLED", "false") == "true",
+  domain: System.get_env("CDN_DOMAIN", "cdn.wombie.com")
+
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
 

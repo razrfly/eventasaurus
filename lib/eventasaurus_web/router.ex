@@ -36,6 +36,9 @@ defmodule EventasaurusWeb.Router do
 
       # Test page for plug-level 404 rendering (matches ValidateCity behavior)
       get "/test-404", Dev.Test404Controller, :test_plug_404
+
+      # CDN testing page (dev - no auth)
+      get "/cdn-test", Dev.CdnTestController, :index
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
