@@ -551,16 +551,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp extract_provider_ids_from_metadata(nil), do: %{}
 
   defp extract_provider_ids_from_metadata(metadata) when is_map(metadata) do
-    # The geocoding result from Orchestrator.geocode includes provider_ids
-    # This function extracts it, or builds it from legacy place_id if needed
-    case Map.get(metadata, :provider_ids) do
+    # Support both atom and string keys from orchestrator/JSON
+    case Map.get(metadata, :provider_ids) || Map.get(metadata, "provider_ids") do
       provider_ids when is_map(provider_ids) and map_size(provider_ids) > 0 ->
         provider_ids
 
       _ ->
         # Fallback: build from place_id and provider for backwards compatibility
-        provider_name = Map.get(metadata, :provider)
-        place_id = Map.get(metadata, :place_id)
+        provider_name = Map.get(metadata, :provider) || Map.get(metadata, "provider")
+        place_id = Map.get(metadata, :place_id) || Map.get(metadata, "place_id")
 
         if provider_name && place_id do
           %{provider_name => place_id}
