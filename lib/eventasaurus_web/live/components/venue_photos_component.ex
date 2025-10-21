@@ -554,19 +554,19 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
         venue && is_map(venue) && Map.has_key?(venue, "venue_images") ->
           normalize_venue_images(venue["venue_images"])
 
-        # Standardized format from rich_data
-        is_map(rich_data) ->
-          case get_in(rich_data, [:sections, :photos, :photos]) do
-            photos when is_list(photos) -> normalize_standardized_photos(photos)
-            _ -> nil
-          end || []
-
-        # Legacy rich_data.images format
+        # Legacy rich_data.images format (check before catch-all)
         is_map(rich_data) && Map.has_key?(rich_data, :images) && is_list(rich_data.images) ->
           normalize_photos(rich_data.images)
 
         is_map(rich_data) && Map.has_key?(rich_data, "images") && is_list(rich_data["images"]) ->
           normalize_photos(rich_data["images"])
+
+        # Standardized format from rich_data (check after specific images field)
+        is_map(rich_data) ->
+          case get_in(rich_data, [:sections, :photos, :photos]) do
+            photos when is_list(photos) -> normalize_standardized_photos(photos)
+            _ -> nil
+          end || []
 
         true ->
           []

@@ -14,7 +14,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
   """
   use EventasaurusWeb, :controller
 
-  alias EventasaurusDiscovery.VenueImages.{Orchestrator, Monitor, RateLimiter}
+  alias EventasaurusDiscovery.VenueImages.{Orchestrator, RateLimiter}
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
   alias EventasaurusApp.{Repo, Venues.Venue}
   import Ecto.Query
@@ -113,7 +113,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
       needs_enrichment: needs_enrichment_count,
       total_images: total_images,
       total_cost: total_cost,
-      avg_images_per_venue: if(enriched_venues > 0, do: total_images / enriched_venues, else: 0),
+      avg_images_per_venue: if(enriched_venues > 0, do: (total_images / enriched_venues) * 1.0, else: 0.0),
       avg_cost_per_venue: if(enriched_venues > 0, do: total_cost / enriched_venues, else: 0.0)
     }
   end
@@ -126,7 +126,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
     providers =
       from(p in GeocodingProvider,
         where: fragment("? @> ?", p.capabilities, ^%{"images" => true}),
-        order_by: [asc: fragment("CAST(? -> 'images' AS INTEGER)", p.priorities)]
+        order_by: [asc: fragment("COALESCE((? ->> 'images')::int, 99)", p.priorities)]
       )
       |> Repo.all()
 
@@ -138,7 +138,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
 
       # Calculate success rate from metadata
       {successes, attempts} = calculate_provider_success_rate(provider.name)
-      success_rate = if attempts > 0, do: successes / attempts * 100, else: 0.0
+      success_rate = if attempts > 0, do: (successes / attempts * 100.0), else: 0.0
 
       # Calculate total cost for this provider
       total_cost = calculate_provider_total_cost(provider.name)
@@ -359,10 +359,20 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
 
             new_cost =
               case cost do
-                val when is_float(val) -> val
-                val when is_binary(val) -> String.to_float(val)
-                val when is_integer(val) -> val / 1.0
-                _ -> 0.0
+                val when is_float(val) ->
+                  val
+
+                val when is_binary(val) ->
+                  case Float.parse(val) do
+                    {f, _} -> f
+                    :error -> 0.0
+                  end
+
+                val when is_integer(val) ->
+                  val / 1.0
+
+                _ ->
+                  0.0
               end
 
             Map.put(inner_acc, provider, current + new_cost)

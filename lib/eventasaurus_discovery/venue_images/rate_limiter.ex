@@ -69,14 +69,15 @@ defmodule EventasaurusDiscovery.VenueImages.RateLimiter do
   This prevents race conditions from separate check + record calls.
   """
   def allow_and_record(provider) when is_map(provider) do
+    # Normalize provider name to string for consistency
+    name = to_string(provider.name)
     rate_limits = get_rate_limits(provider)
 
     if Enum.empty?(rate_limits) do
-      # No limits configured - just record and allow
-      GenServer.cast(__MODULE__, {:record_request, provider.name})
-      :ok
+      # No limits configured - use atomic call for consistency
+      GenServer.call(__MODULE__, {:allow_and_record, name, []})
     else
-      GenServer.call(__MODULE__, {:allow_and_record, provider.name, rate_limits})
+      GenServer.call(__MODULE__, {:allow_and_record, name, rate_limits})
     end
   end
 

@@ -55,10 +55,8 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestHTML do
   def format_number(num) when is_integer(num) do
     num
     |> Integer.to_string()
-    |> String.graphemes()
-    |> Enum.reverse()
-    |> Enum.chunk_every(3)
-    |> Enum.join(",")
+    |> String.reverse()
+    |> String.replace(~r/.{3}(?=.)/, "\\0,")
     |> String.reverse()
   end
 
@@ -71,21 +69,23 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestHTML do
   @doc """
   Format duration in seconds to human-readable format.
   """
-  def format_duration(seconds) when seconds < 60 do
+  def format_duration(seconds) when is_integer(seconds) and seconds < 60 do
     "#{seconds}s"
   end
 
-  def format_duration(seconds) when seconds < 3600 do
+  def format_duration(seconds) when is_integer(seconds) and seconds < 3600 do
     minutes = div(seconds, 60)
     secs = rem(seconds, 60)
     "#{minutes}m #{secs}s"
   end
 
-  def format_duration(seconds) do
+  def format_duration(seconds) when is_integer(seconds) do
     hours = div(seconds, 3600)
     minutes = div(rem(seconds, 3600), 60)
     "#{hours}h #{minutes}m"
   end
+
+  def format_duration(_), do: "0s"
 
   @doc """
   Get status badge class based on boolean value.
