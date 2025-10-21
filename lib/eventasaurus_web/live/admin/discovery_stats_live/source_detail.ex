@@ -810,6 +810,34 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 </p>
               </div>
 
+              <!-- Occurrence Richness Card (Phase 2C.4) -->
+              <div class="p-4 border rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-sm font-medium text-gray-700">Occurrence Data</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.occurrence_richness %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-amber-600 h-2.5 rounded-full" style={"width: #{@quality_data.occurrence_richness}%"}></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                  <%= @quality_data.occurrence_metrics.events_with_occurrences %> / <%= @quality_data.total_events %> have occurrences
+                </p>
+                <div class="mt-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>Single: <%= @quality_data.occurrence_metrics.events_single_date %></span>
+                  <span>Multiple: <%= @quality_data.occurrence_metrics.events_multiple_dates %></span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">
+                  Avg: <%= @quality_data.occurrence_metrics.avg_dates_per_event %> dates | Validity: <%= @quality_data.occurrence_metrics.validity_score %>%
+                </p>
+                <%= if @quality_data.occurrence_metrics.validation_issues.total_validity_issues > 0 do %>
+                  <div class="mt-2 pt-2 border-t border-gray-200">
+                    <p class="text-xs text-orange-600">
+                      ⚠️ <%= @quality_data.occurrence_metrics.validation_issues.total_validity_issues %> structural issues
+                    </p>
+                  </div>
+                <% end %>
+              </div>
+
               <!-- Translation Completeness (conditionally displayed) -->
               <%= if @quality_data.supports_translations do %>
                 <div class="p-4 border rounded-lg">
