@@ -5,6 +5,8 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   """
   use EventasaurusWeb, :live_component
 
+  alias Eventasaurus.CDN
+
   def render(assigns) do
     ~H"""
     <div class="mt-8">
@@ -76,7 +78,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
       <div class="aspect-w-16 aspect-h-9 bg-gray-200">
         <%= if @image_url do %>
           <img
-            src={@image_url}
+            src={CDN.url(@image_url, width: 400, height: 300, fit: "cover", quality: 85)}
             alt={@display_title}
             class="w-full h-48 object-cover group-hover:opacity-95 transition-opacity"
             loading="lazy"

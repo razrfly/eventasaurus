@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.Components.EventCards do
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Helpers.CategoryHelpers
+  alias Eventasaurus.CDN
   import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
 
   @doc """
@@ -52,7 +53,7 @@ defmodule EventasaurusWeb.Components.EventCards do
         <!-- Event Image -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
           <%= if @event.cover_image_url do %>
-            <img src={@event.cover_image_url} alt={@event.title} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
+            <img src={CDN.url(@event.cover_image_url, width: 400, height: 300, fit: "cover", quality: 85)} alt={@event.title} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
           <% else %>
             <div class="w-full h-full flex items-center justify-center">
               <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
@@ -161,7 +162,7 @@ defmodule EventasaurusWeb.Components.EventCards do
         <!-- Movie Backdrop/Poster -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
           <%= if @group.movie_backdrop_url do %>
-            <img src={@group.movie_backdrop_url} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
+            <img src={CDN.url(@group.movie_backdrop_url, width: 400, height: 300, fit: "cover", quality: 85)} alt={@group.movie_title} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
           <% else %>
             <div class="w-full h-full flex items-center justify-center">
               <Heroicons.film class="w-12 h-12 text-gray-400" />
@@ -226,7 +227,7 @@ defmodule EventasaurusWeb.Components.EventCards do
         <!-- Event Image -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
           <%= if @group.cover_image_url do %>
-            <img src={@group.cover_image_url} alt={@group.source_name} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
+            <img src={CDN.url(@group.cover_image_url, width: 400, height: 300, fit: "cover", quality: 85)} alt={@group.source_name} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
           <% else %>
             <div class="w-full h-full flex items-center justify-center">
               <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
@@ -305,7 +306,7 @@ defmodule EventasaurusWeb.Components.EventCards do
         <!-- Container Image -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
           <%= if @group.cover_image_url do %>
-            <img src={@group.cover_image_url} alt={@group.container_title} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
+            <img src={CDN.url(@group.cover_image_url, width: 400, height: 300, fit: "cover", quality: 85)} alt={@group.container_title} class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">
           <% else %>
             <div class="w-full h-full flex items-center justify-center">
               <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">

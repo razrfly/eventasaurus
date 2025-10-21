@@ -108,7 +108,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         success_rate = SourceHealthCalculator.success_rate_percentage(stats)
 
         # Get source scope
-        {:ok, scope} = SourceRegistry.get_scope(source_name)
+        scope = case SourceRegistry.get_scope(source_name) do
+          {:ok, scope} -> scope
+          {:error, :not_found} ->
+            Logger.warning("Source #{source_name} has no scope configured in SourceRegistry")
+            "unknown"
+        end
 
         # Count events for this source
         event_count = count_events_for_source(source_name)

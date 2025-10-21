@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
+  alias Eventasaurus.CDN
   import Ecto.Query
 
   @impl true
@@ -701,7 +702,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 <%= if @movie && @movie.backdrop_url do %>
                   <div class="h-96 relative">
                     <img
-                      src={@movie.backdrop_url}
+                      src={CDN.url(@movie.backdrop_url, width: 1200, quality: 90)}
                       alt={@movie.title}
                       class="w-full h-full object-cover"
                     />
@@ -711,7 +712,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 <%= if @event.cover_image_url do %>
                   <div class="h-96 relative">
                     <img
-                      src={@event.cover_image_url}
+                      src={CDN.url(@event.cover_image_url, width: 1200, quality: 90)}
                       alt={@event.display_title}
                       class="w-full h-full object-cover"
                     />
@@ -781,7 +782,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       <%= if @movie.poster_url do %>
                         <div class="flex-shrink-0">
                           <img
-                            src={@movie.poster_url}
+                            src={CDN.url(@movie.poster_url, width: 200, height: 300, fit: "cover", quality: 90)}
                             alt={"#{@movie.title} poster"}
                             class="w-32 h-48 object-cover rounded-lg shadow-lg"
                             loading="lazy"
