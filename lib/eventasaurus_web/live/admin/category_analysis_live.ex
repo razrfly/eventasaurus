@@ -510,7 +510,7 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
           on: v.id == e.venue_id,
           where: pes.source_id == ^source_id,
           where: pec.category_id == ^other_category_id,
-          distinct: e.id,
+          distinct: [e.id],
           select: %{
             id: e.id,
             title: e.title,
@@ -519,7 +519,7 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
             venue_type: v.venue_type,
             inserted_at: e.inserted_at
           },
-          order_by: [desc: e.inserted_at],
+          order_by: [asc: e.id, desc: e.inserted_at],
           limit: 500
         )
 
