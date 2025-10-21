@@ -20,8 +20,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     params = get_connect_params(socket) || %{}
     language = session["language"] || params["locale"] || "en"
 
-    # Store URI from connect_info for SEO (only available during mount)
-    request_uri = get_connect_info(socket, :uri)
+    # Store URI from connect_info for SEO (only available during connected mount)
+    raw_uri = get_connect_info(socket, :uri)
+    request_uri =
+      cond do
+        match?(%URI{}, raw_uri) -> raw_uri
+        is_binary(raw_uri) -> URI.parse(raw_uri)
+        true -> nil
+      end
 
     socket =
       socket

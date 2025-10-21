@@ -70,6 +70,7 @@ mappings:
   # Food & Drink
   food: food-drink
   restaurant: food-drink
+  hotel-restaurant: food-drink
   tasting: food-drink
   wine: food-drink
   gastronomy: food-drink

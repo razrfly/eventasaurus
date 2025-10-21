@@ -50,6 +50,9 @@ defmodule EventasaurusWeb.Router do
       live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
       live "/discovery/stats/city/:city_slug", Admin.DiscoveryStatsLive.CityDetail, :show
 
+      # Category Analysis (dev - no auth)
+      live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
+
       # Geocoding Cost Dashboard (dev - no auth)
       live "/geocoding", Admin.GeocodingDashboardLive
       live "/geocoding/providers", Admin.GeocodingProviderLive, :index
@@ -116,6 +119,9 @@ defmodule EventasaurusWeb.Router do
       live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
       live "/discovery/stats/source/:source_slug", EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail, :show
       live "/discovery/stats/city/:city_slug", EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail, :show
+
+      # Category Analysis with admin authentication
+      live "/discovery/category-analysis/:source_slug", EventasaurusWeb.Admin.CategoryAnalysisLive, :show
 
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive

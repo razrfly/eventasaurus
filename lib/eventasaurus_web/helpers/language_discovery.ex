@@ -18,10 +18,13 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscovery do
   @doc """
   Get languages that should be displayed for a city.
 
-  Returns intersection of:
+  Returns union of:
   1. Languages spoken in the country (from Countries library)
   2. Languages with actual translations in database for city's activities
   3. Always includes English as fallback
+
+  This allows surfacing both country-relevant languages AND any additional
+  translated content that may exist.
 
   ## Examples
 
@@ -40,7 +43,7 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscovery do
     with {:ok, city} <- get_city_with_country(city_slug),
          country_languages <- get_country_languages(city.country_code),
          db_languages <- get_db_languages_for_city(city.id) do
-      # Intersection of country languages and DB languages, plus English
+      # Union of country languages and DB languages, plus English
       (country_languages ++ db_languages ++ ["en"])
       |> Enum.uniq()
       |> Enum.sort()
