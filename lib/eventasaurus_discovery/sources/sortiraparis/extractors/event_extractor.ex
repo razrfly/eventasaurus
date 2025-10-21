@@ -31,6 +31,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   """
 
   require Logger
+  alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
 
   @doc """
   Extract event data from HTML page.
@@ -154,7 +155,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         paragraphs =
           Regex.scan(~r{<p[^>]*>(.*?)</p>}s, article_content, capture: :all_but_first)
           |> Enum.take(2)
-          |> Enum.map(fn [p] -> clean_html(p) end)
+          |> Enum.map(fn [p] -> Normalizer.clean_html(p) end)
           |> Enum.reject(&(&1 == ""))
 
         if length(paragraphs) > 0 do
@@ -210,7 +211,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   - `:currency` - String (EUR, USD, etc.)
   """
   def extract_pricing(html) do
-    text = clean_html(html)
+    text = Normalizer.clean_html(html)
     down = String.downcase(text)
 
     is_free =
@@ -271,7 +272,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
 
   defp extract_h1_title(html) do
     case Regex.run(~r{<h1[^>]*>(.*?)</h1>}s, html) do
-      [_, title] -> clean_html(title)
+      [_, title] -> Normalizer.clean_html(title)
       _ -> nil
     end
   end
@@ -306,7 +307,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
     patterns
     |> Enum.find_value(fn pattern ->
       case Regex.run(pattern, html) do
-        [_, date] -> clean_html(date)
+        [_, date] -> Normalizer.clean_html(date)
         _ -> nil
       end
     end)
@@ -316,7 +317,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
     # Clean HTML and look for date patterns
     # NOTE: This function only EXTRACTS date text from HTML.
     # Actual date PARSING happens in the Transformer using MultilingualDateParser.
-    text = clean_html(html)
+    text = Normalizer.clean_html(html)
 
     # Month names (English|French)
     months =
@@ -405,14 +406,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
       [_, url] -> String.trim(url)
       _ -> nil
     end
-  end
-
-  defp clean_html(text) when is_binary(text) do
-    text
-    |> String.replace(~r{<[^>]+>}, "")
-    |> String.replace(~r{\s+}, " ")
-    |> HtmlEntities.decode()  # Handles ALL HTML entities including &#039;, &#39;, &eacute;, etc.
-    |> String.trim()
   end
 
   defp parse_price(price_string) when is_binary(price_string) do

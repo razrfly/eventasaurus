@@ -65,8 +65,9 @@ defmodule EventasaurusWeb.Dev.CdnTestController do
     ]
 
     # Check CDN status
-    cdn_enabled = Application.get_env(:eventasaurus, :cdn)[:enabled] || false
-    cdn_domain = Application.get_env(:eventasaurus, :cdn)[:domain] || "cdn.wombie.com"
+    cdn_config = Application.get_env(:eventasaurus, :cdn, [])
+    cdn_enabled = Keyword.get(cdn_config, :enabled, false)
+    cdn_domain = Keyword.get(cdn_config, :domain, "cdn.wombie.com")
 
     render(conn, :index,
       sample_images: sample_images,

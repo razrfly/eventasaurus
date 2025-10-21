@@ -37,6 +37,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
   """
 
   require Logger
+  alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
 
   @doc """
   Extract venue data from HTML page.
@@ -229,7 +230,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
     patterns
     |> Enum.find_value(fn pattern ->
       case Regex.run(pattern, html) do
-        [_, venue] -> clean_html(venue)
+        [_, venue] -> Normalizer.clean_html(venue)
         _ -> nil
       end
     end)
@@ -249,7 +250,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
   end
 
   defp extract_venue_from_text(html) do
-    text = clean_html(html)
+    text = Normalizer.clean_html(html)
 
     cond do
       # Strategy 1: Look for patterns like "Where: Venue Name" or "Location: Venue Name"
@@ -331,21 +332,21 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
       # Extract streetAddress directly from HTML
       street =
         case Regex.run(~r{<span[^>]*itemprop="streetAddress"[^>]*>(.*?)</span>}s, html) do
-          [_, s] -> clean_html(s)
+          [_, s] -> Normalizer.clean_html(s)
           _ -> nil
         end
 
       # Extract postalCode directly from HTML
       postal =
         case Regex.run(~r{<span[^>]*itemprop="postalCode"[^>]*>(.*?)</span>}s, html) do
-          [_, p] -> clean_html(p)
+          [_, p] -> Normalizer.clean_html(p)
           _ -> nil
         end
 
       # Extract addressLocality (city) directly from HTML
       city =
         case Regex.run(~r{<span[^>]*itemprop="addressLocality"[^>]*>(.*?)</span>}s, html) do
-          [_, c] -> clean_html(c)
+          [_, c] -> Normalizer.clean_html(c)
           _ -> nil
         end
 
@@ -373,7 +374,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
     patterns
     |> Enum.find_value(fn pattern ->
       case Regex.run(pattern, html) do
-        [_, address] -> clean_html(address)
+        [_, address] -> Normalizer.clean_html(address)
         _ -> nil
       end
     end)
@@ -400,7 +401,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
   end
 
   defp extract_address_from_text(html) do
-    text = clean_html(html)
+    text = Normalizer.clean_html(html)
 
     # Look for Paris address pattern: "8 Boulevard de Bercy, 75012 Paris"
     case Regex.run(
@@ -504,13 +505,4 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
 
   defp parse_coordinate(coord) when is_number(coord), do: coord
   defp parse_coordinate(_), do: nil
-
-  defp clean_html(text) when is_binary(text) do
-    text
-    |> String.replace(~r{<[^>]+>}, "")
-    |> String.replace(~r{\s+}, " ")
-    |> String.replace("&nbsp;", " ")
-    |> String.replace("&amp;", "&")
-    |> String.trim()
-  end
 end
