@@ -144,11 +144,16 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
         {:error, :invalid_response}
 
       is_nil(city) ->
-        Logger.warning(
-          "⚠️ Foursquare: could not extract city. Location: #{inspect(location)}"
-        )
-
-        {:error, :no_city_found}
+        Logger.warning("⚠️ Foursquare: missing city; returning coordinates anyway")
+        {:ok,
+         %{
+           latitude: lat * 1.0,
+           longitude: lng * 1.0,
+           city: nil,
+           country: country || "Unknown",
+           provider_id: place_id,
+           raw_response: result
+         }}
 
       true ->
         {:ok,

@@ -17,6 +17,12 @@ defmodule EventasaurusApp.Repo.Migrations.RenameGeocodingProvidersToVenueDataPro
       add :priority, :integer, default: 99
     end
 
+    # Restore priority from priorities.geocoding if available
+    execute """
+    UPDATE venue_data_providers
+    SET priority = COALESCE((priorities->>'geocoding')::integer, 99);
+    """
+
     # Rename table back
     execute "ALTER TABLE venue_data_providers RENAME TO geocoding_providers;"
   end
