@@ -699,6 +699,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                       <span class="text-gray-600"><%= @quality_data.specificity_metrics.total_categories %> cats</span>
                     </div>
                   </div>
+                  <%= if @quality_data.specificity_metrics.generic_event_count > 0 do %>
+                    <div class="mt-2 pt-2 border-t border-gray-200">
+                      <.link
+                        navigate={~p"/admin/discovery/category-analysis/#{@source_slug}"}
+                        class="text-xs text-indigo-600 hover:text-indigo-900 font-medium"
+                      >
+                        → Analyze "Other" events
+                      </.link>
+                    </div>
+                  <% end %>
                 <% end %>
               </div>
 
@@ -820,10 +830,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
               >
                 <%= if @show_category_details, do: "Hide Details", else: "Show Details" %>
               </button>
-              <div class="flex items-center gap-1">
+              <form phx-change="sort_categories" class="flex items-center gap-1">
                 <label class="text-xs text-gray-600">Sort:</label>
                 <select
-                  phx-change="sort_categories"
                   name="by"
                   class="text-xs border-gray-300 rounded-md"
                 >
@@ -831,7 +840,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                   <option value="name" selected={@category_sort == :name}>Name</option>
                   <option value="percentage" selected={@category_sort == :percentage}>Percentage</option>
                 </select>
-              </div>
+              </form>
             </div>
           </div>
           <div class="p-6">
@@ -910,17 +919,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
               >
                 <%= if @show_venue_details, do: "Collapse", else: "Expand" %>
               </button>
-              <div class="flex items-center gap-1">
+              <form phx-change="sort_venues" class="flex items-center gap-1">
                 <label class="text-xs text-gray-600">Sort:</label>
                 <select
-                  phx-change="sort_venues"
                   name="by"
                   class="text-xs border-gray-300 rounded-md"
                 >
                   <option value="count" selected={@venue_sort == :count}>Event Count</option>
                   <option value="name" selected={@venue_sort == :name}>Name</option>
                 </select>
-              </div>
+              </form>
             </div>
           </div>
           <div class="p-6">

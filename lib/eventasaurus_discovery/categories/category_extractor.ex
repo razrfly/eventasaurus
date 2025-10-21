@@ -667,11 +667,36 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
   # Helper to extract category from Sortiraparis URL
   defp extract_category_from_sortiraparis_url(url) when is_binary(url) do
-    # URL pattern: /what-to-{see|visit}-in-paris/{category}/articles/{id}
-    # or: /en/what-to-{see|visit}-in-paris/{category}/articles/{id}
+    # Sortiraparis has multiple URL patterns:
+    # 1. /what-to-{see|visit}-in-paris/{category}/articles/{id}
+    # 2. /en/what-to-{see|visit}-in-paris/{category}/articles/{id}
+    # 3. /{category}/articles/{id}  (e.g., /hotel-restaurant/articles/...)
+    # 4. /actualites/{category}/articles/{id}
+    # 5. /loisirs/{category}/articles/{id}
+
+    # Try pattern 1 & 2: /what-to-{see|visit}-in-paris/{category}/articles/
     case Regex.run(~r{/what-to-(?:see|visit)-in-paris/([^/]+)/articles/}, url) do
-      [_, category_segment] -> String.downcase(category_segment)
-      _ -> nil
+      [_, category_segment] ->
+        String.downcase(category_segment)
+      _ ->
+        # Try pattern 3: Extract path segment before /articles/
+        # This catches patterns like /hotel-restaurant/restaurant/articles/
+        # or /loisirs/sport/articles/
+        case Regex.run(~r{/([^/]+)/articles/}, url) do
+          [_, category_segment] ->
+            segment = String.downcase(category_segment)
+            # Filter out generic segments that aren't categories
+            unless segment in ["en", "actualites", "loisirs"] do
+              segment
+            else
+              # If it's a generic segment, try to get the one before it
+              case Regex.run(~r{/(?:en|actualites|loisirs)/([^/]+)/articles/}, url) do
+                [_, inner_segment] -> String.downcase(inner_segment)
+                _ -> nil
+              end
+            end
+          _ -> nil
+        end
     end
   end
 
