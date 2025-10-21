@@ -21,6 +21,15 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
   Returns list of {pattern, count, percentage, sample_events}.
   """
   def extract_url_patterns(events) do
+    # Count total events with valid URLs for percentage calculation
+    total_with_url =
+      Enum.count(events, fn e ->
+        case e.source_url do
+          s when is_binary(s) -> String.trim(s) != ""
+          _ -> false
+        end
+      end)
+
     events
     |> Enum.flat_map(fn event ->
       case extract_path_segments(event.source_url) do
@@ -30,7 +39,9 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
     end)
     |> Enum.frequencies()
     |> Enum.map(fn {pattern, count} ->
-      percentage = Float.round(count / length(events) * 100, 1)
+      # Use events with URLs as denominator to avoid division by zero and get accurate percentage
+      denominator = max(total_with_url, 1)
+      percentage = Float.round(count / denominator * 100, 1)
       sample_events = get_sample_events_for_pattern(events, pattern, 3)
 
       %{
@@ -59,17 +70,33 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
       donc car mais
     ]
 
+    # Count total events with valid titles for percentage calculation
+    total_with_titles =
+      Enum.count(events, fn e ->
+        is_binary(e.title) and String.trim(e.title) != ""
+      end)
+
     events
     |> Enum.flat_map(fn event ->
-      event.title
-      |> String.downcase()
-      |> String.replace(~r/[^\p{L}\s]/u, " ")
-      |> String.split()
-      |> Enum.reject(&(&1 in stop_words or String.length(&1) < 3))
+      case event.title do
+        s when is_binary(s) ->
+          s
+          |> normalize_text()
+          |> String.replace(~r/[^\p{L}\s]/u, " ")
+          |> String.split()
+          |> Enum.reject(&(&1 in stop_words or String.length(&1) < 3))
+          # Count at most once per event to get event coverage, not word count
+          |> MapSet.new()
+          |> MapSet.to_list()
+
+        _ ->
+          []
+      end
     end)
     |> Enum.frequencies()
     |> Enum.map(fn {keyword, count} ->
-      percentage = Float.round(count / length(events) * 100, 1)
+      # Use events with titles as denominator to avoid division by zero
+      percentage = Float.round(count / max(total_with_titles, 1) * 100, 1)
       sample_events = get_sample_events_for_keyword(events, keyword, 3)
 
       %{
@@ -155,13 +182,29 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
   end
 
   defp get_sample_events_for_keyword(events, keyword, limit) do
+    norm_kw = normalize_text(keyword)
+
     events
     |> Enum.filter(fn event ->
-      String.contains?(String.downcase(event.title), keyword)
+      case event.title do
+        s when is_binary(s) -> String.contains?(normalize_text(s), norm_kw)
+        _ -> false
+      end
     end)
-    |> Enum.take(limit)
+    |> Enum.take_random(limit)
     |> Enum.map(&%{id: &1.id, title: &1.title})
   end
+
+  # Normalize text by removing accents/diacritics and lowercasing
+  # This helps with French text matching (e.g., "éléphant" matches "elephant")
+  defp normalize_text(s) when is_binary(s) do
+    s
+    |> String.downcase()
+    |> String.normalize(:nfd)
+    |> String.replace(~r/\p{Mn}/u, "")
+  end
+
+  defp normalize_text(_), do: ""
 
   defp generate_url_suggestions(url_patterns, categories) do
     url_patterns
@@ -229,9 +272,26 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
   defp calculate_confidence(_data, :keyword), do: :low
 
   defp merge_suggestions(category, suggestions) do
-    url_patterns = suggestions |> Enum.filter(&(&1.type == :url)) |> Enum.map(& &1.pattern)
-    keywords = suggestions |> Enum.filter(&(&1.type == :keyword)) |> Enum.map(& &1.pattern)
-    total_events = suggestions |> Enum.map(& &1.event_count) |> Enum.sum()
+    # Deduplicate patterns and keywords
+    url_patterns =
+      suggestions
+      |> Enum.filter(&(&1.type == :url))
+      |> Enum.map(& &1.pattern)
+      |> Enum.uniq()
+
+    keywords =
+      suggestions
+      |> Enum.filter(&(&1.type == :keyword))
+      |> Enum.map(& &1.pattern)
+      |> Enum.uniq()
+
+    # Count unique events to avoid double-counting across suggestions
+    total_events =
+      suggestions
+      |> Enum.flat_map(& &1.sample_events)
+      |> Enum.uniq_by(& &1.id)
+      |> length()
+
     avg_confidence = suggestions |> Enum.map(&confidence_to_num(&1.confidence)) |> Enum.sum()
     avg_confidence = div(avg_confidence, length(suggestions))
 
@@ -260,13 +320,37 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
   defp num_to_confidence(_), do: :low
 
   defp generate_yaml_snippet(category_slug, url_patterns, keywords) do
+    # Handle empty sections properly to avoid invalid YAML
+    url_block =
+      case Enum.uniq(url_patterns) do
+        [] ->
+          "  url_patterns: []"
+
+        ups ->
+          "  url_patterns:\n" <>
+            Enum.map_join(ups, "\n", fn p -> "    - " <> yaml_quote("/" <> p <> "/") end)
+      end
+
+    kw_block =
+      case Enum.uniq(keywords) do
+        [] ->
+          "  keywords: []"
+
+        ks ->
+          "  keywords:\n" <>
+            Enum.map_join(ks, "\n", fn k -> "    - " <> yaml_quote(k) end)
+      end
+
     """
     #{category_slug}:
-      url_patterns:
-    #{Enum.map(url_patterns, &"    - \"/#{&1}/\"") |> Enum.join("\n")}
-      keywords:
-    #{Enum.map(keywords, &"    - \"#{&1}\"") |> Enum.join("\n")}
+    #{url_block}
+    #{kw_block}
     """
     |> String.trim()
+  end
+
+  # Properly escape quotes in YAML strings
+  defp yaml_quote(s) when is_binary(s) do
+    ~s("#{String.replace(s, ~S("), ~S(\\"))}")
   end
 end
