@@ -39,6 +39,16 @@ defmodule EventasaurusDiscovery.Locations.City do
   end
 
   @doc """
+  Changeset for deleting a city.
+  Adds constraint to prevent deletion when city has venues.
+  """
+  def delete_changeset(city) do
+    city
+    |> cast(%{}, [])
+    |> check_constraint(:id, name: :venues_city_id_required_for_non_regional, message: "has venues")
+  end
+
+  @doc """
   Changeset for enabling discovery on a city.
   """
   def enable_discovery_changeset(city, attrs \\ %{}) do

@@ -45,6 +45,7 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   def update_city(%City{} = city, attrs) do
     city
     |> City.changeset(attrs)
+    |> validate_country_exists(attrs)
     |> Repo.update()
   end
 
@@ -62,14 +63,17 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       {:error, :has_venues}
   """
   def delete_city(city_id) do
-    city = get_city_with_venues(city_id)
+    city = Repo.get!(City, city_id)
+    changeset = City.delete_changeset(city)
 
-    venue_count = get_venue_count(city)
-
-    if venue_count > 0 do
-      {:error, :has_venues}
-    else
-      Repo.delete(city)
+    case Repo.delete(changeset) do
+      {:ok, _} = result -> result
+      {:error, changeset} ->
+        if Keyword.has_key?(changeset.errors, :id) do
+          {:error, :has_venues}
+        else
+          {:error, changeset}
+        end
     end
   end
 
@@ -188,14 +192,4 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   end
 
   defp validate_country_exists(changeset, _attrs), do: changeset
-
-  defp get_city_with_venues(city_id) do
-    Repo.get!(City, city_id)
-    |> Repo.preload(:venues)
-  end
-
-  defp get_venue_count(%City{} = city) do
-    from(v in "venues", where: v.city_id == ^city.id, select: count(v.id))
-    |> Repo.one()
-  end
 end

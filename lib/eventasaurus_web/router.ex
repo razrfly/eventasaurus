@@ -11,28 +11,9 @@ defmodule EventasaurusWeb.Router do
     # Import Oban Web UI router functions
     import Oban.Web.Router
 
-    # Development tools
+    # Development tools (debugging and testing utilities only)
     scope "/dev", EventasaurusWeb do
       pipe_through :browser
-
-      # Oban Web UI for monitoring background jobs (dev - no auth)
-      oban_dashboard("/oban")
-
-      # Discovery Dashboard (dev - no auth)
-      live "/imports", Admin.DiscoveryDashboardLive
-
-      # Geocoding Cost Dashboard (dev - no auth)
-      live "/geocoding", Admin.GeocodingDashboardLive
-
-      # Category Management (dev - no auth)
-      live "/categories", Admin.CategoryIndexLive, :index
-      live "/categories/new", Admin.CategoryFormLive, :new
-      live "/categories/:id/edit", Admin.CategoryFormLive, :edit
-
-      # Source Management (dev - no auth)
-      live "/sources", Admin.SourceIndexLive, :index
-      live "/sources/new", Admin.SourceFormLive, :new
-      live "/sources/:id/edit", Admin.SourceFormLive, :edit
 
       # Test page for plug-level 404 rendering (matches ValidateCity behavior)
       get "/test-404", Dev.Test404Controller, :test_plug_404
@@ -44,6 +25,9 @@ defmodule EventasaurusWeb.Router do
     # Admin routes (dev - no auth, mirrors production paths)
     scope "/admin", EventasaurusWeb do
       pipe_through :browser
+
+      # Oban Web UI for monitoring background jobs (dev - no auth)
+      oban_dashboard("/oban")
 
       # Discovery Dashboard (dev - no auth)
       live "/imports", Admin.DiscoveryDashboardLive
