@@ -88,6 +88,22 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           price_diversity_score: 100,
           price_diversity_warning: nil
         },
+        description_quality: 100,
+        description_metrics: %{
+          has_description: 0,
+          short_descriptions: 0,
+          adequate_descriptions: 0,
+          detailed_descriptions: 0,
+          avg_length: 0
+        },
+        performer_completeness: 100,
+        performer_metrics: %{
+          events_with_performers: 0,
+          events_single_performer: 0,
+          events_multiple_performers: 0,
+          total_performers: 0,
+          avg_performers_per_event: 0.0
+        },
         supports_translations: false
       }
     else
@@ -124,6 +140,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       # Calculate price completeness
       price_metrics = calculate_price_completeness(source_id)
 
+      # Calculate description quality
+      description_metrics = calculate_description_quality(source_id)
+
+      # Calculate performer completeness
+      performer_metrics = calculate_performer_completeness(source_id)
+
       quality_score =
         calculate_quality_score(
           venue_completeness,
@@ -131,6 +153,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           category_completeness,
           category_specificity,
           price_metrics.price_completeness,
+          description_metrics.description_quality,
+          performer_metrics.performer_completeness,
           translation_completeness
         )
 
@@ -158,6 +182,22 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           unique_prices: price_metrics.unique_prices,
           price_diversity_score: price_metrics.price_diversity_score,
           price_diversity_warning: price_metrics.price_diversity_warning
+        },
+        description_quality: description_metrics.description_quality,
+        description_metrics: %{
+          has_description: description_metrics.has_description,
+          short_descriptions: description_metrics.short_descriptions,
+          adequate_descriptions: description_metrics.adequate_descriptions,
+          detailed_descriptions: description_metrics.detailed_descriptions,
+          avg_length: description_metrics.avg_length
+        },
+        performer_completeness: performer_metrics.performer_completeness,
+        performer_metrics: %{
+          events_with_performers: performer_metrics.events_with_performers,
+          events_single_performer: performer_metrics.events_single_performer,
+          events_multiple_performers: performer_metrics.events_multiple_performers,
+          total_performers: performer_metrics.total_performers,
+          avg_performers_per_event: performer_metrics.avg_performers_per_event
         },
         translation_completeness: translation_completeness,
         supports_translations: has_translations
@@ -257,6 +297,30 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         if quality.price_metrics.price_diversity_warning do
           [
             "⚠️ #{quality.price_metrics.price_diversity_warning}"
+            | recommendations
+          ]
+        else
+          recommendations
+        end
+
+      # Add description quality recommendation if quality is low
+      recommendations =
+        if quality.description_quality < 60 do
+          missing = quality.total_events - quality.description_metrics.has_description
+          [
+            "Improve event descriptions - #{missing} events missing descriptions, #{quality.description_metrics.short_descriptions} too short"
+            | recommendations
+          ]
+        else
+          recommendations
+        end
+
+      # Add performer data recommendation if completeness is low
+      recommendations =
+        if quality.performer_completeness < 50 do
+          missing = quality.total_events - quality.performer_metrics.events_with_performers
+          [
+            "Add performer information - #{missing} events missing artist/performer data"
             | recommendations
           ]
         else
@@ -509,8 +573,9 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: %{
           total: count(pes.id),
           has_price_info: fragment(
-            "COUNT(CASE WHEN ? IS NOT NULL OR ? = true THEN 1 END)",
+            "COUNT(CASE WHEN ? IS NOT NULL OR ? IS NOT NULL OR ? = true THEN 1 END)",
             pes.min_price,
+            pes.max_price,
             pes.is_free
           ),
           has_currency: fragment(
@@ -662,6 +727,222 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     end
   end
 
+  # Calculate description quality score.
+  #
+  # Measures description richness based on character length across all languages:
+  # - Missing: No description in any language (0 points)
+  # - Too short (<50 chars): Poor quality, lacks context (25 points)
+  # - Adequate (50-200 chars): Good quality, sufficient detail (75 points)
+  # - Detailed (>200 chars): Excellent quality, comprehensive (100 points)
+  #
+  # Analyzes all languages in description_translations and uses best score.
+  defp calculate_description_quality(source_id) do
+    query =
+      from pes in PublicEventSource,
+        where: pes.source_id == ^source_id,
+        select: %{
+          total: count(pes.id),
+          # Has any description
+          has_description:
+            fragment(
+              """
+              COUNT(CASE
+                WHEN ? IS NOT NULL
+                AND jsonb_typeof(?) = 'object'
+                AND (SELECT COUNT(*) FROM jsonb_object_keys(?)) > 0
+                THEN 1
+              END)
+              """,
+              pes.description_translations,
+              pes.description_translations,
+              pes.description_translations
+            ),
+          # Short descriptions (<50 chars)
+          short_descriptions:
+            fragment(
+              """
+              COUNT(CASE
+                WHEN ? IS NOT NULL
+                AND jsonb_typeof(?) = 'object'
+                AND (
+                  SELECT MAX(LENGTH(value::text))
+                  FROM jsonb_each_text(?)
+                ) < 50
+                THEN 1
+              END)
+              """,
+              pes.description_translations,
+              pes.description_translations,
+              pes.description_translations
+            ),
+          # Adequate descriptions (50-200 chars)
+          adequate_descriptions:
+            fragment(
+              """
+              COUNT(CASE
+                WHEN ? IS NOT NULL
+                AND jsonb_typeof(?) = 'object'
+                AND (
+                  SELECT MAX(LENGTH(value::text))
+                  FROM jsonb_each_text(?)
+                ) BETWEEN 50 AND 200
+                THEN 1
+              END)
+              """,
+              pes.description_translations,
+              pes.description_translations,
+              pes.description_translations
+            ),
+          # Detailed descriptions (>200 chars)
+          detailed_descriptions:
+            fragment(
+              """
+              COUNT(CASE
+                WHEN ? IS NOT NULL
+                AND jsonb_typeof(?) = 'object'
+                AND (
+                  SELECT MAX(LENGTH(value::text))
+                  FROM jsonb_each_text(?)
+                ) > 200
+                THEN 1
+              END)
+              """,
+              pes.description_translations,
+              pes.description_translations,
+              pes.description_translations
+            ),
+          # Average max length across all events
+          avg_max_length:
+            fragment(
+              """
+              AVG(
+                CASE
+                  WHEN ? IS NOT NULL
+                  AND jsonb_typeof(?) = 'object'
+                  THEN (
+                    SELECT MAX(LENGTH(value::text))
+                    FROM jsonb_each_text(?)
+                  )
+                  ELSE 0
+                END
+              )
+              """,
+              pes.description_translations,
+              pes.description_translations,
+              pes.description_translations
+            )
+        }
+
+    stats = Repo.one(query)
+
+    if stats.total == 0 do
+      %{
+        description_quality: 100,
+        total_events: 0,
+        has_description: 0,
+        short_descriptions: 0,
+        adequate_descriptions: 0,
+        detailed_descriptions: 0,
+        avg_length: 0
+      }
+    else
+      # Calculate weighted quality score
+      # Missing: 0 points, Short: 25 points, Adequate: 75 points, Detailed: 100 points
+      missing = stats.total - stats.has_description
+
+      total_score =
+        missing * 0 +
+          stats.short_descriptions * 25 +
+          stats.adequate_descriptions * 75 +
+          stats.detailed_descriptions * 100
+
+      description_quality = round(total_score / stats.total)
+
+      avg_length =
+        case stats.avg_max_length do
+          nil -> 0
+          %Decimal{} = decimal -> decimal |> Decimal.round(0) |> Decimal.to_integer()
+          value when is_float(value) -> round(value)
+          value when is_integer(value) -> value
+          _ -> 0
+        end
+
+      %{
+        description_quality: description_quality,
+        total_events: stats.total,
+        has_description: stats.has_description,
+        short_descriptions: stats.short_descriptions,
+        adequate_descriptions: stats.adequate_descriptions,
+        detailed_descriptions: stats.detailed_descriptions,
+        avg_length: avg_length
+      }
+    end
+  end
+
+  # Calculate performer data completeness.
+  #
+  # Measures how well performer/artist information is populated:
+  # - Events with performers vs without
+  # - Single vs multiple performers
+  # - Average performers per event
+  #
+  # Performer data is crucial for music events, theater, and performances.
+  defp calculate_performer_completeness(source_id) do
+    query =
+      from e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        left_join: pep in "public_event_performers",
+        on: pep.event_id == e.id,
+        where: pes.source_id == ^source_id,
+        group_by: e.id,
+        select: %{
+          event_id: e.id,
+          performer_count: count(pep.performer_id)
+        }
+
+    performer_data = Repo.all(query)
+    total_events = length(performer_data)
+
+    if total_events == 0 do
+      %{
+        performer_completeness: 100,
+        total_events: 0,
+        events_with_performers: 0,
+        events_single_performer: 0,
+        events_multiple_performers: 0,
+        total_performers: 0,
+        avg_performers_per_event: 0.0
+      }
+    else
+      # Calculate metrics
+      events_with_performers = Enum.count(performer_data, fn d -> d.performer_count > 0 end)
+      events_single = Enum.count(performer_data, fn d -> d.performer_count == 1 end)
+      events_multiple = Enum.count(performer_data, fn d -> d.performer_count > 1 end)
+      total_performers = Enum.reduce(performer_data, 0, fn d, acc -> acc + d.performer_count end)
+
+      avg_performers =
+        if events_with_performers > 0 do
+          Float.round(total_performers / events_with_performers, 1)
+        else
+          0.0
+        end
+
+      # Completeness = % of events with at least one performer
+      performer_completeness = round((events_with_performers / total_events) * 100)
+
+      %{
+        performer_completeness: performer_completeness,
+        total_events: total_events,
+        events_with_performers: events_with_performers,
+        events_single_performer: events_single,
+        events_multiple_performers: events_multiple,
+        total_performers: total_performers,
+        avg_performers_per_event: avg_performers
+      }
+    end
+  end
+
   defp count_multilingual_events(source_id) do
     # Count events that have multiple languages in title_translations OR description_translations
     # Uses jsonb_object_keys() to count the number of language keys
@@ -784,26 +1065,32 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
          category_completeness,
          category_specificity,
          price_completeness,
+         description_quality,
+         performer_completeness,
          translation_completeness
        ) do
     if translation_completeness do
-      # 6 dimensions (with translations)
-      # Weights: venue 20%, image 18%, category 18%, specificity 18%, price 13%, translation 13%
-      (venue_completeness * 0.20 +
-       image_completeness * 0.18 +
-       category_completeness * 0.18 +
-       category_specificity * 0.18 +
-       price_completeness * 0.13 +
-       translation_completeness * 0.13)
+      # 8 dimensions (with translations)
+      # Weights: venue 18%, image 16%, category 16%, specificity 16%, price 12%, description 12%, performer 8%, translation 2%
+      (venue_completeness * 0.18 +
+       image_completeness * 0.16 +
+       category_completeness * 0.16 +
+       category_specificity * 0.16 +
+       price_completeness * 0.12 +
+       description_quality * 0.12 +
+       performer_completeness * 0.08 +
+       translation_completeness * 0.02)
       |> round()
     else
-      # 5 dimensions (without translations)
-      # Weights: venue 25%, image 22%, category 20%, specificity 20%, price 13%
-      (venue_completeness * 0.25 +
-       image_completeness * 0.22 +
-       category_completeness * 0.20 +
-       category_specificity * 0.20 +
-       price_completeness * 0.13)
+      # 7 dimensions (without translations)
+      # Weights: venue 23%, image 20%, category 18%, specificity 18%, price 12%, description 9%, performer 0%
+      (venue_completeness * 0.23 +
+       image_completeness * 0.20 +
+       category_completeness * 0.18 +
+       category_specificity * 0.18 +
+       price_completeness * 0.12 +
+       description_quality * 0.09 +
+       performer_completeness * 0.00)
       |> round()
     end
   end
