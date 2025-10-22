@@ -122,17 +122,17 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
   end
 
   defp extract_geocode_result(result) do
-    # Extract coordinates - new API has them at root level
-    lat = Map.get(result, "latitude")
-    lng = Map.get(result, "longitude")
+    # Extract coordinates - try root level first, fallback to geocodes.main
+    lat = Map.get(result, "latitude") || get_in(result, ["geocodes", "main", "latitude"])
+    lng = Map.get(result, "longitude") || get_in(result, ["geocodes", "main", "longitude"])
 
     # Extract location information
     location = get_in(result, ["location"]) || %{}
     city = Map.get(location, "locality") || Map.get(location, "region")
     country = Map.get(location, "country")
 
-    # Extract Foursquare place ID (fsq_place_id in new API)
-    place_id = Map.get(result, "fsq_place_id")
+    # Extract Foursquare place ID (try fsq_id first, fallback to fsq_place_id)
+    place_id = Map.get(result, "fsq_id") || Map.get(result, "fsq_place_id")
 
     cond do
       is_nil(lat) or is_nil(lng) ->
@@ -255,7 +255,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
         else
           # Just take first result (closest to coordinates)
           first = List.first(results)
-          Map.get(first, "fsq_place_id")
+          Map.get(first, "fsq_id") || Map.get(first, "fsq_place_id")
         end
 
         if provider_id do
@@ -299,9 +299,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
       nil ->
         # No name match, just use first result (closest by distance)
         first = List.first(results)
-        Map.get(first, "fsq_place_id")
+        Map.get(first, "fsq_id") || Map.get(first, "fsq_place_id")
       result ->
-        Map.get(result, "fsq_place_id")
+        Map.get(result, "fsq_id") || Map.get(result, "fsq_place_id")
     end
   end
 

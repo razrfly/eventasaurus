@@ -414,7 +414,11 @@ defmodule EventasaurusApp.Venues do
   def merge_venues(primary_venue_id, duplicate_venue_ids) when is_list(duplicate_venue_ids) do
     Repo.transaction(fn ->
       # Get primary venue
-      primary = Repo.get!(Venue, primary_venue_id)
+      primary = Repo.get(Venue, primary_venue_id)
+
+      if is_nil(primary) do
+        Repo.rollback("Primary venue not found")
+      end
 
       # Get duplicate venues
       duplicates =

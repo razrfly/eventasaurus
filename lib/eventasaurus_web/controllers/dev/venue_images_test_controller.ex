@@ -315,7 +315,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
                     message: "Successfully fetched #{length(images)} images"
                   }
                 ],
-                cost: calculate_cost(provider, 1)
+                cost: calculate_cost(provider, length(images))
               }
 
             {:error, reason} ->

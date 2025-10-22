@@ -40,6 +40,57 @@ uk = case Repo.get_by(Country, code: "GB") do
     existing
 end
 
+# Ensure we have Australia as a country
+australia = case Repo.get_by(Country, code: "AU") do
+  nil ->
+    %Country{}
+    |> Country.changeset(%{
+      name: "Australia",
+      code: "AU",
+      slug: "australia"
+    })
+    |> Repo.insert!()
+    |> tap(fn _ -> IO.puts("  ✅ Created country: Australia") end)
+
+  existing ->
+    IO.puts("  ℹ️  Country already exists: Australia")
+    existing
+end
+
+# Ensure we have United States as a country
+us = case Repo.get_by(Country, code: "US") do
+  nil ->
+    %Country{}
+    |> Country.changeset(%{
+      name: "United States of America",
+      code: "US",
+      slug: "united-states"
+    })
+    |> Repo.insert!()
+    |> tap(fn _ -> IO.puts("  ✅ Created country: United States of America") end)
+
+  existing ->
+    IO.puts("  ℹ️  Country already exists: United States of America")
+    existing
+end
+
+# Ensure we have France as a country
+france = case Repo.get_by(Country, code: "FR") do
+  nil ->
+    %Country{}
+    |> Country.changeset(%{
+      name: "France",
+      code: "FR",
+      slug: "france"
+    })
+    |> Repo.insert!()
+    |> tap(fn _ -> IO.puts("  ✅ Created country: France") end)
+
+  existing ->
+    IO.puts("  ℹ️  Country already exists: France")
+    existing
+end
+
 # Define cities with their coordinates
 cities_data = [
   # United Kingdom
@@ -49,6 +100,30 @@ cities_data = [
     latitude: 51.5074,
     longitude: -0.1278,
     country_id: uk.id
+  },
+  # Australia
+  %{
+    name: "Melbourne",
+    slug: "melbourne",
+    latitude: -37.8174,
+    longitude: 144.9676,
+    country_id: australia.id
+  },
+  # United States
+  %{
+    name: "Austin",
+    slug: "austin",
+    latitude: 30.1356,
+    longitude: -97.6366,
+    country_id: us.id
+  },
+  # France
+  %{
+    name: "Paris",
+    slug: "paris",
+    latitude: 48.8566,
+    longitude: 2.3522,
+    country_id: france.id
   },
   # Poland
   %{
