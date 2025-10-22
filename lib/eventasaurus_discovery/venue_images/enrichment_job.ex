@@ -133,8 +133,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       # Prioritize venues with coordinates and provider IDs
       where: not is_nil(v.latitude) and not is_nil(v.longitude),
       where: fragment("jsonb_typeof(?) = 'object'", v.provider_ids),
-      # Check if provider_ids has at least one key (use jsonb_object_length instead of jsonb_object_keys)
-      where: fragment("jsonb_object_length(?) > 0", v.provider_ids),
+      # Check if provider_ids has at least one key (count keys using jsonb_object_keys)
+      where: fragment("(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 0", v.provider_ids),
       order_by: [
         desc:
           fragment(

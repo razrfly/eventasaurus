@@ -2,21 +2,6 @@ defmodule EventasaurusApp.Repo.Migrations.AddImageProvidersAndPriorities do
   use Ecto.Migration
 
   def up do
-    # Add Unsplash as a fallback image provider
-    execute """
-    INSERT INTO venue_data_providers (name, is_active, capabilities, priorities, metadata, inserted_at, updated_at)
-    VALUES (
-      'unsplash',
-      true,
-      '{"images": true}',
-      '{"images": 99}',
-      '{"rate_limit": "50/hour", "free_tier": true, "requires_attribution": true}',
-      NOW(),
-      NOW()
-    )
-    ON CONFLICT (name) DO NOTHING;
-    """
-
     # Update Geoapify to add images priority
     execute """
     UPDATE venue_data_providers
@@ -40,9 +25,6 @@ defmodule EventasaurusApp.Repo.Migrations.AddImageProvidersAndPriorities do
   end
 
   def down do
-    # Remove Unsplash provider
-    execute "DELETE FROM venue_data_providers WHERE name = 'unsplash';"
-
     # Remove images priority from providers
     execute """
     UPDATE venue_data_providers

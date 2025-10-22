@@ -19,7 +19,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
   ## Capabilities
 
   - **Geocoding**: Geocode API for coordinates
-  - **Images**: Places API for venue images (limited)
+  - **Images**: NOT SUPPORTED - Geoapify does not provide an images/photos API
   - **Reviews**: Not implemented
   - **Hours**: Not implemented
 
@@ -39,7 +39,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
   def capabilities do
     %{
       "geocoding" => true,
-      "images" => true,
+      "images" => false,
       "reviews" => false,
       "hours" => false
     }
@@ -169,104 +169,113 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
     end
   end
 
-  # Images Implementation
+  # Search by Coordinates (for backfill)
 
-  @impl EventasaurusDiscovery.Geocoding.MultiProvider
-  def get_images(place_id) when is_binary(place_id) do
+  @doc """
+  Searches for a venue by coordinates using reverse geocoding.
+
+  Used for backfilling provider IDs when we have venue coordinates but no Geoapify ID.
+
+  ## Parameters
+  - `lat` - Latitude
+  - `lng` - Longitude
+  - `venue_name` - Optional venue name (unused, for API consistency)
+
+  ## Returns
+  - `{:ok, provider_id}` - Found place ID
+  - `{:error, reason}` - No venue found or API error
+  """
+  def search_by_coordinates(lat, lng, _venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
     api_key = get_api_key()
 
     if is_nil(api_key) do
       Logger.error("❌ GEOAPIFY_API_KEY not configured")
       {:error, :api_key_missing}
     else
-      Logger.debug("📸 Geoapify images request: #{place_id}")
-      fetch_place_images(place_id, api_key)
+      Logger.debug("🔍 Geoapify reverse geocode: #{lat},#{lng}")
+      do_reverse_geocode(lat, lng, api_key)
     end
   end
 
-  def get_images(_), do: {:error, :invalid_place_id}
-
-  defp fetch_place_images(place_id, api_key) do
-    # Geoapify Places Details API
-    url = "https://api.geoapify.com/v2/place-details"
+  defp do_reverse_geocode(lat, lng, api_key) do
+    # Geoapify reverse geocoding API
+    url = "https://api.geoapify.com/v1/geocode/reverse"
 
     params = [
-      id: place_id,
-      apiKey: api_key
+      lat: lat,
+      lon: lng,
+      apiKey: api_key,
+      limit: 1,
+      format: "json"
     ]
 
     case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        parse_images_response(body)
-
-      {:ok, %HTTPoison.Response{status_code: 404}} ->
-        Logger.debug("📍 Geoapify: place not found")
-        {:error, :no_results}
+        parse_reverse_response(body)
 
       {:ok, %HTTPoison.Response{status_code: 401}} ->
-        Logger.error("❌ Geoapify images authentication failed")
+        Logger.error("❌ Geoapify reverse geocode authentication failed")
         {:error, :api_error}
 
       {:ok, %HTTPoison.Response{status_code: 429}} ->
-        Logger.warning("⚠️ Geoapify images rate limited")
+        Logger.warning("⚠️ Geoapify reverse geocode rate limited")
         {:error, :rate_limited}
 
       {:ok, %HTTPoison.Response{status_code: status}} ->
-        Logger.error("❌ Geoapify images HTTP error: #{status}")
+        Logger.error("❌ Geoapify reverse geocode HTTP error: #{status}")
         {:error, :api_error}
 
       {:error, %HTTPoison.Error{reason: :timeout}} ->
-        Logger.warning("⏱️ Geoapify images request timed out")
+        Logger.warning("⏱️ Geoapify reverse geocode timed out")
         {:error, :timeout}
 
       {:error, reason} ->
-        Logger.error("❌ Geoapify images request failed: #{inspect(reason)}")
+        Logger.error("❌ Geoapify reverse geocode failed: #{inspect(reason)}")
         {:error, :network_error}
     end
   end
 
-  defp parse_images_response(body) do
+  defp parse_reverse_response(body) do
     case Jason.decode(body) do
-      {:ok, %{"features" => [feature | _]}} ->
-        properties = get_in(feature, ["properties"]) || %{}
-
-        # Geoapify may have image URLs in properties
-        images =
-          case Map.get(properties, "image") do
-            url when is_binary(url) ->
-              [
-                %{
-                  url: url,
-                  width: nil,
-                  height: nil,
-                  attribution: "Geoapify",
-                  source_url: nil
-                }
-              ]
-
-            _ ->
-              []
+      {:ok, %{"results" => [first_result | _]}} ->
+        # Extract place_id from result
+        place_id =
+          case Map.get(first_result, "place_id") do
+            nil -> nil
+            id when is_integer(id) -> Integer.to_string(id)
+            id when is_binary(id) -> id
+            other -> to_string(other)
           end
 
-        if Enum.empty?(images) do
-          Logger.debug("📸 Geoapify: no images available")
-          {:error, :no_images}
+        if place_id do
+          Logger.debug("✅ Geoapify found place: #{place_id}")
+          {:ok, place_id}
         else
-          {:ok, images}
+          Logger.debug("📍 Geoapify: no place_id in response")
+          {:error, :no_results}
         end
 
-      {:ok, %{"features" => []}} ->
-        Logger.debug("📸 Geoapify: no results found")
+      {:ok, %{"results" => []}} ->
+        Logger.debug("📍 Geoapify: no results found")
         {:error, :no_results}
 
-      {:ok, _other} ->
-        Logger.debug("📸 Geoapify: place has no images")
-        {:error, :no_images}
+      {:ok, other} ->
+        Logger.error("❌ Geoapify reverse: unexpected response: #{inspect(other)}")
+        {:error, :invalid_response}
 
       {:error, reason} ->
-        Logger.error("❌ Geoapify images: JSON decode error: #{inspect(reason)}")
+        Logger.error("❌ Geoapify reverse: JSON decode error: #{inspect(reason)}")
         {:error, :invalid_response}
     end
+  end
+
+  # Images Implementation - NOT SUPPORTED
+  # Geoapify does not provide an images/photos API according to their official documentation
+
+  @impl EventasaurusDiscovery.Geocoding.MultiProvider
+  def get_images(_place_id) do
+    {:error, :not_supported}
   end
 
   defp get_api_key do

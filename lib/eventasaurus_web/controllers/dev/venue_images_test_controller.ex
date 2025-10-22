@@ -19,15 +19,354 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
   alias EventasaurusApp.{Repo, Venues.Venue}
   import Ecto.Query
 
+  # Suppress dialyzer warnings for dynamic module calls (runtime module resolution)
+  @dialyzer {:nowarn_function, fetch_provider_id_dynamically: 2}
+  @dialyzer {:nowarn_function, fetch_images_from_provider: 3}
+
   def index(conn, _params) do
+    # Get testable venues (venues with provider_ids for manual testing)
+    testable_venues = get_testable_venues()
+
     render(conn, :index,
       system_status: get_system_status(),
       global_stats: get_global_statistics(),
       provider_stats: get_provider_statistics(),
       sample_venues: get_sample_enriched_venues(),
       cost_analysis: get_cost_analysis(),
-      staleness_monitor: get_staleness_monitor()
+      staleness_monitor: get_staleness_monitor(),
+      testable_venues: testable_venues
     )
+  end
+
+  @doc """
+  POST /dev/venue-images/test-enrichment
+  Synchronously test image enrichment for a specific venue.
+  """
+  def test_enrichment(conn, params) do
+    venue_id = params["venue_id"]
+    provider_filter = params["provider"]
+
+    case Repo.get(Venue, venue_id) do
+      nil ->
+        json(conn, %{success: false, error: "Venue not found"})
+
+      venue ->
+        # Test enrichment synchronously
+        result = test_venue_enrichment(venue, provider_filter)
+        json(conn, result)
+    end
+  end
+
+  @doc """
+  PUT /dev/venue-images/update-provider-ids
+  Update provider_ids for a venue (dev only).
+  """
+  def update_provider_ids(conn, params) do
+    venue_id = params["venue_id"]
+    provider_ids = params["provider_ids"] || %{}
+
+    case Repo.get(Venue, venue_id) do
+      nil ->
+        json(conn, %{success: false, error: "Venue not found"})
+
+      venue ->
+        case Repo.update(Ecto.Changeset.change(venue, provider_ids: provider_ids)) do
+          {:ok, updated_venue} ->
+            json(conn, %{
+              success: true,
+              venue_id: updated_venue.id,
+              provider_ids: updated_venue.provider_ids
+            })
+
+          {:error, changeset} ->
+            json(conn, %{
+              success: false,
+              error: "Failed to update venue",
+              details: inspect(changeset.errors)
+            })
+        end
+    end
+  end
+
+  @doc """
+  POST /dev/venue-images/save-discovered-ids
+  Save dynamically discovered provider IDs to venue.
+  """
+  def save_discovered_ids(conn, params) do
+    venue_id = params["venue_id"]
+    discovered_ids = params["discovered_ids"] || %{}
+
+    case Repo.get(Venue, venue_id) do
+      nil ->
+        json(conn, %{success: false, error: "Venue not found"})
+
+      venue ->
+        # Merge discovered IDs with existing provider_ids
+        existing_ids = venue.provider_ids || %{}
+        updated_ids = Map.merge(existing_ids, discovered_ids)
+
+        case Repo.update(Ecto.Changeset.change(venue, provider_ids: updated_ids)) do
+          {:ok, updated_venue} ->
+            json(conn, %{
+              success: true,
+              venue_id: updated_venue.id,
+              provider_ids: updated_venue.provider_ids,
+              saved_count: map_size(discovered_ids)
+            })
+
+          {:error, changeset} ->
+            json(conn, %{
+              success: false,
+              error: "Failed to save provider IDs",
+              details: inspect(changeset.errors)
+            })
+        end
+    end
+  end
+
+  # ========================================
+  # Manual Testing Functions
+  # ========================================
+
+  defp get_testable_venues do
+    # Get venues that have provider_ids populated
+    from(v in Venue,
+      where: fragment("? IS NOT NULL", v.provider_ids),
+      where: fragment("jsonb_typeof(?) = 'object'", v.provider_ids),
+      where: fragment("(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 0", v.provider_ids),
+      order_by: [desc: v.id],
+      limit: 50
+    )
+    |> Repo.all()
+    |> Enum.map(fn venue ->
+      %{
+        id: venue.id,
+        name: venue.name,
+        city: nil,
+        provider_ids: venue.provider_ids || %{},
+        has_images: venue.venue_images && length(venue.venue_images) > 0
+      }
+    end)
+  end
+
+  defp test_venue_enrichment(venue, provider_filter) do
+    start_time = System.monotonic_time(:millisecond)
+
+    # Get active image providers
+    providers =
+      from(p in GeocodingProvider,
+        where: p.is_active == true,
+        where: fragment("? @> ?", p.capabilities, ^%{"images" => true}),
+        order_by: [asc: fragment("COALESCE((? ->> 'images')::int, 99)", p.priorities)]
+      )
+      |> Repo.all()
+      |> then(fn providers ->
+        if provider_filter do
+          Enum.filter(providers, &(&1.name == provider_filter))
+        else
+          providers
+        end
+      end)
+
+    # Test each provider
+    results =
+      Enum.map(providers, fn provider ->
+        {provider.name, test_provider(venue, provider)}
+      end)
+      |> Enum.into(%{})
+
+    end_time = System.monotonic_time(:millisecond)
+    duration_ms = end_time - start_time
+
+    # Aggregate results
+    total_images = Enum.reduce(results, 0, fn {_provider, result}, acc ->
+      acc + length(Map.get(result, :images, []))
+    end)
+
+    total_cost = Enum.reduce(results, 0.0, fn {_provider, result}, acc ->
+      acc + Map.get(result, :cost, 0.0)
+    end)
+
+    # Collect dynamically discovered provider IDs
+    discovered_ids = Enum.reduce(results, %{}, fn {provider_name, result}, acc ->
+      if Map.get(result, :id_source) == :dynamic and Map.get(result, :provider_id) do
+        Map.put(acc, provider_name, result.provider_id)
+      else
+        acc
+      end
+    end)
+
+    %{
+      success: true,
+      venue_id: venue.id,
+      venue_name: venue.name,
+      results: results,
+      total_images: total_images,
+      total_cost: total_cost,
+      duration_ms: duration_ms,
+      discovered_ids: discovered_ids,
+      has_discovered_ids: map_size(discovered_ids) > 0
+    }
+  end
+
+  defp test_provider(venue, provider) do
+    start_time = System.monotonic_time(:millisecond)
+
+    # Get provider ID for this venue - use Map.get for string-keyed JSONB maps
+    stored_provider_id = Map.get(venue.provider_ids, provider.name)
+
+    # Determine ID and source (stored or dynamic)
+    {provider_id, id_source} = if stored_provider_id do
+      {stored_provider_id, :stored}
+    else
+      # Try to fetch provider ID dynamically using coordinates
+      case fetch_provider_id_dynamically(venue, provider) do
+        {:ok, dynamic_id} -> {dynamic_id, :dynamic}
+        {:error, _reason} -> {nil, :unavailable}
+      end
+    end
+
+    if provider_id do
+      # Try to fetch images from this provider
+      result = fetch_images_from_provider(venue, provider, provider_id)
+
+      end_time = System.monotonic_time(:millisecond)
+      duration_ms = end_time - start_time
+
+      Map.merge(result, %{
+        provider_id: provider_id,
+        id_source: id_source,  # Track how we got the ID
+        duration_ms: duration_ms
+      })
+    else
+      %{
+        success: false,
+        error: "Could not fetch provider ID (venue not found or API unavailable)",
+        images: [],
+        api_calls: [],
+        cost: 0.0,
+        id_source: :unavailable
+      }
+    end
+  end
+
+  defp fetch_provider_id_dynamically(venue, provider) do
+    require Logger
+
+    # Check if venue has coordinates
+    if is_nil(venue.latitude) or is_nil(venue.longitude) do
+      Logger.debug("❌ fetch_provider_id_dynamically: no coordinates for venue #{venue.id}")
+      {:error, :no_coordinates}
+    else
+      case get_adapter_module(provider.name) do
+        nil ->
+          Logger.debug("❌ fetch_provider_id_dynamically: no adapter module for #{provider.name}")
+          {:error, :not_supported}
+
+        provider_module ->
+          # Try calling search_by_coordinates/3 directly without function_exported? check
+          # (function_exported? returns false for functions with default parameters in some cases)
+          try do
+            Logger.debug("🔍 fetch_provider_id_dynamically: calling #{provider.name}.search_by_coordinates(#{venue.latitude}, #{venue.longitude}, #{inspect(venue.name)})")
+            result = apply(provider_module, :search_by_coordinates, [
+              venue.latitude,
+              venue.longitude,
+              venue.name
+            ])
+            Logger.debug("✅ fetch_provider_id_dynamically result: #{inspect(result)}")
+            result
+          rescue
+            UndefinedFunctionError ->
+              Logger.debug("❌ fetch_provider_id_dynamically: search_by_coordinates/3 not implemented for #{provider.name}")
+              {:error, :not_supported}
+            e ->
+              Logger.error("❌ fetch_provider_id_dynamically exception: #{Exception.message(e)}")
+              {:error, {:exception, Exception.message(e)}}
+          end
+      end
+    end
+  end
+
+  defp fetch_images_from_provider(_venue, provider, provider_id) do
+    # Call the geocoding provider's get_images/1 function
+    case get_adapter_module(provider.name) do
+      nil ->
+        %{
+          success: false,
+          error: "Provider module not found for #{provider.name}",
+          images: [],
+          api_calls: [],
+          cost: 0.0
+        }
+
+      provider_module ->
+        try do
+          # Geocoding providers implement get_images/1 (takes place_id only)
+          case apply(provider_module, :get_images, [provider_id]) do
+            {:ok, images} ->
+              %{
+                success: true,
+                images: images,
+                images_found: length(images),
+                api_calls: [
+                  %{
+                    provider: provider.name,
+                    status: 200,
+                    message: "Successfully fetched #{length(images)} images"
+                  }
+                ],
+                cost: calculate_cost(provider, 1)
+              }
+
+            {:error, reason} ->
+              %{
+                success: false,
+                error: inspect(reason),
+                images: [],
+                api_calls: [
+                  %{
+                    provider: provider.name,
+                    status: :error,
+                    message: inspect(reason)
+                  }
+                ],
+                cost: 0.0
+              }
+          end
+        rescue
+          e ->
+            %{
+              success: false,
+              error: Exception.message(e),
+              images: [],
+              api_calls: [
+                %{
+                  provider: provider.name,
+                  status: :exception,
+                  message: Exception.message(e),
+                  stacktrace: Exception.format_stacktrace(__STACKTRACE__)
+                }
+              ],
+              cost: 0.0
+            }
+        end
+    end
+  end
+
+  defp get_adapter_module(provider_name) do
+    # These are geocoding providers that also implement get_images/1
+    case provider_name do
+      "here" -> EventasaurusDiscovery.Geocoding.Providers.Here
+      "geoapify" -> EventasaurusDiscovery.Geocoding.Providers.Geoapify
+      "foursquare" -> EventasaurusDiscovery.Geocoding.Providers.Foursquare
+      "google_places" -> EventasaurusDiscovery.Geocoding.Providers.GooglePlaces
+      _ -> nil
+    end
+  end
+
+  defp calculate_cost(provider, api_calls) do
+    cost_per_call = get_in(provider.metadata, ["cost_per_image"]) || 0.0
+    cost_per_call * api_calls
   end
 
   # ========================================

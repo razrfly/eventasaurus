@@ -110,4 +110,20 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestHTML do
   """
   def freshness_text(true), do: "Stale"
   def freshness_text(false), do: "Fresh"
+
+  @doc """
+  Get ID source badge class based on source type.
+  """
+  def id_source_badge_class(:stored), do: "bg-blue-100 text-blue-800"
+  def id_source_badge_class(:dynamic), do: "bg-yellow-100 text-yellow-800"
+  def id_source_badge_class(:unavailable), do: "bg-gray-100 text-gray-800"
+  def id_source_badge_class(_), do: "bg-gray-100 text-gray-800"
+
+  @doc """
+  Get ID source text.
+  """
+  def id_source_text(:stored), do: "Stored"
+  def id_source_text(:dynamic), do: "Dynamic"
+  def id_source_text(:unavailable), do: "Unavailable"
+  def id_source_text(_), do: "Unknown"
 end

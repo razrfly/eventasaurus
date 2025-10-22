@@ -252,6 +252,146 @@
       </div>
     </div>
 
+    <!-- Manual Testing UI -->
+    <div class="mb-8 bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">Manual Testing Controls</h2>
+
+      <!-- Venue Selector -->
+      <div class="mb-6">
+        <label for="venue-select" class="block text-sm font-medium text-gray-700 mb-2">
+          Select Test Venue
+        </label>
+        <select
+          id="venue-select"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="">-- Choose a venue --</option>
+          <%= for venue <- @testable_venues do %>
+            <option value={venue.id} data-provider-ids={Jason.encode!(venue.provider_ids)}>
+              [#<%= venue.id %>] <%= venue.name %>
+              <%= if venue.city, do: "(#{venue.city})" %>
+              - <%= Enum.count(venue.provider_ids) %> providers
+              <%= if venue.has_images, do: "✓ Has images", else: "" %>
+            </option>
+          <% end %>
+        </select>
+      </div>
+
+      <!-- Provider ID Editor -->
+      <div id="provider-id-editor" class="mb-6 hidden">
+        <h3 class="text-md font-medium text-gray-900 mb-3">Provider IDs</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">HERE ID</label>
+            <input
+              type="text"
+              id="provider-here"
+              placeholder="here:pds:place:..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Geoapify ID</label>
+            <input
+              type="text"
+              id="provider-geoapify"
+              placeholder="51abc123..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Foursquare ID</label>
+            <input
+              type="text"
+              id="provider-foursquare"
+              placeholder="4a1b2c3d..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Google Places ID</label>
+            <input
+              type="text"
+              id="provider-google_places"
+              placeholder="ChIJxyz..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+            />
+          </div>
+        </div>
+        <div class="mt-4">
+          <button
+            id="save-provider-ids"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            Save Provider IDs
+          </button>
+        </div>
+      </div>
+
+      <!-- Test Buttons -->
+      <div id="test-buttons" class="mb-6 hidden">
+        <h3 class="text-md font-medium text-gray-900 mb-3">Test Image Fetching</h3>
+        <div class="flex flex-wrap gap-3">
+          <button
+            id="test-all-providers"
+            class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            🚀 Fetch Images from All Providers
+          </button>
+          <button
+            data-provider="here"
+            class="test-provider px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Test HERE Images
+          </button>
+          <button
+            data-provider="geoapify"
+            class="test-provider px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            Test Geoapify Images
+          </button>
+          <button
+            data-provider="foursquare"
+            class="test-provider px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500"
+          >
+            Test Foursquare Images
+          </button>
+          <button
+            data-provider="google_places"
+            class="test-provider px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            Test Google Places Images
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-Time Results Display -->
+      <div id="test-results" class="hidden">
+        <h3 class="text-md font-medium text-gray-900 mb-3">Test Results</h3>
+
+        <!-- Summary Stats -->
+        <div id="test-summary" class="mb-4 p-4 bg-gray-50 rounded-lg hidden">
+          <div class="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div class="text-2xl font-bold text-gray-900" id="summary-images">0</div>
+              <div class="text-sm text-gray-600">Total Images</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-gray-900" id="summary-cost">$0.0000</div>
+              <div class="text-sm text-gray-600">Total Cost</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-gray-900" id="summary-duration">0ms</div>
+              <div class="text-sm text-gray-600">Duration</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Provider Results -->
+        <div id="provider-results" class="space-y-4"></div>
+      </div>
+    </div>
+
     <!-- Sample Enriched Venues -->
     <%= if length(@sample_venues) > 0 do %>
       <div class="mb-8">
@@ -452,3 +592,312 @@ iex> RateLimiter.get_stats("google_places")</pre>
     </div>
   </div>
 </div>
+
+<script>
+  // Manual Testing UI JavaScript
+  (function() {
+    let currentVenueId = null;
+
+    // Get CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    const venueSelect = document.getElementById('venue-select');
+    const providerIdEditor = document.getElementById('provider-id-editor');
+    const testButtons = document.getElementById('test-buttons');
+    const testResults = document.getElementById('test-results');
+    const saveProviderIdsBtn = document.getElementById('save-provider-ids');
+    const testAllBtn = document.getElementById('test-all-providers');
+    const testProviderBtns = document.querySelectorAll('.test-provider');
+
+    // Venue selection handler
+    venueSelect.addEventListener('change', function() {
+      const selectedOption = this.options[this.selectedIndex];
+      currentVenueId = selectedOption.value;
+
+      if (currentVenueId) {
+        const providerIds = JSON.parse(selectedOption.dataset.providerIds || '{}');
+
+        // Populate provider ID inputs
+        document.getElementById('provider-here').value = providerIds.here || '';
+        document.getElementById('provider-geoapify').value = providerIds.geoapify || '';
+        document.getElementById('provider-foursquare').value = providerIds.foursquare || '';
+        document.getElementById('provider-google_places').value = providerIds.google_places || '';
+
+        // Show editor and test buttons
+        providerIdEditor.classList.remove('hidden');
+        testButtons.classList.remove('hidden');
+        testResults.classList.add('hidden');
+      } else {
+        providerIdEditor.classList.add('hidden');
+        testButtons.classList.add('hidden');
+        testResults.classList.add('hidden');
+      }
+    });
+
+    // Save provider IDs handler
+    saveProviderIdsBtn.addEventListener('click', async function() {
+      if (!currentVenueId) return;
+
+      const providerIds = {
+        here: document.getElementById('provider-here').value || null,
+        geoapify: document.getElementById('provider-geoapify').value || null,
+        foursquare: document.getElementById('provider-foursquare').value || null,
+        google_places: document.getElementById('provider-google_places').value || null
+      };
+
+      // Remove null values
+      Object.keys(providerIds).forEach(key => {
+        if (providerIds[key] === null || providerIds[key] === '') {
+          delete providerIds[key];
+        }
+      });
+
+      try {
+        const response = await fetch('/dev/venue-images/update-provider-ids', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken
+          },
+          body: JSON.stringify({
+            venue_id: currentVenueId,
+            provider_ids: providerIds
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert('Provider IDs saved successfully!');
+        } else {
+          alert('Failed to save provider IDs: ' + result.error);
+        }
+      } catch (error) {
+        alert('Error saving provider IDs: ' + error.message);
+      }
+    });
+
+    // Test all providers handler
+    testAllBtn.addEventListener('click', async function() {
+      await testEnrichment(null);
+    });
+
+    // Test individual provider handlers
+    testProviderBtns.forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const provider = this.dataset.provider;
+        await testEnrichment(provider);
+      });
+    });
+
+    // Test enrichment function
+    async function testEnrichment(provider) {
+      if (!currentVenueId) return;
+
+      // Show results section
+      testResults.classList.remove('hidden');
+      document.getElementById('test-summary').classList.add('hidden');
+      document.getElementById('provider-results').innerHTML = '<div class="text-center text-gray-500">Testing...</div>';
+
+      try {
+        const response = await fetch('/dev/venue-images/test-enrichment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken
+          },
+          body: JSON.stringify({
+            venue_id: currentVenueId,
+            provider: provider
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          displayResults(result);
+        } else {
+          document.getElementById('provider-results').innerHTML =
+            `<div class="p-4 bg-red-50 border border-red-200 rounded text-red-800">Error: ${result.error}</div>`;
+        }
+      } catch (error) {
+        document.getElementById('provider-results').innerHTML =
+          `<div class="p-4 bg-red-50 border border-red-200 rounded text-red-800">Error: ${error.message}</div>`;
+      }
+    }
+
+    // Display results function
+    function displayResults(result) {
+      // Show summary
+      document.getElementById('test-summary').classList.remove('hidden');
+      document.getElementById('summary-images').textContent = result.total_images;
+      document.getElementById('summary-cost').textContent = formatCost(result.total_cost);
+      document.getElementById('summary-duration').textContent = result.duration_ms + 'ms';
+
+      // Show "Save Discovered IDs" button if there are discovered IDs
+      if (result.has_discovered_ids) {
+        const saveButton = document.getElementById('save-discovered-ids-btn');
+        if (!saveButton) {
+          const summaryDiv = document.getElementById('test-summary');
+          const btnHtml = `
+            <div class="mt-4 flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded">
+              <div>
+                <p class="text-sm font-medium text-yellow-900">
+                  🆕 ${Object.keys(result.discovered_ids).length} new provider ID(s) discovered dynamically
+                </p>
+                <p class="text-xs text-yellow-700 mt-1">
+                  Click "Save" to persist these IDs to the venue for future use
+                </p>
+              </div>
+              <button
+                id="save-discovered-ids-btn"
+                class="ml-4 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                💾 Save Discovered IDs
+              </button>
+            </div>
+          `;
+          summaryDiv.insertAdjacentHTML('afterend', btnHtml);
+
+          // Add event listener for save button
+          document.getElementById('save-discovered-ids-btn').addEventListener('click', async function() {
+            await saveDiscoveredIds(result.venue_id, result.discovered_ids);
+          });
+        }
+      }
+
+      // Display provider results
+      const providerResultsHtml = Object.entries(result.results).map(([provider, data]) => {
+        const statusClass = data.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+        const statusText = data.success ? '✓ Success' : '✗ Failed';
+        const statusColor = data.success ? 'text-green-800' : 'text-red-800';
+
+        // ID source badge
+        let idSourceBadge = '';
+        if (data.id_source) {
+          const badgeColors = {
+            'stored': 'bg-blue-100 text-blue-800',
+            'dynamic': 'bg-yellow-100 text-yellow-800',
+            'unavailable': 'bg-gray-100 text-gray-800'
+          };
+          const badgeTexts = {
+            'stored': 'Stored',
+            'dynamic': 'Dynamic',
+            'unavailable': 'Unavailable'
+          };
+          const badgeClass = badgeColors[data.id_source] || 'bg-gray-100 text-gray-800';
+          const badgeText = badgeTexts[data.id_source] || 'Unknown';
+          idSourceBadge = `<span class="ml-2 px-2 py-1 text-xs rounded ${badgeClass}">${badgeText}</span>`;
+        }
+
+        return `
+          <div class="p-4 border rounded ${statusClass}">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-semibold text-lg ${statusColor}">${provider.toUpperCase()}</h4>
+              <span class="${statusColor}">${statusText}</span>
+            </div>
+
+            ${data.provider_id ? `<div class="text-xs text-gray-600 mb-2 font-mono flex items-center">ID: ${data.provider_id}${idSourceBadge}</div>` : ''}
+
+            ${data.error ? `<div class="text-sm text-red-700 mb-2">Error: ${data.error}</div>` : ''}
+
+            <div class="text-sm space-y-1">
+              <div>Images found: <strong>${data.images_found || 0}</strong></div>
+              <div>Duration: <strong>${data.duration_ms || 0}ms</strong></div>
+              <div>Cost: <strong>${formatCost(data.cost || 0)}</strong></div>
+            </div>
+
+            ${data.api_calls && data.api_calls.length > 0 ? `
+              <details class="mt-3">
+                <summary class="cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                  API Calls (${data.api_calls.length})
+                </summary>
+                <div class="mt-2 space-y-2">
+                  ${data.api_calls.map(call => `
+                    <div class="p-2 bg-white rounded text-xs">
+                      <div>Status: ${call.status}</div>
+                      <div>Message: ${call.message}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </details>
+            ` : ''}
+
+            ${data.images && data.images.length > 0 ? `
+              <details class="mt-3">
+                <summary class="cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                  View Images (${data.images.length})
+                </summary>
+                <div class="mt-2 grid grid-cols-2 gap-2">
+                  ${data.images.slice(0, 6).map(img => `
+                    <div class="relative">
+                      <img src="${img.url}" alt="Venue image" class="w-full h-24 object-cover rounded" />
+                      <div class="text-xs text-gray-600 mt-1">
+                        ${img.width}x${img.height}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </details>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('provider-results').innerHTML = providerResultsHtml;
+    }
+
+    // Format cost helper
+    function formatCost(cost) {
+      return '$' + cost.toFixed(4);
+    }
+
+    // Save discovered provider IDs function
+    async function saveDiscoveredIds(venueId, discoveredIds) {
+      const btn = document.getElementById('save-discovered-ids-btn');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const response = await fetch('/dev/venue-images/save-discovered-ids', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken
+          },
+          body: JSON.stringify({
+            venue_id: venueId,
+            discovered_ids: discoveredIds
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          btn.textContent = '✓ Saved!';
+          btn.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+          btn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+          // Update the venue selector to show new provider IDs
+          const venueOption = venueSelect.querySelector(`option[value="${venueId}"]`);
+          if (venueOption) {
+            venueOption.dataset.providerIds = JSON.stringify(result.provider_ids);
+            const providerCount = Object.keys(result.provider_ids).length;
+            venueOption.textContent = venueOption.textContent.replace(/- \d+ providers/, `- ${providerCount} providers`);
+          }
+
+          alert(`Successfully saved ${result.saved_count} provider ID(s)!`);
+        } else {
+          btn.textContent = originalText;
+          btn.disabled = false;
+          alert('Failed to save provider IDs: ' + result.error);
+        }
+      } catch (error) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        alert('Error saving provider IDs: ' + error.message);
+      }
+    }
+  })();
+</script>
