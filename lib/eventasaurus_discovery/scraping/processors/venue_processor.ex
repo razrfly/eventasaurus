@@ -810,23 +810,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         # Check if error is due to duplicate venue detection (not a real error)
         # If so, find and return the existing venue instead of failing
         if has_duplicate_venue_error?(changeset) do
-          # Extract the duplicate venue info from the error message
-          # Error format: "Duplicate venue found: 'Name' at Address (Xm away, ID: Y)"
-          base_errors = Keyword.get_values(changeset.errors, :base)
-
+          # Extract the duplicate venue info from structured error opts
+          # This is more reliable than regex parsing and handles edge cases better
           duplicate_venue =
-            if length(base_errors) > 0 do
-              {error_msg, _} = List.first(base_errors)
-              # Extract venue ID from error message using regex
-              case Regex.run(~r/ID: (\d+)/, error_msg) do
-                [_, venue_id] ->
-                  Repo.get(Venue, String.to_integer(venue_id))
-                _ ->
-                  nil
+            changeset.errors
+            |> Keyword.get_values(:base)
+            |> Enum.find_value(fn {_msg, opts} ->
+              case Keyword.get(opts, :existing_id) do
+                id when is_integer(id) -> Repo.get(Venue, id)
+                _ -> nil
               end
-            else
-              nil
-            end
+            end)
 
           if duplicate_venue do
             Logger.info(
@@ -834,7 +828,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             )
             {:ok, duplicate_venue}
           else
-            # Couldn't extract venue ID from error - log and propagate error
+            # Couldn't extract venue ID from opts - log and propagate error
             errors = format_changeset_errors(changeset)
             Logger.error(
               "❌ Duplicate detected but couldn't find existing venue for '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}"

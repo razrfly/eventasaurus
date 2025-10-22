@@ -32,71 +32,126 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
   @doc """
-  Check freshness health for a source.
+  Check freshness health for a source using Oban job execution metrics.
+
+  This is the CORRECT way to monitor freshness checking effectiveness.
+  It compares actual job execution rate vs expected rate based on Oban history.
 
   Returns a map with:
   - `total_events` - Total events in system for this source
-  - `fresh_events` - Events with last_seen_at within threshold
-  - `stale_events` - Events with last_seen_at outside threshold
-  - `expected_skip_rate` - Percentage that should be skipped (0.0-1.0)
+  - `detail_jobs_executed` - Detail jobs run in lookback period
+  - `expected_jobs` - Expected jobs if freshness checking works (15-30% rate)
+  - `execution_multiplier` - How many times more jobs ran than expected
+  - `processing_rate` - Percentage of events processed per run
+  - `lookback_days` - Days of history analyzed
   - `threshold_hours` - Configured threshold for this source
   - `status` - Health status atom
   - `diagnosis` - Human-readable diagnosis string
   """
   def check_health(source_id) when is_integer(source_id) do
-    threshold_hours = EventFreshnessChecker.get_threshold_for_source(source_id)
-    threshold_ago = DateTime.add(DateTime.utc_now(), -threshold_hours, :hour)
-
-    # Count all events for this source
-    total =
-      Repo.one(
-        from(pes in PublicEventSource,
-          where: pes.source_id == ^source_id,
-          select: count(pes.id)
-        )
-      ) || 0
-
-    # Count fresh events (last_seen_at within threshold)
-    fresh =
-      Repo.one(
-        from(pes in PublicEventSource,
-          where: pes.source_id == ^source_id,
-          where: pes.last_seen_at > ^threshold_ago,
-          select: count(pes.id)
-        )
-      ) || 0
-
-    stale = total - fresh
-    expected_skip_rate = if total > 0, do: fresh / total, else: 0.0
-
-    status = calculate_status(expected_skip_rate, total)
-
-    %{
-      total_events: total,
-      fresh_events: fresh,
-      stale_events: stale,
-      expected_skip_rate: expected_skip_rate,
-      threshold_hours: threshold_hours,
-      status: status,
-      diagnosis: diagnose_issue(expected_skip_rate, total, fresh)
-    }
+    check_health_by_execution_rate(source_id)
   end
 
   @doc """
-  Calculate health status based on skip rate and total events.
+  Check freshness health by analyzing actual Oban job execution rate.
+
+  This is simpler and more reliable than simulating IndexJob behavior.
+  Works universally for all scrapers by comparing job counts vs event counts.
   """
-  def calculate_status(skip_rate, total) do
+  def check_health_by_execution_rate(source_id) when is_integer(source_id) do
+    threshold_hours = EventFreshnessChecker.get_threshold_for_source(source_id)
+    lookback_days = 7
+
+    # Count all events for this source
+    total_events =
+      Repo.one(
+        from(pes in PublicEventSource,
+          where: pes.source_id == ^source_id,
+          select: count(pes.id)
+        )
+      ) || 0
+
+    # Handle empty sources
+    if total_events == 0 do
+      %{
+        total_events: 0,
+        detail_jobs_executed: 0,
+        expected_jobs: 0,
+        execution_multiplier: 0.0,
+        processing_rate: 0.0,
+        lookback_days: lookback_days,
+        threshold_hours: threshold_hours,
+        status: :no_data,
+        diagnosis: "No events in system yet - cannot assess freshness checking effectiveness"
+      }
+    else
+      # Count detail jobs executed in last week from Oban
+      detail_jobs = count_detail_jobs_for_source(source_id, lookback_days)
+
+      # Calculate metrics
+      runs_in_period = (lookback_days * 24) / threshold_hours
+      jobs_per_run = if runs_in_period > 0, do: detail_jobs / runs_in_period, else: 0.0
+      processing_rate = if total_events > 0, do: jobs_per_run / total_events, else: 0.0
+
+      # Expected: 15-30% processing rate per run (average 25%)
+      expected_jobs = total_events * runs_in_period * 0.25
+      execution_multiplier = if expected_jobs > 0, do: detail_jobs / expected_jobs, else: 0.0
+
+      status = calculate_execution_status(processing_rate, total_events)
+
+      %{
+        total_events: total_events,
+        detail_jobs_executed: detail_jobs,
+        expected_jobs: round(expected_jobs),
+        execution_multiplier: execution_multiplier,
+        processing_rate: processing_rate,
+        runs_in_period: runs_in_period,
+        lookback_days: lookback_days,
+        threshold_hours: threshold_hours,
+        status: status,
+        diagnosis: diagnose_execution_rate(processing_rate, execution_multiplier, detail_jobs, total_events)
+      }
+    end
+  end
+
+  # Count detail jobs executed for a source in the last N days
+  defp count_detail_jobs_for_source(source_id, lookback_days) do
+    cutoff = DateTime.add(DateTime.utc_now(), -lookback_days * 24 * 3600, :second)
+
+    # Query oban_jobs for detail jobs with this source_id
+    # Matches: VenueDetailJob, EventDetailJob, etc.
+    Repo.one(
+      from(j in "oban_jobs",
+        where: fragment("? ->> 'source_id' = ?", j.args, ^to_string(source_id)),
+        where: fragment("? LIKE '%DetailJob'", j.worker),
+        where: j.state == "completed",
+        where: j.inserted_at > ^cutoff,
+        select: count(j.id)
+      )
+    ) || 0
+  end
+
+  @doc """
+  Calculate health status based on processing rate.
+
+  Processing rate is the percentage of events processed per scraper run.
+  - <40% = healthy (most events skipped)
+  - 40-70% = degraded (some events skipped)
+  - 70-95% = warning (few events skipped)
+  - 95%+ = broken (no events skipped)
+  """
+  def calculate_execution_status(processing_rate, total_events) do
     cond do
-      total == 0 ->
+      total_events == 0 ->
         :no_data
 
-      skip_rate >= 0.70 ->
+      processing_rate < 0.40 ->
         :healthy
 
-      skip_rate >= 0.30 ->
+      processing_rate < 0.70 ->
         :degraded
 
-      skip_rate >= 0.05 ->
+      processing_rate < 0.95 ->
         :warning
 
       true ->
@@ -104,9 +159,47 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
     end
   end
 
+  # Legacy function for backwards compatibility
+  @doc false
+  def calculate_status(skip_rate, total) do
+    calculate_execution_status(1.0 - skip_rate, total)
+  end
+
   @doc """
-  Generate human-readable diagnosis based on freshness metrics.
+  Generate human-readable diagnosis based on execution rate metrics.
   """
+  def diagnose_execution_rate(processing_rate, execution_multiplier, detail_jobs, total_events) do
+    cond do
+      total_events == 0 ->
+        "No events in system yet"
+
+      processing_rate < 0.40 ->
+        "✅ HEALTHY: Processing #{Float.round(processing_rate * 100, 1)}% of events per run (#{detail_jobs} jobs for #{total_events} events). Freshness checking working correctly."
+
+      processing_rate < 0.70 ->
+        "⚡ DEGRADED: Processing #{Float.round(processing_rate * 100, 1)}% of events per run (#{detail_jobs} jobs for #{total_events} events). Expected <40% per run."
+
+      processing_rate < 0.95 ->
+        """
+        ⚠️ WARNING: Processing #{Float.round(processing_rate * 100, 1)}% of events per run (#{detail_jobs} jobs for #{total_events} events).
+        Freshness checking is mostly broken. Expected <40% per run.
+        """
+
+      true ->
+        """
+        🔴 BROKEN: Processing #{Float.round(processing_rate * 100, 1)}% of events per run (#{detail_jobs} jobs for #{total_events} events).
+        Running #{Float.round(execution_multiplier, 1)}x more jobs than expected.
+
+        Possible causes:
+        • External ID format mismatch between IndexJob and Transformer
+        • last_seen_at not being updated by EventProcessor
+        • EventFreshnessChecker not being called in IndexJob
+        """
+    end
+  end
+
+  # Legacy diagnosis function
+  @doc false
   def diagnose_issue(skip_rate, total, fresh) do
     cond do
       total == 0 ->

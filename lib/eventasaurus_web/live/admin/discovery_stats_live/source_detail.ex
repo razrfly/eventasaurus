@@ -927,7 +927,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                         <%= freshness_status_label(@freshness_health.status) %>
                       </p>
                       <p class={"text-sm #{freshness_status_text_color(@freshness_health.status)} mt-1"}>
-                        <%= Float.round(@freshness_health.expected_skip_rate * 100, 1) %>% of events are fresh and being skipped
+                        Processing <%= Float.round(@freshness_health.processing_rate * 100, 1) %>% per run
                       </p>
                     </div>
                   </div>
@@ -936,20 +936,25 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
             </div>
 
             <!-- Metrics -->
-            <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-4 gap-4 mb-6">
               <div class="p-4 bg-blue-50 rounded-lg text-center">
                 <p class="text-2xl font-bold text-blue-900"><%= format_number(@freshness_health.total_events) %></p>
                 <p class="text-xs text-blue-700 mt-1">Total Events</p>
               </div>
+              <div class="p-4 bg-purple-50 rounded-lg text-center">
+                <p class="text-2xl font-bold text-purple-900"><%= format_number(@freshness_health.detail_jobs_executed) %></p>
+                <p class="text-xs text-purple-700 mt-1">Detail Jobs</p>
+                <p class="text-xs text-purple-600 mt-1">(last 7 days)</p>
+              </div>
               <div class="p-4 bg-green-50 rounded-lg text-center">
-                <p class="text-2xl font-bold text-green-900"><%= format_number(@freshness_health.fresh_events) %></p>
-                <p class="text-xs text-green-700 mt-1">Fresh Events</p>
-                <p class="text-xs text-green-600 mt-1">(within <%= @freshness_health.threshold_hours %>h)</p>
+                <p class="text-2xl font-bold text-green-900"><%= format_number(@freshness_health.expected_jobs) %></p>
+                <p class="text-xs text-green-700 mt-1">Expected Jobs</p>
+                <p class="text-xs text-green-600 mt-1">(if working)</p>
               </div>
               <div class="p-4 bg-orange-50 rounded-lg text-center">
-                <p class="text-2xl font-bold text-orange-900"><%= format_number(@freshness_health.stale_events) %></p>
-                <p class="text-xs text-orange-700 mt-1">Stale Events</p>
-                <p class="text-xs text-orange-600 mt-1">(older than <%= @freshness_health.threshold_hours %>h)</p>
+                <p class="text-2xl font-bold text-orange-900"><%= Float.round(@freshness_health.processing_rate * 100, 1) %>%</p>
+                <p class="text-xs text-orange-700 mt-1">Processing Rate</p>
+                <p class="text-xs text-orange-600 mt-1">(per run)</p>
               </div>
             </div>
 

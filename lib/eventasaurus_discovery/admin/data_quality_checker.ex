@@ -374,7 +374,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       recommendations =
         if quality.occurrence_metrics.validity_score < 80 do
           issues = quality.occurrence_metrics.validation_issues
-          msg = "⚠️ Occurrence data issues: #{issues.pattern_missing_dates} pattern events missing dates, #{issues.explicit_single_date} explicit events with single date"
+          msg = "⚠️ Occurrence data issues: #{issues.pattern_missing_dates} pattern events missing recurrence rules, #{issues.explicit_single_date} explicit events with single date"
           [msg | recommendations]
         else
           recommendations
@@ -1007,7 +1007,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # - Distribution by occurrence type (explicit, pattern, exhibition, recurring)
   #
   # Validation metrics:
-  # - Pattern events missing required 'dates' field
+  # - Pattern events missing required 'pattern' field (recurrence rules)
   # - Explicit events with only 1 date (may be miscategorized)
   # - Exhibition events with only 1 date (should have ranges)
   # - Overall structural validity score
@@ -1108,8 +1108,15 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
             end)
             |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
 
+          %{"type" => "pattern", "pattern" => pattern} when is_map(pattern) ->
+            # Pattern events with recurrence rules are valid (no dates array needed)
+            acc
+            |> Map.update!(:events_with_occurrences, &(&1 + 1))
+            |> Map.update!(:type_counts, &Map.update(&1, "pattern", 1, fn count -> count + 1 end))
+
           %{"type" => type} ->
-            # Has type but missing dates field - validation issue
+            # Has type but missing required field - actual validation issue
+            # Pattern events need "pattern" field, other types need "dates" array
             acc
             |> Map.update!(:events_with_occurrences, &(&1 + 1))
             |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))

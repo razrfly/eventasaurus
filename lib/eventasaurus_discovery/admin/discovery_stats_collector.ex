@@ -1176,7 +1176,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         "EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob"
 
       String.contains?(sync_worker, "Inquizition.Jobs.SyncJob") ->
-        "EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob"
+        "EventasaurusDiscovery.Sources.Inquizition.Jobs.VenueDetailJob"
 
       String.contains?(sync_worker, "SpeedQuizzing.Jobs.SyncJob") ->
         "EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob"

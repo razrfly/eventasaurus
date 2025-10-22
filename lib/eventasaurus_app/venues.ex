@@ -215,9 +215,11 @@ defmodule EventasaurusApp.Venues do
         {:ok, nil}
 
       venue ->
+        # Return error with venue ID in opts for structured extraction
         {:error,
          "Duplicate venue found: '#{venue["name"]}' at #{venue["address"]} " <>
-           "(#{Float.round(venue["distance"], 1)}m away, ID: #{venue["id"]})"}
+           "(#{Float.round(venue["distance"], 1)}m away, ID: #{venue["id"]})",
+         existing_id: venue["id"]}
     end
   end
 
