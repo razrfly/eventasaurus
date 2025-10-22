@@ -45,14 +45,6 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
     end
   end
 
-  # Helper to safely get loaded duplicate groups
-  defp get_loaded_duplicate_groups(socket) do
-    case socket.assigns.duplicate_groups do
-      %{ok?: true, result: duplicate_groups} -> duplicate_groups
-      _ -> []
-    end
-  end
-
   @impl true
   def handle_event("select_primary", %{"venue_id" => venue_id_str}, socket) do
     case Integer.parse(venue_id_str) do
@@ -115,6 +107,14 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
      assign_async(socket, :duplicate_groups, fn ->
        {:ok, Venues.find_duplicate_groups()}
      end)}
+  end
+
+  # Helper to safely get loaded duplicate groups
+  defp get_loaded_duplicate_groups(socket) do
+    case socket.assigns.duplicate_groups do
+      %{ok?: true, result: duplicate_groups} -> duplicate_groups
+      _ -> []
+    end
   end
 
   @impl true
