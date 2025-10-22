@@ -2,7 +2,7 @@
 #
 # This file configures production discovery settings for:
 # - Kraków (Poland): 6 sources
-# - London (United Kingdom): 2 sources
+# - London (United Kingdom): 3 sources
 # - Melbourne (Australia): 2 sources
 # - Austin (United States): 1 source
 # - Paris (France): 1 source
@@ -111,7 +111,7 @@ configure_city.("krakow", [
 ])
 
 # ============================================================================
-# LONDON, UNITED KINGDOM - 2 SOURCES
+# LONDON, UNITED KINGDOM - 3 SOURCES
 # ============================================================================
 
 configure_city.("london", [
@@ -122,6 +122,11 @@ configure_city.("london", [
 
   # Speed Quizzing - Interactive trivia events (global source)
   {"speed-quizzing", %{
+    "limit" => 100
+  }},
+
+  # Inquizition - Pub quiz events (global source)
+  {"inquizition", %{
     "limit" => 100
   }}
 ])

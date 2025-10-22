@@ -130,7 +130,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         # Get data quality metrics (Phase 5)
         quality_data = DataQualityChecker.check_quality(source_name)
         {quality_emoji, quality_text, quality_class} =
-          if Map.get(quality_data, :not_found, false) do
+          if Map.get(quality_data, :not_found, false) || Map.get(quality_data, :total_events, 0) == 0 do
             {"⚪", "N/A", "text-gray-600"}
           else
             DataQualityChecker.quality_status(quality_data.quality_score)
@@ -286,8 +286,21 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     ~H"""
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">🎯 Discovery Source Statistics</h1>
-        <p class="mt-2 text-sm text-gray-600">Real-time monitoring of event discovery sources</p>
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">🎯 Discovery Source Statistics</h1>
+            <p class="mt-2 text-sm text-gray-600">Real-time monitoring of event discovery sources</p>
+          </div>
+          <.link
+            navigate={~p"/admin/imports"}
+            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+            </svg>
+            Back to Imports
+          </.link>
+        </div>
       </div>
 
       <%= if @loading do %>
@@ -411,7 +424,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="flex items-center">
                         <span class="text-lg mr-1"><%= source.quality_emoji %></span>
-                        <span class={"text-sm font-medium #{source.quality_class}"}><%= source.quality_score %>%</span>
+                        <span class={"text-sm font-medium #{source.quality_class}"}>
+                          <%= if source.quality_text == "N/A", do: "N/A", else: "#{source.quality_score}%" %>
+                        </span>
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
