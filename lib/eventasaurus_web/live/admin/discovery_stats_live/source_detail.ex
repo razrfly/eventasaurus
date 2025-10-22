@@ -406,12 +406,15 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
       else
         %{
           total_events: 0,
-          fresh_events: 0,
-          stale_events: 0,
-          expected_skip_rate: 0.0,
           threshold_hours: 168,
           status: :no_data,
-          diagnosis: "Source not found"
+          diagnosis: "Source not found",
+          # New execution-rate fields expected by the UI
+          detail_jobs_executed: 0,
+          expected_jobs: 0,
+          processing_rate: 0.0,
+          runs_in_period: 0,
+          execution_multiplier: 1.0
         }
       end
 

@@ -88,8 +88,14 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
       # Count detail jobs executed in last week from Oban
       detail_jobs = count_detail_jobs_for_source(source_id, lookback_days)
 
-      # Calculate metrics
-      runs_in_period = (lookback_days * 24) / threshold_hours
+      # Calculate metrics with division by zero guards
+      runs_in_period =
+        if is_number(threshold_hours) and threshold_hours > 0 do
+          (lookback_days * 24) / threshold_hours
+        else
+          0
+        end
+
       jobs_per_run = if runs_in_period > 0, do: detail_jobs / runs_in_period, else: 0.0
       processing_rate = if total_events > 0, do: jobs_per_run / total_events, else: 0.0
 
@@ -120,12 +126,13 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
 
     # Query oban_jobs for detail jobs with this source_id
     # Matches: VenueDetailJob, EventDetailJob, etc.
+    # Use completed_at to measure jobs actually executed in the window
     Repo.one(
       from(j in "oban_jobs",
         where: fragment("? ->> 'source_id' = ?", j.args, ^to_string(source_id)),
         where: fragment("? LIKE '%DetailJob'", j.worker),
         where: j.state == "completed",
-        where: j.inserted_at > ^cutoff,
+        where: j.completed_at > ^cutoff,
         select: count(j.id)
       )
     ) || 0

@@ -173,12 +173,15 @@ defmodule Mix.Tasks.Discovery.Freshness do
 
     IO.puts(String.duplicate("-", 80))
 
+    rate = ((health.processing_rate || 0.0) * 100.0) |> Float.round(1)
+    runs = (health.runs_in_period || 0.0) |> Float.round(1)
+
     IO.puts("Total Events:        #{format_number(health.total_events)}")
     IO.puts("Detail Jobs (7d):    #{format_number(health.detail_jobs_executed)}")
     IO.puts("Expected Jobs:       #{format_number(health.expected_jobs)}")
-    IO.puts("Processing Rate:     #{Float.round(health.processing_rate * 100, 1)}% per run")
+    IO.puts("Processing Rate:     #{rate}% per run")
     IO.puts("Threshold:           #{health.threshold_hours}h")
-    IO.puts("Runs in Period:      #{Float.round(health.runs_in_period, 1)}")
+    IO.puts("Runs in Period:      #{runs}")
 
     IO.puts("\nDiagnosis:")
     IO.puts(health.diagnosis)
