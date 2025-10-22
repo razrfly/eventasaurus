@@ -24,12 +24,17 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
     case Integer.parse(index_str) do
       {index, ""} ->
         group = Enum.at(socket.assigns.duplicate_groups, index)
-        primary_venue = List.first(group.venues)
 
-        {:noreply,
-         socket
-         |> assign(:selected_group, group)
-         |> assign(:selected_primary, primary_venue.id)}
+        if is_nil(group) or Enum.empty?(group.venues) do
+          {:noreply, put_flash(socket, :error, "Invalid group selection")}
+        else
+          primary_venue = List.first(group.venues)
+
+          {:noreply,
+           socket
+           |> assign(:selected_group, group)
+           |> assign(:selected_primary, primary_venue.id)}
+        end
 
       _ ->
         {:noreply, put_flash(socket, :error, "Invalid group selection")}

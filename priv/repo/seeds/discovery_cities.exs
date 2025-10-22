@@ -1,8 +1,11 @@
 # Seed script to configure automated discovery for all cities
 #
 # This file configures production discovery settings for:
-# - Kraków (Poland): 5 sources
-# - London (United Kingdom): 1 source
+# - Kraków (Poland): 6 sources
+# - London (United Kingdom): 2 sources
+# - Melbourne (Australia): 2 sources
+# - Austin (United States): 1 source
+# - Paris (France): 1 source
 #
 # Run with: mix run priv/repo/seeds/discovery_cities.exs
 # Or automatically via: mix ecto.setup
@@ -70,6 +73,7 @@ end
 # ============================================================================
 # KRAKÓW, POLAND - 6 SOURCES
 # ============================================================================
+# Note: PubQuiz Poland, Karnet, Resident Advisor, Cinema City, Bandsintown, Ticketmaster
 
 configure_city.("krakow", [
   # PubQuiz Poland - Weekly pub quiz events
@@ -107,13 +111,56 @@ configure_city.("krakow", [
 ])
 
 # ============================================================================
-# LONDON, UNITED KINGDOM - 1 SOURCE
+# LONDON, UNITED KINGDOM - 2 SOURCES
 # ============================================================================
 
 configure_city.("london", [
-  # Question One - Pub quiz events
+  # Question One - Pub quiz events (global source)
   {"question-one", %{
     "limit" => 250
+  }},
+
+  # Speed Quizzing - Interactive trivia events (global source)
+  {"speed-quizzing", %{
+    "limit" => 100
+  }}
+])
+
+# ============================================================================
+# MELBOURNE, AUSTRALIA - 2 SOURCES
+# ============================================================================
+
+configure_city.("melbourne", [
+  # Quizmeisters - Trivia events (global source via StoreRocket API)
+  {"quizmeisters", %{
+    "limit" => 100
+  }},
+
+  # Question One - Pub quiz events (global source)
+  {"question-one", %{
+    "limit" => 100
+  }}
+])
+
+# ============================================================================
+# AUSTIN, UNITED STATES - 1 SOURCE
+# ============================================================================
+
+configure_city.("austin", [
+  # Geeks Who Drink - Trivia events (global source)
+  {"geeks-who-drink", %{
+    "limit" => 100
+  }}
+])
+
+# ============================================================================
+# PARIS, FRANCE - 1 SOURCE
+# ============================================================================
+
+configure_city.("paris", [
+  # Sortiraparis - Paris cultural events (concerts, exhibitions, theater)
+  {"sortiraparis", %{
+    "limit" => 100
   }}
 ])
 

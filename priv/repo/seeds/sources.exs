@@ -133,6 +133,41 @@ sources = [
     }
   },
   %{
+    name: "Speed Quizzing",
+    slug: "speed-quizzing",
+    website_url: "https://speedquizzing.com",
+    priority: 35,
+    domains: ["trivia"],
+    aggregate_on_index: true,
+    aggregation_type: "trivia",
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 300,
+      "language" => "en",
+      "supports_recurring_events" => true,
+      "supports_performer_details" => true,
+      "has_coordinates" => true,
+      "coverage" => "UK, US, UAE, international",
+      "scope" => "regional"
+    }
+  },
+  %{
+    name: "Sortiraparis",
+    slug: "sortiraparis",
+    website_url: "https://www.sortiraparis.com",
+    priority: 65,
+    domains: ["music", "cultural", "theater", "general"],
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 500,
+      "language" => "fr",
+      "supports_multilingual" => true,
+      "coverage" => "Paris, France",
+      "requires_geocoding" => true,
+      "scope" => "city"
+    }
+  },
+  %{
     name: "Cinema City",
     slug: "cinema-city",
     website_url: "https://www.cinema-city.pl",

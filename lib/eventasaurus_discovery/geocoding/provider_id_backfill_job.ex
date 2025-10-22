@@ -73,7 +73,11 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
       {:ok, :no_coordinates}
     else
       # Get existing provider_ids (may be nil or empty map)
-      existing_ids = venue.provider_ids || %{}
+      # Normalize keys to strings to prevent atom/string mix
+      existing_ids =
+        (venue.provider_ids || %{})
+        |> Enum.map(fn {k, v} -> {to_string(k), v} end)
+        |> Enum.into(%{})
 
       Logger.info("📍 Venue ##{venue.id} \"#{venue.name}\" at #{venue.latitude},#{venue.longitude}")
       Logger.info("   Existing IDs: #{inspect(Map.keys(existing_ids))}")
