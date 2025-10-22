@@ -65,7 +65,7 @@ For pattern-based recurring events, the **venue IS the unique identifier**.
 
 **Generation:** CityJob (line 131-141)
 ```elixir
-def generate_external_id(url) do
+defp generate_external_id(url) do
   url
   |> String.trim_trailing("/")
   |> String.split("/")

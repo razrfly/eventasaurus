@@ -4,8 +4,6 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
   """
   use EventasaurusWeb, :live_view
 
-  import Ecto.Query
-
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Admin.CityManager
   alias EventasaurusDiscovery.Helpers.AddressGeocoder
