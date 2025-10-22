@@ -24,7 +24,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     priority: 1
 
   require Logger
-  alias EventasaurusDiscovery.Sources.QuestionOne.{Client, Jobs.VenueDetailJob}
+  alias EventasaurusDiscovery.Sources.QuestionOne.{Client, Jobs.VenueDetailJob, Extractors.VenueExtractor, Helpers.TextHelper}
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
   @impl Oban.Worker
@@ -103,9 +103,14 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     # Generate external_ids for freshness checking
     # For pattern-based scrapers, venue is the unique identifier
     # Day of week is metadata, not part of the external_id
+    #
+    # IMPORTANT: Must match Transformer's external_id generation:
+    # 1. Clean RSS title using VenueExtractor.clean_title/1
+    # 2. Slugify cleaned title using TextHelper.slugify/1
     venues_with_ids =
       Enum.map(venues, fn venue ->
-        venue_slug = extract_venue_slug(venue.url)
+        cleaned_title = VenueExtractor.clean_title(venue.title)
+        venue_slug = TextHelper.slugify(cleaned_title)
         Map.put(venue, :external_id, "question_one_#{venue_slug}")
       end)
 
@@ -138,14 +143,6 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     end)
 
     length(venues_to_process)
-  end
-
-  defp extract_venue_slug(url) do
-    url
-    |> String.split("/")
-    |> Enum.reject(&(&1 == ""))
-    |> List.last()
-    |> String.downcase()
   end
 
   defp enqueue_next_page(next_page, source_id, limit) do

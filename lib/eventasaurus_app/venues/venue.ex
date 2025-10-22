@@ -279,9 +279,9 @@ defmodule EventasaurusApp.Venues.Venue do
             # No duplicate found
             changeset
 
-          {:error, reason} ->
-            # Duplicate found - add error to changeset
-            add_error(changeset, :base, reason)
+          {:error, reason, opts} ->
+            # Duplicate found - add error to changeset with structured opts
+            add_error(changeset, :base, reason, opts)
         end
       else
         # Missing required fields for duplicate check - skip validation

@@ -24,7 +24,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.DateParser
+  alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.{DateParser, TextHelper}
   alias EventasaurusDiscovery.Locations.CountryResolver
 
   @doc """
@@ -60,7 +60,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     # Generate stable external_id
     # For pattern-based scrapers, venue is the unique identifier
     # Day of week is metadata, not part of identity
-    venue_slug = slugify(title)
+    venue_slug = TextHelper.slugify(title)
     external_id = "question_one_#{venue_slug}"
 
     # Use geocoded city and country (enriched by venue_detail_job)
@@ -246,14 +246,6 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
       true ->
         {false, nil}
     end
-  end
-
-  # Generate URL-safe slug from title
-  defp slugify(text) when is_binary(text) do
-    text
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "_")
-    |> String.trim("_")
   end
 
   # Add hours to a DateTime

@@ -386,6 +386,50 @@ end
 
 ---
 
+## 🔍 Automated Monitoring & Quality Checks
+
+### Freshness Health Check
+
+**Check if EventFreshnessChecker is working correctly:**
+
+```bash
+# Check specific source
+mix discovery.freshness question-one
+
+# Check all sources
+mix discovery.freshness --all
+
+# Find broken sources (for monitoring/alerts)
+mix discovery.freshness --broken
+
+# JSON output for automation
+mix discovery.freshness --all --json
+```
+
+**What it checks:**
+- Processing rate (% of events processed per run)
+- Expected vs actual job execution count
+- Freshness checking effectiveness
+
+**Status levels:**
+- ✅ **HEALTHY** (<40% processing rate) - Most events skipped, working correctly
+- ⚡ **DEGRADED** (40-70%) - Partially working
+- ⚠️ **WARNING** (70-95%) - Mostly broken
+- 🔴 **BROKEN** (95%+) - Not working, all events processed every run
+
+**Common causes of BROKEN status:**
+- External ID format mismatch between IndexJob and Transformer
+- `last_seen_at` not being updated by EventProcessor
+- EventFreshnessChecker not being called in IndexJob
+
+**Fix checklist:**
+1. Verify external_id format matches between IndexJob and Transformer
+2. Ensure IndexJob calls `EventFreshnessChecker.filter_events_needing_processing/2`
+3. Check that EventProcessor updates `last_seen_at` timestamps
+4. Run `mix discovery.freshness <source>` to verify fix
+
+---
+
 ## 📝 Logging Standards
 
 ```elixir
