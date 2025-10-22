@@ -427,59 +427,6 @@ defmodule EventasaurusApp.Venues do
     |> Enum.sort_by(fn group -> length(group.venues) end, :desc)
   end
 
-  # Groups venues that are transitively connected as duplicates (legacy version - kept for compatibility)
-  defp group_connected_venues(duplicate_pairs, all_venues) do
-    # Build adjacency map
-    adjacency =
-      Enum.reduce(duplicate_pairs, %{}, fn {v1, v2, _similarity}, acc ->
-        acc
-        |> Map.update(v1.id, [v2.id], &[v2.id | &1])
-        |> Map.update(v2.id, [v1.id], &[v1.id | &1])
-      end)
-
-    # Find connected components using DFS
-    {groups, _visited} =
-      Enum.reduce(Map.keys(adjacency), {[], MapSet.new()}, fn venue_id, {groups, visited} ->
-        if MapSet.member?(visited, venue_id) do
-          {groups, visited}
-        else
-          {group, new_visited} = dfs_component(venue_id, adjacency, visited)
-          {[group | groups], new_visited}
-        end
-      end)
-
-    # Convert venue IDs to venue structs and calculate metrics
-    Enum.map(groups, fn venue_ids ->
-      group_venues = Enum.filter(all_venues, fn v -> v.id in venue_ids end)
-
-      # Calculate all pairwise distances and similarities
-      {distances, similarities} =
-        for v1 <- group_venues,
-            v2 <- group_venues,
-            v1.id < v2.id,
-            reduce: {%{}, %{}} do
-          {dist_acc, sim_acc} ->
-            nearby = find_nearby_venues(v1.latitude, v1.longitude, get_distance_threshold() * 2)
-            v2_nearby = Enum.find(nearby, fn venue -> venue["id"] == v2.id end)
-
-            distance = if v2_nearby, do: v2_nearby["distance"], else: nil
-            similarity = calculate_name_similarity(v1.name, v2.name)
-
-            {
-              if(distance, do: Map.put(dist_acc, {v1.id, v2.id}, distance), else: dist_acc),
-              Map.put(sim_acc, {v1.id, v2.id}, similarity)
-            }
-        end
-
-      %{
-        venues: group_venues,
-        distances: distances,
-        similarities: similarities
-      }
-    end)
-    |> Enum.sort_by(fn group -> length(group.venues) end, :desc)
-  end
-
   # Depth-first search to find connected component
   defp dfs_component(venue_id, adjacency, visited) do
     if MapSet.member?(visited, venue_id) do
