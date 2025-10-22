@@ -90,13 +90,13 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
       total == 0 ->
         :no_data
 
-      skip_rate > 0.70 ->
+      skip_rate >= 0.70 ->
         :healthy
 
-      skip_rate > 0.30 ->
+      skip_rate >= 0.30 ->
         :degraded
 
-      skip_rate > 0.05 ->
+      skip_rate >= 0.05 ->
         :warning
 
       true ->

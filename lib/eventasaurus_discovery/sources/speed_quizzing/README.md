@@ -67,7 +67,7 @@ end
 
 **Flow:**
 1. IndexJob fetches events from Speed Quizzing API
-2. Generates external_ids for each event (line 50-70)
+2. Generates external_ids for each event (lines 52-56)
 3. EventFreshnessChecker filters out fresh events (>70% skip rate)
 4. DetailJob processes stale events only
 5. Transformer reuses event_id to create external_id
