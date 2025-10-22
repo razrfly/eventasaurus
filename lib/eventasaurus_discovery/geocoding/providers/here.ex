@@ -171,6 +171,105 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
     end
   end
 
+  # Search by Coordinates (for backfill)
+
+  @doc """
+  Searches for a venue by coordinates using reverse geocoding.
+
+  Used for backfilling provider IDs when we have venue coordinates but no HERE ID.
+
+  ## Parameters
+  - `lat` - Latitude
+  - `lng` - Longitude
+  - `venue_name` - Optional venue name (unused, for API consistency)
+
+  ## Returns
+  - `{:ok, provider_id}` - Found place ID
+  - `{:error, reason}` - No venue found or API error
+  """
+  def search_by_coordinates(lat, lng, _venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
+    api_key = get_api_key()
+
+    if is_nil(api_key) do
+      Logger.error("❌ HERE_API_KEY not configured")
+      {:error, :api_key_missing}
+    else
+      Logger.debug("🔍 HERE reverse geocode: #{lat},#{lng}")
+      do_reverse_geocode(lat, lng, api_key)
+    end
+  end
+
+  defp do_reverse_geocode(lat, lng, api_key) do
+    # HERE reverse geocoding API (revgeocode endpoint)
+    url = "https://revgeocode.search.hereapi.com/v1/revgeocode"
+
+    params = [
+      at: "#{lat},#{lng}",
+      apiKey: api_key,
+      limit: 1
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_reverse_response(body)
+
+      {:ok, %HTTPoison.Response{status_code: 401}} ->
+        Logger.error("❌ HERE reverse geocode authentication failed")
+        {:error, :api_error}
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ HERE reverse geocode rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ HERE reverse geocode HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ HERE reverse geocode timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ HERE reverse geocode failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_reverse_response(body) do
+    case Jason.decode(body) do
+      {:ok, %{"items" => [first_item | _]}} ->
+        # Extract HERE place ID
+        place_id =
+          case Map.get(first_item, "id") do
+            nil -> nil
+            id when is_integer(id) -> Integer.to_string(id)
+            id when is_binary(id) -> id
+            other -> to_string(other)
+          end
+
+        if place_id do
+          Logger.debug("✅ HERE found place: #{place_id}")
+          {:ok, place_id}
+        else
+          Logger.debug("📍 HERE: no place ID in response")
+          {:error, :no_results}
+        end
+
+      {:ok, %{"items" => []}} ->
+        Logger.debug("📍 HERE: no results found")
+        {:error, :no_results}
+
+      {:ok, other} ->
+        Logger.error("❌ HERE reverse: unexpected response: #{inspect(other)}")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
+        Logger.error("❌ HERE reverse: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
+  end
+
   # Images Implementation
 
   @impl EventasaurusDiscovery.Geocoding.MultiProvider

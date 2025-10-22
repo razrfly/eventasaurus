@@ -63,11 +63,12 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
   def geocode(_), do: {:error, :invalid_address}
 
   defp search_places(address, api_key) do
-    url = "https://api.foursquare.com/v3/places/search"
+    url = "https://places-api.foursquare.com/places/search"
 
     headers = [
-      {"Authorization", api_key},
-      {"Accept", "application/json"}
+      {"Authorization", "Bearer #{api_key}"},
+      {"Accept", "application/json"},
+      {"X-Places-Api-Version", "2025-06-17"}
     ]
 
     params = [
@@ -121,18 +122,17 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
   end
 
   defp extract_geocode_result(result) do
-    # Extract coordinates from geocodes
-    geocodes = get_in(result, ["geocodes", "main"]) || %{}
-    lat = Map.get(geocodes, "latitude")
-    lng = Map.get(geocodes, "longitude")
+    # Extract coordinates - new API has them at root level
+    lat = Map.get(result, "latitude")
+    lng = Map.get(result, "longitude")
 
     # Extract location information
     location = get_in(result, ["location"]) || %{}
     city = Map.get(location, "locality") || Map.get(location, "region")
     country = Map.get(location, "country")
 
-    # Extract Foursquare place ID (fsq_id)
-    place_id = Map.get(result, "fsq_id")
+    # Extract Foursquare place ID (fsq_place_id in new API)
+    place_id = Map.get(result, "fsq_place_id")
 
     cond do
       is_nil(lat) or is_nil(lng) ->
@@ -168,6 +168,143 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
     end
   end
 
+  # Search by Coordinates (for backfill)
+
+  @doc """
+  Searches for a venue by coordinates and optional name.
+
+  Used for backfilling provider IDs when we have venue coordinates but no Foursquare ID.
+
+  ## Parameters
+  - `lat` - Latitude
+  - `lng` - Longitude
+  - `venue_name` - Optional venue name for better matching (can be nil)
+
+  ## Returns
+  - `{:ok, provider_id}` - Found venue ID
+  - `{:error, reason}` - No venue found or API error
+  """
+  def search_by_coordinates(lat, lng, venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
+    api_key = get_api_key()
+
+    if is_nil(api_key) do
+      Logger.error("❌ FOURSQUARE_API_KEY not configured")
+      {:error, :api_key_missing}
+    else
+      Logger.debug("🔍 Foursquare search by coordinates: #{lat},#{lng} name=#{inspect(venue_name)}")
+      do_coordinate_search(lat, lng, venue_name, api_key)
+    end
+  end
+
+  defp do_coordinate_search(lat, lng, venue_name, api_key) do
+    url = "https://places-api.foursquare.com/places/search"
+
+    headers = [
+      {"Authorization", "Bearer #{api_key}"},
+      {"Accept", "application/json"},
+      {"X-Places-Api-Version", "2025-06-17"}
+    ]
+
+    # Build params - use name query if provided, otherwise just search by location
+    base_params = [
+      ll: "#{lat},#{lng}",
+      radius: 100,  # 100 meter radius
+      limit: 5      # Get top 5 results for matching
+    ]
+
+    params = if venue_name && String.trim(venue_name) != "" do
+      [{:query, venue_name} | base_params]
+    else
+      base_params
+    end
+
+    case HTTPoison.get(url, headers, params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_search_response(body, venue_name)
+
+      {:ok, %HTTPoison.Response{status_code: 401, body: body}} ->
+        Logger.error("❌ Foursquare search authentication failed. Response: #{body}")
+        {:error, :api_error}
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ Foursquare search rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ Foursquare search HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Foursquare search timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ Foursquare search failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_search_response(body, venue_name) do
+    case Jason.decode(body) do
+      {:ok, %{"results" => results}} when is_list(results) and length(results) > 0 ->
+        # If we have a venue name, try to find best match
+        # Otherwise just take the first result (closest by distance)
+        provider_id = if venue_name && String.trim(venue_name) != "" do
+          find_best_match(results, venue_name)
+        else
+          # Just take first result (closest to coordinates)
+          first = List.first(results)
+          Map.get(first, "fsq_place_id")
+        end
+
+        if provider_id do
+          Logger.debug("✅ Foursquare found venue: #{provider_id}")
+          {:ok, provider_id}
+        else
+          Logger.debug("📍 Foursquare: no matching venue found")
+          {:error, :no_results}
+        end
+
+      {:ok, %{"results" => []}} ->
+        Logger.debug("📍 Foursquare: no results found")
+        {:error, :no_results}
+
+      {:ok, other} ->
+        Logger.error("❌ Foursquare search: unexpected response: #{inspect(other)}")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
+        Logger.error("❌ Foursquare search: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
+  end
+
+  defp find_best_match(results, venue_name) do
+    # Normalize venue name for comparison
+    normalized_name = String.downcase(String.trim(venue_name))
+
+    # Try to find exact or partial match
+    matched = Enum.find(results, fn result ->
+      result_name = get_in(result, ["name"]) || ""
+      normalized_result = String.downcase(result_name)
+
+      # Check if names match (exact or contains)
+      normalized_result == normalized_name ||
+        String.contains?(normalized_result, normalized_name) ||
+        String.contains?(normalized_name, normalized_result)
+    end)
+
+    case matched do
+      nil ->
+        # No name match, just use first result (closest by distance)
+        first = List.first(results)
+        Map.get(first, "fsq_place_id")
+      result ->
+        Map.get(result, "fsq_place_id")
+    end
+  end
+
   # Images Implementation
 
   @impl EventasaurusDiscovery.Geocoding.MultiProvider
@@ -186,11 +323,12 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
   def get_images(_), do: {:error, :invalid_place_id}
 
   defp fetch_photos(place_id, api_key) do
-    url = "https://api.foursquare.com/v3/places/#{place_id}/photos"
+    url = "https://places-api.foursquare.com/places/#{place_id}/photos"
 
     headers = [
-      {"Authorization", api_key},
-      {"Accept", "application/json"}
+      {"Authorization", "Bearer #{api_key}"},
+      {"Accept", "application/json"},
+      {"X-Places-Api-Version", "2025-06-17"}
     ]
 
     params = [

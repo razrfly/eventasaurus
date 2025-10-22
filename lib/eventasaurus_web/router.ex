@@ -26,6 +26,9 @@ defmodule EventasaurusWeb.Router do
 
       # Venue Images testing page (dev - no auth)
       get "/venue-images", Dev.VenueImagesTestController, :index
+      post "/venue-images/test-enrichment", Dev.VenueImagesTestController, :test_enrichment
+      put "/venue-images/update-provider-ids", Dev.VenueImagesTestController, :update_provider_ids
+      post "/venue-images/save-discovered-ids", Dev.VenueImagesTestController, :save_discovered_ids
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
@@ -52,6 +55,9 @@ defmodule EventasaurusWeb.Router do
 
       # Venue Images Stats Dashboard (dev - no auth)
       live "/venue-images/stats", Admin.VenueImagesStatsLive
+
+      # Venue Duplicate Management (dev - no auth)
+      live "/venues/duplicates", AdminVenueDuplicatesLive
 
       # City Discovery Configuration (dev - no auth)
       live "/discovery/config", Admin.CityDiscoveryConfigLive, :index
@@ -130,6 +136,9 @@ defmodule EventasaurusWeb.Router do
 
       # Venue Images Stats Dashboard with admin authentication
       live "/venue-images/stats", EventasaurusWeb.Admin.VenueImagesStatsLive
+
+      # Venue Duplicate Management with admin authentication
+      live "/venues/duplicates", EventasaurusWeb.AdminVenueDuplicatesLive
 
       # City Discovery Configuration
       live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index

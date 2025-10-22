@@ -76,6 +76,17 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
   def geocode(_), do: {:error, :invalid_address}
 
+  @doc """
+  Searches for a venue by coordinates and optional name.
+
+  Google Places doesn't support this for Phase 1 due to high cost ($0.034/call).
+  Returns error to avoid unexpected charges.
+  """
+  def search_by_coordinates(_lat, _lng, _venue_name \\ nil) do
+    Logger.warning("⚠️ Google Places search_by_coordinates disabled due to high cost")
+    {:error, :not_implemented}
+  end
+
   # Step 1: Text Search API
   defp text_search(address, api_key) do
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"

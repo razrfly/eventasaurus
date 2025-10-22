@@ -153,6 +153,7 @@ defmodule EventasaurusApp.Venues.Venue do
     |> validate_length(:place_id, max: 255)
     |> validate_utf8_fields()
     |> validate_gps_coordinates()
+    |> validate_no_duplicate()
     |> validate_place_id_source()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
@@ -259,6 +260,39 @@ defmodule EventasaurusApp.Venues.Venue do
 
       true ->
         changeset
+    end
+  end
+
+  # Duplicate Detection Validation (Phase 1)
+  # Prevents creation of duplicate venues based on proximity and name similarity
+  defp validate_no_duplicate(changeset) do
+    # Only check for duplicates on new venue creation (not updates)
+    # Skip if changeset already has errors
+    if changeset.data.id || !changeset.valid? do
+      changeset
+    else
+      lat = get_field(changeset, :latitude)
+      lng = get_field(changeset, :longitude)
+      name = get_field(changeset, :name)
+
+      # Only perform duplicate check if we have all required fields
+      if lat && lng && name do
+        alias EventasaurusApp.Venues
+
+        case Venues.check_duplicate(%{latitude: lat, longitude: lng, name: name}) do
+          {:ok, nil} ->
+            # No duplicate found
+            changeset
+
+          {:error, reason} ->
+            # Duplicate found - add error to changeset
+            add_error(changeset, :base, reason)
+        end
+      else
+        # Missing required fields for duplicate check - skip validation
+        # (required field validation will catch this separately)
+        changeset
+      end
     end
   end
 
