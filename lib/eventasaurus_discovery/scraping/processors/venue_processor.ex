@@ -630,9 +630,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         {:ok, venue} ->
           {:ok, venue}
 
-        {:error, changeset} ->
+        {:error, error} ->
           # Check if it's a unique constraint violation on place_id
-          if has_place_id_constraint_error?(changeset) do
+          # Error could be a changeset or an error string
+          if is_struct(error, Ecto.Changeset) && has_place_id_constraint_error?(error) do
             # Another worker beat us to the insert, fetch and return the existing venue
             # Try provider_ids first, then place_id
             refetch_existing =
@@ -653,7 +654,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                   "🏛️ ❌ Unique constraint violation but venue not found: provider_ids=#{inspect(provider_ids)}, place_id=#{final_place_id}"
                 )
 
-                {:error, changeset}
+                {:error, error}
 
               existing ->
                 Logger.info(
@@ -663,8 +664,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                 {:ok, existing}
             end
           else
-            # Some other error, propagate it
-            {:error, changeset}
+            # Some other error, propagate it (could be changeset or string)
+            {:error, error}
           end
       end
     end
@@ -806,18 +807,55 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         {:ok, venue}
 
       {:error, changeset} ->
-        errors = format_changeset_errors(changeset)
+        # Check if error is due to duplicate venue detection (not a real error)
+        # If so, find and return the existing venue instead of failing
+        if has_duplicate_venue_error?(changeset) do
+          # Extract the duplicate venue info from the error message
+          # Error format: "Duplicate venue found: 'Name' at Address (Xm away, ID: Y)"
+          base_errors = Keyword.get_values(changeset.errors, :base)
 
-        Logger.error(
-          "❌ Failed to create venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}"
-        )
+          duplicate_venue =
+            if length(base_errors) > 0 do
+              {error_msg, _} = List.first(base_errors)
+              # Extract venue ID from error message using regex
+              case Regex.run(~r/ID: (\d+)/, error_msg) do
+                [_, venue_id] ->
+                  Repo.get(Venue, String.to_integer(venue_id))
+                _ ->
+                  nil
+              end
+            else
+              nil
+            end
 
-        # If it's specifically a GPS coordinate error, provide clear message for Oban
-        if has_coordinate_errors?(changeset) do
-          {:error,
-           "GPS coordinates required but unavailable for venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}' in #{city.name}. Geocoding failed or returned no results."}
+          if duplicate_venue do
+            Logger.info(
+              "🏛️ ✅ Found existing venue via duplicate detection: '#{duplicate_venue.name}' (ID: #{duplicate_venue.id})"
+            )
+            {:ok, duplicate_venue}
+          else
+            # Couldn't extract venue ID from error - log and propagate error
+            errors = format_changeset_errors(changeset)
+            Logger.error(
+              "❌ Duplicate detected but couldn't find existing venue for '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}"
+            )
+            {:error, "Failed to create venue: #{errors}"}
+          end
         else
-          {:error, "Failed to create venue: #{errors}"}
+          # Some other error (GPS coordinates, validation, etc.)
+          errors = format_changeset_errors(changeset)
+
+          Logger.error(
+            "❌ Failed to create venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}"
+          )
+
+          # If it's specifically a GPS coordinate error, provide clear message for Oban
+          if has_coordinate_errors?(changeset) do
+            {:error,
+             "GPS coordinates required but unavailable for venue '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}' in #{city.name}. Geocoding failed or returned no results."}
+          else
+            {:error, "Failed to create venue: #{errors}"}
+          end
         end
     end
   end
@@ -825,9 +863,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp maybe_update_venue(venue, data, _source_scraper) do
     updates = []
 
+    # Note: place_id field was removed from venues table
+    # Google Places IDs are now stored in provider_ids map
     updates =
-      if is_nil(venue.place_id) && data.place_id do
-        [{:place_id, data.place_id} | updates]
+      if data[:place_id] && !Map.has_key?(venue.provider_ids || %{}, "google_places") do
+        current_provider_ids = venue.provider_ids || %{}
+        updated_provider_ids = Map.put(current_provider_ids, "google_places", data.place_id)
+        [{:provider_ids, updated_provider_ids} | updates]
       else
         updates
       end
@@ -923,6 +965,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
     Enum.any?(errors, fn {field, _} ->
       field in [:latitude, :longitude]
+    end)
+  end
+
+  # Detects if a changeset error is due to duplicate venue detection
+  # Duplicate errors are added to :base field with "Duplicate venue found:" prefix
+  defp has_duplicate_venue_error?(changeset) do
+    base_errors = Keyword.get_values(changeset.errors, :base)
+
+    Enum.any?(base_errors, fn {error_msg, _} ->
+      String.contains?(error_msg, "Duplicate venue found:")
     end)
   end
 

@@ -112,7 +112,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
   # Helper to safely get loaded duplicate groups
   defp get_loaded_duplicate_groups(socket) do
     case socket.assigns.duplicate_groups do
-      %{ok?: true, result: duplicate_groups} -> duplicate_groups
+      %{ok?: true, result: %{duplicate_groups: groups}} -> groups
       _ -> []
     end
   end
