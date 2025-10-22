@@ -23,6 +23,9 @@ defmodule EventasaurusWeb.Router do
 
       # Unsplash integration testing page (dev - no auth)
       get "/unsplash", Dev.UnsplashTestController, :index
+
+      # Venue Images testing page (dev - no auth)
+      get "/venue-images", Dev.VenueImagesTestController, :index
     end
 
     # Admin routes (dev - no auth, mirrors production paths)

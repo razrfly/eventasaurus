@@ -235,12 +235,13 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
           Enum.map(images, fn img ->
             %{
               url: Map.get(img, "url") || Map.get(img, "src"),
-              width: nil,
-              height: nil,
+              width: Map.get(img, "width"),
+              height: Map.get(img, "height"),
               attribution: "HERE",
-              source_url: nil
+              source_url: Map.get(img, "source_url")
             }
           end)
+          |> Enum.filter(fn img -> img.url != nil and img.url != "" end)
 
         if Enum.empty?(mapped_images) do
           Logger.debug("📸 HERE: no images available for this place")

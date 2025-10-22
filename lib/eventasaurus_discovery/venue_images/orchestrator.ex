@@ -183,42 +183,47 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
   defp fetch_from_provider(venue, provider) do
     # Check rate limits before making request
-    case RateLimiter.check_rate_limit(provider) do
-      :ok ->
-        provider_module = get_provider_module(provider.name)
+    with :ok <- RateLimiter.check_rate_limit(provider),
+         {:ok, provider_module} <- get_provider_module_result(provider.name),
+         {:ok, place_id} <- get_place_id(venue, provider.name) do
+      # Record request for rate limiting
+      RateLimiter.record_request(provider.name)
 
-        if provider_module do
-          # Extract provider-specific place_id from venue.provider_ids map
-          place_id =
-            get_in(venue, [:provider_ids, provider.name]) ||
-              get_in(venue, ["provider_ids", provider.name])
+      # Provider has a stored place_id, use it directly
+      case provider_module.get_images(place_id) do
+        {:ok, images} when is_list(images) ->
+          {:ok, provider.name, images, calculate_cost(provider, length(images))}
 
-          if place_id do
-            # Record request for rate limiting
-            RateLimiter.record_request(provider.name)
-
-            # Provider has a stored place_id, use it directly
-            case provider_module.get_images(place_id) do
-              {:ok, images} when is_list(images) ->
-                {:ok, provider.name, images, calculate_cost(provider, length(images))}
-
-              {:error, reason} ->
-                Logger.warning("⚠️ #{provider.name} failed: #{inspect(reason)}")
-                {:error, provider.name, reason}
-            end
-          else
-            # No stored place_id for this provider, skip
-            Logger.debug("⏭️  Skipping #{provider.name}: no provider_id available")
-            {:error, provider.name, :no_place_id}
-          end
-        else
-          Logger.warning("⚠️ Provider module not found for: #{provider.name}")
-          {:error, provider.name, :module_not_found}
-        end
-
+        {:error, reason} ->
+          Logger.warning("⚠️ #{provider.name} failed: #{inspect(reason)}")
+          {:error, provider.name, reason}
+      end
+    else
       {:error, :rate_limited} ->
         Logger.warning("⚠️ Skipping #{provider.name}: rate limit exceeded")
         {:error, provider.name, :rate_limited}
+
+      {:error, :module_not_found} ->
+        Logger.warning("⚠️ Provider module not found for: #{provider.name}")
+        {:error, provider.name, :module_not_found}
+
+      {:error, :no_place_id} ->
+        Logger.debug("⏭️  Skipping #{provider.name}: no provider_id available")
+        {:error, provider.name, :no_place_id}
+    end
+  end
+
+  defp get_provider_module_result(provider_name) do
+    case get_provider_module(provider_name) do
+      nil -> {:error, :module_not_found}
+      module -> {:ok, module}
+    end
+  end
+
+  defp get_place_id(venue, provider_name) do
+    case get_in(venue, [:provider_ids, provider_name]) || get_in(venue, ["provider_ids", provider_name]) do
+      nil -> {:error, :no_place_id}
+      place_id -> {:ok, place_id}
     end
   end
 
@@ -350,32 +355,30 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       provider_ids: venue.provider_ids || %{}
     }
 
-    case fetch_venue_images_with_retry(venue_input, max_retries) do
-      {:ok, images, metadata} ->
-        update_venue_with_images(venue, images, metadata)
-
-      {:error, reason} ->
-        Logger.error("❌ Failed to enrich venue #{venue.id}: #{inspect(reason)}")
-        {:error, reason}
-    end
+    # fetch_venue_images_with_retry always returns {:ok, images, metadata}
+    # even if no images found (images will be empty list)
+    {:ok, images, metadata} = fetch_venue_images_with_retry(venue_input, max_retries)
+    update_venue_with_images(venue, images, metadata)
   end
 
   defp fetch_venue_images_with_retry(venue_input, max_retries, attempt \\ 1) do
     case fetch_venue_images(venue_input) do
-      {:ok, images, metadata} when is_list(images) ->
+      {:ok, images, metadata} when is_list(images) and length(images) > 0 ->
         {:ok, images, metadata}
 
-      {:error, reason} when attempt < max_retries ->
+      {:ok, [], _metadata} when attempt < max_retries ->
+        # No images found, retry with backoff
         Logger.warning(
-          "⚠️ Image fetch attempt #{attempt} failed: #{inspect(reason)}, retrying..."
+          "⚠️ Image fetch attempt #{attempt} found no images, retrying..."
         )
 
         # Exponential backoff: 1s, 2s, 4s...
         :timer.sleep(:math.pow(2, attempt - 1) * 1000 |> round())
         fetch_venue_images_with_retry(venue_input, max_retries, attempt + 1)
 
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, images, metadata} ->
+        # Either images found or max retries reached
+        {:ok, images, metadata}
     end
   end
 

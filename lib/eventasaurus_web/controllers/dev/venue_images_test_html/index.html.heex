@@ -1,0 +1,454 @@
+<div class="min-h-screen bg-gray-50 py-8">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">Venue Image Aggregation System</h1>
+      <p class="mt-2 text-gray-600">
+        Development testing and monitoring for multi-provider venue image enrichment
+      </p>
+    </div>
+
+    <!-- System Status -->
+    <div class="mb-8 p-6 bg-white rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4">System Status</h2>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div>
+          <span class="text-sm font-medium text-gray-700">Google Places:</span>
+          <span class={
+            "ml-2 px-3 py-1 rounded-full text-sm font-medium #{status_badge_class(@system_status.api_keys.google_places)}"
+          }>
+            <%= status_text(@system_status.api_keys.google_places) %>
+          </span>
+        </div>
+        <div>
+          <span class="text-sm font-medium text-gray-700">Foursquare:</span>
+          <span class={
+            "ml-2 px-3 py-1 rounded-full text-sm font-medium #{status_badge_class(@system_status.api_keys.foursquare)}"
+          }>
+            <%= status_text(@system_status.api_keys.foursquare) %>
+          </span>
+        </div>
+        <div>
+          <span class="text-sm font-medium text-gray-700">HERE:</span>
+          <span class={
+            "ml-2 px-3 py-1 rounded-full text-sm font-medium #{status_badge_class(@system_status.api_keys.here)}"
+          }>
+            <%= status_text(@system_status.api_keys.here) %>
+          </span>
+        </div>
+        <div>
+          <span class="text-sm font-medium text-gray-700">Geoapify:</span>
+          <span class={
+            "ml-2 px-3 py-1 rounded-full text-sm font-medium #{status_badge_class(@system_status.api_keys.geoapify)}"
+          }>
+            <%= status_text(@system_status.api_keys.geoapify) %>
+          </span>
+        </div>
+        <div>
+          <span class="text-sm font-medium text-gray-700">Unsplash:</span>
+          <span class={
+            "ml-2 px-3 py-1 rounded-full text-sm font-medium #{status_badge_class(@system_status.api_keys.unsplash)}"
+          }>
+            <%= status_text(@system_status.api_keys.unsplash) %>
+          </span>
+        </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        <div>
+          <span class="font-medium text-gray-700">Rate Limiter:</span>
+          <span class={
+            "ml-2 px-2 py-1 rounded text-xs #{status_badge_class(@system_status.rate_limiter_running)}"
+          }>
+            <%= if @system_status.rate_limiter_running, do: "Running", else: "Stopped" %>
+          </span>
+        </div>
+        <div>
+          <span class="font-medium text-gray-700">Oban Queue Depth:</span>
+          <span class="ml-2 text-gray-600"><%= @system_status.oban_queue_depth %> jobs</span>
+        </div>
+        <div>
+          <span class="font-medium text-gray-700">Providers Enabled:</span>
+          <span class="ml-2 text-gray-600"><%= @system_status.providers_enabled %></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Statistics -->
+    <div class="mb-8 p-6 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4">Global Statistics</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div>
+          <div class="text-3xl font-bold"><%= format_number(@global_stats.total_venues) %></div>
+          <div class="text-sm text-indigo-100">Total Venues</div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold"><%= format_number(@global_stats.enriched_venues) %></div>
+          <div class="text-sm text-indigo-100">Enriched Venues</div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold"><%= format_number(@global_stats.total_images) %></div>
+          <div class="text-sm text-indigo-100">Total Images</div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold"><%= format_cost(@global_stats.total_cost) %></div>
+          <div class="text-sm text-indigo-100">Total Cost</div>
+        </div>
+      </div>
+
+      <div class="mt-6 pt-6 border-t border-indigo-500 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        <div>
+          <div class="text-lg font-semibold"><%= Float.round(@global_stats.avg_images_per_venue, 1) %></div>
+          <div class="text-xs text-indigo-100">Avg Images/Venue</div>
+        </div>
+        <div>
+          <div class="text-lg font-semibold"><%= format_cost(@global_stats.avg_cost_per_venue) %></div>
+          <div class="text-xs text-indigo-100">Avg Cost/Venue</div>
+        </div>
+        <div>
+          <div class="text-lg font-semibold"><%= format_number(@global_stats.needs_enrichment) %></div>
+          <div class="text-xs text-indigo-100">Needs Enrichment</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Provider Statistics -->
+    <div class="mb-8 bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 bg-gray-50 border-b">
+        <h2 class="text-xl font-semibold">Provider Statistics</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Provider
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Priority
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Images
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Success Rate
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Cost/Image
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total Cost
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Rate Limits
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for provider <- @provider_stats do %>
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <%= String.capitalize(provider.name) %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class={"px-2 py-1 text-xs rounded #{status_badge_class(provider.is_active)}"}>
+                    <%= status_text(provider.is_active) %>
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <%= provider.priority %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <%= format_number(provider.images_contributed) %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <%= format_percentage(provider.success_rate) %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <%= format_cost(provider.cost_per_image) %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <%= format_cost(provider.total_cost) %>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                  <div>sec: <%= provider.rate_limit_stats.last_second %></div>
+                  <div>min: <%= provider.rate_limit_stats.last_minute %></div>
+                  <div>hr: <%= provider.rate_limit_stats.last_hour %></div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cost Analysis -->
+    <div class="mb-8 bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">Cost Analysis</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-medium mb-3">Cost Breakdown by Provider</h3>
+          <div class="space-y-2">
+            <%= for {provider, cost} <- @cost_analysis.provider_costs do %>
+              <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                <span class="font-medium text-gray-700"><%= String.capitalize(provider) %></span>
+                <span class="text-gray-900"><%= format_cost(cost) %></span>
+              </div>
+            <% end %>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-medium mb-3">Projections</h3>
+          <div class="space-y-4">
+            <div class="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+              <div class="text-sm text-blue-700">Average Cost per Venue</div>
+              <div class="text-2xl font-bold text-blue-900">
+                <%= format_cost(@cost_analysis.avg_cost_per_venue) %>
+              </div>
+            </div>
+            <div class="p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded">
+              <div class="text-sm text-indigo-700">Projected Total Cost (All Venues)</div>
+              <div class="text-2xl font-bold text-indigo-900">
+                <%= format_cost(@cost_analysis.projected_total_cost) %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staleness Monitor -->
+    <div class="mb-8 bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">Staleness Monitor</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div class="p-4 bg-red-50 border-l-4 border-red-400 rounded">
+          <div class="text-3xl font-bold text-red-900">
+            <%= format_number(@staleness_monitor.stale_venues) %>
+          </div>
+          <div class="text-sm text-red-700">Stale Venues (>30 days)</div>
+        </div>
+        <div class="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+          <div class="text-3xl font-bold text-yellow-900">
+            <%= format_number(@staleness_monitor.upcoming_stale) %>
+          </div>
+          <div class="text-sm text-yellow-700">Upcoming Stale (25-30 days)</div>
+        </div>
+        <div class="p-4 bg-orange-50 border-l-4 border-orange-400 rounded">
+          <div class="text-3xl font-bold text-orange-900">
+            <%= format_number(@staleness_monitor.never_enriched) %>
+          </div>
+          <div class="text-sm text-orange-700">Never Enriched</div>
+        </div>
+        <div class="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+          <div class="text-lg font-bold text-blue-900">
+            <%= format_duration(@staleness_monitor.time_until_cron) %>
+          </div>
+          <div class="text-sm text-blue-700">Until Next Cron (4 AM UTC)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sample Enriched Venues -->
+    <%= if length(@sample_venues) > 0 do %>
+      <div class="mb-8">
+        <h2 class="text-2xl font-semibold mb-4">Recently Enriched Venues</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <%= for venue_data <- @sample_venues do %>
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+              <!-- Venue Header -->
+              <div class="px-4 py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white">
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <h3 class="text-lg font-bold"><%= venue_data.venue.name %></h3>
+                    <p class="text-sm text-gray-300">
+                      <%= if venue_data.venue.city, do: venue_data.venue.city.name, else: "Unknown City" %>
+                    </p>
+                  </div>
+                  <div class="ml-4">
+                    <span class={
+                      "px-3 py-1 text-xs rounded #{freshness_badge_class(venue_data.is_stale)}"
+                    }>
+                      <%= freshness_text(venue_data.is_stale) %>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Primary Image -->
+              <%= if venue_data.primary_image do %>
+                <div class="aspect-video bg-gray-100 relative">
+                  <img
+                    src={venue_data.primary_image.url}
+                    alt={venue_data.venue.name}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <%= if venue_data.primary_image.provider do %>
+                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                      <div class="text-white text-xs">
+                        <div>Source: <%= String.capitalize(venue_data.primary_image.provider) %></div>
+                        <%= if venue_data.primary_image.attribution do %>
+                          <div class="text-gray-300"><%= venue_data.primary_image.attribution %></div>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% else %>
+                <div class="aspect-video bg-gray-200 flex items-center justify-center">
+                  <div class="text-gray-400 text-center">
+                    <div class="text-2xl mb-2">🖼️</div>
+                    <div class="text-sm">No images available</div>
+                  </div>
+                </div>
+              <% end %>
+
+              <!-- Venue Stats -->
+              <div class="px-4 py-3 bg-gray-50 border-t">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span class="font-medium text-gray-700">Images:</span>
+                    <span class="ml-2 text-gray-900"><%= venue_data.image_count %></span>
+                  </div>
+                  <div>
+                    <span class="font-medium text-gray-700">Cost:</span>
+                    <span class="ml-2 text-gray-900"><%= format_cost(venue_data.total_cost) %></span>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <span class="text-xs font-medium text-gray-700">Provider Breakdown:</span>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    <%= for {provider, count} <- venue_data.provider_breakdown do %>
+                      <span class="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded">
+                        <%= String.capitalize(provider) %>: <%= count %>
+                      </span>
+                    <% end %>
+                  </div>
+                </div>
+
+                <div class="mt-3 text-xs text-gray-500">
+                  Last enriched: <%= format_date(venue_data.last_enriched) %>
+                </div>
+              </div>
+
+              <!-- Metadata Details -->
+              <div class="px-4 py-3 border-t">
+                <details>
+                  <summary class="cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                    View Enrichment Metadata
+                  </summary>
+                  <div class="mt-3 p-3 bg-gray-50 rounded text-xs">
+                    <pre class="overflow-x-auto"><code><%= Jason.encode!(venue_data.metadata, pretty: true) %></code></pre>
+                  </div>
+                </details>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% else %>
+      <!-- No Enriched Venues Message -->
+      <div class="mb-8 p-8 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+        <h3 class="text-lg font-semibold text-yellow-900 mb-2">
+          No Enriched Venues Yet
+        </h3>
+        <p class="text-sm text-yellow-700 mb-4">
+          No venues have been enriched with images yet. Try enriching some venues manually.
+        </p>
+      </div>
+    <% end %>
+
+    <!-- Testing Instructions -->
+    <div class="mt-8 p-6 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+      <h3 class="text-lg font-semibold text-blue-900 mb-3">Testing & Usage Instructions</h3>
+      <div class="space-y-4 text-sm text-blue-800">
+        <div>
+          <h4 class="font-semibold mb-2">Manual Enrichment (IEx Console):</h4>
+          <pre class="p-3 bg-blue-100 rounded font-mono text-xs overflow-x-auto">alias EventasaurusDiscovery.VenueImages.Orchestrator
+alias EventasaurusApp.Repo
+alias EventasaurusApp.Venues.Venue
+venue = Repo.get(Venue, 1) |> Repo.preload(:city)
+result = Orchestrator.enrich_venue(venue)
+# Check result.venue_images for fetched images</pre>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-2">Enqueue Background Job:</h4>
+          <pre class="p-3 bg-blue-100 rounded font-mono text-xs overflow-x-auto">iex> EventasaurusDiscovery.VenueImages.EnrichmentJob.enqueue()
+# Monitor at /admin/oban</pre>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-2">Check Rate Limits:</h4>
+          <pre class="p-3 bg-blue-100 rounded font-mono text-xs overflow-x-auto">iex> alias EventasaurusDiscovery.VenueImages.RateLimiter
+iex> RateLimiter.get_stats("google_places")</pre>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-2">Admin Dashboard:</h4>
+          <p>
+            Real-time monitoring at
+            <a href="/admin/venue-images/stats" class="underline hover:text-blue-900">
+              /admin/venue-images/stats
+            </a>
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold mb-2">Load Testing:</h4>
+          <p>
+            See <code class="px-1 bg-blue-100 rounded">test/eventasaurus_discovery/venue_images/LOAD_TESTING.md</code>
+            for comprehensive load testing scenarios.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Reference -->
+    <div class="mt-8 p-6 bg-white rounded-lg shadow">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">API Reference</h3>
+      <div class="space-y-3 text-sm">
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">Orchestrator.fetch_venue_images/1</code>
+          <p class="text-gray-600 mt-1">Fetch images for a venue (no DB update)</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">Orchestrator.enrich_venue/1</code>
+          <p class="text-gray-600 mt-1">Fetch and update venue with images</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">Orchestrator.needs_enrichment?/1</code>
+          <p class="text-gray-600 mt-1">Check if venue needs enrichment (>30 days)</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">EnrichmentJob.enqueue/0</code>
+          <p class="text-gray-600 mt-1">Enqueue all stale venues for enrichment</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">Monitor.get_all_stats/0</code>
+          <p class="text-gray-600 mt-1">Get all provider statistics</p>
+        </div>
+        <div class="p-3 bg-gray-50 rounded">
+          <code class="font-medium text-indigo-600">RateLimiter.get_stats/1</code>
+          <p class="text-gray-600 mt-1">Get rate limit usage for provider</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-8 text-center text-sm text-gray-500">
+      <p>Development testing page - Not accessible in production</p>
+      <p class="mt-1">
+        For production monitoring, use
+        <a href="/admin/venue-images/stats" class="underline hover:text-gray-700">
+          /admin/venue-images/stats
+        </a>
+      </p>
+    </div>
+  </div>
+</div>
