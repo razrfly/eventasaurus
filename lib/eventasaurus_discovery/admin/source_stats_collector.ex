@@ -314,7 +314,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         join: v in Venue,
         on: v.id == pe.venue_id,
         where: s.slug == ^source_slug,
-        group_by: [v.id, v.name, v.address, v.latitude, v.longitude, v.source, v.place_id, v.geocoding_performance, v.metadata],
+        group_by: [v.id, v.name, v.address, v.latitude, v.longitude, v.source, v.geocoding_performance, v.metadata],
         select: %{
           venue_id: v.id,
           venue_name: v.name,
@@ -322,7 +322,6 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
           latitude: v.latitude,
           longitude: v.longitude,
           source: v.source,
-          place_id: v.place_id,
           geocoding_performance: v.geocoding_performance,
           metadata: v.metadata,
           event_count: count(pe.id)

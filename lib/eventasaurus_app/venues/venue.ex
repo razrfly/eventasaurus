@@ -105,7 +105,6 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:latitude, :float)
     field(:longitude, :float)
     field(:venue_type, :string, default: "venue")
-    field(:place_id, :string)
     field(:source, :string, default: "user")
     field(:metadata, :map)
     field(:geocoding_performance, :map)
@@ -135,7 +134,6 @@ defmodule EventasaurusApp.Venues.Venue do
       :latitude,
       :longitude,
       :venue_type,
-      :place_id,
       :source,
       :city_id,
       :metadata,
@@ -150,14 +148,11 @@ defmodule EventasaurusApp.Venues.Venue do
     )
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
     |> validate_source()
-    |> validate_length(:place_id, max: 255)
     |> validate_utf8_fields()
     |> validate_gps_coordinates()
     |> validate_no_duplicate()
-    |> validate_place_id_source()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
-    |> unique_constraint(:place_id, name: :venues_place_id_unique_index)
     |> foreign_key_constraint(:city_id)
   end
 
@@ -296,21 +291,6 @@ defmodule EventasaurusApp.Venues.Venue do
     end
   end
 
-  defp validate_place_id_source(changeset) do
-    source = get_field(changeset, :source)
-    place_id = get_field(changeset, :place_id)
-
-    # Provider-agnostic validation
-    # place_id is optional for all sources (providers store IDs in provider_ids field)
-    # Only validate that user-created venues don't have place_ids (they should be geocoded first)
-    cond do
-      not is_nil(place_id) and source == "user" ->
-        add_error(changeset, :source, "cannot be 'user' when place_id is present (venue should be geocoded)")
-
-      true ->
-        changeset
-    end
-  end
 
   @doc """
   Returns the list of valid venue types.

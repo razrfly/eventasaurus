@@ -454,6 +454,132 @@ performers: [
 ]
 ```
 
+### Pattern-Based Scraper External IDs
+
+For scrapers that track **recurring events** (weekly trivia, daily movie showtimes), external_id generation follows a **venue-based pattern** rather than including temporal metadata.
+
+#### Core Principle
+
+> **For pattern-based recurring events, the venue IS the unique identifier.**
+
+- **Venue location** = Identity (describes WHICH event it is)
+- **Day of week, time, scheduling** = Metadata (describes WHEN event happens)
+
+This approach enables:
+- ✅ EventFreshnessChecker to skip recently-updated venues (80-90% reduction in API calls)
+- ✅ Recurring event consolidation via EventProcessor
+- ✅ Stable external_ids across scraper runs
+
+#### Pattern-Based vs Explicit-Date Scrapers
+
+**Pattern-Based Scrapers** (use venue-based external_id):
+- **Examples**: Question One, PubQuiz, Inquizition, Geeks Who Drink, Speed Quizzing
+- **Characteristics**: Weekly/recurring events at fixed venues
+- **External ID Format**: `{source}_{venue_identifier}`
+  - Question One: `question_one_royal_oak_twickenham`
+  - PubQuiz: `pubquiz-pl_warszawa_centrum`
+  - Inquizition: `inquizition_12345`
+  - Geeks Who Drink: `geeks_who_drink_12345`
+  - Speed Quizzing: `speed-quizzing-12345`
+
+**Explicit-Date Scrapers** (use event-based external_id):
+- **Examples**: Ticketmaster, Bandsintown, Resident Advisor, Karnet
+- **Characteristics**: One-time events with specific dates
+- **External ID Format**: `{source}_event_{event_id}`
+  - Ticketmaster: `tm_event_G5vZZ9RVZV8V3`
+  - Bandsintown: `bandsintown_event_103844808`
+
+#### Implementation Pattern
+
+For pattern-based scrapers, generate external_id from venue identifier:
+
+```elixir
+# Transformer - Generate stable external_id from venue
+def transform_event(venue_data, _options \\ %{}) do
+  # Use venue identifier (not day_of_week!)
+  venue_slug = slugify(venue_data.name)
+  external_id = "question_one_#{venue_slug}"
+
+  %{
+    external_id: external_id,
+    title: "Quiz Night at #{venue_data.name}",
+    starts_at: next_occurrence,
+    recurrence_rule: %{
+      "frequency" => "weekly",
+      "days_of_week" => ["monday"],  # Metadata, not in external_id
+      "time" => "19:00",
+      "timezone" => "Europe/London"
+    }
+  }
+end
+```
+
+**Two-Stage Architecture** (IndexJob + DetailJob):
+
+```elixir
+# IndexJob - Generate external_id for freshness filtering
+defp schedule_detail_jobs(venues, source_id) do
+  # Generate external_ids for venues
+  venues_with_ids = Enum.map(venues, fn venue ->
+    venue_slug = extract_venue_slug(venue.url)
+    Map.put(venue, :external_id, "question_one_#{venue_slug}")
+  end)
+
+  # EventFreshnessChecker filters out fresh venues
+  venues_to_process = EventFreshnessChecker.filter_events_needing_processing(
+    venues_with_ids,
+    source_id
+  )
+
+  # Schedule detail jobs ONLY for stale venues
+  Enum.each(venues_to_process, fn venue ->
+    VenueDetailJob.new(%{
+      "venue_url" => venue.url,
+      "source_id" => source_id
+    })
+    |> Oban.insert()
+  end)
+end
+```
+
+#### Edge Case Handling
+
+**Q: What if a venue has multiple different events?**
+
+A: EventProcessor's title-based matching handles this automatically via three-layer matching:
+
+1. **Direct external_id match**: Skip if seen within threshold
+2. **Existing event_id match**: Skip if belongs to recently-updated recurring event
+3. **Predicted event_id match**: Uses title+venue similarity for new events
+
+**Example**:
+- Regular quiz: external_id = `geeks_who_drink_bar_xyz`, title = "General Trivia Night"
+- Special event: external_id = `geeks_who_drink_bar_xyz`, title = "Halloween Special Trivia"
+- **Result**: Different titles → EventFreshnessChecker's prediction layer groups them separately → both processed ✅
+
+**Q: What if titles are very similar?**
+
+A: Intentional consolidation for recurring event detection:
+- "Monday Night Trivia" and "Monday Trivia Night"
+- Jaro distance > 0.85 → merged as recurring event ✅
+- This is desired behavior for pattern-based scrapers
+
+#### Reference Implementations
+
+**Best Practices**:
+- ✅ Question One: `lib/eventasaurus_discovery/sources/question_one/README.md` (External ID Pattern section)
+- ✅ PubQuiz: `lib/eventasaurus_discovery/sources/pubquiz/README.md` (External ID Pattern section)
+- ✅ Speed Quizzing: `lib/eventasaurus_discovery/sources/speed_quizzing/README.md` (External ID Pattern section)
+- ✅ Inquizition: `lib/eventasaurus_discovery/sources/inquizition/README.md` (External ID Pattern section)
+- ✅ Geeks Who Drink: `lib/eventasaurus_discovery/sources/geeks_who_drink/README.md` (External ID Pattern section)
+
+**EventFreshnessChecker Integration**:
+- Three-layer matching system: `lib/eventasaurus_discovery/services/event_freshness_checker.ex`
+- Recurring event consolidation: `lib/eventasaurus_discovery/scraping/processors/event_processor.ex:1132-1391`
+
+**Related Issues**:
+- GitHub Issue #1944 - Pattern-based scraper external_id standardization
+
 ---
 
 ## GPS Coordinates & Geocoding

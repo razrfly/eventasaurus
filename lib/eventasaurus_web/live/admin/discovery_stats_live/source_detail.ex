@@ -23,6 +23,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     SourceStatsCollector
   }
 
+  alias EventasaurusDiscovery.Services.FreshnessHealthChecker
+
   import Ecto.Query
   require Logger
 
@@ -390,6 +392,29 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     occurrence_chart_data = format_occurrence_pie_chart(comprehensive_stats.occurrence_types)
     category_chart_data = format_category_pie_chart(comprehensive_stats.top_categories)
 
+    # Get freshness health check
+    source = Repo.one(
+      from(s in EventasaurusDiscovery.Sources.Source,
+        where: s.slug == ^source_slug,
+        select: s
+      )
+    )
+
+    freshness_health =
+      if source do
+        FreshnessHealthChecker.check_health(source.id)
+      else
+        %{
+          total_events: 0,
+          fresh_events: 0,
+          stale_events: 0,
+          expected_skip_rate: 0.0,
+          threshold_hours: 168,
+          status: :no_data,
+          diagnosis: "Source not found"
+        }
+      end
+
     socket
     |> assign(:scope, scope)
     |> assign(:coverage, coverage)
@@ -418,6 +443,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     |> assign(:comprehensive_stats, comprehensive_stats)
     |> assign(:occurrence_chart_data, Jason.encode!(occurrence_chart_data))
     |> assign(:category_chart_data, Jason.encode!(category_chart_data))
+    |> assign(:freshness_health, freshness_health)
   end
 
   # Get configured window for new events detection
@@ -883,6 +909,60 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           </div>
         </div>
 
+        <!-- Freshness Health Monitor -->
+        <div class="bg-white rounded-lg shadow mb-8">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">🔄 Freshness Health Monitor</h2>
+            <p class="mt-1 text-sm text-gray-500">Event freshness checking effectiveness (<%= @freshness_health.threshold_hours %>h threshold)</p>
+          </div>
+          <div class="p-6">
+            <!-- Overall Status -->
+            <div class={["mb-6 p-4 rounded-lg border", freshness_status_bg(@freshness_health.status), freshness_status_border(@freshness_health.status)]}>
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center">
+                    <span class="text-4xl mr-3"><%= freshness_status_emoji(@freshness_health.status) %></span>
+                    <div>
+                      <p class={"text-lg font-semibold #{freshness_status_text_color(@freshness_health.status)}"}>
+                        <%= freshness_status_label(@freshness_health.status) %>
+                      </p>
+                      <p class={"text-sm #{freshness_status_text_color(@freshness_health.status)} mt-1"}>
+                        <%= Float.round(@freshness_health.expected_skip_rate * 100, 1) %>% of events are fresh and being skipped
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Metrics -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+              <div class="p-4 bg-blue-50 rounded-lg text-center">
+                <p class="text-2xl font-bold text-blue-900"><%= format_number(@freshness_health.total_events) %></p>
+                <p class="text-xs text-blue-700 mt-1">Total Events</p>
+              </div>
+              <div class="p-4 bg-green-50 rounded-lg text-center">
+                <p class="text-2xl font-bold text-green-900"><%= format_number(@freshness_health.fresh_events) %></p>
+                <p class="text-xs text-green-700 mt-1">Fresh Events</p>
+                <p class="text-xs text-green-600 mt-1">(within <%= @freshness_health.threshold_hours %>h)</p>
+              </div>
+              <div class="p-4 bg-orange-50 rounded-lg text-center">
+                <p class="text-2xl font-bold text-orange-900"><%= format_number(@freshness_health.stale_events) %></p>
+                <p class="text-xs text-orange-700 mt-1">Stale Events</p>
+                <p class="text-xs text-orange-600 mt-1">(older than <%= @freshness_health.threshold_hours %>h)</p>
+              </div>
+            </div>
+
+            <!-- Diagnosis -->
+            <div class="border-t pt-4">
+              <h3 class="text-sm font-semibold text-gray-900 mb-3">📋 Diagnosis</h3>
+              <div class="text-sm text-gray-700 whitespace-pre-line">
+                <%= @freshness_health.diagnosis %>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Occurrence Type Distribution (Phase 1-3) -->
         <div class="bg-white rounded-lg shadow mb-8">
           <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -1095,9 +1175,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                           <%= if venue.address do %>
                             <span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded" title="Address available">✅ Address</span>
                           <% end %>
-                          <%= if venue.place_id do %>
-                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded" title="Google Place ID">🆔 Place ID</span>
-                          <% end %>
                           <%= if venue.source do %>
                             <span class="text-xs bg-gray-100 text-gray-800 px-2 py-0.5 rounded" title="Data source">
                               🔍 <%= venue.source %>
@@ -1123,12 +1200,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                         <div class="flex items-start">
                           <span class="font-medium w-24 flex-shrink-0">GPS:</span>
                           <span class="flex-1"><%= Float.round(venue.latitude, 6) %>, <%= Float.round(venue.longitude, 6) %></span>
-                        </div>
-                      <% end %>
-                      <%= if venue.place_id do %>
-                        <div class="flex items-start">
-                          <span class="font-medium w-24 flex-shrink-0">Place ID:</span>
-                          <span class="flex-1 font-mono text-xs break-all"><%= venue.place_id %></span>
                         </div>
                       <% end %>
                       <%= if venue.geocoding_performance do %>
@@ -1706,4 +1777,35 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     |> Repo.all()
     |> Map.new()
   end
+
+  # Freshness health status helpers
+  defp freshness_status_bg(:broken), do: "bg-red-50"
+  defp freshness_status_bg(:warning), do: "bg-orange-50"
+  defp freshness_status_bg(:degraded), do: "bg-yellow-50"
+  defp freshness_status_bg(:healthy), do: "bg-green-50"
+  defp freshness_status_bg(:no_data), do: "bg-gray-50"
+
+  defp freshness_status_border(:broken), do: "border-red-200"
+  defp freshness_status_border(:warning), do: "border-orange-200"
+  defp freshness_status_border(:degraded), do: "border-yellow-200"
+  defp freshness_status_border(:healthy), do: "border-green-200"
+  defp freshness_status_border(:no_data), do: "border-gray-200"
+
+  defp freshness_status_emoji(:broken), do: "🔴"
+  defp freshness_status_emoji(:warning), do: "⚠️"
+  defp freshness_status_emoji(:degraded), do: "⚡"
+  defp freshness_status_emoji(:healthy), do: "✅"
+  defp freshness_status_emoji(:no_data), do: "⚪"
+
+  defp freshness_status_label(:broken), do: "CRITICAL - Freshness Checking Broken"
+  defp freshness_status_label(:warning), do: "WARNING - Mostly Not Working"
+  defp freshness_status_label(:degraded), do: "DEGRADED - Partially Working"
+  defp freshness_status_label(:healthy), do: "HEALTHY - Working Correctly"
+  defp freshness_status_label(:no_data), do: "NO DATA - No Events Yet"
+
+  defp freshness_status_text_color(:broken), do: "text-red-900"
+  defp freshness_status_text_color(:warning), do: "text-orange-900"
+  defp freshness_status_text_color(:degraded), do: "text-yellow-900"
+  defp freshness_status_text_color(:healthy), do: "text-green-900"
+  defp freshness_status_text_color(:no_data), do: "text-gray-900"
 end

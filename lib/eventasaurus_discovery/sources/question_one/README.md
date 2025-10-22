@@ -8,7 +8,7 @@ Scrapes weekly trivia event data from [Question One](https://questionone.com).
 - **Coverage**: UK, Ireland, and select international venues
 - **Frequency**: Weekly recurring trivia events
 - **Priority**: 35 (regional specialist source)
-- **External ID Format**: `question_one_<venue_slug>_<day_of_week>`
+- **External ID Format**: `question_one_<venue_slug>`
 
 ## Data Sources
 
@@ -171,11 +171,92 @@ mix test test/eventasaurus_discovery/sources/question_one/
 mix test test/eventasaurus_discovery/sources/question_one/transformer_test.exs
 ```
 
+## External ID Pattern
+
+**Format:** `question_one_{venue_slug}`
+
+**Example:** `question_one_royal_oak_twickenham`
+
+### Why Venue-Based?
+
+For pattern-based recurring events, the **venue IS the unique identifier**.
+
+- Day of week, time, and scheduling are **metadata** (describe WHEN event happens)
+- Venue location is **identity** (describes WHICH event it is)
+- Venue slug creates globally unique identifier
+
+### Implementation
+
+**Generation:** IndexPageJob (line 103-114)
+```elixir
+defp schedule_detail_jobs(venues, source_id, limit) do
+  # Generate external_ids for freshness checking
+  # For pattern-based scrapers, venue is the unique identifier
+  # Day of week is metadata, not part of the external_id
+  venues_with_ids =
+    Enum.map(venues, fn venue ->
+      venue_slug = extract_venue_slug(venue.url)
+      Map.put(venue, :external_id, "question_one_#{venue_slug}")
+    end)
+
+  # Filter out venues that were recently updated (default: 7 days)
+  venues_to_process =
+    EventFreshnessChecker.filter_events_needing_processing(venues_with_ids, source_id)
+```
+
+**Also in Transformer:** (line 64)
+```elixir
+# Generate stable external_id
+# For pattern-based scrapers, venue is the unique identifier
+# Day of week is metadata, not part of identity
+venue_slug = slugify(title)
+external_id = "question_one_#{venue_slug}"
+```
+
+**Flow:**
+1. IndexPageJob generates external_id from venue URL
+2. EventFreshnessChecker filters out fresh venues (>70% skip rate)
+3. VenueDetailJob scrapes stale venues only
+4. Transformer regenerates same external_id from title
+5. EventProcessor creates/updates recurring event with deduplication
+
+### How It Works with EventFreshnessChecker
+
+1. **Direct external_id match:** Skip if external_id seen within threshold (168h default)
+2. **Existing event_id match:** Skip if external_id belongs to recently-updated recurring event
+3. **Predicted event_id match:** Uses title+venue similarity for new events
+
+**Efficiency:** First scrape processes all venues, subsequent scrapes skip ~70-90% (already fresh)
+
+### Edge Cases
+
+**Q: What if a venue has multiple different events?**
+
+A: EventProcessor's title-based matching handles this:
+- Regular quiz: "Quiz Night at The Red Lion"
+- Special event: "Halloween Trivia at The Red Lion"
+- Different titles → processed separately ✅
+
+**Q: What if titles are very similar?**
+
+A: Intentional consolidation (Jaro distance > 0.85):
+- "Trivia Night at The Red Lion"
+- "Quiz Night at The Red Lion"
+- Similar titles → merged as recurring event ✅
+
+This is desired behavior for recurring event detection.
+
+### Related Documentation
+
+- EventFreshnessChecker: `lib/eventasaurus_discovery/services/event_freshness_checker.ex`
+- EventProcessor recurring logic: `lib/eventasaurus_discovery/scraping/processors/event_processor.ex:1132-1391`
+- Pattern standardization: See issue #1944
+
 ## Idempotency
 
 Designed to run daily without creating duplicates:
 
-1. **Stable External IDs**: `question_one_<venue_slug>_<day_of_week>`
+1. **Stable External IDs**: `question_one_{venue_slug}` (venue-based)
 2. **EventFreshnessChecker**: Skips recently updated venues
 3. **EventProcessor**: Updates `last_seen_at` timestamps
 4. **VenueProcessor**: Matches venues by GPS/name

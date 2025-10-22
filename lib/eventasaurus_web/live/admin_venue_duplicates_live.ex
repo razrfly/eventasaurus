@@ -8,22 +8,26 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
     # Note: Authentication is handled by the router pipeline
     # Dev: no auth required (dev admin scope)
     # Production: admin auth required (oban_admin pipeline)
-    duplicate_groups = Venues.find_duplicate_groups()
 
+    # Use async loading to avoid blocking page render
+    # This prevents timeouts when processing many venues
     {:ok,
      socket
-     |> assign(:duplicate_groups, duplicate_groups)
      |> assign(:selected_group, nil)
      |> assign(:selected_primary, nil)
      |> assign(:merge_in_progress, false)
-     |> assign(:page_title, "Manage Duplicate Venues")}
+     |> assign(:page_title, "Manage Duplicate Venues")
+     |> assign_async(:duplicate_groups, fn ->
+       {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
+     end)}
   end
 
   @impl true
   def handle_event("select_group", %{"group_index" => index_str}, socket) do
     case Integer.parse(index_str) do
       {index, ""} ->
-        group = Enum.at(socket.assigns.duplicate_groups, index)
+        duplicate_groups = get_loaded_duplicate_groups(socket)
+        group = Enum.at(duplicate_groups, index)
 
         if is_nil(group) or Enum.empty?(group.venues) do
           {:noreply, put_flash(socket, :error, "Invalid group selection")}
@@ -38,6 +42,14 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
 
       _ ->
         {:noreply, put_flash(socket, :error, "Invalid group selection")}
+    end
+  end
+
+  # Helper to safely get loaded duplicate groups
+  defp get_loaded_duplicate_groups(socket) do
+    case socket.assigns.duplicate_groups do
+      %{ok?: true, result: groups} -> groups
+      _ -> []
     end
   end
 
@@ -67,16 +79,16 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
 
       case Venues.merge_venues(primary_id, duplicate_ids) do
         {:ok, _merged_venue} ->
-          # Refresh duplicate groups
-          updated_groups = Venues.find_duplicate_groups()
-
+          # Refresh duplicate groups asynchronously
           {:noreply,
            socket
-           |> assign(:duplicate_groups, updated_groups)
            |> assign(:selected_group, nil)
            |> assign(:selected_primary, nil)
            |> assign(:merge_in_progress, false)
-           |> put_flash(:info, "Successfully merged #{length(duplicate_ids)} duplicate venues")}
+           |> put_flash(:info, "Successfully merged #{length(duplicate_ids)} duplicate venues")
+           |> assign_async(:duplicate_groups, fn ->
+             {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
+           end)}
 
         {:error, reason} ->
           {:noreply,
@@ -106,7 +118,11 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
           Manage Duplicate Venues
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Found <%= length(@duplicate_groups) %> groups of duplicate venues
+          <.async_result :let={duplicate_groups} assign={@duplicate_groups}>
+            <:loading>Analyzing venues for duplicates...</:loading>
+            <:failed :let={_reason}>Failed to load duplicate groups. Please try again.</:failed>
+            Found <%= length(duplicate_groups) %> groups of duplicate venues
+          </.async_result>
         </p>
       </div>
 
@@ -183,31 +199,74 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
       <% end %>
 
       <!-- Duplicate Groups List -->
-      <%= if length(@duplicate_groups) == 0 do %>
-        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-6 text-center">
-          <svg
-            class="mx-auto h-12 w-12 text-green-600 dark:text-green-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-          <h3 class="mt-4 text-lg font-semibold text-green-900 dark:text-green-100">
-            No Duplicates Found
-          </h3>
-          <p class="mt-2 text-green-700 dark:text-green-300">
-            All venues are unique based on current detection thresholds.
-          </p>
-        </div>
-      <% else %>
-        <div class="space-y-4">
-          <%= for {group, index} <- Enum.with_index(@duplicate_groups) do %>
+      <.async_result :let={duplicate_groups} assign={@duplicate_groups}>
+        <:loading>
+          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6 text-center">
+            <div class="flex justify-center">
+              <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
+            </div>
+            <h3 class="mt-4 text-lg font-semibold text-blue-900 dark:text-blue-100">
+              Analyzing Venues
+            </h3>
+            <p class="mt-2 text-blue-700 dark:text-blue-300">
+              Searching for duplicate venues using spatial and name similarity analysis...
+            </p>
+          </div>
+        </:loading>
+        <:failed :let={reason}>
+          <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-6 text-center">
+            <svg
+              class="mx-auto h-12 w-12 text-red-600 dark:text-red-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <h3 class="mt-4 text-lg font-semibold text-red-900 dark:text-red-100">
+              Error Loading Duplicates
+            </h3>
+            <p class="mt-2 text-red-700 dark:text-red-300">
+              <%= inspect(reason) %>
+            </p>
+            <button
+              phx-click="retry_load"
+              class="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        </:failed>
+        <%= if length(duplicate_groups) == 0 do %>
+          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-6 text-center">
+            <svg
+              class="mx-auto h-12 w-12 text-green-600 dark:text-green-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            <h3 class="mt-4 text-lg font-semibold text-green-900 dark:text-green-100">
+              No Duplicates Found
+            </h3>
+            <p class="mt-2 text-green-700 dark:text-green-300">
+              All venues are unique based on current detection thresholds.
+            </p>
+          </div>
+        <% else %>
+          <div class="space-y-4">
+            <%= for {group, index} <- Enum.with_index(duplicate_groups) do %>
             <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
               <div class="flex items-start justify-between mb-4">
                 <div>
@@ -288,7 +347,8 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
             </div>
           <% end %>
         </div>
-      <% end %>
+        <% end %>
+      </.async_result>
     </div>
     """
   end

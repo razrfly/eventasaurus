@@ -272,11 +272,82 @@ mix test test/eventasaurus_discovery/sources/geeks_who_drink/transformer_test.ex
 mix discovery.sync --source geeks-who-drink --limit 3
 ```
 
+## External ID Pattern
+
+**Format:** `geeks_who_drink_{venue_id}`
+
+**Example:** `geeks_who_drink_12345`
+
+### Why Venue-Based?
+
+For pattern-based recurring events, the **venue IS the unique identifier**.
+
+- Day of week, time, and scheduling are **metadata** (describe WHEN event happens)
+- Venue location is **identity** (describes WHICH event it is)
+- Venue ID from source API creates globally unique identifier
+
+### Implementation
+
+**Generation:** Transformer (line 63)
+```elixir
+def transform_event(venue_data, _options \\ %{}) do
+  # Generate stable external_id from venue_id
+  external_id = "geeks_who_drink_#{venue_data.venue_id}"
+
+  %{
+    external_id: external_id,
+    # ...
+  }
+end
+```
+
+**Flow:**
+1. SyncJob extracts WordPress nonce from venues page
+2. IndexJob queries map API with US bounds and nonce
+3. VenueExtractor parses venue blocks from HTML response
+4. Generates external_ids for each venue
+5. EventFreshnessChecker filters out fresh venues (>70% skip rate)
+6. VenueDetailJob scrapes stale venue detail pages only
+7. Transformer regenerates same external_id from venue_id
+8. EventProcessor creates/updates recurring event with deduplication
+
+### How It Works with EventFreshnessChecker
+
+1. **Direct external_id match:** Skip if external_id seen within threshold (168h default)
+2. **Existing event_id match:** Skip if external_id belongs to recently-updated recurring event
+3. **Predicted event_id match:** Uses title+venue similarity for new events
+
+**Efficiency:** First scrape processes all venues, subsequent scrapes skip ~70-90% (already fresh)
+
+### Edge Cases
+
+**Q: What if a venue has multiple different events?**
+
+A: EventProcessor's title-based matching handles this:
+- Regular quiz: "Geeks Who Drink Trivia at The Library Bar"
+- Special event: "Halloween Trivia at The Library Bar"
+- Different titles → processed separately ✅
+
+**Q: What if titles are very similar?**
+
+A: Intentional consolidation (Jaro distance > 0.85):
+- "Geeks Who Drink Trivia at The Library Bar"
+- "Trivia Night at The Library Bar"
+- Similar titles → merged as recurring event ✅
+
+This is desired behavior for recurring event detection.
+
+### Related Documentation
+
+- EventFreshnessChecker: `lib/eventasaurus_discovery/services/event_freshness_checker.ex`
+- EventProcessor recurring logic: `lib/eventasaurus_discovery/scraping/processors/event_processor.ex:1132-1391`
+- Pattern standardization: See issue #1944
+
 ## Idempotency
 
 Designed to run daily without creating duplicates:
 
-1. **Stable External IDs**: `geeks_who_drink_<venue_id>`
+1. **Stable External IDs**: `geeks_who_drink_{venue_id}` (venue-based)
 2. **EventFreshnessChecker**: Skips recently updated venues
 3. **EventProcessor**: Updates `last_seen_at` timestamps
 4. **VenueProcessor**: Matches venues by GPS coordinates (50m/200m radius)

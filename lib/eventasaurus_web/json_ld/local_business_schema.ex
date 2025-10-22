@@ -111,11 +111,19 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
     end
   end
 
-  # Add Google Place ID if available
+  # Add Google Place ID if available (from provider_ids)
   defp add_place_id(schema, venue) do
-    if venue.place_id do
+    # Try to get Google Places ID from provider_ids JSONB field
+    google_place_id =
+      case venue.provider_ids do
+        %{"google_places" => id} when is_binary(id) -> id
+        %{google_places: id} when is_binary(id) -> id
+        _ -> nil
+      end
+
+    if google_place_id do
       # Use the Google Maps URL format
-      url = "https://www.google.com/maps/place/?q=place_id:#{venue.place_id}"
+      url = "https://www.google.com/maps/place/?q=place_id:#{google_place_id}"
       Map.put(schema, "hasMap", url)
     else
       schema
