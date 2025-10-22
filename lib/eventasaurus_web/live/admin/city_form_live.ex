@@ -166,13 +166,28 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
     # Popular countries to show first (based on common event locations)
     popular_codes = ["US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "NL", "PL"]
 
-    all_countries = Repo.all(from c in Country, order_by: c.name)
+    # Use the countries gem directly - no need to store in database
+    all_countries = Countries.all()
 
-    popular = Enum.filter(all_countries, fn c -> c.code in popular_codes end)
-              |> Enum.sort_by(fn c -> Enum.find_index(popular_codes, &(&1 == c.code)) end)
+    # Convert to format compatible with existing code (map with code/name keys)
+    popular =
+      Enum.filter(all_countries, fn c -> c.alpha2 in popular_codes end)
+      |> Enum.sort_by(fn c -> Enum.find_index(popular_codes, &(&1 == c.alpha2)) end)
+      |> Enum.map(&country_to_map/1)
 
-    rest = Enum.reject(all_countries, fn c -> c.code in popular_codes end)
+    rest =
+      Enum.reject(all_countries, fn c -> c.alpha2 in popular_codes end)
+      |> Enum.sort_by(& &1.name)
+      |> Enum.map(&country_to_map/1)
 
     %{popular: popular, other: rest}
+  end
+
+  defp country_to_map(country) do
+    %{
+      id: nil,  # No DB id needed
+      code: country.alpha2,
+      name: country.name
+    }
   end
 end
