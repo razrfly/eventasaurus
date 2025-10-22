@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
      |> assign(:merge_in_progress, false)
      |> assign(:page_title, "Manage Duplicate Venues")
      |> assign_async(:duplicate_groups, fn ->
-       {:ok, Venues.find_duplicate_groups()}
+       {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
      end)}
   end
 
@@ -79,7 +79,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
            |> assign(:merge_in_progress, false)
            |> put_flash(:info, "Successfully merged #{length(duplicate_ids)} duplicate venues")
            |> assign_async(:duplicate_groups, fn ->
-             {:ok, Venues.find_duplicate_groups()}
+             {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
            end)}
 
         {:error, reason} ->
@@ -105,7 +105,7 @@ defmodule EventasaurusWeb.AdminVenueDuplicatesLive do
   def handle_event("retry_load", _params, socket) do
     {:noreply,
      assign_async(socket, :duplicate_groups, fn ->
-       {:ok, Venues.find_duplicate_groups()}
+       {:ok, %{duplicate_groups: Venues.find_duplicate_groups()}}
      end)}
   end
 
