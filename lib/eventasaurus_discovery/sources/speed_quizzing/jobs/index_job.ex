@@ -84,7 +84,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
     end)
 
     # Insert all jobs
-    {count, _} = Oban.insert_all(Oban, jobs)
+    {count, _jobs} = Oban.insert_all(jobs)
     Logger.info("✅ Enqueued #{count} detail jobs for Speed Quizzing")
     {:ok, %{detail_jobs_enqueued: count}}
   end

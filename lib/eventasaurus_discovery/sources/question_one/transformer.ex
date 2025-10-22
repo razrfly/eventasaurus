@@ -58,8 +58,10 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     starts_at = DateParser.next_occurrence(day_of_week, start_time)
 
     # Generate stable external_id
+    # For pattern-based scrapers, venue is the unique identifier
+    # Day of week is metadata, not part of identity
     venue_slug = slugify(title)
-    external_id = "question_one_#{venue_slug}_#{day_of_week}"
+    external_id = "question_one_#{venue_slug}"
 
     # Use geocoded city and country (enriched by venue_detail_job)
     city = Map.get(venue_data, :city_name)

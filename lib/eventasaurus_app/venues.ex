@@ -296,31 +296,138 @@ defmodule EventasaurusApp.Venues do
     distance = distance_threshold || get_distance_threshold()
     similarity = similarity_threshold || get_similarity_threshold()
 
-    # Get all venues with coordinates
-    venues = Repo.all(from(v in Venue, where: not is_nil(v.latitude) and not is_nil(v.longitude)))
+    # Use a single optimized SQL query to find all duplicate pairs at once
+    # This replaces the O(n²) nested loop with n²/2 database queries
+    query = """
+    SELECT
+      v1.id as id1,
+      v1.name as name1,
+      v1.address as address1,
+      v1.latitude as lat1,
+      v1.longitude as lng1,
+      v1.slug as slug1,
+      v1.provider_ids as provider_ids1,
+      v1.venue_images as venue_images1,
+      v2.id as id2,
+      v2.name as name2,
+      v2.address as address2,
+      v2.latitude as lat2,
+      v2.longitude as lng2,
+      v2.slug as slug2,
+      v2.provider_ids as provider_ids2,
+      v2.venue_images as venue_images2,
+      ST_Distance(
+        ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography
+      ) as distance,
+      similarity(v1.name, v2.name) as name_similarity
+    FROM venues v1
+    INNER JOIN venues v2 ON v1.id < v2.id
+    WHERE v1.latitude IS NOT NULL
+      AND v1.longitude IS NOT NULL
+      AND v2.latitude IS NOT NULL
+      AND v2.longitude IS NOT NULL
+      AND ST_DWithin(
+        ST_SetSRID(ST_MakePoint(v1.longitude, v1.latitude), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(v2.longitude, v2.latitude), 4326)::geography,
+        $1
+      )
+      AND similarity(v1.name, v2.name) >= $2
+    """
 
-    # Find all duplicate pairs
-    duplicate_pairs =
-      for v1 <- venues,
-          v2 <- venues,
-          v1.id < v2.id do
-        nearby = find_nearby_venues(v1.latitude, v1.longitude, distance)
+    case Repo.query(query, [distance, similarity]) do
+      {:ok, %{rows: rows}} ->
+        # Convert query results to venue structs and similarity data
+        {duplicate_pairs, venues_map} =
+          Enum.reduce(rows, {[], %{}}, fn row, {pairs, venues} ->
+            [id1, name1, addr1, lat1, lng1, slug1, pids1, imgs1,
+             id2, name2, addr2, lat2, lng2, slug2, pids2, imgs2,
+             distance, name_similarity] = row
 
-        if Enum.any?(nearby, fn venue -> venue["id"] == v2.id end) do
-          name_similarity = calculate_name_similarity(v1.name, v2.name)
+            v1 = %Venue{
+              id: id1, name: name1, address: addr1,
+              latitude: lat1, longitude: lng1, slug: slug1,
+              provider_ids: pids1, venue_images: imgs1
+            }
+            v2 = %Venue{
+              id: id2, name: name2, address: addr2,
+              latitude: lat2, longitude: lng2, slug: slug2,
+              provider_ids: pids2, venue_images: imgs2
+            }
 
-          if name_similarity >= similarity do
-            {v1, v2, name_similarity}
-          end
-        end
-      end
-      |> Enum.reject(&is_nil/1)
+            venues = venues
+              |> Map.put(id1, v1)
+              |> Map.put(id2, v2)
 
-    # Group connected venues (transitive closure)
-    group_connected_venues(duplicate_pairs, venues)
+            pairs = [{v1, v2, name_similarity, distance} | pairs]
+
+            {pairs, venues}
+          end)
+
+        # Group connected venues (transitive closure)
+        group_connected_venues_optimized(duplicate_pairs, venues_map)
+
+      {:error, _} ->
+        []
+    end
   end
 
-  # Groups venues that are transitively connected as duplicates
+  # Optimized version that uses pre-calculated distances and similarities
+  defp group_connected_venues_optimized(duplicate_pairs, venues_map) do
+    # Build adjacency map and store distances/similarities
+    {adjacency, distances_map, similarities_map} =
+      Enum.reduce(duplicate_pairs, {%{}, %{}, %{}}, fn {v1, v2, similarity, distance}, {adj, dist, sim} ->
+        adj = adj
+          |> Map.update(v1.id, [v2.id], &[v2.id | &1])
+          |> Map.update(v2.id, [v1.id], &[v1.id | &1])
+
+        dist = Map.put(dist, {v1.id, v2.id}, distance)
+        sim = Map.put(sim, {v1.id, v2.id}, similarity)
+
+        {adj, dist, sim}
+      end)
+
+    # Find connected components using DFS
+    {groups, _visited} =
+      Enum.reduce(Map.keys(adjacency), {[], MapSet.new()}, fn venue_id, {groups, visited} ->
+        if MapSet.member?(visited, venue_id) do
+          {groups, visited}
+        else
+          {group, new_visited} = dfs_component(venue_id, adjacency, visited)
+          {[group | groups], new_visited}
+        end
+      end)
+
+    # Convert venue IDs to venue structs with pre-calculated metrics
+    Enum.map(groups, fn venue_ids ->
+      group_venues = Enum.map(venue_ids, fn id -> Map.get(venues_map, id) end)
+
+      # Extract distances and similarities for this group
+      {distances, similarities} =
+        for v1_id <- venue_ids,
+            v2_id <- venue_ids,
+            v1_id < v2_id,
+            reduce: {%{}, %{}} do
+          {dist_acc, sim_acc} ->
+            dist = Map.get(distances_map, {v1_id, v2_id})
+            sim = Map.get(similarities_map, {v1_id, v2_id})
+
+            {
+              if(dist, do: Map.put(dist_acc, {v1_id, v2_id}, dist), else: dist_acc),
+              if(sim, do: Map.put(sim_acc, {v1_id, v2_id}, sim), else: sim_acc)
+            }
+        end
+
+      %{
+        venues: group_venues,
+        distances: distances,
+        similarities: similarities
+      }
+    end)
+    |> Enum.sort_by(fn group -> length(group.venues) end, :desc)
+  end
+
+  # Groups venues that are transitively connected as duplicates (legacy version - kept for compatibility)
   defp group_connected_venues(duplicate_pairs, all_venues) do
     # Build adjacency map
     adjacency =

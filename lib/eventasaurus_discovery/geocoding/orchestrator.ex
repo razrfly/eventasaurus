@@ -124,8 +124,6 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
           attempted_providers: Enum.reverse([provider_name | attempted]),
           attempts: length(attempted) + 1,
           geocoded_at: DateTime.utc_now(),
-          # Keep for backwards compatibility
-          place_id: provider_id,
           raw_response: Map.get(result, :raw_response)
         }
 

@@ -101,10 +101,12 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
   # CRITICAL: EventFreshnessChecker integration
   defp schedule_detail_jobs(venues, source_id, limit) do
     # Generate external_ids for freshness checking
+    # For pattern-based scrapers, venue is the unique identifier
+    # Day of week is metadata, not part of the external_id
     venues_with_ids =
       Enum.map(venues, fn venue ->
         venue_slug = extract_venue_slug(venue.url)
-        Map.put(venue, :external_id, "question_one_venue_#{venue_slug}")
+        Map.put(venue, :external_id, "question_one_#{venue_slug}")
       end)
 
     # Filter out venues that were recently updated (default: 7 days)

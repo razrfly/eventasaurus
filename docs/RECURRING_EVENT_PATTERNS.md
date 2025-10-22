@@ -640,6 +640,126 @@ Before implementing `recurrence_rule` in a scraper:
 
 ---
 
+---
+
+## 🆔 External ID Patterns for Recurring Events
+
+### Venue-Based External IDs
+
+For pattern-based recurring events, **the venue IS the unique identifier**, not the day of week or time.
+
+#### Core Principle
+
+> **Venue location** = Identity (describes WHICH event it is)
+> **Day of week, time, scheduling** = Metadata (describes WHEN event happens)
+
+#### Why Venue-Based?
+
+**Benefits:**
+- ✅ EventFreshnessChecker can skip recently-updated venues (80-90% reduction in API calls)
+- ✅ Recurring event consolidation via EventProcessor title matching
+- ✅ Stable external_ids across scraper runs
+- ✅ Automatic handling of edge cases (multiple events at same venue with different titles)
+
+**Pattern-Based Scrapers (use venue-based external_id):**
+- Question One: `question_one_royal_oak_twickenham`
+- PubQuiz: `pubquiz-pl_warszawa_centrum`
+- Inquizition: `inquizition_12345`
+- Geeks Who Drink: `geeks_who_drink_12345`
+- Speed Quizzing: `speed-quizzing-12345`
+
+#### Implementation
+
+```elixir
+# ❌ WRONG: Including day_of_week in external_id
+external_id = "question_one_#{venue_slug}_#{day_of_week}"
+
+# ✅ CORRECT: Venue-based external_id only
+external_id = "question_one_#{venue_slug}"
+```
+
+**In Transformer:**
+```elixir
+def transform_event(venue_data, _options \\ %{}) do
+  # Use venue identifier (NOT day_of_week!)
+  venue_slug = slugify(venue_data.name)
+  external_id = "question_one_#{venue_slug}"
+
+  %{
+    external_id: external_id,
+    title: "Quiz Night at #{venue_data.name}",
+    recurrence_rule: %{
+      "frequency" => "weekly",
+      "days_of_week" => ["monday"],  # Metadata, not in external_id
+      "time" => "19:00",
+      "timezone" => "Europe/London"
+    }
+  }
+end
+```
+
+**In IndexJob (for two-stage architecture):**
+```elixir
+defp schedule_detail_jobs(venues, source_id) do
+  # Generate external_ids for venues
+  venues_with_ids = Enum.map(venues, fn venue ->
+    venue_slug = extract_venue_slug(venue.url)
+    Map.put(venue, :external_id, "question_one_#{venue_slug}")
+  end)
+
+  # EventFreshnessChecker filters out fresh venues
+  venues_to_process = EventFreshnessChecker.filter_events_needing_processing(
+    venues_with_ids,
+    source_id
+  )
+
+  # Schedule detail jobs ONLY for stale venues
+  Enum.each(venues_to_process, fn venue ->
+    VenueDetailJob.new(%{...}) |> Oban.insert()
+  end)
+end
+```
+
+#### Edge Case: Multiple Events at Same Venue
+
+**Q: What if a venue has multiple different events?**
+
+A: EventProcessor's title-based matching handles this automatically:
+
+**Example:**
+- Regular quiz: external_id = `geeks_who_drink_bar_xyz`, title = "General Trivia Night"
+- Special event: external_id = `geeks_who_drink_bar_xyz`, title = "Halloween Special Trivia"
+- **Result**: EventFreshnessChecker's prediction layer groups by normalized title → different titles processed separately ✅
+
+**Three-Layer Matching:**
+1. **Direct external_id match**: Skip if seen within threshold
+2. **Existing event_id match**: Skip if belongs to recently-updated recurring event
+3. **Predicted event_id match**: Uses title+venue similarity for new events
+
+**Q: What if titles are very similar?**
+
+A: Intentional consolidation (Jaro distance > 0.85):
+- "Monday Night Trivia" and "Monday Trivia Night" → merged as recurring event ✅
+- This is desired behavior for recurring event detection
+
+#### Reference Documentation
+
+**EventFreshnessChecker Integration:**
+- Three-layer matching: `lib/eventasaurus_discovery/services/event_freshness_checker.ex`
+- Recurring event consolidation: `lib/eventasaurus_discovery/scraping/processors/event_processor.ex:1132-1391`
+
+**Scraper Examples:**
+- Question One: `lib/eventasaurus_discovery/sources/question_one/README.md` (External ID Pattern section)
+- PubQuiz: `lib/eventasaurus_discovery/sources/pubquiz/README.md` (External ID Pattern section)
+- Speed Quizzing: `lib/eventasaurus_discovery/sources/speed_quizzing/README.md` (External ID Pattern section)
+- Inquizition: `lib/eventasaurus_discovery/sources/inquizition/README.md` (External ID Pattern section)
+- Geeks Who Drink: `lib/eventasaurus_discovery/sources/geeks_who_drink/README.md` (External ID Pattern section)
+
+**Related Issues:**
+- GitHub Issue #1944 - Pattern-based scraper external_id standardization
+
+---
+
 ## 🎓 Key Takeaways
 
 1. **recurrence_rule enables pattern-based events** - One record, many future dates
@@ -650,6 +770,8 @@ Before implementing `recurrence_rule` in a scraper:
 6. **Follow PubQuiz pattern** - Reference implementation is production-tested
 7. **Calculate next occurrence** - Always set `starts_at` to next upcoming date
 8. **Store pattern in occurrences field** - EventProcessor handles storage
+9. **Use venue-based external_ids** - Venue is identity, schedule is metadata
+10. **EventFreshnessChecker integration** - Filters out fresh venues for efficiency
 
 ---
 
