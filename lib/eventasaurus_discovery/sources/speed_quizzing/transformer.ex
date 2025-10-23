@@ -105,7 +105,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
 
       # Optional fields
       ends_at: if(match?(%DateTime{}, starts_at), do: add_hours(starts_at, 2), else: nil),
-      description: build_description(venue_data),
+      description_translations: %{"en" => build_description(venue_data)},
       source_url: venue_data.event_url,
 
       # Event image (none available from Speed Quizzing)

@@ -162,7 +162,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     * `:events_succeeded` - Events that succeeded (from metadata)
     * `:events_failed` - Events that failed (from metadata)
     * `:success_rate` - Success rate percentage
-    * `:failure_breakdown` - Map of error_category => count
     * `:last_run_at` - Most recent job completion timestamp
 
   ## Examples
@@ -174,7 +173,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           events_succeeded: 1180,
           events_failed: 70,
           success_rate: 94.4,
-          failure_breakdown: %{"validation_error" => 42},
           last_run_at: ~U[2025-01-07 12:00:00Z]
         },
         "karnet" => %{...}
@@ -961,7 +959,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
     * `:events_succeeded` - Events that succeeded (from metadata)
     * `:events_failed` - Events that failed (from metadata)
     * `:success_rate` - Success rate percentage
-    * `:failure_breakdown` - Map of error_category => count
 
   ## Examples
 
@@ -973,11 +970,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         events_processed: 1250,
         events_succeeded: 1180,
         events_failed: 70,
-        success_rate: 94.4,
-        failure_breakdown: %{
-          "validation_error" => 42,
-          "geocoding_error" => 28
-        }
+        success_rate: 94.4
       }
   """
   def get_detailed_source_stats(city_id, source_name) do
@@ -988,7 +981,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       {:ok, worker} ->
         detail_worker = determine_detail_worker(worker)
         event_stats = get_event_level_stats(detail_worker, city_id, source_name)
-        failure_summary = get_failure_breakdown(source_name)
 
         # Compute last_run_at from detail worker instead of sync worker
         # This is especially important when city_id is nil (aggregating across all cities)
@@ -1000,7 +992,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           events_succeeded: event_stats.succeeded,
           events_failed: event_stats.failed,
           success_rate: calculate_success_rate(event_stats.succeeded, event_stats.processed),
-          failure_breakdown: failure_summary,
           last_run_at: last_run_at || base_stats.last_run_at,
           # Legacy fields for backward compatibility with Stats page template
           run_count: event_stats.processed,
@@ -1038,7 +1029,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           events_succeeded: 1180,
           events_failed: 70,
           success_rate: 94.4,
-          failure_breakdown: %{"validation_error" => 42},
           last_run_at: ~U[2025-01-07 12:00:00Z]
         },
         ...
@@ -1062,7 +1052,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         events_succeeded: stats[:events_succeeded] || 0,
         events_failed: stats[:events_failed] || 0,
         success_rate: stats[:success_rate] || 0.0,
-        failure_breakdown: stats[:failure_breakdown] || %{},
         last_run_at: stats[:last_run_at]
       }
     end)
@@ -1191,22 +1180,5 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
   defp calculate_success_rate(succeeded, processed) when processed > 0 do
     (succeeded / processed * 100) |> Float.round(1)
-  end
-
-  defp get_failure_breakdown(source_name) do
-    alias EventasaurusDiscovery.Metrics.FailureTracker
-
-    case get_source_id_by_slug(source_name) do
-      nil -> %{}
-      source_id -> FailureTracker.get_failure_summary(source_id)
-    end
-  end
-
-  defp get_source_id_by_slug(source_slug) do
-    Repo.one(
-      from s in EventasaurusDiscovery.Sources.Source,
-        where: s.slug == ^source_slug,
-        select: s.id
-    )
   end
 end

@@ -45,11 +45,26 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   - images: List of deduplicated image maps with position
   - metadata: Hash with attempt tracking and costs
   """
-  def fetch_venue_images(venue) when is_map(venue) do
-    providers = get_enabled_image_providers()
+  def fetch_venue_images(venue, provider_names \\ nil) when is_map(venue) do
+    # Get enabled providers and optionally filter by provider names
+    providers =
+      case provider_names do
+        nil ->
+          # No filter, use all enabled providers
+          get_enabled_image_providers()
+
+        names when is_list(names) ->
+          # Filter to only requested providers
+          Logger.info("🔍 Filtering image providers to: #{inspect(names)}")
+          all_providers = get_enabled_image_providers()
+          filtered = Enum.filter(all_providers, fn p -> p.name in names end)
+          Logger.info("✅ Found #{length(filtered)} matching provider(s)")
+          filtered
+      end
 
     if Enum.empty?(providers) do
-      Logger.warning("⚠️ No active image providers configured")
+      filter_msg = if provider_names, do: " matching #{inspect(provider_names)}", else: ""
+      Logger.warning("⚠️ No active image providers configured#{filter_msg}")
       {:ok, [], %{providers_attempted: [], providers_succeeded: [], total_images_found: 0}}
     else
       aggregate_from_all_providers(venue, providers)
@@ -57,12 +72,13 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   end
 
   @doc """
-  Enriches a venue with images from all providers and updates the database.
+  Enriches a venue with images from providers and updates the database.
 
   Returns {:ok, venue} with updated venue_images and image_enrichment_metadata.
 
   ## Options
 
+  - `:providers` - List of specific provider names to use (default: all enabled providers)
   - `:force` - Force re-enrichment even if not stale (default: false)
   - `:max_retries` - Maximum retry attempts on failure (default: 3)
 
@@ -71,11 +87,17 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   Images are considered stale after 30 days.
   """
   def enrich_venue(venue, opts \\ []) do
+    providers = Keyword.get(opts, :providers)
     force = Keyword.get(opts, :force, false)
     max_retries = Keyword.get(opts, :max_retries, 3)
 
+    # Log provider override if specified
+    if providers do
+      Logger.info("🎯 Provider override active for venue #{venue.id}: using only #{inspect(providers)}")
+    end
+
     if needs_enrichment?(venue, force) do
-      do_enrich_venue(venue, max_retries)
+      do_enrich_venue(venue, providers, max_retries)
     else
       Logger.debug("⏭️  Venue #{venue.id} images are fresh, skipping enrichment")
       {:ok, venue}
@@ -306,17 +328,65 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       |> Map.new(fn {provider, idx} -> {provider.name, idx} end)
 
     images
-    # Deduplicate by URL (keep first occurrence)
-    |> Enum.uniq_by(& &1.url)
-    # Sort by provider priority, then original position
+    # Add quality scores to all images
+    |> Enum.map(&add_quality_score/1)
+    # Deduplicate by URL, keeping highest quality version
+    |> deduplicate_by_quality()
+    # Sort by quality score (descending), then provider priority
     |> Enum.sort_by(fn img ->
       provider_priority = Map.get(priority_map, img.provider, 999)
-      {provider_priority, img[:position] || 0}
+      {-img.quality_score, provider_priority, img[:position] || 0}
     end)
     # Add final position
     |> Enum.with_index(1)
     |> Enum.map(fn {img, position} ->
       Map.put(img, :position, position)
+    end)
+  end
+
+  # Calculate quality score for an image based on resolution and aspect ratio
+  defp add_quality_score(image) do
+    width = image[:width] || image["width"] || 0
+    height = image[:height] || image["height"] || 0
+
+    quality_score = calculate_quality_score(width, height)
+    Map.put(image, :quality_score, quality_score)
+  end
+
+  # Quality scoring algorithm
+  # Scores range from 0.0 to 1.0, with higher being better
+  defp calculate_quality_score(width, height) when width > 0 and height > 0 do
+    # Resolution score: normalize to 4MP (2048x2048)
+    # Higher resolution = better score, with diminishing returns above 4MP
+    resolution = width * height
+    resolution_score = min(resolution / 4_000_000, 1.0) * 0.7
+
+    # Aspect ratio score: prefer landscape images between 1.3:1 and 1.8:1
+    # Common aspect ratios: 16:9 (1.78), 4:3 (1.33), 3:2 (1.5)
+    aspect_ratio = width / height
+
+    aspect_score =
+      cond do
+        aspect_ratio >= 1.3 and aspect_ratio <= 1.8 -> 0.3  # Ideal landscape
+        aspect_ratio >= 1.0 and aspect_ratio < 1.3 -> 0.25  # Square-ish
+        aspect_ratio > 1.8 and aspect_ratio <= 2.4 -> 0.25  # Wide landscape
+        true -> 0.2  # Portrait or very wide
+      end
+
+    resolution_score + aspect_score
+  end
+
+  # No dimensions available - assign minimum score
+  defp calculate_quality_score(_, _), do: 0.1
+
+  # Deduplicate images by URL, keeping the highest quality version
+  defp deduplicate_by_quality(images) do
+    images
+    |> Enum.group_by(fn img -> img.url || img["url"] end)
+    |> Enum.map(fn {_url, duplicate_images} ->
+      # If multiple images with same URL, pick highest quality
+      duplicate_images
+      |> Enum.max_by(fn img -> img.quality_score end)
     end)
   end
 
@@ -345,7 +415,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
   # Enrichment Functions
 
-  defp do_enrich_venue(venue, max_retries) do
+  defp do_enrich_venue(venue, providers, max_retries) do
     Logger.info("🖼️  Enriching venue #{venue.id} (#{venue.name}) with images")
 
     venue_input = %{
@@ -357,12 +427,12 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     # fetch_venue_images_with_retry always returns {:ok, images, metadata}
     # even if no images found (images will be empty list)
-    {:ok, images, metadata} = fetch_venue_images_with_retry(venue_input, max_retries)
+    {:ok, images, metadata} = fetch_venue_images_with_retry(venue_input, providers, max_retries)
     update_venue_with_images(venue, images, metadata)
   end
 
-  defp fetch_venue_images_with_retry(venue_input, max_retries, attempt \\ 1) do
-    case fetch_venue_images(venue_input) do
+  defp fetch_venue_images_with_retry(venue_input, providers, max_retries, attempt \\ 1) do
+    case fetch_venue_images(venue_input, providers) do
       {:ok, images, metadata} when is_list(images) and length(images) > 0 ->
         {:ok, images, metadata}
 
@@ -374,7 +444,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
         # Exponential backoff: 1s, 2s, 4s...
         :timer.sleep(:math.pow(2, attempt - 1) * 1000 |> round())
-        fetch_venue_images_with_retry(venue_input, max_retries, attempt + 1)
+        fetch_venue_images_with_retry(venue_input, providers, max_retries, attempt + 1)
 
       {:ok, images, metadata} ->
         # Either images found or max retries reached
@@ -383,27 +453,73 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   end
 
   defp update_venue_with_images(venue, images, metadata) do
-    import Ecto.Changeset
+    alias EventasaurusApp.Venues.Venue
 
     # Calculate next enrichment due date (30 days from now)
-    next_enrichment = DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.to_iso8601()
+    now = DateTime.utc_now()
+    next_enrichment = DateTime.add(now, 30, :day) |> DateTime.to_iso8601()
 
-    enrichment_metadata =
-      Map.merge(metadata, %{
-        "last_enriched_at" => metadata.fetched_at,
-        "next_enrichment_due" => next_enrichment
-      })
+    # Convert new images to proper structure with string keys (JSONB requirement)
+    new_structured_images =
+      Enum.map(images, fn img ->
+        %{
+          "url" => img.url || img["url"],
+          "provider" => img.provider || img["provider"],
+          "width" => img[:width] || img["width"],
+          "height" => img[:height] || img["height"],
+          "quality_score" => img[:quality_score] || img["quality_score"],
+          "attribution" => img[:attribution] || img["attribution"],
+          "fetched_at" => img[:fetched_at] || img["fetched_at"] || DateTime.to_iso8601(now)
+        }
+        |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+        |> Map.new()
+      end)
 
-    changeset =
-      venue
-      |> change()
-      |> put_change(:venue_images, images)
-      |> put_change(:image_enrichment_metadata, enrichment_metadata)
+    # Merge with existing images (deduplicate by URL, keep highest quality)
+    existing_images = venue.venue_images || []
+    merged_images = merge_and_deduplicate_images(existing_images, new_structured_images)
+
+    # Build enrichment metadata with history
+    existing_metadata = venue.image_enrichment_metadata || %{}
+    existing_history = existing_metadata["enrichment_history"] || []
+
+    # Track which providers we've seen across all enrichments
+    all_providers_used =
+      (existing_metadata["providers_used"] || [])
+      |> Kernel.++(metadata.providers_succeeded || metadata[:providers_succeeded] || [])
+      |> Enum.uniq()
+
+    # Calculate new images added (not just fetched)
+    images_before = length(existing_images)
+    images_after = length(merged_images)
+    net_new_images = max(images_after - images_before, 0)
+
+    # Create history entry for this enrichment
+    history_entry = %{
+      "enriched_at" => DateTime.to_iso8601(now),
+      "providers" => metadata.providers_succeeded || metadata[:providers_succeeded] || [],
+      "images_fetched" => length(images),
+      "images_added" => net_new_images,
+      "cost_usd" => metadata.total_cost || metadata[:total_cost] || 0.0
+    }
+
+    enrichment_metadata = %{
+      "last_enriched_at" => DateTime.to_iso8601(now),
+      "next_enrichment_due" => next_enrichment,
+      "providers_used" => all_providers_used,
+      "total_images_fetched" => length(merged_images),
+      "cost_breakdown" => metadata.cost_breakdown || metadata[:cost_breakdown] || %{},
+      "enrichment_history" => [history_entry | existing_history] |> Enum.take(10)  # Keep last 10
+    }
+
+    # Use the specialized changeset function from Venue schema
+    changeset = Venue.update_venue_images(venue, merged_images, enrichment_metadata)
 
     case Repo.update(changeset) do
       {:ok, updated_venue} ->
+        providers_count = length(metadata.providers_succeeded || metadata[:providers_succeeded] || [])
         Logger.info(
-          "✅ Enriched venue #{venue.id} with #{length(images)} images from #{length(metadata.providers_succeeded)} providers"
+          "✅ Stored #{length(merged_images)} images for venue #{venue.id} (+#{net_new_images} new) from #{providers_count} provider(s)"
         )
 
         {:ok, updated_venue}
@@ -412,6 +528,30 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
         Logger.error("❌ Failed to update venue #{venue.id}: #{inspect(changeset.errors)}")
         {:error, :update_failed}
     end
+  end
+
+  # Merge existing and new images, deduplicating by URL and keeping highest quality
+  defp merge_and_deduplicate_images(existing_images, new_images) do
+    all_images = existing_images ++ new_images
+
+    # Group by URL
+    all_images
+    |> Enum.group_by(fn img -> img["url"] end)
+    |> Enum.map(fn {_url, duplicate_images} ->
+      # Pick the image with highest quality score
+      # Prefer images with quality_score, fall back to newest (last in list)
+      duplicate_images
+      |> Enum.max_by(
+        fn img ->
+          {
+            img["quality_score"] || 0.0,
+            img["fetched_at"] || "1970-01-01T00:00:00Z"
+          }
+        end
+      )
+    end)
+    # Sort by quality score descending
+    |> Enum.sort_by(fn img -> -(img["quality_score"] || 0.0) end)
   end
 
   defp parse_datetime(nil), do: {:error, :nil}

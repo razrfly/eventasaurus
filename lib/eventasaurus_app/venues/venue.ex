@@ -442,4 +442,56 @@ defmodule EventasaurusApp.Venues.Venue do
     changeset(venue, %{})
     |> put_provider_id(provider_name, provider_id)
   end
+
+  @doc """
+  Changeset for updating venue images and enrichment metadata.
+
+  This is used by the image enrichment system to store fetched images.
+
+  ## Parameters
+  - `venue` - Venue struct or changeset
+  - `images` - List of image maps with url, provider, attribution, etc.
+  - `metadata` - Enrichment metadata with providers_used, timestamps, etc.
+
+  ## Examples
+
+      iex> venue |> Venue.update_venue_images(images, metadata) |> Repo.update()
+      {:ok, %Venue{venue_images: [...], image_enrichment_metadata: %{...}}}
+  """
+  def update_venue_images(%Ecto.Changeset{} = changeset, images, metadata)
+      when is_list(images) and is_map(metadata) do
+    changeset
+    |> put_change(:venue_images, images)
+    |> put_change(:image_enrichment_metadata, metadata)
+    |> validate_image_structure()
+  end
+
+  def update_venue_images(%__MODULE__{} = venue, images, metadata)
+      when is_list(images) and is_map(metadata) do
+    changeset(venue, %{})
+    |> update_venue_images(images, metadata)
+  end
+
+  # Validate the structure of venue_images array
+  defp validate_image_structure(changeset) do
+    images = get_change(changeset, :venue_images)
+
+    if images && is_list(images) do
+      # Check that each image has required fields
+      valid? =
+        Enum.all?(images, fn image ->
+          is_map(image) &&
+            Map.has_key?(image, "url") &&
+            is_binary(image["url"])
+        end)
+
+      if valid? do
+        changeset
+      else
+        add_error(changeset, :venue_images, "must be a list of maps with at least a 'url' field")
+      end
+    else
+      changeset
+    end
+  end
 end

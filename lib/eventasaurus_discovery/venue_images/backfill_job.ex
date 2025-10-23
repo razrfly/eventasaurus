@@ -313,8 +313,8 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
             {:skip, v} -> v
           end
 
-        # Perform enrichment
-        case Orchestrator.enrich_venue(venue_with_ids, force: force, max_retries: 2) do
+        # Perform enrichment (pass providers to respect user's provider selection)
+        case Orchestrator.enrich_venue(venue_with_ids, providers: providers, force: force, max_retries: 2) do
           {:ok, enriched_venue} ->
             # Extract which providers were used
             metadata = enriched_venue.image_enrichment_metadata || %{}
