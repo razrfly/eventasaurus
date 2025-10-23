@@ -136,14 +136,35 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery 
   end
 
   defp get_image_url(image) do
-    original_url = image["url"]
-    provider = image["provider"] || "unknown"
+    # Use ImageKit URL directly (uploaded during enrichment)
+    imagekit_url = image["url"]
 
-    # Encode the URL as base64 (URL-safe, no padding)
-    encoded_url = Base.url_encode64(original_url, padding: false)
+    # Fallback to proxy if upload failed or legacy image
+    case image["upload_status"] do
+      "uploaded" ->
+        # Use ImageKit URL directly
+        imagekit_url
 
-    # Generate proxy URL
-    "/venue-images/proxy/#{provider}/#{encoded_url}"
+      "failed" ->
+        # Fallback to proxy for failed uploads
+        provider_url = image["provider_url"] || imagekit_url
+        provider = image["provider"] || "unknown"
+        encoded_url = Base.url_encode64(provider_url, padding: false)
+        "/venue-images/proxy/#{provider}/#{encoded_url}"
+
+      _ ->
+        # Legacy images without upload_status (use proxy)
+        # This handles images from before ImageKit integration
+        if String.starts_with?(imagekit_url || "", "https://ik.imagekit.io") do
+          # Already an ImageKit URL
+          imagekit_url
+        else
+          # Legacy provider URL, use proxy
+          provider = image["provider"] || "unknown"
+          encoded_url = Base.url_encode64(imagekit_url, padding: false)
+          "/venue-images/proxy/#{provider}/#{encoded_url}"
+        end
+    end
   end
 
   defp format_last_enriched(venue) do

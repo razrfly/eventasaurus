@@ -58,13 +58,13 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
   ## Examples
 
       # Basic backfill for city
-      BackfillJob.enqueue(city_id: 5, limit: 10)
+      BackfillOrchestratorJob.enqueue(city_id: 5, limit: 10)
 
       # With specific provider
-      BackfillJob.enqueue(city_id: 5, provider: "foursquare", limit: 20)
+      BackfillOrchestratorJob.enqueue(city_id: 5, provider: "foursquare", limit: 20)
 
       # With multiple providers and geocoding
-      BackfillJob.enqueue(
+      BackfillOrchestratorJob.enqueue(
         city_id: 5,
         providers: ["foursquare", "google_places"],
         limit: 15,

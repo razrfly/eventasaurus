@@ -21,6 +21,9 @@ defmodule EventasaurusWeb.Router do
       # CDN testing page (dev - no auth)
       get "/cdn-test", Dev.CdnTestController, :index
 
+      # ImageKit CDN testing page (dev - no auth)
+      get "/imagekit-test", Dev.ImagekitTestController, :index
+
       # Unsplash integration testing page (dev - no auth)
       get "/unsplash", Dev.UnsplashTestController, :index
 

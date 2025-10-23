@@ -470,17 +470,46 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     next_enrichment = DateTime.add(now, 30 * 86_400, :second) |> DateTime.to_iso8601()
 
     # Convert new images to proper structure with string keys (JSONB requirement)
+    # AND upload to ImageKit for permanent storage
     new_structured_images =
-      Enum.map(images, fn img ->
-        %{
-          "url" => img.url || img["url"],
-          "provider" => img.provider || img["provider"],
+      images
+      |> Enum.with_index()
+      |> Enum.map(fn {img, _index} ->
+        provider_url = img.url || img["url"]
+        provider = img.provider || img["provider"]
+
+        # Upload to ImageKit
+        upload_result = upload_to_imagekit(venue, provider_url, provider)
+
+        base_image = %{
+          "provider" => provider,
           "width" => img[:width] || img["width"],
           "height" => img[:height] || img["height"],
           "quality_score" => img[:quality_score] || img["quality_score"],
           "attribution" => img[:attribution] || img["attribution"],
           "fetched_at" => img[:fetched_at] || img["fetched_at"] || DateTime.to_iso8601(now)
         }
+
+        case upload_result do
+          {:ok, imagekit_url, imagekit_path} ->
+            Map.merge(base_image, %{
+              "url" => imagekit_url,
+              "provider_url" => provider_url,
+              "imagekit_path" => imagekit_path,
+              "upload_status" => "uploaded"
+            })
+
+          {:error, reason} ->
+            Logger.warning(
+              "ImageKit upload failed for venue #{venue.id}, provider #{provider}: #{inspect(reason)}"
+            )
+
+            Map.merge(base_image, %{
+              "url" => provider_url,
+              "provider_url" => provider_url,
+              "upload_status" => "failed"
+            })
+        end
         |> Enum.reject(fn {_k, v} -> is_nil(v) end)
         |> Map.new()
       end)
@@ -539,6 +568,35 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       {:error, changeset} ->
         Logger.error("❌ Failed to update venue #{venue.id}: #{inspect(changeset.errors)}")
         {:error, :update_failed}
+    end
+  end
+
+  # Upload image to ImageKit with hash-based deterministic filename
+  defp upload_to_imagekit(venue, provider_url, provider) do
+    alias Eventasaurus.ImageKit.{Uploader, Filename}
+
+    # Generate deterministic filename using hash
+    filename = Filename.generate(provider_url, provider)
+    folder = Filename.build_folder_path(venue.id)
+    imagekit_path = Filename.build_full_path(venue.id, filename)
+
+    # Add tags for organization and searchability
+    tags = [
+      provider,
+      "venue_#{venue.id}"
+    ]
+
+    # Upload to ImageKit
+    case Uploader.upload_from_url(provider_url,
+           folder: folder,
+           filename: filename,
+           tags: tags
+         ) do
+      {:ok, imagekit_url} ->
+        {:ok, imagekit_url, imagekit_path}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

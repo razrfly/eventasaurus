@@ -406,12 +406,16 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       :network_error -> true
 
       # HTTP errors - only retry 429 and 5xx
+      # Also handle string patterns as safety net while providers migrate to atoms
       error when is_binary(error) ->
-        String.starts_with?(error, "HTTP 429") or  # Rate limit
-        String.starts_with?(error, "HTTP 500") or  # Internal server error
-        String.starts_with?(error, "HTTP 502") or  # Bad gateway
-        String.starts_with?(error, "HTTP 503") or  # Service unavailable
-        String.starts_with?(error, "HTTP 504")     # Gateway timeout
+        String.starts_with?(error, "HTTP 429") or       # Rate limit
+        String.starts_with?(error, "HTTP 500") or       # Internal server error
+        String.starts_with?(error, "HTTP 502") or       # Bad gateway
+        String.starts_with?(error, "HTTP 503") or       # Service unavailable
+        String.starts_with?(error, "HTTP 504") or       # Gateway timeout
+        String.starts_with?(error, "Network error") or  # Network errors (safety net)
+        String.contains?(error, "OVER_QUERY_LIMIT") or  # Google rate limit
+        String.contains?(error, "RESOURCE_EXHAUSTED")   # Google resource exhausted
 
       # All other errors are permanent - DO NOT RETRY
       _ -> false

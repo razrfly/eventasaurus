@@ -40,6 +40,16 @@ config :eventasaurus, :cdn,
   enabled: System.get_env("CDN_ENABLED", default_cdn_enabled) == "true",
   domain: System.get_env("CDN_DOMAIN", "cdn.wombie.com")
 
+# ImageKit CDN configuration (for venue images)
+# Enabled by default in production, disabled by default in dev/test
+# Can be overridden with IMAGEKIT_CDN_ENABLED environment variable
+default_imagekit_enabled = if config_env() == :prod, do: "true", else: "false"
+
+config :eventasaurus, :imagekit,
+  enabled: System.get_env("IMAGEKIT_CDN_ENABLED", default_imagekit_enabled) == "true",
+  id: System.get_env("IMAGEKIT_ID", "wombie"),
+  endpoint: System.get_env("IMAGEKIT_END_POINT", "https://ik.imagekit.io/wombie")
+
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
 
