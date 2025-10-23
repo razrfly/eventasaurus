@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, TrendAnalyzer}
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusDiscovery.VenueImages.QualityStats
 
   import Ecto.Query
   require Logger
@@ -111,6 +112,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
     city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
 
+    # Get venue image quality stats (Phase 2)
+    venue_stats = QualityStats.get_city_venue_stats(city_id)
+    venue_image_sources = QualityStats.get_venue_image_sources(city_id)
+    recent_enrichments_7d = QualityStats.get_recent_enrichments(city_id, 7)
+    recent_enrichments_30d = QualityStats.get_recent_enrichments(city_id, 30)
+    venues_needing_images = QualityStats.list_venues_without_images(city_id, 20)
+
     socket
     |> assign(:sources_data, sources_data)
     |> assign(:top_venues, top_venues)
@@ -118,6 +126,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     |> assign(:total_events, total_events)
     |> assign(:events_this_week, events_this_week)
     |> assign(:city_chart_data, Jason.encode!(city_chart_data))
+    |> assign(:venue_stats, venue_stats)
+    |> assign(:venue_image_sources, venue_image_sources)
+    |> assign(:recent_enrichments_7d, recent_enrichments_7d)
+    |> assign(:recent_enrichments_30d, recent_enrichments_30d)
+    |> assign(:venues_needing_images, venues_needing_images)
   end
 
   defp get_sources_for_city(city_id) do
@@ -459,6 +472,224 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
           </div>
         </div>
 
+        <!-- Venue Image Quality (Phase 2) -->
+        <div class="bg-white rounded-lg shadow mb-8">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">🏢 Venue Image Quality</h2>
+            <p class="mt-1 text-sm text-gray-500">Image coverage and provider statistics</p>
+          </div>
+          <div class="p-6">
+            <!-- Venue Stats Card -->
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <p class="text-sm font-medium text-gray-600">Total Venues</p>
+                  <p class="text-3xl font-bold text-gray-900"><%= format_number(@venue_stats.total_venues) %></p>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-gray-600">With Images</p>
+                  <p class="text-3xl font-bold text-green-600"><%= format_number(@venue_stats.venues_with_images) %></p>
+                  <p class="text-sm text-gray-500"><%= @venue_stats.coverage_percentage %>% coverage</p>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-gray-600">Without Images</p>
+                  <p class="text-3xl font-bold text-red-600"><%= format_number(@venue_stats.venues_without_images) %></p>
+                  <p class="text-sm text-gray-500"><%= Float.round(100 - @venue_stats.coverage_percentage, 2) %>% missing</p>
+                </div>
+              </div>
+
+              <!-- Progress Bar -->
+              <div class="mt-6">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-gray-600">Image Coverage Progress</span>
+                  <span class="text-sm font-medium text-gray-900"><%= @venue_stats.coverage_percentage %>%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    class={"h-3 rounded-full transition-all #{coverage_color(@venue_stats.coverage_percentage)}"}
+                    style={"width: #{@venue_stats.coverage_percentage}%"}
+                  >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Data Quality Metrics -->
+            <div class="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-6 mb-6">
+              <h3 class="text-sm font-semibold text-gray-900 mb-4">🔍 Data Quality</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Address Data -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-medium text-gray-600">Address Coverage</p>
+                    <span class={"text-sm font-bold #{if @venue_stats.address_coverage_percentage < 95.0, do: "text-red-600", else: "text-green-600"}"}><%= @venue_stats.address_coverage_percentage %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div
+                      class={"h-2 rounded-full transition-all #{if @venue_stats.address_coverage_percentage < 95.0, do: "bg-red-500", else: "bg-green-500"}"}
+                      style={"width: #{@venue_stats.address_coverage_percentage}%"}
+                    >
+                    </div>
+                  </div>
+                  <%= if @venue_stats.venues_missing_address > 0 do %>
+                    <p class="text-xs text-red-600 font-medium">⚠️ <%= @venue_stats.venues_missing_address %> venues missing addresses</p>
+                  <% else %>
+                    <p class="text-xs text-green-600 font-medium">✓ All venues have addresses</p>
+                  <% end %>
+                </div>
+
+                <!-- Coordinates Data -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-medium text-gray-600">Coordinates Coverage</p>
+                    <span class={"text-sm font-bold #{if @venue_stats.coordinates_coverage_percentage < 100.0, do: "text-red-600", else: "text-green-600"}"}><%= @venue_stats.coordinates_coverage_percentage %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div
+                      class={"h-2 rounded-full transition-all #{if @venue_stats.coordinates_coverage_percentage < 100.0, do: "bg-red-500", else: "bg-green-500"}"}
+                      style={"width: #{@venue_stats.coordinates_coverage_percentage}%"}
+                    >
+                    </div>
+                  </div>
+                  <%= if @venue_stats.venues_missing_coordinates > 0 do %>
+                    <p class="text-xs text-red-600 font-medium">⚠️ <%= @venue_stats.venues_missing_coordinates %> venues missing coordinates</p>
+                  <% else %>
+                    <p class="text-xs text-green-600 font-medium">✓ All venues have coordinates</p>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Enrichments Timeline -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+              <h3 class="text-sm font-semibold text-gray-900 mb-3">📈 Recent Activity</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0">
+                    <span class="text-2xl">📅</span>
+                  </div>
+                  <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-900">Last 7 Days</p>
+                    <p class="text-lg font-semibold text-green-600">
+                      +<%= @recent_enrichments_7d.venues_enriched %> venues enriched
+                    </p>
+                    <p class="text-xs text-gray-500"><%= @recent_enrichments_7d.images_added %> images added</p>
+                  </div>
+                </div>
+                <div class="flex items-center">
+                  <div class="flex-shrink-0">
+                    <span class="text-2xl">📆</span>
+                  </div>
+                  <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-900">Last 30 Days</p>
+                    <p class="text-lg font-semibold text-green-600">
+                      +<%= @recent_enrichments_30d.venues_enriched %> venues enriched
+                    </p>
+                    <p class="text-xs text-gray-500"><%= @recent_enrichments_30d.images_added %> images added</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Image Source Breakdown -->
+            <%= if @venue_stats.venues_with_images > 0 do %>
+              <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">📸 Image Sources</h3>
+                <div class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Provider</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Venues</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Percentage</th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                      <%= if @venue_image_sources.foursquare > 0 do %>
+                        <tr>
+                          <td class="px-4 py-2 text-sm font-medium text-gray-900">Foursquare</td>
+                          <td class="px-4 py-2 text-sm text-gray-900"><%= @venue_image_sources.foursquare %></td>
+                          <td class="px-4 py-2 text-sm text-gray-900">
+                            <%= Float.round(@venue_image_sources.foursquare / @venue_stats.venues_with_images * 100, 1) %>%
+                          </td>
+                        </tr>
+                      <% end %>
+                      <%= if @venue_image_sources.google_places > 0 do %>
+                        <tr>
+                          <td class="px-4 py-2 text-sm font-medium text-gray-900">Google Places</td>
+                          <td class="px-4 py-2 text-sm text-gray-900"><%= @venue_image_sources.google_places %></td>
+                          <td class="px-4 py-2 text-sm text-gray-900">
+                            <%= Float.round(@venue_image_sources.google_places / @venue_stats.venues_with_images * 100, 1) %>%
+                          </td>
+                        </tr>
+                      <% end %>
+                      <%= if @venue_image_sources.multiple_sources > 0 do %>
+                        <tr>
+                          <td class="px-4 py-2 text-sm font-medium text-gray-900">Multiple Sources</td>
+                          <td class="px-4 py-2 text-sm text-gray-900"><%= @venue_image_sources.multiple_sources %></td>
+                          <td class="px-4 py-2 text-sm text-gray-900">
+                            <%= Float.round(@venue_image_sources.multiple_sources / @venue_stats.venues_with_images * 100, 1) %>%
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            <% end %>
+
+            <!-- Venues Needing Images -->
+            <%= if @venue_stats.venues_without_images > 0 do %>
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">
+                  🚨 Venues Needing Images (<%= min(@venue_stats.venues_without_images, 20) %> of <%= @venue_stats.venues_without_images %>)
+                </h3>
+                <div class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                      <%= for venue <- @venues_needing_images do %>
+                        <tr class="hover:bg-gray-50">
+                          <td class="px-4 py-2 text-sm font-medium text-gray-900"><%= venue.name %></td>
+                          <td class="px-4 py-2 text-sm text-gray-600"><%= venue.address %></td>
+                          <td class="px-4 py-2 text-sm">
+                            <%= if venue.has_coordinates do %>
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                ✓ Has Coordinates
+                              </span>
+                            <% else %>
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                ✗ No Coordinates
+                              </span>
+                            <% end %>
+                            <%= if venue.has_provider_ids do %>
+                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 ml-1">
+                                ✓ Has Provider ID
+                              </span>
+                            <% end %>
+                          </td>
+                          <td class="px-4 py-2 text-sm">
+                            <span class={"inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{priority_badge_color(venue.priority_score)}"}>
+                              <%= priority_label(venue.priority_score) %>
+                            </span>
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+
         <!-- Auto-refresh indicator -->
         <div class="mt-4 text-center text-xs text-gray-500">
           Auto-refreshing every 30 seconds
@@ -504,4 +735,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   defp format_change(change) when change > 0, do: "+#{change}%"
   defp format_change(change) when change < 0, do: "#{change}%"
   defp format_change(_), do: "0%"
+
+  # Venue quality helper functions (Phase 2)
+
+  defp coverage_color(percentage) when percentage >= 90, do: "bg-green-500"
+  defp coverage_color(percentage) when percentage >= 70, do: "bg-blue-500"
+  defp coverage_color(percentage) when percentage >= 50, do: "bg-yellow-500"
+  defp coverage_color(percentage) when percentage >= 25, do: "bg-orange-500"
+  defp coverage_color(_), do: "bg-red-500"
+
+  defp priority_label(3), do: "High"
+  defp priority_label(2), do: "Medium"
+  defp priority_label(1), do: "Low"
+  defp priority_label(_), do: "Very Low"
+
+  defp priority_badge_color(3), do: "bg-green-100 text-green-800"
+  defp priority_badge_color(2), do: "bg-blue-100 text-blue-800"
+  defp priority_badge_color(1), do: "bg-yellow-100 text-yellow-800"
+  defp priority_badge_color(_), do: "bg-gray-100 text-gray-800"
 end

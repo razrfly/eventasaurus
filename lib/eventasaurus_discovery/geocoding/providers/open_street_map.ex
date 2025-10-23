@@ -76,6 +76,88 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
 
   def geocode(_), do: {:error, :invalid_address}
 
+  @doc """
+  Reverse geocode coordinates to get address information.
+
+  Used for venues that have coordinates but no address (e.g., Resident Advisor).
+  """
+  def search_by_coordinates(lat, lng, _venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
+    Logger.debug("🔍 OpenStreetMap reverse geocode: #{lat},#{lng}")
+
+    # CRITICAL: Enforce 1 req/sec rate limit BEFORE making request
+    Process.sleep(1000)
+
+    try do
+      # OSM Nominatim reverse geocoding
+      url = "https://nominatim.openstreetmap.org/reverse"
+
+      params = [
+        lat: lat,
+        lon: lng,
+        format: "json",
+        addressdetails: 1
+      ]
+
+      headers = [
+        {"User-Agent", "EventasaurusDiscovery/1.0"}
+      ]
+
+      case HTTPoison.get(url, headers, params: params, recv_timeout: 10_000) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+          parse_reverse_response(body)
+
+        {:ok, %HTTPoison.Response{status_code: status}} ->
+          Logger.error("❌ OSM reverse geocode HTTP error: #{status}")
+          {:error, :api_error}
+
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          Logger.error("❌ OSM reverse geocode failed: #{inspect(reason)}")
+          {:error, :network_error}
+      end
+    rescue
+      Jason.DecodeError ->
+        Logger.warning("⚠️ OSM reverse returned HTML instead of JSON (likely rate limited)")
+        {:error, :rate_limited}
+
+      error ->
+        Logger.error("❌ OSM reverse unexpected error: #{inspect(error)}")
+        {:error, :api_error}
+    catch
+      :exit, {:timeout, _} ->
+        Logger.warning("⏱️ OSM reverse GenServer timeout (exceeded 5s)")
+        {:error, :timeout}
+
+      :exit, reason ->
+        Logger.error("❌ OSM reverse exited with reason: #{inspect(reason)}")
+        {:error, :api_error}
+    end
+  end
+
+  defp parse_reverse_response(body) do
+    case Jason.decode(body) do
+      {:ok, result} when is_map(result) ->
+        # Extract formatted address (display_name in OSM)
+        formatted_address = Map.get(result, "display_name")
+
+        if formatted_address do
+          Logger.debug("✅ OpenStreetMap found address: #{formatted_address}")
+          {:ok, formatted_address}
+        else
+          Logger.debug("📍 OpenStreetMap: no address in response")
+          {:error, :no_results}
+        end
+
+      {:ok, _other} ->
+        Logger.error("❌ OpenStreetMap reverse: unexpected response format")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
+        Logger.error("❌ OpenStreetMap reverse: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
+  end
+
   defp extract_result(coordinates) do
     location = coordinates.location || %{}
 
@@ -106,6 +188,11 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
         Map.get(location, :country_name) ||
         Map.get(location, "country_name") ||
         "Unknown"
+
+    # Extract formatted address (OSM uses display_name)
+    formatted_address =
+      Map.get(location, :display_name) ||
+        Map.get(location, "display_name")
 
     # Extract OpenStreetMap place ID and convert to string (may be integer in response)
     place_id =
@@ -140,6 +227,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap do
            longitude: lon,
            city: city,
            country: country,
+           # Formatted address from OpenStreetMap
+           address: formatted_address,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility

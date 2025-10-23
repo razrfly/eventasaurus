@@ -104,7 +104,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
   defp extract_performer(nil), do: {:error, "No venue ID available"}
 
   defp extract_performer(venue_id) do
-    # Construct the API endpoint URL
+    # Construct the API endpoint URL with query parameters
     params = %{
       "action" => "mb_display_venue_events",
       "pag" => "1",
@@ -114,7 +114,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
 
     Logger.debug("🔍 Fetching performer data for venue: #{venue_id}")
 
-    case Client.post_ajax(params) do
+    case Client.get_ajax(params) do
       {:ok, body} ->
         process_performer_response(body)
 
@@ -238,15 +238,10 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
     end
   end
 
-  defp extract_description(document) do
-    document
-    |> Floki.find(".venue__description")
-    |> Floki.text()
-    |> String.trim()
-    |> case do
-      "" -> nil
-      desc -> desc
-    end
+  # Description extraction removed - .venue__description class no longer exists on GWD pages
+  # Phase 2 Fix: HTML structure changed, this field is not available
+  defp extract_description(_document) do
+    nil
   end
 
   defp extract_fee(document) do

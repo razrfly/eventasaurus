@@ -498,7 +498,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   # Geocodes venue address using multi-provider system (Mapbox, HERE, Geoapify, etc.)
-  # Returns {latitude, longitude, geocoding_metadata} tuple
+  # Returns {latitude, longitude, address, geocoding_metadata} tuple
   defp geocode_venue_address(data, city) do
     # Build full address: "Venue Name, Address, City, Country"
     full_address = build_full_address(data, city)
@@ -512,13 +512,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          country: _country_name,
          latitude: lat,
          longitude: lng,
+         address: address,
          geocoding_metadata: metadata
        }} ->
         Logger.info(
-          "🗺️ ✅ Successfully geocoded venue '#{data.name}' via #{metadata.provider}: #{lat}, #{lng}"
+          "🗺️ ✅ Successfully geocoded venue '#{data.name}' via #{metadata.provider}: #{lat}, #{lng}, address: #{address}"
         )
 
-        {lat, lng, metadata}
+        {lat, lng, address, metadata}
 
       {:error, reason, metadata} ->
         Logger.error(
@@ -526,7 +527,84 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             "Attempted providers: #{inspect(metadata.attempted_providers)}"
         )
 
-        {nil, nil, metadata}
+        {nil, nil, nil, metadata}
+    end
+  end
+
+  # Reverse geocodes coordinates to get address
+  # Used when scrapers provide coordinates but no address (e.g., Resident Advisor)
+  # Returns {address} tuple - simpler than forward geocoding since we already have coordinates
+  defp reverse_geocode_coordinates(lat, lng, city) when is_number(lat) and is_number(lng) do
+    Logger.info("🔄 Reverse geocoding coordinates: #{lat}, #{lng}")
+
+    # Try providers that support reverse geocoding in priority order
+    providers_with_reverse = [
+      EventasaurusDiscovery.Geocoding.Providers.Mapbox,
+      EventasaurusDiscovery.Geocoding.Providers.HERE,
+      EventasaurusDiscovery.Geocoding.Providers.Geoapify,
+      EventasaurusDiscovery.Geocoding.Providers.GooglePlaces,
+      EventasaurusDiscovery.Geocoding.Providers.LocationIQ,
+      EventasaurusDiscovery.Geocoding.Providers.OpenStreetMap,
+      EventasaurusDiscovery.Geocoding.Providers.Photon,
+      EventasaurusDiscovery.Geocoding.Providers.Foursquare
+    ]
+
+    result = try_reverse_geocoding(providers_with_reverse, lat, lng, city)
+
+    case result do
+      {:ok, address} ->
+        Logger.info("🗺️ ✅ Successfully reverse geocoded to address: #{address}")
+        {address}
+
+      {:error, reason} ->
+        Logger.error(
+          "🗺️ ❌ Failed to reverse geocode coordinates #{lat}, #{lng}: #{reason}. Tried all available providers."
+        )
+
+        {nil}
+    end
+  end
+
+  defp reverse_geocode_coordinates(_lat, _lng, _city), do: {nil}
+
+  # Try reverse geocoding with multiple providers until one succeeds
+  defp try_reverse_geocoding([], _lat, _lng, _city), do: {:error, :all_providers_failed}
+
+  defp try_reverse_geocoding([provider | rest], lat, lng, city) do
+    provider_name = provider_module_to_name(provider)
+    Logger.debug("🔍 Trying reverse geocoding with #{provider_name}")
+
+    try do
+      case provider.search_by_coordinates(lat, lng) do
+        {:ok, address} when is_binary(address) ->
+          Logger.info("✅ #{provider_name} reverse geocoding successful")
+          {:ok, address}
+
+        {:error, _reason} ->
+          Logger.debug("❌ #{provider_name} reverse geocoding failed, trying next provider")
+          try_reverse_geocoding(rest, lat, lng, city)
+
+        _other ->
+          Logger.warning("⚠️ #{provider_name} returned unexpected response, trying next provider")
+          try_reverse_geocoding(rest, lat, lng, city)
+      end
+    rescue
+      error ->
+        Logger.error("❌ #{provider_name} raised error: #{inspect(error)}, trying next provider")
+        try_reverse_geocoding(rest, lat, lng, city)
+    end
+  end
+
+  # Convert provider module to friendly name
+  defp provider_module_to_name(module) do
+    module
+    |> Module.split()
+    |> List.last()
+    |> case do
+      "GooglePlaces" -> "Google Places"
+      "OpenStreetMap" -> "OpenStreetMap"
+      "LocationIQ" -> "LocationIQ"
+      name -> name
     end
   end
 
@@ -571,17 +649,25 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp create_venue(data, city, _source, source_scraper) do
     # Check if we need to geocode the venue address
-    {latitude, longitude, geocoding_metadata, geocoding_place_id, provider_ids} =
+    {latitude, longitude, geocoded_address, geocoding_metadata, geocoding_place_id, provider_ids} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
-        # Try to geocode using multi-provider system
-        {lat, lng, metadata} = geocode_venue_address(data, city)
+        # Case 1: No coordinates provided → forward geocode (address → coordinates + address)
+        {lat, lng, address, metadata} = geocode_venue_address(data, city)
         # Extract place_id and provider_ids from geocoding metadata if available
         place_id = if metadata, do: Map.get(metadata, :place_id), else: nil
         provider_ids_map = extract_provider_ids_from_metadata(metadata)
-        {lat, lng, metadata, place_id, provider_ids_map}
+        {lat, lng, address, metadata, place_id, provider_ids_map}
       else
-        # Use provided coordinates
-        {data.latitude, data.longitude, nil, nil, %{}}
+        # Case 2: Has coordinates
+        if is_nil(data.address) do
+          # Case 2a: Has coordinates but no address → reverse geocode (coordinates → address)
+          # This handles Resident Advisor and similar scrapers
+          {address} = reverse_geocode_coordinates(data.latitude, data.longitude, city)
+          {data.latitude, data.longitude, address, nil, nil, %{}}
+        else
+          # Case 2b: Has both coordinates and address → use them directly
+          {data.latitude, data.longitude, nil, nil, nil, %{}}
+        end
       end
 
     # Use scraped name and place_id
@@ -623,6 +709,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
              final_place_id,
              latitude,
              longitude,
+             geocoded_address,
              geocoding_metadata,
              source_scraper,
              provider_ids
@@ -701,6 +788,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          final_place_id,
          latitude,
          longitude,
+         geocoded_address,
          geocoding_metadata,
          source_scraper,
          provider_ids
@@ -782,9 +870,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         end
       end
 
+    # Priority: scraper address > geocoded address
+    # This ensures we use the scraper's address if provided,
+    # and fall back to the geocoded address if not
+    final_address = data.address || geocoded_address
+
     attrs = %{
       name: EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(final_name),
-      address: data.address,
+      address: final_address,
       city: city.name,
       state: data.state,
       country: data.country_name,
@@ -891,11 +984,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           }
 
           case geocode_venue_address(lookup_data, city_for_lookup) do
-            {lat, lng, _metadata} when not is_nil(lat) and not is_nil(lng) ->
+            {lat, lng, address, _metadata} when not is_nil(lat) and not is_nil(lng) ->
               Logger.info("🗺️ Successfully geocoded existing venue '#{venue.name}'")
 
-              # Update with coordinates
-              [{:latitude, lat}, {:longitude, lng} | updates]
+              # Update with coordinates and address (if address is nil on venue and we got one from geocoding)
+              updates_with_coords = [{:latitude, lat}, {:longitude, lng} | updates]
+
+              if is_nil(venue.address) && address do
+                [{:address, address} | updates_with_coords]
+              else
+                updates_with_coords
+              end
 
             _ ->
               Logger.error(

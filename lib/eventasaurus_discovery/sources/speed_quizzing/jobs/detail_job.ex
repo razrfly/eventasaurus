@@ -1,23 +1,26 @@
 defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
   @moduledoc """
-  Oban job for fetching and processing individual Speed Quizzing event details.
+  Oban job for fetching and processing individual Speed Quizzing event details with host data in metadata.
 
   ## Workflow
   1. Fetch event detail page HTML
-  2. Extract venue and event data using VenueExtractor
+  2. Extract venue, event, and host data using VenueExtractor
   3. Parse date/time using shared DateParser
-  4. Transform to unified format via Transformer
+  4. Transform to unified format with host in description + metadata
   5. Process through Processor.process_source_data/3
-  6. Handle performer data and image downloads
-  7. Link performer to event
 
   ## Critical Features
   - Uses Processor.process_source_data/3 (NOT manual VenueStore/EventStore)
   - GPS coordinates in detail page (no geocoding needed)
-  - Performer image URLs downloaded and uploaded
   - EventProcessor updates last_seen_at timestamp
   - Stable external_ids for deduplication
   - Weekly recurring events with metadata
+
+  ## Host Handling (Hybrid Approach)
+  - Extract from host sections and "Hosted by" patterns
+  - Store in description (user-visible)
+  - Store in metadata.performer (structured data)
+  - NOT stored in performers table (venue-specific hosts, not traveling performers)
   """
 
   use Oban.Worker,
@@ -34,9 +37,6 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
   }
 
   alias EventasaurusDiscovery.Sources.Processor
-  alias EventasaurusDiscovery.Performers.PerformerStore
-  alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
-  alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
@@ -56,13 +56,18 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
            {:ok, document} <- parse_html(html),
            venue_data <- VenueExtractor.extract(document, event_id),
            venue_data <- merge_event_data(venue_data, event_data),
-           {:ok, performer} <- process_performer(venue_data.performer, source_id),
            {:ok, transformed} <- transform_and_validate(venue_data, source_id),
-           {:ok, events} <- process_event(transformed, source_id),
-           :ok <- link_performer_to_events(performer, events) do
+           {:ok, events} <- process_event(transformed, source_id) do
         Logger.info("✅ Successfully processed event: #{event_id}")
-        log_results(events, performer)
-        {:ok, %{events: length(events), performer: performer != nil}}
+
+        # Log host from metadata (hybrid approach - not stored in performers table)
+        host_name = get_in(transformed, [:metadata, :performer, :name])
+        if host_name do
+          Logger.info("🎭 Host: #{host_name} (stored in description + metadata)")
+        end
+
+        log_results(events)
+        {:ok, %{events: length(events)}}
       else
         {:error, reason} = error ->
           Logger.error("❌ Failed to process event #{event_id}: #{inspect(reason)}")
@@ -151,34 +156,6 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
     end
   end
 
-  # Process performer data through PerformerStore
-  defp process_performer(nil, _source_id) do
-    Logger.debug("ℹ️ No performer data available")
-    {:ok, nil}
-  end
-
-  defp process_performer(performer_data, source_id) when is_map(performer_data) do
-    attrs = %{
-      name: performer_data.name,
-      image_url: performer_data.profile_image,
-      source_id: source_id,
-      metadata: %{
-        source: "speed-quizzing",
-        description: performer_data[:description]
-      }
-    }
-
-    case PerformerStore.find_or_create_performer(attrs) do
-      {:ok, performer} ->
-        Logger.info("✅ Processed performer: #{performer.name} (ID: #{performer.id})")
-        {:ok, performer}
-
-      {:error, reason} ->
-        Logger.error("❌ Failed to process performer: #{inspect(reason)}")
-        # Don't fail the entire job for performer issues
-        {:ok, nil}
-    end
-  end
 
   defp transform_and_validate(venue_data, source_id) do
     case Transformer.transform_event(venue_data, source_id) do
@@ -204,46 +181,13 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
     end
   end
 
-  # Link performer to events via PublicEventPerformer join table
-  defp link_performer_to_events(nil, _events), do: :ok
 
-  defp link_performer_to_events(performer, events) do
-    events
-    |> Enum.each(fn event ->
-      case link_performer_to_event(performer, event) do
-        {:ok, _} ->
-          Logger.debug("🔗 Linked performer #{performer.id} to event #{event.id}")
-
-        {:error, reason} ->
-          Logger.warning("⚠️ Failed to link performer to event: #{inspect(reason)}")
-      end
-    end)
-
-    :ok
-  end
-
-  defp link_performer_to_event(performer, event) do
-    attrs = %{
-      event_id: event.id,
-      performer_id: performer.id
-    }
-
-    # Upsert to avoid duplicates
-    %PublicEventPerformer{}
-    |> PublicEventPerformer.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: :nothing,
-      conflict_target: [:event_id, :performer_id]
-    )
-  end
-
-  defp log_results(events, performer) do
+  defp log_results(events) do
     count = length(events)
-    performer_info = if performer, do: " with performer: #{performer.name}", else: ""
 
     Logger.info("""
     📊 Processing results:
-    - Events processed: #{count}#{performer_info}
+    - Events processed: #{count}
     """)
   end
 end

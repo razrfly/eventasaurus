@@ -119,7 +119,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Transformer do
         venue_id: venue_data.venue_id,
         recurring: true,
         frequency: "weekly",
-        start_time: venue_data[:start_time]
+        start_time: venue_data[:start_time],
+        quizmaster: venue_data[:performer]
       },
 
       # Category
@@ -263,8 +264,17 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Transformer do
   defp parse_location_from_address_conservative(_), do: {nil, "Australia"}
 
   # Build description from venue data
+  # Includes quizmaster/host name if available (hybrid approach - not stored in performers table)
   defp build_description(venue_data) do
     base_description = venue_data[:description] || "Weekly trivia night at #{venue_data.name}"
+
+    # Add quizmaster/host to description if present
+    base_description =
+      if venue_data[:performer] && venue_data[:performer][:name] do
+        "#{base_description} with Quizmaster #{venue_data[:performer][:name]}"
+      else
+        base_description
+      end
 
     additional_info =
       [

@@ -210,6 +210,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
     lat = get_in(result, ["geometry", "location", "lat"])
     lng = get_in(result, ["geometry", "location", "lng"])
 
+    # Extract formatted address
+    formatted_address = Map.get(result, "formatted_address")
+
     # Extract city and country from address_components
     address_components = Map.get(result, "address_components", [])
 
@@ -236,6 +239,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
            longitude: lng * 1.0,
            city: city,
            country: country || "Unknown",
+           # Formatted address from Google Places
+           address: formatted_address,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility

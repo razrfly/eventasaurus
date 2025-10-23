@@ -43,13 +43,38 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
 
   ## Parameters
   - `address` - Full address string to geocode
+  - `opts` - Keyword list of options
+    - `:providers` - List of provider names to use instead of normal priority system.
+      Used for reverse geocoding during backfill when we need specific provider IDs.
+      Example: `providers: ["google_places"]`
 
   ## Returns
   - `{:ok, result}` - Success with coordinates and metadata
   - `{:error, :all_failed, metadata}` - All providers failed
+
+  ## Special Use Case: Provider Override
+
+  When `:providers` option is specified, the normal priority system is bypassed.
+  This is used for reverse geocoding during venue backfill operations where we already
+  have coordinates but need provider-specific IDs (e.g., Google Places place_id) to
+  fetch images from those providers. The user explicitly selects which provider(s) to use.
+
+  ## Examples
+
+      # Normal geocoding - uses priority system
+      geocode("123 Main St, Portland, OR")
+
+      # Reverse geocoding with specific provider - bypasses priority
+      geocode("123 Main St, Portland, OR", providers: ["google_places"])
   """
-  def geocode(address) when is_binary(address) do
-    providers = get_enabled_providers()
+  def geocode(address, opts \\ []) when is_binary(address) do
+    providers = case Keyword.get(opts, :providers) do
+      nil ->
+        get_enabled_providers()
+      provider_names when is_list(provider_names) ->
+        ProviderConfig.get_specific_providers(provider_names)
+        |> Enum.map(fn {module, _opts} -> module end)
+    end
 
     if Enum.empty?(providers) do
       Logger.error("❌ No geocoding providers enabled in configuration")
@@ -60,7 +85,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
     end
   end
 
-  def geocode(_), do: {:error, :invalid_address, %{attempted_providers: []}}
+  def geocode(_, _), do: {:error, :invalid_address, %{attempted_providers: []}}
 
   # Try providers recursively until one succeeds
   defp try_providers(_address, [], attempted) do
