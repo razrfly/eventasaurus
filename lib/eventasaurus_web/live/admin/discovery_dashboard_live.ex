@@ -19,7 +19,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.VenueImages.{Orchestrator, BackfillJob}
+  alias EventasaurusDiscovery.VenueImages.BackfillJob
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
 
   import Ecto.Query
@@ -256,10 +256,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           DataManager.clear_future_by_source(source)
 
         "city:" <> city_id ->
-          DataManager.clear_by_city(String.to_integer(city_id))
+          case Integer.parse(city_id) do
+            {city_id_int, _} -> DataManager.clear_by_city(city_id_int)
+            :error -> {:error, "Invalid city ID"}
+          end
 
         "city-future:" <> city_id ->
-          DataManager.clear_future_by_city(String.to_integer(city_id))
+          case Integer.parse(city_id) do
+            {city_id_int, _} -> DataManager.clear_future_by_city(city_id_int)
+            :error -> {:error, "Invalid city ID"}
+          end
 
         _ ->
           {:error, "Unknown clear target"}
@@ -345,30 +351,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   @impl true
   def handle_event("toggle_city_discovery", %{"city_id" => city_id}, socket) do
-    city_id = String.to_integer(city_id)
-    city = Enum.find(socket.assigns.discovery_cities, &(&1.id == city_id))
+    case Integer.parse(city_id) do
+      {city_id_int, _} ->
+        city = Enum.find(socket.assigns.discovery_cities, &(&1.id == city_id_int))
+        toggle_city_discovery_internal(city, city_id_int, socket)
 
-    result =
-      if city && city.discovery_enabled do
-        DiscoveryConfigManager.disable_city(city_id)
-      else
-        DiscoveryConfigManager.enable_city(city_id)
-      end
-
-    socket =
-      case result do
-        {:ok, _city} ->
-          action = if city && city.discovery_enabled, do: "disabled", else: "enabled"
-
-          socket
-          |> put_flash(:info, "Automated discovery #{action} successfully")
-          |> load_data()
-
-        {:error, reason} ->
-          put_flash(socket, :error, "Failed to update discovery: #{inspect(reason)}")
-      end
-
-    {:noreply, socket}
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city ID")}
+    end
   end
 
   @impl true
@@ -435,48 +425,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   @impl true
   def handle_event("trigger_city_discovery", %{"city_id" => city_id}, socket) do
-    city_id = String.to_integer(city_id)
-    city = Enum.find(socket.assigns.discovery_cities, &(&1.id == city_id))
+    case Integer.parse(city_id) do
+      {city_id_int, _} ->
+        city = Enum.find(socket.assigns.discovery_cities, &(&1.id == city_id_int))
+        trigger_city_discovery_internal(city, city_id_int, socket)
 
-    if city do
-      # Get all enabled sources for this city
-      config_sources = Map.get(city.discovery_config || %{}, "sources", [])
-
-      sources =
-        (DiscoveryConfigManager.get_due_sources(city) ++ config_sources)
-        |> Enum.filter(& &1["enabled"])
-        |> Enum.uniq_by(& &1["name"])
-
-      # Queue jobs for each source
-      results =
-        Enum.map(sources, fn source ->
-          source_name = source["name"]
-          source_settings = source["settings"] || %{}
-          limit = source_settings["limit"] || 100
-
-          job_args =
-            EventasaurusDiscovery.Admin.SourceOptionsBuilder.build_job_args(
-              source_name,
-              city_id,
-              limit,
-              source_settings
-            )
-
-          DiscoverySyncJob.new(job_args) |> Oban.insert()
-        end)
-
-      success_count = Enum.count(results, &match?({:ok, _}, &1))
-
-      socket =
-        if success_count > 0 do
-          put_flash(socket, :info, "Queued #{success_count} discovery jobs for #{city.name}")
-        else
-          put_flash(socket, :error, "Failed to queue discovery jobs")
-        end
-
-      {:noreply, socket}
-    else
-      {:noreply, put_flash(socket, :error, "City not found")}
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid city ID")}
     end
   end
 
@@ -581,6 +536,75 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @impl true
   def handle_event("toggle_geocode", _params, socket) do
     {:noreply, assign(socket, backfill_geocode: !socket.assigns.backfill_geocode)}
+  end
+
+  # Private helper functions
+
+  defp toggle_city_discovery_internal(city, city_id, socket) do
+    result =
+      if city && city.discovery_enabled do
+        DiscoveryConfigManager.disable_city(city_id)
+      else
+        DiscoveryConfigManager.enable_city(city_id)
+      end
+
+    socket =
+      case result do
+        {:ok, _city} ->
+          action = if city && city.discovery_enabled, do: "disabled", else: "enabled"
+
+          socket
+          |> put_flash(:info, "Automated discovery #{action} successfully")
+          |> load_data()
+
+        {:error, reason} ->
+          put_flash(socket, :error, "Failed to update discovery: #{inspect(reason)}")
+      end
+
+    {:noreply, socket}
+  end
+
+  defp trigger_city_discovery_internal(city, city_id, socket) do
+    if city do
+      # Get all enabled sources for this city
+      config_sources = Map.get(city.discovery_config || %{}, "sources", [])
+
+      sources =
+        (DiscoveryConfigManager.get_due_sources(city) ++ config_sources)
+        |> Enum.filter(& &1["enabled"])
+        |> Enum.uniq_by(& &1["name"])
+
+      # Queue jobs for each source
+      results =
+        Enum.map(sources, fn source ->
+          source_name = source["name"]
+          source_settings = source["settings"] || %{}
+          limit = source_settings["limit"] || 100
+
+          job_args =
+            EventasaurusDiscovery.Admin.SourceOptionsBuilder.build_job_args(
+              source_name,
+              city_id,
+              limit,
+              source_settings
+            )
+
+          DiscoverySyncJob.new(job_args) |> Oban.insert()
+        end)
+
+      success_count = Enum.count(results, &match?({:ok, _}, &1))
+
+      socket =
+        if success_count > 0 do
+          put_flash(socket, :info, "Queued #{success_count} discovery jobs for #{city.name}")
+        else
+          put_flash(socket, :error, "Failed to queue discovery jobs")
+        end
+
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "City not found")}
+    end
   end
 
   defp load_data(socket) do
@@ -1061,9 +1085,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     |> Enum.join(" ")
   end
 
-  @doc """
-  Formats provider name for display.
-  """
+  # Formats provider name for display
   defp format_provider_name(provider_name) do
     case provider_name do
       "google_places" -> "Google Places"

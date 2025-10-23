@@ -97,7 +97,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     city_id = Map.get(args, "city_id")
     providers = get_providers_from_args(args)
     limit = Map.get(args, "limit", get_default_limit())
@@ -118,11 +118,44 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
 
     if Enum.empty?(venues) do
       Logger.info("✅ No venues found needing image backfill")
+
+      # Store empty result in Oban meta
+      store_results_in_meta(job, %{
+        status: "success",
+        city_id: city_id,
+        providers: providers || [],
+        total_venues: 0,
+        enriched: 0,
+        geocoded: 0,
+        skipped: 0,
+        failed: 0,
+        by_provider: %{},
+        total_cost_usd: 0,
+        processed_at: NaiveDateTime.utc_now()
+      })
+
       :ok
     else
       Logger.info("📊 Found #{length(venues)} venues to backfill")
       results = backfill_venues(venues, providers, geocode: geocode, force: force)
       log_results(results, city_id)
+
+      # Store results in Oban meta (Phase 1 + Phase 2)
+      store_results_in_meta(job, %{
+        status: determine_status(results),
+        city_id: city_id,
+        providers: providers || [],
+        total_venues: results.total,
+        enriched: results.enriched,
+        geocoded: results.geocoded,
+        skipped: results.skipped,
+        failed: results.failed,
+        by_provider: results.by_provider,
+        total_cost_usd: calculate_total_cost(results),
+        venue_results: Enum.reverse(results.venue_results),  # Phase 2: Venue-level details
+        processed_at: NaiveDateTime.utc_now()
+      })
+
       :ok
     end
   end
@@ -167,7 +200,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
     Repo.all(query)
   end
 
-  defp backfill_venues(venues, providers, opts \\ []) do
+  defp backfill_venues(venues, providers, opts) do
     geocode = Keyword.get(opts, :geocode, false)
     force = Keyword.get(opts, :force, false)
 
@@ -178,21 +211,27 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
       skipped: 0,
       failed: 0,
       errors: [],
-      by_provider: %{}
+      by_provider: %{},
+      venue_results: []  # Phase 2: Collect per-venue details
     }
 
     Enum.reduce(venues, results, fn venue, acc ->
       case backfill_single_venue(venue, providers, geocode: geocode, force: force) do
-        {:ok, :enriched, provider_names} ->
+        {:ok, :enriched, provider_names, venue_detail} ->
           # Update provider counts
           updated_by_provider =
             Enum.reduce(provider_names, acc.by_provider, fn provider, provider_acc ->
               Map.update(provider_acc, provider, 1, &(&1 + 1))
             end)
 
-          %{acc | enriched: acc.enriched + 1, by_provider: updated_by_provider}
+          %{
+            acc
+            | enriched: acc.enriched + 1,
+              by_provider: updated_by_provider,
+              venue_results: [venue_detail | acc.venue_results]
+          }
 
-        {:ok, :geocoded_and_enriched, provider_names} ->
+        {:ok, :geocoded_and_enriched, provider_names, venue_detail} ->
           updated_by_provider =
             Enum.reduce(provider_names, acc.by_provider, fn provider, provider_acc ->
               Map.update(provider_acc, provider, 1, &(&1 + 1))
@@ -202,27 +241,48 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
             acc
             | enriched: acc.enriched + 1,
               geocoded: acc.geocoded + 1,
-              by_provider: updated_by_provider
+              by_provider: updated_by_provider,
+              venue_results: [venue_detail | acc.venue_results]
           }
 
         {:skip, reason} ->
           Logger.debug("⏭️  Skipped venue #{venue.id}: #{reason}")
-          %{acc | skipped: acc.skipped + 1}
+
+          venue_detail = %{
+            venue_id: venue.id,
+            venue_name: venue.name,
+            action: "skipped",
+            skip_reason: to_string(reason)
+          }
+
+          %{
+            acc
+            | skipped: acc.skipped + 1,
+              venue_results: [venue_detail | acc.venue_results]
+          }
 
         {:error, reason} ->
           error = "Venue #{venue.id} (#{venue.name}): #{inspect(reason)}"
           Logger.error("❌ #{error}")
 
+          venue_detail = %{
+            venue_id: venue.id,
+            venue_name: venue.name,
+            action: "failed",
+            error_message: inspect(reason)
+          }
+
           %{
             acc
             | failed: acc.failed + 1,
-              errors: [error | acc.errors]
+              errors: [error | acc.errors],
+              venue_results: [venue_detail | acc.venue_results]
           }
       end
     end)
   end
 
-  defp backfill_single_venue(venue, providers, opts \\ []) do
+  defp backfill_single_venue(venue, providers, opts) do
     geocode = Keyword.get(opts, :geocode, false)
     force = Keyword.get(opts, :force, false)
 
@@ -236,14 +296,21 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
 
       true ->
         # Attempt geocoding if needed and enabled
-        venue_with_ids =
+        geocoding_result =
           if needs_geocoding?(venue, providers) and geocode do
             case reverse_geocode_venue(venue, providers) do
-              {:ok, updated_venue} -> updated_venue
-              {:error, _} -> venue
+              {:ok, updated_venue} -> {:ok, updated_venue}
+              {:error, reason} -> {:error, reason}
             end
           else
-            venue
+            {:skip, venue}
+          end
+
+        venue_with_ids =
+          case geocoding_result do
+            {:ok, updated_venue} -> updated_venue
+            {:error, _} -> venue
+            {:skip, v} -> v
           end
 
         # Perform enrichment
@@ -253,10 +320,37 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
             metadata = enriched_venue.image_enrichment_metadata || %{}
             provider_names = metadata["providers_succeeded"] || metadata[:providers_succeeded] || []
 
+            # Get geocoding provider if geocoded
+            geocoding_provider =
+              case geocoding_result do
+                {:ok, _} ->
+                  geocoding_meta = venue_with_ids.geocoding_performance || %{}
+                  geocoding_meta["provider"] || geocoding_meta[:provider]
+                _ ->
+                  nil
+              end
+
+            # Count images
+            images_fetched = length(enriched_venue.venue_images || [])
+
+            # Build venue detail (Phase 2)
+            venue_detail = %{
+              venue_id: venue.id,
+              venue_name: venue.name,
+              action: if(geocode and venue != venue_with_ids, do: "geocoded_and_enriched", else: "enriched"),
+              was_geocoded: geocode and venue != venue_with_ids,
+              geocoding_provider: geocoding_provider,
+              geocoding_success: geocoding_result != {:skip, venue} and match?({:ok, _}, geocoding_result),
+              images_fetched: images_fetched,
+              providers_succeeded: provider_names,
+              providers_failed: metadata["providers_failed"] || metadata[:providers_failed] || [],
+              cost_usd: 0  # TODO: Extract from metadata when cost tracking is implemented
+            }
+
             if geocode and venue != venue_with_ids do
-              {:ok, :geocoded_and_enriched, provider_names}
+              {:ok, :geocoded_and_enriched, provider_names, venue_detail}
             else
-              {:ok, :enriched, provider_names}
+              {:ok, :enriched, provider_names, venue_detail}
             end
 
           {:error, reason} ->
@@ -306,7 +400,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
                  set: [
                    provider_ids: updated_provider_ids,
                    geocoding_performance: result[:geocoding_metadata] || result["geocoding_metadata"],
-                   updated_at: DateTime.utc_now()
+                   updated_at: NaiveDateTime.utc_now()
                  ]
                ) do
             {1, _} ->
@@ -381,7 +475,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
   defp get_safe_limit(requested_limit) do
     dev_limit = get_dev_limit()
 
-    if Mix.env() == :dev and requested_limit > dev_limit do
+    if is_dev_env?() and requested_limit > dev_limit do
       Logger.warning("""
       ⚠️  Development limit enforced!
          Requested: #{requested_limit} venues
@@ -396,12 +490,17 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
   end
 
   defp get_default_limit do
-    if Mix.env() == :dev do
+    if is_dev_env?() do
       get_dev_limit()
     else
       Application.get_env(:eventasaurus, __MODULE__, [])
       |> Keyword.get(:prod_default_limit, 100)
     end
+  end
+
+  # Runtime-safe environment check (works in releases)
+  defp is_dev_env? do
+    Application.get_env(:eventasaurus, :environment, :prod) == :dev
   end
 
   defp get_dev_limit do
@@ -433,5 +532,40 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
     end
 
     results
+  end
+
+  # Phase 1: Store results in Oban meta field
+  defp store_results_in_meta(job, meta_data) do
+    case Oban.update_job(job, %{meta: meta_data}) do
+      {:ok, _updated_job} ->
+        Logger.debug("✅ Stored results in Oban meta for job #{job.id}")
+        :ok
+
+      {:error, reason} ->
+        Logger.error("❌ Failed to store results in Oban meta: #{inspect(reason)}")
+        :ok  # Don't fail the job if meta update fails
+    end
+  end
+
+  defp determine_status(results) do
+    cond do
+      results.failed > 0 and results.enriched == 0 ->
+        "failed"
+
+      results.failed > 0 ->
+        "partial"
+
+      results.skipped > 0 and results.enriched == 0 ->
+        "skipped"
+
+      true ->
+        "success"
+    end
+  end
+
+  defp calculate_total_cost(_results) do
+    # For now, return 0 until we have cost tracking in place
+    # TODO: Sum costs from venue enrichment metadata
+    0
   end
 end

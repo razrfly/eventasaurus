@@ -52,6 +52,7 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard (dev - no auth)
       live "/geocoding", Admin.GeocodingDashboardLive
       live "/geocoding/providers", Admin.GeocodingProviderLive, :index
+      live "/geocoding/operations/:city_slug", Admin.GeocodingOperationsLive
 
       # Venue Images Stats Dashboard (dev - no auth)
       live "/venue-images/stats", Admin.VenueImagesStatsLive
@@ -133,6 +134,7 @@ defmodule EventasaurusWeb.Router do
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
       live "/geocoding/providers", EventasaurusWeb.Admin.GeocodingProviderLive, :index
+      live "/geocoding/operations/:city_slug", EventasaurusWeb.Admin.GeocodingOperationsLive
 
       # Venue Images Stats Dashboard with admin authentication
       live "/venue-images/stats", EventasaurusWeb.Admin.VenueImagesStatsLive
