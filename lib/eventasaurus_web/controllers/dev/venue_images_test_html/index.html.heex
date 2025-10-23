@@ -392,6 +392,42 @@
       </div>
     </div>
 
+    <!-- Clear Cache Section -->
+    <div class="mb-8 bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">🧹 Clear Image Cache</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Clear cached venue images and enrichment metadata for testing purposes.
+        This is useful when you need to re-enrich venues with fresh data (e.g., after rotating API keys).
+      </p>
+
+      <!-- City Filter -->
+      <div class="mb-4">
+        <label for="clear-cache-city" class="block text-sm font-medium text-gray-700 mb-2">
+          Optional: Filter by City (leave empty to clear all)
+        </label>
+        <select
+          id="clear-cache-city"
+          class="w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="">-- All Cities --</option>
+          <%= for city <- @active_cities do %>
+            <option value={city.slug}><%= city.name %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <!-- Clear Button -->
+      <button
+        id="clear-cache-btn"
+        class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+      >
+        🗑️ Clear Image Cache
+      </button>
+
+      <!-- Clear Cache Result -->
+      <div id="clear-cache-result" class="hidden mt-4"></div>
+    </div>
+
     <!-- Sample Enriched Venues -->
     <%= if length(@sample_venues) > 0 do %>
       <div class="mb-8">
@@ -405,7 +441,7 @@
                   <div class="flex-1">
                     <h3 class="text-lg font-bold"><%= venue_data.venue.name %></h3>
                     <p class="text-sm text-gray-300">
-                      <%= if venue_data.venue.city, do: venue_data.venue.city.name, else: "Unknown City" %>
+                      <%= if venue_data.venue.city_ref, do: venue_data.venue.city_ref.name, else: "Unknown City" %>
                     </p>
                   </div>
                   <div class="ml-4">
@@ -899,5 +935,80 @@ iex> RateLimiter.get_stats("google_places")</pre>
         alert('Error saving provider IDs: ' + error.message);
       }
     }
+
+    // Clear cache handler
+    const clearCacheBtn = document.getElementById('clear-cache-btn');
+    const clearCacheCityInput = document.getElementById('clear-cache-city');
+    const clearCacheResult = document.getElementById('clear-cache-result');
+
+    clearCacheBtn.addEventListener('click', async function() {
+      const citySlug = clearCacheCityInput.value || null;
+
+      // Confirm action
+      const confirmMessage = citySlug
+        ? `Are you sure you want to clear image cache for city "${citySlug}"?`
+        : 'Are you sure you want to clear ALL venue image cache? This will affect all venues.';
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      const originalText = clearCacheBtn.textContent;
+      clearCacheBtn.disabled = true;
+      clearCacheBtn.textContent = 'Clearing...';
+      clearCacheResult.classList.add('hidden');
+
+      try {
+        const response = await fetch('/dev/venue-images/clear-cache', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken
+          },
+          body: JSON.stringify({
+            city_slug: citySlug
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          clearCacheResult.className = 'mt-4 p-4 bg-green-50 border border-green-200 rounded';
+          clearCacheResult.innerHTML = `
+            <p class="text-green-800 font-medium">✓ Cache cleared successfully!</p>
+            <p class="text-sm text-green-700 mt-1">
+              Cleared ${result.cleared_count} venue(s)
+              ${citySlug ? `in city "${citySlug}"` : '(all cities)'}
+            </p>
+            <p class="text-xs text-green-600 mt-2">
+              You can now re-enrich these venues to fetch fresh images.
+            </p>
+          `;
+          clearCacheResult.classList.remove('hidden');
+
+          // Refresh the page after 2 seconds to show updated stats
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          clearCacheResult.className = 'mt-4 p-4 bg-red-50 border border-red-200 rounded';
+          clearCacheResult.innerHTML = `
+            <p class="text-red-800 font-medium">✗ Failed to clear cache</p>
+            <p class="text-sm text-red-700 mt-1">${result.error || 'Unknown error'}</p>
+          `;
+          clearCacheResult.classList.remove('hidden');
+        }
+      } catch (error) {
+        clearCacheResult.className = 'mt-4 p-4 bg-red-50 border border-red-200 rounded';
+        clearCacheResult.innerHTML = `
+          <p class="text-red-800 font-medium">✗ Error</p>
+          <p class="text-sm text-red-700 mt-1">${error.message}</p>
+        `;
+        clearCacheResult.classList.remove('hidden');
+      } finally {
+        clearCacheBtn.disabled = false;
+        clearCacheBtn.textContent = originalText;
+      }
+    });
   })();
 </script>

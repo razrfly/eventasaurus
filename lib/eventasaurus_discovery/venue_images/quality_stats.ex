@@ -338,6 +338,35 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
   end
 
   @doc """
+  Lists venues with images to display in admin UI.
+
+  Returns venues with their images and enrichment metadata for gallery display.
+
+  ## Parameters
+    - `city_id` - Integer city ID to get venues for
+    - `limit` - Maximum number of venues to return (default: 20)
+
+  ## Returns
+    List of Venue structs with preloaded images and metadata
+
+  ## Examples
+
+      iex> QualityStats.list_venues_with_images(1, 10)
+      [%Venue{venue_images: [...], image_enrichment_metadata: %{...}}, ...]
+  """
+  def list_venues_with_images(city_id, limit \\ 20)
+      when is_integer(city_id) and is_integer(limit) and limit > 0 do
+    query =
+      from v in Venue,
+        where: v.city_id == ^city_id,
+        where: fragment("jsonb_array_length(?) > 0", v.venue_images),
+        order_by: [desc: fragment("jsonb_array_length(?)", v.venue_images), asc: v.id],
+        limit: ^limit
+
+    Repo.all(query)
+  end
+
+  @doc """
   Lists venues without images that need backfilling.
 
   Returns venues in priority order (prioritizing those with provider IDs

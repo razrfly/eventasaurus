@@ -29,6 +29,7 @@ defmodule EventasaurusWeb.Router do
       post "/venue-images/test-enrichment", Dev.VenueImagesTestController, :test_enrichment
       put "/venue-images/update-provider-ids", Dev.VenueImagesTestController, :update_provider_ids
       post "/venue-images/save-discovered-ids", Dev.VenueImagesTestController, :save_discovered_ids
+      post "/venue-images/clear-cache", Dev.VenueImagesTestController, :clear_cache
     end
 
     # Admin routes (dev - no auth, mirrors production paths)
@@ -589,6 +590,14 @@ defmodule EventasaurusWeb.Router do
 
     # Calendar export endpoint
     get "/:slug/calendar/:format", CalendarController, :export
+  end
+
+  # Public venue image proxy (no auth required)
+  # Proxies external venue images to work around CORS and API key restrictions
+  scope "/venue-images", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/proxy/:provider/:id", VenueImageProxyController, :show
   end
 
   # Public social card generation (no auth required)

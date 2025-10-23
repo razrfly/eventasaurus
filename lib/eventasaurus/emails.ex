@@ -547,7 +547,10 @@ defmodule Eventasaurus.Emails do
 
     # Apply CDN transformations for email optimization
     if raw_url do
-      Eventasaurus.CDN.url(raw_url,
+      # Convert local paths to full URLs before CDN processing
+      full_url = get_full_image_url(raw_url)
+
+      Eventasaurus.CDN.url(full_url,
         width: 600,
         fit: "scale-down",
         quality: 85,
@@ -555,6 +558,32 @@ defmodule Eventasaurus.Emails do
       )
     else
       nil
+    end
+  end
+
+  # Convert relative/local image paths to full URLs
+  defp get_full_image_url(image_url) do
+    case URI.parse(image_url) do
+      %URI{scheme: scheme} when scheme in ["http", "https"] ->
+        # Already a full URL
+        image_url
+
+      %URI{path: "/" <> _rest} ->
+        # Absolute path, prepend base URL
+        "#{get_base_url()}#{image_url}"
+
+      _ ->
+        # Relative path or invalid, prepend base URL
+        "#{get_base_url()}/#{image_url}"
+    end
+  end
+
+  defp get_base_url do
+    # In production, use PHX_HOST environment variable
+    # In development, use localhost
+    case System.get_env("PHX_HOST") do
+      nil -> "http://localhost:4000"
+      host -> "https://#{host}"
     end
   end
 
