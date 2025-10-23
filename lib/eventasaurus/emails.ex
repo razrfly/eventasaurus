@@ -326,7 +326,7 @@ defmodule Eventasaurus.Emails do
         Poll
         |> Ecto.Query.where([p], p.event_id == ^event_id)
         |> Ecto.Query.where([p], p.phase in ^["voting_with_suggestions", "voting_only"])
-        |> Ecto.Query.order_by([p], [asc: p.order_index, asc: p.id])
+        |> Ecto.Query.order_by([p], asc: p.order_index, asc: p.id)
         |> Ecto.Query.limit(1)
         |> Ecto.Query.preload([:poll_options])
         |> Repo.one()
@@ -379,6 +379,7 @@ defmodule Eventasaurus.Emails do
       more_html =
         if total_count > limit do
           remaining = total_count - limit
+
           "<li style=\"margin: 8px 0; color: #888; font-style: italic;\">...and #{remaining} more option#{if remaining == 1, do: "", else: "s"}</li>"
         else
           ""
@@ -527,19 +528,33 @@ defmodule Eventasaurus.Emails do
   end
 
   # Get event image URL from either cover_image_url or external_image_data
+  # Wraps URLs with Cloudflare CDN transformations for email optimization
   defp get_event_image_url(event) do
-    cond do
-      # Check for user-uploaded cover image
-      event.cover_image_url && event.cover_image_url != "" ->
-        event.cover_image_url
+    raw_url =
+      cond do
+        # Check for user-uploaded cover image
+        event.cover_image_url && event.cover_image_url != "" ->
+          event.cover_image_url
 
-      # Check for external image data (Unsplash/TMDB)
-      is_map(event.external_image_data) && Map.get(event.external_image_data, "url") ->
-        Map.get(event.external_image_data, "url")
+        # Check for external image data (Unsplash/TMDB)
+        is_map(event.external_image_data) && Map.get(event.external_image_data, "url") ->
+          Map.get(event.external_image_data, "url")
 
-      # No image available
-      true ->
-        nil
+        # No image available
+        true ->
+          nil
+      end
+
+    # Apply CDN transformations for email optimization
+    if raw_url do
+      Eventasaurus.CDN.url(raw_url,
+        width: 600,
+        fit: "scale-down",
+        quality: 85,
+        format: "auto"
+      )
+    else
+      nil
     end
   end
 
