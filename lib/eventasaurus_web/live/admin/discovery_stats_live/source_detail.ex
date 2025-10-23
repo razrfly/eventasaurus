@@ -414,7 +414,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
           expected_jobs: 0,
           processing_rate: 0.0,
           runs_in_period: 0,
-          execution_multiplier: 1.0
+          execution_multiplier: 0.0
         }
       end
 
