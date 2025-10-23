@@ -40,6 +40,77 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
 
   def geocode(_), do: {:error, :invalid_address}
 
+  @doc """
+  Reverse geocode coordinates to get address information.
+
+  Used for venues that have coordinates but no address (e.g., Resident Advisor).
+  """
+  def search_by_coordinates(lat, lng, _venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
+    Logger.debug("🔍 Photon reverse geocode: #{lat},#{lng}")
+    reverse_geocode_request(lat, lng)
+  end
+
+  defp reverse_geocode_request(lat, lng) do
+    url = "https://photon.komoot.io/reverse"
+
+    params = [
+      lat: lat,
+      lon: lng,
+      limit: 1
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_reverse_response(body)
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ Photon reverse geocode rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ Photon reverse geocode HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Photon reverse geocode timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ Photon reverse geocode failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_reverse_response(body) do
+    case Jason.decode(body) do
+      {:ok, %{"features" => [first_feature | _]}} ->
+        # Extract name field (Photon uses 'name' for display)
+        properties = Map.get(first_feature, "properties", %{})
+        formatted_address = Map.get(properties, "name")
+
+        if formatted_address do
+          Logger.debug("✅ Photon found address: #{formatted_address}")
+          {:ok, formatted_address}
+        else
+          Logger.debug("📍 Photon: no address in response")
+          {:error, :no_results}
+        end
+
+      {:ok, %{"features" => []}} ->
+        Logger.debug("📍 Photon reverse geocode: no results found")
+        {:error, :no_results}
+
+      {:ok, _other} ->
+        Logger.error("❌ Photon reverse: unexpected response format")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
+        Logger.error("❌ Photon reverse: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
+  end
+
   defp make_request(address) do
     url = "https://photon.komoot.io/api/"
 
@@ -115,6 +186,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
 
     country = Map.get(properties, "country")
 
+    # Extract formatted address (Photon uses 'name' field for display)
+    formatted_address = Map.get(properties, "name")
+
     # Extract Photon/OSM place ID and convert to string (may be integer in response)
     place_id =
       case Map.get(properties, "osm_id") || Map.get(properties, "place_id") do
@@ -145,6 +219,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Photon do
            longitude: lng * 1.0,
            city: city,
            country: country || "Unknown",
+           # Formatted address from Photon
+           address: formatted_address,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility

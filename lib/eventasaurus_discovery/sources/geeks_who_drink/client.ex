@@ -49,6 +49,47 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Client do
   end
 
   @doc """
+  Make a GET request to the WordPress AJAX API with query parameters.
+
+  ## Parameters
+  - `params` - Map of parameters to send as query string
+  - `options` - Optional map with retry settings
+
+  ## Returns
+  - `{:ok, body}` - Success with response body
+  - `{:error, reason}` - Request failed
+  """
+  def get_ajax(params, options \\ %{}) do
+    url = Config.ajax_url()
+    retries = Map.get(options, :retries, 0)
+    max_retries = Map.get(options, :max_retries, Config.max_retries())
+
+    # Build URL with query parameters
+    query_string = URI.encode_query(params)
+    full_url = "#{url}?#{query_string}"
+
+    Logger.debug(
+      "🔍 GET #{url} with action: #{params["action"]} (attempt #{retries + 1}/#{max_retries + 1})"
+    )
+
+    case HTTPoison.get(full_url, Config.headers(),
+           timeout: Config.timeout(),
+           recv_timeout: Config.timeout()
+         ) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ HTTP #{status} when calling AJAX API")
+        maybe_retry(:ajax_get, {url, params}, status, retries, max_retries, options)
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("❌ Network error calling AJAX API: #{inspect(reason)}")
+        maybe_retry(:ajax_get, {url, params}, reason, retries, max_retries, options)
+    end
+  end
+
+  @doc """
   Make a POST request to the WordPress AJAX API.
 
   ## Parameters
@@ -108,6 +149,10 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Client do
     case method do
       :get ->
         fetch_page(request_data, updated_options)
+
+      :ajax_get ->
+        {_url, params} = request_data
+        get_ajax(params, updated_options)
 
       :post ->
         {_url, params} = request_data

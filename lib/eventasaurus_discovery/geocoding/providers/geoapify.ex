@@ -130,6 +130,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
     # Extract country
     country = Map.get(result, "country")
 
+    # Extract formatted address
+    formatted_address = Map.get(result, "formatted")
+
     # Extract Geoapify place ID and convert to string (may be integer in response)
     place_id =
       case Map.get(result, "place_id") do
@@ -159,6 +162,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
            longitude: lng * 1.0,
            city: city,
            country: country || "Unknown",
+           # Formatted address from Geoapify
+           address: formatted_address,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility
@@ -239,7 +244,10 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
   defp parse_reverse_response(body) do
     case Jason.decode(body) do
       {:ok, %{"results" => [first_result | _]}} ->
-        # Extract place_id from result
+        # Extract formatted address
+        formatted_address = Map.get(first_result, "formatted")
+
+        # Also extract place_id for compatibility with existing backfill logic
         place_id =
           case Map.get(first_result, "place_id") do
             nil -> nil
@@ -248,12 +256,17 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
             other -> to_string(other)
           end
 
-        if place_id do
+        if formatted_address do
+          Logger.debug("✅ Geoapify found address: #{formatted_address}")
+          {:ok, formatted_address}
+        else if place_id do
+          # Fallback to place_id for backwards compatibility
           Logger.debug("✅ Geoapify found place: #{place_id}")
           {:ok, place_id}
         else
-          Logger.debug("📍 Geoapify: no place_id in response")
+          Logger.debug("📍 Geoapify: no address or place_id in response")
           {:error, :no_results}
+        end
         end
 
       {:ok, %{"results" => []}} ->

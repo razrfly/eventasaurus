@@ -42,6 +42,88 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Mapbox do
 
   def geocode(_), do: {:error, :invalid_address}
 
+  @doc """
+  Reverse geocode coordinates to get address information.
+
+  Used for venues that have coordinates but no address (e.g., Resident Advisor).
+  """
+  def search_by_coordinates(lat, lng, _venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
+    access_token = get_access_token()
+
+    if is_nil(access_token) do
+      Logger.error("❌ MAPBOX_ACCESS_TOKEN not configured")
+      {:error, :api_key_missing}
+    else
+      Logger.debug("🔍 Mapbox reverse geocode: #{lat},#{lng}")
+      reverse_geocode_request(lng, lat, access_token)
+    end
+  end
+
+  defp reverse_geocode_request(lng, lat, api_key) do
+    # Mapbox reverse geocoding uses lon,lat format
+    url = "https://api.mapbox.com/geocoding/v5/mapbox.places/#{lng},#{lat}.json"
+
+    params = [
+      access_token: api_key,
+      limit: 1,
+      types: "place,locality,neighborhood,address"
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_reverse_response(body)
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ Mapbox reverse geocode rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: 401}} ->
+        Logger.error("❌ Mapbox reverse geocode authentication failed")
+        {:error, :api_error}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ Mapbox reverse geocode HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Mapbox reverse geocode timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ Mapbox reverse geocode failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_reverse_response(body) do
+    case Jason.decode(body) do
+      {:ok, %{"features" => [first_feature | _]}} ->
+        # Extract formatted address (place_name)
+        place_name = Map.get(first_feature, "place_name")
+
+        if place_name do
+          Logger.debug("✅ Mapbox found address: #{place_name}")
+          {:ok, place_name}
+        else
+          Logger.debug("📍 Mapbox: no address in response")
+          {:error, :no_results}
+        end
+
+      {:ok, %{"features" => []}} ->
+        Logger.debug("📍 Mapbox reverse geocode: no results found")
+        {:error, :no_results}
+
+      {:ok, other} ->
+        Logger.error("❌ Mapbox reverse: unexpected response: #{inspect(other)}")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
+        Logger.error("❌ Mapbox reverse: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
+  end
+
   defp make_request(address, api_key) do
     url = "https://api.mapbox.com/geocoding/v5/mapbox.places/#{URI.encode(address)}.json"
 
@@ -137,6 +219,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Mapbox do
            longitude: lng,
            city: city,
            country: country || "Unknown",
+           # Formatted address from Mapbox
+           address: place_name,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility

@@ -39,6 +39,46 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderConfig do
   end
 
   @doc """
+  Get specific providers by name for explicit provider selection.
+
+  This is a special use case for reverse geocoding during backfill operations where
+  the user explicitly selects which providers to use, overriding the normal priority system.
+
+  Returns list of {module, opts} tuples in the order specified (preserves user's selection).
+  Filters to only active providers that support geocoding operation.
+  Skips any providers that don't exist or aren't valid.
+
+  ## Examples
+
+      iex> get_specific_providers(["google_places", "mapbox"])
+      [
+        {EventasaurusDiscovery.Geocoding.Providers.GooglePlaces, [enabled: true, priority: 99]},
+        {EventasaurusDiscovery.Geocoding.Providers.Mapbox, [enabled: true, priority: 1]}
+      ]
+
+  ## Use Case
+
+  When backfilling venue images, we need provider-specific IDs (e.g., Google Places place_id)
+  to fetch images from those providers. We already have coordinates, so we're doing reverse
+  geocoding just to get the provider IDs. The user selects which provider(s) they want IDs for,
+  and we must use those specific providers regardless of their normal geocoding priority.
+  """
+  def get_specific_providers(provider_names) when is_list(provider_names) do
+    provider_names
+    |> Enum.map(&String.trim/1)
+    |> Enum.map(&String.downcase/1)
+    |> Enum.map(fn name ->
+      # Look up provider in database
+      Repo.get_by(GeocodingProvider, name: name)
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.filter(fn provider -> provider.is_active == true end)
+    |> filter_by_capability("geocoding")
+    |> Enum.map(&provider_to_config/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  @doc """
   List all providers for admin interface (including disabled).
   Ordered by geocoding priority (from priorities map) for backwards compatibility.
   """

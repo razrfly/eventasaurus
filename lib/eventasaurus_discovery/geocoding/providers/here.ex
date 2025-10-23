@@ -132,6 +132,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
 
     country = Map.get(address, "countryName")
 
+    # Extract formatted address label
+    formatted_address = Map.get(address, "label")
+
     # Extract HERE place ID and convert to string (may be integer in response)
     place_id =
       case Map.get(item, "id") do
@@ -161,6 +164,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
            longitude: lng * 1.0,
            city: city,
            country: country || "Unknown",
+           # Formatted address from HERE
+           address: formatted_address,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility
@@ -239,7 +244,10 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
   defp parse_reverse_response(body) do
     case Jason.decode(body) do
       {:ok, %{"items" => [first_item | _]}} ->
-        # Extract HERE place ID
+        # Extract formatted address from HERE
+        formatted_address = get_in(first_item, ["address", "label"])
+
+        # Also extract place_id for compatibility with existing backfill logic
         place_id =
           case Map.get(first_item, "id") do
             nil -> nil
@@ -248,12 +256,17 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
             other -> to_string(other)
           end
 
-        if place_id do
+        if formatted_address do
+          Logger.debug("✅ HERE found address: #{formatted_address}")
+          {:ok, formatted_address}
+        else if place_id do
+          # Fallback to place_id for backwards compatibility
           Logger.debug("✅ HERE found place: #{place_id}")
           {:ok, place_id}
         else
-          Logger.debug("📍 HERE: no place ID in response")
+          Logger.debug("📍 HERE: no address or place ID in response")
           {:error, :no_results}
+        end
         end
 
       {:ok, %{"items" => []}} ->

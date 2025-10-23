@@ -392,8 +392,17 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
   defp detect_currency(_, country), do: detect_currency("", country)
 
   # Build description from venue data
+  # Includes host name if available (hybrid approach - not stored in performers table)
   defp build_description(venue_data) do
     base_description = venue_data.description || "Weekly trivia night at #{venue_data.venue_name}"
+
+    # Add host to description if present
+    base_description =
+      if venue_data.performer && venue_data.performer[:name] do
+        "#{base_description} with host #{venue_data.performer[:name]}"
+      else
+        base_description
+      end
 
     additional_info =
       [

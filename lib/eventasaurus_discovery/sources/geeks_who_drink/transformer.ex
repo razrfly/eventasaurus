@@ -30,6 +30,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   require Logger
 
   alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
 
   @doc """
   Transform extracted venue data to unified format.
@@ -131,7 +132,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         brand: venue_data[:brand],
         start_time: venue_data[:start_time],
         facebook: venue_data[:facebook],
-        instagram: venue_data[:instagram]
+        instagram: venue_data[:instagram],
+        # Quizmaster stored in metadata (hybrid approach - not in performers table)
+        quizmaster: venue_data[:performer]
       },
 
       # Category
@@ -285,14 +288,32 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   defp parse_location_from_address_conservative(_), do: {nil, "United States"}
 
   # Build description from venue data
+  # Includes quizmaster name and schedule details (hybrid approach - not stored in performers table)
   defp build_description(venue_data) do
-    base_description = venue_data[:description] || "Weekly trivia night at #{venue_data.title}"
+    # Parse day and time from time_text for enhanced description
+    day_info = parse_day_from_time_text(venue_data[:time_text])
+    time_info = parse_time_from_time_text(venue_data[:time_text]) ||
+                parse_time_from_starts_at(venue_data[:starts_at])
 
+    # Build base description with schedule if available
+    base_description =
+      if day_info && time_info do
+        "Weekly trivia every #{day_info} at #{time_info} at #{venue_data.title}"
+      else
+        venue_data[:description] || "Weekly trivia night at #{venue_data.title}"
+      end
+
+    # Add quizmaster to description if present
+    base_description =
+      if venue_data[:performer] && venue_data[:performer][:name] do
+        "#{base_description} with Quizmaster #{venue_data[:performer][:name]}"
+      else
+        base_description
+      end
+
+    # Add fee information if available (time_text now incorporated into base description)
     additional_info =
-      [
-        venue_data[:fee_text],
-        venue_data[:time_text]
-      ]
+      [venue_data[:fee_text]]
       |> Enum.reject(&is_nil/1)
       |> Enum.join(" • ")
 
@@ -302,6 +323,42 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
       base_description
     end
   end
+
+  # Parse day of week from time_text (e.g., "Tuesdays at 7pm" -> "Tuesday")
+  defp parse_day_from_time_text(time_text) when is_binary(time_text) do
+    case RecurringEventParser.parse_day_of_week(time_text) do
+      {:ok, day_atom} ->
+        day_atom
+        |> Atom.to_string()
+        |> String.capitalize()
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_day_from_time_text(_), do: nil
+
+  # Parse time from time_text (e.g., "Tuesdays at 7pm" -> "7pm")
+  defp parse_time_from_time_text(time_text) when is_binary(time_text) do
+    case Regex.run(~r/at\s+(\d+(?::\d+)?\s*[ap]m)/i, time_text) do
+      [_, time] -> time
+      _ -> nil
+    end
+  end
+
+  defp parse_time_from_time_text(_), do: nil
+
+  # Parse time from starts_at DateTime (fallback)
+  defp parse_time_from_starts_at(%DateTime{} = dt) do
+    dt
+    |> DateTime.to_time()
+    |> Calendar.strftime("%I:%M%p")
+    |> String.downcase()
+    |> String.replace(~r/:00/, "")  # "7:00pm" -> "7pm"
+  end
+
+  defp parse_time_from_starts_at(_), do: nil
 
   # Parse pricing information from fee_text
   # Returns {is_free, min_price}

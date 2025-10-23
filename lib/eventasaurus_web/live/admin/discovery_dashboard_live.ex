@@ -19,6 +19,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusDiscovery.Sources.SourceRegistry
+  alias EventasaurusDiscovery.VenueImages.{Orchestrator, BackfillJob}
+  alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
 
   import Ecto.Query
   require Logger
@@ -54,6 +56,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:city_specific_sources, @city_specific_sources)
       |> assign(:expanded_source_jobs, MapSet.new())
       |> assign(:expanded_metro_areas, MapSet.new())
+      # Venue backfill assigns
+      |> assign(:backfill_city_id, nil)
+      |> assign(:backfill_providers, [])
+      |> assign(:backfill_limit, 10)
+      |> assign(:backfill_geocode, true)
+      |> assign(:backfill_running, false)
+      |> assign(:image_providers, [])
       |> load_data()
       |> schedule_refresh()
 
@@ -506,6 +515,74 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     end
   end
 
+  @impl true
+  def handle_event("start_backfill", params, socket) do
+    city_id = parse_int(params["city_id"], nil)
+    providers = Map.get(params, "providers", [])
+    limit = parse_int(params["limit"], 10)
+    geocode = socket.assigns.backfill_geocode
+
+    cond do
+      is_nil(city_id) ->
+        {:noreply, put_flash(socket, :error, "Please select a city")}
+
+      Enum.empty?(providers) ->
+        {:noreply, put_flash(socket, :error, "Please select at least one provider")}
+
+      true ->
+        # Enqueue backfill job
+        case BackfillJob.enqueue(city_id: city_id, providers: providers, limit: limit, geocode: geocode) do
+          {:ok, job} ->
+            city = Enum.find(socket.assigns.cities, &(&1.id == city_id))
+            city_name = if city, do: city.name, else: "City ##{city_id}"
+
+            socket =
+              socket
+              |> put_flash(
+                :info,
+                "Queued venue backfill job ##{job.id} for #{city_name} (#{limit} venues, #{length(providers)} providers)"
+              )
+              |> assign(:backfill_running, true)
+
+            {:noreply, socket}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to queue backfill: #{inspect(reason)}")}
+        end
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_provider", %{"provider" => provider}, socket) do
+    current_providers = socket.assigns.backfill_providers
+
+    new_providers =
+      if provider in current_providers do
+        List.delete(current_providers, provider)
+      else
+        [provider | current_providers]
+      end
+
+    {:noreply, assign(socket, :backfill_providers, new_providers)}
+  end
+
+  @impl true
+  def handle_event("update_backfill_limit", %{"limit" => limit_str}, socket) do
+    limit = parse_int(limit_str, 10)
+    {:noreply, assign(socket, :backfill_limit, limit)}
+  end
+
+  @impl true
+  def handle_event("select_backfill_city", %{"city_id" => city_id_str}, socket) do
+    city_id = parse_int(city_id_str, nil)
+    {:noreply, assign(socket, :backfill_city_id, city_id)}
+  end
+
+  @impl true
+  def handle_event("toggle_geocode", _params, socket) do
+    {:noreply, assign(socket, backfill_geocode: !socket.assigns.backfill_geocode)}
+  end
+
   defp load_data(socket) do
     # Get overall statistics
     stats = %{
@@ -531,8 +608,15 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     # Get per-city statistics
     city_stats = get_city_statistics()
 
-    # Get available cities
-    cities = Repo.all(from(c in City, order_by: c.name, preload: :country))
+    # Get active cities only (those with discovery enabled)
+    cities =
+      Repo.all(
+        from(c in City,
+          where: c.discovery_enabled == true,
+          order_by: c.name,
+          preload: :country
+        )
+      )
 
     # Get available sources
     sources = [
@@ -577,6 +661,28 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       DiscoveryConfigManager.list_discovery_enabled_cities()
       |> Enum.map(&load_city_stats/1)
 
+    # Get ALL image providers for backfill form (including disabled ones)
+    image_providers =
+      from(p in GeocodingProvider,
+        where: fragment("? @> ?", p.capabilities, ^%{"images" => true}),
+        order_by: [
+          asc:
+            fragment(
+              "COALESCE(CAST(? ->> 'images' AS INTEGER), 999)",
+              p.priorities
+            )
+        ]
+      )
+      |> Repo.all()
+      |> Enum.map(fn p ->
+        %{
+          name: p.name,
+          display_name: format_provider_name(p.name),
+          is_active: p.is_active,
+          priority: get_in(p.priorities, ["images"]) || 999
+        }
+      end)
+
     socket
     |> assign(:stats, stats)
     |> assign(:source_stats, source_stats)
@@ -588,6 +694,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     |> assign(:upcoming_count, upcoming_count)
     |> assign(:past_count, past_count)
     |> assign(:discovery_cities, discovery_cities)
+    |> assign(:image_providers, image_providers)
   end
 
   defp load_city_stats(city) do
@@ -952,5 +1059,19 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     |> String.split()
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
+  end
+
+  @doc """
+  Formats provider name for display.
+  """
+  defp format_provider_name(provider_name) do
+    case provider_name do
+      "google_places" -> "Google Places"
+      "foursquare" -> "Foursquare"
+      "here" -> "Here"
+      "geoapify" -> "Geoapify"
+      "unsplash" -> "Unsplash"
+      name -> String.capitalize(name)
+    end
   end
 end

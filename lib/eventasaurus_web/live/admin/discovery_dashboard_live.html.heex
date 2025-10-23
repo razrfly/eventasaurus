@@ -249,6 +249,188 @@
     </div>
   </div>
 
+  <!-- Venue Image Backfill -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">🖼️ Venue Image Backfill</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Backfill Form -->
+      <div>
+        <h3 class="text-lg font-medium mb-3">Start Backfill</h3>
+
+        <form phx-submit="start_backfill" class="space-y-4">
+          <div>
+            <label for="backfill_city_id" class="block text-sm font-medium text-gray-700">
+              City <span class="text-red-600">*</span>
+            </label>
+            <select
+              id="backfill_city_id"
+              name="city_id"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              phx-change="select_backfill_city"
+            >
+              <option value="">Select city...</option>
+              <%= for city <- @cities do %>
+                <option
+                  value={city.id}
+                  selected={@backfill_city_id == city.id}
+                >
+                  {city.name}, {city.country.name}
+                </option>
+              <% end %>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Image Providers <span class="text-red-600">*</span>
+            </label>
+            <%= if Enum.empty?(@image_providers) do %>
+              <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p class="text-xs text-yellow-900">
+                  ⚠️ No active image providers configured. Please configure image providers in the geocoding dashboard.
+                </p>
+              </div>
+            <% else %>
+              <div class="space-y-2">
+                <%= for provider <- @image_providers do %>
+                  <label class={"flex items-center #{unless provider.is_active, do: "opacity-50"}"}>
+                    <input
+                      type="checkbox"
+                      name="providers[]"
+                      value={provider.name}
+                      checked={provider.is_active and provider.name in @backfill_providers}
+                      disabled={not provider.is_active}
+                      phx-click={if provider.is_active, do: "toggle_provider", else: nil}
+                      phx-value-provider={provider.name}
+                      class={"rounded border-gray-300 text-blue-600 focus:ring-blue-500 #{unless provider.is_active, do: "cursor-not-allowed"}"}
+                    />
+                    <span class="ml-2 text-sm text-gray-700">
+                      {provider.display_name}
+                      <%= if not provider.is_active do %>
+                        <span class="text-xs text-gray-500">(disabled)</span>
+                      <% end %>
+                      <span class="text-xs text-gray-400 ml-1">priority: {provider.priority}</span>
+                    </span>
+                  </label>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+
+          <div>
+            <label class="flex items-center">
+              <input
+                type="checkbox"
+                checked={@backfill_geocode}
+                phx-click="toggle_geocode"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span class="ml-2 text-sm text-gray-700">
+                Enable reverse geocoding for venues without provider IDs
+              </span>
+            </label>
+            <p class="mt-1 text-xs text-gray-500">
+              When enabled, venues without provider IDs will be geocoded to get their IDs before fetching images (adds ~1 extra API call per venue)
+            </p>
+          </div>
+
+          <div>
+            <label for="backfill_limit" class="block text-sm font-medium text-gray-700">
+              Venue Limit
+            </label>
+            <input
+              type="number"
+              id="backfill_limit"
+              name="limit"
+              value={@backfill_limit}
+              min="1"
+              max="100"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              phx-change="update_backfill_limit"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              <%= if Mix.env() == :dev do %>
+                Development limit: max 10 venues
+              <% else %>
+                Maximum: 100 venues per backfill
+              <% end %>
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            phx-disable-with="Starting..."
+            disabled={
+              is_nil(@backfill_city_id) or
+              Enum.empty?(@backfill_providers) or
+              @backfill_running
+            }
+          >
+            <%= if @backfill_running do %>
+              Backfill Running...
+            <% else %>
+              Start Image Backfill
+            <% end %>
+          </button>
+        </form>
+      </div>
+
+      <!-- Info & Status -->
+      <div>
+        <h3 class="text-lg font-medium mb-3">About Venue Image Backfill</h3>
+
+        <div class="space-y-3">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="text-xs text-blue-900">
+              <strong>Purpose:</strong> Enriches venues with images from image providers (Foursquare, Google Places, Here, etc.)
+            </p>
+            <p class="text-xs text-blue-900 mt-1">
+              <strong>Process:</strong> Fetches images from selected providers and updates venue records
+            </p>
+            <p class="text-xs text-blue-900 mt-1">
+              <strong>Priority:</strong> Venues with coordinates and provider IDs are prioritized
+            </p>
+          </div>
+
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p class="text-xs text-yellow-900">
+              <strong>Cost Control:</strong>
+            </p>
+            <ul class="list-disc list-inside text-xs text-yellow-900 mt-1">
+              <li>Development: Limited to 10 venues max</li>
+              <li>Production: Up to 100 venues per job</li>
+              <li>Rate limits enforced per provider</li>
+            </ul>
+          </div>
+
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+            <p class="text-xs text-green-900">
+              <strong>Next Steps:</strong>
+            </p>
+            <ol class="list-decimal list-inside text-xs text-green-900 mt-1">
+              <li>Select a city with venues</li>
+              <li>Choose one or more image providers</li>
+              <li>Set venue limit (consider costs)</li>
+              <li>Start backfill and monitor Oban dashboard</li>
+            </ol>
+          </div>
+
+          <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <p class="text-xs text-purple-900">
+              <strong>Monitor Progress:</strong>
+            </p>
+            <p class="text-xs text-purple-900 mt-1">
+              Check the <a href="/admin/oban" class="underline">Oban Dashboard</a> for job status and the
+              <a href="/admin/discovery/stats" class="underline">Discovery Stats</a> page for venue image quality metrics.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- TMDB Maintenance -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">TMDB Maintenance</h2>

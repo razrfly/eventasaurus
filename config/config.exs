@@ -117,6 +117,9 @@ config :eventasaurus, Oban,
     # Venue enrichment queue for image fetching
     # Low concurrency to respect provider rate limits
     venue_enrichment: 2,
+    # Venue image backfill queue for admin-triggered backfills
+    # Low concurrency to respect API rate limits and costs
+    venue_backfill: 2,
     # Default queue for other background jobs
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation

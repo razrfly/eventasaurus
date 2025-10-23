@@ -42,6 +42,84 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
 
   def geocode(_), do: {:error, :invalid_address}
 
+  @doc """
+  Reverse geocode coordinates to get address information.
+
+  Used for venues that have coordinates but no address (e.g., Resident Advisor).
+  """
+  def search_by_coordinates(lat, lng, _venue_name \\ nil)
+      when is_number(lat) and is_number(lng) do
+    access_token = get_access_token()
+
+    if is_nil(access_token) do
+      Logger.error("❌ LOCATION_IQ_ACCESS_TOKEN not configured")
+      {:error, :api_key_missing}
+    else
+      Logger.debug("🔍 LocationIQ reverse geocode: #{lat},#{lng}")
+      reverse_geocode_request(lat, lng, access_token)
+    end
+  end
+
+  defp reverse_geocode_request(lat, lng, access_token) do
+    url = "https://us1.locationiq.com/v1/reverse.php"
+
+    params = [
+      lat: lat,
+      lon: lng,
+      key: access_token,
+      format: "json"
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        parse_reverse_response(body)
+
+      {:ok, %HTTPoison.Response{status_code: 401}} ->
+        Logger.error("❌ LocationIQ reverse geocode authentication failed")
+        {:error, :api_error}
+
+      {:ok, %HTTPoison.Response{status_code: 429}} ->
+        Logger.warning("⚠️ LocationIQ reverse geocode rate limited")
+        {:error, :rate_limited}
+
+      {:ok, %HTTPoison.Response{status_code: status}} ->
+        Logger.error("❌ LocationIQ reverse geocode HTTP error: #{status}")
+        {:error, :api_error}
+
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ LocationIQ reverse geocode timed out")
+        {:error, :timeout}
+
+      {:error, reason} ->
+        Logger.error("❌ LocationIQ reverse geocode failed: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  defp parse_reverse_response(body) do
+    case Jason.decode(body) do
+      {:ok, result} when is_map(result) ->
+        # Extract formatted address (display_name in OSM-based providers)
+        formatted_address = Map.get(result, "display_name")
+
+        if formatted_address do
+          Logger.debug("✅ LocationIQ found address: #{formatted_address}")
+          {:ok, formatted_address}
+        else
+          Logger.debug("📍 LocationIQ: no address in response")
+          {:error, :no_results}
+        end
+
+      {:ok, _other} ->
+        Logger.error("❌ LocationIQ reverse: unexpected response format")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
+        Logger.error("❌ LocationIQ reverse: JSON decode error: #{inspect(reason)}")
+        {:error, :invalid_response}
+    end
+  end
+
   defp make_request(address, access_token) do
     url = "https://us1.locationiq.com/v1/search.php"
 
@@ -128,6 +206,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
 
     country = Map.get(address, "country")
 
+    # Extract formatted address (display_name in OSM-based providers)
+    formatted_address = Map.get(result, "display_name")
+
     # Extract LocationIQ place ID and convert to string (may be integer in response)
     place_id =
       case Map.get(result, "place_id") do
@@ -158,6 +239,8 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.LocationIQ do
            longitude: lng,
            city: city,
            country: country || "Unknown",
+           # Formatted address from LocationIQ
+           address: formatted_address,
            # New multi-provider field
            provider_id: place_id,
            # Keep for backwards compatibility
