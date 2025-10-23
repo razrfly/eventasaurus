@@ -55,9 +55,12 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
   ## Special Use Case: Provider Override
 
   When `:providers` option is specified, the normal priority system is bypassed.
-  This is used for reverse geocoding during venue backfill operations where we already
-  have coordinates but need provider-specific IDs (e.g., Google Places place_id) to
-  fetch images from those providers. The user explicitly selects which provider(s) to use.
+  This is used during venue backfill operations when we need provider-specific IDs
+  (e.g., Google Places place_id) to fetch images from those providers.
+
+  Note: This is NOT reverse geocoding (coordinates → address). The address is still
+  required for geocoding. This option simply forces specific provider(s) to be used
+  instead of following the normal priority system.
 
   ## Examples
 
@@ -67,7 +70,9 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
       # Reverse geocoding with specific provider - bypasses priority
       geocode("123 Main St, Portland, OR", providers: ["google_places"])
   """
-  def geocode(address, opts \\ []) when is_binary(address) do
+  def geocode(address, opts \\ [])
+
+  def geocode(address, opts) when is_binary(address) do
     providers = case Keyword.get(opts, :providers) do
       nil ->
         get_enabled_providers()
