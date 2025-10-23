@@ -19,7 +19,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.VenueImages.BackfillJob
+  alias EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
 
   import Ecto.Query
@@ -485,8 +485,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         {:noreply, put_flash(socket, :error, "Please select at least one provider")}
 
       true ->
-        # Enqueue backfill job
-        case BackfillJob.enqueue(city_id: city_id, providers: providers, limit: limit, geocode: geocode) do
+        # Enqueue backfill orchestrator job
+        case BackfillOrchestratorJob.enqueue(city_id: city_id, providers: providers, limit: limit, geocode: geocode) do
           {:ok, job} ->
             city = Enum.find(socket.assigns.cities, &(&1.id == city_id))
             city_name = if city, do: city.name, else: "City ##{city_id}"
@@ -495,7 +495,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
               socket
               |> put_flash(
                 :info,
-                "Queued venue backfill job ##{job.id} for #{city_name} (#{limit} venues, #{length(providers)} providers)"
+                "Queued venue backfill orchestrator job ##{job.id} for #{city_name} (will spawn #{limit} individual enrichment jobs, #{length(providers)} providers)"
               )
               |> assign(:backfill_running, true)
 
