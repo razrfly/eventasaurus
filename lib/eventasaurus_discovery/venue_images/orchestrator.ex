@@ -255,6 +255,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     failed = []
     cost_breakdown = %{}
     requests_made = %{}
+    error_details = %{}
     all_images = []
 
     {images, metadata} =
@@ -284,18 +285,25 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
                   provider_name,
                   1
                 ),
-              total_cost: (acc_meta[:total_cost] || 0.0) + cost
+              total_cost: (acc_meta[:total_cost] || 0.0) + cost,
+              error_details: acc_meta[:error_details] || error_details
             }
 
             {acc_images ++ tagged_images, new_meta}
 
-          {:error, provider_name, _reason} ->
+          {:error, provider_name, reason} ->
             new_meta = %{
               failed: [provider_name | (acc_meta[:failed] || failed)],
               succeeded: acc_meta[:succeeded] || succeeded,
               cost_breakdown: acc_meta[:cost_breakdown] || cost_breakdown,
               requests_made: acc_meta[:requests_made] || requests_made,
-              total_cost: acc_meta[:total_cost] || 0.0
+              total_cost: acc_meta[:total_cost] || 0.0,
+              error_details:
+                Map.put(
+                  acc_meta[:error_details] || error_details,
+                  provider_name,
+                  reason
+                )
             }
 
             {acc_images, new_meta}
@@ -310,6 +318,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
         providers_attempted: attempted,
         providers_succeeded: Enum.reverse(metadata[:succeeded] || []),
         providers_failed: Enum.reverse(metadata[:failed] || []),
+        error_details: metadata[:error_details] || %{},
         cost_breakdown: metadata[:cost_breakdown] || %{},
         requests_made: metadata[:requests_made] || %{},
         total_images_found: length(images),
@@ -510,7 +519,9 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       "providers_used" => all_providers_used,
       "total_images_fetched" => length(merged_images),
       "cost_breakdown" => metadata.cost_breakdown || metadata[:cost_breakdown] || %{},
-      "enrichment_history" => [history_entry | existing_history] |> Enum.take(10)  # Keep last 10
+      "enrichment_history" => [history_entry | existing_history] |> Enum.take(10),  # Keep last 10
+      "providers_failed" => metadata.providers_failed || metadata[:providers_failed] || [],
+      "error_details" => metadata.error_details || metadata[:error_details] || %{}
     }
 
     # Use the specialized changeset function from Venue schema

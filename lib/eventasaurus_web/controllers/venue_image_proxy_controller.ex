@@ -50,6 +50,59 @@ defmodule EventasaurusWeb.VenueImageProxyController do
   end
 
   defp fetch_image(url) do
+    # Validate URL is safe to fetch (prevent SSRF attacks)
+    case validate_image_url(url) do
+      :ok ->
+        fetch_validated_image(url)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp validate_image_url(url) do
+    uri = URI.parse(url)
+
+    # Reject non-HTTP(S) schemes
+    if uri.scheme not in ["http", "https"] do
+      {:error, :invalid_scheme}
+    # Check if host is allowed
+    else
+      if is_allowed_image_host?(uri) do
+        :ok
+      else
+        {:error, :forbidden_host}
+      end
+    end
+  end
+
+  defp is_allowed_image_host?(uri) do
+    case uri.host do
+      # Block localhost
+      host when host in ["localhost", "127.0.0.1", "::1"] ->
+        false
+
+      # Check for private IP ranges
+      host when is_binary(host) ->
+        not is_private_ip?(host)
+
+      _ ->
+        false
+    end
+  end
+
+  defp is_private_ip?(host) do
+    case :inet.parse_address(String.to_charlist(host)) do
+      {:ok, {10, _, _, _}} -> true  # 10.0.0.0/8
+      {:ok, {172, b, _, _}} when b >= 16 and b <= 31 -> true  # 172.16.0.0/12
+      {:ok, {192, 168, _, _}} -> true  # 192.168.0.0/16
+      {:ok, {169, 254, _, _}} -> true  # Cloud metadata 169.254.0.0/16
+      {:ok, {127, _, _, _}} -> true  # Loopback
+      _ -> false
+    end
+  end
+
+  defp fetch_validated_image(url) do
     headers = [
       {"User-Agent", "Mozilla/5.0 (compatible; EventasaurusBot/1.0)"},
       {"Accept", "image/*"}

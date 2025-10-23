@@ -308,29 +308,21 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         parse_photos_response(body, api_key)
 
-      {:ok, %HTTPoison.Response{status_code: 404}} ->
-        Logger.debug("📍 Google Places: place not found")
-        {:error, :no_results}
+      {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
+        # Parse the error message from Google's response
+        error_message =
+          case Jason.decode(body) do
+            {:ok, %{"error_message" => msg}} -> msg
+            {:ok, %{"status" => status_text}} -> status_text
+            _ -> body
+          end
 
-      {:ok, %HTTPoison.Response{status_code: 429}} ->
-        Logger.warning("⚠️ Google Places Photos rate limited")
-        {:error, :rate_limited}
+        Logger.error("❌ Google Places Photos HTTP #{status}: #{error_message}")
+        {:error, "HTTP #{status}: #{error_message}"}
 
-      {:ok, %HTTPoison.Response{status_code: 403}} ->
-        Logger.error("❌ Google Places Photos authentication failed")
-        {:error, :api_error}
-
-      {:ok, %HTTPoison.Response{status_code: status}} ->
-        Logger.error("❌ Google Places Photos HTTP error: #{status}")
-        {:error, :api_error}
-
-      {:error, %HTTPoison.Error{reason: :timeout}} ->
-        Logger.warning("⏱️ Google Places Photos request timed out")
-        {:error, :timeout}
-
-      {:error, reason} ->
+      {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("❌ Google Places Photos request failed: #{inspect(reason)}")
-        {:error, :network_error}
+        {:error, "Network error: #{inspect(reason)}"}
     end
   end
 
@@ -374,9 +366,13 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
         Logger.debug("📸 Google Places: place has no photos")
         {:error, :no_images}
 
+      {:ok, %{"status" => status, "error_message" => error_msg}} ->
+        Logger.error("❌ Google Places Photos error: #{status} - #{error_msg}")
+        {:error, "#{status}: #{error_msg}"}
+
       {:ok, %{"status" => status}} ->
         Logger.error("❌ Google Places Photos error status: #{status}")
-        {:error, :api_error}
+        {:error, "API error: #{status}"}
 
       {:error, reason} ->
         Logger.error("❌ Google Places Photos: JSON decode error: #{inspect(reason)}")
