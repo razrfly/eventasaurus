@@ -456,8 +456,9 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     alias EventasaurusApp.Venues.Venue
 
     # Calculate next enrichment due date (30 days from now)
+    # 30 days = 30 * 86400 seconds
     now = DateTime.utc_now()
-    next_enrichment = DateTime.add(now, 30, :day) |> DateTime.to_iso8601()
+    next_enrichment = DateTime.add(now, 30 * 86_400, :second) |> DateTime.to_iso8601()
 
     # Convert new images to proper structure with string keys (JSONB requirement)
     new_structured_images =

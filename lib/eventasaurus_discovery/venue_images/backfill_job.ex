@@ -548,16 +548,34 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillJob do
   end
 
   defp determine_status(results) do
+    # Check if any venues actually got images
+    venues_with_images =
+      Enum.count(results.venue_results, fn v ->
+        Map.get(v, :images_fetched, 0) > 0
+      end)
+
     cond do
+      # All venues failed or got no images
+      venues_with_images == 0 and results.enriched > 0 ->
+        "failed"
+
+      # Some failed entirely
       results.failed > 0 and results.enriched == 0 ->
         "failed"
 
+      # Some venues processed but got no images
+      venues_with_images < results.enriched ->
+        "partial"
+
+      # Some completely failed
       results.failed > 0 ->
         "partial"
 
+      # All skipped
       results.skipped > 0 and results.enriched == 0 ->
         "skipped"
 
+      # Success: all enriched venues got images
       true ->
         "success"
     end

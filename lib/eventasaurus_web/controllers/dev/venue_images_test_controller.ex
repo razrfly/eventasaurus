@@ -27,6 +27,9 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
     # Get testable venues (venues with provider_ids for manual testing)
     testable_venues = get_testable_venues()
 
+    # Get active cities for dropdown
+    active_cities = get_active_cities()
+
     render(conn, :index,
       system_status: get_system_status(),
       global_stats: get_global_statistics(),
@@ -34,7 +37,8 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
       sample_venues: get_sample_enriched_venues(),
       cost_analysis: get_cost_analysis(),
       staleness_monitor: get_staleness_monitor(),
-      testable_venues: testable_venues
+      testable_venues: testable_venues,
+      active_cities: active_cities
     )
   end
 
@@ -122,6 +126,52 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
             })
         end
     end
+  end
+
+  @doc """
+  POST /dev/venue-images/clear-cache
+  Clear image cache for testing purposes. Accepts optional filters.
+  """
+  def clear_cache(conn, params) do
+    city_slug = params["city_slug"]
+    venue_id = params["venue_id"]
+
+    query = from(v in Venue)
+
+    query =
+      if venue_id do
+        from(v in query, where: v.id == ^venue_id)
+      else
+        query
+      end
+
+    query =
+      if city_slug do
+        from(v in query,
+          join: c in assoc(v, :city_ref),
+          where: c.slug == ^city_slug
+        )
+      else
+        query
+      end
+
+    # Clear image data
+    {count, _} =
+      Repo.update_all(query,
+        set: [
+          venue_images: nil,
+          image_enrichment_metadata: nil
+        ]
+      )
+
+    json(conn, %{
+      success: true,
+      cleared_count: count,
+      filters: %{
+        city_slug: city_slug,
+        venue_id: venue_id
+      }
+    })
   end
 
   # ========================================
@@ -579,7 +629,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
           )
       ],
       limit: 20,
-      preload: [:city]
+      preload: [:city_ref]
     )
     |> Repo.all()
     |> Enum.map(&enrich_venue_data/1)
@@ -789,5 +839,25 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
     else
       DateTime.add(today_4am, 1, :day)
     end
+  end
+
+  # ========================================
+  # City Management
+  # ========================================
+
+  defp get_active_cities do
+    alias EventasaurusDiscovery.Locations.City
+
+    Repo.all(
+      from(c in City,
+        where: c.discovery_enabled == true,
+        select: %{
+          id: c.id,
+          name: c.name,
+          slug: c.slug
+        },
+        order_by: [asc: c.name]
+      )
+    )
   end
 end

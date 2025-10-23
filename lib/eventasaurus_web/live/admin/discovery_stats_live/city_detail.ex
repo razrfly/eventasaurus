@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, TrendAnalyzer}
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.VenueImages.QualityStats
+  alias EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery
 
   import Ecto.Query
   require Logger
@@ -112,12 +113,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
     city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
 
-    # Get venue image quality stats (Phase 2)
+    # Get venue image quality stats (Phase 2 & Phase 4)
     venue_stats = QualityStats.get_city_venue_stats(city_id)
     venue_image_sources = QualityStats.get_venue_image_sources(city_id)
     recent_enrichments_7d = QualityStats.get_recent_enrichments(city_id, 7)
     recent_enrichments_30d = QualityStats.get_recent_enrichments(city_id, 30)
     venues_needing_images = QualityStats.list_venues_without_images(city_id, 20)
+    venues_with_images = QualityStats.list_venues_with_images(city_id, 20)
 
     socket
     |> assign(:sources_data, sources_data)
@@ -131,6 +133,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     |> assign(:recent_enrichments_7d, recent_enrichments_7d)
     |> assign(:recent_enrichments_30d, recent_enrichments_30d)
     |> assign(:venues_needing_images, venues_needing_images)
+    |> assign(:venues_with_images, venues_with_images)
   end
 
   defp get_sources_for_city(city_id) do
@@ -642,6 +645,31 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
                       <% end %>
                     </tbody>
                   </table>
+                </div>
+              </div>
+            <% end %>
+
+            <!-- Venues with Images Gallery (Phase 4) -->
+            <%= if @venue_stats.venues_with_images > 0 && length(@venues_with_images) > 0 do %>
+              <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-900 mb-3">
+                  🖼️ Venues with Images (<%= min(length(@venues_with_images), 20) %> of <%= @venue_stats.venues_with_images %>)
+                </h3>
+                <div class="space-y-6">
+                  <%= for venue <- @venues_with_images do %>
+                    <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                      <!-- Venue Header -->
+                      <div class="mb-3">
+                        <h4 class="text-base font-semibold text-gray-900"><%= venue.name %></h4>
+                        <%= if venue.address do %>
+                          <p class="text-sm text-gray-600"><%= venue.address %></p>
+                        <% end %>
+                      </div>
+
+                      <!-- Image Gallery Component -->
+                      <VenueImageGallery.venue_image_gallery venue={venue} show_history={false} />
+                    </div>
+                  <% end %>
                 </div>
               </div>
             <% end %>
