@@ -67,17 +67,19 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
       # Normal geocoding - uses priority system
       geocode("123 Main St, Portland, OR")
 
-      # Reverse geocoding with specific provider - bypasses priority
-      geocode("123 Main St, Portland, OR", providers: ["google_places"])
+      # Provider override for backfill - collects IDs from all specified providers
+      geocode("123 Main St, Portland, OR", providers: ["google_places", "foursquare"])
   """
   def geocode(address, opts \\ [])
 
   def geocode(address, opts) when is_binary(address) do
-    providers = case Keyword.get(opts, :providers) do
+    provider_names = Keyword.get(opts, :providers)
+
+    providers = case provider_names do
       nil ->
         get_enabled_providers()
-      provider_names when is_list(provider_names) ->
-        ProviderConfig.get_specific_providers(provider_names)
+      names when is_list(names) ->
+        ProviderConfig.get_specific_providers(names)
         |> Enum.map(fn {module, _opts} -> module end)
     end
 
@@ -86,11 +88,118 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
       {:error, :no_providers_configured, %{attempted_providers: []}}
     else
       Logger.info("🌍 Geocoding address: #{address} (#{length(providers)} providers available)")
-      try_providers(address, providers, [])
+
+      # When specific providers are requested, collect IDs from ALL of them
+      # This is used during backfill to get provider-specific IDs for image fetching
+      case provider_names do
+        nil -> try_providers(address, providers, [])
+        _ -> try_all_providers(address, providers)
+      end
     end
   end
 
   def geocode(_, _), do: {:error, :invalid_address, %{attempted_providers: []}}
+
+  # Try ALL providers and collect provider IDs from each
+  # Used when specific providers are requested (backfill scenario)
+  defp try_all_providers(address, providers) do
+    Logger.info("🔄 Collecting provider IDs from #{length(providers)} providers")
+
+    result = Enum.reduce(providers, %{
+      provider_ids: %{},
+      attempted: [],
+      first_success: nil,
+      raw_responses: []
+    }, fn provider_module, acc ->
+      provider_name = provider_module.name()
+      Logger.debug("🔄 Trying provider: #{provider_name}")
+
+      # Check rate limit BEFORE calling provider
+      case RateLimiter.check_rate_limit(provider_name) do
+        :ok ->
+          call_provider_for_collection(address, provider_module, provider_name, acc)
+
+        {:error, :rate_limited, retry_after_ms} ->
+          Logger.warning("⏱️ #{provider_name} rate limited, waiting #{retry_after_ms}ms...")
+          Process.sleep(retry_after_ms)
+          # Retry after waiting
+          call_provider_for_collection(address, provider_module, provider_name, acc)
+      end
+    end)
+
+    # Build final response from collected data
+    case result.first_success do
+      {lat, lng, first_result} ->
+        # Success! Use coordinates from first successful provider, but include ALL provider IDs
+        Logger.info("✅ Collected #{map_size(result.provider_ids)} provider IDs from #{length(result.attempted)} providers")
+
+        metadata = %{
+          provider: first_result[:provider_name] || List.first(result.attempted),
+          attempted_providers: Enum.reverse(result.attempted),
+          attempts: length(result.attempted),
+          geocoded_at: DateTime.utc_now(),
+          raw_response: first_result[:raw_response],
+          collection_mode: true
+        }
+
+        response = %{
+          latitude: lat,
+          longitude: lng,
+          city: first_result[:city],
+          country: first_result[:country],
+          geocoding_metadata: metadata,
+          provider_ids: result.provider_ids
+        }
+
+        {:ok, response}
+
+      nil ->
+        # All providers failed
+        Logger.error("❌ All #{length(result.attempted)} providers failed")
+
+        metadata = %{
+          attempted_providers: Enum.reverse(result.attempted),
+          attempts: length(result.attempted),
+          geocoded_at: DateTime.utc_now(),
+          all_failed: true
+        }
+
+        {:error, :all_failed, metadata}
+    end
+  end
+
+  # Helper for try_all_providers - calls provider and updates accumulator
+  defp call_provider_for_collection(address, provider_module, provider_name, acc) do
+    case provider_module.geocode(address) do
+      {:ok, %{latitude: lat, longitude: lng} = result} when is_float(lat) and is_float(lng) ->
+        Logger.info("✅ #{provider_name} succeeded: #{lat}, #{lng}")
+
+        # Extract provider_id from result
+        provider_id = Map.get(result, :provider_id) || Map.get(result, :place_id)
+
+        # Update accumulator
+        acc
+        |> Map.update!(:attempted, fn list -> [provider_name | list] end)
+        |> Map.update!(:provider_ids, fn ids ->
+          if provider_id, do: Map.put(ids, provider_name, provider_id), else: ids
+        end)
+        |> Map.update!(:first_success, fn
+          nil -> {lat, lng, Map.put(result, :provider_name, provider_name)}
+          existing -> existing  # Keep first success
+        end)
+        |> Map.update!(:raw_responses, fn responses ->
+          [%{provider: provider_name, response: Map.get(result, :raw_response)} | responses]
+        end)
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Provider #{provider_name} failed: #{inspect(reason)}")
+        Map.update!(acc, :attempted, fn list -> [provider_name | list] end)
+
+      other ->
+        Logger.warning("⚠️ Provider #{provider_name} returned invalid format: #{inspect(other)}")
+        Map.update!(acc, :attempted, fn list -> [provider_name | list] end)
+    end
+  end
 
   # Try providers recursively until one succeeds
   defp try_providers(_address, [], attempted) do
