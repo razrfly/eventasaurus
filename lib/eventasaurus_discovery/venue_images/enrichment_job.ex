@@ -115,20 +115,17 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
                 :ok
               else
-                # Build error message with actual provider errors
-                error_messages =
-                  Enum.map(providers_failed, fn provider ->
+                # Check if ANY error is a permanent failure (API auth, config issues)
+                any_permanent? =
+                  Enum.any?(providers_failed, fn provider ->
                     error =
                       Map.get(error_details, provider) ||
                         Map.get(error_details, to_string(provider))
 
-                    "#{provider}: #{inspect(error)}"
+                    permanent_failure?(error)
                   end)
-                  |> Enum.join(", ")
 
-                # Check if ANY error is retryable (only retry transient failures)
-                # RETRYABLE: rate limits, timeouts, network errors, server errors (5xx)
-                # NOT RETRYABLE: everything else (no images, auth errors, 4xx, etc.)
+                # Check if ANY error is retryable (rate limits, timeouts, server errors)
                 any_retryable? =
                   Enum.any?(providers_failed, fn provider ->
                     error =
@@ -138,18 +135,32 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                     retryable_error?(error)
                   end)
 
-                if any_retryable? do
-                  Logger.error(
-                    "❌ Venue #{venue_id} failed with retryable error: #{error_messages}"
-                  )
+                # Build error message with actual provider errors
+                error_messages = build_error_messages(providers_failed, error_details)
 
-                  {:error, "Failed to fetch images: #{error_messages}"}
-                else
-                  Logger.info(
-                    "ℹ️  Venue #{venue_id} failed with permanent error (not retrying): #{error_messages}"
-                  )
+                cond do
+                  any_permanent? ->
+                    Logger.error(
+                      "❌ Venue #{venue_id} failed with permanent error: #{error_messages}"
+                    )
 
-                  :ok
+                    {:error, "API authentication/configuration error: #{error_messages}"}
+
+                  any_retryable? ->
+                    Logger.error(
+                      "❌ Venue #{venue_id} failed with retryable error: #{error_messages}"
+                    )
+
+                    {:error, "Transient error (will retry): #{error_messages}"}
+
+                  true ->
+                    # Providers failed but errors are neither permanent nor retryable
+                    # This is the "no images available" case (e.g., ZERO_RESULTS)
+                    Logger.info(
+                      "ℹ️  Venue #{venue_id} completed but no images: #{error_messages}"
+                    )
+
+                    :ok
                 end
               end
             end
@@ -591,9 +602,55 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     end
   end
 
+  # Helper to build error messages from providers and error details
+  defp build_error_messages(providers_failed, error_details) do
+    Enum.map(providers_failed, fn provider ->
+      error =
+        Map.get(error_details, provider) ||
+          Map.get(error_details, to_string(provider))
+
+      "#{provider}: #{inspect(error)}"
+    end)
+    |> Enum.join(", ")
+  end
+
+  # Determines if an error is a permanent failure that should fail the job
+  # These errors should NOT retry and should mark the job as failed
+  defp permanent_failure?(error) do
+    case error do
+      # API Authentication & Configuration - FAIL JOB
+      :api_key_missing ->
+        true
+
+      :no_provider_id ->
+        true
+
+      :module_not_found ->
+        true
+
+      :invalid_api_key ->
+        true
+
+      # String-based errors (from API responses)
+      error when is_binary(error) ->
+        # Google API authentication errors
+        String.contains?(error, "REQUEST_DENIED") or
+          String.contains?(error, "INVALID_API_KEY") or
+          String.contains?(error, "INVALID_REQUEST") or
+          # HTTP authentication/authorization errors
+          String.starts_with?(error, "HTTP 400") or
+          String.starts_with?(error, "HTTP 401") or
+          String.starts_with?(error, "HTTP 403")
+
+      # All other errors are either retryable or success with no images
+      _ ->
+        false
+    end
+  end
+
   # Determines if an error should be retried
   # ONLY retry transient failures (network issues, rate limits, server errors)
-  # DO NOT retry permanent failures (no images, auth errors, invalid data, client errors)
+  # DO NOT retry permanent failures (auth errors, config errors) or success cases (no images)
   defp retryable_error?(error) do
     case error do
       # Transient network/infrastructure errors - SHOULD RETRY
