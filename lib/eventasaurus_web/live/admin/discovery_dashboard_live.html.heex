@@ -18,11 +18,18 @@
         >
           🗺️ Geocoding Performance
         </.link>
+        <!-- Oban Links -->
+        <.link
+          navigate={~p"/admin/jobs-monitor"}
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          📊 Jobs Monitor
+        </.link>
         <.link
           navigate={~p"/admin/oban"}
           class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          ⚙️ Oban Dashboard
+          🔧 Oban Dashboard
         </.link>
       </div>
     </div>
@@ -350,11 +357,7 @@
               phx-change="update_backfill_limit"
             />
             <p class="mt-1 text-xs text-gray-500">
-              <%= if Mix.env() == :dev do %>
-                Development limit: max 10 venues
-              <% else %>
-                Maximum: 100 venues per backfill
-              <% end %>
+              Maximum: 100 venues per backfill
             </p>
           </div>
 

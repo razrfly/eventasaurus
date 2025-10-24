@@ -101,8 +101,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Client do
   Gets the configured Google Places API key.
   """
   def get_api_key do
-    Application.get_env(:eventasaurus, :google_places_api_key) ||
-      System.get_env("GOOGLE_MAPS_API_KEY")
+    System.get_env("GOOGLE_MAPS_API_KEY")
   end
 
   @doc """

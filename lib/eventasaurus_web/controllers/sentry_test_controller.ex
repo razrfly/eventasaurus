@@ -26,7 +26,7 @@ defmodule EventasaurusWeb.SentryTestController do
 
   def test_production_error(conn, _params) do
     # Only allow in production with specific header for security
-    if Mix.env() == :prod and get_req_header(conn, "x-sentry-test") == ["production-test"] do
+    if Application.get_env(:eventasaurus, :environment) == :prod and get_req_header(conn, "x-sentry-test") == ["production-test"] do
       # Audit log the production test request
       Logger.info("Production Sentry test triggered",
         remote_ip: format_ip(conn.remote_ip),
@@ -54,7 +54,7 @@ defmodule EventasaurusWeb.SentryTestController do
                 message: "Production test error sent to Sentry",
                 event_id: event_id,
                 timestamp: DateTime.utc_now(),
-                environment: Mix.env()
+                environment: Application.get_env(:eventasaurus, :environment)
               })
 
             {:error, reason} ->
@@ -78,7 +78,7 @@ defmodule EventasaurusWeb.SentryTestController do
         remote_ip: format_ip(conn.remote_ip),
         user_agent: get_req_header(conn, "user-agent") |> List.first(),
         headers: get_req_header(conn, "x-sentry-test"),
-        environment: Mix.env()
+        environment: Application.get_env(:eventasaurus, :environment)
       )
 
       conn
@@ -99,7 +99,7 @@ defmodule EventasaurusWeb.SentryTestController do
     |> put_status(:ok)
     |> json(%{
       sentry_configured: sentry_configured,
-      environment: Mix.env(),
+      environment: Application.get_env(:eventasaurus, :environment),
       timestamp: DateTime.utc_now()
     })
   end
