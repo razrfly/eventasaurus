@@ -38,17 +38,22 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
       jsonb_array_length(v.venue_images) as total_images,
       (SELECT COUNT(*)
        FROM jsonb_array_elements(v.venue_images) img
-       WHERE img->>'upload_status' = 'failed') as failed_count,
+       WHERE img->>'upload_status' IN ('failed', 'permanently_failed')) as failed_count,
       (SELECT COUNT(*)
        FROM jsonb_array_elements(v.venue_images) img
        WHERE img->>'upload_status' = 'uploaded') as uploaded_count,
       ROUND(
-        100.0 * (SELECT COUNT(*) FROM jsonb_array_elements(v.venue_images) img WHERE img->>'upload_status' = 'failed') /
+        100.0 * (SELECT COUNT(*) FROM jsonb_array_elements(v.venue_images) img
+                 WHERE img->>'upload_status' IN ('failed', 'permanently_failed')) /
         NULLIF(jsonb_array_length(v.venue_images), 0),
         1
       ) as failure_rate_pct
     FROM venues v
-    WHERE v.venue_images @> '[{"upload_status": "failed"}]'::jsonb
+    WHERE EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(v.venue_images) img
+      WHERE img->>'upload_status' IN ('failed', 'permanently_failed')
+    )
     ORDER BY failed_count DESC, failure_rate_pct DESC
     """
 
@@ -88,7 +93,7 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
       COUNT(*) as count
     FROM venues v,
       jsonb_array_elements(v.venue_images) img
-    WHERE img->>'upload_status' = 'failed'
+    WHERE img->>'upload_status' IN ('failed', 'permanently_failed')
     GROUP BY provider, error_type
     ORDER BY count DESC
     """
@@ -198,7 +203,10 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
 
         failed_images =
           (venue_full.venue_images || [])
-          |> Enum.filter(fn img -> img["upload_status"] == "failed" end)
+          |> Enum.filter(fn img ->
+            status = img["upload_status"]
+            status == "failed" or status == "permanently_failed"
+          end)
 
         error_types =
           failed_images
@@ -216,9 +224,12 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
     %{
       total_venues: length(venues),
       total_failed_images: Enum.sum(Enum.map(venues, & &1.failed_count)),
-      venues_with_transient: Enum.count(venues_by_id, fn v -> v.classifications[:transient] > 0 end),
-      venues_with_permanent: Enum.count(venues_by_id, fn v -> v.classifications[:permanent] > 0 end),
-      venues_with_ambiguous: Enum.count(venues_by_id, fn v -> v.classifications[:ambiguous] > 0 end)
+      venues_with_transient:
+        Enum.count(venues_by_id, fn v -> Map.get(v.classifications, :transient, 0) > 0 end),
+      venues_with_permanent:
+        Enum.count(venues_by_id, fn v -> Map.get(v.classifications, :permanent, 0) > 0 end),
+      venues_with_ambiguous:
+        Enum.count(venues_by_id, fn v -> Map.get(v.classifications, :ambiguous, 0) > 0 end)
     }
   end
 
@@ -238,7 +249,10 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
 
     failed_images =
       (venue_full.venue_images || [])
-      |> Enum.filter(fn img -> img["upload_status"] == "failed" end)
+      |> Enum.filter(fn img ->
+        status = img["upload_status"]
+        status == "failed" or status == "permanently_failed"
+      end)
 
     transient_count =
       failed_images

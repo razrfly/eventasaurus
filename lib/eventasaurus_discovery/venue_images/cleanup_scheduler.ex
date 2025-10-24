@@ -87,18 +87,20 @@ defmodule EventasaurusDiscovery.VenueImages.CleanupScheduler do
 
   # Process a single venue and queue retry if needed
   defp process_venue(venue_summary) do
-    venue = Repo.get(Venue, venue_summary.id)
+    try do
+      venue = Repo.get(Venue, venue_summary.id)
 
-    if is_nil(venue) do
-      Logger.warning("⚠️  Venue #{venue_summary.id} not found, skipping")
-      %{errors: 1}
-    else
-      classify_and_queue(venue, venue_summary)
+      if is_nil(venue) do
+        Logger.warning("⚠️  Venue #{venue_summary.id} not found, skipping")
+        %{errors: 1}
+      else
+        classify_and_queue(venue, venue_summary)
+      end
+    rescue
+      error ->
+        Logger.error("❌ Error processing venue #{venue_summary.id}: #{inspect(error)}")
+        %{errors: 1}
     end
-  catch
-    error ->
-      Logger.error("❌ Error processing venue #{venue_summary.id}: #{inspect(error)}")
-      %{errors: 1}
   end
 
   # Classify venue failures and queue retry if appropriate
