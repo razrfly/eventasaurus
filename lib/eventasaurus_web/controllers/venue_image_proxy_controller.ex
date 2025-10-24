@@ -2,12 +2,26 @@ defmodule EventasaurusWeb.VenueImageProxyController do
   @moduledoc """
   Proxies venue images from external providers to work around CORS and referrer restrictions.
 
+  ## Deprecation Notice
+
+  **Status**: Active but planned for deprecation after ImageKit migration (#1974)
+
+  **Current Usage**: Proxies Google Places and Foursquare images for local development and ImageKit CDN.
+  - Images served to localhost/ImageKit only, never directly to end users
+  - Production images served via ImageKit CDN (Eventasaurus.ImageKit)
+
+  **Future**: After venue image migration to ImageKit Media Library, this proxy will only be needed
+  for development/testing of the ImageKit upload pipeline.
+
+  ## Current Behavior
+
   Google Places Photo URLs have restrictions:
   - Referrer restrictions (only work from specific domains)
   - CORS restrictions (can't be loaded directly in browsers)
   - May expire after some time
 
   This proxy fetches the images server-side and serves them through our domain.
+  Images are only proxied to localhost and ImageKit CDN, never to end users.
   """
   use EventasaurusWeb, :controller
   require Logger
@@ -78,11 +92,11 @@ defmodule EventasaurusWeb.VenueImageProxyController do
 
   defp is_allowed_image_host?(uri) do
     case uri.host do
-      # Block localhost
+      # Block localhost variants
       host when host in ["localhost", "127.0.0.1", "::1"] ->
         false
 
-      # Check for private IP ranges
+      # Check for private IP ranges (both IPv4 and IPv6)
       host when is_binary(host) ->
         not is_private_ip?(host)
 
@@ -91,16 +105,45 @@ defmodule EventasaurusWeb.VenueImageProxyController do
     end
   end
 
+  # Check if host is a private IP address
+  # Blocks internal networks to prevent SSRF attacks
   defp is_private_ip?(host) do
     case :inet.parse_address(String.to_charlist(host)) do
-      {:ok, {10, _, _, _}} -> true  # 10.0.0.0/8
-      {:ok, {172, b, _, _}} when b >= 16 and b <= 31 -> true  # 172.16.0.0/12
-      {:ok, {192, 168, _, _}} -> true  # 192.168.0.0/16
-      {:ok, {169, 254, _, _}} -> true  # Cloud metadata 169.254.0.0/16
-      {:ok, {127, _, _, _}} -> true  # Loopback
+      # IPv4 private ranges
+      {:ok, {10, _, _, _}} -> true                              # 10.0.0.0/8
+      {:ok, {172, b, _, _}} when b >= 16 and b <= 31 -> true    # 172.16.0.0/12
+      {:ok, {192, 168, _, _}} -> true                           # 192.168.0.0/16
+      {:ok, {169, 254, _, _}} -> true                           # Link-local 169.254.0.0/16 (cloud metadata)
+      {:ok, {127, _, _, _}} -> true                             # Loopback 127.0.0.0/8
+
+      # IPv6 private ranges - check in function body since we can't use bitwise in guards
+      {:ok, ipv6} when tuple_size(ipv6) == 8 ->
+        is_private_ipv6?(ipv6)
+
+      # Not an IP address or public IP
       _ -> false
     end
   end
+
+  # Check if IPv6 address is in private range
+  defp is_private_ipv6?({0, 0, 0, 0, 0, 0, 0, 1}), do: true  # Loopback ::1
+
+  defp is_private_ipv6?({a, _, _, _, _, _, _, _}) do
+    import Bitwise
+
+    cond do
+      # ULA (Unique Local Address) fc00::/7
+      (a &&& 0xFE00) == 0xFC00 -> true
+
+      # Link-local fe80::/10
+      (a &&& 0xFFC0) == 0xFE80 -> true
+
+      # Otherwise public
+      true -> false
+    end
+  end
+
+  defp is_private_ipv6?(_), do: false
 
   defp fetch_validated_image(url) do
     headers = [

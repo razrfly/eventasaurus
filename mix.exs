@@ -64,6 +64,9 @@ defmodule Eventasaurus.MixProject do
       # HTTP client for API calls (used for Supabase integration)
       {:httpoison, "~> 2.0"},
 
+      # Modern HTTP client for ImageKit uploads (better multipart form support)
+      {:req, "~> 0.5.10"},
+
       # Load environment variables from .env file
       {:dotenv, "~> 3.1", only: [:dev, :test]},
 
