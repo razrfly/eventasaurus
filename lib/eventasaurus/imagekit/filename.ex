@@ -118,9 +118,15 @@ defmodule Eventasaurus.ImageKit.Filename do
             params
           end
 
-        # Rebuild URL with only stable params
-        normalized_query = URI.encode_query(stable_params)
-        %{uri | query: normalized_query} |> URI.to_string()
+        # Rebuild URL with only stable params in deterministic order
+        normalized_query =
+          stable_params
+          |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
+          |> Enum.sort_by(fn {k, _} -> k end)
+          |> URI.encode_query()
+
+        %{uri | query: normalized_query}
+        |> URI.to_string()
     end
   end
 

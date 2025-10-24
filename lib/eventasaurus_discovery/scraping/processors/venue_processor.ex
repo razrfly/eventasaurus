@@ -553,7 +553,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
     case result do
       {:ok, address, provider_name, attempted_providers} ->
-        Logger.info("🗺️ ✅ Successfully reverse geocoded to address: #{address} using #{provider_name}")
+        Logger.info(
+          "🗺️ ✅ Successfully reverse geocoded to address: #{address} using #{provider_name}"
+        )
 
         # Build metadata for reverse geocoding
         metadata = %{
@@ -561,7 +563,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           geocoded_at: DateTime.utc_now(),
           attempts: length(attempted_providers),
           attempted_providers: attempted_providers,
-          cost_per_call: 0.0,  # Reverse geocoding typically free
+          # Reverse geocoding typically free
+          cost_per_call: 0.0,
           collection_mode: true
         }
 
@@ -613,11 +616,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   # Convert provider module to snake_case for database storage
+  # Explicit mapping ensures consistent IDs across system
   defp provider_module_to_snake_case(module) do
-    module
-    |> Module.split()
-    |> List.last()
-    |> Macro.underscore()
+    case module |> Module.split() |> List.last() do
+      "OpenStreetMap" -> "openstreetmap"
+      "GooglePlaces" -> "google_places"
+      "LocationIQ" -> "locationiq"
+      other -> other |> Macro.underscore()
+    end
   end
 
   # Convert provider module to friendly name for logging
@@ -687,7 +693,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         if is_nil(data.address) do
           # Case 2a: Has coordinates but no address → reverse geocode (coordinates → address)
           # This handles Resident Advisor and similar scrapers
-          {address, reverse_metadata} = reverse_geocode_coordinates(data.latitude, data.longitude, city)
+          {address, reverse_metadata} =
+            reverse_geocode_coordinates(data.latitude, data.longitude, city)
+
           {data.latitude, data.longitude, address, reverse_metadata, nil, %{}}
         else
           # Case 2b: Has both coordinates and address → use them directly

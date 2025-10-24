@@ -134,7 +134,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Article data for article-based events (Sortiraparis)
       article_id: data[:article_id] || data["article_id"],
       # Event type for Sortiraparis (one_time, exhibition, recurring)
-      event_type: data[:event_type] || data["event_type"]
+      event_type: normalize_event_type(data[:event_type] || data["event_type"])
     }
 
     cond do
@@ -146,6 +146,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       true ->
         {:ok, normalized}
+    end
+  end
+
+  defp normalize_event_type(nil), do: nil
+
+  defp normalize_event_type(val) when is_atom(val) do
+    if val in [:one_time, :exhibition, :recurring], do: val, else: nil
+  end
+
+  defp normalize_event_type(val) when is_binary(val) do
+    case String.downcase(String.trim(val)) do
+      "one_time" -> :one_time
+      "one-time" -> :one_time
+      "exhibition" -> :exhibition
+      "recurring" -> :recurring
+      _ -> nil
     end
   end
 
