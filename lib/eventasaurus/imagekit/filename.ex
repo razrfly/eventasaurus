@@ -131,16 +131,16 @@ defmodule Eventasaurus.ImageKit.Filename do
   end
 
   @doc """
-  Builds the full ImageKit folder path for a venue.
+  Builds the full ImageKit folder path for a venue using slug.
 
   ## Examples
 
-      iex> build_folder_path(123)
-      "/venues/123"
+      iex> build_folder_path("blue-note-jazz-club")
+      "/venues/blue-note-jazz-club"
   """
-  @spec build_folder_path(integer() | String.t()) :: String.t()
-  def build_folder_path(venue_id) do
-    "/venues/#{venue_id}"
+  @spec build_folder_path(String.t()) :: String.t()
+  def build_folder_path(venue_slug) when is_binary(venue_slug) do
+    "/venues/#{venue_slug}"
   end
 
   @doc """
@@ -148,11 +148,11 @@ defmodule Eventasaurus.ImageKit.Filename do
 
   ## Examples
 
-      iex> build_full_path(123, "gp-a8f3d2.jpg")
-      "/venues/123/gp-a8f3d2.jpg"
+      iex> build_full_path("blue-note-jazz-club", "gp-a8f3d2.jpg")
+      "/venues/blue-note-jazz-club/gp-a8f3d2.jpg"
   """
-  @spec build_full_path(integer() | String.t(), String.t()) :: String.t()
-  def build_full_path(venue_id, filename) do
-    "#{build_folder_path(venue_id)}/#{filename}"
+  @spec build_full_path(String.t(), String.t()) :: String.t()
+  def build_full_path(venue_slug, filename) when is_binary(venue_slug) and is_binary(filename) do
+    "#{build_folder_path(venue_slug)}/#{filename}"
   end
 end

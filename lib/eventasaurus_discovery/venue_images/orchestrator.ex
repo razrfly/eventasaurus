@@ -585,13 +585,13 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     # Generate deterministic filename using hash
     filename = Filename.generate(provider_url, provider)
-    folder = Filename.build_folder_path(venue.id)
-    imagekit_path = Filename.build_full_path(venue.id, filename)
+    folder = Filename.build_folder_path(venue.slug)
+    imagekit_path = Filename.build_full_path(venue.slug, filename)
 
     # Add tags for organization and searchability
     tags = [
       provider,
-      "venue_#{venue.id}"
+      "venue:#{venue.slug}"
     ]
 
     # Upload to ImageKit

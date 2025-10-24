@@ -45,6 +45,45 @@ defmodule EventasaurusApp.Venues do
   def get_venue(id), do: Repo.get(Venue, id)
 
   @doc """
+  Gets a single venue by slug.
+
+  Raises `Ecto.NoResultsError` if the Venue does not exist.
+  """
+  def get_venue_by_slug!(slug) when is_binary(slug) do
+    Repo.get_by!(Venue, slug: slug)
+  end
+
+  @doc """
+  Lists related venues in the same city.
+
+  Returns up to 6 venues from the same city, excluding the current venue.
+  Prioritizes venues with images.
+
+  ## Parameters
+  - venue_id: The ID of the current venue
+  - city_id: The city ID to find related venues in
+  - limit: Maximum number of venues to return (default: 6)
+
+  ## Examples
+
+      iex> list_related_venues(123, 456)
+      [%Venue{}, ...]
+  """
+  def list_related_venues(venue_id, city_id, limit \\ 6)
+      when is_integer(venue_id) and is_integer(city_id) do
+    from(v in Venue,
+      where: v.city_id == ^city_id,
+      where: v.id != ^venue_id,
+      order_by: [
+        desc: fragment("COALESCE(jsonb_array_length(?), 0)", v.venue_images),
+        desc: v.id
+      ],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Creates a venue.
   """
   def create_venue(attrs \\ %{}) do

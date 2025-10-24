@@ -29,8 +29,8 @@ test_url = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=3000&photo
 provider = "google_places"
 
 filename = Filename.generate(test_url, provider)
-folder = Filename.build_folder_path(123)
-full_path = Filename.build_full_path(123, filename)
+folder = Filename.build_folder_path("test-venue-slug")
+full_path = Filename.build_full_path("test-venue-slug", filename)
 
 IO.puts("  Provider: #{provider}")
 IO.puts("  Provider Code: #{Filename.get_provider_code(provider)}")
