@@ -21,6 +21,9 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
     # Use code execution for data migration
     execute(&regenerate_all_venue_slugs/0)
 
+    # Verify all slugs are non-null before adding constraint
+    execute(&verify_no_nil_slugs/0)
+
     # Now that all venues have slugs, add NOT NULL constraint
     alter table(:venues) do
       modify :slug, :string, null: false
@@ -61,6 +64,51 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
     - Skipped: #{skipped}
     - Errors: #{errors}
     """)
+
+    # Halt migration if any errors occurred
+    if errors > 0 do
+      raise """
+      Migration halted: Failed to regenerate #{errors} venue slugs.
+      Cannot proceed with NOT NULL constraint. Please investigate failed venues.
+      Check logs above for specific error details.
+      """
+    end
+  end
+
+  defp verify_no_nil_slugs do
+    alias EventasaurusApp.Repo
+    alias EventasaurusApp.Venues.Venue
+
+    # Count venues with nil slugs
+    nil_slug_count =
+      from(v in Venue,
+        where: is_nil(v.slug),
+        select: count(v.id)
+      )
+      |> Repo.one()
+
+    if nil_slug_count > 0 do
+      # Get sample of venues with nil slugs for debugging
+      sample_venues =
+        from(v in Venue,
+          where: is_nil(v.slug),
+          select: {v.id, v.name},
+          limit: 5
+        )
+        |> Repo.all()
+
+      raise """
+      Migration halted: Found #{nil_slug_count} venues with nil slugs.
+      Cannot add NOT NULL constraint.
+
+      Sample venues with nil slugs:
+      #{Enum.map_join(sample_venues, "\n", fn {id, name} -> "  - ID: #{id}, Name: #{name}" end)}
+
+      Please investigate why these venues failed slug regeneration.
+      """
+    end
+
+    Logger.info("✅ Verified all venues have non-nil slugs")
   end
 
   defp process_venues_in_batches(batch_size, total) do

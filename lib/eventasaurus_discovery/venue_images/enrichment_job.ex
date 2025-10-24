@@ -67,10 +67,12 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"venue_id" => venue_id} = args}) do
+  def perform(%Oban.Job{args: %{"venue_id" => venue_id} = args} = job) do
     providers = Map.get(args, "providers")
     geocode = Map.get(args, "geocode", false)
     force = Map.get(args, "force", false)
+
+    start_time = DateTime.utc_now()
 
     Logger.info("""
     🖼️  Processing single venue enrichment:
@@ -83,6 +85,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     case Repo.get(Venue, venue_id) do
       nil ->
         Logger.warning("⚠️ Venue #{venue_id} not found")
+        update_job_meta(job, build_error_metadata("Venue not found", start_time))
         {:discard, :not_found}
 
       venue ->
@@ -91,6 +94,10 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
           {:ok, enriched_venue} ->
             # Check if we actually got images
             images_count = length(enriched_venue.venue_images || [])
+
+            # Build and update job metadata
+            metadata = build_success_metadata(enriched_venue, start_time)
+            update_job_meta(job, metadata)
 
             if images_count > 0 do
               Logger.info("✅ Venue #{venue_id} enriched with #{images_count} images")
@@ -149,26 +156,48 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
           {:skip, reason} ->
             Logger.info("⏭️  Skipped venue #{venue_id}: #{reason}")
+            update_job_meta(job, %{
+              status: "skipped",
+              reason: to_string(reason),
+              execution_time_ms: DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+            })
             :ok
 
           {:error, reason} ->
             Logger.error("❌ Failed to enrich venue #{venue_id}: #{inspect(reason)}")
+            update_job_meta(job, build_error_metadata(reason, start_time))
             {:error, reason}
         end
     end
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"venue_ids" => venue_ids}}) do
+  def perform(%Oban.Job{args: %{"venue_ids" => venue_ids}} = job) do
+    start_time = DateTime.utc_now()
     Logger.info("🖼️  Processing batch venue enrichment: #{length(venue_ids)} venues")
 
     venues = Repo.all(from(v in Venue, where: v.id in ^venue_ids))
-    _ = enrich_venues_batch(venues)
+    {:ok, results} = enrich_venues_batch(venues)
+
+    # Build batch metadata
+    execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+    metadata = %{
+      status: "batch_completed",
+      total_venues: results.total,
+      enriched: results.enriched,
+      skipped: results.skipped,
+      failed: results.failed,
+      execution_time_ms: execution_time,
+      completed_at: DateTime.to_iso8601(DateTime.utc_now())
+    }
+
+    update_job_meta(job, metadata)
     :ok
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: _args}) do
+  def perform(%Oban.Job{args: _args} = job) do
+    start_time = DateTime.utc_now()
     Logger.info("🖼️  Starting scheduled venue image enrichment")
 
     batch_size = get_batch_size()
@@ -176,10 +205,29 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
     if Enum.empty?(stale_venues) do
       Logger.info("✅ No stale venues found")
+      update_job_meta(job, %{
+        status: "no_work",
+        message: "No stale venues found",
+        execution_time_ms: DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+      })
       :ok
     else
       Logger.info("📊 Found #{length(stale_venues)} stale venues to enrich")
-      _ = enrich_venues_batch(stale_venues)
+      {:ok, results} = enrich_venues_batch(stale_venues)
+
+      # Build scheduled batch metadata
+      execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+      metadata = %{
+        status: "scheduled_batch_completed",
+        total_venues: results.total,
+        enriched: results.enriched,
+        skipped: results.skipped,
+        failed: results.failed,
+        execution_time_ms: execution_time,
+        completed_at: DateTime.to_iso8601(DateTime.utc_now())
+      }
+
+      update_job_meta(job, metadata)
       :ok
     end
   end
@@ -412,6 +460,135 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       []
     )
     |> Keyword.get(:max_retries, 3)
+  end
+
+  # Metadata Building Functions
+
+  defp update_job_meta(job, metadata) do
+    try do
+      job
+      |> Ecto.Changeset.change(meta: metadata)
+      |> Repo.update()
+    rescue
+      e ->
+        Logger.warning("⚠️ Failed to update job metadata: #{inspect(e)}")
+        :ok
+    end
+  end
+
+  defp build_success_metadata(enriched_venue, start_time) do
+    execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+
+    metadata = enriched_venue.image_enrichment_metadata || %{}
+    images_count = length(enriched_venue.venue_images || [])
+
+    providers_succeeded = metadata["providers_succeeded"] || metadata[:providers_succeeded] || []
+    providers_failed = metadata["providers_failed"] || metadata[:providers_failed] || []
+    total_cost = metadata["total_cost"] || metadata[:total_cost] || 0.0
+
+    %{
+      status: if(images_count > 0, do: "success", else: "no_images"),
+      images_found: images_count,
+      providers: build_provider_details(metadata, enriched_venue.venue_images),
+      imagekit_urls: extract_imagekit_urls(enriched_venue.venue_images),
+      total_cost_usd: total_cost,
+      execution_time_ms: execution_time,
+      completed_at: DateTime.to_iso8601(DateTime.utc_now()),
+      summary: build_summary(providers_succeeded, providers_failed, images_count)
+    }
+  end
+
+  defp build_error_metadata(reason, start_time) do
+    execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+
+    %{
+      status: "error",
+      error: inspect(reason),
+      images_found: 0,
+      execution_time_ms: execution_time,
+      failed_at: DateTime.to_iso8601(DateTime.utc_now())
+    }
+  end
+
+  defp extract_imagekit_urls(venue_images) when is_list(venue_images) do
+    venue_images
+    |> Enum.filter(fn img ->
+      upload_status = img["upload_status"] || img[:upload_status]
+      upload_status == "uploaded"
+    end)
+    |> Enum.map(fn img -> img["url"] || img[:url] end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp extract_imagekit_urls(_), do: []
+
+  defp build_provider_details(metadata, venue_images) do
+    cost_breakdown = metadata["cost_breakdown"] || metadata[:cost_breakdown] || %{}
+    error_details = metadata["error_details"] || metadata[:error_details] || %{}
+    providers_succeeded = metadata["providers_succeeded"] || metadata[:providers_succeeded] || []
+    providers_failed = metadata["providers_failed"] || metadata[:providers_failed] || []
+
+    # Build details for successful providers
+    success_details =
+      providers_succeeded
+      |> Enum.map(fn provider ->
+        provider_images =
+          venue_images
+          |> Enum.filter(fn img ->
+            (img["provider"] || img[:provider]) == provider
+          end)
+
+        images_fetched = length(provider_images)
+        images_uploaded = Enum.count(provider_images, fn img ->
+          (img["upload_status"] || img[:upload_status]) == "uploaded"
+        end)
+
+        imagekit_urls =
+          provider_images
+          |> Enum.filter(fn img ->
+            (img["upload_status"] || img[:upload_status]) == "uploaded"
+          end)
+          |> Enum.map(fn img -> img["url"] || img[:url] end)
+
+        {provider, %{
+          status: "success",
+          images_fetched: images_fetched,
+          images_uploaded: images_uploaded,
+          imagekit_urls: imagekit_urls,
+          cost_usd: Map.get(cost_breakdown, provider) || Map.get(cost_breakdown, to_string(provider)) || 0.0
+        }}
+      end)
+      |> Map.new()
+
+    # Build details for failed providers
+    failed_details =
+      providers_failed
+      |> Enum.map(fn provider ->
+        error = Map.get(error_details, provider) || Map.get(error_details, to_string(provider))
+
+        {provider, %{
+          status: "failed",
+          reason: inspect(error)
+        }}
+      end)
+      |> Map.new()
+
+    Map.merge(success_details, failed_details)
+  end
+
+  defp build_summary(providers_succeeded, providers_failed, images_count) do
+    cond do
+      images_count > 0 ->
+        provider_names = Enum.join(providers_succeeded, ", ")
+        "Found #{images_count} images from #{provider_names}, uploaded to ImageKit"
+
+      Enum.empty?(providers_failed) ->
+        "No images found - providers returned 0 images"
+
+      true ->
+        failed_names = Enum.join(providers_failed, ", ")
+        "Failed - #{failed_names} encountered errors"
+    end
   end
 
   # Determines if an error should be retried

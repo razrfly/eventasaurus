@@ -124,10 +124,17 @@ defmodule EventasaurusWeb.VenueLive.Show do
     now = DateTime.utc_now()
     thirty_days_from_now = DateTime.add(now, 30, :day)
 
-    # Query public_events for this venue (limit 1000 to prevent excessive memory usage)
-    all_events = PublicEvents.by_venue(venue_id, upcoming_only: false, limit: 1000)
+    # Get upcoming events (limit 5000 - venues rarely have this many future events)
+    # This ensures we capture all upcoming/future events even for high-volume venues
+    upcoming_events = PublicEvents.by_venue(venue_id, upcoming_only: true, limit: 5000)
 
-    # Group events into upcoming (next 30 days), future (30+ days), and past
+    # Get recent past events using a separate query with reverse chronological order
+    # We want the MOST RECENT past events, not the oldest ones
+    past_events = get_recent_past_events(venue_id, limit: 500)
+
+    # Combine and group all events
+    all_events = upcoming_events ++ past_events
+
     grouped =
       Enum.group_by(all_events, fn event ->
         cond do
@@ -140,8 +147,28 @@ defmodule EventasaurusWeb.VenueLive.Show do
     %{
       upcoming: grouped[:upcoming] || [],
       future: grouped[:future] || [],
-      past: Enum.reverse(grouped[:past] || [])
+      # Past events are already in reverse chronological order (newest first)
+      past: grouped[:past] || []
     }
+  end
+
+  defp get_recent_past_events(venue_id, opts) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
+    limit = Keyword.get(opts, :limit, 500)
+    now = DateTime.utc_now()
+
+    # Query past events in reverse chronological order (most recent first)
+    from(pe in PublicEvent,
+      where: pe.venue_id == ^venue_id,
+      where:
+        (not is_nil(pe.ends_at) and pe.ends_at < ^now) or
+          (is_nil(pe.ends_at) and pe.starts_at < ^now),
+      order_by: [desc: pe.starts_at],
+      limit: ^limit
+    )
+    |> Repo.all()
+    |> Repo.preload([:performers, :categories, venue: [city_ref: :country]])
   end
 
 

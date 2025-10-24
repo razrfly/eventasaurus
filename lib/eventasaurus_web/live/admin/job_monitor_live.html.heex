@@ -1,0 +1,319 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <!-- Header -->
+  <div class="mb-8">
+    <div class="mb-4">
+      <.link navigate="/admin/imports" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
+        ← Back to Dashboard
+      </.link>
+    </div>
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Oban Jobs Monitor</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Real-time monitoring of all automated Oban jobs and background workers
+        </p>
+        <%= if @last_refresh do %>
+          <p class="mt-1 text-xs text-gray-500">
+            Last updated: <%= format_time_ago(@last_refresh) %> • Auto-refreshes every 30s
+          </p>
+        <% end %>
+      </div>
+      <div class="flex gap-2">
+        <button
+          phx-click="refresh"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <.icon name="hero-arrow-path" class="h-4 w-4 inline mr-1" />
+          Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <%= if @loading do %>
+    <div class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600">
+      </div>
+      <p class="mt-4 text-gray-600">Loading job statistics...</p>
+    </div>
+  <% end %>
+
+  <%= if @summary do %>
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-queue-list" class="h-6 w-6 text-gray-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Total Jobs</dt>
+                <dd class="text-2xl font-semibold text-gray-900"><%= @summary.total_jobs %></dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-check-circle" class="h-6 w-6 text-green-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Healthy</dt>
+                <dd class="text-2xl font-semibold text-green-900"><%= @summary.healthy %></dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-exclamation-triangle" class="h-6 w-6 text-yellow-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Warning</dt>
+                <dd class="text-2xl font-semibold text-yellow-900"><%= @summary.warning %></dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <.icon name="hero-x-circle" class="h-6 w-6 text-red-400" />
+            </div>
+            <div class="ml-5 w-0 flex-1">
+              <dl>
+                <dt class="text-sm font-medium text-gray-500 truncate">Error</dt>
+                <dd class="text-2xl font-semibold text-red-900"><%= @summary.error %></dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Filter Tabs -->
+    <div class="mb-6">
+      <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <select
+          id="tabs"
+          name="tabs"
+          class="block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+        >
+          <option>All Jobs</option>
+          <option>Discovery</option>
+          <option>Scheduled</option>
+          <option>Maintenance</option>
+        </select>
+      </div>
+      <div class="hidden sm:block">
+        <div class="border-b border-gray-200">
+          <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              phx-click="filter"
+              phx-value-category="all"
+              class={"#{if @filter == :all, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"} whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium"}
+            >
+              All Jobs (<%= @summary.total_jobs %>)
+            </button>
+            <button
+              phx-click="filter"
+              phx-value-category="discovery"
+              class={"#{if @filter == :discovery, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"} whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium"}
+            >
+              Discovery (<%= @summary.discovery_jobs %>)
+            </button>
+            <button
+              phx-click="filter"
+              phx-value-category="scheduled"
+              class={"#{if @filter == :scheduled, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"} whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium"}
+            >
+              Scheduled (<%= @summary.scheduled_jobs %>)
+            </button>
+            <button
+              phx-click="filter"
+              phx-value-category="maintenance"
+              class={"#{if @filter == :maintenance, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"} whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium"}
+            >
+              Maintenance (<%= @summary.maintenance_jobs %>)
+            </button>
+          </nav>
+        </div>
+      </div>
+    </div>
+    <!-- Job Cards -->
+    <div class="space-y-4">
+      <%= for job <- @filtered_jobs do %>
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+          <div class="p-5">
+            <!-- Job Header -->
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl"><%= health_icon(job.health_status) %></span>
+                  <h3 class="text-lg font-semibold text-gray-900"><%= job.display_name %></h3>
+                  <span class={"px-2 py-1 text-xs font-medium rounded-full #{category_badge_class(job.category)}"}>
+                    <%= job.category |> Atom.to_string() |> String.capitalize() %>
+                  </span>
+                </div>
+                <p class="text-sm text-gray-600 mb-2"><%= job.description %></p>
+                <div class="flex flex-wrap gap-3 text-sm text-gray-500">
+                  <span>
+                    <span class="font-medium">Queue:</span>
+                    <%= job.queue %>
+                  </span>
+                  <%= if job.schedule do %>
+                    <span>
+                      <span class="font-medium">Schedule:</span>
+                      <%= job.schedule %>
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+              <button
+                phx-click="toggle_expand"
+                phx-value-worker={job.worker}
+                class="ml-4 text-gray-400 hover:text-gray-600"
+              >
+                <%= if is_expanded?(@expanded, job.worker) do %>
+                  <.icon name="hero-chevron-up" class="h-5 w-5" />
+                <% else %>
+                  <.icon name="hero-chevron-down" class="h-5 w-5" />
+                <% end %>
+              </button>
+            </div>
+            <!-- Job Metrics Summary -->
+            <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <p class="text-xs text-gray-500">Last Run</p>
+                <p class="text-sm font-medium text-gray-900">
+                  <%= if job.last_execution do %>
+                    <%= format_time_ago(job.last_execution.attempted_at) %>
+                    <span class="ml-1"><%= format_state(job.last_execution.state) %></span>
+                  <% else %>
+                    <span class="text-gray-400">Never</span>
+                  <% end %>
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">24h Runs</p>
+                <p class="text-sm font-medium text-gray-900">
+                  <%= job.stats_24h.total_runs %>
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">Success Rate</p>
+                <p class="text-sm font-medium text-gray-900">
+                  <%= job.stats_24h.success_rate %>%
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">Avg Duration</p>
+                <p class="text-sm font-medium text-gray-900">
+                  <%= job.stats_24h.avg_duration_seconds %>s
+                </p>
+              </div>
+            </div>
+            <!-- Expanded Details -->
+            <%= if is_expanded?(@expanded, job.worker) do %>
+              <div class="mt-6 pt-6 border-t border-gray-200">
+                <h4 class="text-sm font-semibold text-gray-900 mb-4">Detailed Metrics (Last 24h)</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <p class="text-xs text-gray-500">Total Runs</p>
+                    <p class="text-lg font-medium text-gray-900">
+                      <%= job.stats_24h.total_runs %>
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500">Completed</p>
+                    <p class="text-lg font-medium text-green-600">
+                      <%= job.stats_24h.completed %>
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500">Failed</p>
+                    <p class="text-lg font-medium text-red-600"><%= job.stats_24h.failed %></p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500">Executing</p>
+                    <p class="text-lg font-medium text-blue-600">
+                      <%= job.stats_24h.executing %>
+                    </p>
+                  </div>
+                </div>
+                <%= if job.last_execution do %>
+                  <div class="bg-gray-50 rounded p-4">
+                    <h5 class="text-xs font-semibold text-gray-700 mb-2">Last Execution Details</h5>
+                    <div class="text-sm space-y-1">
+                      <p>
+                        <span class="text-gray-500">Attempted:</span>
+                        <span class="font-medium">
+                          <%= Calendar.strftime(job.last_execution.attempted_at, "%Y-%m-%d %H:%M:%S UTC") %>
+                        </span>
+                      </p>
+                      <%= if job.last_execution.completed_at do %>
+                        <p>
+                          <span class="text-gray-500">Completed:</span>
+                          <span class="font-medium">
+                            <%= Calendar.strftime(job.last_execution.completed_at, "%Y-%m-%d %H:%M:%S UTC") %>
+                          </span>
+                        </p>
+                      <% end %>
+                      <%= if job.last_execution.duration_seconds do %>
+                        <p>
+                          <span class="text-gray-500">Duration:</span>
+                          <span class="font-medium"><%= job.last_execution.duration_seconds %>s</span>
+                        </p>
+                      <% end %>
+                      <%= if job.last_execution.items_processed do %>
+                        <p>
+                          <span class="text-gray-500">Items Processed:</span>
+                          <span class="font-medium"><%= job.last_execution.items_processed %></span>
+                        </p>
+                      <% end %>
+                      <p>
+                        <span class="text-gray-500">State:</span>
+                        <span class={"font-medium #{if job.last_execution.state == "completed", do: "text-green-600", else: "text-red-600"}"}>
+                          <%= job.last_execution.state %>
+                        </span>
+                      </p>
+                      <%= if job.last_execution.errors && length(job.last_execution.errors) > 0 do %>
+                        <div class="mt-2">
+                          <p class="text-gray-500 mb-1">Errors:</p>
+                          <div class="bg-red-50 p-2 rounded text-xs font-mono text-red-800">
+                            <%= inspect(job.last_execution.errors, pretty: true) %>
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                <% else %>
+                  <p class="text-sm text-gray-500 italic">No execution history available</p>
+                <% end %>
+                <div class="mt-4">
+                  <p class="text-xs text-gray-500">Worker Module:</p>
+                  <p class="text-xs font-mono text-gray-700"><%= job.worker %></p>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>
