@@ -97,23 +97,23 @@ defmodule EventasaurusWeb.Admin.VenueImageOperationsLive do
 
   @impl true
   def handle_event("retry_venue", %{"venue_id" => venue_id_str}, socket) do
-    venue_id = String.to_integer(venue_id_str)
+    case Integer.parse(venue_id_str) do
+      {venue_id, ""} ->
+        case FailedUploadRetryWorker.enqueue_venue(venue_id) do
+          {:ok, _job} ->
+            socket =
+              socket
+              |> put_flash(:info, "✅ Retry queued for venue ##{venue_id}")
+              |> load_operations()
 
-    case FailedUploadRetryWorker.enqueue_venue(venue_id) do
-      {:ok, _job} ->
-        socket =
-          socket
-          |> put_flash(:info, "✅ Retry queued for venue ##{venue_id}")
-          |> load_operations()
+            {:noreply, socket}
 
-        {:noreply, socket}
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+        end
 
-      {:error, reason} ->
-        socket =
-          socket
-          |> put_flash(:error, "❌ Failed to enqueue retry: #{inspect(reason)}")
-
-        {:noreply, socket}
+      _ ->
+        {:noreply, put_flash(socket, :error, "❌ Invalid venue ID")}
     end
   end
 

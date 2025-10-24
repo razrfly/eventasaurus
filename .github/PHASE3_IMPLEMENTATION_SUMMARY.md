@@ -526,7 +526,7 @@ Stats.summary_stats()
 
 1. **Deploy to production**
    - All code changes compile successfully
-   - Nightly cleanup job will start automatically at 4 AM UTC
+   - Nightly cleanup job designed for 4 AM UTC (requires Oban cron configuration to enable automatic execution)
 
 2. **Monitor first week**
    - Check Oban dashboard for retry job success rates
