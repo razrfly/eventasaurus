@@ -214,12 +214,34 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Returns the list of events for a specific venue.
+
+  ## Parameters
+  - venue_id: The ID of the venue
+
+  ## Examples
+
+      iex> list_events_by_venue(123)
+      [%Event{}, ...]
+  """
+  def list_events_by_venue(venue_id) when is_integer(venue_id) do
+    from(e in Event,
+      where: e.venue_id == ^venue_id,
+      where: is_nil(e.deleted_at),
+      order_by: [asc: e.start_at],
+      preload: [:venue]
+    )
+    |> Repo.all()
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
   Returns the list of public events with optional search.
 
   ## Options
     - search: Search term to filter by title or description
     - include_ended: if true, includes events that have ended (default: false)
-    
+
   ## Examples
 
       iex> list_public_events()
