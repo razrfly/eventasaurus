@@ -144,11 +144,11 @@ config :eventasaurus, Oban,
        # City coordinate recalculation runs daily at 1 AM UTC
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
-       {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker},
-       # Venue image enrichment runs daily at 4 AM UTC
-       {"0 4 * * *", EventasaurusDiscovery.VenueImages.EnrichmentJob},
-       # Monthly geocoding cost report on 1st of month at 8 AM UTC
-       {"0 8 1 * *", EventasaurusDiscovery.Workers.GeocodingCostReportWorker}
+       {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker}
+       # DISABLED - Costs money, should be manual only
+       # {"0 4 * * *", EventasaurusDiscovery.VenueImages.EnrichmentJob}
+       # DISABLED - Doesn't work, can be removed or fixed later
+       # {"0 8 1 * *", EventasaurusDiscovery.Workers.GeocodingCostReportWorker}
      ]}
   ]
 

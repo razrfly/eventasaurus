@@ -46,6 +46,9 @@ defmodule EventasaurusWeb.Router do
       # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
 
+      # Jobs Monitor Dashboard (dev - no auth)
+      live "/jobs-monitor", Admin.JobMonitorLive
+
       # Discovery Dashboard (dev - no auth)
       live "/imports", Admin.DiscoveryDashboardLive
 
@@ -127,6 +130,9 @@ defmodule EventasaurusWeb.Router do
 
       # Oban Web UI with admin authentication
       oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
+
+      # Jobs Monitor Dashboard with admin authentication
+      live "/jobs-monitor", EventasaurusWeb.Admin.JobMonitorLive
 
       # Discovery Dashboard with admin authentication
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive
