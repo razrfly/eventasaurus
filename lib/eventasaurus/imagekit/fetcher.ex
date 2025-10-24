@@ -53,26 +53,38 @@ defmodule Eventasaurus.ImageKit.Fetcher do
   """
   @spec list_venue_images(String.t()) :: {:ok, list(map())} | {:error, atom() | String.t()}
   def list_venue_images(venue_slug) when is_binary(venue_slug) do
-    # Reuse Filename.build_folder_path for consistency
-    folder_path = Eventasaurus.ImageKit.Filename.build_folder_path(venue_slug) <> "/"
+    # Build folder path - may raise ArgumentError if slug is invalid
+    # Wrap in try/catch to match function spec
+    with {:ok, folder_path} <- build_safe_folder_path(venue_slug) do
+      # Build search query for ImageKit API
+      # Note: slug is already validated by build_folder_path to only contain [a-z0-9-]
+      # so no special Lucene characters can appear in the path
+      search_query = ~s(path: "#{folder_path}")
 
-    # Build search query for ImageKit API
-    # Use path prefix search to get all files in the venue folder
-    # Escape quotes in path to prevent query injection
-    safe_path = String.replace(folder_path, ~S("), ~S(\"))
-    search_query = ~s(path: "#{safe_path}")
+      Logger.debug("🔍 Fetching images from ImageKit: #{search_query}")
 
-    Logger.debug("🔍 Fetching images from ImageKit: #{search_query}")
+      case query_imagekit_api(search_query) do
+        {:ok, files} ->
+          images = Enum.map(files, &format_image/1)
+          Logger.debug("✅ Found #{length(images)} images for venue: #{venue_slug}")
+          {:ok, images}
 
-    case query_imagekit_api(search_query) do
-      {:ok, files} ->
-        images = Enum.map(files, &format_image/1)
-        Logger.debug("✅ Found #{length(images)} images for venue: #{venue_slug}")
-        {:ok, images}
+        {:error, reason} ->
+          Logger.warning("⚠️  Failed to fetch images for venue #{venue_slug}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    end
+  end
 
-      {:error, reason} ->
-        Logger.warning("⚠️  Failed to fetch images for venue #{venue_slug}: #{inspect(reason)}")
-        {:error, reason}
+  # Safely build folder path, catching ArgumentError from invalid slug
+  defp build_safe_folder_path(venue_slug) do
+    try do
+      folder_path = Eventasaurus.ImageKit.Filename.build_folder_path(venue_slug) <> "/"
+      {:ok, folder_path}
+    rescue
+      ArgumentError ->
+        Logger.warning("⚠️  Invalid venue slug: #{venue_slug}")
+        {:error, :invalid_slug}
     end
   end
 

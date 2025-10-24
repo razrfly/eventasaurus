@@ -124,7 +124,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
     now = DateTime.utc_now()
     thirty_days_from_now = DateTime.add(now, 30, :day)
 
-    # Query public_events for this venue (no limit, get all events)
+    # Query public_events for this venue (limit 1000 to prevent excessive memory usage)
     all_events = PublicEvents.by_venue(venue_id, upcoming_only: false, limit: 1000)
 
     # Group events into upcoming (next 30 days), future (30+ days), and past

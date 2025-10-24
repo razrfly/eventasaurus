@@ -905,7 +905,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                         <span class="font-medium"><%= gettext("Venue") %></span>
                       </div>
                       <p class="text-gray-900">
-                        <%= @event.venue.name %>
+                        <.link
+                          navigate={~p"/venues/#{@event.venue.slug}"}
+                          class="font-semibold hover:text-indigo-600 transition-colors"
+                        >
+                          <%= @event.venue.name %>
+                        </.link>
                         <%= if @event.venue.address do %>
                           <br />
                           <span class="text-sm text-gray-600">

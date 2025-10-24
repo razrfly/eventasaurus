@@ -13,15 +13,27 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
 
   Old format: venue-name-{city_id}-{random}
   New format: venue-name or venue-name-{city-slug}
+
+  After regenerating all slugs, adds NOT NULL constraint to ensure data integrity.
   """
 
   def up do
     # Use code execution for data migration
     execute(&regenerate_all_venue_slugs/0)
+
+    # Now that all venues have slugs, add NOT NULL constraint
+    alter table(:venues) do
+      modify :slug, :string, null: false
+    end
   end
 
   def down do
-    # This migration is not reversible since we're discarding the old slug format
+    # Remove NOT NULL constraint
+    alter table(:venues) do
+      modify :slug, :string, null: true
+    end
+
+    # This migration is not reversible for slug regeneration since we're discarding the old slug format
     # Old slugs are not preserved
     :ok
   end
