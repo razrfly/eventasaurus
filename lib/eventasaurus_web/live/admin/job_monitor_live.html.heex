@@ -111,13 +111,14 @@
         <label for="tabs" class="sr-only">Select a tab</label>
         <select
           id="tabs"
-          name="tabs"
+          name="category"
+          phx-change="filter"
           class="block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
         >
-          <option>All Jobs</option>
-          <option>Discovery</option>
-          <option>Scheduled</option>
-          <option>Maintenance</option>
+          <option value="all" selected={@filter == :all}>All Jobs (<%= @summary.total_jobs %>)</option>
+          <option value="discovery" selected={@filter == :discovery}>Discovery (<%= @summary.discovery_jobs %>)</option>
+          <option value="scheduled" selected={@filter == :scheduled}>Scheduled (<%= @summary.scheduled_jobs %>)</option>
+          <option value="maintenance" selected={@filter == :maintenance}>Maintenance (<%= @summary.maintenance_jobs %>)</option>
         </select>
       </div>
       <div class="hidden sm:block">

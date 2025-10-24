@@ -33,256 +33,310 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
     |> Enum.find(&(&1.worker == worker_name))
   end
 
-  # Scheduled Cron Jobs (from config/config.exs Oban.Plugins.Cron)
+  # Scheduled Cron Jobs (auto-discovered from config/config.exs Oban.Plugins.Cron)
   defp scheduled_jobs do
+    # Parse Oban cron configuration at runtime
+    cron_jobs = get_cron_jobs_from_config()
+
+    # Map each cron job to our job structure with metadata overrides
+    Enum.map(cron_jobs, fn {schedule, worker} ->
+      worker_name = module_to_string(worker)
+
+      %{
+        worker: worker_name,
+        display_name: get_display_name(worker_name),
+        category: :scheduled,
+        queue: extract_queue_from_worker(worker_name),
+        schedule: schedule,
+        description: get_description(worker_name, schedule)
+      }
+    end) ++ manual_scheduled_jobs()
+  end
+
+  # Extract cron jobs from Oban configuration
+  defp get_cron_jobs_from_config do
+    oban_config = Application.get_env(:eventasaurus, Oban, [])
+
+    oban_config[:plugins]
+    |> Enum.find_value(fn
+      {Oban.Plugins.Cron, opts} -> opts[:crontab] || []
+      _ -> nil
+    end) || []
+  end
+
+  # Manual scheduled jobs that aren't in cron config
+  defp manual_scheduled_jobs do
+    worker_name = "EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob"
+
     [
       %{
-        worker: "Eventasaurus.Workers.SitemapWorker",
-        display_name: "Sitemap Generator",
-        category: :scheduled,
-        queue: "default",
-        schedule: "0 2 * * *",
-        description: "Generates XML sitemaps daily at 2 AM UTC"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator",
-        display_name: "City Discovery Orchestrator",
-        category: :scheduled,
-        queue: "discovery",
-        schedule: "0 0 * * *",
-        description: "Orchestrates city-wide event discovery at midnight UTC"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker",
-        display_name: "City Coordinate Recalculation",
-        category: :scheduled,
-        queue: "maintenance",
-        schedule: "0 1 * * *",
-        description: "Recalculates city coordinates daily at 1 AM UTC"
-      },
-      %{
-        worker: "EventasaurusApp.Workers.UnsplashRefreshWorker",
-        display_name: "Unsplash Images Refresh",
-        category: :scheduled,
-        queue: "default",
-        schedule: "0 3 * * *",
-        description: "Refreshes Unsplash city images daily at 3 AM UTC"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob",
+        worker: worker_name,
         display_name: "Now Playing Movies Sync",
         category: :scheduled,
-        queue: "scraper",
+        queue: extract_queue_from_worker(worker_name),
         schedule: nil,
         description: "Syncs now playing movies from TMDB"
       }
     ]
   end
 
-  # Discovery Jobs (Event scrapers and data sync)
+  # Display name overrides for scheduled jobs
+  defp get_display_name("Eventasaurus.Workers.SitemapWorker"), do: "Sitemap Generator"
+
+  defp get_display_name("EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator"),
+    do: "City Discovery Orchestrator"
+
+  defp get_display_name("EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker"),
+    do: "City Coordinate Recalculation"
+
+  defp get_display_name("EventasaurusApp.Workers.UnsplashRefreshWorker"),
+    do: "Unsplash Images Refresh"
+
+  defp get_display_name(worker_name) do
+    # Fallback: humanize the module name
+    worker_name
+    |> String.split(".")
+    |> List.last()
+    |> String.replace("Worker", "")
+    |> humanize_string()
+  end
+
+  # Extract queue from worker module configuration
+  defp extract_queue_from_worker(worker_name) when is_binary(worker_name) do
+    try do
+      # Convert string to module atom
+      module = String.to_existing_atom("Elixir.#{worker_name}")
+
+      # Ensure module is loaded
+      Code.ensure_loaded(module)
+
+      # Get Oban worker configuration
+      # Oban workers store their config in __opts__/0 function
+      if function_exported?(module, :__opts__, 0) do
+        opts = apply(module, :__opts__, [])
+        queue = Keyword.get(opts, :queue, :default)
+        to_string(queue)
+      else
+        "default"
+      end
+    rescue
+      ArgumentError -> "default"  # Module doesn't exist
+      _ -> "default"  # Any other error
+    end
+  end
+
+  # Description generation based on schedule
+  defp get_description("Eventasaurus.Workers.SitemapWorker", _schedule),
+    do: "Generates XML sitemaps daily at 2 AM UTC"
+
+  defp get_description("EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator", _schedule),
+    do: "Orchestrates city-wide event discovery at midnight UTC"
+
+  defp get_description("EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker", _schedule),
+    do: "Recalculates city coordinates daily at 1 AM UTC"
+
+  defp get_description("EventasaurusApp.Workers.UnsplashRefreshWorker", _schedule),
+    do: "Refreshes Unsplash city images daily at 3 AM UTC"
+
+  defp get_description(_worker, schedule) do
+    # Fallback: generate description from cron schedule
+    "Runs #{humanize_cron_schedule(schedule)}"
+  end
+
+  # Convert module atom to string
+  defp module_to_string(module) when is_atom(module) do
+    module |> Module.split() |> Enum.join(".")
+  end
+
+  # Humanize string (CamelCase to Title Case)
+  defp humanize_string(str) do
+    str
+    |> String.replace(~r/([A-Z])/, " \\1")
+    |> String.trim()
+  end
+
+  # Convert cron schedule to human-readable format
+  defp humanize_cron_schedule("0 0 * * *"), do: "daily at midnight UTC"
+  defp humanize_cron_schedule("0 1 * * *"), do: "daily at 1 AM UTC"
+  defp humanize_cron_schedule("0 2 * * *"), do: "daily at 2 AM UTC"
+  defp humanize_cron_schedule("0 3 * * *"), do: "daily at 3 AM UTC"
+  defp humanize_cron_schedule("0 4 * * *"), do: "daily at 4 AM UTC"
+  defp humanize_cron_schedule(schedule), do: "on schedule: #{schedule}"
+
+  # Discovery Jobs (auto-discovered from SourceRegistry)
   defp discovery_jobs do
-    [
-      # Bandsintown
-      %{
-        worker: "EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob",
-        display_name: "Bandsintown Sync",
-        category: :discovery,
-        queue: "scraper_index",
-        schedule: nil,
-        description: "Syncs events from Bandsintown"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob",
-        display_name: "Bandsintown Event Details",
-        category: :discovery,
-        queue: "scraper_detail",
-        schedule: nil,
-        description: "Fetches detailed event information from Bandsintown",
-        show_in_dashboard: false  # Spawned by Index job
-      },
+    # Get parent jobs from SourceRegistry
+    parent_jobs =
+      EventasaurusDiscovery.Sources.SourceRegistry.sources_map()
+      |> Enum.map(fn {source_slug, _job_module} ->
+        worker = get_parent_worker_for_source(source_slug)
 
-      # Resident Advisor
-      %{
-        worker: "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob",
-        display_name: "Resident Advisor Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs events from Resident Advisor"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob",
-        display_name: "Resident Advisor Event Details",
-        category: :discovery,
-        queue: "scraper_detail",
-        schedule: nil,
-        description: "Fetches detailed event information from Resident Advisor",
-        show_in_dashboard: false  # Spawned by Sync job
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob",
-        display_name: "Resident Advisor Artist Enrichment",
-        category: :discovery,
-        queue: "scraper_detail",
-        schedule: nil,
-        description: "Enriches events with artist information from Resident Advisor",
-        show_in_dashboard: false  # Spawned by Sync job
-      },
+        %{
+          worker: worker,
+          display_name: humanize_source_name(source_slug),
+          category: :discovery,
+          queue: extract_queue_from_worker(worker),
+          schedule: nil,
+          description: "Syncs events from #{humanize_source_name(source_slug)}"
+        }
+      end)
 
-      # Ticketmaster
-      %{
-        worker: "EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob",
-        display_name: "Ticketmaster Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs events from Ticketmaster API"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob",
-        display_name: "Ticketmaster Event Processor",
-        category: :discovery,
-        queue: "scraper",
-        schedule: nil,
-        description: "Processes Ticketmaster events",
-        show_in_dashboard: false  # Spawned by CitySyncJob
-      },
+    # Append manually defined child jobs (spawned by parent jobs)
+    parent_jobs ++ child_discovery_jobs()
+  end
 
-      # Quiz Sources
-      %{
-        worker: "EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob",
-        display_name: "Pubquiz Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs trivia events from Pubquiz"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob",
-        display_name: "Question One Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs trivia events from Question One"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob",
-        display_name: "Geeks Who Drink Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs trivia events from Geeks Who Drink"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob",
-        display_name: "Speed Quizzing Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs trivia events from Speed Quizzing"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob",
-        display_name: "Quizmeisters Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs trivia events from Quizmeisters"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob",
-        display_name: "Inquizition Sync",
-        category: :discovery,
-        queue: "discovery",
-        schedule: nil,
-        description: "Syncs trivia events from Inquizition"
-      },
+  # Override mapping for sources that don't use standard SyncJob pattern
+  defp get_parent_worker_for_source("bandsintown"),
+    do: "EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob"
+  defp get_parent_worker_for_source("ticketmaster"),
+    do: "EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob"
+  defp get_parent_worker_for_source("cinema-city"),
+    do: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob"
+  defp get_parent_worker_for_source("kino-krakow"),
+    do: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob"
+  defp get_parent_worker_for_source("karnet"),
+    do: "EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob"
+  # Default: use SourceRegistry mapping (converts module to string)
+  defp get_parent_worker_for_source(source_slug) do
+    {:ok, module} = EventasaurusDiscovery.Sources.SourceRegistry.get_sync_job(source_slug)
+    module |> Module.split() |> Enum.join(".")
+  end
 
-      # Movie Sources
-      %{
-        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
-        display_name: "Cinema City Sync",
-        category: :discovery,
-        queue: "scraper",
-        schedule: nil,
-        description: "Syncs showtimes from Cinema City"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob",
-        display_name: "Kino Krakow Sync",
-        category: :discovery,
-        queue: "scraper",
-        schedule: nil,
-        description: "Syncs showtimes from Kino Krakow"
-      },
+  # Convert source slug to display name
+  defp humanize_source_name("bandsintown"), do: "Bandsintown Sync"
+  defp humanize_source_name("resident-advisor"), do: "Resident Advisor Sync"
+  defp humanize_source_name("ticketmaster"), do: "Ticketmaster Sync"
+  defp humanize_source_name("pubquiz-pl"), do: "Pubquiz Sync"
+  defp humanize_source_name("question-one"), do: "Question One Sync"
+  defp humanize_source_name("geeks-who-drink"), do: "Geeks Who Drink Sync"
+  defp humanize_source_name("speed-quizzing"), do: "Speed Quizzing Sync"
+  defp humanize_source_name("quizmeisters"), do: "Quizmeisters Sync"
+  defp humanize_source_name("inquizition"), do: "Inquizition Sync"
+  defp humanize_source_name("cinema-city"), do: "Cinema City Sync"
+  defp humanize_source_name("kino-krakow"), do: "Kino Krakow Sync"
+  defp humanize_source_name("sortiraparis"), do: "SortirAParis Sync"
+  defp humanize_source_name("karnet"), do: "Karnet Sync"
+  defp humanize_source_name(slug) do
+    slug
+    |> String.split("-")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+    |> Kernel.<>(" Sync")
+  end
 
-      # Paris Events
-      %{
-        worker: "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob",
-        display_name: "SortirAParis Sync",
-        category: :discovery,
-        queue: "scraper_index",
-        schedule: nil,
-        description: "Syncs events from SortirAParis"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob",
-        display_name: "SortirAParis Event Details",
-        category: :discovery,
-        queue: "scraper_detail",
-        schedule: nil,
-        description: "Fetches event details from SortirAParis",
-        show_in_dashboard: false  # Spawned by SyncJob
-      },
+  # No longer needed - queues extracted from worker modules via extract_queue_from_worker/1
 
-      # Krakow Events
-      %{
-        worker: "EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob",
-        display_name: "Karnet Sync",
-        category: :discovery,
-        queue: "scraper_index",
-        schedule: nil,
-        description: "Syncs events from Karnet"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob",
-        display_name: "Karnet Event Details",
-        category: :discovery,
-        queue: "scraper_detail",
-        schedule: nil,
-        description: "Fetches event details from Karnet",
-        show_in_dashboard: false  # Spawned by IndexPageJob
-      }
-    ]
+  # Child jobs auto-detected by convention (spawned by parent jobs, hidden from dashboard)
+  defp child_discovery_jobs do
+    # Get all parent job worker names for comparison
+    parent_workers =
+      EventasaurusDiscovery.Sources.SourceRegistry.sources_map()
+      |> Enum.map(fn {source_slug, _} -> get_parent_worker_for_source(source_slug) end)
+      |> MapSet.new()
+
+    # Query Oban for all discovery-related workers that have been executed
+    discovery_workers = get_all_discovery_workers()
+
+    # Filter out parent jobs to identify child jobs
+    discovery_workers
+    |> Enum.reject(&MapSet.member?(parent_workers, &1))
+    |> Enum.map(&build_child_job_metadata/1)
+  end
+
+  # Query Oban jobs table for all distinct discovery worker modules
+  defp get_all_discovery_workers do
+    import Ecto.Query
+
+    EventasaurusApp.Repo.all(
+      from j in Oban.Job,
+        where: fragment("? LIKE 'EventasaurusDiscovery.Sources.%' OR ? LIKE 'EventasaurusDiscovery.Apis.%'",
+                       j.worker, j.worker),
+        distinct: true,
+        select: j.worker
+    )
+  end
+
+  # Build metadata for a child job based on naming conventions
+  defp build_child_job_metadata(worker) do
+    # Extract source name and job type from worker module
+    # E.g., "EventasaurusDiscovery.Sources.Bandsintown.Jobs.EventDetailJob"
+    parts = String.split(worker, ".")
+    source_name = Enum.at(parts, 3) || "Unknown"
+    job_type = List.last(parts) || "Unknown"
+
+    %{
+      worker: worker,
+      display_name: humanize_child_job_name(source_name, job_type),
+      category: :discovery,
+      queue: extract_queue_from_worker(worker),
+      schedule: nil,
+      description: generate_child_job_description(source_name, job_type),
+      show_in_dashboard: false
+    }
+  end
+
+  # Humanize child job display name
+  defp humanize_child_job_name(source_name, job_type) do
+    source_display = source_name |> humanize_string()
+    job_display = job_type |> String.replace("Job", "") |> humanize_string()
+    "#{source_display} #{job_display}"
+  end
+
+  # No longer needed - queues extracted from worker modules via extract_queue_from_worker/1
+
+  # Generate description based on job type
+  defp generate_child_job_description(source_name, job_type) do
+    source_display = source_name |> humanize_string()
+
+    cond do
+      String.ends_with?(job_type, "DetailJob") ->
+        "Fetches detailed event information from #{source_display}"
+      String.ends_with?(job_type, "EnrichmentJob") ->
+        "Enriches events with additional information from #{source_display}"
+      String.ends_with?(job_type, "ProcessorJob") ->
+        "Processes events from #{source_display}"
+      true ->
+        "Background processing for #{source_display}"
+    end
   end
 
   # Maintenance and Background Jobs
   defp maintenance_jobs do
     [
-      %{
-        worker: "EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob",
-        display_name: "City Coordinate Calculation",
-        category: :maintenance,
-        queue: "maintenance",
-        schedule: nil,
-        description: "Calculates coordinates for cities"
-      },
-      %{
-        worker: "EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob",
-        display_name: "Geocoding Provider ID Backfill",
-        category: :maintenance,
-        queue: "maintenance",
-        schedule: nil,
-        description: "Backfills provider IDs for existing geocoded venues"
-      },
-      %{
-        worker: "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob",
-        display_name: "Venue Images Backfill Orchestrator",
-        category: :maintenance,
-        queue: "venue_backfill",
-        schedule: nil,
-        description: "Orchestrates venue image backfill operations"
-      }
+      "EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob",
+      "EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob",
+      "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"
     ]
+    |> Enum.map(fn worker_name ->
+      %{
+        worker: worker_name,
+        display_name: humanize_maintenance_job_name(worker_name),
+        category: :maintenance,
+        queue: extract_queue_from_worker(worker_name),
+        schedule: nil,
+        description: generate_maintenance_job_description(worker_name)
+      }
+    end)
   end
+
+  # Humanize maintenance job names
+  defp humanize_maintenance_job_name("EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob"),
+    do: "City Coordinate Calculation"
+  defp humanize_maintenance_job_name("EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"),
+    do: "Geocoding Provider ID Backfill"
+  defp humanize_maintenance_job_name("EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"),
+    do: "Venue Images Backfill Orchestrator"
+  defp humanize_maintenance_job_name(worker_name) do
+    worker_name |> String.split(".") |> List.last() |> String.replace("Job", "") |> humanize_string()
+  end
+
+  # Generate maintenance job descriptions
+  defp generate_maintenance_job_description("EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob"),
+    do: "Calculates coordinates for cities"
+  defp generate_maintenance_job_description("EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"),
+    do: "Backfills provider IDs for existing geocoded venues"
+  defp generate_maintenance_job_description("EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"),
+    do: "Orchestrates venue image backfill operations"
+  defp generate_maintenance_job_description(_worker_name),
+    do: "Maintenance background job"
 end
