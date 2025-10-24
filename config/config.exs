@@ -115,11 +115,13 @@ config :eventasaurus, Oban,
     # Single concurrency to respect Google's rate limits
     google_lookup: 1,
     # Venue enrichment queue for image fetching
-    # Low concurrency to respect provider rate limits
-    venue_enrichment: 2,
+    # Serial processing (concurrency: 1) to prevent parallel jobs from overwhelming Google rate limits
+    # Combined with 500ms delays between uploads = guaranteed 2 req/sec to Google
+    venue_enrichment: 1,
     # Venue image backfill queue for admin-triggered backfills
-    # Low concurrency to respect API rate limits and costs
-    venue_backfill: 2,
+    # Serial processing to prevent multiple backfills from overwhelming the venue_enrichment queue
+    # Backfill jobs spawn many enrichment jobs, so only one backfill should run at a time
+    venue_backfill: 1,
     # Default queue for other background jobs
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation

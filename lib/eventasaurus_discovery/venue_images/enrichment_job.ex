@@ -491,21 +491,51 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
 
     metadata = enriched_venue.image_enrichment_metadata || %{}
-    images_count = length(enriched_venue.venue_images || [])
+    all_images = enriched_venue.venue_images || []
+
+    # Separate uploaded and failed images
+    uploaded_images = Enum.filter(all_images, fn img -> img["upload_status"] == "uploaded" end)
+    failed_images = Enum.filter(all_images, fn img -> img["upload_status"] == "failed" end)
 
     providers_succeeded = metadata["providers_succeeded"] || metadata[:providers_succeeded] || []
     providers_failed = metadata["providers_failed"] || metadata[:providers_failed] || []
     total_cost = metadata["total_cost"] || metadata[:total_cost] || 0.0
 
+    # Build failure breakdown statistics
+    failure_breakdown =
+      failed_images
+      |> Enum.group_by(fn img -> get_in(img, ["error_details", "error_type"]) end)
+      |> Enum.map(fn {error_type, images} -> {error_type || "unknown", length(images)} end)
+      |> Map.new()
+
+    # Extract detailed failure information
+    failed_image_details =
+      failed_images
+      |> Enum.map(fn img ->
+        error_details = img["error_details"] || %{}
+
+        %{
+          "provider_url" => img["provider_url"],
+          "provider" => img["provider"],
+          "error_type" => error_details["error_type"],
+          "status_code" => error_details["status_code"],
+          "timestamp" => error_details["timestamp"]
+        }
+      end)
+
     %{
-      status: if(images_count > 0, do: "success", else: "no_images"),
-      images_found: images_count,
+      status: if(length(uploaded_images) > 0, do: "success", else: "no_images"),
+      images_discovered: length(all_images),
+      images_uploaded: length(uploaded_images),
+      images_failed: length(failed_images),
+      failure_breakdown: failure_breakdown,
+      failed_images: failed_image_details,
       providers: build_provider_details(metadata, enriched_venue.venue_images),
       imagekit_urls: extract_imagekit_urls(enriched_venue.venue_images),
       total_cost_usd: total_cost,
       execution_time_ms: execution_time,
       completed_at: DateTime.to_iso8601(DateTime.utc_now()),
-      summary: build_summary(providers_succeeded, providers_failed, images_count)
+      summary: build_summary(providers_succeeded, providers_failed, length(uploaded_images), length(all_images))
     }
   end
 
@@ -587,11 +617,16 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     Map.merge(success_details, failed_details)
   end
 
-  defp build_summary(providers_succeeded, providers_failed, images_count) do
+  defp build_summary(providers_succeeded, providers_failed, images_uploaded, images_discovered) do
     cond do
-      images_count > 0 ->
+      images_uploaded > 0 and images_uploaded == images_discovered ->
         provider_names = Enum.join(providers_succeeded, ", ")
-        "Found #{images_count} images from #{provider_names}, uploaded to ImageKit"
+        "Found #{images_discovered} images from #{provider_names}, all uploaded to ImageKit"
+
+      images_uploaded > 0 and images_uploaded < images_discovered ->
+        provider_names = Enum.join(providers_succeeded, ", ")
+        failed_count = images_discovered - images_uploaded
+        "Found #{images_discovered} images from #{provider_names}, #{images_uploaded} uploaded, #{failed_count} failed"
 
       Enum.empty?(providers_failed) ->
         "No images found - providers returned 0 images"
