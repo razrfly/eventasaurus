@@ -133,15 +133,47 @@ defmodule Eventasaurus.ImageKit.Filename do
   @doc """
   Builds the full ImageKit folder path for a venue using slug.
 
+  Validates slug to prevent path traversal or unsafe characters.
+
   ## Examples
 
       iex> build_folder_path("blue-note-jazz-club")
       "/venues/blue-note-jazz-club"
+
+      iex> build_folder_path("invalid/slug")
+      ** (ArgumentError) invalid venue slug: contains unsafe characters
   """
   @spec build_folder_path(String.t()) :: String.t()
   def build_folder_path(venue_slug) when is_binary(venue_slug) do
-    "/venues/#{venue_slug}"
+    if valid_slug?(venue_slug) do
+      "/venues/#{venue_slug}"
+    else
+      raise ArgumentError, "invalid venue slug: contains unsafe characters"
+    end
   end
+
+  @doc """
+  Validates that a slug contains only safe characters.
+
+  Safe characters: lowercase letters, numbers, hyphens
+
+  ## Examples
+
+      iex> valid_slug?("blue-note-jazz-club")
+      true
+
+      iex> valid_slug?("../etc/passwd")
+      false
+
+      iex> valid_slug?("slug with spaces")
+      false
+  """
+  @spec valid_slug?(String.t()) :: boolean()
+  def valid_slug?(slug) when is_binary(slug) do
+    String.match?(slug, ~r/\A[a-z0-9-]+\z/)
+  end
+
+  def valid_slug?(_), do: false
 
   @doc """
   Builds the complete ImageKit path (folder + filename).

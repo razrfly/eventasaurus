@@ -16,8 +16,8 @@ public_key = Config.public_key()
 upload_endpoint = Config.upload_endpoint()
 url_endpoint = Config.url_endpoint()
 
-IO.puts("  Private Key: #{String.slice(private_key, 0..20)}...")
-IO.puts("  Public Key: #{String.slice(public_key, 0..20)}...")
+IO.puts("  Private Key: [REDACTED]")
+IO.puts("  Public Key: [REDACTED]")
 IO.puts("  Upload Endpoint: #{upload_endpoint}")
 IO.puts("  URL Endpoint: #{url_endpoint}")
 
