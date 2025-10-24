@@ -68,6 +68,9 @@ defmodule EventasaurusWeb.Router do
       # Venue Images Stats Dashboard (dev - no auth)
       live "/venue-images/stats", Admin.VenueImagesStatsLive
 
+      # Venue Image Operations (dev - no auth)
+      live "/venue-images/operations", Admin.VenueImageOperationsLive
+
       # Venue Duplicate Management (dev - no auth)
       live "/venues/duplicates", AdminVenueDuplicatesLive
 
@@ -160,6 +163,9 @@ defmodule EventasaurusWeb.Router do
 
       # Venue Images Stats Dashboard with admin authentication
       live "/venue-images/stats", EventasaurusWeb.Admin.VenueImagesStatsLive
+
+      # Venue Image Operations with admin authentication
+      live "/venue-images/operations", EventasaurusWeb.Admin.VenueImageOperationsLive
 
       # Venue Duplicate Management with admin authentication
       live "/venues/duplicates", EventasaurusWeb.AdminVenueDuplicatesLive

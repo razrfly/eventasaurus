@@ -98,13 +98,20 @@ defmodule EventasaurusDiscovery.VenueImages.CleanupScheduler do
       end
     rescue
       error ->
-        Logger.error("❌ Error processing venue #{venue_summary.id}: #{inspect(error)}")
+        stacktrace = __STACKTRACE__
+
+        Logger.error(
+          "❌ Error processing venue #{venue_summary.id}: " <>
+            Exception.format(:error, error, stacktrace)
+        )
+
         %{errors: 1}
     end
   end
 
   # Classify venue failures and queue retry if appropriate
   defp classify_and_queue(venue, _venue_summary) do
+    # Only process "failed" status, not "permanently_failed" (those are already determined non-retryable)
     failed_images =
       (venue.venue_images || [])
       |> Enum.filter(fn img -> img["upload_status"] == "failed" end)

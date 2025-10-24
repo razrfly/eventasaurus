@@ -102,7 +102,7 @@ end
 
 ### Expected Workflow
 
-```
+```text
 User clicks button
   ↓
 CleanupScheduler.enqueue()

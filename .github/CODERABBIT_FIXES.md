@@ -6,6 +6,7 @@ All critical and major CodeRabbit AI suggestions have been implemented and verif
 
 ✅ **3 Critical Bugs Fixed**
 ✅ **6 Major Improvements Implemented**
+✅ **3 Documentation/Quality Improvements**
 ✅ **All Code Compiles Successfully**
 
 ---
@@ -334,6 +335,131 @@ end
 
 ---
 
+## Documentation & Quality Improvements
+
+### 10. Add Language Tag to Code Blocks
+
+**Issue**: Markdown linter flagged missing language tag in flowchart code blocks.
+
+**Fix**: Added `text` language tag to code block.
+
+```markdown
+# Before
+```
+User clicks button → ...
+```
+
+# After
+```text
+User clicks button → ...
+```
+```
+
+**File**: `.github/ADMIN_BUTTON_IMPLEMENTATION.md:105`
+
+---
+
+### 11. Clarify Manual vs Scheduled Behavior
+
+**Issue**: Documentation contradiction - described as "Daily at 4 AM UTC" but also "Manual trigger only".
+
+**Fix**: Clarified that CleanupScheduler is designed to support scheduled cron but currently only manual trigger is configured.
+
+```markdown
+# Before
+**Schedule**: Daily at 4 AM UTC (via Oban cron)
+...
+**Status**: Manual trigger only (no automated cron job).
+
+# After
+**Schedule**: Designed for daily at 4 AM UTC (via Oban cron), currently manual trigger only
+```
+
+**File**: `.github/PHASE3_IMPLEMENTATION_SUMMARY.md:188`
+
+---
+
+### 12. Improve Exception Logging with Stacktrace
+
+**Issue**: Rescue block dropped stacktrace, making debugging difficult.
+
+**Fix**: Capture and log stacktrace using `__STACKTRACE__` and `Exception.format/3`.
+
+```elixir
+# Before (lines 99-103)
+rescue
+  error ->
+    Logger.error("❌ Error processing venue #{venue_summary.id}: #{inspect(error)}")
+    %{errors: 1}
+end
+
+# After
+rescue
+  error ->
+    stacktrace = __STACKTRACE__
+
+    Logger.error(
+      "❌ Error processing venue #{venue_summary.id}: " <>
+        Exception.format(:error, error, stacktrace)
+    )
+
+    %{errors: 1}
+end
+```
+
+**Benefits**:
+- Full stacktrace available for debugging
+- Proper exception formatting with context
+- Easier to diagnose production issues
+
+**File**: `lib/eventasaurus_discovery/venue_images/cleanup_scheduler.ex:99-109`
+
+---
+
+### 13. Fix Decimal Type in failure_rate_pct (Critical)
+
+**Issue**: `ROUND(..., 1)` returns `Decimal` type via postgrex, causing arithmetic errors when code tries to add/multiply these values as floats.
+
+**Impact**: Could crash when calculating aggregate statistics or performing float operations on failure rates.
+
+**Fix**: Cast to `float8` in SQL query to ensure native float type.
+
+```sql
+-- Before (lines 45-50)
+ROUND(
+  100.0 * (SELECT COUNT(*) FROM ...) / NULLIF(...),
+  1
+) as failure_rate_pct
+
+-- After
+(ROUND(
+  100.0 * (SELECT COUNT(*) FROM ...) / NULLIF(...),
+  1
+))::float8 as failure_rate_pct
+```
+
+**Also Fixed**: `partial_failure_candidates` query with same issue.
+
+```sql
+-- Before (line 127)
+ROUND(100.0 * failed_count / (failed_count + uploaded_count), 1) as failure_rate_pct
+
+-- After
+(ROUND(100.0 * failed_count::float8 / (failed_count + uploaded_count), 1))::float8 as failure_rate_pct
+```
+
+**Benefits**:
+- Prevents type errors in arithmetic operations
+- Consistent float type throughout application
+- Avoids Decimal to Float conversion overhead
+- Safer for JSON serialization
+
+**Files Modified**:
+- `lib/eventasaurus_discovery/venue_images/stats.ex:45-50` (venues_with_failures)
+- `lib/eventasaurus_discovery/venue_images/stats.ex:127` (partial_failure_candidates)
+
+---
+
 ## Not Implemented (Out of Scope)
 
 ### Optimistic Locking (Suggestion #8)
@@ -388,25 +514,35 @@ Generated eventasaurus app
 
 ### Files Modified
 
-1. `lib/eventasaurus_discovery/venue_images/cleanup_scheduler.ex` - Critical fix #1
+**Code Files**:
+1. `lib/eventasaurus_discovery/venue_images/cleanup_scheduler.ex` - Fixes #1, #12
 2. `lib/eventasaurus_discovery/venue_images/failed_upload_retry_worker.ex` - Fixes #2, #4, #6, #7, #9
-3. `lib/eventasaurus_discovery/venue_images/stats.ex` - Fixes #3, #5
+3. `lib/eventasaurus_discovery/venue_images/stats.ex` - Fixes #3, #5, #13
 4. `lib/eventasaurus_discovery/venue_images/orchestrator.ex` - Fix #8
+
+**Documentation Files**:
+5. `.github/ADMIN_BUTTON_IMPLEMENTATION.md` - Fix #10
+6. `.github/PHASE3_IMPLEMENTATION_SUMMARY.md` - Fix #11
 
 ### Verification Checklist
 
 - [x] All critical bugs fixed
 - [x] All major improvements implemented
+- [x] All documentation/quality improvements applied
 - [x] Code compiles without errors
 - [x] Code compiles without warnings (except pre-existing unused clause warnings)
 - [x] Pattern matching now correct for error classification
 - [x] SQL queries now include `permanently_failed` status
+- [x] SQL queries return float8 (not Decimal) for failure rates
 - [x] Nil guards prevent crashes on legacy data
 - [x] Oban uniqueness prevents duplicate jobs
 - [x] Return types normalized across code paths
 - [x] Non-retryable images marked permanently_failed
 - [x] Folder/path logic unified with orchestrator
 - [x] Tags added for organization and searchability
+- [x] Exception logging includes full stacktraces
+- [x] Documentation clarified (no contradictions)
+- [x] Markdown lint issues resolved
 
 ---
 
@@ -419,22 +555,30 @@ Generated eventasaurus app
 ❌ Nil comparison crashes in stats queries
 ❌ Duplicate concurrent retry jobs possible
 ❌ SQL queries missing `permanently_failed` images
+❌ SQL queries returning Decimal type causing arithmetic errors
 ❌ Crashes on legacy records with nil provider_url
 ❌ Non-retryable images reconsidered on every scan
 ❌ Inconsistent return types breaking calling code
 ❌ Folder path divergence scattering images across different folders
+❌ Exception logs without stacktraces
+❌ Documentation contradictions about scheduled vs manual
+❌ Markdown lint errors in documentation
 
 ### After Fixes
 
 ✅ Clean compilation
 ✅ Correct error classification and retry logic
 ✅ Nil-safe stats queries
+✅ Float8 type for failure rates (prevents arithmetic errors)
 ✅ Duplicate job prevention (10-min window)
 ✅ Complete failure tracking (failed + permanently_failed)
 ✅ Graceful handling of legacy data
 ✅ Efficient cleanup (skip permanent failures)
 ✅ Consistent API contracts
 ✅ Unified folder/path logic preventing image scattering
+✅ Full stacktraces in error logs
+✅ Clear, consistent documentation
+✅ All markdown lint issues resolved
 
 ---
 

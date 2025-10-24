@@ -42,12 +42,12 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
       (SELECT COUNT(*)
        FROM jsonb_array_elements(v.venue_images) img
        WHERE img->>'upload_status' = 'uploaded') as uploaded_count,
-      ROUND(
+      (ROUND(
         100.0 * (SELECT COUNT(*) FROM jsonb_array_elements(v.venue_images) img
                  WHERE img->>'upload_status' IN ('failed', 'permanently_failed')) /
         NULLIF(jsonb_array_length(v.venue_images), 0),
         1
-      ) as failure_rate_pct
+      ))::float8 as failure_rate_pct
     FROM venues v
     WHERE EXISTS (
       SELECT 1
@@ -124,7 +124,7 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
       v.city_id,
       failed_count,
       uploaded_count,
-      ROUND(100.0 * failed_count / (failed_count + uploaded_count), 1) as failure_rate_pct,
+      (ROUND(100.0 * failed_count::float8 / (failed_count + uploaded_count), 1))::float8 as failure_rate_pct,
       (SELECT jsonb_agg(img->'error_details'->>'error_type')
        FROM jsonb_array_elements(v.venue_images) img
        WHERE img->>'upload_status' = 'failed') as error_types
