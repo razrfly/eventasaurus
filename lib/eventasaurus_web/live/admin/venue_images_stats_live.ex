@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.Admin.VenueImagesStatsLive do
   use EventasaurusWeb, :live_view
 
-  alias EventasaurusDiscovery.VenueImages.Monitor
+  alias EventasaurusDiscovery.VenueImages.{Monitor, Stats, CleanupScheduler}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -39,6 +39,26 @@ defmodule EventasaurusWeb.Admin.VenueImagesStatsLive do
   end
 
   @impl true
+  def handle_event("retry_failed_uploads", _params, socket) do
+    case CleanupScheduler.enqueue() do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(:info, "✅ Cleanup job enqueued - will scan venues and retry failed uploads")
+          |> load_stats()
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          socket
+          |> put_flash(:error, "❌ Failed to enqueue cleanup job: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="p-6">
@@ -48,14 +68,54 @@ defmodule EventasaurusWeb.Admin.VenueImagesStatsLive do
             <h1 class="text-2xl font-bold">Venue Image Provider Statistics</h1>
             <p class="text-gray-600 mt-2">Real-time monitoring of image provider usage and rate limits</p>
           </div>
-          <button
-            phx-click="enqueue_enrichment"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            🖼️ Enqueue Enrichment
-          </button>
+          <div class="flex gap-3">
+            <button
+              phx-click="retry_failed_uploads"
+              class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              title="Retry transient failed uploads without calling provider APIs"
+            >
+              🔄 Retry Failed Uploads
+            </button>
+            <button
+              phx-click="enqueue_enrichment"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              🖼️ Enqueue Enrichment
+            </button>
+          </div>
         </div>
       </div>
+
+      <!-- Failed Upload Summary -->
+      <%= if @failure_summary.total_venues_with_failures > 0 do %>
+        <div class="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <h2 class="text-lg font-semibold text-orange-900 mb-2">📊 Failed Upload Summary</h2>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p class="text-orange-700">Venues with Failures</p>
+                  <p class="text-2xl font-bold text-orange-900"><%= @failure_summary.total_venues_with_failures %></p>
+                </div>
+                <div>
+                  <p class="text-orange-700">Failed Images</p>
+                  <p class="text-2xl font-bold text-orange-900"><%= @failure_summary.total_failed_images %></p>
+                </div>
+                <div>
+                  <p class="text-orange-700">Transient Failures</p>
+                  <p class="text-2xl font-bold text-green-700"><%= @failure_summary.venues_with_transient %></p>
+                  <p class="text-xs text-gray-600">Can be retried</p>
+                </div>
+                <div>
+                  <p class="text-orange-700">Permanent Failures</p>
+                  <p class="text-2xl font-bold text-red-700"><%= @failure_summary.venues_with_permanent %></p>
+                  <p class="text-xs text-gray-600">Need manual review</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
 
       <!-- Alerts Section -->
       <%= if length(@alerts) > 0 do %>
@@ -139,10 +199,12 @@ defmodule EventasaurusWeb.Admin.VenueImagesStatsLive do
   defp load_stats(socket) do
     stats = Monitor.get_all_stats()
     alerts = Monitor.check_alerts()
+    failure_summary = Stats.summary_stats()
 
     socket
     |> assign(:stats, stats)
     |> assign(:alerts, alerts)
+    |> assign(:failure_summary, failure_summary)
     |> assign(:updated_at, DateTime.utc_now())
   end
 

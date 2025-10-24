@@ -234,7 +234,13 @@ CleanupScheduler.enqueue()
 
 **Status**: Manual trigger only (no automated cron job).
 
-**Trigger Methods**:
+**Admin Dashboard Button** ⭐ **NEW**:
+- Navigate to `/admin/venue-images/stats`
+- Click **"Retry Failed Uploads"** button (orange, top right)
+- View real-time failure statistics in dashboard
+- See `.github/ADMIN_BUTTON_IMPLEMENTATION.md` for details
+
+**Alternative Trigger Methods** (IEx console):
 
 ```elixir
 # Option 1: Trigger cleanup scheduler manually (scans all venues, queues retries)
@@ -252,9 +258,11 @@ Orchestrator.enrich_venue(venue, force: true)
 ```
 
 **Recommended Workflow**:
-1. Use Stats module to identify venues with failures
-2. Decide on retry strategy (individual vs batch)
-3. Trigger manually when ready
+1. Navigate to `/admin/venue-images/stats` in browser
+2. Check **Failed Upload Summary** dashboard section
+3. Click **"Retry Failed Uploads"** button
+4. Monitor Oban dashboard for retry job progress
+5. Stats auto-refresh every 10 seconds
 
 ---
 
@@ -484,6 +492,12 @@ Stats.summary_stats()
    - Line 677: Fixed deduplication logic (provider_url)
    - Lines 90-119: Added retry_failed_only option to enrich_venue
 
+2. **lib/eventasaurus_web/live/admin/venue_images_stats_live.ex**
+   - Added "Retry Failed Uploads" button
+   - Added Failed Upload Summary dashboard section
+   - Integrated Stats module for real-time failure monitoring
+   - See `.github/ADMIN_BUTTON_IMPLEMENTATION.md` for details
+
 ### Created
 
 3. **lib/eventasaurus_discovery/venue_images/stats.ex** (NEW)
@@ -495,11 +509,14 @@ Stats.summary_stats()
    - 272 lines
 
 5. **lib/eventasaurus_discovery/venue_images/cleanup_scheduler.ex** (NEW)
-   - Nightly cleanup and retry orchestration
+   - Manual cleanup and retry orchestration
    - 154 lines
 
 6. **.github/PHASE3_IMPLEMENTATION_SUMMARY.md** (NEW - this file)
    - Implementation documentation
+
+7. **.github/ADMIN_BUTTON_IMPLEMENTATION.md** (NEW)
+   - Admin dashboard button documentation
 
 ---
 

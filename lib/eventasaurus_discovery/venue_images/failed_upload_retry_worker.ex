@@ -23,7 +23,8 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
 
   use Oban.Worker,
     queue: :venue_enrichment,
-    max_attempts: 3
+    max_attempts: 3,
+    unique: [fields: [:args], keys: [:venue_id], period: 600]
 
   require Logger
   alias EventasaurusApp.Repo
@@ -80,8 +81,22 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
       # Retry each failed upload with delays
       retry_results = retry_failed_uploads(venue, retryable)
 
+      # Mark non-retryable images as permanently_failed
+      non_retryable_marked =
+        Enum.map(non_retryable, fn img ->
+          retry_count = img["retry_count"] || 0
+
+          Map.merge(img, %{
+            "upload_status" => "permanently_failed",
+            "retry_count" => retry_count,
+            "error_details" =>
+              (img["error_details"] || %{})
+              |> Map.put("finalized_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          })
+        end)
+
       # Update venue_images with results
-      update_venue_images(venue, retry_results, non_retryable)
+      update_venue_images(venue, retry_results, non_retryable_marked)
     end
   end
 
@@ -126,54 +141,74 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
     provider_url = failed_img["provider_url"]
     retry_count = (failed_img["retry_count"] || 0) + 1
 
-    Logger.info("🔄 Retrying upload attempt #{retry_count} for #{provider}: #{String.slice(provider_url || "", 0..80)}")
+    # Guard against missing provider_url (legacy records)
+    cond do
+      is_nil(provider_url) or provider_url == "" ->
+        Logger.warning("⚠️  Missing provider_url for #{provider}, marking as permanently_failed")
 
-    # Use existing upload_to_imagekit logic from orchestrator
-    upload_result = upload_to_imagekit(venue, provider_url, provider)
-
-    case upload_result do
-      {:ok, imagekit_url, imagekit_path} ->
-        Logger.info("✅ Retry successful: #{imagekit_url}")
-
-        # Update image with success
         failed_img
         |> Map.merge(%{
-          "url" => imagekit_url,
-          "imagekit_path" => imagekit_path,
-          "upload_status" => "uploaded",
+          "upload_status" => "permanently_failed",
           "retry_count" => retry_count,
-          "retried_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+          "error_details" => %{
+            "error" => "missing provider_url",
+            "error_type" => "invalid_provider_url",
+            "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+            "retry_attempt" => retry_count
+          }
         })
-        |> Map.delete("error_details")
 
-      {:error, reason} ->
-        Logger.warning("⚠️  Retry failed (attempt #{retry_count}): #{inspect(reason)}")
+      true ->
+        Logger.info("🔄 Retrying upload attempt #{retry_count} for #{provider}: #{String.slice(provider_url, 0..80)}")
 
-        # Classify new error
-        error_type = classify_error(reason)
+        # Use existing upload_to_imagekit logic from orchestrator
+        upload_result = upload_to_imagekit(venue, provider_url, provider)
 
-        status_code =
-          case reason do
-            {:download_failed, {:http_status, code}} -> code
-            {:http_error, code, _body} -> code
-            _ -> nil
-          end
+        case upload_result do
+          {:ok, imagekit_url, imagekit_path} ->
+            Logger.info("✅ Retry successful: #{imagekit_url}")
 
-        error_detail = %{
-          "error" => inspect(reason),
-          "error_type" => Atom.to_string(error_type),
-          "status_code" => status_code,
-          "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
-          "retry_attempt" => retry_count
-        }
+            # Update image with success
+            failed_img
+            |> Map.merge(%{
+              "url" => imagekit_url,
+              "imagekit_path" => imagekit_path,
+              "upload_status" => "uploaded",
+              "retry_count" => retry_count,
+              "retried_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+            })
+            |> Map.delete("error_details")
 
-        # Update image with failure info
-        failed_img
-        |> Map.merge(%{
-          "upload_status" => if(retry_count >= @max_image_retries, do: "permanently_failed", else: "failed"),
-          "retry_count" => retry_count,
-          "error_details" => error_detail
-        })
+          {:error, reason} ->
+            Logger.warning("⚠️  Retry failed (attempt #{retry_count}): #{inspect(reason)}")
+
+            # Classify new error
+            error_type = classify_error(reason)
+
+            status_code =
+              case reason do
+                {:download_failed, {:http_status, code}} -> code
+                {:http_error, code, _body} -> code
+                _ -> nil
+              end
+
+            error_detail = %{
+              "error" => inspect(reason),
+              "error_type" => Atom.to_string(error_type),
+              "status_code" => status_code,
+              "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+              "retry_attempt" => retry_count
+            }
+
+            # Update image with failure info
+            failed_img
+            |> Map.merge(%{
+              "upload_status" =>
+                if(retry_count >= @max_image_retries, do: "permanently_failed", else: "failed"),
+              "retry_count" => retry_count,
+              "error_details" => error_detail
+            })
+        end
     end
   end
 
@@ -184,18 +219,41 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
     # Generate deterministic filename using hash
     filename = Filename.generate(provider_url, provider)
 
-    # Determine folder based on venue slug or ID
-    folder =
-      if venue.slug do
-        "/venues/#{venue.slug}"
-      else
-        "/venues/venue-#{venue.id}"
+    # Sanitize slug - MUST match orchestrator.ex logic exactly to prevent folder divergence
+    safe_slug =
+      case venue.slug do
+        s when is_binary(s) and s != "" ->
+          # Basic sanitization: replace unsafe chars with hyphens
+          trimmed =
+            s
+            |> String.replace(~r/[^a-z0-9\-]/i, "-")
+            |> String.downcase()
+            |> String.trim("-")
+
+          if trimmed != "", do: trimmed, else: "venue-#{venue.id}"
+
+        _ ->
+          # Fallback to ID if slug is nil or invalid
+          "venue-#{venue.id}"
       end
 
+    # Use Filename module helpers for consistency
+    folder = Filename.build_folder_path(safe_slug)
+    imagekit_path = Filename.build_full_path(safe_slug, filename)
+
+    # Add same tags as orchestrator for organization and searchability
+    tags = [
+      provider,
+      "venue:#{safe_slug}"
+    ]
+
     # Upload with retry logic (handles 429, 503, timeouts)
-    case Uploader.upload_from_url(provider_url, folder: folder, filename: filename) do
+    case Uploader.upload_from_url(provider_url,
+           folder: folder,
+           filename: filename,
+           tags: tags
+         ) do
       {:ok, imagekit_url} ->
-        imagekit_path = "#{folder}/#{filename}"
         {:ok, imagekit_url, imagekit_path}
 
       {:error, reason} ->
@@ -234,9 +292,10 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
 
   defp classify_error({:http_error, _status, _body}), do: :http_error
 
-  defp classify_error({:error, %Mint.TransportError{reason: :timeout}}), do: :network_timeout
+  defp classify_error({:download_failed, %Mint.TransportError{reason: :timeout}}),
+    do: :network_timeout
 
-  defp classify_error({:error, %Mint.TransportError{}}), do: :network_error
+  defp classify_error({:download_failed, %Mint.TransportError{}}), do: :network_error
 
   defp classify_error(:file_too_large), do: :file_too_large
 

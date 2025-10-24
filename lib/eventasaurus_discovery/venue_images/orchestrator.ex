@@ -95,7 +95,18 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       alias EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker
 
       Logger.info("🔄 Retry-only mode: skipping provider API calls for venue #{venue.id}")
-      FailedUploadRetryWorker.perform_now(venue)
+
+      case FailedUploadRetryWorker.perform_now(venue) do
+        {:ok, %EventasaurusApp.Venues.Venue{} = updated_venue} ->
+          {:ok, updated_venue}
+
+        {:ok, _msg} ->
+          # If no retries were performed, return the original venue
+          {:ok, Repo.get!(EventasaurusApp.Venues.Venue, venue.id)}
+
+        {:error, _} = err ->
+          err
+      end
     else
       # Normal enrichment flow
       providers = Keyword.get(opts, :providers)
