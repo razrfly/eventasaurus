@@ -181,7 +181,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Transformer do
         end
 
       # Build recurrence rule using shared helper
-      recurrence_rule = RecurringEventParser.build_recurrence_rule(day_of_week, time_struct, timezone)
+      recurrence_rule =
+        RecurringEventParser.build_recurrence_rule(day_of_week, time_struct, timezone)
+
       {:ok, recurrence_rule}
     else
       {:error, _reason} ->

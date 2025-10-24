@@ -80,7 +80,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
     # Extract external_id for metrics tracking with fallback to job.id
     # Ensures external_id is always a string
     external_id =
-      to_string(event_metadata["external_id_base"] || event_metadata["article_id"] || url || job_id)
+      to_string(
+        event_metadata["external_id_base"] || event_metadata["article_id"] || url || job_id
+      )
 
     if is_bilingual do
       Logger.info("🌐 Fetching bilingual Sortiraparis event: #{url} + #{secondary_url}")
@@ -156,26 +158,34 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
     with {:ok, primary_html} <- fetch_page(primary_url),
          {:ok, secondary_html} <- fetch_secondary_with_retry(secondary_url),
-         {:ok, primary_data} <- extract_single_language(primary_html, primary_url, event_metadata),
-         {:ok, secondary_data} <- extract_single_language(secondary_html, secondary_url, event_metadata),
-         {:ok, merged_event} <- merge_translations(primary_data, secondary_data, primary_url, secondary_url) do
+         {:ok, primary_data} <-
+           extract_single_language(primary_html, primary_url, event_metadata),
+         {:ok, secondary_data} <-
+           extract_single_language(secondary_html, secondary_url, event_metadata),
+         {:ok, merged_event} <-
+           merge_translations(primary_data, secondary_data, primary_url, secondary_url) do
       Logger.info("✅ Successfully merged bilingual event data")
       {:ok, merged_event}
     else
       {:error, reason} ->
-        Logger.warning("⚠️ Bilingual fetch failed after retries (#{inspect(reason)}), attempting fallback to primary URL only: #{primary_url}")
+        Logger.warning(
+          "⚠️ Bilingual fetch failed after retries (#{inspect(reason)}), attempting fallback to primary URL only: #{primary_url}"
+        )
+
         Logger.warning("   Secondary URL that failed: #{secondary_url}")
 
         # Fallback: fetch primary language only, but track the failure
         case fetch_and_extract_event(primary_url, nil, event_metadata) do
           {:ok, raw_event} ->
             # Add metadata to track that bilingual fetch failed
-            tracked_event = Map.merge(raw_event, %{
-              "bilingual_fetch_attempted" => true,
-              "bilingual_fetch_failed" => true,
-              "bilingual_fetch_failure_reason" => inspect(reason),
-              "attempted_secondary_url" => secondary_url
-            })
+            tracked_event =
+              Map.merge(raw_event, %{
+                "bilingual_fetch_attempted" => true,
+                "bilingual_fetch_failed" => true,
+                "bilingual_fetch_failure_reason" => inspect(reason),
+                "attempted_secondary_url" => secondary_url
+              })
+
             {:ok, tracked_event}
 
           {:error, _} = error ->
@@ -204,19 +214,28 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
         if attempt > 1 do
           Logger.info("🎉 Secondary URL fetch succeeded on attempt #{attempt}/#{max_attempts}")
         end
+
         {:ok, html}
 
       {:error, :bot_protection} when attempt < max_attempts ->
         # Exponential backoff for bot protection (2^attempt seconds)
         delay = round(:math.pow(2, attempt) * 1000)
-        Logger.info("🔄 Bot protection detected, retrying secondary URL after #{delay}ms (attempt #{attempt + 1}/#{max_attempts})")
+
+        Logger.info(
+          "🔄 Bot protection detected, retrying secondary URL after #{delay}ms (attempt #{attempt + 1}/#{max_attempts})"
+        )
+
         Process.sleep(delay)
         fetch_secondary_with_retry(secondary_url, attempt + 1, max_attempts)
 
       {:error, :timeout} when attempt < max_attempts ->
         # Linear backoff for timeouts (attempt * 2 seconds)
         delay = attempt * 2000
-        Logger.info("🔄 Timeout detected, retrying secondary URL after #{delay}ms (attempt #{attempt + 1}/#{max_attempts})")
+
+        Logger.info(
+          "🔄 Timeout detected, retrying secondary URL after #{delay}ms (attempt #{attempt + 1}/#{max_attempts})"
+        )
+
         Process.sleep(delay)
         fetch_secondary_with_retry(secondary_url, attempt + 1, max_attempts)
 
@@ -225,6 +244,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
         if attempt > 1 do
           Logger.warning("❌ Secondary URL fetch failed after #{attempt} attempts")
         end
+
         error
     end
   end
@@ -236,23 +256,24 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
       {:ok, event_data} ->
         # Try to extract venue data, but don't fail if it's missing
         # Some events (outdoor exhibitions, walking tours) don't have specific venues
-        venue_data = case VenueExtractor.extract(html) do
-          {:ok, venue} ->
-            Logger.debug("✅ Venue extracted: #{venue["name"]}")
-            venue
+        venue_data =
+          case VenueExtractor.extract(html) do
+            {:ok, venue} ->
+              Logger.debug("✅ Venue extracted: #{venue["name"]}")
+              venue
 
-          {:error, :venue_name_not_found} ->
-            Logger.debug("ℹ️ No venue data (outdoor/district event)")
-            nil
+            {:error, :venue_name_not_found} ->
+              Logger.debug("ℹ️ No venue data (outdoor/district event)")
+              nil
 
-          {:error, :address_not_found} ->
-            Logger.debug("ℹ️ No venue address found")
-            nil
+            {:error, :address_not_found} ->
+              Logger.debug("ℹ️ No venue address found")
+              nil
 
-          {:error, reason} ->
-            Logger.warning("⚠️ Venue extraction failed: #{inspect(reason)}")
-            nil
-        end
+            {:error, reason} ->
+              Logger.warning("⚠️ Venue extraction failed: #{inspect(reason)}")
+              nil
+          end
 
         raw_event =
           Map.merge(event_data, %{
@@ -323,33 +344,36 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
     Logger.debug("💾 Processing #{length(transformed_events)} event(s)")
 
     # Look up Sortiraparis source by slug
-    source = Repo.one(from s in Source, where: s.slug == "sortiraparis")
+    source = Repo.one(from(s in Source, where: s.slug == "sortiraparis"))
 
     if is_nil(source) do
       Logger.error("❌ Sortiraparis source not found in database")
       {:error, :source_not_found}
     else
       processed_count =
-      transformed_events
-      |> Enum.map(fn event ->
-        # EventProcessor handles:
-        # - Venue geocoding (via VenueProcessor with multi-provider)
-        # - Venue GPS deduplication (50m tight, 200m broad)
-        # - Event deduplication by external_id
-        # - Database insertion
-        case EventProcessor.process_event(event, source.id) do
-          {:ok, db_event} ->
-            Logger.debug("✅ Processed event: #{db_event.title} (ID: #{db_event.id})")
-            true
+        transformed_events
+        |> Enum.map(fn event ->
+          # EventProcessor handles:
+          # - Venue geocoding (via VenueProcessor with multi-provider)
+          # - Venue GPS deduplication (50m tight, 200m broad)
+          # - Event deduplication by external_id
+          # - Database insertion
+          case EventProcessor.process_event(event, source.id) do
+            {:ok, db_event} ->
+              Logger.debug("✅ Processed event: #{db_event.title} (ID: #{db_event.id})")
+              true
 
-          {:error, reason} ->
-            Logger.warning("⚠️ Failed to process event: #{inspect(reason)}")
-            false
-        end
-      end)
-      |> Enum.count(& &1)
+            {:error, reason} ->
+              Logger.warning("⚠️ Failed to process event: #{inspect(reason)}")
+              false
+          end
+        end)
+        |> Enum.count(& &1)
 
-      Logger.info("📊 Successfully processed #{processed_count}/#{length(transformed_events)} events")
+      Logger.info(
+        "📊 Successfully processed #{processed_count}/#{length(transformed_events)} events"
+      )
+
       {:ok, processed_count}
     end
   end

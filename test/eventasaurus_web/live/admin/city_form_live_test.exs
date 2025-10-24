@@ -145,8 +145,14 @@ defmodule EventasaurusWeb.Admin.CityFormLiveTest do
   describe "Edit City Form" do
     setup do
       au = insert(:country, name: "Australia", code: "AU")
-      sydney = insert(:city, name: "Sydney", country: au,
-        latitude: Decimal.new("-33.8688"), longitude: Decimal.new("151.2093"))
+
+      sydney =
+        insert(:city,
+          name: "Sydney",
+          country: au,
+          latitude: Decimal.new("-33.8688"),
+          longitude: Decimal.new("151.2093")
+        )
 
       {:ok, australia: au, sydney: sydney}
     end

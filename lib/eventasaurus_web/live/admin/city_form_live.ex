@@ -183,7 +183,8 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
 
   defp country_to_map(country) do
     %{
-      id: nil,  # No DB id needed
+      # No DB id needed
+      id: nil,
       code: country.alpha2,
       name: country.name
     }

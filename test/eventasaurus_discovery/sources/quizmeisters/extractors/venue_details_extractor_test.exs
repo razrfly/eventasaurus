@@ -24,7 +24,10 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Extractors.VenueDetailsExtr
 
       assert details.description =~ "Welcome to The Library Bar"
       assert details.description =~ "Join us every Wednesday"
-      assert details.hero_image_url == "https://uploads-ssl.webflow.com/images/library-bar-hero.jpg"
+
+      assert details.hero_image_url ==
+               "https://uploads-ssl.webflow.com/images/library-bar-hero.jpg"
+
       assert details.website == "https://librarybar.com"
       assert details.facebook == "https://facebook.com/librarybar"
       assert details.instagram == "https://instagram.com/librarybar"
@@ -34,7 +37,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Extractors.VenueDetailsExtr
       # Performer data
       assert details.performer != nil
       assert details.performer.name == "John Smith"
-      assert details.performer.image_url == "https://uploads-ssl.webflow.com/host-images/john-smith-profile.jpg"
+
+      assert details.performer.image_url ==
+               "https://uploads-ssl.webflow.com/host-images/john-smith-profile.jpg"
     end
 
     test "extracts performer with image only (no name)" do
@@ -47,7 +52,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Extractors.VenueDetailsExtr
       # Should have generated a name from the image filename
       assert details.performer.name != nil
       assert details.performer.name != ""
-      assert details.performer.image_url == "https://uploads-ssl.webflow.com/host-images/trivia-host-profile.jpg"
+
+      assert details.performer.image_url ==
+               "https://uploads-ssl.webflow.com/host-images/trivia-host-profile.jpg"
     end
 
     test "detects venue on break status" do
@@ -85,7 +92,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Extractors.VenueDetailsExtr
       details = extract_details_from_document(document)
 
       # Should only get the real image, not the placeholder
-      assert details.performer.image_url == "https://uploads-ssl.webflow.com/host-images/trivia-host-profile.jpg"
+      assert details.performer.image_url ==
+               "https://uploads-ssl.webflow.com/host-images/trivia-host-profile.jpg"
     end
 
     test "handles missing phone number" do
@@ -235,7 +243,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Extractors.VenueDetailsExtr
   defp extract_description(document) do
     description =
       document
-      |> Floki.find(".venue-description.w-richtext:not(.trivia-generic):not(.bingo-generic):not(.survey-generic) p")
+      |> Floki.find(
+        ".venue-description.w-richtext:not(.trivia-generic):not(.bingo-generic):not(.survey-generic) p"
+      )
       |> Enum.map(&Floki.text/1)
       |> Enum.join("\n\n")
       |> String.trim()

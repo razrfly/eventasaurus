@@ -79,7 +79,10 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
         |> Enum.map(fn {k, v} -> {to_string(k), v} end)
         |> Enum.into(%{})
 
-      Logger.info("📍 Venue ##{venue.id} \"#{venue.name}\" at #{venue.latitude},#{venue.longitude}")
+      Logger.info(
+        "📍 Venue ##{venue.id} \"#{venue.name}\" at #{venue.latitude},#{venue.longitude}"
+      )
+
       Logger.info("   Existing IDs: #{inspect(Map.keys(existing_ids))}")
 
       # Try to get IDs from providers that don't have them yet
@@ -91,7 +94,10 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
 
         case Repo.update(Ecto.Changeset.change(venue, provider_ids: updated_ids)) do
           {:ok, _updated_venue} ->
-            Logger.info("✅ Venue ##{venue.id} updated with #{map_size(new_ids)} new provider IDs: #{inspect(Map.keys(new_ids))}")
+            Logger.info(
+              "✅ Venue ##{venue.id} updated with #{map_size(new_ids)} new provider IDs: #{inspect(Map.keys(new_ids))}"
+            )
+
             {:ok, :updated, new_ids}
 
           {:error, changeset} ->
@@ -99,7 +105,10 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
             {:error, :update_failed}
         end
       else
-        Logger.info("ℹ️  Venue ##{venue.id} already has all available provider IDs or no new IDs found")
+        Logger.info(
+          "ℹ️  Venue ##{venue.id} already has all available provider IDs or no new IDs found"
+        )
+
         {:ok, :no_changes}
       end
     end

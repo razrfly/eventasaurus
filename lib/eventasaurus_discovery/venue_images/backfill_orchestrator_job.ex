@@ -288,7 +288,8 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
 
       {:error, reason} ->
         Logger.error("❌ Failed to store results in Oban meta: #{inspect(reason)}")
-        :ok  # Don't fail the job if meta update fails
+        # Don't fail the job if meta update fails
+        :ok
     end
   end
 end

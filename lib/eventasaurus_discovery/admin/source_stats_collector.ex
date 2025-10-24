@@ -38,7 +38,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
   """
   def get_occurrence_type_distribution(source_slug) when is_binary(source_slug) do
     query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -49,12 +49,10 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         select: %{
           type: fragment("?->>'type'", pe.occurrences),
           count: count(pe.id),
-          percentage:
-            fragment(
-              "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)"
-            )
+          percentage: fragment("ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)")
         },
         order_by: [desc: count(pe.id)]
+      )
 
     Repo.all(query)
   end
@@ -77,7 +75,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
     # CRITICAL FIX: Query public_event_categories join table instead of deprecated pe.category_id
     # Events can have multiple categories, so we need to use the join table
     query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -92,13 +90,11 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
           category_id: c.id,
           category_name: c.name,
           count: count(pe.id),
-          percentage:
-            fragment(
-              "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)"
-            )
+          percentage: fragment("ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)")
         },
         order_by: [desc: count(pe.id)],
         limit: ^limit
+      )
 
     Repo.all(query)
   end
@@ -121,7 +117,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
     # CRITICAL FIX: Query public_event_categories join table instead of deprecated pe.category_id
     # Count events that have at least one category assigned in the join table
     stats_query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -131,13 +127,16 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         where: s.slug == ^source_slug,
         select: %{
           total_events: count(pe.id, :distinct),
-          events_with_category: fragment("COUNT(DISTINCT CASE WHEN ? IS NOT NULL THEN ? END)", pec.category_id, pe.id),
-          events_without_category: fragment("COUNT(DISTINCT CASE WHEN ? IS NULL THEN ? END)", pec.category_id, pe.id)
+          events_with_category:
+            fragment("COUNT(DISTINCT CASE WHEN ? IS NOT NULL THEN ? END)", pec.category_id, pe.id),
+          events_without_category:
+            fragment("COUNT(DISTINCT CASE WHEN ? IS NULL THEN ? END)", pec.category_id, pe.id)
         }
+      )
 
     # Count unique categories used by this source (from join table)
     categories_query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -146,6 +145,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         on: pec.event_id == pe.id,
         where: s.slug == ^source_slug,
         select: count(pec.category_id, :distinct)
+      )
 
     stats = Repo.one(stats_query)
     total_categories = Repo.one(categories_query) || 0
@@ -182,7 +182,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
   def get_translation_coverage(source_slug) when is_binary(source_slug) do
     # Get events with title translations
     _title_translations_query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -193,10 +193,11 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
           total_events: count(pe.id),
           translations: fragment("jsonb_object_keys(?)", pe.title_translations)
         }
+      )
 
     # Get events with description translations
     _desc_translations_query =
-      from pes in PublicEventSource,
+      from(pes in PublicEventSource,
         join: s in Source,
         on: s.id == pes.source_id,
         where: s.slug == ^source_slug,
@@ -205,14 +206,16 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
           total_events: count(pes.id),
           translations: fragment("jsonb_object_keys(?)", pes.description_translations)
         }
+      )
 
     # Get total events for the source
     total_query =
-      from pes in PublicEventSource,
+      from(pes in PublicEventSource,
         join: s in Source,
         on: s.id == pes.source_id,
         where: s.slug == ^source_slug,
         select: count(pes.id)
+      )
 
     total_events = Repo.one(total_query) || 0
 
@@ -246,15 +249,17 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
   """
   def get_image_statistics(source_slug) when is_binary(source_slug) do
     query =
-      from pes in PublicEventSource,
+      from(pes in PublicEventSource,
         join: s in Source,
         on: s.id == pes.source_id,
         where: s.slug == ^source_slug,
         select: %{
           total_events: count(pes.id),
-          events_with_images: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", pes.image_url),
+          events_with_images:
+            fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", pes.image_url),
           events_without_images: fragment("COUNT(CASE WHEN ? IS NULL THEN 1 END)", pes.image_url)
         }
+      )
 
     stats = Repo.one(query)
 
@@ -268,7 +273,11 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
     Map.merge(stats, %{
       coverage_percentage: coverage_percentage,
       total_images: stats.events_with_images,
-      average_per_event: if(stats.total_events > 0, do: Float.round(stats.events_with_images / stats.total_events, 1), else: 0.0)
+      average_per_event:
+        if(stats.total_events > 0,
+          do: Float.round(stats.events_with_images / stats.total_events, 1),
+          else: 0.0
+        )
     })
   end
 
@@ -291,7 +300,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
       when is_binary(source_slug) and is_integer(top_limit) do
     # Basic venue stats
     stats_query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -303,10 +312,11 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
           events_without_venues: fragment("COUNT(CASE WHEN ? IS NULL THEN 1 END)", pe.venue_id),
           unique_venues: count(pe.venue_id, :distinct)
         }
+      )
 
     # Top venues by event count with quality indicators
     top_venues_query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == pe.id,
         join: s in Source,
@@ -314,7 +324,16 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         join: v in Venue,
         on: v.id == pe.venue_id,
         where: s.slug == ^source_slug,
-        group_by: [v.id, v.name, v.address, v.latitude, v.longitude, v.source, v.geocoding_performance, v.metadata],
+        group_by: [
+          v.id,
+          v.name,
+          v.address,
+          v.latitude,
+          v.longitude,
+          v.source,
+          v.geocoding_performance,
+          v.metadata
+        ],
         select: %{
           venue_id: v.id,
           venue_name: v.name,
@@ -328,6 +347,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         },
         order_by: [desc: count(pe.id)],
         limit: ^top_limit
+      )
 
     stats = Repo.one(stats_query)
     top_venues = Repo.all(top_venues_query)

@@ -63,7 +63,11 @@ defmodule EventasaurusWeb.Components.Events.OccurrenceDisplay do
   end
 
   defp display_title(assigns) do
-    case occurrence_display_type(assigns.occurrence_list, assigns.is_movie_screening, assigns.event) do
+    case occurrence_display_type(
+           assigns.occurrence_list,
+           assigns.is_movie_screening,
+           assigns.event
+         ) do
       :exhibition -> gettext("Exhibition Dates")
       :daily_show -> gettext("Daily Shows Available")
       :same_day_multiple -> gettext("Select a Time")

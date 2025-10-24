@@ -149,7 +149,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.TransformerTest do
 
       # Check that ends_at is 2 hours after starts_at
       diff_seconds = DateTime.diff(event.ends_at, event.starts_at)
-      assert diff_seconds == 7200  # 2 hours = 7200 seconds
+      # 2 hours = 7200 seconds
+      assert diff_seconds == 7200
     end
 
     test "includes no image_url (not available from source)" do

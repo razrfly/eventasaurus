@@ -155,7 +155,9 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
     with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
          {:ok, time_struct} <- RecurringEventParser.parse_time(time_text) do
       # Use provided timezone (already detected from country/address)
-      recurrence_rule = RecurringEventParser.build_recurrence_rule(day_of_week, time_struct, timezone)
+      recurrence_rule =
+        RecurringEventParser.build_recurrence_rule(day_of_week, time_struct, timezone)
+
       {:ok, recurrence_rule}
     else
       {:error, reason} ->
@@ -244,7 +246,14 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
 
     cond do
       # West Coast
-      String.contains?(address_lower, ["ca ", "california", "seattle", "portland", "san francisco", "los angeles"]) ->
+      String.contains?(address_lower, [
+        "ca ",
+        "california",
+        "seattle",
+        "portland",
+        "san francisco",
+        "los angeles"
+      ]) ->
         "America/Los_Angeles"
 
       # Mountain
@@ -354,11 +363,13 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
       case Regex.run(~r/(£|\$|€)\s*([0-9]+(?:\.[0-9]{2})?)/, fee_text) do
         [_, _symbol, amount] ->
           # Handle both integer ("2") and float ("2.50") strings
-          price = if String.contains?(amount, ".") do
-            String.to_float(amount)
-          else
-            String.to_integer(amount) * 1.0
-          end
+          price =
+            if String.contains?(amount, ".") do
+              String.to_float(amount)
+            else
+              String.to_integer(amount) * 1.0
+            end
+
           {false, price, price, currency}
 
         _ ->

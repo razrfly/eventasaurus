@@ -49,7 +49,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
     # Get sitemap configs (list of %{url: ..., language: ...})
     sitemap_configs = args["sitemap_urls"] || Config.sitemap_urls()
     limit = args["limit"]
-    language_filter = args["language"] # Optional: :en, :fr, or :all (default)
+    # Optional: :en, :fr, or :all (default)
+    language_filter = args["language"]
 
     # Apply language filter if specified
     filtered_sitemaps =
@@ -74,7 +75,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
          {:ok, grouped_articles} <- group_urls_by_article(event_urls_with_metadata),
          {:ok, fresh_articles} <- filter_fresh_events(grouped_articles, limit),
          {:ok, scheduled_count} <- schedule_event_detail_jobs(fresh_articles) do
-
       total_urls = length(event_urls_with_metadata)
       unique_articles = map_size(grouped_articles)
 
@@ -152,7 +152,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
         case Client.fetch_sitemap(sitemap_url, language: language) do
           {:ok, url_entries} ->
-            Logger.debug("✅ Found #{length(url_entries)} URLs in #{language} sitemap: #{sitemap_url}")
+            Logger.debug(
+              "✅ Found #{length(url_entries)} URLs in #{language} sitemap: #{sitemap_url}"
+            )
+
             url_entries
 
           {:error, :bot_protection} ->
@@ -182,9 +185,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
         # Keep only entries whose URLs passed the filter
         event_url_set = MapSet.new(event_urls)
-        event_entries = Enum.filter(all_url_entries, fn entry ->
-          MapSet.member?(event_url_set, entry.url)
-        end)
+
+        event_entries =
+          Enum.filter(all_url_entries, fn entry ->
+            MapSet.member?(event_url_set, entry.url)
+          end)
 
         # DON'T apply limit here - we need ALL URLs to ensure complete language pairs
         # Limit will be applied to ARTICLES (not URL entries) in filter_fresh_events/1
@@ -221,9 +226,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
     # Log statistics
     en_count = Enum.count(grouped, fn {_, langs} -> Map.has_key?(langs, "en") end)
     fr_count = Enum.count(grouped, fn {_, langs} -> Map.has_key?(langs, "fr") end)
-    both_count = Enum.count(grouped, fn {_, langs} ->
-      Map.has_key?(langs, "en") && Map.has_key?(langs, "fr")
-    end)
+
+    both_count =
+      Enum.count(grouped, fn {_, langs} ->
+        Map.has_key?(langs, "en") && Map.has_key?(langs, "fr")
+      end)
 
     Logger.info("""
     📊 Article Grouping Results:
@@ -247,14 +254,17 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
     # Apply limit to ARTICLES (not URL entries)
     # This ensures we get complete language pairs for each article
-    limited_articles = if limit do
-      Enum.take(articles_list, limit)
-    else
-      articles_list
-    end
+    limited_articles =
+      if limit do
+        Enum.take(articles_list, limit)
+      else
+        articles_list
+      end
 
     if limit && length(limited_articles) < length(articles_list) do
-      Logger.info("🔢 Applying limit: #{length(limited_articles)}/#{length(articles_list)} articles")
+      Logger.info(
+        "🔢 Applying limit: #{length(limited_articles)}/#{length(articles_list)} articles"
+      )
     end
 
     Logger.info("""
@@ -287,11 +297,13 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
           # Use English URL as primary, French as secondary
           primary_url = Map.get(language_urls, "en") || Map.get(language_urls, "fr")
-          secondary_url = if Map.has_key?(language_urls, "en") && Map.has_key?(language_urls, "fr") do
-            Map.get(language_urls, "fr")
-          else
-            nil
-          end
+
+          secondary_url =
+            if Map.has_key?(language_urls, "en") && Map.has_key?(language_urls, "fr") do
+              Map.get(language_urls, "fr")
+            else
+              nil
+            end
 
           job_args = %{
             "source" => "sortiraparis",
@@ -305,7 +317,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
             }
           }
 
-          Logger.debug("📋 Scheduling article #{article_id}: EN=#{!is_nil(Map.get(language_urls, "en"))}, FR=#{!is_nil(Map.get(language_urls, "fr"))}")
+          Logger.debug(
+            "📋 Scheduling article #{article_id}: EN=#{!is_nil(Map.get(language_urls, "en"))}, FR=#{!is_nil(Map.get(language_urls, "fr"))}"
+          )
 
           EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob.new(
             job_args,
@@ -333,6 +347,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
       ✅ Successfully scheduled #{successful_count}/#{length(articles_list)} detail jobs
       🌐 Bilingual articles: #{bilingual_count}
       """)
+
       {:ok, successful_count}
     end
   end

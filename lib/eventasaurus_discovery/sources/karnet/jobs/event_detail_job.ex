@@ -54,7 +54,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
             Logger.info("🌐 Processing bilingual event ID: #{event_id}")
             process_bilingual_event(url, event_id, source_id, event_metadata)
           else
-            Logger.warning("Invalid event ID format: #{event_id}, falling back to single language")
+            Logger.warning(
+              "Invalid event ID format: #{event_id}, falling back to single language"
+            )
+
             fallback_to_single_language(url, source_id, event_metadata)
           end
       end

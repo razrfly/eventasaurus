@@ -294,7 +294,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
         clean_venue_name(venue)
 
       # Pattern: "at Venue Name" or "in Venue Name" (venue after at/in, must be proper noun)
-      match = Regex.run(~r{(?:at|in)\s+([A-Z][A-Za-z\s]+(?:Arena|Hall|Centre|Center|Palais|Museum|Theatre|Theater|Stadium))}i, title) ->
+      match =
+          Regex.run(
+            ~r{(?:at|in)\s+([A-Z][A-Za-z\s]+(?:Arena|Hall|Centre|Center|Palais|Museum|Theatre|Theater|Stadium))}i,
+            title
+          ) ->
         [_, venue] = match
         clean_venue_name(venue)
 
@@ -326,7 +330,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractor d
 
     # Check if there's a Schema.org address structure present
     has_schema_address =
-      Regex.match?(~r{<span[^>]*itemprop="address"[^>]*itemtype="http://schema\.org/PostalAddress"}sm, html)
+      Regex.match?(
+        ~r{<span[^>]*itemprop="address"[^>]*itemtype="http://schema\.org/PostalAddress"}sm,
+        html
+      )
 
     if has_schema_address do
       # Extract streetAddress directly from HTML

@@ -73,13 +73,19 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
       {:error, :no_token} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Unable to upload logo: You must be logged in to upload images. Please refresh the page and try again.")
+         |> put_flash(
+           :error,
+           "Unable to upload logo: You must be logged in to upload images. Please refresh the page and try again."
+         )
          |> assign(:form, to_form(Source.changeset(socket.assigns.source, params)))}
 
       {:error, %{message: "Bucket not found"}} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Storage bucket not configured. Please contact an administrator to set up Supabase Storage.")
+         |> put_flash(
+           :error,
+           "Storage bucket not configured. Please contact an administrator to set up Supabase Storage."
+         )
          |> assign(:form, to_form(Source.changeset(socket.assigns.source, params)))}
 
       {:error, error} ->

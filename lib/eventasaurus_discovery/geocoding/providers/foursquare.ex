@@ -145,6 +145,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
 
       is_nil(city) ->
         Logger.warning("⚠️ Foursquare: missing city; returning coordinates anyway")
+
         {:ok,
          %{
            latitude: lat * 1.0,
@@ -192,7 +193,10 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
       Logger.error("❌ FOURSQUARE_API_KEY not configured")
       {:error, :api_key_missing}
     else
-      Logger.debug("🔍 Foursquare search by coordinates: #{lat},#{lng} name=#{inspect(venue_name)}")
+      Logger.debug(
+        "🔍 Foursquare search by coordinates: #{lat},#{lng} name=#{inspect(venue_name)}"
+      )
+
       do_coordinate_search(lat, lng, venue_name, api_key)
     end
   end
@@ -209,15 +213,18 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
     # Build params - use name query if provided, otherwise just search by location
     base_params = [
       ll: "#{lat},#{lng}",
-      radius: 100,  # 100 meter radius
-      limit: 5      # Get top 5 results for matching
+      # 100 meter radius
+      radius: 100,
+      # Get top 5 results for matching
+      limit: 5
     ]
 
-    params = if venue_name && String.trim(venue_name) != "" do
-      [{:query, venue_name} | base_params]
-    else
-      base_params
-    end
+    params =
+      if venue_name && String.trim(venue_name) != "" do
+        [{:query, venue_name} | base_params]
+      else
+        base_params
+      end
 
     case HTTPoison.get(url, headers, params: params, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -250,13 +257,14 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
       {:ok, %{"results" => results}} when is_list(results) and length(results) > 0 ->
         # If we have a venue name, try to find best match
         # Otherwise just take the first result (closest by distance)
-        provider_id = if venue_name && String.trim(venue_name) != "" do
-          find_best_match(results, venue_name)
-        else
-          # Just take first result (closest to coordinates)
-          first = List.first(results)
-          Map.get(first, "fsq_id") || Map.get(first, "fsq_place_id")
-        end
+        provider_id =
+          if venue_name && String.trim(venue_name) != "" do
+            find_best_match(results, venue_name)
+          else
+            # Just take first result (closest to coordinates)
+            first = List.first(results)
+            Map.get(first, "fsq_id") || Map.get(first, "fsq_place_id")
+          end
 
         if provider_id do
           Logger.debug("✅ Foursquare found venue: #{provider_id}")
@@ -285,21 +293,23 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Foursquare do
     normalized_name = String.downcase(String.trim(venue_name))
 
     # Try to find exact or partial match
-    matched = Enum.find(results, fn result ->
-      result_name = get_in(result, ["name"]) || ""
-      normalized_result = String.downcase(result_name)
+    matched =
+      Enum.find(results, fn result ->
+        result_name = get_in(result, ["name"]) || ""
+        normalized_result = String.downcase(result_name)
 
-      # Check if names match (exact or contains)
-      normalized_result == normalized_name ||
-        String.contains?(normalized_result, normalized_name) ||
-        String.contains?(normalized_name, normalized_result)
-    end)
+        # Check if names match (exact or contains)
+        normalized_result == normalized_name ||
+          String.contains?(normalized_result, normalized_name) ||
+          String.contains?(normalized_name, normalized_result)
+      end)
 
     case matched do
       nil ->
         # No name match, just use first result (closest by distance)
         first = List.first(results)
         Map.get(first, "fsq_id") || Map.get(first, "fsq_place_id")
+
       result ->
         Map.get(result, "fsq_id") || Map.get(result, "fsq_place_id")
     end

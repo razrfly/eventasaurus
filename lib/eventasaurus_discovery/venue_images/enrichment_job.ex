@@ -102,13 +102,19 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
               error_details = metadata["error_details"] || metadata[:error_details] || %{}
 
               if Enum.empty?(providers_failed) do
-                Logger.warning("⚠️  Venue #{venue_id} enrichment completed but no images fetched (no errors reported)")
+                Logger.warning(
+                  "⚠️  Venue #{venue_id} enrichment completed but no images fetched (no errors reported)"
+                )
+
                 :ok
               else
                 # Build error message with actual provider errors
                 error_messages =
                   Enum.map(providers_failed, fn provider ->
-                    error = Map.get(error_details, provider) || Map.get(error_details, to_string(provider))
+                    error =
+                      Map.get(error_details, provider) ||
+                        Map.get(error_details, to_string(provider))
+
                     "#{provider}: #{inspect(error)}"
                   end)
                   |> Enum.join(", ")
@@ -118,15 +124,24 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                 # NOT RETRYABLE: everything else (no images, auth errors, 4xx, etc.)
                 any_retryable? =
                   Enum.any?(providers_failed, fn provider ->
-                    error = Map.get(error_details, provider) || Map.get(error_details, to_string(provider))
+                    error =
+                      Map.get(error_details, provider) ||
+                        Map.get(error_details, to_string(provider))
+
                     retryable_error?(error)
                   end)
 
                 if any_retryable? do
-                  Logger.error("❌ Venue #{venue_id} failed with retryable error: #{error_messages}")
+                  Logger.error(
+                    "❌ Venue #{venue_id} failed with retryable error: #{error_messages}"
+                  )
+
                   {:error, "Failed to fetch images: #{error_messages}"}
                 else
-                  Logger.info("ℹ️  Venue #{venue_id} failed with permanent error (not retrying): #{error_messages}")
+                  Logger.info(
+                    "ℹ️  Venue #{venue_id} failed with permanent error (not retrying): #{error_messages}"
+                  )
+
                   :ok
                 end
               end
@@ -147,7 +162,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   def perform(%Oban.Job{args: %{"venue_ids" => venue_ids}}) do
     Logger.info("🖼️  Processing batch venue enrichment: #{length(venue_ids)} venues")
 
-    venues = Repo.all(from v in Venue, where: v.id in ^venue_ids)
+    venues = Repo.all(from(v in Venue, where: v.id in ^venue_ids))
     _ = enrich_venues_batch(venues)
     :ok
   end
@@ -178,12 +193,12 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       |> DateTime.to_naive()
 
     from(v in Venue,
+      # Never enriched
+      # No images (handle NULL venue_images)
+      # Stale images (>30 days)
       where:
-        # Never enriched
         is_nil(fragment("? ->> 'last_enriched_at'", v.image_enrichment_metadata)) or
-          # No images (handle NULL venue_images)
           fragment("COALESCE(jsonb_array_length(?), 0) = 0", v.venue_images) or
-          # Stale images (>30 days)
           fragment(
             "(? ->> 'last_enriched_at')::timestamp < ?::timestamp",
             v.image_enrichment_metadata,
@@ -262,7 +277,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
         if geocode and needs_geocoding?(venue, providers) do
           case reverse_geocode_venue(venue, providers) do
             {:ok, updated_venue} -> updated_venue
-            {:error, _reason} -> venue  # Continue with original venue if geocoding fails
+            # Continue with original venue if geocoding fails
+            {:error, _reason} -> venue
           end
         else
           venue
@@ -274,7 +290,9 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       ]
 
       enrichment_opts =
-        if providers, do: Keyword.put(enrichment_opts, :providers, providers), else: enrichment_opts
+        if providers,
+          do: Keyword.put(enrichment_opts, :providers, providers),
+          else: enrichment_opts
 
       enrichment_opts =
         if force, do: Keyword.put(enrichment_opts, :force, force), else: enrichment_opts
@@ -332,7 +350,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                  from(v in Venue, where: v.id == ^venue.id),
                  set: [
                    provider_ids: updated_provider_ids,
-                   geocoding_performance: result[:geocoding_metadata] || result["geocoding_metadata"],
+                   geocoding_performance:
+                     result[:geocoding_metadata] || result["geocoding_metadata"],
                    updated_at: NaiveDateTime.utc_now()
                  ]
                ) do
@@ -401,24 +420,38 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   defp retryable_error?(error) do
     case error do
       # Transient network/infrastructure errors - SHOULD RETRY
-      :rate_limited -> true
-      :timeout -> true
-      :network_error -> true
+      :rate_limited ->
+        true
+
+      :timeout ->
+        true
+
+      :network_error ->
+        true
 
       # HTTP errors - only retry 429 and 5xx
       # Also handle string patterns as safety net while providers migrate to atoms
       error when is_binary(error) ->
-        String.starts_with?(error, "HTTP 429") or       # Rate limit
-        String.starts_with?(error, "HTTP 500") or       # Internal server error
-        String.starts_with?(error, "HTTP 502") or       # Bad gateway
-        String.starts_with?(error, "HTTP 503") or       # Service unavailable
-        String.starts_with?(error, "HTTP 504") or       # Gateway timeout
-        String.starts_with?(error, "Network error") or  # Network errors (safety net)
-        String.contains?(error, "OVER_QUERY_LIMIT") or  # Google rate limit
-        String.contains?(error, "RESOURCE_EXHAUSTED")   # Google resource exhausted
+        # Rate limit
+        # Internal server error
+        # Bad gateway
+        # Service unavailable
+        # Gateway timeout
+        # Network errors (safety net)
+        # Google rate limit
+        # Google resource exhausted
+        String.starts_with?(error, "HTTP 429") or
+          String.starts_with?(error, "HTTP 500") or
+          String.starts_with?(error, "HTTP 502") or
+          String.starts_with?(error, "HTTP 503") or
+          String.starts_with?(error, "HTTP 504") or
+          String.starts_with?(error, "Network error") or
+          String.contains?(error, "OVER_QUERY_LIMIT") or
+          String.contains?(error, "RESOURCE_EXHAUSTED")
 
       # All other errors are permanent - DO NOT RETRY
-      _ -> false
+      _ ->
+        false
     end
   end
 end

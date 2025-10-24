@@ -36,15 +36,18 @@ defmodule Mix.Tasks.Quality.Check do
       opts[:all] ->
         # List all sources with quality scores
         sources = SourceRegistry.all_sources()
-        results = Enum.map(sources, fn slug ->
-          quality = DataQualityChecker.check_quality(slug)
-          %{
-            source: slug,
-            score: quality.quality_score,
-            total_events: quality.total_events
-          }
-        end)
-        |> Enum.sort_by(& &1.score, :desc)
+
+        results =
+          Enum.map(sources, fn slug ->
+            quality = DataQualityChecker.check_quality(slug)
+
+            %{
+              source: slug,
+              score: quality.quality_score,
+              total_events: quality.total_events
+            }
+          end)
+          |> Enum.sort_by(& &1.score, :desc)
 
         if opts[:json] do
           print_json(%{sources: results})
@@ -97,7 +100,10 @@ defmodule Mix.Tasks.Quality.Check do
   end
 
   defp print_all_sources(results) do
-    Mix.shell().info("\n" <> IO.ANSI.bright() <> "Quality Scores - All Sources" <> IO.ANSI.reset())
+    Mix.shell().info(
+      "\n" <> IO.ANSI.bright() <> "Quality Scores - All Sources" <> IO.ANSI.reset()
+    )
+
     Mix.shell().info("=" |> String.duplicate(60))
     Mix.shell().info("")
 
@@ -108,18 +114,23 @@ defmodule Mix.Tasks.Quality.Check do
       color = score_color(result.score)
 
       Mix.shell().info(
-        color <> "#{emoji} #{result.source}" <> IO.ANSI.reset() <>
-        " - " <>
-        color <> "#{result.score}%" <> IO.ANSI.reset() <>
-        " (#{format_number(result.total_events)} events)"
+        color <>
+          "#{emoji} #{result.source}" <>
+          IO.ANSI.reset() <>
+          " - " <>
+          color <>
+          "#{result.score}%" <>
+          IO.ANSI.reset() <>
+          " (#{format_number(result.total_events)} events)"
       )
     end)
 
-    avg_score = if length(results) > 0 do
-      (Enum.reduce(results, 0, fn r, acc -> acc + r.score end) / length(results)) |> round()
-    else
-      0
-    end
+    avg_score =
+      if length(results) > 0 do
+        (Enum.reduce(results, 0, fn r, acc -> acc + r.score end) / length(results)) |> round()
+      else
+        0
+      end
 
     Mix.shell().info("")
     Mix.shell().info("=" |> String.duplicate(60))
@@ -131,12 +142,17 @@ defmodule Mix.Tasks.Quality.Check do
     {emoji, status_text, _class} = DataQualityChecker.quality_status(quality.quality_score)
     color = score_color(quality.quality_score)
 
-    Mix.shell().info("\n" <> IO.ANSI.bright() <> "Quality Report: #{source_slug}" <> IO.ANSI.reset())
+    Mix.shell().info(
+      "\n" <> IO.ANSI.bright() <> "Quality Report: #{source_slug}" <> IO.ANSI.reset()
+    )
+
     Mix.shell().info("=" |> String.duplicate(60))
+
     Mix.shell().info(
       "Overall Score: " <>
-      color <> "#{quality.quality_score}% #{emoji} #{status_text}" <> IO.ANSI.reset()
+        color <> "#{quality.quality_score}% #{emoji} #{status_text}" <> IO.ANSI.reset()
     )
+
     Mix.shell().info("")
 
     Mix.shell().info(IO.ANSI.bright() <> "Dimensions:" <> IO.ANSI.reset())
@@ -163,7 +179,9 @@ defmodule Mix.Tasks.Quality.Check do
         end
       end)
     else
-      Mix.shell().info("  #{IO.ANSI.green()}✓ No issues found - data quality is excellent!#{IO.ANSI.reset()}")
+      Mix.shell().info(
+        "  #{IO.ANSI.green()}✓ No issues found - data quality is excellent!#{IO.ANSI.reset()}"
+      )
     end
 
     Mix.shell().info("")
@@ -180,8 +198,10 @@ defmodule Mix.Tasks.Quality.Check do
 
     Mix.shell().info(
       "  #{String.pad_trailing(name <> ":", 15)} " <>
-      color <> "#{String.pad_leading("#{score}%", 4)}" <> IO.ANSI.reset() <>
-      " #{indicator}"
+        color <>
+        "#{String.pad_leading("#{score}%", 4)}" <>
+        IO.ANSI.reset() <>
+        " #{indicator}"
     )
   end
 

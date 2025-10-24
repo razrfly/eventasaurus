@@ -350,7 +350,9 @@ defmodule EventasaurusApp.Events.Poll do
   Get display name for poll type.
   """
   def poll_type_display(nil), do: "Poll"
-  def poll_type_display(poll_type) when is_atom(poll_type), do: poll_type |> Atom.to_string() |> poll_type_display()
+
+  def poll_type_display(poll_type) when is_atom(poll_type),
+    do: poll_type |> Atom.to_string() |> poll_type_display()
 
   def poll_type_display("movie"), do: "Movies"
   def poll_type_display("places"), do: "Places"
@@ -362,7 +364,9 @@ defmodule EventasaurusApp.Events.Poll do
   def poll_type_display("venue"), do: "Venue"
   def poll_type_display("date_selection"), do: "Date Selection"
   def poll_type_display("music_track"), do: "Music"
-  def poll_type_display(type) when is_binary(type), do: type |> String.replace("_", " ") |> String.capitalize()
+
+  def poll_type_display(type) when is_binary(type),
+    do: type |> String.replace("_", " ") |> String.capitalize()
 
   @doc """
   Get display name for voting system.

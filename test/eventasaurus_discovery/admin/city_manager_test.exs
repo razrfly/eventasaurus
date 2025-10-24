@@ -215,7 +215,10 @@ defmodule EventasaurusDiscovery.Admin.CityManagerTest do
       assert hd(cities).id == melbourne.id
     end
 
-    test "filters cities by discovery_enabled string 'true'", %{sydney: sydney, new_york: new_york} do
+    test "filters cities by discovery_enabled string 'true'", %{
+      sydney: sydney,
+      new_york: new_york
+    } do
       cities = CityManager.list_cities(%{discovery_enabled: "true"})
 
       assert length(cities) == 2
@@ -232,11 +235,12 @@ defmodule EventasaurusDiscovery.Admin.CityManagerTest do
     end
 
     test "combines multiple filters", %{sydney: sydney, australia: au} do
-      cities = CityManager.list_cities(%{
-        search: "syd",
-        country_id: au.id,
-        discovery_enabled: true
-      })
+      cities =
+        CityManager.list_cities(%{
+          search: "syd",
+          country_id: au.id,
+          discovery_enabled: true
+        })
 
       assert length(cities) == 1
       assert hd(cities).id == sydney.id

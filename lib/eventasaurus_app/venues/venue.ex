@@ -1,10 +1,12 @@
 defmodule EventasaurusApp.Venues.Venue.Slug do
   use EctoAutoslugField.Slug, to: :slug
   require Logger
+  import Ecto.Query
+  alias EventasaurusApp.Repo
 
   def get_sources(_changeset, _opts) do
-    # Use name as primary source, but also include city_id for uniqueness
-    [:name, :city_id]
+    # Use name as primary source for slug generation
+    [:name]
   end
 
   def build_slug(sources, changeset) do
@@ -16,15 +18,70 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
     case safe_sources do
       ["" | _] ->
         # Fallback slug if name is empty/invalid after cleaning
-        "venue-#{DateTime.utc_now() |> DateTime.to_unix()}-#{random_suffix()}"
+        "venue-#{DateTime.utc_now() |> DateTime.to_unix()}"
 
       _ ->
-        # Get the default slug from cleaned sources
-        slug = super(safe_sources, changeset)
+        # Get the base slug from cleaned sources
+        base_slug = super(safe_sources, changeset)
 
-        # Add some randomness to ensure uniqueness
-        "#{slug}-#{random_suffix()}"
+        # Ensure uniqueness using progressive disambiguation
+        ensure_unique_slug(base_slug, changeset)
     end
+  end
+
+  # Ensure slug is unique using progressive disambiguation
+  # Strategy: name -> name-city -> name-timestamp
+  defp ensure_unique_slug(base_slug, changeset) do
+    existing_id = Ecto.Changeset.get_field(changeset, :id)
+
+    cond do
+      # Try base slug (name only)
+      !slug_exists?(base_slug, existing_id) ->
+        base_slug
+
+      # Try name + city
+      true ->
+        city_slug = get_city_slug(changeset)
+        slug_with_city = "#{base_slug}-#{city_slug}"
+
+        if !slug_exists?(slug_with_city, existing_id) do
+          slug_with_city
+        else
+          # Fallback: name + timestamp
+          "#{base_slug}-#{System.system_time(:second)}"
+        end
+    end
+  end
+
+  # Get city slug from venue's city_ref
+  defp get_city_slug(changeset) do
+    city_id = Ecto.Changeset.get_field(changeset, :city_id)
+
+    if city_id do
+      case Repo.get(EventasaurusDiscovery.Locations.City, city_id) do
+        %{slug: slug} when is_binary(slug) -> slug
+        _ -> "city"
+      end
+    else
+      "city"
+    end
+  end
+
+  # Check if slug already exists (excluding current record if updating)
+  defp slug_exists?(slug, existing_id) do
+    query =
+      from(v in EventasaurusApp.Venues.Venue,
+        where: v.slug == ^slug
+      )
+
+    query =
+      if existing_id do
+        from(v in query, where: v.id != ^existing_id)
+      else
+        query
+      end
+
+    Repo.exists?(query)
   end
 
   # Universal UTF-8 safety function (same as PublicEvent.Slug)
@@ -59,10 +116,6 @@ defmodule EventasaurusApp.Venues.Venue.Slug do
     error ->
       Logger.error("Error in ensure_safe_string: #{inspect(error)}")
       ""
-  end
-
-  defp random_suffix do
-    :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
   end
 end
 
@@ -290,7 +343,6 @@ defmodule EventasaurusApp.Venues.Venue do
       end
     end
   end
-
 
   @doc """
   Returns the list of valid venue types.

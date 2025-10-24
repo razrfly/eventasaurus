@@ -24,7 +24,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Client do
     retries = Map.get(options, :retries, 0)
     max_retries = Map.get(options, :max_retries, Config.max_retries())
 
-    Logger.info("🔍 Fetching venues from storerocket.io API (attempt #{retries + 1}/#{max_retries + 1})")
+    Logger.info(
+      "🔍 Fetching venues from storerocket.io API (attempt #{retries + 1}/#{max_retries + 1})"
+    )
 
     case HTTPoison.get(Config.api_url(), Config.headers(),
            timeout: Config.timeout(),
@@ -54,7 +56,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Client do
     retries = Map.get(options, :retries, 0)
     max_retries = Map.get(options, :max_retries, Config.max_retries())
 
-    Logger.info("🔍 Fetching venues from storerocket.io API (attempt #{retries + 1}/#{max_retries + 1})")
+    Logger.info(
+      "🔍 Fetching venues from storerocket.io API (attempt #{retries + 1}/#{max_retries + 1})"
+    )
 
     case HTTPoison.get(Config.api_url(), Config.headers(),
            timeout: Config.timeout(),

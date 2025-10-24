@@ -164,7 +164,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
           |> Enum.map(fn [url_block] -> parse_url_entry(url_block, language) end)
           |> Enum.reject(&is_nil/1)
 
-        Logger.debug("Extracted #{length(url_entries)} URL entries with metadata (language: #{language || "auto"})")
+        Logger.debug(
+          "Extracted #{length(url_entries)} URL entries with metadata (language: #{language || "auto"})"
+        )
+
         {:ok, url_entries}
     end
   rescue
@@ -258,8 +261,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.SitemapExtractor
 
   defp valid_url?(url) when is_binary(url) do
     case URI.parse(url) do
-      %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) and host != "" -> true
-      _ -> false
+      %URI{scheme: scheme, host: host}
+      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+        true
+
+      _ ->
+        false
     end
   end
 

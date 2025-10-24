@@ -38,9 +38,11 @@ defmodule EventasaurusApp.Services.UnsplashService do
   """
   @spec get_city_image(String.t()) :: {:ok, map()} | {:error, atom()}
   def get_city_image(city_name) do
-    query = from c in City,
-      where: c.name == ^city_name and c.discovery_enabled == true,
-      select: c.unsplash_gallery
+    query =
+      from(c in City,
+        where: c.name == ^city_name and c.discovery_enabled == true,
+        select: c.unsplash_gallery
+      )
 
     case Repo.one(query) do
       nil ->
@@ -73,9 +75,11 @@ defmodule EventasaurusApp.Services.UnsplashService do
   """
   @spec get_city_images_batch([String.t()]) :: map()
   def get_city_images_batch(city_names) when is_list(city_names) do
-    query = from c in City,
-      where: c.name in ^city_names and c.discovery_enabled == true,
-      select: {c.name, c.unsplash_gallery}
+    query =
+      from(c in City,
+        where: c.name in ^city_names and c.discovery_enabled == true,
+        select: {c.name, c.unsplash_gallery}
+      )
 
     Repo.all(query)
     |> Enum.reduce(%{}, fn {city_name, gallery}, acc ->
@@ -106,9 +110,11 @@ defmodule EventasaurusApp.Services.UnsplashService do
   """
   @spec cities_with_galleries() :: [String.t()]
   def cities_with_galleries do
-    query = from c in City,
-      where: c.discovery_enabled == true and not is_nil(c.unsplash_gallery),
-      select: c.name
+    query =
+      from(c in City,
+        where: c.discovery_enabled == true and not is_nil(c.unsplash_gallery),
+        select: c.name
+      )
 
     Repo.all(query)
   end

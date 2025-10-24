@@ -14,7 +14,7 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    countries = Repo.all(from c in Country, order_by: c.name)
+    countries = Repo.all(from(c in Country, order_by: c.name))
 
     socket =
       socket

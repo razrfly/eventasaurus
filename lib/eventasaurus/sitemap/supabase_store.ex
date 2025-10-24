@@ -75,10 +75,12 @@ defmodule Eventasaurus.Sitemap.SupabaseStore do
     base_url = config[:url]
 
     # Extract project ref from URL (e.g., "vnhxedeynrtvakglinnr" from "https://vnhxedeynrtvakglinnr.supabase.co")
-    project_ref = base_url |> String.replace(~r/https?:\/\//, "") |> String.split(".") |> List.first()
+    project_ref =
+      base_url |> String.replace(~r/https?:\/\//, "") |> String.split(".") |> List.first()
 
     # S3 endpoint: https://project_ref.storage.supabase.co/storage/v1/s3/bucket/path
-    s3_url = "https://#{project_ref}.storage.supabase.co/storage/v1/s3/#{get_bucket_name()}/#{storage_path}"
+    s3_url =
+      "https://#{project_ref}.storage.supabase.co/storage/v1/s3/#{get_bucket_name()}/#{storage_path}"
 
     # S3 API uses Bearer token with the secret key
     headers = [
@@ -94,10 +96,12 @@ defmodule Eventasaurus.Sitemap.SupabaseStore do
         {:ok, %{path: storage_path}}
 
       {:ok, %{status_code: code, body: response_body}} ->
-        error = case Jason.decode(response_body) do
-          {:ok, decoded} -> decoded["message"] || response_body
-          {:error, _} -> response_body
-        end
+        error =
+          case Jason.decode(response_body) do
+            {:ok, decoded} -> decoded["message"] || response_body
+            {:error, _} -> response_body
+          end
+
         {:error, %{status: code, message: error}}
 
       {:error, error} ->

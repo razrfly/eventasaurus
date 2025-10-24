@@ -137,6 +137,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           multilingual = count_multilingual_events(source_id)
           genuine = count_genuine_translations(source_id)
           duplicates = count_duplicate_translations(source_id)
+
           # "Missing" means events without multilingual translations (single-language events are considered missing)
           missing = total_events - multilingual
           completeness = calculate_completeness(total_events, missing)
@@ -315,6 +316,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       recommendations =
         if quality.price_completeness < 70 do
           missing = quality.total_events - quality.price_metrics.events_with_price_info
+
           [
             "Add price information - #{missing} events missing price data"
             | recommendations
@@ -338,6 +340,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       recommendations =
         if quality.description_quality < 60 do
           missing = quality.total_events - quality.description_metrics.has_description
+
           [
             "Improve event descriptions - #{missing} events missing descriptions, #{quality.description_metrics.short_descriptions} too short"
             | recommendations
@@ -350,6 +353,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       recommendations =
         if quality.performer_completeness < 50 do
           missing = quality.total_events - quality.performer_metrics.events_with_performers
+
           [
             "Add performer information - #{missing} events missing artist/performer data"
             | recommendations
@@ -362,6 +366,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       recommendations =
         if quality.occurrence_richness < 70 do
           missing = quality.occurrence_metrics.events_without_occurrences
+
           [
             "Improve occurrence data - #{missing} events missing occurrence information"
             | recommendations
@@ -374,7 +379,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       recommendations =
         if quality.occurrence_metrics.validity_score < 80 do
           issues = quality.occurrence_metrics.validation_issues
-          msg = "⚠️ Occurrence data issues: #{issues.pattern_missing_dates} pattern events missing recurrence rules, #{issues.explicit_single_date} explicit events with single date"
+
+          msg =
+            "⚠️ Occurrence data issues: #{issues.pattern_missing_dates} pattern events missing recurrence rules, #{issues.explicit_single_date} explicit events with single date"
+
           [msg | recommendations]
         else
           recommendations
@@ -621,38 +629,45 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # Returns map with completeness score and detailed metrics.
   defp calculate_price_completeness(source_id) do
     query =
-      from pes in PublicEventSource,
+      from(pes in PublicEventSource,
         where: pes.source_id == ^source_id,
         select: %{
           total: count(pes.id),
-          has_price_info: fragment(
-            "COUNT(CASE WHEN ? IS NOT NULL OR ? IS NOT NULL OR ? = true THEN 1 END)",
-            pes.min_price,
-            pes.max_price,
-            pes.is_free
-          ),
-          has_currency: fragment(
-            "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
-            pes.currency
-          ),
-          has_min_price: fragment(
-            "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
-            pes.min_price
-          ),
-          has_max_price: fragment(
-            "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
-            pes.max_price
-          ),
-          has_price_range: fragment(
-            "COUNT(CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN 1 END)",
-            pes.min_price,
-            pes.max_price
-          ),
-          is_free_count: fragment(
-            "COUNT(CASE WHEN ? = true THEN 1 END)",
-            pes.is_free
-          )
+          has_price_info:
+            fragment(
+              "COUNT(CASE WHEN ? IS NOT NULL OR ? IS NOT NULL OR ? = true THEN 1 END)",
+              pes.min_price,
+              pes.max_price,
+              pes.is_free
+            ),
+          has_currency:
+            fragment(
+              "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
+              pes.currency
+            ),
+          has_min_price:
+            fragment(
+              "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
+              pes.min_price
+            ),
+          has_max_price:
+            fragment(
+              "COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)",
+              pes.max_price
+            ),
+          has_price_range:
+            fragment(
+              "COUNT(CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN 1 END)",
+              pes.min_price,
+              pes.max_price
+            ),
+          is_free_count:
+            fragment(
+              "COUNT(CASE WHEN ? = true THEN 1 END)",
+              pes.is_free
+            )
         }
+      )
 
     stats = Repo.one(query)
 
@@ -671,7 +686,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       }
     else
       # Price completeness = % of events with ANY price information
-      price_completeness = round((stats.has_price_info / stats.total) * 100)
+      price_completeness = round(stats.has_price_info / stats.total * 100)
 
       # Calculate price diversity for paid events
       {unique_prices, price_diversity_score, price_diversity_warning} =
@@ -703,7 +718,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     else
       # Get distribution of prices (only for paid events)
       price_query =
-        from pes in PublicEventSource,
+        from(pes in PublicEventSource,
           where: pes.source_id == ^source_id,
           where: not is_nil(pes.min_price),
           group_by: pes.min_price,
@@ -712,6 +727,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
             count: count(pes.id)
           },
           order_by: [desc: count(pes.id)]
+        )
 
       price_distribution = Repo.all(price_query)
       unique_prices = length(price_distribution)
@@ -720,7 +736,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       cond do
         # All prices are identical
         unique_prices == 1 ->
-          {1, 0, "All #{paid_event_count} paid events have identical price (#{List.first(price_distribution).price})"}
+          {1, 0,
+           "All #{paid_event_count} paid events have identical price (#{List.first(price_distribution).price})"}
 
         # Low diversity: >80% of events have the same price
         unique_prices >= 2 ->
@@ -791,7 +808,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # Analyzes all languages in description_translations and uses best score.
   defp calculate_description_quality(source_id) do
     query =
-      from pes in PublicEventSource,
+      from(pes in PublicEventSource,
         where: pes.source_id == ^source_id,
         select: %{
           total: count(pes.id),
@@ -885,6 +902,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
               pes.description_translations
             )
         }
+      )
 
     stats = Repo.one(query)
 
@@ -942,7 +960,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # Performer data is crucial for music events, theater, and performances.
   defp calculate_performer_completeness(source_id) do
     query =
-      from e in PublicEvent,
+      from(e in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         left_join: pep in "public_event_performers",
@@ -953,6 +971,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           event_id: e.id,
           performer_count: count(pep.performer_id)
         }
+      )
 
     performer_data = Repo.all(query)
     total_events = length(performer_data)
@@ -982,7 +1001,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         end
 
       # Completeness = % of events with at least one performer
-      performer_completeness = round((events_with_performers / total_events) * 100)
+      performer_completeness = round(events_with_performers / total_events * 100)
 
       %{
         performer_completeness: performer_completeness,
@@ -1016,7 +1035,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   defp calculate_occurrence_richness(source_id) do
     # Get occurrence data per event
     query =
-      from e in PublicEvent,
+      from(e in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
@@ -1024,6 +1043,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           event_id: e.id,
           occurrences: e.occurrences
         }
+      )
 
     occurrence_data = Repo.all(query)
     total_events = length(occurrence_data)
@@ -1060,77 +1080,82 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         exhibition_single_date: 0
       }
 
-      stats = Enum.reduce(occurrence_data, initial_state, fn event, acc ->
-        case event.occurrences do
-          nil ->
-            %{acc | events_without_occurrences: acc.events_without_occurrences + 1}
+      stats =
+        Enum.reduce(occurrence_data, initial_state, fn event, acc ->
+          case event.occurrences do
+            nil ->
+              %{acc | events_without_occurrences: acc.events_without_occurrences + 1}
 
-          %{"type" => type, "dates" => dates} when is_list(dates) ->
-            date_count = length(dates)
+            %{"type" => type, "dates" => dates} when is_list(dates) ->
+              date_count = length(dates)
 
-            acc
-            |> Map.update!(:events_with_occurrences, &(&1 + 1))
-            |> Map.update!(:total_dates, &(&1 + date_count))
-            |> then(fn acc ->
-              # Special handling for exhibition events: single-date arrays with end_date ranges
-              # should be treated as rich data (date ranges), not single dates
-              if date_count == 1 do
-                if type == "exhibition" do
-                  # Check if this is a proper date range
-                  has_end_date = case List.first(dates) do
-                    %{"end_date" => end_date} when not is_nil(end_date) -> true
-                    _ -> false
-                  end
+              acc
+              |> Map.update!(:events_with_occurrences, &(&1 + 1))
+              |> Map.update!(:total_dates, &(&1 + date_count))
+              |> then(fn acc ->
+                # Special handling for exhibition events: single-date arrays with end_date ranges
+                # should be treated as rich data (date ranges), not single dates
+                if date_count == 1 do
+                  if type == "exhibition" do
+                    # Check if this is a proper date range
+                    has_end_date =
+                      case List.first(dates) do
+                        %{"end_date" => end_date} when not is_nil(end_date) -> true
+                        _ -> false
+                      end
 
-                  if has_end_date do
-                    # Exhibition with date range: treat as "multiple dates" for richness scoring
-                    Map.update!(acc, :events_multiple_dates, &(&1 + 1))
+                    if has_end_date do
+                      # Exhibition with date range: treat as "multiple dates" for richness scoring
+                      Map.update!(acc, :events_multiple_dates, &(&1 + 1))
+                    else
+                      # Invalid exhibition: missing end_date
+                      acc
+                      |> Map.update!(:events_single_date, &(&1 + 1))
+                      |> Map.update!(:exhibition_single_date, &(&1 + 1))
+                    end
                   else
-                    # Invalid exhibition: missing end_date
+                    # Explicit or other types: single date is genuinely single
                     acc
                     |> Map.update!(:events_single_date, &(&1 + 1))
-                    |> Map.update!(:exhibition_single_date, &(&1 + 1))
+                    |> then(fn acc ->
+                      if type == "explicit",
+                        do: Map.update!(acc, :explicit_single_date, &(&1 + 1)),
+                        else: acc
+                    end)
                   end
                 else
-                  # Explicit or other types: single date is genuinely single
-                  acc
-                  |> Map.update!(:events_single_date, &(&1 + 1))
-                  |> then(fn acc ->
-                    if type == "explicit",
-                      do: Map.update!(acc, :explicit_single_date, &(&1 + 1)),
-                      else: acc
-                  end)
+                  # Multiple dates in array
+                  Map.update!(acc, :events_multiple_dates, &(&1 + 1))
                 end
-              else
-                # Multiple dates in array
-                Map.update!(acc, :events_multiple_dates, &(&1 + 1))
-              end
-            end)
-            |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
+              end)
+              |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
 
-          %{"type" => "pattern", "pattern" => pattern} when is_map(pattern) ->
-            # Pattern events with recurrence rules are valid (no dates array needed)
-            acc
-            |> Map.update!(:events_with_occurrences, &(&1 + 1))
-            |> Map.update!(:type_counts, &Map.update(&1, "pattern", 1, fn count -> count + 1 end))
+            %{"type" => "pattern", "pattern" => pattern} when is_map(pattern) ->
+              # Pattern events with recurrence rules are valid (no dates array needed)
+              acc
+              |> Map.update!(:events_with_occurrences, &(&1 + 1))
+              |> Map.update!(
+                :type_counts,
+                &Map.update(&1, "pattern", 1, fn count -> count + 1 end)
+              )
 
-          %{"type" => type} ->
-            # Has type but missing required field - actual validation issue
-            # Pattern events need "pattern" field, other types need "dates" array
-            acc
-            |> Map.update!(:events_with_occurrences, &(&1 + 1))
-            |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
-            |> then(fn acc ->
-              if type == "pattern",
-                do: Map.update!(acc, :pattern_missing_dates, &(&1 + 1)),
-                else: acc
-            end)
+            %{"type" => type} ->
+              # Has type but missing required field - actual validation issue
+              # Pattern events need "pattern" field, other types need "dates" array
+              acc
+              |> Map.update!(:events_with_occurrences, &(&1 + 1))
+              |> Map.update!(:type_counts, &Map.update(&1, type, 1, fn count -> count + 1 end))
+              |> then(fn acc ->
+                if type == "pattern",
+                  do: Map.update!(acc, :pattern_missing_dates, &(&1 + 1)),
+                  else: acc
+              end)
 
-          _ ->
-            # Invalid structure
-            %{acc | events_without_occurrences: acc.events_without_occurrences + 1}
-        end
-      end)
+            _ ->
+              # Invalid structure
+              %{acc | events_without_occurrences: acc.events_without_occurrences + 1}
+          end
+        end)
 
       # Calculate averages
       avg_dates =
@@ -1147,26 +1172,31 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       # - Type diversity OR validity: 20% (adaptive)
       has_occurrence_score =
         if total_events > 0,
-          do: (stats.events_with_occurrences / total_events) * 100,
+          do: stats.events_with_occurrences / total_events * 100,
           else: 100
 
       multiple_date_score =
         if stats.events_with_occurrences > 0,
-          do: (stats.events_multiple_dates / stats.events_with_occurrences) * 100,
+          do: stats.events_multiple_dates / stats.events_with_occurrences * 100,
           else: 100
 
       # Calculate validity score for the diversity/validity component
-      total_validity_issues = stats.pattern_missing_dates + stats.explicit_single_date + stats.exhibition_single_date
+      total_validity_issues =
+        stats.pattern_missing_dates + stats.explicit_single_date + stats.exhibition_single_date
 
       validity_score =
         if stats.events_with_occurrences > 0 do
-          round(((stats.events_with_occurrences - total_validity_issues) / stats.events_with_occurrences) * 100)
+          round(
+            (stats.events_with_occurrences - total_validity_issues) /
+              stats.events_with_occurrences * 100
+          )
         else
           100
         end
 
       # Type diversity using Shannon entropy
-      type_diversity_score = calculate_type_diversity(stats.type_counts, stats.events_with_occurrences)
+      type_diversity_score =
+        calculate_type_diversity(stats.type_counts, stats.events_with_occurrences)
 
       # Adaptive weighting: For specialized sources (low diversity), use validity instead
       # If type diversity < 50%, it indicates a specialized source (e.g., exhibition-only)
@@ -1183,8 +1213,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       occurrence_richness =
         round(
           has_occurrence_score * 0.5 +
-          multiple_date_score * 0.3 +
-          diversity_component * 0.2
+            multiple_date_score * 0.3 +
+            diversity_component * 0.2
         )
 
       %{
@@ -1263,7 +1293,6 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
     Repo.one(query) || 0
   end
-
 
   defp count_genuine_translations(source_id) do
     # Count events that have multiple languages with DIFFERENT text values
@@ -1369,27 +1398,27 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       # Weights: venue 16%, image 15%, category 15%, specificity 15%,
       # occurrence 13%, price 10%, description 8%, performer 6%, translation 2%
       (venue_completeness * 0.16 +
-       image_completeness * 0.15 +
-       category_completeness * 0.15 +
-       category_specificity * 0.15 +
-       occurrence_richness * 0.13 +
-       price_completeness * 0.10 +
-       description_quality * 0.08 +
-       performer_completeness * 0.06 +
-       translation_completeness * 0.02)
+         image_completeness * 0.15 +
+         category_completeness * 0.15 +
+         category_specificity * 0.15 +
+         occurrence_richness * 0.13 +
+         price_completeness * 0.10 +
+         description_quality * 0.08 +
+         performer_completeness * 0.06 +
+         translation_completeness * 0.02)
       |> round()
     else
       # 8 dimensions (without translations)
       # Weights: venue 20%, image 18%, category 16%, specificity 16%,
       # occurrence 14%, price 10%, description 6%, performer 0%
       (venue_completeness * 0.20 +
-       image_completeness * 0.18 +
-       category_completeness * 0.16 +
-       category_specificity * 0.16 +
-       occurrence_richness * 0.14 +
-       price_completeness * 0.10 +
-       description_quality * 0.06 +
-       performer_completeness * 0.00)
+         image_completeness * 0.18 +
+         category_completeness * 0.16 +
+         category_specificity * 0.16 +
+         occurrence_richness * 0.14 +
+         price_completeness * 0.10 +
+         description_quality * 0.06 +
+         performer_completeness * 0.00)
       |> round()
     end
   end

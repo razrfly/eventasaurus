@@ -248,15 +248,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         city_slugs = load_city_slugs(city_ids)
 
         # Transform to format expected by clustering (with :count field)
-        city_stats = Enum.map(raw_city_data, fn city ->
-          %{
-            city_id: city.city_id,
-            city_name: city.city_name,
-            city_slug: Map.get(city_slugs, city.city_id),
-            count: city.event_count,
-            new_this_week: city.new_this_week
-          }
-        end)
+        city_stats =
+          Enum.map(raw_city_data, fn city ->
+            %{
+              city_id: city.city_id,
+              city_name: city.city_name,
+              city_slug: Map.get(city_slugs, city.city_id),
+              count: city.event_count,
+              new_this_week: city.new_this_week
+            }
+          end)
 
         # Create a lookup map for new_this_week values by city_id
         new_this_week_map = Map.new(city_stats, fn stat -> {stat.city_id, stat.new_this_week} end)
@@ -268,9 +269,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         Enum.map(clustered, fn city ->
           # Sum new_this_week for primary city and all subcities
           primary_new = Map.get(new_this_week_map, city.city_id, 0)
-          subcities_new = Enum.reduce(city.subcities, 0, fn sub, acc ->
-            acc + Map.get(new_this_week_map, sub.city_id, 0)
-          end)
+
+          subcities_new =
+            Enum.reduce(city.subcities, 0, fn sub, acc ->
+              acc + Map.get(new_this_week_map, sub.city_id, 0)
+            end)
 
           %{
             city_id: city.city_id,
@@ -393,12 +396,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     category_chart_data = format_category_pie_chart(comprehensive_stats.top_categories)
 
     # Get freshness health check
-    source = Repo.one(
-      from(s in EventasaurusDiscovery.Sources.Source,
-        where: s.slug == ^source_slug,
-        select: s
+    source =
+      Repo.one(
+        from(s in EventasaurusDiscovery.Sources.Source,
+          where: s.slug == ^source_slug,
+          select: s
+        )
       )
-    )
 
     freshness_health =
       if source do

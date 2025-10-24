@@ -48,7 +48,8 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     result =
       with {:ok, body} <- Client.fetch_venue_page(venue_url),
            {:ok, document} <- parse_document(body),
-           {:ok, venue_data} <- VenueExtractor.extract_venue_data(document, venue_url, venue_title),
+           {:ok, venue_data} <-
+             VenueExtractor.extract_venue_data(document, venue_url, venue_title),
            {:ok, enriched_venue_data} <- enrich_with_geocoding(venue_data),
            {:ok, transformed} <- transform_and_validate(enriched_venue_data),
            {:ok, results} <- process_event(transformed, source_id) do

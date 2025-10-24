@@ -396,7 +396,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
       {:error, reason} ->
         socket =
-          put_flash(socket, :error, "Failed to queue coordinate recalculation: #{inspect(reason)}")
+          put_flash(
+            socket,
+            :error,
+            "Failed to queue coordinate recalculation: #{inspect(reason)}"
+          )
 
         {:noreply, socket}
     end
@@ -486,7 +490,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
       true ->
         # Enqueue backfill orchestrator job
-        case BackfillOrchestratorJob.enqueue(city_id: city_id, providers: providers, limit: limit, geocode: geocode) do
+        case BackfillOrchestratorJob.enqueue(
+               city_id: city_id,
+               providers: providers,
+               limit: limit,
+               geocode: geocode
+             ) do
           {:ok, job} ->
             city = Enum.find(socket.assigns.cities, &(&1.id == city_id))
             city_name = if city, do: city.name, else: "City ##{city_id}"

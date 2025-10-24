@@ -100,6 +100,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJobTest do
 
       # Check external IDs are unique
       external_ids = Enum.map(events, & &1.external_id) |> Enum.sort()
+
       assert external_ids == [
                "sortiraparis_320000_2026-07-10",
                "sortiraparis_320000_2026-07-12",

@@ -93,7 +93,9 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     # Log provider override if specified
     if providers do
-      Logger.info("🎯 Provider override active for venue #{venue.id}: using only #{inspect(providers)}")
+      Logger.info(
+        "🎯 Provider override active for venue #{venue.id}: using only #{inspect(providers)}"
+      )
     end
 
     if needs_enrichment?(venue, force) do
@@ -243,7 +245,8 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   end
 
   defp get_place_id(venue, provider_name) do
-    case get_in(venue, [:provider_ids, provider_name]) || get_in(venue, ["provider_ids", provider_name]) do
+    case get_in(venue, [:provider_ids, provider_name]) ||
+           get_in(venue, ["provider_ids", provider_name]) do
       nil -> {:error, :no_place_id}
       place_id -> {:ok, place_id}
     end
@@ -272,7 +275,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
               end)
 
             new_meta = %{
-              succeeded: [provider_name | (acc_meta[:succeeded] || succeeded)],
+              succeeded: [provider_name | acc_meta[:succeeded] || succeeded],
               cost_breakdown:
                 Map.put(
                   acc_meta[:cost_breakdown] || cost_breakdown,
@@ -293,7 +296,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
           {:error, provider_name, reason} ->
             new_meta = %{
-              failed: [provider_name | (acc_meta[:failed] || failed)],
+              failed: [provider_name | acc_meta[:failed] || failed],
               succeeded: acc_meta[:succeeded] || succeeded,
               cost_breakdown: acc_meta[:cost_breakdown] || cost_breakdown,
               requests_made: acc_meta[:requests_made] || requests_made,
@@ -376,10 +379,14 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     aspect_score =
       cond do
-        aspect_ratio >= 1.3 and aspect_ratio <= 1.8 -> 0.3  # Ideal landscape
-        aspect_ratio >= 1.0 and aspect_ratio < 1.3 -> 0.25  # Square-ish
-        aspect_ratio > 1.8 and aspect_ratio <= 2.4 -> 0.25  # Wide landscape
-        true -> 0.2  # Portrait or very wide
+        # Ideal landscape
+        aspect_ratio >= 1.3 and aspect_ratio <= 1.8 -> 0.3
+        # Square-ish
+        aspect_ratio >= 1.0 and aspect_ratio < 1.3 -> 0.25
+        # Wide landscape
+        aspect_ratio > 1.8 and aspect_ratio <= 2.4 -> 0.25
+        # Portrait or very wide
+        true -> 0.2
       end
 
     resolution_score + aspect_score
@@ -447,12 +454,10 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
       {:ok, [], _metadata} when attempt < max_retries ->
         # No images found, retry with backoff
-        Logger.warning(
-          "⚠️ Image fetch attempt #{attempt} found no images, retrying..."
-        )
+        Logger.warning("⚠️ Image fetch attempt #{attempt} found no images, retrying...")
 
         # Exponential backoff: 1s, 2s, 4s...
-        :timer.sleep(:math.pow(2, attempt - 1) * 1000 |> round())
+        :timer.sleep((:math.pow(2, attempt - 1) * 1000) |> round())
         fetch_venue_images_with_retry(venue_input, providers, max_retries, attempt + 1)
 
       {:ok, images, metadata} ->
@@ -548,7 +553,8 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       "providers_used" => all_providers_used,
       "total_images_fetched" => length(merged_images),
       "cost_breakdown" => metadata.cost_breakdown || metadata[:cost_breakdown] || %{},
-      "enrichment_history" => [history_entry | existing_history] |> Enum.take(10),  # Keep last 10
+      # Keep last 10
+      "enrichment_history" => [history_entry | existing_history] |> Enum.take(10),
       "providers_failed" => metadata.providers_failed || metadata[:providers_failed] || [],
       "error_details" => metadata.error_details || metadata[:error_details] || %{}
     }
@@ -558,7 +564,9 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     case Repo.update(changeset) do
       {:ok, updated_venue} ->
-        providers_count = length(metadata.providers_succeeded || metadata[:providers_succeeded] || [])
+        providers_count =
+          length(metadata.providers_succeeded || metadata[:providers_succeeded] || [])
+
         Logger.info(
           "✅ Stored #{length(merged_images)} images for venue #{venue.id} (+#{net_new_images} new) from #{providers_count} provider(s)"
         )
@@ -611,20 +619,18 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       # Pick the image with highest quality score
       # Prefer images with quality_score, fall back to newest (last in list)
       duplicate_images
-      |> Enum.max_by(
-        fn img ->
-          {
-            img["quality_score"] || 0.0,
-            img["fetched_at"] || "1970-01-01T00:00:00Z"
-          }
-        end
-      )
+      |> Enum.max_by(fn img ->
+        {
+          img["quality_score"] || 0.0,
+          img["fetched_at"] || "1970-01-01T00:00:00Z"
+        }
+      end)
     end)
     # Sort by quality score descending
     |> Enum.sort_by(fn img -> -(img["quality_score"] || 0.0) end)
   end
 
-  defp parse_datetime(nil), do: {:error, :nil}
+  defp parse_datetime(nil), do: {:error, nil}
 
   defp parse_datetime(dt) when is_binary(dt) do
     case DateTime.from_iso8601(dt) do

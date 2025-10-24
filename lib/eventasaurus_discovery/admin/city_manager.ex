@@ -71,7 +71,9 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
         changeset = City.delete_changeset(city)
 
         case Repo.delete(changeset) do
-          {:ok, _} = result -> result
+          {:ok, _} = result ->
+            result
+
           {:error, changeset} ->
             if Keyword.has_key?(changeset.errors, :id) do
               {:error, :has_venues}
@@ -188,7 +190,8 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   defp filter_by_discovery(query, "false"), do: where(query, [c], c.discovery_enabled == false)
   defp filter_by_discovery(query, _), do: query
 
-  defp validate_country_exists(changeset, %{country_id: country_id}) when not is_nil(country_id) do
+  defp validate_country_exists(changeset, %{country_id: country_id})
+       when not is_nil(country_id) do
     if Repo.get(Country, country_id) do
       changeset
     else

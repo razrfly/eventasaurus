@@ -68,21 +68,23 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
       end
 
     # Analyze patterns in the other events
-    patterns = if other_count > 0 do
-      PatternAnalyzer.analyze_patterns(other_events)
-    else
-      nil
-    end
+    patterns =
+      if other_count > 0 do
+        PatternAnalyzer.analyze_patterns(other_events)
+      else
+        nil
+      end
 
     # Get available categories for suggestions
     available_categories = get_available_categories()
 
     # Generate suggestions based on patterns
-    suggestions = if patterns do
-      PatternAnalyzer.generate_suggestions(patterns, available_categories)
-    else
-      []
-    end
+    suggestions =
+      if patterns do
+        PatternAnalyzer.generate_suggestions(patterns, available_categories)
+      else
+        []
+      end
 
     {:noreply,
      socket

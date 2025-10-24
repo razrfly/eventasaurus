@@ -53,9 +53,7 @@ defmodule EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker do
             {:skipped, city.name}
 
           {:error, reason} ->
-            Logger.warning(
-              "  ⚠️  Failed to schedule update for #{city.name}: #{inspect(reason)}"
-            )
+            Logger.warning("  ⚠️  Failed to schedule update for #{city.name}: #{inspect(reason)}")
 
             {:error, city.name}
         end

@@ -39,6 +39,7 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscovery do
   """
   def get_available_languages_for_city(nil), do: ["en"]
   def get_available_languages_for_city(""), do: ["en"]
+
   def get_available_languages_for_city(city_slug) when is_binary(city_slug) do
     with {:ok, city} <- get_city_with_country(city_slug),
          country_languages <- get_country_languages(city.country_code),
@@ -139,10 +140,11 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscovery do
 
   defp get_city_with_country(city_slug) do
     query =
-      from c in City,
+      from(c in City,
         where: c.slug == ^city_slug,
         join: country in assoc(c, :country),
         select: %{id: c.id, name: c.name, country_code: country.code}
+      )
 
     case Repo.one(query) do
       nil -> {:error, :city_not_found}
@@ -174,12 +176,13 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscovery do
   defp get_db_languages_for_city(city_id) do
     # Query what translation languages actually exist for events in this city
     query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         join: v in assoc(pe, :venue),
         where: v.city_id == ^city_id,
         where: not is_nil(pe.title_translations),
         where: fragment("jsonb_typeof(?)", pe.title_translations) == "object",
         select: fragment("jsonb_object_keys(?)", pe.title_translations)
+      )
 
     query
     |> Repo.all()

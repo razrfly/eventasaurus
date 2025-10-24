@@ -678,6 +678,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
     case Regex.run(~r{/what-to-(?:see|visit)-in-paris/([^/]+)/articles/}, url) do
       [_, category_segment] ->
         String.downcase(category_segment)
+
       _ ->
         # Try pattern 3: Extract path segment before /articles/
         # This catches patterns like /hotel-restaurant/restaurant/articles/
@@ -695,7 +696,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
                 _ -> nil
               end
             end
-          _ -> nil
+
+          _ ->
+            nil
         end
     end
   end

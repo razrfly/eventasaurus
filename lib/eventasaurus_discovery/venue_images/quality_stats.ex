@@ -88,30 +88,34 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
   def get_city_venue_stats(city_id) when is_integer(city_id) do
     # Query all venues for this city
     total_query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         select: count(v.id)
+      )
 
     # Query venues with images (venue_images JSONB array length > 0)
     with_images_query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: fragment("COALESCE(jsonb_array_length(?), 0) > 0", v.venue_images),
         select: count(v.id)
+      )
 
     # Query venues with missing address (NULL or empty string)
     missing_address_query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: is_nil(v.address) or v.address == "",
         select: count(v.id)
+      )
 
     # Query venues with missing coordinates (either latitude or longitude is NULL)
     missing_coordinates_query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: is_nil(v.latitude) or is_nil(v.longitude),
         select: count(v.id)
+      )
 
     total_venues = Repo.one(total_query) || 0
     venues_with_images = Repo.one(with_images_query) || 0
@@ -189,13 +193,14 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
     # Query venues with images and extract provider information
     # venue_images structure: [%{"url" => "...", "provider" => "foursquare"}, ...]
     query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: fragment("COALESCE(jsonb_array_length(?), 0) > 0", v.venue_images),
         select: %{
           venue_id: v.id,
           venue_images: v.venue_images
         }
+      )
 
     venues_with_images = Repo.all(query)
 
@@ -289,7 +294,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
     # Query venues enriched since cutoff date
     # image_enrichment_metadata structure: %{"last_enriched_at" => "2025-01-15T10:30:00", ...}
     query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where:
           fragment(
@@ -302,6 +307,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
           venue_images: v.venue_images,
           enrichment_metadata: v.image_enrichment_metadata
         }
+      )
 
     enriched_venues = Repo.all(query)
 
@@ -357,11 +363,12 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
   def list_venues_with_images(city_id, limit \\ 20)
       when is_integer(city_id) and is_integer(limit) and limit > 0 do
     query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: fragment("jsonb_array_length(?) > 0", v.venue_images),
         order_by: [desc: fragment("jsonb_array_length(?)", v.venue_images), asc: v.id],
         limit: ^limit
+      )
 
     Repo.all(query)
   end
@@ -409,7 +416,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
     # +2 for having coordinates
     # +1 for having at least one provider ID
     query =
-      from v in Venue,
+      from(v in Venue,
         where: v.city_id == ^city_id,
         where: fragment("COALESCE(jsonb_array_length(?), 0) = 0", v.venue_images),
         select: %{
@@ -436,6 +443,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
           asc: v.id
         ],
         limit: ^limit
+      )
 
     venues = Repo.all(query)
 
@@ -449,8 +457,8 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         end
 
       priority_score =
-        (if has_coordinates, do: 2, else: 0) +
-          (if has_provider_ids, do: 1, else: 0)
+        if(has_coordinates, do: 2, else: 0) +
+          if has_provider_ids, do: 1, else: 0
 
       %{
         id: venue.id,
@@ -495,9 +503,10 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
     # Venues with images
     venues_with_images =
       Repo.one(
-        from v in Venue,
+        from(v in Venue,
           where: fragment("COALESCE(jsonb_array_length(?), 0) > 0", v.venue_images),
           select: count(v.id)
+        )
       ) || 0
 
     coverage_percentage =
@@ -510,9 +519,10 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
     # Count cities with venues
     cities_analyzed =
       Repo.one(
-        from v in Venue,
+        from(v in Venue,
           where: not is_nil(v.city_id),
           select: count(v.city_id, :distinct)
+        )
       ) || 0
 
     # Get top 5 cities by venue count

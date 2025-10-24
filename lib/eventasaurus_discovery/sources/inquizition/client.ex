@@ -72,9 +72,11 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
 
       {:error, reason} when retries_left > 0 ->
         delay = calculate_backoff_delay(attempt)
+
         Logger.warning(
           "[Inquizition] Request failed (attempt #{attempt}), retrying in #{delay}ms: #{inspect(reason)}"
         )
+
         Process.sleep(delay)
         fetch_with_retry(url, retries_left - 1, attempt + 1)
 
@@ -93,7 +95,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
     ]
 
     case HTTPoison.get(url, Config.headers(), opts) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} when is_binary(body) and body != "" ->
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}}
+      when is_binary(body) and body != "" ->
         {:ok, body}
 
       {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
@@ -102,6 +105,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
             b when is_binary(b) -> byte_size(b)
             _ -> 0
           end
+
         Logger.error("[Inquizition] CDN returned status #{status} (body #{size} bytes)")
         {:error, {:http_error, status}}
 
@@ -113,6 +117,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
   defp parse_jsonp_response(body) do
     # Strip JSONP wrapper: slw({...}) or slw({...}); → {...}
     trimmed = String.trim(body)
+
     json_string =
       case Regex.run(~r/^\s*slw\((.*)\)\s*;?\s*$/s, trimmed) do
         [_, inner] -> String.trim(inner)
@@ -123,12 +128,16 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Client do
       {:ok, data} when is_map(data) ->
         # Validate response structure
         stores = Map.get(data, "stores")
+
         if is_list(stores) do
           store_count = length(stores)
           Logger.info("[Inquizition] Successfully fetched #{store_count} venues from CDN")
           {:ok, data}
         else
-          Logger.error("[Inquizition] Invalid response structure: missing 'stores' key or not a list")
+          Logger.error(
+            "[Inquizition] Invalid response structure: missing 'stores' key or not a list"
+          )
+
           {:error, :invalid_response_structure}
         end
 

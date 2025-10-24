@@ -47,10 +47,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
   """
   def fetch_page(url, opts \\ []) do
     # Localize URL if language specified
-    localized_url = case Keyword.get(opts, :language) do
-      nil -> url
-      language -> localize_url(url, language)
-    end
+    localized_url =
+      case Keyword.get(opts, :language) do
+        nil -> url
+        language -> localize_url(url, language)
+      end
 
     retries = Keyword.get(opts, :retries, 3)
     attempt = Keyword.get(opts, :attempt, 1)
@@ -262,8 +263,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
       case get_header(headers, "content-encoding") do
         "gzip" ->
           :zlib.gunzip(body)
+
         "deflate" ->
           :zlib.uncompress(body)
+
         "br" ->
           # Check if Brotli is available before attempting decode
           if Code.ensure_loaded?(:brotli) and function_exported?(:brotli, :decode, 1) do
@@ -271,6 +274,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
           else
             body
           end
+
         _ ->
           body
       end

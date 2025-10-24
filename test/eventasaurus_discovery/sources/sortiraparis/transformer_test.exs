@@ -32,7 +32,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.TransformerTest do
 
       event = Enum.at(events, 0)
       # Use map access with atom keys
-      assert event[:external_id] =~ ~r/sortiraparis_319282_2025-10-3\d/  # Day shifts due to timezone
+      # Day shifts due to timezone
+      assert event[:external_id] =~ ~r/sortiraparis_319282_2025-10-3\d/
       assert event[:title] == "Indochine Concert at Accor Arena"
       assert event[:description] == "Indochine returns to Paris for an exclusive concert."
       assert event[:image_url] == "https://www.sortiraparis.com/images/indochine.jpg"

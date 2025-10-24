@@ -128,7 +128,11 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscoveryTest do
           slug: "spanish-event-#{System.unique_integer([:positive])}",
           venue_id: venue.id,
           starts_at: DateTime.utc_now(),
-          title_translations: %{"es" => "Evento Español", "en" => "Spanish Event", "fr" => "Événement Espagnol"}
+          title_translations: %{
+            "es" => "Evento Español",
+            "en" => "Spanish Event",
+            "fr" => "Événement Espagnol"
+          }
         })
         |> Repo.insert!()
 
@@ -214,7 +218,10 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscoveryTest do
       %{city: city, venue: venue}
     end
 
-    test "returns correct language context when activity has all city languages", %{city: city, venue: venue} do
+    test "returns correct language context when activity has all city languages", %{
+      city: city,
+      venue: venue
+    } do
       event =
         %PublicEvent{}
         |> PublicEvent.changeset(%{
@@ -234,7 +241,10 @@ defmodule EventasaurusWeb.Helpers.LanguageDiscoveryTest do
       assert context.all == context.available
     end
 
-    test "returns correct context when activity missing some city languages", %{city: city, venue: venue} do
+    test "returns correct context when activity missing some city languages", %{
+      city: city,
+      venue: venue
+    } do
       # Create another event in Warsaw with Polish translations so Polish appears in city languages
       %PublicEvent{}
       |> PublicEvent.changeset(%{

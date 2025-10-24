@@ -131,7 +131,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractorTe
       </html>
       """
 
-      assert {:ok, "Musée du Moyen-Age - Musée de Cluny"} = VenueExtractor.extract_venue_name(html)
+      assert {:ok, "Musée du Moyen-Age - Musée de Cluny"} =
+               VenueExtractor.extract_venue_name(html)
     end
 
     test "extracts venue from _mapHandler.init with multiple markers (uses first)" do
@@ -181,7 +182,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.VenueExtractorTe
     end
 
     test "extracts venue from title with 'The' prefix" do
-      html = "<title>The Musée de Cluny at night: discover the Middle Ages - Sortiraparis.com</title>"
+      html =
+        "<title>The Musée de Cluny at night: discover the Middle Ages - Sortiraparis.com</title>"
+
       assert {:ok, "Musée de Cluny"} = VenueExtractor.extract_venue_name(html)
     end
 

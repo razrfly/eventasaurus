@@ -75,16 +75,53 @@ defmodule Eventasaurus.ImageKit.Filename do
   The hash is deterministic - the same URL will always produce the same hash.
   This enables deduplication by checking if a file already exists before uploading.
 
+  For URLs with query parameters (like Google Places), only specific stable parameters
+  are included in the hash (e.g., photoreference, photo_id) to ensure the same photo
+  always generates the same hash regardless of API key changes.
+
   ## Examples
 
       iex> generate_hash("https://example.com/image.jpg")
       "a8f3d2"
+
+      iex> generate_hash("https://maps.googleapis.com/maps/api/place/photo?photoreference=ABC&key=123")
+      # Same hash as with key=456 (only photoreference matters)
   """
   @spec generate_hash(String.t()) :: String.t()
   def generate_hash(url) when is_binary(url) do
-    :crypto.hash(:md5, url)
+    normalized_url = normalize_url_for_hash(url)
+
+    :crypto.hash(:md5, normalized_url)
     |> Base.encode16(case: :lower)
     |> String.slice(0..5)
+  end
+
+  # Normalize URLs to ensure consistent hashing
+  defp normalize_url_for_hash(url) do
+    uri = URI.parse(url)
+
+    case uri.query do
+      nil ->
+        # No query params, use full URL
+        url
+
+      query_string ->
+        # Parse query params
+        params = URI.decode_query(query_string)
+
+        # For Google Places URLs, only use stable identifiers
+        stable_params =
+          if String.contains?(url, "maps.googleapis.com") do
+            Map.take(params, ["photoreference", "photo_id", "maxwidth", "maxheight"])
+          else
+            # For other providers, use all params
+            params
+          end
+
+        # Rebuild URL with only stable params
+        normalized_query = URI.encode_query(stable_params)
+        %{uri | query: normalized_query} |> URI.to_string()
+    end
   end
 
   @doc """

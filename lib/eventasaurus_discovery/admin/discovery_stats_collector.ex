@@ -787,11 +787,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       case job.args do
         %{"city_id" => city_id} when is_integer(city_id) ->
           city_id
+
         %{"city_id" => city_id} when is_binary(city_id) ->
           case Integer.parse(city_id) do
             {id, ""} -> id
             _ -> nil
           end
+
         _ ->
           nil
       end
@@ -1072,8 +1074,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           where: j.state in ["completed", "discarded"],
           select: %{
             processed: fragment("COUNT(*) FILTER (WHERE meta->>'status' IS NOT NULL)"),
-            succeeded:
-              fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
+            succeeded: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
             failed: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'failed')")
           }
         )
@@ -1083,8 +1084,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           where: j.state in ["completed", "discarded"],
           select: %{
             processed: fragment("COUNT(*) FILTER (WHERE meta->>'status' IS NOT NULL)"),
-            succeeded:
-              fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
+            succeeded: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'success')"),
             failed: fragment("COUNT(*) FILTER (WHERE meta->>'status' = 'failed')")
           }
         )

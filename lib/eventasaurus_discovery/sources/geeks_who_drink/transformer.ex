@@ -292,8 +292,10 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   defp build_description(venue_data) do
     # Parse day and time from time_text for enhanced description
     day_info = parse_day_from_time_text(venue_data[:time_text])
-    time_info = parse_time_from_time_text(venue_data[:time_text]) ||
-                parse_time_from_starts_at(venue_data[:starts_at])
+
+    time_info =
+      parse_time_from_time_text(venue_data[:time_text]) ||
+        parse_time_from_starts_at(venue_data[:starts_at])
 
     # Build base description with schedule if available
     base_description =
@@ -355,7 +357,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     |> DateTime.to_time()
     |> Calendar.strftime("%I:%M%p")
     |> String.downcase()
-    |> String.replace(~r/:00/, "")  # "7:00pm" -> "7pm"
+    # "7:00pm" -> "7pm"
+    |> String.replace(~r/:00/, "")
   end
 
   defp parse_time_from_starts_at(_), do: nil

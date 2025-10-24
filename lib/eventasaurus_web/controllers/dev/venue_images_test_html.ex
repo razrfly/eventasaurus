@@ -126,4 +126,17 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestHTML do
   def id_source_text(:dynamic), do: "Dynamic"
   def id_source_text(:unavailable), do: "Unavailable"
   def id_source_text(_), do: "Unknown"
+
+  @doc """
+  Format provider name for display.
+  """
+  def format_provider_name(provider) when is_binary(provider) do
+    provider
+    |> String.replace("_", " ")
+    |> String.split(" ")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  def format_provider_name(_), do: "Unknown"
 end

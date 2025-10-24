@@ -60,7 +60,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     result =
       with {:ok, additional_details} <- fetch_additional_details(venue_url),
            _ <- log_additional_details(additional_details),
-           {:ok, {day_of_week, time}} <- parse_time_from_sources(venue_data.time_text, additional_details),
+           {:ok, {day_of_week, time}} <-
+             parse_time_from_sources(venue_data.time_text, additional_details),
            {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time),
            enriched_venue_data <-
              enrich_venue_data(venue_data, additional_details, next_occurrence),
@@ -72,6 +73,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
 
         # Log quizmaster from metadata (hybrid approach - not stored in performers table)
         quizmaster_name = get_in(transformed, [:metadata, :quizmaster, :name])
+
         if quizmaster_name do
           Logger.info("🎭 Quizmaster: #{quizmaster_name} (stored in description + metadata)")
         end
@@ -157,7 +159,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
   defp get_time_string(additional_details) do
     case additional_details[:start_time] do
       time when is_binary(time) and time != "" -> time
-      _ -> "20:00"  # Default fallback matching trivia_advisor
+      # Default fallback matching trivia_advisor
+      _ -> "20:00"
     end
   end
 
@@ -233,6 +236,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     - Start time: #{inspect(additional_details[:start_time])}
     - Fee text: #{inspect(additional_details[:fee_text])}
     """)
+
     :ok
   end
 
@@ -246,6 +250,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     - Start time: #{inspect(enriched_venue_data[:start_time])}
     - Starts at: #{inspect(enriched_venue_data[:starts_at])}
     """)
+
     :ok
   end
 
@@ -262,6 +267,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     - Venue data keys: #{inspect(Map.keys(transformed[:venue_data] || %{}))}
     - Metadata keys: #{inspect(Map.keys(transformed[:metadata] || %{}))}
     """)
+
     :ok
   end
 end

@@ -117,7 +117,7 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
         end)
 
       if total_runs > 0 do
-        total_success / total_runs * 100
+        (total_success / total_runs * 100)
         |> round()
       else
         0

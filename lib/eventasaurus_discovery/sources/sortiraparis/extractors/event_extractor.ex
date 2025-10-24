@@ -70,7 +70,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         "is_free" => pricing[:is_free],
         "min_price" => pricing[:min_price],
         "max_price" => pricing[:max_price],
-        "currency" => pricing[:currency],  # No default - nil means no data
+        # No default - nil means no data
+        "currency" => pricing[:currency],
         "performers" => performers,
         "original_date_string" => date_string,
         "event_type" => event_type
@@ -196,7 +197,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         {:ok, url}
 
       true ->
-        {:ok, nil}  # Image is optional
+        # Image is optional
+        {:ok, nil}
     end
   end
 
@@ -220,11 +222,14 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
     # Sortiraparis does NOT provide reliable pricing information
     # Do NOT extract or guess pricing - leave as nil
     %{
-      is_free: nil,        # Unknown, not false
-      is_ticketed: false,  # No ticketing info available
+      # Unknown, not false
+      is_free: nil,
+      # No ticketing info available
+      is_ticketed: false,
       min_price: nil,
       max_price: nil,
-      currency: nil        # No currency info - do NOT default to EUR
+      # No currency info - do NOT default to EUR
+      currency: nil
     }
   end
 
@@ -236,7 +241,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
   def extract_performers(_html) do
     # Look for common performer patterns
     # This is basic - can be enhanced based on actual HTML structure
-    []  # TODO: Implement if needed based on real HTML structure
+    # TODO: Implement if needed based on real HTML structure
+    []
   end
 
   # Private helper functions
@@ -420,7 +426,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         :one_time
 
       # Single date with day: "Friday, October 31, 2025"
-      text =~ ~r/(monday|tuesday|wednesday|thursday|friday|saturday|sunday),\s*\w+\s+\d+,\s*\d{4}/i ->
+      text =~
+          ~r/(monday|tuesday|wednesday|thursday|friday|saturday|sunday),\s*\w+\s+\d+,\s*\d{4}/i ->
         :one_time
 
       # Default to potential exhibition for safety

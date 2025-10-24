@@ -50,16 +50,18 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
   # Filter out events that were recently updated (default: 7 days)
   defp filter_fresh_events(events, source_id, limit) do
     # Generate external_ids for each event (prefer event_id, fallback to id)
-    events_with_external_ids = Enum.map(events, fn event ->
-      id = event["event_id"] || event["id"]
-      Map.put(event, "external_id", "speed-quizzing-#{id}")
-    end)
+    events_with_external_ids =
+      Enum.map(events, fn event ->
+        id = event["event_id"] || event["id"]
+        Map.put(event, "external_id", "speed-quizzing-#{id}")
+      end)
 
     # Filter out events that were recently updated
-    events_to_process = EventFreshnessChecker.filter_events_needing_processing(
-      events_with_external_ids,
-      source_id
-    )
+    events_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        events_with_external_ids,
+        source_id
+      )
 
     # Apply limit if provided (for testing)
     if limit do
@@ -71,17 +73,18 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
 
   # Enqueue a DetailJob for each event
   defp enqueue_detail_jobs(events, source_id) do
-    jobs = Enum.map(events, fn event ->
-      # Index JSON uses "event_id" not "id"
-      event_id = event["event_id"] || event["id"]
+    jobs =
+      Enum.map(events, fn event ->
+        # Index JSON uses "event_id" not "id"
+        event_id = event["event_id"] || event["id"]
 
-      %{
-        "source_id" => source_id,
-        "event_id" => event_id,
-        "event_data" => event
-      }
-      |> SpeedQuizzing.Jobs.DetailJob.new()
-    end)
+        %{
+          "source_id" => source_id,
+          "event_id" => event_id,
+          "event_data" => event
+        }
+        |> SpeedQuizzing.Jobs.DetailJob.new()
+      end)
 
     # Insert all jobs
     inserted_jobs = Oban.insert_all(jobs)

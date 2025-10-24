@@ -182,11 +182,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     from(pe in query,
       left_join: es in EventasaurusDiscovery.PublicEvents.PublicEventSource,
       on: es.event_id == pe.id,
+      # Known dates: check starts_at/ends_at
+      # Unknown occurrence type: check last_seen_at for freshness (JSONB query)
       where:
-        # Known dates: check starts_at/ends_at
         (not is_nil(pe.ends_at) and pe.ends_at > ^current_time) or
           (is_nil(pe.ends_at) and pe.starts_at > ^current_time) or
-          # Unknown occurrence type: check last_seen_at for freshness (JSONB query)
           (fragment("? ->> 'occurrence_type'", es.metadata) == "unknown" and
              es.last_seen_at >= ^freshness_threshold),
       distinct: pe.id
@@ -204,11 +204,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     from(pe in query,
       left_join: es in EventasaurusDiscovery.PublicEvents.PublicEventSource,
       on: es.event_id == pe.id,
+      # Known dates: check starts_at/ends_at
+      # Unknown occurrence type: check last_seen_at for freshness (JSONB query)
       where:
-        # Known dates: check starts_at/ends_at
         (not is_nil(pe.ends_at) and pe.ends_at > ^current_time) or
           (is_nil(pe.ends_at) and pe.starts_at > ^current_time) or
-          # Unknown occurrence type: check last_seen_at for freshness (JSONB query)
           (fragment("? ->> 'occurrence_type'", es.metadata) == "unknown" and
              es.last_seen_at >= ^freshness_threshold)
     )
@@ -388,9 +388,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> Repo.preload([
       :categories,
       :performers,
-      sources: :source,           # Load nested source association for aggregate_events
-      venue: [city_ref: :country], # Load nested venue associations for aggregate_events
-      movies: []                   # Load movies association (empty nested for now)
+      # Load nested source association for aggregate_events
+      sources: :source,
+      # Load nested venue associations for aggregate_events
+      venue: [city_ref: :country],
+      # Load movies association (empty nested for now)
+      movies: []
     ])
     |> Enum.map(fn event ->
       # Add display fields based on language

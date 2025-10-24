@@ -239,7 +239,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     Logger.info("🔄 Checking for recurring event pattern...")
 
     recurring_parent =
-      find_recurring_parent(data.title, venue, data.external_id, source_id, data[:movie_id], data[:article_id], data[:event_type])
+      find_recurring_parent(
+        data.title,
+        venue,
+        data.external_id,
+        source_id,
+        data[:movie_id],
+        data[:article_id],
+        data[:event_type]
+      )
 
     case {existing_from_source, recurring_parent} do
       # No existing event and no recurring parent - check for collision then create new
@@ -1129,7 +1137,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   # Modified to accept event_type parameter to handle exhibitions and recurring events
-  defp find_recurring_parent(title, venue, external_id, source_id, movie_id, article_id, event_type) do
+  defp find_recurring_parent(
+         title,
+         venue,
+         external_id,
+         source_id,
+         movie_id,
+         article_id,
+         event_type
+       ) do
     if venue do
       cond do
         # Skip consolidation for exhibitions and recurring events - they're already properly structured
@@ -1234,7 +1250,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         nil
 
       event ->
-        Logger.info("📰 Found article parent for article #{article_id} at venue #{venue.id}: event ##{event.id}")
+        Logger.info(
+          "📰 Found article parent for article #{article_id} at venue #{venue.id}: event ##{event.id}"
+        )
+
         event
     end
   end
