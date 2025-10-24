@@ -183,9 +183,9 @@ end
 
 **File**: `lib/eventasaurus_discovery/venue_images/cleanup_scheduler.ex`
 
-**Purpose**: Nightly automated scan and recovery of failed uploads.
+**Purpose**: Automated scan and recovery of failed uploads.
 
-**Schedule**: Daily at 4 AM UTC (via Oban cron)
+**Schedule**: Designed for daily at 4 AM UTC (via Oban cron), currently manual trigger only
 
 **Logic Flow**:
 
