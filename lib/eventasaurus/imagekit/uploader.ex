@@ -73,13 +73,52 @@ defmodule Eventasaurus.ImageKit.Uploader do
 
   @spec download_image(String.t()) :: {:ok, {binary(), String.t()}} | {:error, any()}
   defp download_image(url) do
+    download_image_with_retry(url, 1, 3)
+  end
+
+  @spec download_image_with_retry(String.t(), integer(), integer()) ::
+          {:ok, {binary(), String.t()}} | {:error, any()}
+  defp download_image_with_retry(url, attempt, max_attempts) do
     case Req.get(url, receive_timeout: @timeout_ms) do
       {:ok, %Req.Response{status: 200, body: body, headers: headers}} when is_binary(body) ->
         content_type = get_content_type(headers)
         {:ok, {body, content_type}}
 
+      {:ok, %Req.Response{status: 429, body: _body}} when attempt < max_attempts ->
+        # Rate limited - exponential backoff
+        backoff_ms = round(:math.pow(2, attempt) * 1000)
+
+        Logger.warning(
+          "⚠️  Rate limited (attempt #{attempt}/#{max_attempts}), retrying in #{backoff_ms}ms"
+        )
+
+        Process.sleep(backoff_ms)
+        download_image_with_retry(url, attempt + 1, max_attempts)
+
+      {:ok, %Req.Response{status: 503, body: _body}} when attempt < max_attempts ->
+        # Service unavailable - exponential backoff
+        backoff_ms = round(:math.pow(2, attempt) * 1000)
+
+        Logger.warning(
+          "⚠️  Service unavailable (attempt #{attempt}/#{max_attempts}), retrying in #{backoff_ms}ms"
+        )
+
+        Process.sleep(backoff_ms)
+        download_image_with_retry(url, attempt + 1, max_attempts)
+
       {:ok, %Req.Response{status: status, body: _body}} ->
         {:error, {:http_status, status}}
+
+      {:error, %Mint.TransportError{reason: :timeout}} when attempt < max_attempts ->
+        # Network timeout - exponential backoff
+        backoff_ms = round(:math.pow(2, attempt) * 1000)
+
+        Logger.warning(
+          "⚠️  Network timeout (attempt #{attempt}/#{max_attempts}), retrying in #{backoff_ms}ms"
+        )
+
+        Process.sleep(backoff_ms)
+        download_image_with_retry(url, attempt + 1, max_attempts)
 
       {:error, exception} ->
         {:error, exception}

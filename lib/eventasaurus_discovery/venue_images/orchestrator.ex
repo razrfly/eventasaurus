@@ -479,9 +479,17 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     new_structured_images =
       images
       |> Enum.with_index()
-      |> Enum.map(fn {img, _index} ->
+      |> Enum.map(fn {img, index} ->
         provider_url = img.url || img["url"]
         provider = img.provider || img["provider"]
+
+        # Add delay between uploads to respect Google rate limits
+        # Skip delay for first image
+        if index > 0 do
+          delay_ms = calculate_upload_delay(provider, index)
+          Logger.debug("⏱️  Rate limit delay: #{delay_ms}ms before image #{index + 1}")
+          Process.sleep(delay_ms)
+        end
 
         # Upload to ImageKit
         upload_result = upload_to_imagekit(venue, provider_url, provider)
@@ -505,14 +513,39 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
             })
 
           {:error, reason} ->
-            Logger.warning(
-              "ImageKit upload failed for venue #{venue.id}, provider #{provider}: #{inspect(reason)}"
-            )
+            # Classify error for better observability
+            error_type = classify_error(reason)
+
+            # Extract HTTP status code if available
+            status_code =
+              case reason do
+                {:download_failed, {:http_status, code}} -> code
+                {:http_error, code, _body} -> code
+                _ -> nil
+              end
+
+            # Build detailed error information for metadata
+            error_detail = %{
+              "error" => to_string(reason),
+              "error_type" => to_string(error_type),
+              "status_code" => status_code,
+              "timestamp" => DateTime.to_iso8601(now)
+            }
+
+            # Enhanced logging with error classification
+            Logger.warning("""
+            ⚠️  Image upload failed for venue #{venue.id}:
+               Provider: #{provider}
+               Error Type: #{error_type}
+               #{if status_code, do: "Status Code: #{status_code}\n", else: ""}   URL: #{String.slice(provider_url, 0..80)}...
+               Reason: #{inspect(reason)}
+            """)
 
             Map.merge(base_image, %{
               "url" => provider_url,
               "provider_url" => provider_url,
-              "upload_status" => "failed"
+              "upload_status" => "failed",
+              "error_details" => error_detail
             })
         end
         |> Enum.reject(fn {_k, v} -> is_nil(v) end)
@@ -647,6 +680,72 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     end)
     # Sort by quality score descending
     |> Enum.sort_by(fn img -> -(img["quality_score"] || 0.0) end)
+  end
+
+  # Classify error type for observability and metrics
+  defp classify_error({:download_failed, {:http_status, status_code}}) do
+    case status_code do
+      429 -> :rate_limited
+      401 -> :auth_error
+      403 -> :forbidden
+      404 -> :not_found
+      500 -> :server_error
+      502 -> :bad_gateway
+      503 -> :service_unavailable
+      504 -> :gateway_timeout
+      _ -> :http_error
+    end
+  end
+
+  defp classify_error({:download_failed, %Mint.TransportError{reason: :timeout}}) do
+    :network_timeout
+  end
+
+  defp classify_error({:download_failed, %Mint.TransportError{}}) do
+    :network_error
+  end
+
+  defp classify_error({:download_failed, _}) do
+    :download_failed
+  end
+
+  defp classify_error(:authentication_failed) do
+    :auth_error
+  end
+
+  defp classify_error(:forbidden) do
+    :forbidden
+  end
+
+  defp classify_error(:file_too_large) do
+    :file_too_large
+  end
+
+  defp classify_error({:http_error, status_code, _body}) do
+    classify_error({:download_failed, {:http_status, status_code}})
+  end
+
+  defp classify_error(_) do
+    :unknown_error
+  end
+
+  # Calculate delay between ImageKit uploads to respect provider rate limits
+  # Different providers have different rate limit thresholds
+  defp calculate_upload_delay(provider, _index) do
+    case provider do
+      # Google Places: 2 requests/second = 500ms delay
+      # Conservative to avoid rate limits when fetching photo URLs
+      "google_places" -> 500
+
+      # Foursquare: 5 requests/second = 200ms delay
+      "foursquare" -> 200
+
+      # Here: 5 requests/second = 200ms delay
+      "here" -> 200
+
+      # Default: 100ms for unknown providers
+      _ -> 100
+    end
   end
 
   defp parse_datetime(nil), do: {:error, nil}
