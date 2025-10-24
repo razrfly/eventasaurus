@@ -104,8 +104,9 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   # Extract queue from worker module configuration
   defp extract_queue_from_worker(worker_name) when is_binary(worker_name) do
     try do
-      # Convert string to module atom
-      module = String.to_existing_atom("Elixir.#{worker_name}")
+      # Convert string to module atom, handling existing Elixir prefix
+      module_name = if String.starts_with?(worker_name, "Elixir."), do: worker_name, else: "Elixir.#{worker_name}"
+      module = String.to_existing_atom(module_name)
 
       # Ensure module is loaded
       Code.ensure_loaded(module)
@@ -198,8 +199,10 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
     do: "EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob"
   # Default: use SourceRegistry mapping (converts module to string)
   defp get_parent_worker_for_source(source_slug) do
-    {:ok, module} = EventasaurusDiscovery.Sources.SourceRegistry.get_sync_job(source_slug)
-    module |> Module.split() |> Enum.join(".")
+    case EventasaurusDiscovery.Sources.SourceRegistry.get_sync_job(source_slug) do
+      {:ok, module} -> module |> Module.split() |> Enum.join(".")
+      {:error, _} -> "Unknown.Worker"  # Fallback for unknown sources
+    end
   end
 
   # Convert source slug to display name
@@ -244,6 +247,10 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   end
 
   # Query Oban jobs table for all distinct discovery worker modules
+  # NOTE: This query runs on every dashboard load. Performance optimizations:
+  # 1. Add database index on oban_jobs.worker column (recommended)
+  # 2. Cache results with 5-minute TTL if this becomes a bottleneck
+  # Current approach maintains true auto-discovery - new child jobs appear immediately
   defp get_all_discovery_workers do
     import Ecto.Query
 
