@@ -59,11 +59,11 @@ defmodule Eventasaurus.ImageKit.Uploader do
 
     # Step 1: Download the image binary
     case download_image(remote_url) do
-      {:ok, image_binary} ->
-        Logger.info("✅ Downloaded #{byte_size(image_binary)} bytes")
+      {:ok, {image_binary, content_type}} ->
+        Logger.info("✅ Downloaded #{byte_size(image_binary)} bytes (#{content_type})")
 
         # Step 2: Upload the binary to ImageKit
-        upload_binary(image_binary, opts)
+        upload_binary(image_binary, Keyword.put(opts, :content_type, content_type))
 
       {:error, reason} ->
         Logger.error("❌ Failed to download image: #{inspect(reason)}")
@@ -71,19 +71,12 @@ defmodule Eventasaurus.ImageKit.Uploader do
     end
   end
 
-  @doc """
-  Downloads image binary from a URL.
-
-  ## Returns
-
-  - `{:ok, binary}` - Image downloaded successfully
-  - `{:error, reason}` - Download failed
-  """
-  @spec download_image(String.t()) :: {:ok, binary()} | {:error, any()}
+  @spec download_image(String.t()) :: {:ok, {binary(), String.t()}} | {:error, any()}
   defp download_image(url) do
     case Req.get(url, receive_timeout: @timeout_ms) do
-      {:ok, %Req.Response{status: 200, body: body}} when is_binary(body) ->
-        {:ok, body}
+      {:ok, %Req.Response{status: 200, body: body, headers: headers}} when is_binary(body) ->
+        content_type = get_content_type(headers)
+        {:ok, {body, content_type}}
 
       {:ok, %Req.Response{status: status, body: _body}} ->
         {:error, {:http_status, status}}
@@ -93,31 +86,39 @@ defmodule Eventasaurus.ImageKit.Uploader do
     end
   end
 
-  @doc """
-  Uploads image binary data to ImageKit.
+  defp get_content_type(headers) when is_map(headers) do
+    case Map.get(headers, "content-type", "image/jpeg") do
+      # If it's a list (from Req), take first element
+      [content_type | _] when is_binary(content_type) ->
+        String.split(content_type, ";") |> List.first()
 
-  ## Parameters
+      # If it's a string, split on semicolon
+      content_type when is_binary(content_type) ->
+        String.split(content_type, ";") |> List.first()
 
-  - `image_binary` - Binary image data
-  - `opts` - Upload options (same as upload_from_url/2)
+      # Fallback
+      _ ->
+        "image/jpeg"
+    end
+  end
 
-  ## Returns
+  defp get_content_type(_), do: "image/jpeg"
 
-  - `{:ok, imagekit_url}` - Upload successful
-  - `{:error, reason}` - Upload failed
-  """
   @spec upload_binary(binary(), keyword()) :: {:ok, String.t()} | {:error, atom() | tuple()}
-  defp upload_binary(image_binary, opts \\ []) do
+  defp upload_binary(image_binary, opts) do
     folder = Keyword.get(opts, :folder, "/venues")
     filename = Keyword.get(opts, :filename, generate_filename())
     tags = Keyword.get(opts, :tags, [])
     use_unique = Keyword.get(opts, :use_unique_filename, false)
+    content_type = Keyword.get(opts, :content_type, "image/jpeg")
 
-    Logger.info("📤 Uploading to ImageKit: #{byte_size(image_binary)} bytes → #{folder}/#{filename}")
+    Logger.info(
+      "📤 Uploading to ImageKit: #{byte_size(image_binary)} bytes → #{folder}/#{filename}"
+    )
 
     # Encode image as base64 for form upload
     # ImageKit accepts base64-encoded files in the "file" parameter
-    base64_image = "data:image/jpeg;base64," <> Base.encode64(image_binary)
+    base64_image = "data:#{content_type};base64," <> Base.encode64(image_binary)
 
     # Build form data for Req library
     form_data = %{
@@ -179,7 +180,6 @@ defmodule Eventasaurus.ImageKit.Uploader do
         {:error, :request_failed}
     end
   end
-
 
   @doc """
   Generate a unique filename for uploaded images.

@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
     # Store URI from connect_info for SEO (only available during connected mount)
     raw_uri = get_connect_info(socket, :uri)
+
     request_uri =
       cond do
         match?(%URI{}, raw_uri) -> raw_uri

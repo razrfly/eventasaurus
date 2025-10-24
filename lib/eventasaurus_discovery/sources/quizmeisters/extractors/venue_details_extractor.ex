@@ -73,7 +73,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Extractors.VenueDetailsExtr
     # Try venue-specific description first
     description =
       document
-      |> Floki.find(".venue-description.w-richtext:not(.trivia-generic):not(.bingo-generic):not(.survey-generic) p")
+      |> Floki.find(
+        ".venue-description.w-richtext:not(.trivia-generic):not(.bingo-generic):not(.survey-generic) p"
+      )
       |> Enum.map(&Floki.text/1)
       |> Enum.join("\n\n")
       |> String.trim()

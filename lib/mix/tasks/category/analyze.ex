@@ -81,7 +81,14 @@ defmodule Mix.Tasks.Category.Analyze do
               status: categorization_status(percentage)
             })
           else
-            print_category_analysis(source_slug, total_events, other_count, percentage, patterns, suggestions)
+            print_category_analysis(
+              source_slug,
+              total_events,
+              other_count,
+              percentage,
+              patterns,
+              suggestions
+            )
           end
         else
           Mix.shell().error("Source not found: #{source_slug}")
@@ -103,9 +110,10 @@ defmodule Mix.Tasks.Category.Analyze do
     import Ecto.Query
 
     query =
-      from s in Source,
+      from(s in Source,
         where: s.slug == ^slug,
         select: %{id: s.id, name: s.name, slug: s.slug}
+      )
 
     Repo.one(query)
   end
@@ -116,10 +124,11 @@ defmodule Mix.Tasks.Category.Analyze do
     import Ecto.Query
 
     query =
-      from e in PublicEvent,
+      from(e in PublicEvent,
         join: pes in assoc(e, :sources),
         where: pes.source_id == ^source_id,
         select: count(fragment("DISTINCT ?", e.id))
+      )
 
     Repo.one(query) || 0
   end
@@ -132,15 +141,16 @@ defmodule Mix.Tasks.Category.Analyze do
 
     other_category_id =
       Repo.one(
-        from c in Category,
+        from(c in Category,
           where: c.slug == "other" and c.is_active == true,
           select: c.id,
           limit: 1
+        )
       )
 
     if other_category_id do
       query =
-        from e in PublicEvent,
+        from(e in PublicEvent,
           join: pes in assoc(e, :sources),
           join: pec in "public_event_categories",
           on: pec.event_id == e.id,
@@ -159,6 +169,7 @@ defmodule Mix.Tasks.Category.Analyze do
           },
           order_by: [asc: e.id, desc: e.inserted_at],
           limit: 500
+        )
 
       Repo.all(query)
     else
@@ -172,16 +183,27 @@ defmodule Mix.Tasks.Category.Analyze do
     import Ecto.Query
 
     query =
-      from c in Category,
+      from(c in Category,
         where: c.is_active == true and c.slug != "other",
         select: %{id: c.id, name: c.name, slug: c.slug},
         order_by: c.name
+      )
 
     Repo.all(query)
   end
 
-  defp print_category_analysis(source_slug, total_events, other_count, percentage, patterns, suggestions) do
-    Mix.shell().info("\n" <> IO.ANSI.bright() <> "Category Analysis: #{source_slug}" <> IO.ANSI.reset())
+  defp print_category_analysis(
+         source_slug,
+         total_events,
+         other_count,
+         percentage,
+         patterns,
+         suggestions
+       ) do
+    Mix.shell().info(
+      "\n" <> IO.ANSI.bright() <> "Category Analysis: #{source_slug}" <> IO.ANSI.reset()
+    )
+
     Mix.shell().info("=" |> String.duplicate(60))
     Mix.shell().info("")
 
@@ -193,7 +215,11 @@ defmodule Mix.Tasks.Category.Analyze do
     status_color = if percentage < 10, do: IO.ANSI.green(), else: IO.ANSI.red()
     status_text = if percentage < 10, do: "✓ Good", else: "✗ Needs improvement"
 
-    Mix.shell().info("  Percentage:      " <> status_color <> "#{percentage}%" <> IO.ANSI.reset() <> " (Target: <10% - #{status_text})")
+    Mix.shell().info(
+      "  Percentage:      " <>
+        status_color <> "#{percentage}%" <> IO.ANSI.reset() <> " (Target: <10% - #{status_text})"
+    )
+
     Mix.shell().info("")
 
     if other_count > 0 and patterns do
@@ -207,7 +233,11 @@ defmodule Mix.Tasks.Category.Analyze do
           confidence_label = confidence_label(suggestion.confidence)
 
           Mix.shell().info("  " <> IO.ANSI.bright() <> suggestion.category <> IO.ANSI.reset())
-          Mix.shell().info("    Confidence: " <> confidence_color <> confidence_label <> IO.ANSI.reset())
+
+          Mix.shell().info(
+            "    Confidence: " <> confidence_color <> confidence_label <> IO.ANSI.reset()
+          )
+
           Mix.shell().info("    Would categorize: #{suggestion.event_count} events")
 
           if length(suggestion.url_patterns) > 0 do
@@ -225,27 +255,42 @@ defmodule Mix.Tasks.Category.Analyze do
       # Top URL patterns
       if length(patterns.url_patterns) > 0 do
         Mix.shell().info(IO.ANSI.bright() <> "🔗 Top URL Patterns:" <> IO.ANSI.reset())
-        Enum.take(patterns.url_patterns, 5) |> Enum.each(fn pattern ->
-          Mix.shell().info("  /#{pattern.pattern}/ - #{pattern.count} events (#{pattern.percentage}%)")
+
+        Enum.take(patterns.url_patterns, 5)
+        |> Enum.each(fn pattern ->
+          Mix.shell().info(
+            "  /#{pattern.pattern}/ - #{pattern.count} events (#{pattern.percentage}%)"
+          )
         end)
+
         Mix.shell().info("")
       end
 
       # Top keywords
       if length(patterns.title_keywords) > 0 do
         Mix.shell().info(IO.ANSI.bright() <> "🏷️  Top Title Keywords:" <> IO.ANSI.reset())
-        Enum.take(patterns.title_keywords, 5) |> Enum.each(fn keyword ->
-          Mix.shell().info("  #{keyword.keyword} - #{keyword.count} events (#{keyword.percentage}%)")
+
+        Enum.take(patterns.title_keywords, 5)
+        |> Enum.each(fn keyword ->
+          Mix.shell().info(
+            "  #{keyword.keyword} - #{keyword.count} events (#{keyword.percentage}%)"
+          )
         end)
+
         Mix.shell().info("")
       end
 
       # Venue types
       if length(patterns.venue_types) > 0 do
         Mix.shell().info(IO.ANSI.bright() <> "🏛️  Venue Types:" <> IO.ANSI.reset())
-        Enum.take(patterns.venue_types, 5) |> Enum.each(fn venue_type ->
-          Mix.shell().info("  #{venue_type.venue_type} - #{venue_type.count} events (#{venue_type.percentage}%)")
+
+        Enum.take(patterns.venue_types, 5)
+        |> Enum.each(fn venue_type ->
+          Mix.shell().info(
+            "  #{venue_type.venue_type} - #{venue_type.count} events (#{venue_type.percentage}%)"
+          )
         end)
+
         Mix.shell().info("")
       end
 
@@ -256,7 +301,9 @@ defmodule Mix.Tasks.Category.Analyze do
       Mix.shell().info("  3. Run: mix eventasaurus.recategorize_events --source #{source_slug}")
       Mix.shell().info("  4. Re-run this analysis to verify improvements")
     else
-      Mix.shell().info(IO.ANSI.green() <> "✅ Excellent! No events categorized as 'Other'." <> IO.ANSI.reset())
+      Mix.shell().info(
+        IO.ANSI.green() <> "✅ Excellent! No events categorized as 'Other'." <> IO.ANSI.reset()
+      )
     end
   end
 

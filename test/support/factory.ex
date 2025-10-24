@@ -71,7 +71,8 @@ defmodule EventasaurusApp.Factory do
     # Generate 2-character codes using letters A-Z
     # This gives us 26*26 = 676 possible combinations
     code_num = sequence(:country_code_num, & &1)
-    first_letter = rem(code_num, 26) + 65  # 65 is 'A' in ASCII
+    # 65 is 'A' in ASCII
+    first_letter = rem(code_num, 26) + 65
     second_letter = rem(div(code_num, 26), 26) + 65
     code = <<first_letter, second_letter>>
 

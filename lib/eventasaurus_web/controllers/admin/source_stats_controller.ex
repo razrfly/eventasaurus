@@ -40,14 +40,14 @@ defmodule EventasaurusWeb.Admin.SourceStatsController do
     if is_admin_email?(conn) do
       # Verify source exists
       case SourceRegistry.get_sync_job(source_slug) do
-      {:error, :not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{
-          error: "Source not found",
-          source: source_slug,
-          message: "The requested source does not exist in the registry"
-        })
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{
+            error: "Source not found",
+            source: source_slug,
+            message: "The requested source does not exist in the registry"
+          })
 
         {:ok, _} ->
           # Get comprehensive stats
@@ -102,8 +102,12 @@ defmodule EventasaurusWeb.Admin.SourceStatsController do
   # Parse the ADMIN_EMAILS environment variable into a list
   defp get_admin_emails do
     case System.get_env("ADMIN_EMAILS") do
-      nil -> []
-      "" -> []
+      nil ->
+        []
+
+      "" ->
+        []
+
       emails ->
         emails
         |> String.split(",")

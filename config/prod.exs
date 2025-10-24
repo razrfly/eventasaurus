@@ -7,12 +7,10 @@ config :eventasaurus, :environment, :prod
 config :eventasaurus, :dev_quick_login, false
 
 # Enable CDN in production
-config :eventasaurus, :cdn,
-  enabled: true
+config :eventasaurus, :cdn, enabled: true
 
 # Enable ImageKit CDN in production
-config :eventasaurus, :imagekit,
-  enabled: true
+config :eventasaurus, :imagekit, enabled: true
 
 # Note we also include the path to a cache manifest
 # containing the digested version of static files. This

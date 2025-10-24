@@ -342,22 +342,51 @@ defmodule EventasaurusApp.Venues do
         # Convert query results to venue structs and similarity data
         {duplicate_pairs, venues_map} =
           Enum.reduce(rows, {[], %{}}, fn row, {pairs, venues} ->
-            [id1, name1, addr1, lat1, lng1, slug1, pids1, imgs1,
-             id2, name2, addr2, lat2, lng2, slug2, pids2, imgs2,
-             distance, name_similarity] = row
+            [
+              id1,
+              name1,
+              addr1,
+              lat1,
+              lng1,
+              slug1,
+              pids1,
+              imgs1,
+              id2,
+              name2,
+              addr2,
+              lat2,
+              lng2,
+              slug2,
+              pids2,
+              imgs2,
+              distance,
+              name_similarity
+            ] = row
 
             v1 = %Venue{
-              id: id1, name: name1, address: addr1,
-              latitude: lat1, longitude: lng1, slug: slug1,
-              provider_ids: pids1, venue_images: imgs1
-            }
-            v2 = %Venue{
-              id: id2, name: name2, address: addr2,
-              latitude: lat2, longitude: lng2, slug: slug2,
-              provider_ids: pids2, venue_images: imgs2
+              id: id1,
+              name: name1,
+              address: addr1,
+              latitude: lat1,
+              longitude: lng1,
+              slug: slug1,
+              provider_ids: pids1,
+              venue_images: imgs1
             }
 
-            venues = venues
+            v2 = %Venue{
+              id: id2,
+              name: name2,
+              address: addr2,
+              latitude: lat2,
+              longitude: lng2,
+              slug: slug2,
+              provider_ids: pids2,
+              venue_images: imgs2
+            }
+
+            venues =
+              venues
               |> Map.put(id1, v1)
               |> Map.put(id2, v2)
 
@@ -378,8 +407,10 @@ defmodule EventasaurusApp.Venues do
   defp group_connected_venues_optimized(duplicate_pairs, venues_map) do
     # Build adjacency map and store distances/similarities
     {adjacency, distances_map, similarities_map} =
-      Enum.reduce(duplicate_pairs, {%{}, %{}, %{}}, fn {v1, v2, similarity, distance}, {adj, dist, sim} ->
-        adj = adj
+      Enum.reduce(duplicate_pairs, {%{}, %{}, %{}}, fn {v1, v2, similarity, distance},
+                                                       {adj, dist, sim} ->
+        adj =
+          adj
           |> Map.update(v1.id, [v2.id], &[v2.id | &1])
           |> Map.update(v2.id, [v1.id], &[v1.id | &1])
 

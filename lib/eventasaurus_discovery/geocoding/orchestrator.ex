@@ -75,13 +75,15 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
   def geocode(address, opts) when is_binary(address) do
     provider_names = Keyword.get(opts, :providers)
 
-    providers = case provider_names do
-      nil ->
-        get_enabled_providers()
-      names when is_list(names) ->
-        ProviderConfig.get_specific_providers(names)
-        |> Enum.map(fn {module, _opts} -> module end)
-    end
+    providers =
+      case provider_names do
+        nil ->
+          get_enabled_providers()
+
+        names when is_list(names) ->
+          ProviderConfig.get_specific_providers(names)
+          |> Enum.map(fn {module, _opts} -> module end)
+      end
 
     if Enum.empty?(providers) do
       Logger.error("❌ No geocoding providers enabled in configuration")
@@ -105,33 +107,40 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
   defp try_all_providers(address, providers) do
     Logger.info("🔄 Collecting provider IDs from #{length(providers)} providers")
 
-    result = Enum.reduce(providers, %{
-      provider_ids: %{},
-      attempted: [],
-      first_success: nil,
-      raw_responses: []
-    }, fn provider_module, acc ->
-      provider_name = provider_module.name()
-      Logger.debug("🔄 Trying provider: #{provider_name}")
+    result =
+      Enum.reduce(
+        providers,
+        %{
+          provider_ids: %{},
+          attempted: [],
+          first_success: nil,
+          raw_responses: []
+        },
+        fn provider_module, acc ->
+          provider_name = provider_module.name()
+          Logger.debug("🔄 Trying provider: #{provider_name}")
 
-      # Check rate limit BEFORE calling provider
-      case RateLimiter.check_rate_limit(provider_name) do
-        :ok ->
-          call_provider_for_collection(address, provider_module, provider_name, acc)
+          # Check rate limit BEFORE calling provider
+          case RateLimiter.check_rate_limit(provider_name) do
+            :ok ->
+              call_provider_for_collection(address, provider_module, provider_name, acc)
 
-        {:error, :rate_limited, retry_after_ms} ->
-          Logger.warning("⏱️ #{provider_name} rate limited, waiting #{retry_after_ms}ms...")
-          Process.sleep(retry_after_ms)
-          # Retry after waiting
-          call_provider_for_collection(address, provider_module, provider_name, acc)
-      end
-    end)
+            {:error, :rate_limited, retry_after_ms} ->
+              Logger.warning("⏱️ #{provider_name} rate limited, waiting #{retry_after_ms}ms...")
+              Process.sleep(retry_after_ms)
+              # Retry after waiting
+              call_provider_for_collection(address, provider_module, provider_name, acc)
+          end
+        end
+      )
 
     # Build final response from collected data
     case result.first_success do
       {lat, lng, first_result} ->
         # Success! Use coordinates from first successful provider, but include ALL provider IDs
-        Logger.info("✅ Collected #{map_size(result.provider_ids)} provider IDs from #{length(result.attempted)} providers")
+        Logger.info(
+          "✅ Collected #{map_size(result.provider_ids)} provider IDs from #{length(result.attempted)} providers"
+        )
 
         metadata = %{
           provider: first_result[:provider_name] || List.first(result.attempted),
@@ -185,7 +194,8 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
         end)
         |> Map.update!(:first_success, fn
           nil -> {lat, lng, Map.put(result, :provider_name, provider_name)}
-          existing -> existing  # Keep first success
+          # Keep first success
+          existing -> existing
         end)
         |> Map.update!(:raw_responses, fn responses ->
           [%{provider: provider_name, response: Map.get(result, :raw_response)} | responses]

@@ -98,7 +98,9 @@ defmodule EventasaurusDiscovery.VenueImages.OrchestratorTest do
       venue = %Venue{
         id: 1,
         venue_images: [],
-        image_enrichment_metadata: %{"last_enriched_at" => DateTime.utc_now() |> DateTime.to_iso8601()}
+        image_enrichment_metadata: %{
+          "last_enriched_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        }
       }
 
       assert Orchestrator.needs_enrichment?(venue) == true

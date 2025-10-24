@@ -137,34 +137,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery 
 
   defp get_image_url(image) do
     # Use ImageKit URL directly (uploaded during enrichment)
-    imagekit_url = image["url"]
-
-    # Fallback to proxy if upload failed or legacy image
-    case image["upload_status"] do
-      "uploaded" ->
-        # Use ImageKit URL directly
-        imagekit_url
-
-      "failed" ->
-        # Fallback to proxy for failed uploads
-        provider_url = image["provider_url"] || imagekit_url
-        provider = image["provider"] || "unknown"
-        encoded_url = Base.url_encode64(provider_url, padding: false)
-        "/venue-images/proxy/#{provider}/#{encoded_url}"
-
-      _ ->
-        # Legacy images without upload_status (use proxy)
-        # This handles images from before ImageKit integration
-        if String.starts_with?(imagekit_url || "", "https://ik.imagekit.io") do
-          # Already an ImageKit URL
-          imagekit_url
-        else
-          # Legacy provider URL, use proxy
-          provider = image["provider"] || "unknown"
-          encoded_url = Base.url_encode64(imagekit_url, padding: false)
-          "/venue-images/proxy/#{provider}/#{encoded_url}"
-        end
-    end
+    image["url"]
   end
 
   defp format_last_enriched(venue) do
@@ -201,6 +174,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery 
   defp format_provider_name("tripadvisor"), do: "TripAdvisor"
   defp format_provider_name("here"), do: "HERE Maps"
   defp format_provider_name(nil), do: "Unknown"
+
   defp format_provider_name(provider) when is_binary(provider) do
     provider
     |> String.replace("_", " ")
@@ -208,6 +182,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery 
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
   end
+
   defp format_provider_name(_), do: "Unknown"
 
   defp format_date(iso_string) when is_binary(iso_string) do

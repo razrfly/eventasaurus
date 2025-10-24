@@ -259,14 +259,15 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Geoapify do
         if formatted_address do
           Logger.debug("✅ Geoapify found address: #{formatted_address}")
           {:ok, formatted_address}
-        else if place_id do
-          # Fallback to place_id for backwards compatibility
-          Logger.debug("✅ Geoapify found place: #{place_id}")
-          {:ok, place_id}
         else
-          Logger.debug("📍 Geoapify: no address or place_id in response")
-          {:error, :no_results}
-        end
+          if place_id do
+            # Fallback to place_id for backwards compatibility
+            Logger.debug("✅ Geoapify found place: #{place_id}")
+            {:ok, place_id}
+          else
+            Logger.debug("📍 Geoapify: no address or place_id in response")
+            {:error, :no_results}
+          end
         end
 
       {:ok, %{"results" => []}} ->

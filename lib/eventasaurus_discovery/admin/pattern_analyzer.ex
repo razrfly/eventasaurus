@@ -121,11 +121,13 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
     |> Enum.frequencies()
     |> Enum.map(fn {venue_type, count} ->
       total_with_venue = Enum.count(events, &(&1.venue_type != nil))
-      percentage = if total_with_venue > 0 do
-        Float.round(count / total_with_venue * 100, 1)
-      else
-        0.0
-      end
+
+      percentage =
+        if total_with_venue > 0 do
+          Float.round(count / total_with_venue * 100, 1)
+        else
+          0.0
+        end
 
       %{
         venue_type: venue_type,
@@ -143,7 +145,9 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
   """
   def generate_suggestions(patterns, available_categories) do
     url_suggestions = generate_url_suggestions(patterns.url_patterns, available_categories)
-    keyword_suggestions = generate_keyword_suggestions(patterns.title_keywords, available_categories)
+
+    keyword_suggestions =
+      generate_keyword_suggestions(patterns.title_keywords, available_categories)
 
     (url_suggestions ++ keyword_suggestions)
     |> Enum.group_by(& &1.category)
@@ -167,6 +171,7 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
       []
     end
   end
+
   defp extract_path_segments(_), do: []
 
   defp get_sample_events_for_pattern(events, pattern, limit) do
@@ -307,7 +312,8 @@ defmodule EventasaurusDiscovery.Admin.PatternAnalyzer do
       event_count: total_events,
       confidence: num_to_confidence(avg_confidence),
       yaml: yaml,
-      sample_events: suggestions |> Enum.flat_map(& &1.sample_events) |> Enum.uniq_by(& &1.id) |> Enum.take(3)
+      sample_events:
+        suggestions |> Enum.flat_map(& &1.sample_events) |> Enum.uniq_by(& &1.id) |> Enum.take(3)
     }
   end
 

@@ -62,6 +62,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
 
         # Log host from metadata (hybrid approach - not stored in performers table)
         host_name = get_in(transformed, [:metadata, :performer, :name])
+
         if host_name do
           Logger.info("🎭 Host: #{host_name} (stored in description + metadata)")
         end
@@ -108,17 +109,29 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
     # Convert GPS coordinates to string format (they may be floats or strings)
     lat_val =
       cond do
-        is_binary(event_data["lat"]) or is_float(event_data["lat"]) -> event_data["lat"]
-        is_binary(event_data["latitude"]) or is_float(event_data["latitude"]) -> event_data["latitude"]
-        true -> nil
+        is_binary(event_data["lat"]) or is_float(event_data["lat"]) ->
+          event_data["lat"]
+
+        is_binary(event_data["latitude"]) or is_float(event_data["latitude"]) ->
+          event_data["latitude"]
+
+        true ->
+          nil
       end
 
     lng_val =
       cond do
-        is_binary(event_data["lng"]) or is_float(event_data["lng"]) -> event_data["lng"]
-        is_binary(event_data["lon"]) or is_float(event_data["lon"]) -> event_data["lon"]
-        is_binary(event_data["longitude"]) or is_float(event_data["longitude"]) -> event_data["longitude"]
-        true -> nil
+        is_binary(event_data["lng"]) or is_float(event_data["lng"]) ->
+          event_data["lng"]
+
+        is_binary(event_data["lon"]) or is_float(event_data["lon"]) ->
+          event_data["lon"]
+
+        is_binary(event_data["longitude"]) or is_float(event_data["longitude"]) ->
+          event_data["longitude"]
+
+        true ->
+          nil
       end
 
     lat = if lat_val, do: to_string(lat_val), else: nil
@@ -156,7 +169,6 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
     end
   end
 
-
   defp transform_and_validate(venue_data, source_id) do
     case Transformer.transform_event(venue_data, source_id) do
       transformed when is_map(transformed) ->
@@ -180,7 +192,6 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
       error -> error
     end
   end
-
 
   defp log_results(events) do
     count = length(events)

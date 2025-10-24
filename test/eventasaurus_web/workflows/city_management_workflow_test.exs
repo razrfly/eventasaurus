@@ -68,7 +68,8 @@ defmodule EventasaurusWeb.Workflows.CityManagementWorkflowTest do
       assert html =~ "Melbourne"
       assert html =~ "Australia"
       assert html =~ "-37.8136"
-      assert html =~ "Enabled"  # Discovery enabled badge
+      # Discovery enabled badge
+      assert html =~ "Enabled"
 
       # Step 7: Verify city was created in database
       melbourne = Repo.get_by(City, name: "Melbourne")

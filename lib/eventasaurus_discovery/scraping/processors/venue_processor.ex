@@ -533,7 +533,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   # Reverse geocodes coordinates to get address
   # Used when scrapers provide coordinates but no address (e.g., Resident Advisor)
-  # Returns {address} tuple - simpler than forward geocoding since we already have coordinates
+  # Returns {address, metadata} tuple with geocoding provider information
   defp reverse_geocode_coordinates(lat, lng, city) when is_number(lat) and is_number(lng) do
     Logger.info("🔄 Reverse geocoding coordinates: #{lat}, #{lng}")
 
@@ -549,53 +549,78 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       EventasaurusDiscovery.Geocoding.Providers.Foursquare
     ]
 
-    result = try_reverse_geocoding(providers_with_reverse, lat, lng, city)
+    result = try_reverse_geocoding(providers_with_reverse, lat, lng, city, [])
 
     case result do
-      {:ok, address} ->
-        Logger.info("🗺️ ✅ Successfully reverse geocoded to address: #{address}")
-        {address}
+      {:ok, address, provider_name, attempted_providers} ->
+        Logger.info("🗺️ ✅ Successfully reverse geocoded to address: #{address} using #{provider_name}")
 
-      {:error, reason} ->
+        # Build metadata for reverse geocoding
+        metadata = %{
+          provider: provider_name,
+          geocoded_at: DateTime.utc_now(),
+          attempts: length(attempted_providers),
+          attempted_providers: attempted_providers,
+          cost_per_call: 0.0,  # Reverse geocoding typically free
+          collection_mode: true
+        }
+
+        {address, metadata}
+
+      {:error, reason, attempted_providers} ->
         Logger.error(
-          "🗺️ ❌ Failed to reverse geocode coordinates #{lat}, #{lng}: #{reason}. Tried all available providers."
+          "🗺️ ❌ Failed to reverse geocode coordinates #{lat}, #{lng}: #{reason}. Tried: #{inspect(attempted_providers)}"
         )
 
-        {nil}
+        {nil, nil}
     end
   end
 
-  defp reverse_geocode_coordinates(_lat, _lng, _city), do: {nil}
+  defp reverse_geocode_coordinates(_lat, _lng, _city), do: {nil, nil}
 
   # Try reverse geocoding with multiple providers until one succeeds
-  defp try_reverse_geocoding([], _lat, _lng, _city), do: {:error, :all_providers_failed}
+  # Returns {:ok, address, provider_name, attempted_providers} or {:error, reason, attempted_providers}
+  defp try_reverse_geocoding([], _lat, _lng, _city, attempted_providers) do
+    {:error, :all_providers_failed, Enum.reverse(attempted_providers)}
+  end
 
-  defp try_reverse_geocoding([provider | rest], lat, lng, city) do
-    provider_name = provider_module_to_name(provider)
-    Logger.debug("🔍 Trying reverse geocoding with #{provider_name}")
+  defp try_reverse_geocoding([provider | rest], lat, lng, city, attempted_providers) do
+    provider_name = provider_module_to_snake_case(provider)
+    display_name = provider_module_to_name(provider)
+    Logger.debug("🔍 Trying reverse geocoding with #{display_name}")
+
+    updated_attempted = [provider_name | attempted_providers]
 
     try do
       case provider.search_by_coordinates(lat, lng) do
         {:ok, address} when is_binary(address) ->
-          Logger.info("✅ #{provider_name} reverse geocoding successful")
-          {:ok, address}
+          Logger.info("✅ #{display_name} reverse geocoding successful")
+          {:ok, address, provider_name, Enum.reverse(updated_attempted)}
 
         {:error, _reason} ->
-          Logger.debug("❌ #{provider_name} reverse geocoding failed, trying next provider")
-          try_reverse_geocoding(rest, lat, lng, city)
+          Logger.debug("❌ #{display_name} reverse geocoding failed, trying next provider")
+          try_reverse_geocoding(rest, lat, lng, city, updated_attempted)
 
         _other ->
-          Logger.warning("⚠️ #{provider_name} returned unexpected response, trying next provider")
-          try_reverse_geocoding(rest, lat, lng, city)
+          Logger.warning("⚠️ #{display_name} returned unexpected response, trying next provider")
+          try_reverse_geocoding(rest, lat, lng, city, updated_attempted)
       end
     rescue
       error ->
-        Logger.error("❌ #{provider_name} raised error: #{inspect(error)}, trying next provider")
-        try_reverse_geocoding(rest, lat, lng, city)
+        Logger.error("❌ #{display_name} raised error: #{inspect(error)}, trying next provider")
+        try_reverse_geocoding(rest, lat, lng, city, updated_attempted)
     end
   end
 
-  # Convert provider module to friendly name
+  # Convert provider module to snake_case for database storage
+  defp provider_module_to_snake_case(module) do
+    module
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+  end
+
+  # Convert provider module to friendly name for logging
   defp provider_module_to_name(module) do
     module
     |> Module.split()
@@ -662,8 +687,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         if is_nil(data.address) do
           # Case 2a: Has coordinates but no address → reverse geocode (coordinates → address)
           # This handles Resident Advisor and similar scrapers
-          {address} = reverse_geocode_coordinates(data.latitude, data.longitude, city)
-          {data.latitude, data.longitude, address, nil, nil, %{}}
+          {address, reverse_metadata} = reverse_geocode_coordinates(data.latitude, data.longitude, city)
+          {data.latitude, data.longitude, address, reverse_metadata, nil, %{}}
         else
           # Case 2b: Has both coordinates and address → use them directly
           {data.latitude, data.longitude, nil, nil, nil, %{}}
@@ -689,7 +714,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       end
 
     # Fallback to place_id lookup if no provider_ids match
-    existing_venue = existing_venue || if final_place_id, do: find_existing_venue(%{place_id: final_place_id}), else: nil
+    existing_venue =
+      existing_venue ||
+        if final_place_id, do: find_existing_venue(%{place_id: final_place_id}), else: nil
 
     if existing_venue do
       # Another worker just created it, return existing venue
@@ -732,7 +759,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                 nil
               end
 
-            refetch_existing = refetch_existing || find_existing_venue(%{place_id: final_place_id})
+            refetch_existing =
+              refetch_existing || find_existing_venue(%{place_id: final_place_id})
 
             case refetch_existing do
               nil ->
@@ -919,13 +947,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
             Logger.info(
               "🏛️ ✅ Found existing venue via duplicate detection: '#{duplicate_venue.name}' (ID: #{duplicate_venue.id})"
             )
+
             {:ok, duplicate_venue}
           else
             # Couldn't extract venue ID from opts - log and propagate error
             errors = format_changeset_errors(changeset)
+
             Logger.error(
               "❌ Duplicate detected but couldn't find existing venue for '#{EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(data.name)}': #{errors}"
             )
+
             {:error, "Failed to create venue: #{errors}"}
           end
         else

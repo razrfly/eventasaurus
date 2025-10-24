@@ -80,27 +80,48 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     with {:ok, article_id} <- extract_article_id(raw_event),
          {:ok, title} <- extract_title(raw_event),
          {:ok, venue_data} <- extract_venue(raw_event) do
-
       # Try to parse dates - if it fails, use unknown occurrence fallback
       case extract_and_parse_dates(raw_event, options) do
         {:ok, dates} ->
           # SUCCESS: Create events with parsed dates
           event_type = Map.get(raw_event, "event_type", :one_time)
 
-          events = case event_type do
-            :exhibition ->
-              [create_exhibition_event(article_id, title, dates, venue_data, raw_event, options)]
+          events =
+            case event_type do
+              :exhibition ->
+                [
+                  create_exhibition_event(
+                    article_id,
+                    title,
+                    dates,
+                    venue_data,
+                    raw_event,
+                    options
+                  )
+                ]
 
-            :recurring ->
-              [create_recurring_event(article_id, title, List.first(dates), venue_data, raw_event, options)]
+              :recurring ->
+                [
+                  create_recurring_event(
+                    article_id,
+                    title,
+                    List.first(dates),
+                    venue_data,
+                    raw_event,
+                    options
+                  )
+                ]
 
-            :one_time ->
-              Enum.map(dates, fn date ->
-                create_event(article_id, title, date, venue_data, raw_event, options)
-              end)
-          end
+              :one_time ->
+                Enum.map(dates, fn date ->
+                  create_event(article_id, title, date, venue_data, raw_event, options)
+                end)
+            end
 
-          Logger.info("✅ Transformed into #{length(events)} #{event_type} event instance(s): #{title}")
+          Logger.info(
+            "✅ Transformed into #{length(events)} #{event_type} event instance(s): #{title}"
+          )
+
           {:ok, events}
 
         {:error, :unsupported_date_format} ->
@@ -112,7 +133,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
           Creating event with occurrence_type = "unknown" (stored in metadata JSONB)
           """)
 
-          event = create_unknown_occurrence_event(article_id, title, venue_data, raw_event, options)
+          event =
+            create_unknown_occurrence_event(article_id, title, venue_data, raw_event, options)
+
           Logger.info("✅ Created unknown occurrence event: #{title}")
           {:ok, [event]}
 
@@ -218,13 +241,17 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     coerced =
       dates
       |> Enum.flat_map(fn
-        %DateTime{} = dt -> [dt]
+        %DateTime{} = dt ->
+          [dt]
+
         bin when is_binary(bin) ->
           case parse_with_multilingual_parser(bin, options) do
             {:ok, [dt | _]} -> [dt]
             _ -> []
           end
-        _ -> []
+
+        _ ->
+          []
       end)
 
     if coerced == [], do: {:error, :no_dates_extracted}, else: {:ok, coerced}
@@ -262,9 +289,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     %{
       # Required fields
       external_id: external_id,
-      article_id: article_id,  # Article ID for consolidation (similar to movie_id)
+      # Article ID for consolidation (similar to movie_id)
+      article_id: article_id,
       title: title,
-      starts_at: date,  # Assumes date is already DateTime in UTC
+      # Assumes date is already DateTime in UTC
+      starts_at: date,
       event_type: :one_time,
 
       # Venue data (REQUIRED - VenueProcessor handles geocoding)
@@ -299,7 +328,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Metadata (include occurrence_type for consistency)
       metadata: %{
         article_id: article_id,
-        occurrence_type: "explicit",  # Store in metadata JSONB (validated type)
+        # Store in metadata JSONB (validated type)
+        occurrence_type: "explicit",
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: "en"
@@ -322,8 +352,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       external_id: external_id,
       article_id: article_id,
       title: title,
-      starts_at: first_seen,  # Use first_seen as starts_at
-      event_type: :one_time,  # Keep as one_time for compatibility
+      # Use first_seen as starts_at
+      starts_at: first_seen,
+      # Keep as one_time for compatibility
+      event_type: :one_time,
 
       # Venue data (REQUIRED - VenueProcessor handles geocoding)
       venue_data: %{
@@ -338,7 +370,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       },
 
       # Optional but recommended
-      ends_at: nil,  # Unknown
+      # Unknown
+      ends_at: nil,
       description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
@@ -357,10 +390,13 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       # Events with unparseable dates are treated as exhibitions (open-ended)
       metadata: %{
         article_id: article_id,
-        occurrence_type: "exhibition",  # JSONB storage for occurrence type (validated)
-        occurrence_fallback: true,    # Flag indicating fallback was used
+        # JSONB storage for occurrence type (validated)
+        occurrence_type: "exhibition",
+        # Flag indicating fallback was used
+        occurrence_fallback: true,
         first_seen_at: DateTime.to_iso8601(first_seen),
-        original_date_string: Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"),
+        original_date_string:
+          Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: get_source_language(raw_event)
       },
@@ -376,10 +412,11 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     sorted_dates = Enum.sort(dates, &(DateTime.compare(&1, &2) != :gt))
 
     # Guard against empty dates list
-    [start_date | rest] = case sorted_dates do
-      [] -> raise ArgumentError, "Exhibition requires at least one date"
-      dates -> dates
-    end
+    [start_date | rest] =
+      case sorted_dates do
+        [] -> raise ArgumentError, "Exhibition requires at least one date"
+        dates -> dates
+      end
 
     end_date = List.last(rest) || start_date
 
@@ -392,7 +429,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       article_id: article_id,
       title: title,
       starts_at: start_date,
-      ends_at: end_date,  # Exhibition closing date
+      # Exhibition closing date
+      ends_at: end_date,
       event_type: :exhibition,
 
       # Venue data
@@ -406,7 +444,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         external_id: Map.get(venue_data, "external_id"),
         metadata: Map.get(venue_data, "metadata", %{})
       },
-
       description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
@@ -417,13 +454,13 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       min_price: Map.get(raw_event, "min_price"),
       max_price: Map.get(raw_event, "max_price"),
       currency: Map.get(raw_event, "currency"),
-
       performers: Map.get(raw_event, "performers", []),
 
       # Metadata (include occurrence_type for consistency)
       metadata: %{
         article_id: article_id,
-        occurrence_type: "exhibition",  # Store in metadata JSONB
+        # Store in metadata JSONB
+        occurrence_type: "exhibition",
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: get_source_language(raw_event),
@@ -432,7 +469,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
           end_date: format_date_for_id(end_date)
         }
       },
-
       raw_event_data: raw_event
     }
   end
@@ -463,7 +499,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         external_id: Map.get(venue_data, "external_id"),
         metadata: Map.get(venue_data, "metadata", %{})
       },
-
       description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
@@ -474,19 +509,18 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       min_price: Map.get(raw_event, "min_price"),
       max_price: Map.get(raw_event, "max_price"),
       currency: Map.get(raw_event, "currency"),
-
       performers: Map.get(raw_event, "performers", []),
 
       # Metadata - include recurrence pattern and occurrence_type
       metadata: %{
         article_id: article_id,
-        occurrence_type: "recurring",  # Store in metadata JSONB
+        # Store in metadata JSONB
+        occurrence_type: "recurring",
         original_date_string: Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),
         language: get_source_language(raw_event),
         recurrence_pattern: recurrence_pattern
       },
-
       raw_event_data: raw_event
     }
   end
@@ -525,8 +559,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       nil ->
         # No translations map, check for single language description
         case Map.get(raw_event, "description") do
-          nil -> nil
-          "" -> nil
+          nil ->
+            nil
+
+          "" ->
+            nil
+
           desc ->
             # Single language description - use source_language if available
             lang = Map.get(raw_event, "source_language", "en")
@@ -553,7 +591,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     # Try French first since Sortiraparis is primarily French content
     case MultilingualDateParser.extract_and_parse(date_string,
            languages: [:french, :english],
-           timezone: timezone) do
+           timezone: timezone
+         ) do
       {:ok, %{starts_at: starts_at, ends_at: nil}} ->
         # Single date - return list with one DateTime
         {:ok, [starts_at]}

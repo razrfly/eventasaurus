@@ -85,16 +85,18 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
   # CRITICAL: EventFreshnessChecker integration
   defp filter_fresh_venues(venues, source_id, limit) do
     # Generate external_ids for each venue
-    venues_with_external_ids = Enum.map(venues, fn venue ->
-      venue_id = venue.venue_id || venue[:venue_id]
-      Map.put(venue, :external_id, "inquizition-#{venue_id}")
-    end)
+    venues_with_external_ids =
+      Enum.map(venues, fn venue ->
+        venue_id = venue.venue_id || venue[:venue_id]
+        Map.put(venue, :external_id, "inquizition-#{venue_id}")
+      end)
 
     # Filter out venues that were recently updated (default: 7 days)
-    venues_to_process = EventFreshnessChecker.filter_events_needing_processing(
-      venues_with_external_ids,
-      source_id
-    )
+    venues_to_process =
+      EventFreshnessChecker.filter_events_needing_processing(
+        venues_with_external_ids,
+        source_id
+      )
 
     # Apply limit if provided (for testing)
     if limit do
@@ -106,16 +108,17 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
 
   # Enqueue a VenueDetailJob for each venue
   defp enqueue_detail_jobs(venues, source_id) do
-    jobs = Enum.map(venues, fn venue ->
-      venue_id = venue.venue_id || venue[:venue_id]
+    jobs =
+      Enum.map(venues, fn venue ->
+        venue_id = venue.venue_id || venue[:venue_id]
 
-      %{
-        "source_id" => source_id,
-        "venue_id" => venue_id,
-        "venue_data" => venue
-      }
-      |> Inquizition.Jobs.VenueDetailJob.new()
-    end)
+        %{
+          "source_id" => source_id,
+          "venue_id" => venue_id,
+          "venue_data" => venue
+        }
+        |> Inquizition.Jobs.VenueDetailJob.new()
+      end)
 
     # Insert all jobs
     inserted_jobs = Oban.insert_all(jobs)

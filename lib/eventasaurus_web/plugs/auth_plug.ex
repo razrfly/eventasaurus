@@ -363,7 +363,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
             # This prevents forced logouts due to transient network issues during deployments
             if is_token_actually_expired?(token_expires_at) do
               # Token is truly expired, must clear session
-              Logger.warning("Token expired and refresh failed: #{inspect(reason)}. Clearing session.")
+              Logger.warning(
+                "Token expired and refresh failed: #{inspect(reason)}. Clearing session."
+              )
 
               # Report to Sentry for monitoring deployment-related refresh failures
               Sentry.capture_message("Token refresh failed with expired token",
@@ -380,7 +382,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
               # This handles transient network issues during Fly.io deployments
               Logger.warning(
                 "Token refresh failed but token still valid (expires: #{token_expires_at}): #{inspect(reason)}. " <>
-                "Keeping session to prevent logout during deployment."
+                  "Keeping session to prevent logout during deployment."
               )
 
               # Report to Sentry for monitoring transient failures

@@ -15,7 +15,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
   alias EventasaurusDiscovery.Sources.Source
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, TrendAnalyzer}
+
+  alias EventasaurusDiscovery.Admin.{
+    DiscoveryStatsCollector,
+    SourceHealthCalculator,
+    EventChangeTracker,
+    TrendAnalyzer
+  }
+
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.VenueImages.QualityStats
   alias EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery
@@ -23,7 +30,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   import Ecto.Query
   require Logger
 
-  @refresh_interval 30_000  # 30 seconds
+  # 30 seconds
+  @refresh_interval 30_000
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
@@ -76,7 +84,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
     # Get new trend data
     city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
-    city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
+
+    city_chart_data =
+      TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
 
     socket =
       socket
@@ -111,7 +121,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
     # Get trend data (Phase 6) - uses date_range
     city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
-    city_chart_data = TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
+
+    city_chart_data =
+      TrendAnalyzer.format_for_chartjs(city_event_trend, :count, "Events", "#3B82F6")
 
     # Get venue image quality stats (Phase 2 & Phase 4)
     venue_stats = QualityStats.get_city_venue_stats(city_id)
@@ -169,8 +181,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
       # Get change tracking data
       new_events = EventChangeTracker.calculate_new_events(source.source_slug, 24)
       dropped_events = EventChangeTracker.calculate_dropped_events(source.source_slug, 48)
-      percentage_change = EventChangeTracker.calculate_percentage_change(source.source_slug, city_id)
-      {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(percentage_change)
+
+      percentage_change =
+        EventChangeTracker.calculate_percentage_change(source.source_slug, city_id)
+
+      {trend_emoji, trend_text, trend_class} =
+        EventChangeTracker.get_trend_indicator(percentage_change)
 
       %{
         source_id: source.source_id,
@@ -738,6 +754,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   # Helper functions
 
   defp format_number(nil), do: "0"
+
   defp format_number(num) when is_integer(num) do
     num
     |> Integer.to_string()
@@ -745,11 +762,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
     |> String.reverse()
   end
+
   defp format_number(num) when is_float(num), do: format_number(round(num))
   defp format_number(_), do: "0"
 
   defp format_last_run(nil), do: "Never"
   defp format_last_run(%DateTime{} = dt), do: time_ago_in_words(dt)
+
   defp format_last_run(%NaiveDateTime{} = dt) do
     dt
     |> DateTime.from_naive!("Etc/UTC")

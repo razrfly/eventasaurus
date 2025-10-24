@@ -75,10 +75,11 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
 
   defp get_active_cities do
     query =
-      from c in City,
+      from(c in City,
         where: c.discovery_enabled == true,
         order_by: c.name,
         select: %{id: c.id, name: c.name}
+      )
 
     Repo.all(query)
   end
@@ -97,9 +98,7 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
         {:error, :rate_limited}
 
       {:error, :max_retries_exceeded} ->
-        Logger.warning(
-          "  ⚠️  Max retries exceeded for #{city.name}, skipping this cycle"
-        )
+        Logger.warning("  ⚠️  Max retries exceeded for #{city.name}, skipping this cycle")
 
         {:error, :max_retries_exceeded}
 

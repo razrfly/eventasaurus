@@ -422,9 +422,14 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     # mode: :content - Show only content, parent handles container and header
     mode =
       cond do
-        Map.has_key?(assigns, :mode) -> assigns.mode
-        Map.has_key?(assigns, :show_container) -> if assigns.show_container, do: :full, else: :content
-        true -> :full
+        Map.has_key?(assigns, :mode) ->
+          assigns.mode
+
+        Map.has_key?(assigns, :show_container) ->
+          if assigns.show_container, do: :full, else: :content
+
+        true ->
+          :full
       end
 
     assigns = assign(assigns, :mode, mode)

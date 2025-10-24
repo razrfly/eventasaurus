@@ -151,7 +151,7 @@
             <%= for provider <- @provider_stats do %>
               <tr>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  <%= String.capitalize(provider.name) %>
+                  <%= format_provider_name(provider.name) %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class={"px-2 py-1 text-xs rounded #{status_badge_class(provider.is_active)}"}>
@@ -185,41 +185,6 @@
       </div>
     </div>
 
-    <!-- Cost Analysis -->
-    <div class="mb-8 bg-white rounded-lg shadow p-6">
-      <h2 class="text-xl font-semibold mb-4">Cost Analysis</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <h3 class="text-lg font-medium mb-3">Cost Breakdown by Provider</h3>
-          <div class="space-y-2">
-            <%= for {provider, cost} <- @cost_analysis.provider_costs do %>
-              <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
-                <span class="font-medium text-gray-700"><%= String.capitalize(provider) %></span>
-                <span class="text-gray-900"><%= format_cost(cost) %></span>
-              </div>
-            <% end %>
-          </div>
-        </div>
-
-        <div>
-          <h3 class="text-lg font-medium mb-3">Projections</h3>
-          <div class="space-y-4">
-            <div class="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
-              <div class="text-sm text-blue-700">Average Cost per Venue</div>
-              <div class="text-2xl font-bold text-blue-900">
-                <%= format_cost(@cost_analysis.avg_cost_per_venue) %>
-              </div>
-            </div>
-            <div class="p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded">
-              <div class="text-sm text-indigo-700">Projected Total Cost (All Venues)</div>
-              <div class="text-2xl font-bold text-indigo-900">
-                <%= format_cost(@cost_analysis.projected_total_cost) %>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Staleness Monitor -->
     <div class="mb-8 bg-white rounded-lg shadow p-6">
@@ -539,82 +504,6 @@
       </div>
     <% end %>
 
-    <!-- Testing Instructions -->
-    <div class="mt-8 p-6 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
-      <h3 class="text-lg font-semibold text-blue-900 mb-3">Testing & Usage Instructions</h3>
-      <div class="space-y-4 text-sm text-blue-800">
-        <div>
-          <h4 class="font-semibold mb-2">Manual Enrichment (IEx Console):</h4>
-          <pre class="p-3 bg-blue-100 rounded font-mono text-xs overflow-x-auto">alias EventasaurusDiscovery.VenueImages.Orchestrator
-alias EventasaurusApp.Repo
-alias EventasaurusApp.Venues.Venue
-venue = Repo.get(Venue, 1) |> Repo.preload(:city)
-result = Orchestrator.enrich_venue(venue)
-# Check result.venue_images for fetched images</pre>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-2">Enqueue Background Job:</h4>
-          <pre class="p-3 bg-blue-100 rounded font-mono text-xs overflow-x-auto">iex> EventasaurusDiscovery.VenueImages.EnrichmentJob.enqueue()
-# Monitor at /admin/oban</pre>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-2">Check Rate Limits:</h4>
-          <pre class="p-3 bg-blue-100 rounded font-mono text-xs overflow-x-auto">iex> alias EventasaurusDiscovery.VenueImages.RateLimiter
-iex> RateLimiter.get_stats("google_places")</pre>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-2">Admin Dashboard:</h4>
-          <p>
-            Real-time monitoring at
-            <a href="/admin/venue-images/stats" class="underline hover:text-blue-900">
-              /admin/venue-images/stats
-            </a>
-          </p>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-2">Load Testing:</h4>
-          <p>
-            See <code class="px-1 bg-blue-100 rounded">test/eventasaurus_discovery/venue_images/LOAD_TESTING.md</code>
-            for comprehensive load testing scenarios.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- API Reference -->
-    <div class="mt-8 p-6 bg-white rounded-lg shadow">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">API Reference</h3>
-      <div class="space-y-3 text-sm">
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">Orchestrator.fetch_venue_images/1</code>
-          <p class="text-gray-600 mt-1">Fetch images for a venue (no DB update)</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">Orchestrator.enrich_venue/1</code>
-          <p class="text-gray-600 mt-1">Fetch and update venue with images</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">Orchestrator.needs_enrichment?/1</code>
-          <p class="text-gray-600 mt-1">Check if venue needs enrichment (>30 days)</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">EnrichmentJob.enqueue/0</code>
-          <p class="text-gray-600 mt-1">Enqueue all stale venues for enrichment</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">Monitor.get_all_stats/0</code>
-          <p class="text-gray-600 mt-1">Get all provider statistics</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">RateLimiter.get_stats/1</code>
-          <p class="text-gray-600 mt-1">Get rate limit usage for provider</p>
-        </div>
-      </div>
-    </div>
 
     <!-- Footer -->
     <div class="mt-8 text-center text-sm text-gray-500">

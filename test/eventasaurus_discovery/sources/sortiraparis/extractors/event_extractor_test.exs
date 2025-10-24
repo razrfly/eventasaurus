@@ -140,7 +140,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractorTe
     end
 
     test "extracts first image from article" do
-      html = ~s(<article><img src="https://example.com/first.jpg"><img src="https://example.com/second.jpg"></article>)
+      html =
+        ~s(<article><img src="https://example.com/first.jpg"><img src="https://example.com/second.jpg"></article>)
+
       assert {:ok, "https://example.com/first.jpg"} = EventExtractor.extract_image_url(html)
     end
 

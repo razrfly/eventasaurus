@@ -45,7 +45,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Source do
 
       # Job configuration
       sync_job: SyncJob,
-      detail_job: nil,  # TODO: Add EventDetailJob in Phase 4
+      # TODO: Add EventDetailJob in Phase 4
+      detail_job: nil,
 
       # Queue settings
       sync_queue: :scraper_index,
@@ -57,7 +58,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Source do
 
       # Features
       supports_api: false,
-      supports_pagination: false,  # Uses sitemap discovery
+      # Uses sitemap discovery
+      supports_pagination: false,
       supports_date_filtering: false,
       supports_venue_details: true,
       supports_performer_details: true,
@@ -65,10 +67,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Source do
 
       # Geocoding strategy
       requires_geocoding: true,
-      geocoding_strategy: :multi_provider,  # Uses AddressGeocoder orchestrator
+      # Uses AddressGeocoder orchestrator
+      geocoding_strategy: :multi_provider,
 
       # Data quality indicators
-      has_coordinates: false,  # Must geocode all venues
+      # Must geocode all venues
+      has_coordinates: false,
       has_ticket_urls: true,
       has_performer_info: true,
       has_images: true,
@@ -146,7 +150,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Source do
   end
 
   defp validate_job_modules do
-    modules = [SyncJob]  # TODO: Add EventDetailJob when implemented
+    # TODO: Add EventDetailJob when implemented
+    modules = [SyncJob]
 
     missing =
       Enum.filter(modules, fn module ->

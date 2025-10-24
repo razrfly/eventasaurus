@@ -229,22 +229,25 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
     duration_ms = end_time - start_time
 
     # Aggregate results
-    total_images = Enum.reduce(results, 0, fn {_provider, result}, acc ->
-      acc + length(Map.get(result, :images, []))
-    end)
+    total_images =
+      Enum.reduce(results, 0, fn {_provider, result}, acc ->
+        acc + length(Map.get(result, :images, []))
+      end)
 
-    total_cost = Enum.reduce(results, 0.0, fn {_provider, result}, acc ->
-      acc + Map.get(result, :cost, 0.0)
-    end)
+    total_cost =
+      Enum.reduce(results, 0.0, fn {_provider, result}, acc ->
+        acc + Map.get(result, :cost, 0.0)
+      end)
 
     # Collect dynamically discovered provider IDs
-    discovered_ids = Enum.reduce(results, %{}, fn {provider_name, result}, acc ->
-      if Map.get(result, :id_source) == :dynamic and Map.get(result, :provider_id) do
-        Map.put(acc, provider_name, result.provider_id)
-      else
-        acc
-      end
-    end)
+    discovered_ids =
+      Enum.reduce(results, %{}, fn {provider_name, result}, acc ->
+        if Map.get(result, :id_source) == :dynamic and Map.get(result, :provider_id) do
+          Map.put(acc, provider_name, result.provider_id)
+        else
+          acc
+        end
+      end)
 
     %{
       success: true,
@@ -266,15 +269,16 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
     stored_provider_id = Map.get(venue.provider_ids, provider.name)
 
     # Determine ID and source (stored or dynamic)
-    {provider_id, id_source} = if stored_provider_id do
-      {stored_provider_id, :stored}
-    else
-      # Try to fetch provider ID dynamically using coordinates
-      case fetch_provider_id_dynamically(venue, provider) do
-        {:ok, dynamic_id} -> {dynamic_id, :dynamic}
-        {:error, _reason} -> {nil, :unavailable}
+    {provider_id, id_source} =
+      if stored_provider_id do
+        {stored_provider_id, :stored}
+      else
+        # Try to fetch provider ID dynamically using coordinates
+        case fetch_provider_id_dynamically(venue, provider) do
+          {:ok, dynamic_id} -> {dynamic_id, :dynamic}
+          {:error, _reason} -> {nil, :unavailable}
+        end
       end
-    end
 
     if provider_id do
       # Try to fetch images from this provider
@@ -285,7 +289,8 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
 
       Map.merge(result, %{
         provider_id: provider_id,
-        id_source: id_source,  # Track how we got the ID
+        # Track how we got the ID
+        id_source: id_source,
         duration_ms: duration_ms
       })
     else
@@ -317,18 +322,27 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
           # Try calling search_by_coordinates/3 directly without function_exported? check
           # (function_exported? returns false for functions with default parameters in some cases)
           try do
-            Logger.debug("🔍 fetch_provider_id_dynamically: calling #{provider.name}.search_by_coordinates(#{venue.latitude}, #{venue.longitude}, #{inspect(venue.name)})")
-            result = apply(provider_module, :search_by_coordinates, [
-              venue.latitude,
-              venue.longitude,
-              venue.name
-            ])
+            Logger.debug(
+              "🔍 fetch_provider_id_dynamically: calling #{provider.name}.search_by_coordinates(#{venue.latitude}, #{venue.longitude}, #{inspect(venue.name)})"
+            )
+
+            result =
+              apply(provider_module, :search_by_coordinates, [
+                venue.latitude,
+                venue.longitude,
+                venue.name
+              ])
+
             Logger.debug("✅ fetch_provider_id_dynamically result: #{inspect(result)}")
             result
           rescue
             UndefinedFunctionError ->
-              Logger.debug("❌ fetch_provider_id_dynamically: search_by_coordinates/3 not implemented for #{provider.name}")
+              Logger.debug(
+                "❌ fetch_provider_id_dynamically: search_by_coordinates/3 not implemented for #{provider.name}"
+              )
+
               {:error, :not_supported}
+
             e ->
               Logger.error("❌ fetch_provider_id_dynamically exception: #{Exception.message(e)}")
               {:error, {:exception, Exception.message(e)}}
@@ -443,6 +457,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
     case Oban.check_queue(queue: :venue_enrichment) do
       {:ok, %{running: running, available: available}} ->
         running + available
+
       _ ->
         0
     end
@@ -502,7 +517,8 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
       needs_enrichment: needs_enrichment_count,
       total_images: total_images,
       total_cost: total_cost,
-      avg_images_per_venue: if(enriched_venues > 0, do: (total_images / enriched_venues) * 1.0, else: 0.0),
+      avg_images_per_venue:
+        if(enriched_venues > 0, do: total_images / enriched_venues * 1.0, else: 0.0),
       avg_cost_per_venue: if(enriched_venues > 0, do: total_cost / enriched_venues, else: 0.0)
     }
   end
@@ -527,7 +543,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
 
       # Calculate success rate from metadata
       {successes, attempts} = calculate_provider_success_rate(provider.name)
-      success_rate = if attempts > 0, do: (successes / attempts * 100.0), else: 0.0
+      success_rate = if attempts > 0, do: successes / attempts * 100.0, else: 0.0
 
       # Calculate total cost for this provider
       total_cost = calculate_provider_total_cost(provider.name)
@@ -668,7 +684,8 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
       primary_image: normalize_image(primary_image),
       provider_breakdown: provider_breakdown,
       is_stale: Orchestrator.needs_enrichment?(venue),
-      last_enriched: get_in(metadata, ["last_enriched_at"]) || get_in(metadata, [:last_enriched_at]),
+      last_enriched:
+        get_in(metadata, ["last_enriched_at"]) || get_in(metadata, [:last_enriched_at]),
       total_cost: get_in(metadata, ["total_cost"]) || get_in(metadata, [:total_cost]) || 0.0,
       metadata: metadata
     }

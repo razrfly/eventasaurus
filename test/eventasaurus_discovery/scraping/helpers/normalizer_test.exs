@@ -10,6 +10,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.NormalizerTest do
     test "removes HTML tags" do
       assert Normalizer.clean_html("<p>Hello <b>world</b></p>") == "Hello world"
       assert Normalizer.clean_html("<div><span>Test</span></div>") == "Test"
+
       assert Normalizer.clean_html("<article><h1>Title</h1><p>Content</p></article>") ==
                "Title Content"
     end
@@ -57,7 +58,9 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.NormalizerTest do
 
     test "handles mixed entities in real-world content" do
       # From the original bug report - event description
-      input = "rock&#039;n&#039;roll &amp; metal band will be presenting &quot;God Of Angels Trust&quot;"
+      input =
+        "rock&#039;n&#039;roll &amp; metal band will be presenting &quot;God Of Angels Trust&quot;"
+
       expected = "rock'n'roll & metal band will be presenting \"God Of Angels Trust\""
       assert Normalizer.clean_html(input) == expected
     end
@@ -76,7 +79,9 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.NormalizerTest do
       </div>
       """
 
-      expected = "Visitez le musée d'Orsay pour découvrir l'art français. Entrée libre & gratuite!"
+      expected =
+        "Visitez le musée d'Orsay pour découvrir l'art français. Entrée libre & gratuite!"
+
       assert Normalizer.clean_html(input) == expected
     end
 

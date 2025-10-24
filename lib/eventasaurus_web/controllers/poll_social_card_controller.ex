@@ -12,7 +12,12 @@ defmodule EventasaurusWeb.PollSocialCardController do
   Generates a social card PNG for a poll by event slug and poll number with hash validation.
   Provides cache busting through hash-based URLs.
   """
-  def generate_card_by_number(conn, %{"slug" => slug, "number" => number, "hash" => hash, "rest" => rest}) do
+  def generate_card_by_number(conn, %{
+        "slug" => slug,
+        "number" => number,
+        "hash" => hash,
+        "rest" => rest
+      }) do
     Logger.info(
       "Poll social card requested for event slug: #{slug}, poll_number: #{number}, hash: #{hash}, rest: #{inspect(rest)}"
     )
@@ -36,9 +41,9 @@ defmodule EventasaurusWeb.PollSocialCardController do
 
     with {:event, event} when not is_nil(event) <- {:event, Events.get_event_by_slug(slug)},
          {:number, {poll_number, ""}} <- {:number, Integer.parse(number)},
-         {:poll, poll} when not is_nil(poll) <- {:poll, get_poll_with_options_by_number(poll_number, event.id)},
+         {:poll, poll} when not is_nil(poll) <-
+           {:poll, get_poll_with_options_by_number(poll_number, event.id)},
          {:poll_belongs_to_event, true} <- {:poll_belongs_to_event, poll.event_id == event.id} do
-
       # Validate that the hash matches current poll data
       case PollHashGenerator.validate_hash(poll, final_hash) do
         true ->
@@ -144,7 +149,12 @@ defmodule EventasaurusWeb.PollSocialCardController do
   Generates a social card PNG for a poll by event slug and poll ID with hash validation.
   DEPRECATED: Use generate_card_by_number/2 instead. This is kept for backwards compatibility.
   """
-  def generate_card_by_id(conn, %{"slug" => slug, "poll_id" => poll_id, "hash" => hash, "rest" => rest}) do
+  def generate_card_by_id(conn, %{
+        "slug" => slug,
+        "poll_id" => poll_id,
+        "hash" => hash,
+        "rest" => rest
+      }) do
     Logger.info(
       "Poll social card requested for event slug: #{slug}, poll_id: #{poll_id}, hash: #{hash}, rest: #{inspect(rest)}"
     )
@@ -169,7 +179,6 @@ defmodule EventasaurusWeb.PollSocialCardController do
     with {:event, event} when not is_nil(event) <- {:event, Events.get_event_by_slug(slug)},
          {:poll, poll} when not is_nil(poll) <- {:poll, Events.get_poll_with_options(poll_id)},
          {:poll_belongs_to_event, true} <- {:poll_belongs_to_event, poll.event_id == event.id} do
-
       # Validate that the hash matches current poll data
       case PollHashGenerator.validate_hash(poll, final_hash) do
         true ->

@@ -109,7 +109,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Source do
     %{
       "event_id" =>
         event_data["event_id"] || event_data[:event_id] ||
-        event_data["id"] || event_data[:id],
+          event_data["id"] || event_data[:id],
       "source_id" => metadata[:source_id],
       "lat" => event_data["lat"] || event_data[:lat],
       "lng" => event_data["lon"] || event_data["lng"] || event_data[:lng],

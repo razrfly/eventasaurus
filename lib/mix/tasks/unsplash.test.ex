@@ -45,9 +45,11 @@ defmodule Mix.Tasks.Unsplash.Test do
       IO.puts("\n🌆 Testing Unsplash fetch for all active cities")
       IO.puts(String.duplicate("=", 60))
 
-      query = from c in City,
-        where: c.discovery_enabled == true,
-        select: c.name
+      query =
+        from(c in City,
+          where: c.discovery_enabled == true,
+          select: c.name
+        )
 
       active_cities = Repo.all(query)
       IO.puts("Found #{length(active_cities)} active cities: #{Enum.join(active_cities, ", ")}")

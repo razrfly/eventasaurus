@@ -17,12 +17,19 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
   alias EventasaurusDiscovery.Sources.SourceRegistry
-  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCollector, SourceHealthCalculator, EventChangeTracker, DataQualityChecker}
+
+  alias EventasaurusDiscovery.Admin.{
+    DiscoveryStatsCollector,
+    SourceHealthCalculator,
+    EventChangeTracker,
+    DataQualityChecker
+  }
 
   import Ecto.Query
   require Logger
 
-  @refresh_interval 30_000  # 30 seconds
+  # 30 seconds
+  @refresh_interval 30_000
 
   @impl true
   def mount(_params, _session, socket) do
@@ -91,46 +98,54 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     sources_data =
       source_names
       |> Enum.map(fn source_name ->
-        stats = Map.get(source_stats, source_name, %{
-          # Metadata-based stats (NEW format)
-          events_processed: 0,
-          events_succeeded: 0,
-          events_failed: 0,
-          # Legacy stats (OLD format) - kept for backward compatibility
-          run_count: 0,
-          success_count: 0,
-          error_count: 0,
-          last_run_at: nil,
-          last_error: nil
-        })
+        stats =
+          Map.get(source_stats, source_name, %{
+            # Metadata-based stats (NEW format)
+            events_processed: 0,
+            events_succeeded: 0,
+            events_failed: 0,
+            # Legacy stats (OLD format) - kept for backward compatibility
+            run_count: 0,
+            success_count: 0,
+            error_count: 0,
+            last_run_at: nil,
+            last_error: nil
+          })
 
         health_status = SourceHealthCalculator.calculate_health_score(stats)
         success_rate = SourceHealthCalculator.success_rate_percentage(stats)
 
         # Get source scope
-        scope = case SourceRegistry.get_scope(source_name) do
-          {:ok, scope} -> scope
-          {:error, :not_found} ->
-            Logger.warning("Source #{source_name} has no scope configured in SourceRegistry")
-            "unknown"
-        end
+        scope =
+          case SourceRegistry.get_scope(source_name) do
+            {:ok, scope} ->
+              scope
+
+            {:error, :not_found} ->
+              Logger.warning("Source #{source_name} has no scope configured in SourceRegistry")
+              "unknown"
+          end
 
         # Count events for this source
         event_count = count_events_for_source(source_name)
 
         # Get change tracking data
-        changes = Map.get(change_stats, source_name, %{
-          new_events: 0,
-          dropped_events: 0,
-          percentage_change: 0
-        })
+        changes =
+          Map.get(change_stats, source_name, %{
+            new_events: 0,
+            dropped_events: 0,
+            percentage_change: 0
+          })
 
-        {trend_emoji, trend_text, trend_class} = EventChangeTracker.get_trend_indicator(changes.percentage_change)
+        {trend_emoji, trend_text, trend_class} =
+          EventChangeTracker.get_trend_indicator(changes.percentage_change)
 
         # Get data quality metrics (Phase 5)
         quality_data = DataQualityChecker.check_quality(source_name)
+
         {quality_emoji, quality_text, quality_class} =
-          if Map.get(quality_data, :not_found, false) || Map.get(quality_data, :total_events, 0) == 0 do
+          if Map.get(quality_data, :not_found, false) ||
+               Map.get(quality_data, :total_events, 0) == 0 do
             {"⚪", "N/A", "text-gray-600"}
           else
             DataQualityChecker.quality_status(quality_data.quality_score)
@@ -552,6 +567,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   # Helper functions
 
   defp format_number(nil), do: "0"
+
   defp format_number(num) when is_integer(num) do
     num
     |> Integer.to_string()
@@ -559,13 +575,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
     |> String.reverse()
   end
+
   defp format_number(num) when is_float(num), do: format_number(round(num))
   defp format_number(_), do: "0"
 
   defp format_last_run(nil), do: "Never"
+
   defp format_last_run(%DateTime{} = dt) do
     time_ago_in_words(dt)
   end
+
   defp format_last_run(%NaiveDateTime{} = dt) do
     dt
     |> DateTime.from_naive!("Etc/UTC")

@@ -91,10 +91,12 @@ defmodule EventasaurusWeb.Plugs.LanguagePlug do
 
   # Normalize language code to lowercase 2-letter ISO code
   defp get_normalized_language(nil), do: nil
+
   defp get_normalized_language(lang) when is_binary(lang) do
     lang
     |> String.downcase()
     |> String.slice(0..1)
   end
+
   defp get_normalized_language(_), do: nil
 end

@@ -186,7 +186,10 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
 
       {{:ok, day}, {:error, time_reason}} ->
         # Day found, time missing: use 8:00 PM default
-        Logger.warning("⚠️ Could not parse time: #{time_reason}. Defaulting to 8:00 PM for day #{day}.")
+        Logger.warning(
+          "⚠️ Could not parse time: #{time_reason}. Defaulting to 8:00 PM for day #{day}."
+        )
+
         {:ok, fallback_time} = Time.new(20, 0, 0)
         starts_at = ScheduleHelper.next_occurrence(day, fallback_time, "Europe/London")
 

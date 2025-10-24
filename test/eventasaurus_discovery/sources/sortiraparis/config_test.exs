@@ -159,7 +159,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.ConfigTest do
 
   describe "is_event_url?/1" do
     test "returns true for concert URLs" do
-      url = "https://www.sortiraparis.com/concerts-music-festival/articles/319282-indochine-concert"
+      url =
+        "https://www.sortiraparis.com/concerts-music-festival/articles/319282-indochine-concert"
+
       assert Config.is_event_url?(url) == true
     end
 

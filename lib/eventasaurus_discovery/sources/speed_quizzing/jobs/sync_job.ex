@@ -44,7 +44,6 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
          _ = IO.puts("✓ HTML fetched, size: #{byte_size(html)} bytes"),
          {:ok, json_string} <- extract_events_json(html),
          {:ok, events} <- parse_events_json(json_string) do
-
       Logger.info("✅ Successfully extracted #{length(events)} events from index page")
 
       # Enqueue IndexJob with events data
@@ -94,7 +93,11 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
 
     IO.puts("📜 Found #{length(scripts_no_src)} scripts with :not([src]) selector")
     IO.puts("📜 Found #{length(all_scripts)} total scripts")
-    Logger.info("📜 [SpeedQuizzing] Found #{length(scripts_no_src)} scripts with :not([src]) selector")
+
+    Logger.info(
+      "📜 [SpeedQuizzing] Found #{length(scripts_no_src)} scripts with :not([src]) selector"
+    )
+
     Logger.info("📜 [SpeedQuizzing] Found #{length(all_scripts)} total scripts")
 
     # Use all scripts if the :not([src]) selector doesn't work
@@ -103,25 +106,30 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
     # Check each script
     IO.puts("🔍 Checking #{length(scripts)} scripts for 'var events = JSON.parse('...")
 
-    script_content = scripts
-    |> Enum.map(&Floki.raw_html/1)
-    |> Enum.with_index()
-    |> Enum.find(fn {html, idx} ->
-      contains = String.contains?(html, "var events = JSON.parse(")
-      preview = String.slice(html, 0, 80)
-      IO.puts("  Script #{idx + 1}: #{preview}... [contains pattern: #{contains}]")
-      if contains, do: IO.puts("✓ Found it in script #{idx + 1}!")
-      contains
-    end)
-    |> case do
-      {html, _idx} -> html
-      nil -> nil
-    end
+    script_content =
+      scripts
+      |> Enum.map(&Floki.raw_html/1)
+      |> Enum.with_index()
+      |> Enum.find(fn {html, idx} ->
+        contains = String.contains?(html, "var events = JSON.parse(")
+        preview = String.slice(html, 0, 80)
+        IO.puts("  Script #{idx + 1}: #{preview}... [contains pattern: #{contains}]")
+        if contains, do: IO.puts("✓ Found it in script #{idx + 1}!")
+        contains
+      end)
+      |> case do
+        {html, _idx} -> html
+        nil -> nil
+      end
 
     case script_content do
       nil ->
         IO.puts("❌ Events JSON not found in page (checked #{length(scripts)} scripts)")
-        Logger.error("❌ [SpeedQuizzing] Events JSON not found in page (checked #{length(scripts)} scripts)")
+
+        Logger.error(
+          "❌ [SpeedQuizzing] Events JSON not found in page (checked #{length(scripts)} scripts)"
+        )
+
         {:error, :events_json_not_found}
 
       content ->
@@ -138,11 +146,15 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
 
     case Regex.run(regex, script_content) do
       [_, json_str] ->
-        Logger.debug("[SpeedQuizzing] Successfully extracted JSON string (#{String.length(json_str)} chars)")
+        Logger.debug(
+          "[SpeedQuizzing] Successfully extracted JSON string (#{String.length(json_str)} chars)"
+        )
+
         # Unescape the JSON string
-        unescaped = json_str
-        |> String.replace("\\'", "'")
-        |> String.replace("\\\\", "\\")
+        unescaped =
+          json_str
+          |> String.replace("\\'", "'")
+          |> String.replace("\\\\", "\\")
 
         {:ok, unescaped}
 
@@ -169,5 +181,4 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
         {:error, {:json_parse_error, reason}}
     end
   end
-
 end

@@ -237,5 +237,4 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
       nil
     end
   end
-
 end

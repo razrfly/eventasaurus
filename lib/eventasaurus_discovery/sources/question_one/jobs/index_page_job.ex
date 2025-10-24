@@ -24,7 +24,14 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     priority: 1
 
   require Logger
-  alias EventasaurusDiscovery.Sources.QuestionOne.{Client, Jobs.VenueDetailJob, Extractors.VenueExtractor, Helpers.TextHelper}
+
+  alias EventasaurusDiscovery.Sources.QuestionOne.{
+    Client,
+    Jobs.VenueDetailJob,
+    Extractors.VenueExtractor,
+    Helpers.TextHelper
+  }
+
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
   @impl Oban.Worker

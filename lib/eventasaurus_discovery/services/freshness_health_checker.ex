@@ -91,7 +91,7 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
       # Calculate metrics with division by zero guards
       runs_in_period =
         if is_number(threshold_hours) and threshold_hours > 0 do
-          (lookback_days * 24) / threshold_hours
+          lookback_days * 24 / threshold_hours
         else
           0
         end
@@ -115,7 +115,13 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
         lookback_days: lookback_days,
         threshold_hours: threshold_hours,
         status: status,
-        diagnosis: diagnose_execution_rate(processing_rate, execution_multiplier, detail_jobs, total_events)
+        diagnosis:
+          diagnose_execution_rate(
+            processing_rate,
+            execution_multiplier,
+            detail_jobs,
+            total_events
+          )
       }
     end
   end

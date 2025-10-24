@@ -112,6 +112,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Source do
       {:ok, %{status_code: 200, body: body}} when is_binary(body) and body != "" ->
         # Verify JSONP format (allow trailing semicolon: slw(...) or slw(...);)
         trimmed = String.trim(body)
+
         if String.starts_with?(trimmed, "slw(") and Regex.match?(~r/\)\s*;?\s*$/, trimmed) do
           :ok
         else

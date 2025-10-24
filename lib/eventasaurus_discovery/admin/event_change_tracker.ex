@@ -42,6 +42,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   def calculate_new_events(source_slug, window_hours \\ nil)
       when is_binary(source_slug) and (is_integer(window_hours) or is_nil(window_hours)) do
     window_hours = window_hours || get_new_events_window()
+
     case get_source_id(source_slug) do
       nil ->
         0
@@ -84,6 +85,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   def calculate_dropped_events(source_slug, window_hours \\ nil)
       when is_binary(source_slug) and (is_integer(window_hours) or is_nil(window_hours)) do
     window_hours = window_hours || get_dropped_events_window()
+
     case get_source_id(source_slug) do
       nil ->
         0
@@ -256,7 +258,8 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
         new_events_by_id = batch_calculate_new_events(source_ids, get_new_events_window())
 
         # Batch fetch dropped events (configured window)
-        dropped_events_by_id = batch_calculate_dropped_events(source_ids, get_dropped_events_window())
+        dropped_events_by_id =
+          batch_calculate_dropped_events(source_ids, get_dropped_events_window())
 
         # Batch fetch percentage changes
         percentage_changes_by_id = batch_calculate_percentage_changes(source_ids, city_id)
@@ -392,7 +395,9 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
     # Previous week (7-14 days ago)
     previous_week_start = DateTime.add(now, -14, :day)
     previous_week_end = DateTime.add(now, -7, :day)
-    previous_week_counts = batch_get_event_counts(source_ids, city_id, previous_week_start, previous_week_end)
+
+    previous_week_counts =
+      batch_get_event_counts(source_ids, city_id, previous_week_start, previous_week_end)
 
     # Calculate percentage change for each source
     source_ids

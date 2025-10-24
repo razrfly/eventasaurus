@@ -33,6 +33,7 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
 
     # Get total stats
     cities_with_galleries_count = length(cities_with_galleries)
+
     total_images =
       Enum.reduce(cities_with_galleries, 0, fn city, acc ->
         acc + length(city.images)
@@ -51,16 +52,17 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
 
   defp count_active_cities do
     query =
-      from c in City,
+      from(c in City,
         where: c.discovery_enabled == true,
         select: count(c.id)
+      )
 
     Repo.one(query)
   end
 
   defp get_cities_with_galleries do
     query =
-      from c in City,
+      from(c in City,
         where: c.discovery_enabled == true and not is_nil(c.unsplash_gallery),
         order_by: c.name,
         select: %{
@@ -69,6 +71,7 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
           slug: c.slug,
           gallery: c.unsplash_gallery
         }
+      )
 
     Repo.all(query)
     |> Enum.map(&enrich_city_data/1)
@@ -80,11 +83,12 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
     last_refreshed = Map.get(gallery, "last_refreshed_at")
 
     # Get current daily image
-    current_image_index = if length(images) > 0 do
-      UnsplashService.get_daily_image_index(length(images))
-    else
-      0
-    end
+    current_image_index =
+      if length(images) > 0 do
+        UnsplashService.get_daily_image_index(length(images))
+      else
+        0
+      end
 
     current_image = if length(images) > 0, do: Enum.at(images, current_image_index), else: nil
 

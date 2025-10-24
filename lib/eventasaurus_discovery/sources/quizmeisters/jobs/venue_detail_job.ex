@@ -67,6 +67,7 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
 
         # Log quizmaster from metadata (hybrid approach - not stored in performers table)
         quizmaster_name = get_in(transformed, [:metadata, :quizmaster, :name])
+
         if quizmaster_name do
           Logger.info("🎭 Quizmaster: #{quizmaster_name} (stored in description + metadata)")
         end
@@ -137,7 +138,6 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
       {:error, "Failed to calculate next occurrence"}
   end
 
-
   # Enrich venue data with additional details and event occurrence
   defp enrich_venue_data(venue_data, additional_details, next_occurrence) do
     venue_data
@@ -168,7 +168,6 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
       error -> error
     end
   end
-
 
   defp log_results(events) do
     count = length(events)

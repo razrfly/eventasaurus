@@ -104,18 +104,24 @@ defmodule Eventasaurus.Sitemap.SupabaseS3Store do
   defp get_bucket_name do
     # Allow override via environment variable, otherwise use config
     System.get_env("SUPABASE_BUCKET") ||
-      (Application.get_env(:eventasaurus, :supabase) |> Keyword.get(:bucket)) ||
+      Application.get_env(:eventasaurus, :supabase) |> Keyword.get(:bucket) ||
       "eventasaur.us"
   end
 
   # Get S3 configuration for ExAws
   defp get_ex_aws_config do
     # Read directly from environment variables to avoid dev.exs overrides
-    supabase_url = System.get_env("SUPABASE_URL") || raise "SUPABASE_URL environment variable not set"
+    supabase_url =
+      System.get_env("SUPABASE_URL") || raise "SUPABASE_URL environment variable not set"
 
     # Use dedicated S3 credentials generated in Supabase dashboard
-    access_key_id = System.get_env("SUPABASE_S3_ACCESS_KEY_ID") || raise "SUPABASE_S3_ACCESS_KEY_ID environment variable not set"
-    secret_access_key = System.get_env("SUPABASE_S3_SECRET_ACCESS_KEY") || raise "SUPABASE_S3_SECRET_ACCESS_KEY environment variable not set"
+    access_key_id =
+      System.get_env("SUPABASE_S3_ACCESS_KEY_ID") ||
+        raise "SUPABASE_S3_ACCESS_KEY_ID environment variable not set"
+
+    secret_access_key =
+      System.get_env("SUPABASE_S3_SECRET_ACCESS_KEY") ||
+        raise "SUPABASE_S3_SECRET_ACCESS_KEY environment variable not set"
 
     # Extract project ref from URL (e.g., "vnhxedeynrtvakglinnr" from "https://vnhxedeynrtvakglinnr.supabase.co")
     project_ref =

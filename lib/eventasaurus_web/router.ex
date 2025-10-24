@@ -31,7 +31,11 @@ defmodule EventasaurusWeb.Router do
       get "/venue-images", Dev.VenueImagesTestController, :index
       post "/venue-images/test-enrichment", Dev.VenueImagesTestController, :test_enrichment
       put "/venue-images/update-provider-ids", Dev.VenueImagesTestController, :update_provider_ids
-      post "/venue-images/save-discovered-ids", Dev.VenueImagesTestController, :save_discovered_ids
+
+      post "/venue-images/save-discovered-ids",
+           Dev.VenueImagesTestController,
+           :save_discovered_ids
+
       post "/venue-images/clear-cache", Dev.VenueImagesTestController, :clear_cache
     end
 
@@ -129,11 +133,19 @@ defmodule EventasaurusWeb.Router do
 
       # Discovery Stats Dashboard with admin authentication
       live "/discovery/stats", EventasaurusWeb.Admin.DiscoveryStatsLive, :index
-      live "/discovery/stats/source/:source_slug", EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail, :show
-      live "/discovery/stats/city/:city_slug", EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail, :show
+
+      live "/discovery/stats/source/:source_slug",
+           EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail,
+           :show
+
+      live "/discovery/stats/city/:city_slug",
+           EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail,
+           :show
 
       # Category Analysis with admin authentication
-      live "/discovery/category-analysis/:source_slug", EventasaurusWeb.Admin.CategoryAnalysisLive, :show
+      live "/discovery/category-analysis/:source_slug",
+           EventasaurusWeb.Admin.CategoryAnalysisLive,
+           :show
 
       # Geocoding Cost Dashboard with admin authentication
       live "/geocoding", EventasaurusWeb.Admin.GeocodingDashboardLive
@@ -482,6 +494,9 @@ defmodule EventasaurusWeb.Router do
 
       # Performer profile pages
       live "/performers/:slug", PerformerLive.Show, :show
+
+      # Direct venue pages (for trivia_advisor compatibility)
+      live "/venues/:slug", VenueLive.Show, :show
     end
   end
 
@@ -595,13 +610,6 @@ defmodule EventasaurusWeb.Router do
     get "/:slug/calendar/:format", CalendarController, :export
   end
 
-  # Public venue image proxy (no auth required)
-  # Proxies external venue images to work around CORS and API key restrictions
-  scope "/venue-images", EventasaurusWeb do
-    pipe_through :browser
-
-    get "/proxy/:provider/:id", VenueImageProxyController, :show
-  end
 
   # Public social card generation (no auth required)
   # These routes mirror the public event/poll page structure at root scope
@@ -613,8 +621,10 @@ defmodule EventasaurusWeb.Router do
       as: :social_card_cached
 
     # Poll social card generation (matches public poll route at /:slug/polls/:number)
-    get "/:slug/polls/:number/social-card-:hash/*rest", PollSocialCardController, :generate_card_by_number,
-      as: :poll_social_card_cached
+    get "/:slug/polls/:number/social-card-:hash/*rest",
+        PollSocialCardController,
+        :generate_card_by_number,
+        as: :poll_social_card_cached
   end
 
   # Other scopes may use custom stacks.

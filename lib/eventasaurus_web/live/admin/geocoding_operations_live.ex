@@ -133,7 +133,7 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
       id: job.id,
       completed_at: job.completed_at,
       duration_seconds: duration_seconds,
-      state: meta["status"] || (if job.state == "completed", do: "success", else: "failed"),
+      state: meta["status"] || if(job.state == "completed", do: "success", else: "failed"),
       providers: providers,
       # Job-level summary (Phase 1)
       total_venues: meta["total_venues"] || 0,

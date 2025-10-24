@@ -129,6 +129,7 @@ defmodule Eventasaurus.SocialCards.PollHashGenerator do
 
     # Get parent event for theme (if available)
     event = Map.get(poll, :event)
+
     theme =
       if event && is_map(event) do
         Map.get(event, :theme, :minimal)

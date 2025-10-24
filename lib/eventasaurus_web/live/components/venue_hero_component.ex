@@ -444,8 +444,7 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
       "url" => Map.get(image, :url) || Map.get(image, "url"),
       "provider" => Map.get(image, :provider) || Map.get(image, "provider"),
       "attribution" => Map.get(image, :attribution) || Map.get(image, "attribution"),
-      "attribution_url" =>
-        Map.get(image, :attribution_url) || Map.get(image, "attribution_url")
+      "attribution_url" => Map.get(image, :attribution_url) || Map.get(image, "attribution_url")
     }
   end
 end

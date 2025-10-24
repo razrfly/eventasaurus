@@ -64,9 +64,7 @@ defmodule EventasaurusDiscovery.Sources.Source do
     |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i,
       message: "must start with http:// or https://"
     )
-    |> validate_format(:logo_url, ~r/^https?:\/\/\S+$/i,
-      message: "must be a valid URL"
-    )
+    |> validate_format(:logo_url, ~r/^https?:\/\/\S+$/i, message: "must be a valid URL")
     |> validate_number(:priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> validate_domains()
     |> unique_constraint(:slug)

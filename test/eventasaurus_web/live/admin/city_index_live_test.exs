@@ -12,8 +12,15 @@ defmodule EventasaurusWeb.Admin.CityIndexLiveTest do
       au = insert(:country, name: "Australia", code: "AU")
       us = insert(:country, name: "United States", code: "US")
 
-      sydney = insert(:city, name: "Sydney", country: au, discovery_enabled: true,
-        latitude: Decimal.new("-33.8688"), longitude: Decimal.new("151.2093"))
+      sydney =
+        insert(:city,
+          name: "Sydney",
+          country: au,
+          discovery_enabled: true,
+          latitude: Decimal.new("-33.8688"),
+          longitude: Decimal.new("151.2093")
+        )
+
       melbourne = insert(:city, name: "Melbourne", country: au, discovery_enabled: false)
       new_york = insert(:city, name: "New York", country: us, discovery_enabled: true)
 
@@ -24,7 +31,12 @@ defmodule EventasaurusWeb.Admin.CityIndexLiveTest do
       {:ok, australia: au, us: us, sydney: sydney, melbourne: melbourne, new_york: new_york}
     end
 
-    test "displays all cities with venue counts", %{conn: conn, sydney: sydney, melbourne: melbourne, new_york: new_york} do
+    test "displays all cities with venue counts", %{
+      conn: conn,
+      sydney: sydney,
+      melbourne: melbourne,
+      new_york: new_york
+    } do
       {:ok, _index_live, html} = live(conn, ~p"/admin/cities")
 
       assert html =~ "Cities"
@@ -33,7 +45,8 @@ defmodule EventasaurusWeb.Admin.CityIndexLiveTest do
       assert html =~ "New York"
 
       # Check venue count for Sydney
-      assert html =~ "2"  # Sydney has 2 venues
+      # Sydney has 2 venues
+      assert html =~ "2"
 
       # Check coordinates display
       assert html =~ "-33.8688"
@@ -134,8 +147,10 @@ defmodule EventasaurusWeb.Admin.CityIndexLiveTest do
         |> render_change()
 
       assert html =~ "Sydney"
-      refute html =~ "Melbourne"  # Disabled
-      refute html =~ "New York"   # Different country
+      # Disabled
+      refute html =~ "Melbourne"
+      # Different country
+      refute html =~ "New York"
     end
 
     test "displays discovery status badges", %{conn: conn} do
@@ -224,7 +239,8 @@ defmodule EventasaurusWeb.Admin.CityIndexLiveTest do
 
     test "URL params persist filters", %{conn: conn, australia: au} do
       # Navigate with URL params
-      {:ok, _index_live, html} = live(conn, ~p"/admin/cities?search=sydney&country_id=#{au.id}&discovery_enabled=true")
+      {:ok, _index_live, html} =
+        live(conn, ~p"/admin/cities?search=sydney&country_id=#{au.id}&discovery_enabled=true")
 
       assert html =~ "Sydney"
       refute html =~ "Melbourne"
@@ -253,6 +269,5 @@ defmodule EventasaurusWeb.Admin.CityIndexLiveTest do
       assert html =~ "Melbourne"
       assert html =~ "New York"
     end
-
   end
 end

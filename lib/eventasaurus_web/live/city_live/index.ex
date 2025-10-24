@@ -884,31 +884,51 @@ defmodule EventasaurusWeb.CityLive.Index do
   # This is the ONLY acceptable mapping since it's about visual representation
   defp language_to_country_code(lang) do
     case lang do
-      "en" -> "GB"  # English -> UK flag (most common)
-      "es" -> "ES"  # Spanish -> Spain
-      "fr" -> "FR"  # French -> France
-      "de" -> "DE"  # German -> Germany
-      "it" -> "IT"  # Italian -> Italy
-      "pt" -> "PT"  # Portuguese -> Portugal
-      "pl" -> "PL"  # Polish -> Poland
-      "nl" -> "NL"  # Dutch -> Netherlands
-      "ru" -> "RU"  # Russian -> Russia
-      "ja" -> "JP"  # Japanese -> Japan
-      "zh" -> "CN"  # Chinese -> China
-      "ko" -> "KR"  # Korean -> Korea
-      "ar" -> "SA"  # Arabic -> Saudi Arabia
-      "tr" -> "TR"  # Turkish -> Turkey
-      "sv" -> "SE"  # Swedish -> Sweden
-      "da" -> "DK"  # Danish -> Denmark
-      "no" -> "NO"  # Norwegian -> Norway
-      "fi" -> "FI"  # Finnish -> Finland
-      _ -> "XX"     # Unknown - will show globe
+      # English -> UK flag (most common)
+      "en" -> "GB"
+      # Spanish -> Spain
+      "es" -> "ES"
+      # French -> France
+      "fr" -> "FR"
+      # German -> Germany
+      "de" -> "DE"
+      # Italian -> Italy
+      "it" -> "IT"
+      # Portuguese -> Portugal
+      "pt" -> "PT"
+      # Polish -> Poland
+      "pl" -> "PL"
+      # Dutch -> Netherlands
+      "nl" -> "NL"
+      # Russian -> Russia
+      "ru" -> "RU"
+      # Japanese -> Japan
+      "ja" -> "JP"
+      # Chinese -> China
+      "zh" -> "CN"
+      # Korean -> Korea
+      "ko" -> "KR"
+      # Arabic -> Saudi Arabia
+      "ar" -> "SA"
+      # Turkish -> Turkey
+      "tr" -> "TR"
+      # Swedish -> Sweden
+      "sv" -> "SE"
+      # Danish -> Denmark
+      "da" -> "DK"
+      # Norwegian -> Norway
+      "no" -> "NO"
+      # Finnish -> Finland
+      "fi" -> "FI"
+      # Unknown - will show globe
+      _ -> "XX"
     end
   end
 
   # Convert 2-letter country code to Unicode flag emoji
   # Uses Regional Indicator Symbols (🇦 = U+1F1E6, 🇿 = U+1F1FF)
   defp country_code_to_flag("XX"), do: "🌐"
+
   defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
     code
     |> String.upcase()
@@ -919,5 +939,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     end)
     |> List.to_string()
   end
+
   defp country_code_to_flag(_), do: "🌐"
 end

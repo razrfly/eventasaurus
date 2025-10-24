@@ -119,7 +119,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.TransformerTest do
     test "parses schedule with starts_at DateTime" do
       starts_at = DateTime.from_naive!(~N[2025-10-15 19:00:00], "America/Chicago")
 
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Wednesdays at 7pm", starts_at, %{})
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Wednesdays at 7pm", starts_at, %{})
 
       assert rule["frequency"] == "weekly"
       assert rule["days_of_week"] == ["wednesday"]
@@ -130,19 +131,22 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.TransformerTest do
     test "uses venue_data timezone if starts_at is nil" do
       venue_data = %{timezone: "America/Los_Angeles"}
 
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Thursdays at 8:00 PM", nil, venue_data)
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Thursdays at 8:00 PM", nil, venue_data)
 
       assert rule["timezone"] == "America/Los_Angeles"
     end
 
     test "defaults to Australia/Sydney timezone" do
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Tuesdays at 7:30pm", nil, %{})
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Tuesdays at 7:30pm", nil, %{})
 
       assert rule["timezone"] == "Australia/Sydney"
     end
 
     test "returns error for nil time_text" do
-      assert {:error, "Time text is nil"} = Transformer.parse_schedule_to_recurrence(nil, nil, %{})
+      assert {:error, "Time text is nil"} =
+               Transformer.parse_schedule_to_recurrence(nil, nil, %{})
     end
 
     test "returns error for invalid time_text" do
@@ -150,10 +154,14 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.TransformerTest do
     end
 
     test "handles different day formats" do
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Monday nights at 8pm", nil, %{})
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Monday nights at 8pm", nil, %{})
+
       assert rule["days_of_week"] == ["monday"]
 
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Fridays at 9:00 PM", nil, %{})
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Fridays at 9:00 PM", nil, %{})
+
       assert rule["days_of_week"] == ["friday"]
     end
 
@@ -161,10 +169,14 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.TransformerTest do
       assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Wednesdays at 7pm", nil, %{})
       assert rule["time"] == "19:00"
 
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Wednesdays at 7:30pm", nil, %{})
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Wednesdays at 7:30pm", nil, %{})
+
       assert rule["time"] == "19:30"
 
-      assert {:ok, rule} = Transformer.parse_schedule_to_recurrence("Wednesdays at 8:00 PM", nil, %{})
+      assert {:ok, rule} =
+               Transformer.parse_schedule_to_recurrence("Wednesdays at 8:00 PM", nil, %{})
+
       assert rule["time"] == "20:00"
     end
   end
@@ -172,7 +184,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.TransformerTest do
   describe "resolve_location/3" do
     test "resolves location from coordinates" do
       # This will use offline geocoding
-      {city, country} = Transformer.resolve_location(40.7128, -74.006, "123 Main St, Brooklyn, NY 11201")
+      {city, country} =
+        Transformer.resolve_location(40.7128, -74.006, "123 Main St, Brooklyn, NY 11201")
 
       assert country == "Australia"
       # City might be nil if geocoding fails, or resolved city name

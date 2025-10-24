@@ -10,7 +10,8 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
 
-  @max_images 10  # Number of images to store per city
+  # Number of images to store per city
+  @max_images 10
 
   @doc """
   Fetch and store images for a city.
@@ -59,15 +60,16 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       access_key ->
         # Simple city name query with landscape orientation
         query = URI.encode(city_name)
-        page = :rand.uniform(5)  # Random page (1-5) for variety
+        # Random page (1-5) for variety
+        page = :rand.uniform(5)
 
         url =
           "https://api.unsplash.com/search/photos" <>
-          "?query=#{query}" <>
-          "&orientation=landscape" <>
-          "&per_page=15" <>
-          "&page=#{page}" <>
-          "&client_id=#{access_key}"
+            "?query=#{query}" <>
+            "&orientation=landscape" <>
+            "&per_page=15" <>
+            "&page=#{page}" <>
+            "&client_id=#{access_key}"
 
         Logger.info("Fetching from Unsplash: #{city_name} (page #{page})")
 
@@ -87,8 +89,13 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       {:ok, %{status_code: 403, body: body}} ->
         if String.contains?(body, "Rate Limit Exceeded") do
           if attempt < max_attempts do
-            backoff = attempt * 1500  # 1.5s, 3s, 4.5s
-            Logger.warning("Rate limited for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
+            # 1.5s, 3s, 4.5s
+            backoff = attempt * 1500
+
+            Logger.warning(
+              "Rate limited for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})"
+            )
+
             Process.sleep(backoff)
             fetch_with_retry(url, city_name, attempt + 1)
           else
@@ -102,8 +109,13 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
 
       {:ok, %{status_code: 429}} ->
         if attempt < max_attempts do
-          backoff = attempt * 2000  # 2s, 4s, 6s
-          Logger.warning("Rate limited (429) for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})")
+          # 2s, 4s, 6s
+          backoff = attempt * 2000
+
+          Logger.warning(
+            "Rate limited (429) for #{city_name}, retrying in #{backoff}ms (attempt #{attempt}/#{max_attempts})"
+          )
+
           Process.sleep(backoff)
           fetch_with_retry(url, city_name, attempt + 1)
         else
@@ -160,8 +172,10 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       "attribution" => %{
         "photographer_name" => get_in(result, ["user", "name"]),
         "photographer_username" => get_in(result, ["user", "username"]),
-        "photographer_url" => "#{get_in(result, ["user", "links", "html"])}?utm_source=eventasaurus&utm_medium=referral",
-        "unsplash_url" => "#{get_in(result, ["links", "html"])}?utm_source=eventasaurus&utm_medium=referral"
+        "photographer_url" =>
+          "#{get_in(result, ["user", "links", "html"])}?utm_source=eventasaurus&utm_medium=referral",
+        "unsplash_url" =>
+          "#{get_in(result, ["links", "html"])}?utm_source=eventasaurus&utm_medium=referral"
       },
       "fetched_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
