@@ -7,6 +7,10 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# Configure the current environment for runtime access
+# This replaces Mix.env() which is only available at compile time
+config :eventasaurus, :environment, config_env()
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server
