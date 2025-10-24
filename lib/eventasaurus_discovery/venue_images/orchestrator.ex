@@ -585,13 +585,32 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     # Generate deterministic filename using hash
     filename = Filename.generate(provider_url, provider)
-    folder = Filename.build_folder_path(venue.slug)
-    imagekit_path = Filename.build_full_path(venue.slug, filename)
+
+    # Sanitize slug - handle nil or invalid slugs
+    safe_slug =
+      case venue.slug do
+        s when is_binary(s) and s != "" ->
+          # Basic sanitization: replace unsafe chars with hyphens
+          trimmed =
+            s
+            |> String.replace(~r/[^a-z0-9\-]/i, "-")
+            |> String.downcase()
+            |> String.trim("-")
+
+          if trimmed != "", do: trimmed, else: "venue-#{venue.id}"
+
+        _ ->
+          # Fallback to ID if slug is nil or invalid
+          "venue-#{venue.id}"
+      end
+
+    folder = Filename.build_folder_path(safe_slug)
+    imagekit_path = Filename.build_full_path(safe_slug, filename)
 
     # Add tags for organization and searchability
     tags = [
       provider,
-      "venue:#{venue.slug}"
+      "venue:#{safe_slug}"
     ]
 
     # Upload to ImageKit

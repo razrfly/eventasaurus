@@ -53,11 +53,14 @@ defmodule Eventasaurus.ImageKit.Fetcher do
   """
   @spec list_venue_images(String.t()) :: {:ok, list(map())} | {:error, atom() | String.t()}
   def list_venue_images(venue_slug) when is_binary(venue_slug) do
-    folder_path = "/venues/#{venue_slug}/"
+    # Reuse Filename.build_folder_path for consistency
+    folder_path = Eventasaurus.ImageKit.Filename.build_folder_path(venue_slug) <> "/"
 
     # Build search query for ImageKit API
     # Use path prefix search to get all files in the venue folder
-    search_query = "path: \"#{folder_path}\""
+    # Escape quotes in path to prevent query injection
+    safe_path = String.replace(folder_path, ~S("), ~S(\"))
+    search_query = ~s(path: "#{safe_path}")
 
     Logger.debug("🔍 Fetching images from ImageKit: #{search_query}")
 
@@ -80,7 +83,7 @@ defmodule Eventasaurus.ImageKit.Fetcher do
 
     # Build authentication header
     # ImageKit uses HTTP Basic Auth with private_key as username and empty password
-    auth = {:basic, "#{Config.private_key()}:"}
+    auth = {:basic, Config.private_key(), ""}
 
     case Req.get(
            api_url,

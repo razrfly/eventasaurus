@@ -4,10 +4,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Venues.Venue
-  alias EventasaurusApp.Events
+  alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusWeb.VenueLive.Components.ImageGallery
   alias EventasaurusWeb.VenueLive.Components.EventCard
-  alias EventasaurusWeb.VenueLive.Components.VenueMap
+  alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.VenueLive.Components.VenueCard
   import Ecto.Query
 
@@ -124,14 +124,15 @@ defmodule EventasaurusWeb.VenueLive.Show do
     now = DateTime.utc_now()
     thirty_days_from_now = DateTime.add(now, 30, :day)
 
-    all_events = Events.list_events_by_venue(venue_id)
+    # Query public_events for this venue (no limit, get all events)
+    all_events = PublicEvents.by_venue(venue_id, upcoming_only: false, limit: 1000)
 
     # Group events into upcoming (next 30 days), future (30+ days), and past
     grouped =
       Enum.group_by(all_events, fn event ->
         cond do
-          DateTime.compare(event.start_at, now) == :lt -> :past
-          DateTime.compare(event.start_at, thirty_days_from_now) == :lt -> :upcoming
+          DateTime.compare(event.starts_at, now) == :lt -> :past
+          DateTime.compare(event.starts_at, thirty_days_from_now) == :lt -> :upcoming
           true -> :future
         end
       end)
@@ -353,7 +354,13 @@ defmodule EventasaurusWeb.VenueLive.Show do
           <!-- Location Map -->
           <div class="bg-white rounded-lg shadow-md p-6">
             <h2 class="text-xl font-semibold text-gray-900 mb-4">🗺️ Location</h2>
-            <VenueMap.venue_map venue={@venue} />
+            <.live_component
+              module={StaticMapComponent}
+              id="venue-map"
+              venue={@venue}
+              theme={:professional}
+              size={:large}
+            />
           </div>
           <!-- Related Venues -->
           <%= if !Enum.empty?(@related_venues) do %>

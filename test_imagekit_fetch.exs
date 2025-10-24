@@ -14,7 +14,7 @@ alias Eventasaurus.ImageKit.Config
 private_key = Config.private_key()
 url_endpoint = Config.url_endpoint()
 
-IO.puts("  Private Key: #{String.slice(private_key, 0..20)}...")
+IO.puts("  Private Key: [REDACTED]")
 IO.puts("  URL Endpoint: #{url_endpoint}")
 
 # Test 2: Test fetching images for a venue slug

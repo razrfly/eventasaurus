@@ -201,11 +201,15 @@ defmodule EventasaurusWeb.VenueLive.Components.ImageGallery do
   end
 
   defp get_images(venue) do
-    # Local dev: fetch from ImageKit if no images in DB
-    if Mix.env() == :dev do
+    # Enable via config: config :eventasaurus, :enable_dev_imagekit_fetch, true
+    dev_fetch? =
+      Application.get_env(:eventasaurus, :enable_dev_imagekit_fetch, false) and
+        Code.ensure_loaded?(Eventasaurus.ImageKit.Fetcher)
+
+    if dev_fetch? do
       case Eventasaurus.ImageKit.Fetcher.list_venue_images(venue.slug) do
         {:ok, images} -> images
-        {:error, _} -> []
+        _ -> []
       end
     else
       []

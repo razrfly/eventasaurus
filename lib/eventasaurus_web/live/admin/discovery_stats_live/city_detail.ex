@@ -213,12 +213,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         join: v in Venue,
         on: v.id == e.venue_id,
         where: v.city_id == ^city_id,
-        group_by: [v.id, v.name],
+        group_by: [v.id, v.name, v.slug],
         order_by: [desc: count(e.id)],
         limit: ^limit,
         select: %{
           venue_id: v.id,
           venue_name: v.name,
+          venue_slug: v.slug,
           event_count: count(e.id)
         }
       )
@@ -449,8 +450,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
               <tbody class="bg-white divide-y divide-gray-200">
                 <%= for venue <- @top_venues do %>
                   <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 text-sm font-medium text-gray-900">
-                      <%= venue.venue_name %>
+                    <td class="px-6 py-4 text-sm font-medium">
+                      <.link
+                        navigate={~p"/venues/#{venue.venue_slug}"}
+                        class="text-indigo-600 hover:text-indigo-900"
+                      >
+                        <%= venue.venue_name %>
+                      </.link>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= format_number(venue.event_count) %>
