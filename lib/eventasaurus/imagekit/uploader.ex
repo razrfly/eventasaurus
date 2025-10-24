@@ -86,23 +86,39 @@ defmodule Eventasaurus.ImageKit.Uploader do
     end
   end
 
-  defp get_content_type(headers) when is_map(headers) do
-    case Map.get(headers, "content-type", "image/jpeg") do
-      # If it's a list (from Req), take first element
-      [content_type | _] when is_binary(content_type) ->
-        String.split(content_type, ";") |> List.first()
+  defp get_content_type(headers) do
+    value =
+      cond do
+        is_map(headers) ->
+          Map.get(headers, "content-type") || Map.get(headers, "Content-Type")
 
-      # If it's a string, split on semicolon
-      content_type when is_binary(content_type) ->
-        String.split(content_type, ";") |> List.first()
+        is_list(headers) ->
+          headers
+          |> Enum.reduce_while(nil, fn {k, v}, acc ->
+            key_string =
+              cond do
+                is_binary(k) -> k
+                is_atom(k) -> to_string(k)
+                true -> ""
+              end
 
-      # Fallback
-      _ ->
-        "image/jpeg"
+            if String.downcase(key_string) == "content-type" do
+              {:halt, v}
+            else
+              {:cont, acc}
+            end
+          end)
+
+        true ->
+          nil
+      end
+
+    case value do
+      [h | _] when is_binary(h) -> String.split(h, ";") |> hd()
+      h when is_binary(h) -> String.split(h, ";") |> hd()
+      _ -> "image/jpeg"
     end
   end
-
-  defp get_content_type(_), do: "image/jpeg"
 
   @spec upload_binary(binary(), keyword()) :: {:ok, String.t()} | {:error, atom() | tuple()}
   defp upload_binary(image_binary, opts) do

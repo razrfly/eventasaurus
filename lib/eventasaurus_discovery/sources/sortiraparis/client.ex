@@ -272,6 +272,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Client do
           if Code.ensure_loaded?(:brotli) and function_exported?(:brotli, :decode, 1) do
             apply(:brotli, :decode, [body])
           else
+            Logger.warning(
+              "⚠️ Brotli compression detected but :brotli module not available. Returning compressed body."
+            )
+
             body
           end
 

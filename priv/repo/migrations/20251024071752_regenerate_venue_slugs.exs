@@ -38,26 +38,17 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
     Logger.info("Found #{total} venues to process")
 
     # Process venues in batches to avoid memory issues
+    # Each batch commits separately to reduce lock contention
     batch_size = 100
 
-    result =
-      Repo.transaction(fn ->
-        process_venues_in_batches(batch_size, total)
-      end, timeout: :infinity)
+    {updated, skipped, errors} = process_venues_in_batches(batch_size, total)
 
-    case result do
-      {:ok, {updated, skipped, errors}} ->
-        Logger.info("""
-        Venue slug regeneration complete!
-        - Updated: #{updated}
-        - Skipped: #{skipped}
-        - Errors: #{errors}
-        """)
-
-      {:error, reason} ->
-        Logger.error("Venue slug regeneration failed: #{inspect(reason)}")
-        raise "Migration failed: #{inspect(reason)}"
-    end
+    Logger.info("""
+    Venue slug regeneration complete!
+    - Updated: #{updated}
+    - Skipped: #{skipped}
+    - Errors: #{errors}
+    """)
   end
 
   defp process_venues_in_batches(batch_size, total) do
@@ -72,27 +63,43 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
 
       venues =
         from(v in Venue,
+          order_by: [asc: v.id],
           limit: ^batch_size,
           offset: ^offset,
           preload: [city_ref: :country]
         )
         |> Repo.all()
 
-      # Process each venue in the batch
+      # Process each venue in the batch within a transaction
       batch_result =
-        Enum.reduce(venues, {0, 0, 0}, fn venue, {u, s, e} ->
-          case regenerate_venue_slug(venue) do
-            {:ok, _} ->
-              if rem(u + s + e + 1, 50) == 0 do
-                Logger.info("Processed #{u + s + e + 1}/#{total} venues...")
-              end
-              {u + 1, s, e}
-            {:skipped, _} -> {u, s + 1, e}
-            {:error, reason} ->
-              Logger.warning("Failed to update venue #{venue.id}: #{inspect(reason)}")
-              {u, s, e + 1}
-          end
+        Repo.transaction(fn ->
+          Enum.reduce(venues, {0, 0, 0}, fn venue, {u, s, e} ->
+            case regenerate_venue_slug(venue) do
+              {:ok, _} ->
+                processed_so_far = offset + u + s + e + 1
+
+                if rem(processed_so_far, 50) == 0 do
+                  Logger.info("Processed #{processed_so_far}/#{total} venues...")
+                end
+
+                {u + 1, s, e}
+
+              {:skipped, _} ->
+                {u, s + 1, e}
+
+              {:error, reason} ->
+                Logger.warning("Failed to update venue #{venue.id}: #{inspect(reason)}")
+                {u, s, e + 1}
+            end
+          end)
         end)
+
+      # Extract result from transaction
+      batch_result =
+        case batch_result do
+          {:ok, result} -> result
+          {:error, _} -> {0, 0, length(venues)}
+        end
 
       {
         updated + elem(batch_result, 0),
@@ -120,6 +127,7 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
       case Repo.update(changeset) do
         {:ok, updated_venue} ->
           {:ok, updated_venue}
+
         {:error, changeset} ->
           {:error, changeset.errors}
       end
