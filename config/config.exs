@@ -145,10 +145,6 @@ config :eventasaurus, Oban,
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
        {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker}
-       # DISABLED - Costs money, should be manual only
-       # {"0 4 * * *", EventasaurusDiscovery.VenueImages.EnrichmentJob}
-       # DISABLED - Doesn't work, can be removed or fixed later
-       # {"0 8 1 * *", EventasaurusDiscovery.Workers.GeocodingCostReportWorker}
      ]}
   ]
 

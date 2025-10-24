@@ -22,7 +22,7 @@ defmodule EventasaurusApp.Monitoring.HealthCheck do
     * High error count relative to success count
   - :healthy otherwise
   """
-  def determine_health(job_config, last_execution, stats_24h)
+  @spec determine_health(map(), map() | nil, map()) :: :healthy | :warning | :error
 
   # No execution data at all - this is an error for scheduled jobs, warning for others
   def determine_health(%{category: :scheduled, schedule: schedule}, nil, %{total_runs: 0})

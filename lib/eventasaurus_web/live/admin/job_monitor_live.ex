@@ -68,6 +68,7 @@ defmodule EventasaurusWeb.Admin.JobMonitorLive do
     |> assign(:filter, :all)
     |> assign(:expanded, MapSet.new())
     |> assign(:last_refresh, nil)
+    |> assign(:filtered_jobs, [])  # Prevent SSR crash
   end
 
   defp load_stats(socket) do
@@ -97,11 +98,13 @@ defmodule EventasaurusWeb.Admin.JobMonitorLive do
   defp health_icon(:healthy), do: "🟢"
   defp health_icon(:warning), do: "🟡"
   defp health_icon(:error), do: "🔴"
+  defp health_icon(_), do: "⚪"  # Unknown status
 
   defp category_badge_class(:discovery), do: "bg-purple-100 text-purple-800"
   defp category_badge_class(:scheduled), do: "bg-blue-100 text-blue-800"
   defp category_badge_class(:maintenance), do: "bg-gray-100 text-gray-800"
   defp category_badge_class(:background), do: "bg-indigo-100 text-indigo-800"
+  defp category_badge_class(_), do: "bg-gray-100 text-gray-800"  # Unknown category
 
   defp format_time_ago(nil), do: "Never"
 
