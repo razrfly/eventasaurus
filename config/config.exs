@@ -147,6 +147,7 @@ config :eventasaurus, Oban,
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
        {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker}
+       # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]
 

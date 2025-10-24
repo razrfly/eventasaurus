@@ -81,28 +81,40 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   - `:providers` - List of specific provider names to use (default: all enabled providers)
   - `:force` - Force re-enrichment even if not stale (default: false)
   - `:max_retries` - Maximum retry attempts on failure (default: 3)
+  - `:retry_failed_only` - Only retry existing failed uploads, don't call providers (default: false)
 
   ## Staleness Policy
 
   Images are considered stale after 30 days.
   """
   def enrich_venue(venue, opts \\ []) do
-    providers = Keyword.get(opts, :providers)
-    force = Keyword.get(opts, :force, false)
-    max_retries = Keyword.get(opts, :max_retries, 3)
+    retry_failed_only = Keyword.get(opts, :retry_failed_only, false)
 
-    # Log provider override if specified
-    if providers do
-      Logger.info(
-        "🎯 Provider override active for venue #{venue.id}: using only #{inspect(providers)}"
-      )
-    end
+    # If retry_failed_only mode, delegate to retry worker
+    if retry_failed_only do
+      alias EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker
 
-    if needs_enrichment?(venue, force) do
-      do_enrich_venue(venue, providers, max_retries)
+      Logger.info("🔄 Retry-only mode: skipping provider API calls for venue #{venue.id}")
+      FailedUploadRetryWorker.perform_now(venue)
     else
-      Logger.debug("⏭️  Venue #{venue.id} images are fresh, skipping enrichment")
-      {:ok, venue}
+      # Normal enrichment flow
+      providers = Keyword.get(opts, :providers)
+      force = Keyword.get(opts, :force, false)
+      max_retries = Keyword.get(opts, :max_retries, 3)
+
+      # Log provider override if specified
+      if providers do
+        Logger.info(
+          "🎯 Provider override active for venue #{venue.id}: using only #{inspect(providers)}"
+        )
+      end
+
+      if needs_enrichment?(venue, force) do
+        do_enrich_venue(venue, providers, max_retries)
+      else
+        Logger.debug("⏭️  Venue #{venue.id} images are fresh, skipping enrichment")
+        {:ok, venue}
+      end
     end
   end
 
@@ -526,18 +538,22 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
             # Build detailed error information for metadata
             error_detail = %{
-              "error" => to_string(reason),
-              "error_type" => to_string(error_type),
+              "error" => inspect(reason),
+              "error_type" => Atom.to_string(error_type),
               "status_code" => status_code,
               "timestamp" => DateTime.to_iso8601(now)
             }
 
             # Enhanced logging with error classification
+            # Safely truncate URL with nil guard
+            truncated_url =
+              if provider_url, do: String.slice(provider_url, 0..80), else: "(nil)"
+
             Logger.warning("""
             ⚠️  Image upload failed for venue #{venue.id}:
                Provider: #{provider}
                Error Type: #{error_type}
-               #{if status_code, do: "Status Code: #{status_code}\n", else: ""}   URL: #{String.slice(provider_url, 0..80)}...
+               #{if status_code, do: "Status Code: #{status_code}\n", else: ""}   URL: #{truncated_url}...
                Reason: #{inspect(reason)}
             """)
 
@@ -664,9 +680,13 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   defp merge_and_deduplicate_images(existing_images, new_images) do
     all_images = existing_images ++ new_images
 
-    # Group by URL
+    # Group by provider_url (or fall back to url)
+    # This ensures failed and successful uploads of the same photo deduplicate correctly
+    # Failed: url = google_url, provider_url = google_url
+    # Success: url = imagekit_url, provider_url = google_url
+    # Both have same provider_url, so they deduplicate!
     all_images
-    |> Enum.group_by(fn img -> img["url"] end)
+    |> Enum.group_by(fn img -> img["provider_url"] || img["url"] end)
     |> Enum.map(fn {_url, duplicate_images} ->
       # Pick the image with highest quality score
       # Prefer images with quality_score, fall back to newest (last in list)
