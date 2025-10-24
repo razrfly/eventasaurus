@@ -13,7 +13,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
 
   ## Configuration
 
-  Requires `GOOGLE_PLACES_API_KEY` environment variable.
+  Requires `GOOGLE_MAPS_API_KEY` environment variable.
 
   **Note**: This provider is **DISABLED by default** due to high cost ($0.034/call).
   Enable only as absolute last resort.
@@ -57,7 +57,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
     api_key = get_api_key()
 
     if is_nil(api_key) do
-      Logger.error("❌ GOOGLE_PLACES_API_KEY not configured")
+      Logger.error("❌ GOOGLE_MAPS_API_KEY not configured")
       {:error, :api_key_missing}
     else
       Logger.debug("🌐 Google Places request: #{address}")
@@ -284,7 +284,7 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
     api_key = get_api_key()
 
     if is_nil(api_key) do
-      Logger.error("❌ GOOGLE_PLACES_API_KEY not configured")
+      Logger.error("❌ GOOGLE_MAPS_API_KEY not configured")
       {:error, :api_key_missing}
     else
       Logger.debug("📸 Google Places Photos request: #{place_id}")
@@ -407,6 +407,6 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.GooglePlaces do
   end
 
   defp get_api_key do
-    System.get_env("GOOGLE_PLACES_API_KEY")
+    System.get_env("GOOGLE_MAPS_API_KEY")
   end
 end

@@ -440,7 +440,7 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
   defp get_system_status do
     %{
       api_keys: %{
-        google_places: System.get_env("GOOGLE_PLACES_API_KEY") != nil,
+        google_places: System.get_env("GOOGLE_MAPS_API_KEY") != nil,
         foursquare: System.get_env("FOURSQUARE_API_KEY") != nil,
         here: System.get_env("HERE_API_KEY") != nil,
         geoapify: System.get_env("GEOAPIFY_API_KEY") != nil,
