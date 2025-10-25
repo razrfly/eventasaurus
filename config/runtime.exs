@@ -55,21 +55,42 @@ default_upload_enabled = if config_env() == :prod, do: "true", else: "false"
 
 # Use separate folders for dev vs production (never pollute production folder from dev)
 default_imagekit_folder = if config_env() == :prod, do: "/venues", else: "/venues_test"
+raw_imagekit_folder = System.get_env("IMAGEKIT_FOLDER", default_imagekit_folder) |> String.trim()
+sanitized_imagekit_folder =
+  raw_imagekit_folder
+  |> (fn f -> if String.starts_with?(f, "/"), do: f, else: "/" <> f end).()
+  |> String.trim_trailing("/")
 
 config :eventasaurus, :imagekit,
   enabled: System.get_env("IMAGEKIT_CDN_ENABLED", default_imagekit_enabled) == "true",
   upload_enabled: System.get_env("ENABLE_IMAGEKIT_UPLOAD", default_upload_enabled) == "true",
   id: System.get_env("IMAGEKIT_ID", "wombie"),
   endpoint: System.get_env("IMAGEKIT_END_POINT", "https://ik.imagekit.io/wombie"),
-  folder: System.get_env("IMAGEKIT_FOLDER", default_imagekit_folder)
+  folder: sanitized_imagekit_folder
 
 # Venue image enrichment configuration
 # Limit images processed in development to save API credits (Google Places + ImageKit)
 default_max_images = if config_env() == :prod, do: "10", else: "2"
 
+max_images_env = System.get_env("MAX_IMAGES_PER_PROVIDER")
+safe_max_images =
+  case max_images_env do
+    nil -> default_max_images
+    "" -> default_max_images
+    v -> v
+  end |> String.to_integer()
+
+cooldown_env = System.get_env("NO_IMAGES_COOLDOWN_DAYS")
+safe_cooldown_days =
+  case cooldown_env do
+    nil -> "7"
+    "" -> "7"
+    v -> v
+  end |> String.to_integer()
+
 config :eventasaurus, :venue_images,
-  max_images_per_provider: String.to_integer(System.get_env("MAX_IMAGES_PER_PROVIDER", default_max_images)),
-  no_images_cooldown_days: String.to_integer(System.get_env("NO_IMAGES_COOLDOWN_DAYS", "7"))
+  max_images_per_provider: safe_max_images,
+  no_images_cooldown_days: safe_cooldown_days
 
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")

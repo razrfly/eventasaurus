@@ -199,7 +199,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
           ? IS NULL OR
           ?->>'last_attempt_result' IS NULL OR
           ?->>'last_attempt_result' != 'no_images' OR
-          (?->>'last_attempt_at')::timestamp < NOW() - make_interval(days => ?)
+          (?->>'last_attempt_at')::timestamp < (NOW() AT TIME ZONE 'UTC') - make_interval(days => ?)
           """,
           v.image_enrichment_metadata,
           v.image_enrichment_metadata,
