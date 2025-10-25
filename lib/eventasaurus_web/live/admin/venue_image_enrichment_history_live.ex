@@ -46,7 +46,16 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
 
   @impl true
   def handle_event("change_tab", %{"tab" => tab}, socket) do
-    tab_atom = String.to_existing_atom(tab)
+    tab_atom =
+      case tab do
+        "all" -> :all
+        "city_backfills" -> :city_backfills
+        "individual_venues" -> :individual_venues
+        "partial_failures" -> :partial_failures
+        "failed_only" -> :failed_only
+        _ -> :all
+      end
+
     {:noreply, socket |> assign(:active_tab, tab_atom) |> load_operations()}
   end
 
@@ -76,8 +85,14 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   def handle_event("filter_city", %{"city" => city}, socket) do
     city_filter =
       case city do
-        "all" -> :all
-        other -> String.to_integer(other)
+        "all" ->
+          :all
+
+        other ->
+          case Integer.parse(other) do
+            {id, ""} -> id
+            _ -> :all
+          end
       end
 
     {:noreply, assign(socket, :city_filter, city_filter) |> load_operations()}
@@ -164,19 +179,23 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   def handle_event("retry_venue_images", %{"venue_id" => venue_id_str, "image_indexes" => indexes_json}, socket) do
     case Integer.parse(venue_id_str) do
       {venue_id, ""} ->
-        indexes = Jason.decode!(indexes_json)
+        case Jason.decode(indexes_json) do
+          {:ok, indexes} when is_list(indexes) ->
+            case FailedUploadRetryWorker.enqueue_venue_images(venue_id, indexes) do
+              {:ok, _job} ->
+                socket =
+                  socket
+                  |> put_flash(:info, "✅ Retry queued for #{length(indexes)} images from venue ##{venue_id}")
+                  |> load_operations()
 
-        case FailedUploadRetryWorker.enqueue_venue_images(venue_id, indexes) do
-          {:ok, _job} ->
-            socket =
-              socket
-              |> put_flash(:info, "✅ Retry queued for #{length(indexes)} images from venue ##{venue_id}")
-              |> load_operations()
+                {:noreply, socket}
 
-            {:noreply, socket}
+              {:error, reason} ->
+                {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+            end
 
-          {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+          _ ->
+            {:noreply, put_flash(socket, :error, "❌ Invalid image indexes JSON")}
         end
 
       _ ->
@@ -357,10 +376,27 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
           from(j in query, where: j.completed_at >= ^month_ago)
       end
 
+    jobs = Repo.all(query)
+
+    # Batch load all venues for EnrichmentJob operations to avoid N+1 queries
+    venue_ids =
+      jobs
+      |> Enum.filter(fn j -> String.ends_with?(j.worker, "EnrichmentJob") end)
+      |> Enum.map(fn j -> j.args["venue_id"] end)
+      |> Enum.reject(&is_nil/1)
+
+    venues_map =
+      if Enum.empty?(venue_ids) do
+        %{}
+      else
+        from(v in Venue, where: v.id in ^venue_ids, select: {v.id, v})
+        |> Repo.all()
+        |> Map.new()
+      end
+
     operations =
-      query
-      |> Repo.all()
-      |> Enum.map(&enrich_operation/1)
+      jobs
+      |> Enum.map(&enrich_operation(&1, venues_map))
 
     # Apply Elixir-level filters
     operations =
@@ -388,13 +424,13 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
 
   defp apply_tab_filter(operations, :partial_failures) do
     Enum.filter(operations, fn op ->
-      detect_partial_failure(op) == :partial_failure
+      op.failure_type == :partial_failure
     end)
   end
 
   defp apply_tab_filter(operations, _tab), do: operations
 
-  defp enrich_operation(job) do
+  defp enrich_operation(job, venues_map) do
     # Calculate duration
     duration_seconds =
       if job.completed_at && job.attempted_at do
@@ -474,16 +510,16 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
       imagekit_urls: meta["imagekit_urls"] || []
     }
 
-    # Add partial failure detection
-    Map.put(base_op, :failure_type, detect_partial_failure(base_op))
+    # Add partial failure detection using preloaded venues
+    Map.put(base_op, :failure_type, detect_partial_failure(base_op, venues_map))
   end
 
-  defp detect_partial_failure(op) do
+  defp detect_partial_failure(op, venues_map) do
     cond do
       # Check if this is an EnrichmentJob with venue_id
       op.venue_id != nil ->
-        # Load venue to check venue_images
-        case Repo.get(Venue, op.venue_id) do
+        # Use preloaded venue from venues_map to avoid N+1 queries
+        case Map.get(venues_map, op.venue_id) do
           nil ->
             :unknown
 
