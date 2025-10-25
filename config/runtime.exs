@@ -49,10 +49,27 @@ config :eventasaurus, :cdn,
 # Can be overridden with IMAGEKIT_CDN_ENABLED environment variable
 default_imagekit_enabled = if config_env() == :prod, do: "true", else: "false"
 
+# Upload enabled separately from CDN display (saves API credits in dev)
+# Set ENABLE_IMAGEKIT_UPLOAD=true in development to test uploads
+default_upload_enabled = if config_env() == :prod, do: "true", else: "false"
+
+# Use separate folders for dev vs production (never pollute production folder from dev)
+default_imagekit_folder = if config_env() == :prod, do: "/venues", else: "/venues_test"
+
 config :eventasaurus, :imagekit,
   enabled: System.get_env("IMAGEKIT_CDN_ENABLED", default_imagekit_enabled) == "true",
+  upload_enabled: System.get_env("ENABLE_IMAGEKIT_UPLOAD", default_upload_enabled) == "true",
   id: System.get_env("IMAGEKIT_ID", "wombie"),
-  endpoint: System.get_env("IMAGEKIT_END_POINT", "https://ik.imagekit.io/wombie")
+  endpoint: System.get_env("IMAGEKIT_END_POINT", "https://ik.imagekit.io/wombie"),
+  folder: System.get_env("IMAGEKIT_FOLDER", default_imagekit_folder)
+
+# Venue image enrichment configuration
+# Limit images processed in development to save API credits (Google Places + ImageKit)
+default_max_images = if config_env() == :prod, do: "10", else: "2"
+
+config :eventasaurus, :venue_images,
+  max_images_per_provider: String.to_integer(System.get_env("MAX_IMAGES_PER_PROVIDER", default_max_images)),
+  no_images_cooldown_days: String.to_integer(System.get_env("NO_IMAGES_COOLDOWN_DAYS", "7"))
 
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")

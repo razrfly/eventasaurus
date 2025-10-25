@@ -487,6 +487,69 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     end
   end
 
+  # Determines the correct job status by distinguishing between:
+  # - "success": Images were successfully fetched and uploaded
+  # - "error": Providers failed with API errors (INVALID_REQUEST, auth failures, etc.)
+  # - "no_images": Providers explicitly said no images available (ZERO_RESULTS)
+  defp determine_job_status(uploaded_images, providers_failed, metadata) do
+    cond do
+      # If we got images, it's a success
+      length(uploaded_images) > 0 ->
+        "success"
+
+      # If no providers failed, but we have no images, treat as no_images
+      # (edge case where providers returned empty results without error)
+      Enum.empty?(providers_failed) ->
+        "no_images"
+
+      # If providers failed, check WHY they failed
+      true ->
+        error_details = metadata["error_details"] || metadata[:error_details] || %{}
+
+        # Check if ANY provider had an API error (not ZERO_RESULTS)
+        has_api_errors? =
+          Enum.any?(providers_failed, fn provider ->
+            error = get_provider_error(error_details, provider)
+            is_api_error?(error)
+          end)
+
+        if has_api_errors? do
+          # If ANY provider had an API error, this is an "error" not "no_images"
+          "error"
+        else
+          # All providers returned ZERO_RESULTS (genuine no images available)
+          "no_images"
+        end
+    end
+  end
+
+  # Gets the error for a specific provider from error_details map
+  defp get_provider_error(error_details, provider) do
+    Map.get(error_details, provider) || Map.get(error_details, to_string(provider))
+  end
+
+  # Checks if an error is an API error (not ZERO_RESULTS)
+  # API errors include: INVALID_REQUEST, authentication failures, rate limits, etc.
+  # ZERO_RESULTS is NOT an API error - it means "no images available"
+  defp is_api_error?(error) do
+    # Check if it's a permanent failure (auth, config, invalid request)
+    permanent_failure?(error) or
+      # Check if it's a retryable error (rate limit, timeout, network)
+      retryable_error?(error) or
+      # Check for any other error patterns that are not ZERO_RESULTS
+      (is_binary(error) and not is_zero_results?(error))
+  end
+
+  # Checks if an error represents "no images available" (ZERO_RESULTS)
+  # This is the ONLY case that should trigger "no_images" status
+  defp is_zero_results?(error) when is_binary(error) do
+    String.contains?(error, "ZERO_RESULTS") or
+      String.contains?(error, "No images") or
+      String.contains?(error, "no images")
+  end
+
+  defp is_zero_results?(_), do: false
+
   defp build_success_metadata(enriched_venue, start_time) do
     execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
 
@@ -523,8 +586,11 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
         }
       end)
 
+    # Determine status correctly - distinguish between genuine "no images" vs errors
+    status = determine_job_status(uploaded_images, providers_failed, metadata)
+
     %{
-      status: if(length(uploaded_images) > 0, do: "success", else: "no_images"),
+      status: status,
       images_discovered: length(all_images),
       images_uploaded: length(uploaded_images),
       images_failed: length(failed_images),

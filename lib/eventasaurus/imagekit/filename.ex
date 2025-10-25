@@ -134,6 +134,7 @@ defmodule Eventasaurus.ImageKit.Filename do
   Builds the full ImageKit folder path for a venue using slug.
 
   Validates slug to prevent path traversal or unsafe characters.
+  Uses folder from config (e.g., "/venues" in production, "/venues_test" in development).
 
   ## Examples
 
@@ -146,7 +147,9 @@ defmodule Eventasaurus.ImageKit.Filename do
   @spec build_folder_path(String.t()) :: String.t()
   def build_folder_path(venue_slug) when is_binary(venue_slug) do
     if valid_slug?(venue_slug) do
-      "/venues/#{venue_slug}"
+      # Get base folder from config (e.g., "/venues" or "/venues_test")
+      base_folder = Application.get_env(:eventasaurus, :imagekit, [])[:folder] || "/venues"
+      "#{base_folder}/#{venue_slug}"
     else
       raise ArgumentError, "invalid venue slug: contains unsafe characters"
     end
