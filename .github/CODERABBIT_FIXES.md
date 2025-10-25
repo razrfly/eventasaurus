@@ -5,8 +5,8 @@ All critical and major CodeRabbit AI suggestions have been implemented and verif
 ## Summary
 
 ✅ **3 Critical Bugs Fixed**
-✅ **6 Major Improvements Implemented**
-✅ **3 Documentation/Quality Improvements**
+✅ **7 Major Improvements Implemented**
+✅ **5 Documentation/Quality Improvements**
 ✅ **All Code Compiles Successfully**
 
 ---
@@ -460,6 +460,110 @@ ROUND(100.0 * failed_count / (failed_count + uploaded_count), 1) as failure_rate
 
 ---
 
+### 14. Clarify Deployment Scheduling in Next Steps (Documentation)
+
+**Issue**: Lines 525-533 stated "Nightly cleanup job will start automatically at 4 AM UTC" without clarifying that Oban cron configuration is required first.
+
+**Fix**: Updated to match earlier clarification that cron configuration is needed for automatic execution.
+
+```markdown
+# Before (line 529)
+- Nightly cleanup job will start automatically at 4 AM UTC
+
+# After
+- Nightly cleanup job designed for 4 AM UTC (requires Oban cron configuration to enable automatic execution)
+```
+
+**Benefits**:
+- Removes documentation contradiction
+- Sets correct deployment expectations
+- Clarifies cron configuration requirement
+
+**File**: `.github/PHASE3_IMPLEMENTATION_SUMMARY.md:529`
+
+---
+
+### 15. Harden Venue ID Parsing (venue_image_operations_live.ex)
+
+**Issue**: `String.to_integer/1` raises `ArgumentError` on invalid input, potentially crashing the LiveView process.
+
+**Impact**: Malformed requests or malicious input could crash admin interface.
+
+**Fix**: Use `Integer.parse/1` with proper error handling.
+
+```elixir
+# Before (lines 98-118)
+def handle_event("retry_venue", %{"venue_id" => venue_id_str}, socket) do
+  venue_id = String.to_integer(venue_id_str)  # ⚠️ Can crash!
+
+  case FailedUploadRetryWorker.enqueue_venue(venue_id) do
+    {:ok, _job} -> ...
+    {:error, reason} -> ...
+  end
+end
+
+# After
+def handle_event("retry_venue", %{"venue_id" => venue_id_str}, socket) do
+  case Integer.parse(venue_id_str) do
+    {venue_id, ""} ->
+      case FailedUploadRetryWorker.enqueue_venue(venue_id) do
+        {:ok, _job} ->
+          {:noreply, socket |> put_flash(:info, "✅ Retry queued for venue ##{venue_id}") |> load_operations()}
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+      end
+
+    _ ->
+      {:noreply, put_flash(socket, :error, "❌ Invalid venue ID")}
+  end
+end
+```
+
+**Benefits**:
+- Prevents LiveView crashes from invalid input
+- Shows user-friendly error message
+- Guards against malicious requests
+- More robust admin interface
+
+**File**: `lib/eventasaurus_web/live/admin/venue_image_operations_live.ex:98-118`
+
+---
+
+### 16. Prevent Reverse Tabnabbing on External Links (Security)
+
+**Issue**: External links with `target="_blank"` without `rel="noopener noreferrer"` are vulnerable to reverse tabnabbing attacks.
+
+**Security Risk**: External page can access `window.opener` and redirect original page to phishing site.
+
+**Fix**: Add `rel="noopener noreferrer"` to all external links.
+
+```heex
+<!-- Before (lines 349-356) -->
+<a
+  href={failed_img["provider_url"]}
+  target="_blank"
+  class="..."
+>
+
+<!-- After -->
+<a
+  href={failed_img["provider_url"]}
+  target="_blank"
+  rel="noopener noreferrer"
+  class="..."
+>
+```
+
+**Benefits**:
+- Prevents reverse tabnabbing attacks
+- Blocks `window.opener` access
+- Follows security best practices
+- Protects admin users from phishing
+
+**File**: `lib/eventasaurus_web/live/admin/venue_image_operations_live.html.heex:349-356`
+
+---
+
 ## Not Implemented (Out of Scope)
 
 ### Optimistic Locking (Suggestion #8)
@@ -519,10 +623,12 @@ Generated eventasaurus app
 2. `lib/eventasaurus_discovery/venue_images/failed_upload_retry_worker.ex` - Fixes #2, #4, #6, #7, #9
 3. `lib/eventasaurus_discovery/venue_images/stats.ex` - Fixes #3, #5, #13
 4. `lib/eventasaurus_discovery/venue_images/orchestrator.ex` - Fix #8
+5. `lib/eventasaurus_web/live/admin/venue_image_operations_live.ex` - Fix #15
+6. `lib/eventasaurus_web/live/admin/venue_image_operations_live.html.heex` - Fix #16
 
 **Documentation Files**:
-5. `.github/ADMIN_BUTTON_IMPLEMENTATION.md` - Fix #10
-6. `.github/PHASE3_IMPLEMENTATION_SUMMARY.md` - Fix #11
+7. `.github/ADMIN_BUTTON_IMPLEMENTATION.md` - Fix #10
+8. `.github/PHASE3_IMPLEMENTATION_SUMMARY.md` - Fixes #11, #14
 
 ### Verification Checklist
 
@@ -543,6 +649,9 @@ Generated eventasaurus app
 - [x] Exception logging includes full stacktraces
 - [x] Documentation clarified (no contradictions)
 - [x] Markdown lint issues resolved
+- [x] Venue ID parsing hardened against invalid input
+- [x] External links secured with rel="noopener noreferrer"
+- [x] Deployment section matches cron configuration status
 
 ---
 
@@ -563,6 +672,9 @@ Generated eventasaurus app
 ❌ Exception logs without stacktraces
 ❌ Documentation contradictions about scheduled vs manual
 ❌ Markdown lint errors in documentation
+❌ LiveView crash risk from invalid venue ID input
+❌ Reverse tabnabbing vulnerability on external links
+❌ Deployment docs suggesting auto-execution without cron config
 
 ### After Fixes
 
@@ -579,6 +691,9 @@ Generated eventasaurus app
 ✅ Full stacktraces in error logs
 ✅ Clear, consistent documentation
 ✅ All markdown lint issues resolved
+✅ Robust venue ID parsing with error messages
+✅ External links secured against reverse tabnabbing
+✅ Deployment expectations accurately set
 
 ---
 
