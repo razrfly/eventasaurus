@@ -181,17 +181,40 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
       {venue_id, ""} ->
         case Jason.decode(indexes_json) do
           {:ok, indexes} when is_list(indexes) ->
-            case FailedUploadRetryWorker.enqueue_venue_images(venue_id, indexes) do
-              {:ok, _job} ->
-                socket =
-                  socket
-                  |> put_flash(:info, "✅ Retry queued for #{length(indexes)} images from venue ##{venue_id}")
-                  |> load_operations()
+            # Validate and sanitize image indexes
+            parsed =
+              indexes
+              |> Enum.map(fn
+                i when is_integer(i) and i >= 0 -> {:ok, i}
+                s when is_binary(s) ->
+                  case Integer.parse(String.trim(s)) do
+                    {i, ""} when i >= 0 -> {:ok, i}
+                    _ -> :error
+                  end
+                _ -> :error
+              end)
 
-                {:noreply, socket}
+            if Enum.any?(parsed, &(&1 == :error)) do
+              {:noreply, put_flash(socket, :error, "❌ Image indexes must be non-negative integers")}
+            else
+              validated_indexes =
+                parsed
+                |> Enum.map(fn {:ok, i} -> i end)
+                |> Enum.uniq()
+                |> Enum.take(200) # Safety bound to prevent abuse
 
-              {:error, reason} ->
-                {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+              case FailedUploadRetryWorker.enqueue_venue_images(venue_id, validated_indexes) do
+                {:ok, _job} ->
+                  socket =
+                    socket
+                    |> put_flash(:info, "✅ Retry queued for #{length(validated_indexes)} images from venue ##{venue_id}")
+                    |> load_operations()
+
+                  {:noreply, socket}
+
+                {:error, reason} ->
+                  {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+              end
             end
 
           _ ->
@@ -264,7 +287,14 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   end
 
   defp load_cities(socket) do
-    cities = Repo.all(from c in City, order_by: c.name, select: %{id: c.id, name: c.name})
+    cities =
+      Repo.all(
+        from c in City,
+          where: c.discovery_enabled == true,
+          order_by: c.name,
+          select: %{id: c.id, name: c.name}
+      )
+
     assign(socket, :cities, cities)
   end
 
@@ -382,8 +412,18 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
     venue_ids =
       jobs
       |> Enum.filter(fn j -> String.ends_with?(j.worker, "EnrichmentJob") end)
-      |> Enum.map(fn j -> j.args["venue_id"] end)
+      |> Enum.map(& &1.args["venue_id"])
+      |> Enum.map(fn
+        id when is_integer(id) -> id
+        id when is_binary(id) ->
+          case Integer.parse(String.trim(id)) do
+            {i, ""} -> i
+            _ -> nil
+          end
+        _ -> nil
+      end)
       |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
 
     venues_map =
       if Enum.empty?(venue_ids) do
