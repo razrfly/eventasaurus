@@ -1,12 +1,13 @@
 defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
   @moduledoc """
-  City geocoding operations view.
+  City venue image operations view.
 
-  Shows all venue image backfill operations for a specific city, including:
-  - Recent backfill job history
-  - Job-level summaries (total, enriched, skipped, failed)
-  - Per-venue details (geocoding, images, costs)
+  Shows all venue image enrichment operations for a specific city, including:
+  - Recent backfill and individual enrichment job history
+  - Job-level summaries (total venues, enriched, skipped, failed)
+  - Per-venue details (images uploaded, costs)
   - Provider filter
+  - Supports both BackfillOrchestratorJob (city-wide) and EnrichmentJob (individual venue)
   """
   use EventasaurusWeb, :live_view
 
@@ -30,7 +31,7 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
           socket
           |> assign(:city, city)
           |> assign(:city_slug, city_slug)
-          |> assign(:page_title, "#{city.name} - Geocoding Operations")
+          |> assign(:page_title, "#{city.name} - Venue Image Operations")
           |> assign(:provider_filter, :all)
           |> assign(:expanded_job_ids, MapSet.new())
           |> assign(:loading, true)
@@ -89,10 +90,28 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
   end
 
   defp get_city_operations(city_id, limit) do
+    # Query for both BackfillOrchestratorJob (city-wide) and EnrichmentJob (single venue)
+    # BackfillOrchestratorJob has city_id in args
+    # EnrichmentJob has venue_id in args - need to check venue's city
     query =
       from(j in "oban_jobs",
-        where: j.worker == "EventasaurusDiscovery.VenueImages.BackfillJob",
-        where: fragment("args->>'city_id' = ?", ^to_string(city_id)),
+        where:
+          j.worker in [
+            "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob",
+            "EventasaurusDiscovery.VenueImages.EnrichmentJob"
+          ],
+        where:
+          fragment("args->>'city_id' = ?", ^to_string(city_id)) or
+            fragment(
+              """
+              EXISTS (
+                SELECT 1 FROM venues v
+                WHERE v.id = CAST(args->>'venue_id' AS INTEGER)
+                AND v.city_id = ?
+              )
+              """,
+              ^city_id
+            ),
         where: j.state in ["completed", "discarded"],
         order_by: [desc: j.completed_at],
         limit: ^limit,
@@ -102,7 +121,8 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
           attempted_at: j.attempted_at,
           state: j.state,
           args: j.args,
-          meta: j.meta
+          meta: j.meta,
+          worker: j.worker
         }
       )
 
@@ -122,12 +142,50 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
         nil
       end
 
-    # Extract data from meta (Phase 1 + Phase 2)
+    # Extract data from meta
     meta = job.meta || %{}
 
     # Extract data from args
     args = job.args || %{}
     providers = args["providers"] || []
+
+    # Handle both BackfillOrchestratorJob and EnrichmentJob
+    worker = job.worker || "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"
+
+    {total_venues, enriched, geocoded, skipped, failed, by_provider} =
+      if String.ends_with?(worker, "EnrichmentJob") do
+        # EnrichmentJob: single venue operation
+        status = meta["status"] || "unknown"
+        images_uploaded = meta["images_uploaded"] || 0
+
+        enriched_count = if images_uploaded > 0, do: 1, else: 0
+        failed_count = if status in ["failed", "no_images"] or images_uploaded == 0, do: 1, else: 0
+
+        # Convert provider metadata from EnrichmentJob format
+        provider_results =
+          case meta["providers"] do
+            providers_map when is_map(providers_map) ->
+              Map.new(providers_map, fn {provider, info} ->
+                status = if is_map(info), do: info["status"], else: "unknown"
+                {provider, if(status == "success", do: 1, else: 0)}
+              end)
+
+            _ ->
+              %{}
+          end
+
+        {1, enriched_count, 0, 0, failed_count, provider_results}
+      else
+        # BackfillOrchestratorJob: city-wide operation (original format)
+        {
+          meta["total_venues"] || 0,
+          meta["enriched"] || 0,
+          meta["geocoded"] || 0,
+          meta["skipped"] || 0,
+          meta["failed"] || 0,
+          meta["by_provider"] || %{}
+        }
+      end
 
     %{
       id: job.id,
@@ -135,17 +193,18 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
       duration_seconds: duration_seconds,
       state: meta["status"] || if(job.state == "completed", do: "success", else: "failed"),
       providers: providers,
-      # Job-level summary (Phase 1)
-      total_venues: meta["total_venues"] || 0,
-      enriched: meta["enriched"] || 0,
-      geocoded: meta["geocoded"] || 0,
-      skipped: meta["skipped"] || 0,
-      failed: meta["failed"] || 0,
-      by_provider: meta["by_provider"] || %{},
+      worker: worker,
+      # Job-level summary
+      total_venues: total_venues,
+      enriched: enriched,
+      geocoded: geocoded,
+      skipped: skipped,
+      failed: failed,
+      by_provider: by_provider,
       total_cost_usd: meta["total_cost_usd"] || 0,
-      # Venue-level details (Phase 2)
+      # Venue-level details
       venue_results: meta["venue_results"] || [],
-      processed_at: meta["processed_at"],
+      processed_at: meta["processed_at"] || meta["completed_at"],
       args: args
     }
   end

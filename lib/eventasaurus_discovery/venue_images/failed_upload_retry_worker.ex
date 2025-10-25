@@ -52,6 +52,19 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
   end
 
   @doc """
+  Enqueues a retry job for specific images from a venue.
+
+  ## Parameters
+  - venue_id: Integer venue ID
+  - image_indexes: List of zero-based indexes of failed images to retry
+  """
+  def enqueue_venue_images(venue_id, image_indexes) when is_integer(venue_id) and is_list(image_indexes) do
+    %{venue_id: venue_id, image_indexes: image_indexes}
+    |> __MODULE__.new()
+    |> Oban.insert()
+  end
+
+  @doc """
   Performs retry immediately (for testing/debugging).
   """
   def perform_now(venue) do
@@ -59,11 +72,23 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"venue_id" => venue_id}}) do
+  def perform(%Oban.Job{args: %{"venue_id" => venue_id} = args}) do
     venue = Repo.get!(Venue, venue_id)
 
-    Logger.info("🔄 Starting failed upload retry for venue #{venue.id} (#{venue.name})")
+    # Check if specific image indexes were provided
+    image_indexes = args["image_indexes"]
 
+    if image_indexes do
+      Logger.info("🔄 Starting retry for #{length(image_indexes)} specific images from venue #{venue.id}")
+      perform_selective_retry(venue, image_indexes)
+    else
+      Logger.info("🔄 Starting full failed upload retry for venue #{venue.id} (#{venue.name})")
+      perform_full_retry(venue)
+    end
+  end
+
+  # Perform full retry of all retryable failed images
+  defp perform_full_retry(venue) do
     # Classify failed images by error type
     {retryable, non_retryable} = classify_failed_images(venue)
 
@@ -97,6 +122,61 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
 
       # Update venue_images with results
       update_venue_images(venue, retry_results, non_retryable_marked)
+    end
+  end
+
+  # Perform selective retry of specific images by index
+  defp perform_selective_retry(venue, image_indexes) do
+    failed_images =
+      (venue.venue_images || [])
+      |> Enum.filter(fn img -> img["upload_status"] == "failed" end)
+
+    # Select only the requested images by index
+    images_to_retry =
+      image_indexes
+      |> Enum.map(fn idx -> Enum.at(failed_images, idx) end)
+      |> Enum.reject(&is_nil/1)
+
+    if Enum.empty?(images_to_retry) do
+      Logger.info("✅ No valid images to retry at specified indexes")
+      {:ok, "No valid images"}
+    else
+      Logger.info("🔄 Retrying #{length(images_to_retry)} selected images")
+
+      # Retry selected images
+      retry_results = retry_failed_uploads(venue, images_to_retry)
+
+      # Get all other images (unchanged)
+      other_images =
+        (venue.venue_images || [])
+        |> Enum.reject(fn img ->
+          img in images_to_retry
+        end)
+
+      # Update venue with results
+      all_images = other_images ++ retry_results
+
+      sorted_images =
+        all_images
+        |> Enum.sort_by(fn img -> -(img["quality_score"] || 0.0) end)
+
+      newly_uploaded = Enum.count(retry_results, fn img -> img["upload_status"] == "uploaded" end)
+      still_failed = Enum.count(retry_results, fn img -> img["upload_status"] != "uploaded" end)
+
+      changeset = Venue.update_venue_images(venue, sorted_images, venue.image_enrichment_metadata)
+
+      case Repo.update(changeset) do
+        {:ok, updated_venue} ->
+          Logger.info(
+            "✅ Selective retry complete: #{newly_uploaded} uploaded, #{still_failed} failed"
+          )
+
+          {:ok, updated_venue}
+
+        {:error, changeset} ->
+          Logger.error("❌ Failed to update venue: #{inspect(changeset.errors)}")
+          {:error, :update_failed}
+      end
     end
   end
 

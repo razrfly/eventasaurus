@@ -71,6 +71,9 @@ defmodule EventasaurusWeb.Router do
       # Venue Image Operations (dev - no auth)
       live "/venue-images/operations", Admin.VenueImageOperationsLive
 
+      # Unified Venue Image Enrichment History (dev - no auth)
+      live "/venue-images/enrichment-history", Admin.VenueImageEnrichmentHistoryLive
+
       # Venue Duplicate Management (dev - no auth)
       live "/venues/duplicates", AdminVenueDuplicatesLive
 
