@@ -497,10 +497,34 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     now = DateTime.utc_now()
     next_enrichment = DateTime.add(now, 30 * 86_400, :second) |> DateTime.to_iso8601()
 
+    # Get ImageKit upload config
+    imagekit_config = Application.get_env(:eventasaurus, :imagekit, [])
+    upload_enabled = Keyword.get(imagekit_config, :upload_enabled, true)
+
+    # Get max images to process per provider (for dev environment optimization)
+    max_images_per_provider = Application.get_env(:eventasaurus, :venue_images, [])[:max_images_per_provider] || 10
+
+    # Group images by provider to apply per-provider limits
+    images_by_provider = Enum.group_by(images, fn img ->
+      img.provider || img["provider"]
+    end)
+
+    # Apply per-provider limits and flatten back to list
+    limited_images =
+      images_by_provider
+      |> Enum.flat_map(fn {_provider, provider_images} ->
+        Enum.take(provider_images, max_images_per_provider)
+      end)
+
+    # Log if we're limiting images
+    if length(images) > length(limited_images) do
+      Logger.info("📊 Found #{length(images)} images, processing only #{length(limited_images)} (dev limit: #{max_images_per_provider} per provider)")
+    end
+
     # Convert new images to proper structure with string keys (JSONB requirement)
-    # AND upload to ImageKit for permanent storage
+    # AND upload to ImageKit for permanent storage (if enabled)
     new_structured_images =
-      images
+      limited_images
       |> Enum.with_index()
       |> Enum.map(fn {img, index} ->
         provider_url = img.url || img["url"]
@@ -514,8 +538,15 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
           Process.sleep(delay_ms)
         end
 
-        # Upload to ImageKit
-        upload_result = upload_to_imagekit(venue, provider_url, provider)
+        # Upload to ImageKit (only if enabled)
+        upload_result =
+          if upload_enabled do
+            upload_to_imagekit(venue, provider_url, provider)
+          else
+            # Skip upload in development to save API credits
+            Logger.debug("[DEV] ImageKit upload disabled - skipping upload for #{provider}")
+            {:skip, :upload_disabled}
+          end
 
         base_image = %{
           "provider" => provider,
@@ -533,6 +564,14 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
               "provider_url" => provider_url,
               "imagekit_path" => imagekit_path,
               "upload_status" => "uploaded"
+            })
+
+          {:skip, :upload_disabled} ->
+            # Upload disabled (development mode) - record image details but don't upload
+            Map.merge(base_image, %{
+              "url" => provider_url,
+              "provider_url" => provider_url,
+              "upload_status" => "skipped_dev"
             })
 
           {:error, reason} ->
@@ -607,6 +646,23 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       "cost_usd" => metadata.total_cost || metadata[:total_cost] || 0.0
     }
 
+    # Determine last attempt result
+    # Only set "no_images" when providers explicitly returned ZERO_RESULTS
+    # Set "error" for API errors (INVALID_REQUEST, auth failures, rate limits, etc.)
+    # Set "success" when images were successfully fetched
+    last_attempt_result = determine_attempt_result(
+      merged_images,
+      metadata.providers_failed || metadata[:providers_failed] || [],
+      metadata.error_details || metadata[:error_details] || %{}
+    )
+
+    # Store detailed information about this attempt for cooldown logic
+    last_attempt_details = build_attempt_details(
+      metadata.providers_succeeded || metadata[:providers_succeeded] || [],
+      metadata.providers_failed || metadata[:providers_failed] || [],
+      metadata.error_details || metadata[:error_details] || %{}
+    )
+
     enrichment_metadata = %{
       "last_enriched_at" => DateTime.to_iso8601(now),
       "next_enrichment_due" => next_enrichment,
@@ -616,7 +672,13 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       # Keep last 10
       "enrichment_history" => [history_entry | existing_history] |> Enum.take(10),
       "providers_failed" => metadata.providers_failed || metadata[:providers_failed] || [],
-      "error_details" => metadata.error_details || metadata[:error_details] || %{}
+      "error_details" => metadata.error_details || metadata[:error_details] || %{},
+      # Last attempt tracking for cooldown logic
+      "last_attempt_at" => DateTime.to_iso8601(now),
+      "last_attempt_result" => last_attempt_result,
+      "last_attempt_providers" => (metadata.providers_succeeded || metadata[:providers_succeeded] || []) ++
+                                    (metadata.providers_failed || metadata[:providers_failed] || []),
+      "last_attempt_details" => last_attempt_details
     }
 
     # Use the specialized changeset function from Venue schema
@@ -759,6 +821,114 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   defp classify_error(_) do
     :unknown_error
   end
+
+  # Determines the result of the last enrichment attempt
+  # Returns: "success", "error", or "no_images"
+  # CRITICAL: Only returns "no_images" when providers explicitly said ZERO_RESULTS
+  defp determine_attempt_result(images, providers_failed, error_details) do
+    # Count successfully uploaded images
+    uploaded_images = Enum.count(images, fn img ->
+      (img["upload_status"] || img[:upload_status]) == "uploaded"
+    end)
+
+    cond do
+      # If we got images, it's a success
+      uploaded_images > 0 ->
+        "success"
+
+      # If no providers failed, but we have no images, treat as no_images
+      # (edge case where providers returned empty results without error)
+      Enum.empty?(providers_failed) ->
+        "no_images"
+
+      # If providers failed, check WHY they failed
+      true ->
+        # Check if ANY provider had an API error (not ZERO_RESULTS)
+        has_api_errors? =
+          Enum.any?(providers_failed, fn provider ->
+            error = get_provider_error(error_details, provider)
+            is_api_error?(error)
+          end)
+
+        if has_api_errors? do
+          # If ANY provider had an API error, this is an "error" not "no_images"
+          "error"
+        else
+          # All providers returned ZERO_RESULTS (genuine no images available)
+          "no_images"
+        end
+    end
+  end
+
+  # Builds detailed information about provider responses for last attempt
+  defp build_attempt_details(providers_succeeded, providers_failed, error_details) do
+    # Build details for successful providers
+    success_details =
+      providers_succeeded
+      |> Enum.map(fn provider ->
+        {provider, %{"status" => "success"}}
+      end)
+      |> Map.new()
+
+    # Build details for failed providers
+    failure_details =
+      providers_failed
+      |> Enum.map(fn provider ->
+        error = get_provider_error(error_details, provider)
+        status = if is_zero_results?(error), do: "ZERO_RESULTS", else: "ERROR"
+
+        {provider, %{
+          "status" => status,
+          "message" => inspect(error)
+        }}
+      end)
+      |> Map.new()
+
+    Map.merge(success_details, failure_details)
+  end
+
+  # Gets the error for a specific provider from error_details map
+  defp get_provider_error(error_details, provider) do
+    Map.get(error_details, provider) || Map.get(error_details, to_string(provider))
+  end
+
+  # Checks if an error is an API error (not ZERO_RESULTS)
+  # API errors include: INVALID_REQUEST, authentication failures, rate limits, etc.
+  # ZERO_RESULTS is NOT an API error - it means "no images available"
+  defp is_api_error?(error) when is_binary(error) do
+    # Check for API error patterns (not ZERO_RESULTS)
+    String.contains?(error, "INVALID_REQUEST") or
+      String.contains?(error, "REQUEST_DENIED") or
+      String.contains?(error, "INVALID_API_KEY") or
+      String.contains?(error, "HTTP 400") or
+      String.contains?(error, "HTTP 401") or
+      String.contains?(error, "HTTP 403") or
+      String.contains?(error, "HTTP 429") or
+      String.contains?(error, "HTTP 500") or
+      String.contains?(error, "HTTP 502") or
+      String.contains?(error, "HTTP 503") or
+      String.contains?(error, "rate_limited") or
+      String.contains?(error, "timeout") or
+      String.contains?(error, "network_error")
+  end
+
+  defp is_api_error?(:rate_limited), do: true
+  defp is_api_error?(:timeout), do: true
+  defp is_api_error?(:network_error), do: true
+  defp is_api_error?(:auth_error), do: true
+  defp is_api_error?(:api_key_missing), do: true
+  defp is_api_error?(:invalid_api_key), do: true
+  defp is_api_error?(_), do: false
+
+  # Checks if an error represents "no images available" (ZERO_RESULTS)
+  # This is the ONLY case that should trigger "no_images" status
+  defp is_zero_results?(error) when is_binary(error) do
+    String.contains?(error, "ZERO_RESULTS") or
+      String.contains?(error, "No images") or
+      String.contains?(error, "no images")
+  end
+
+  defp is_zero_results?(_), do: false
 
   # Calculate delay between ImageKit uploads to respect provider rate limits
   # Different providers have different rate limit thresholds

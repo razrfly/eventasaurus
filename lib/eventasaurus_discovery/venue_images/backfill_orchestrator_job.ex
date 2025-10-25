@@ -184,10 +184,29 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
   end
 
   defp find_venues_without_images(city_id, limit, providers) do
+    # Get cooldown days from config
+    cooldown_days = Application.get_env(:eventasaurus, :venue_images, [])[:no_images_cooldown_days] || 7
+
     base_query =
       from(v in Venue,
         where: v.city_id == ^city_id,
         where: fragment("COALESCE(jsonb_array_length(?), 0) = 0", v.venue_images),
+        # Skip venues in cooldown (recently attempted with "no_images" result)
+        # Only skip if: last_attempt_result = "no_images" AND last_attempt_at within cooldown period
+        # If result was "error" or "success", retry immediately
+        where: fragment(
+          """
+          ? IS NULL OR
+          ?->>'last_attempt_result' IS NULL OR
+          ?->>'last_attempt_result' != 'no_images' OR
+          (?->>'last_attempt_at')::timestamp < NOW() - make_interval(days => ?)
+          """,
+          v.image_enrichment_metadata,
+          v.image_enrichment_metadata,
+          v.image_enrichment_metadata,
+          v.image_enrichment_metadata,
+          ^cooldown_days
+        ),
         # Prioritize venues with coordinates and provider IDs
         order_by: [
           desc:

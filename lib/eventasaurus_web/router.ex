@@ -170,6 +170,9 @@ defmodule EventasaurusWeb.Router do
       # Venue Image Operations with admin authentication
       live "/venue-images/operations", EventasaurusWeb.Admin.VenueImageOperationsLive
 
+      # Unified Venue Image Enrichment History with admin authentication
+      live "/venue-images/enrichment-history", EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive
+
       # Venue Duplicate Management with admin authentication
       live "/venues/duplicates", EventasaurusWeb.AdminVenueDuplicatesLive
 

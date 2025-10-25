@@ -25,7 +25,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.VenueImages.QualityStats
-  alias EventasaurusWeb.Admin.DiscoveryStatsLive.Components.VenueImageGallery
 
   import Ecto.Query
   require Logger
@@ -667,31 +666,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
                       <% end %>
                     </tbody>
                   </table>
-                </div>
-              </div>
-            <% end %>
-
-            <!-- Venues with Images Gallery (Phase 4) -->
-            <%= if @venue_stats.venues_with_images > 0 && length(@venues_with_images) > 0 do %>
-              <div class="mb-6">
-                <h3 class="text-sm font-semibold text-gray-900 mb-3">
-                  🖼️ Venues with Images (<%= min(length(@venues_with_images), 20) %> of <%= @venue_stats.venues_with_images %>)
-                </h3>
-                <div class="space-y-6">
-                  <%= for venue <- @venues_with_images do %>
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
-                      <!-- Venue Header -->
-                      <div class="mb-3">
-                        <h4 class="text-base font-semibold text-gray-900"><%= venue.name %></h4>
-                        <%= if venue.address do %>
-                          <p class="text-sm text-gray-600"><%= venue.address %></p>
-                        <% end %>
-                      </div>
-
-                      <!-- Image Gallery Component -->
-                      <VenueImageGallery.venue_image_gallery venue={venue} show_history={false} />
-                    </div>
-                  <% end %>
                 </div>
               </div>
             <% end %>
