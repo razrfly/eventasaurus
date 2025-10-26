@@ -502,7 +502,10 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     upload_enabled = Keyword.get(imagekit_config, :upload_enabled, true)
 
     # Get max images to process per provider (for dev environment optimization)
-    max_images_per_provider = Application.get_env(:eventasaurus, :venue_images, [])[:max_images_per_provider] || 10
+    # nil means no limit (production default)
+    max_images_per_provider =
+      Application.get_env(:eventasaurus, :venue_images, [])
+      |> Keyword.get(:max_images_per_provider)
 
     # Group images by provider to apply per-provider limits
     images_by_provider = Enum.group_by(images, fn img ->
@@ -513,12 +516,15 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     limited_images =
       images_by_provider
       |> Enum.flat_map(fn {_provider, provider_images} ->
-        Enum.take(provider_images, max_images_per_provider)
+        case max_images_per_provider do
+          n when is_integer(n) and n > 0 -> Enum.take(provider_images, n)
+          _ -> provider_images
+        end
       end)
 
     # Log if we're limiting images
-    if length(images) > length(limited_images) do
-      Logger.info("📊 Found #{length(images)} images, processing only #{length(limited_images)} (dev limit: #{max_images_per_provider} per provider)")
+    if is_integer(max_images_per_provider) and length(images) > length(limited_images) do
+      Logger.info("📊 Found #{length(images)} images, processing only #{length(limited_images)} (limit: #{max_images_per_provider}/provider)")
     end
 
     # Convert new images to proper structure with string keys (JSONB requirement)
@@ -651,7 +657,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     # Set "error" for API errors (INVALID_REQUEST, auth failures, rate limits, etc.)
     # Set "success" when images were successfully fetched
     last_attempt_result = determine_attempt_result(
-      merged_images,
+      new_structured_images,
       metadata.providers_failed || metadata[:providers_failed] || [],
       metadata.error_details || metadata[:error_details] || %{}
     )
@@ -826,37 +832,28 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   # Returns: "success", "error", or "no_images"
   # CRITICAL: Only returns "no_images" when providers explicitly said ZERO_RESULTS
   defp determine_attempt_result(images, providers_failed, error_details) do
-    # Count successfully uploaded images
-    uploaded_images = Enum.count(images, fn img ->
-      (img["upload_status"] || img[:upload_status]) == "uploaded"
-    end)
-
-    cond do
-      # If we got images, it's a success
-      uploaded_images > 0 ->
-        "success"
-
-      # If no providers failed, but we have no images, treat as no_images
-      # (edge case where providers returned empty results without error)
-      Enum.empty?(providers_failed) ->
-        "no_images"
-
-      # If providers failed, check WHY they failed
-      true ->
-        # Check if ANY provider had an API error (not ZERO_RESULTS)
-        has_api_errors? =
-          Enum.any?(providers_failed, fn provider ->
-            error = get_provider_error(error_details, provider)
-            is_api_error?(error)
-          end)
-
-        if has_api_errors? do
-          # If ANY provider had an API error, this is an "error" not "no_images"
-          "error"
-        else
-          # All providers returned ZERO_RESULTS (genuine no images available)
+    # Any images fetched in this attempt counts as success (regardless of upload status)
+    # This includes "skipped_dev" uploads - we still got the images from providers
+    if length(images) > 0 do
+      "success"
+    else
+      cond do
+        # If no providers failed, but we have no images, treat as no_images
+        # (edge case where providers returned empty results without error)
+        Enum.empty?(providers_failed) ->
           "no_images"
-        end
+
+        # If providers failed, check WHY they failed
+        true ->
+          # Check if ANY provider had an API error (not ZERO_RESULTS)
+          has_api_errors? =
+            Enum.any?(providers_failed, fn provider ->
+              error = get_provider_error(error_details, provider)
+              is_api_error?(error)
+            end)
+
+          if has_api_errors?, do: "error", else: "no_images"
+      end
     end
   end
 
