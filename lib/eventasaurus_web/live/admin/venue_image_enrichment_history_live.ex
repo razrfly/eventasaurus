@@ -550,8 +550,12 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
       imagekit_urls: meta["imagekit_urls"] || []
     }
 
-    # Add partial failure detection using preloaded venues
-    Map.put(base_op, :failure_type, detect_partial_failure(base_op, venues_map))
+    # Add partial failure detection and venue images using preloaded venues
+    {failure_type, venue_images} = detect_partial_failure(base_op, venues_map)
+
+    base_op
+    |> Map.put(:failure_type, failure_type)
+    |> Map.put(:venue_images, venue_images)
   end
 
   defp detect_partial_failure(op, venues_map) do
@@ -561,7 +565,7 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
         # Use preloaded venue from venues_map to avoid N+1 queries
         case Map.get(venues_map, op.venue_id) do
           nil ->
-            :unknown
+            {:unknown, []}
 
           venue ->
             venue_images = venue.venue_images || []
@@ -571,31 +575,34 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
                 img["upload_status"] in ["failed", "permanently_failed"]
               end)
 
+            # Count both uploaded (production) and skipped_dev (development) as successful
             uploaded_count =
               Enum.count(venue_images, fn img ->
-                img["upload_status"] == "uploaded"
+                img["upload_status"] in ["uploaded", "skipped_dev"]
               end)
 
-            cond do
+            failure_type = cond do
               failed_count > 0 and uploaded_count > 0 -> :partial_failure
               failed_count > 0 -> :complete_failure
               uploaded_count > 0 -> :success
               true -> :no_images
             end
+
+            {failure_type, venue_images}
         end
 
       # BackfillOrchestratorJob - check aggregated stats
       op.enriched > 0 and op.failed > 0 ->
-        :partial_failure
+        {:partial_failure, []}
 
       op.failed > 0 ->
-        :complete_failure
+        {:complete_failure, []}
 
       op.enriched > 0 ->
-        :success
+        {:success, []}
 
       true ->
-        :no_images
+        {:no_images, []}
     end
   end
 

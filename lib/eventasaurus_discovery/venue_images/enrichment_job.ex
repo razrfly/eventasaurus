@@ -393,6 +393,219 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   defp reverse_geocode_venue(venue, providers) do
     Logger.info("🌐 Reverse geocoding venue #{venue.id}: #{venue.name}")
 
+    # For google_places image enrichment, we need BUSINESS place_ids not ADDRESS place_ids
+    # Use nearby search instead of geocoding API
+    if providers == ["google_places"] or providers == [:google_places] do
+      get_google_places_business_id(venue)
+    else
+      # For other providers, use standard geocoding
+      get_provider_ids_via_geocoding(venue, providers)
+    end
+  end
+
+  defp get_google_places_business_id(venue) do
+    Logger.info("🔍 Finding Google Places business ID for venue #{venue.id}: #{venue.name}")
+
+    # Use Nearby Search to find the actual business
+    case search_nearby_business(venue) do
+      {:ok, place_id} ->
+        updated_provider_ids = Map.merge(venue.provider_ids || %{}, %{"google_places" => place_id})
+
+        # Update venue in database
+        case Repo.update_all(
+               from(v in Venue, where: v.id == ^venue.id),
+               set: [
+                 provider_ids: updated_provider_ids,
+                 updated_at: NaiveDateTime.utc_now()
+               ]
+             ) do
+          {1, _} ->
+            Logger.info("✅ Updated venue #{venue.id} with Google Places business ID")
+            {:ok, %{venue | provider_ids: updated_provider_ids}}
+
+          {0, _} ->
+            {:error, :update_failed}
+        end
+
+      {:error, reason} ->
+        Logger.warning("⚠️ Could not find Google Places business ID for venue #{venue.id}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp search_nearby_business(venue) do
+    api_key = System.get_env("GOOGLE_MAPS_API_KEY")
+
+    if is_nil(api_key) do
+      {:error, :api_key_missing}
+    else
+      # Use Nearby Search to find businesses at this location
+      url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+
+      params = [
+        location: "#{venue.latitude},#{venue.longitude}",
+        radius: 50,  # 50 meter radius
+        key: api_key
+      ]
+
+      case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+          case parse_nearby_search_response(body, venue) do
+            {:ok, place_id} ->
+              # Validate that this is a business, not an address
+              validate_business_place_id(place_id, api_key, venue)
+
+            error ->
+              error
+          end
+
+        {:ok, %HTTPoison.Response{status_code: status}} ->
+          Logger.error("❌ Google Nearby Search HTTP #{status}")
+          {:error, "HTTP #{status}"}
+
+        {:error, %HTTPoison.Error{reason: :timeout}} ->
+          {:error, :timeout}
+
+        {:error, _} ->
+          {:error, :network_error}
+      end
+    end
+  end
+
+  defp validate_business_place_id(place_id, api_key, venue) do
+    # Call Place Details to verify this is a business, not an address
+    url = "https://maps.googleapis.com/maps/api/place/details/json"
+
+    params = [
+      place_id: place_id,
+      fields: "name,types,photos",
+      key: api_key
+    ]
+
+    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"result" => result, "status" => "OK"}} ->
+            place_name = Map.get(result, "name", "Unknown")
+            place_types = Map.get(result, "types", [])
+            photo_count = length(Map.get(result, "photos", []))
+
+            # Check if this is an address (reject) or business (accept)
+            cond do
+              is_address_place_id?(place_types) ->
+                Logger.warning("""
+                ⚠️  Venue #{venue.id} (#{venue.name}): Rejected address place_id
+                   - Place Name: #{place_name}
+                   - Types: #{inspect(place_types)}
+                   - Photos: #{photo_count}
+                   - Reason: This is a street address, not a business
+                """)
+                {:error, {:address_not_business, place_name, place_types}}
+
+              is_business_place_id?(place_types) ->
+                Logger.info("""
+                ✅ Venue #{venue.id} (#{venue.name}): Valid business place_id
+                   - Place Name: #{place_name}
+                   - Types: #{inspect(Enum.take(place_types, 3))}
+                   - Photos: #{photo_count}
+                """)
+                {:ok, place_id}
+
+              true ->
+                Logger.warning("""
+                ⚠️  Venue #{venue.id} (#{venue.name}): Uncertain place_id type
+                   - Place Name: #{place_name}
+                   - Types: #{inspect(place_types)}
+                   - Photos: #{photo_count}
+                   - Accepting anyway (has #{photo_count} photos)
+                """)
+                {:ok, place_id}
+            end
+
+          {:ok, %{"status" => status}} ->
+            Logger.error("❌ Place Details validation error: #{status}")
+            # If validation fails, accept the place_id anyway (don't block enrichment)
+            {:ok, place_id}
+
+          _ ->
+            # If we can't validate, accept anyway
+            {:ok, place_id}
+        end
+
+      _ ->
+        # If validation call fails, accept the place_id anyway
+        {:ok, place_id}
+    end
+  end
+
+  # Address types that should be rejected (no photos)
+  defp is_address_place_id?(types) when is_list(types) do
+    address_types = ["street_address", "premise", "subpremise", "route"]
+    Enum.any?(types, fn type -> type in address_types end)
+  end
+
+  defp is_address_place_id?(_), do: false
+
+  # Business types that should be accepted (has photos)
+  defp is_business_place_id?(types) when is_list(types) do
+    business_types = [
+      "bar",
+      "restaurant",
+      "night_club",
+      "museum",
+      "cafe",
+      "store",
+      "establishment",
+      "point_of_interest",
+      "tourist_attraction",
+      "lodging",
+      "food",
+      "shopping_mall"
+    ]
+
+    Enum.any?(types, fn type -> type in business_types end)
+  end
+
+  defp is_business_place_id?(_), do: false
+
+  defp parse_nearby_search_response(body, venue) do
+    case Jason.decode(body) do
+      {:ok, %{"results" => results, "status" => "OK"}} when is_list(results) and length(results) > 0 ->
+        # Try to find best matching result by name similarity
+        best_match = Enum.find(results, fn result ->
+          result_name = Map.get(result, "name", "")
+          venue_name = venue.name || ""
+
+          # Simple name matching - could be improved with fuzzy matching
+          String.downcase(result_name) == String.downcase(venue_name) or
+            String.contains?(String.downcase(result_name), String.downcase(venue_name)) or
+            String.contains?(String.downcase(venue_name), String.downcase(result_name))
+        end)
+
+        # If no name match, use first result (closest by distance)
+        result = best_match || List.first(results)
+        place_id = Map.get(result, "place_id")
+
+        if place_id do
+          Logger.info("✅ Found candidate place_id for #{venue.name}")
+          {:ok, place_id}
+        else
+          {:error, :no_place_id}
+        end
+
+      {:ok, %{"status" => "ZERO_RESULTS"}} ->
+        {:error, :no_results}
+
+      {:ok, %{"status" => status}} ->
+        Logger.error("❌ Google Nearby Search error: #{status}")
+        {:error, "API error: #{status}"}
+
+      {:error, reason} ->
+        {:error, {:json_decode, reason}}
+    end
+  end
+
+  defp get_provider_ids_via_geocoding(venue, providers) do
     # Build full address
     full_address = build_full_address(venue)
 
@@ -491,10 +704,10 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   # - "success": Images were successfully fetched and uploaded
   # - "error": Providers failed with API errors (INVALID_REQUEST, auth failures, etc.)
   # - "no_images": Providers explicitly said no images available (ZERO_RESULTS)
-  defp determine_job_status(uploaded_images, providers_failed, metadata) do
+  defp determine_job_status(successful_images, providers_failed, metadata) do
     cond do
-      # If we got images, it's a success
-      length(uploaded_images) > 0 ->
+      # If we got images (uploaded or skipped_dev), it's a success
+      length(successful_images) > 0 ->
         "success"
 
       # If no providers failed, but we have no images, treat as no_images
@@ -556,8 +769,11 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     metadata = enriched_venue.image_enrichment_metadata || %{}
     all_images = enriched_venue.venue_images || []
 
-    # Separate uploaded and failed images
-    uploaded_images = Enum.filter(all_images, fn img -> img["upload_status"] == "uploaded" end)
+    # Separate successful and failed images
+    # Successful = uploaded (production) OR skipped_dev (development)
+    successful_images = Enum.filter(all_images, fn img ->
+      img["upload_status"] == "uploaded" or img["upload_status"] == "skipped_dev"
+    end)
     failed_images = Enum.filter(all_images, fn img -> img["upload_status"] == "failed" end)
 
     providers_succeeded = metadata["providers_succeeded"] || metadata[:providers_succeeded] || []
@@ -587,12 +803,12 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       end)
 
     # Determine status correctly - distinguish between genuine "no images" vs errors
-    status = determine_job_status(uploaded_images, providers_failed, metadata)
+    status = determine_job_status(successful_images, providers_failed, metadata)
 
     %{
       status: status,
       images_discovered: length(all_images),
-      images_uploaded: length(uploaded_images),
+      images_uploaded: length(successful_images),
       images_failed: length(failed_images),
       failure_breakdown: failure_breakdown,
       failed_images: failed_image_details,
@@ -601,7 +817,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       total_cost_usd: total_cost,
       execution_time_ms: execution_time,
       completed_at: DateTime.to_iso8601(DateTime.utc_now()),
-      summary: build_summary(providers_succeeded, providers_failed, length(uploaded_images), length(all_images))
+      summary: build_summary(providers_succeeded, providers_failed, length(successful_images), length(all_images))
     }
   end
 

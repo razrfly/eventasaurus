@@ -335,16 +335,31 @@
                               </div>
                             <% end %>
                             <!-- Uploaded Images Gallery -->
-                            <%= if not Enum.empty?(op.imagekit_urls) do %>
+                            <%
+                              # Get successful images from either imagekit_urls (production) or venue_images (development)
+                              successful_images = if not Enum.empty?(op.imagekit_urls) do
+                                Enum.map(op.imagekit_urls, fn url -> %{"url" => url, "source" => "imagekit"} end)
+                              else
+                                # In development, show images from venue_images with upload_status "skipped_dev"
+                                Enum.filter(op.venue_images || [], fn img ->
+                                  img["upload_status"] in ["uploaded", "skipped_dev"]
+                                end)
+                                |> Enum.map(fn img -> Map.put(img, "source", "provider") end)
+                              end
+                            %>
+                            <%= if not Enum.empty?(successful_images) do %>
                               <div>
                                 <h4 class="text-sm font-semibold text-gray-900 mb-2">
-                                  Successfully Uploaded Images (<%= length(op.imagekit_urls) %>)
+                                  Successfully Processed Images (<%= length(successful_images) %>)
+                                  <%= if Enum.any?(successful_images, fn img -> img["source"] == "provider" end) do %>
+                                    <span class="text-xs text-gray-500 ml-1">(Development Mode - Source Images)</span>
+                                  <% end %>
                                 </h4>
                                 <div class="grid grid-cols-4 gap-2">
-                                  <%= for img_url <- op.imagekit_urls do %>
+                                  <%= for img <- successful_images do %>
                                     <div class="aspect-w-1 aspect-h-1">
                                       <img
-                                        src={img_url}
+                                        src={img["url"]}
                                         alt="Venue image"
                                         class="rounded object-cover"
                                       />
