@@ -553,9 +553,13 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
     # Add partial failure detection and venue images using preloaded venues
     {failure_type, venue_images} = detect_partial_failure(base_op, venues_map)
 
+    # Get preloaded venue to avoid N+1 queries in template
+    venue = Map.get(venues_map, base_op.venue_id)
+
     base_op
     |> Map.put(:failure_type, failure_type)
     |> Map.put(:venue_images, venue_images)
+    |> Map.put(:venue, venue)
   end
 
   defp detect_partial_failure(op, venues_map) do
@@ -680,4 +684,23 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
       "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
     end
   end
+
+  # Safely render HTML attribution from providers (XSS protection)
+  defp safe_attribution(nil), do: ""
+  defp safe_attribution(html) when is_binary(html) do
+    html
+    |> HtmlSanitizeEx.html5()
+    |> Phoenix.HTML.raw()
+  end
+  defp safe_attribution(_), do: ""
+
+  # Safely format timestamps with error handling
+  defp format_timestamp(nil), do: "unknown"
+  defp format_timestamp(timestamp) when is_binary(timestamp) do
+    case DateTime.from_iso8601(timestamp) do
+      {:ok, dt, _} -> Calendar.strftime(dt, "%b %d, %Y %I:%M:%S %p")
+      _ -> timestamp
+    end
+  end
+  defp format_timestamp(_), do: "unknown"
 end

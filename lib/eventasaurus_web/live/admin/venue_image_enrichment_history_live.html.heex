@@ -335,29 +335,24 @@
                               </div>
                             <% end %>
                             <!-- Venue Details for Individual Enrichments -->
-                            <%= if op.venue_id do %>
-                              <%
-                                venue = Repo.get(EventasaurusApp.Venues.Venue, op.venue_id)
-                              %>
-                              <%= if venue do %>
-                                <div>
-                                  <h4 class="text-sm font-semibold text-gray-900 mb-2">Venue Details</h4>
-                                  <div class="bg-white p-3 rounded border border-gray-200">
-                                    <div class="text-sm">
-                                      <span class="font-medium">Name:</span> <%= venue.name %>
-                                    </div>
-                                    <div class="text-sm text-gray-600">
-                                      <span class="font-medium">Address:</span> <%= venue.address %>
-                                    </div>
-                                    <%= if venue.metadata && venue.metadata["google_place_id"] do %>
-                                      <div class="text-sm text-gray-600">
-                                        <span class="font-medium">Google Place ID:</span>
-                                        <code class="text-xs bg-gray-100 px-1 rounded"><%= venue.metadata["google_place_id"] %></code>
-                                      </div>
-                                    <% end %>
+                            <%= if op.venue do %>
+                              <div>
+                                <h4 class="text-sm font-semibold text-gray-900 mb-2">Venue Details</h4>
+                                <div class="bg-white p-3 rounded border border-gray-200">
+                                  <div class="text-sm">
+                                    <span class="font-medium">Name:</span> <%= op.venue.name %>
                                   </div>
+                                  <div class="text-sm text-gray-600">
+                                    <span class="font-medium">Address:</span> <%= op.venue.address %>
+                                  </div>
+                                  <%= if op.venue.metadata && op.venue.metadata["google_place_id"] do %>
+                                    <div class="text-sm text-gray-600">
+                                      <span class="font-medium">Google Place ID:</span>
+                                      <code class="text-xs bg-gray-100 px-1 rounded"><%= op.venue.metadata["google_place_id"] %></code>
+                                    </div>
+                                  <% end %>
                                 </div>
-                              <% end %>
+                              </div>
                             <% end %>
                             <!-- Uploaded Images Gallery -->
                             <%
@@ -383,11 +378,11 @@
                                 <div class="grid grid-cols-2 gap-4">
                                   <%= for {img, idx} <- Enum.with_index(successful_images, 1) do %>
                                     <div class="bg-white p-2 rounded border border-gray-200">
-                                      <div class="aspect-w-16 aspect-h-9 mb-2">
+                                      <div class="aspect-video mb-2">
                                         <img
                                           src={img["url"]}
                                           alt={"Image #{idx}"}
-                                          class="rounded object-cover w-full"
+                                          class="rounded object-cover w-full h-full"
                                         />
                                       </div>
                                       <%= if img["source"] == "provider" do %>
@@ -399,7 +394,7 @@
                                           <%= if img["attribution"] do %>
                                             <div>
                                               <span class="font-medium">Credit:</span>
-                                              <%= raw(img["attribution"]) %>
+                                              <%= safe_attribution(img["attribution"]) %>
                                             </div>
                                           <% end %>
                                           <%= if img["width"] && img["height"] do %>
@@ -411,10 +406,7 @@
                                           <%= if img["fetched_at"] do %>
                                             <div class="text-gray-500">
                                               <span class="font-medium">Fetched:</span>
-                                              <%= Calendar.strftime(
-                                                elem(DateTime.from_iso8601(img["fetched_at"]), 1),
-                                                "%b %d, %Y %I:%M:%S %p"
-                                              ) %>
+                                              <%= format_timestamp(img["fetched_at"]) %>
                                             </div>
                                           <% end %>
                                           <%

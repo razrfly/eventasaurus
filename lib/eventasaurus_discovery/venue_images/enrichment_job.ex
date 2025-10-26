@@ -7,14 +7,30 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
   ## Usage
 
-      # Enqueue job manually
+      # Scheduled enrichment (SQL pre-filtering, efficient)
       EnrichmentJob.enqueue()
 
-      # Process single venue
+      # Single venue enrichment
       EnrichmentJob.enqueue_venue(venue_id)
 
-      # Process batch of venues
+      # Batch enrichment (processes venues in ONE job)
       EnrichmentJob.enqueue_batch(venue_ids)
+
+      # Bulk enqueueing with pre-filtering (RECOMMENDED for 10+ venues)
+      # Creates individual jobs only for stale venues
+      venue_ids = [1, 2, 3, ..., 300]
+      EnrichmentJob.enqueue_stale_venues(venue_ids)
+      # => {:ok, 90}  # Only 90 jobs created (70% filtered out)
+
+  ## When to Use Each Method
+
+  - `enqueue()` - Scheduled/automated enrichment runs (uses SQL filtering)
+  - `enqueue_venue(id)` - Single venue updates or admin UI actions
+  - `enqueue_batch(ids)` - Process multiple venues in ONE worker (e.g., city backfill)
+  - `enqueue_stale_venues(ids)` - Bulk manual operations (creates jobs only for stale venues)
+
+  **AVOID:** Looping `enqueue_venue/1` for bulk operations - creates wasteful jobs that immediately skip.
+  **INSTEAD:** Use `enqueue_stale_venues/1` to pre-filter and reduce resource waste by 60-70%.
 
   ## Configuration
 
@@ -64,6 +80,78 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     %{venue_ids: venue_ids}
     |> new()
     |> Oban.insert()
+  end
+
+  @doc """
+  Enqueues enrichment jobs for stale venues only (pre-filtered).
+
+  Uses `Orchestrator.needs_enrichment?/1` to filter venues before creating jobs,
+  reducing resource waste for bulk operations.
+
+  ## Usage
+
+      # Bulk operations (preferred for 10+ venues)
+      venue_ids = [1, 2, 3, ..., 300]
+      EnrichmentJob.enqueue_stale_venues(venue_ids)
+      # => {:ok, 90}  # Only creates jobs for stale venues
+
+      # With options
+      EnrichmentJob.enqueue_stale_venues(venue_ids, force: true, providers: ["google_places"])
+
+  ## Options
+
+  - `:force` - Skip staleness check and enqueue all venues (default: false)
+  - `:providers` - Specific providers to use (default: all active providers)
+
+  ## Returns
+
+  - `{:ok, count}` - Number of jobs enqueued
+  - `{:error, reason}` - If batch insert fails
+  """
+  def enqueue_stale_venues(venue_ids, opts \\ []) when is_list(venue_ids) do
+    force = Keyword.get(opts, :force, false)
+    providers = Keyword.get(opts, :providers)
+
+    # Load venues
+    venues = Repo.all(from v in Venue, where: v.id in ^venue_ids)
+
+    # Pre-filter using existing staleness logic
+    stale_venues =
+      if force do
+        venues
+      else
+        Enum.filter(venues, &Orchestrator.needs_enrichment?/1)
+      end
+
+    # Log filtering results
+    filtered_count = length(venues) - length(stale_venues)
+
+    Logger.info("""
+    🔍 Venue Enrichment Pre-filtering:
+      Total venues: #{length(venues)}
+      Stale venues: #{length(stale_venues)}
+      Filtered (skipped): #{filtered_count}
+    """)
+
+    # Batch insert only stale venues
+    # Build job args with only the parameters that should be in the job
+    jobs = Enum.map(stale_venues, fn venue ->
+      job_args = %{venue_id: venue.id}
+      job_args = if providers, do: Map.put(job_args, :providers, providers), else: job_args
+      new(job_args)
+    end)
+
+    # Oban.insert_all returns a list of inserted jobs on success
+    try do
+      inserted_jobs = Oban.insert_all(jobs)
+      count = length(inserted_jobs)
+      Logger.info("✅ Enqueued #{count} venue enrichment jobs")
+      {:ok, count}
+    rescue
+      e ->
+        Logger.error("❌ Failed to enqueue jobs: #{inspect(e)}")
+        {:error, e}
+    end
   end
 
   @impl Oban.Worker
@@ -778,10 +866,18 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     end)
     failed_images = Enum.filter(all_images, fn img -> img["upload_status"] == "failed" end)
 
-    # Extract provider lists - check both 'providers_succeeded' and 'providers_used' (used in venue metadata)
-    providers_succeeded = metadata["providers_succeeded"] || metadata[:providers_succeeded] ||
-                          metadata["providers_used"] || metadata[:providers_used] || []
-    providers_failed = metadata["providers_failed"] || metadata[:providers_failed] || []
+    # Extract and normalize provider lists - deduplicate to avoid mixing atom/string keys
+    providers_succeeded =
+      (metadata["providers_succeeded"] || metadata[:providers_succeeded] ||
+       metadata["providers_used"] || metadata[:providers_used] || [])
+      |> Enum.map(&to_string/1)
+      |> Enum.uniq()
+
+    providers_failed =
+      (metadata["providers_failed"] || metadata[:providers_failed] || [])
+      |> Enum.map(&to_string/1)
+      |> Enum.uniq()
+
     total_cost = metadata["total_cost"] || metadata[:total_cost] || 0.0
 
     # Build failure breakdown statistics
@@ -852,10 +948,21 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   defp build_provider_details(metadata, venue_images) do
     cost_breakdown = metadata["cost_breakdown"] || metadata[:cost_breakdown] || %{}
     error_details = metadata["error_details"] || metadata[:error_details] || %{}
-    # Extract provider lists - check both 'providers_succeeded' and 'providers_used' (used in venue metadata)
-    providers_succeeded = metadata["providers_succeeded"] || metadata[:providers_succeeded] ||
-                          metadata["providers_used"] || metadata[:providers_used] || []
-    providers_failed = metadata["providers_failed"] || metadata[:providers_failed] || []
+
+    # Guard against nil venue_images
+    venue_images = venue_images || []
+
+    # Extract and normalize provider lists - deduplicate to avoid mixing atom/string keys
+    providers_succeeded =
+      (metadata["providers_succeeded"] || metadata[:providers_succeeded] ||
+       metadata["providers_used"] || metadata[:providers_used] || [])
+      |> Enum.map(&to_string/1)
+      |> Enum.uniq()
+
+    providers_failed =
+      (metadata["providers_failed"] || metadata[:providers_failed] || [])
+      |> Enum.map(&to_string/1)
+      |> Enum.uniq()
 
     # Build details for successful providers
     success_details =
@@ -864,7 +971,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
         provider_images =
           venue_images
           |> Enum.filter(fn img ->
-            (img["provider"] || img[:provider]) == provider
+            to_string(img["provider"] || img[:provider]) == provider
           end)
 
         images_fetched = length(provider_images)
