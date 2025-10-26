@@ -154,23 +154,25 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
 
   # Private Functions
 
-  defp spawn_enrichment_jobs(venues, providers, opts) do
-    geocode = Keyword.get(opts, :geocode, false)
-    force = Keyword.get(opts, :force, false)
-
+  defp spawn_enrichment_jobs(venues, providers, _opts) do
     # Build job structs for all venues
+    # IMPORTANT: We pass force: true because find_venues_without_images SQL query
+    # already filtered for staleness using last_checked_at + cooldown period.
+    # The force flag prevents EnrichmentJob.perform from re-checking staleness.
+    # This is NOT "forcing" enrichment of recently-checked venues - the SQL query
+    # ensures we only get venues that pass the 3-criteria check:
+    #   1. Never checked (no last_checked_at)
+    #   2. No images + stale (last_checked_at > 7 days)
     jobs =
       Enum.map(venues, fn venue ->
         EventasaurusDiscovery.VenueImages.EnrichmentJob.new(%{
           venue_id: venue.id,
           providers: providers,
-          geocode: geocode,
-          force: force
+          force: true  # Trust BackfillOrchestrator's SQL staleness filtering
         })
       end)
 
     # Batch insert all jobs efficiently
-    # Oban.insert_all returns a list of jobs (NOT a tuple)
     inserted_jobs = Oban.insert_all(jobs)
     count = length(inserted_jobs)
 
@@ -184,31 +186,39 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
   end
 
   defp find_venues_without_images(city_id, limit, providers) do
-    # Get cooldown days from config
+    # Get cooldown days from config - this matches needs_enrichment? logic
     cooldown_days = Application.get_env(:eventasaurus, :venue_images, [])[:no_images_cooldown_days] || 7
 
     base_query =
       from(v in Venue,
         where: v.city_id == ^city_id,
         where: fragment("COALESCE(jsonb_array_length(?), 0) = 0", v.venue_images),
-        # Skip venues in cooldown (recently attempted with "no_images" result)
-        # Only skip if: last_attempt_result = "no_images" AND last_attempt_at within cooldown period
-        # If result was "error" or "success", retry immediately
+        # Simple staleness check using last_checked_at
+        # Skip venues checked within cooldown period (regardless of result)
+        # This matches the simplified needs_enrichment? logic exactly
         where: fragment(
           """
           ? IS NULL OR
-          ?->>'last_attempt_result' IS NULL OR
-          ?->>'last_attempt_result' != 'no_images' OR
-          (?->>'last_attempt_at')::timestamp < (NOW() AT TIME ZONE 'UTC') - make_interval(days => ?)
+          ?->>'last_checked_at' IS NULL OR
+          (?->>'last_checked_at')::timestamp < (NOW() AT TIME ZONE 'UTC') - make_interval(days => ?)
           """,
-          v.image_enrichment_metadata,
           v.image_enrichment_metadata,
           v.image_enrichment_metadata,
           v.image_enrichment_metadata,
           ^cooldown_days
         ),
-        # Prioritize venues with coordinates and provider IDs
+        # Prioritize venues in this order:
+        # 1. Never checked (highest priority - we don't know if images exist)
+        # 2. Has coordinates (better success rate)
+        # 3. Has provider IDs (better success rate)
+        # 4. ID ascending (deterministic ordering)
         order_by: [
+          desc:
+            fragment(
+              "CASE WHEN ? IS NULL OR ?->>'last_checked_at' IS NULL THEN 3 ELSE 0 END",
+              v.image_enrichment_metadata,
+              v.image_enrichment_metadata
+            ),
           desc:
             fragment(
               "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN 2 ELSE 0 END",
