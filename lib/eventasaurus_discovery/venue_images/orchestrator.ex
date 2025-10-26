@@ -135,7 +135,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   A venue needs enrichment if:
   - It has never been enriched (no image_enrichment_metadata)
   - It has no images (empty venue_images)
-  - Images are stale (>30 days old)
+  - Images are stale (>90 days old)
   - Force flag is true
   """
   def needs_enrichment?(venue, force \\ false)
@@ -162,7 +162,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
         case parse_datetime(last_enriched) do
           {:ok, last_enriched_dt} ->
             staleness_days = DateTime.diff(DateTime.utc_now(), last_enriched_dt, :day)
-            staleness_days > 30
+            staleness_days > 90
 
           {:error, _} ->
             # Can't parse timestamp, assume stale
@@ -507,13 +507,18 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       Application.get_env(:eventasaurus, :venue_images, [])
       |> Keyword.get(:max_images_per_provider)
 
+    # Get max images per venue (controls ImageKit storage costs)
+    max_images_per_venue =
+      Application.get_env(:eventasaurus, :venue_images, [])
+      |> Keyword.get(:max_images_per_venue, 25)
+
     # Group images by provider to apply per-provider limits
     images_by_provider = Enum.group_by(images, fn img ->
       img.provider || img["provider"]
     end)
 
     # Apply per-provider limits and flatten back to list
-    limited_images =
+    provider_limited_images =
       images_by_provider
       |> Enum.flat_map(fn {_provider, provider_images} ->
         case max_images_per_provider do
@@ -522,9 +527,16 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
         end
       end)
 
+    # Apply per-venue limit (after per-provider limits)
+    limited_images = Enum.take(provider_limited_images, max_images_per_venue)
+
     # Log if we're limiting images
-    if is_integer(max_images_per_provider) and length(images) > length(limited_images) do
-      Logger.info("📊 Found #{length(images)} images, processing only #{length(limited_images)} (limit: #{max_images_per_provider}/provider)")
+    if is_integer(max_images_per_provider) and length(images) > length(provider_limited_images) do
+      Logger.info("📊 Found #{length(images)} images, processing only #{length(provider_limited_images)} (limit: #{max_images_per_provider}/provider)")
+    end
+
+    if length(provider_limited_images) > length(limited_images) do
+      Logger.info("📊 Limiting to #{length(limited_images)} images per venue (max: #{max_images_per_venue})")
     end
 
     # Convert new images to proper structure with string keys (JSONB requirement)
@@ -669,8 +681,25 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       metadata.error_details || metadata[:error_details] || %{}
     )
 
+    # Calculate completeness score (0.0-1.0)
+    # Measures how successful the enrichment was across all attempted providers
+    providers_succeeded = metadata.providers_succeeded || metadata[:providers_succeeded] || []
+    providers_failed = metadata.providers_failed || metadata[:providers_failed] || []
+    total_providers_attempted = length(providers_succeeded) + length(providers_failed)
+
+    completeness_score =
+      if total_providers_attempted > 0 do
+        length(providers_succeeded) / total_providers_attempted
+      else
+        0.0
+      end
+
     enrichment_metadata = %{
+      # Schema versioning for future-proof migrations
+      "schema_version" => "1.0",
+      "scoring_version" => "1.0",
       "last_enriched_at" => DateTime.to_iso8601(now),
+      "completeness_score" => completeness_score,
       "next_enrichment_due" => next_enrichment,
       "providers_used" => all_providers_used,
       "total_images_fetched" => length(merged_images),

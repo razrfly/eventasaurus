@@ -29,25 +29,27 @@ defmodule Eventasaurus.ImageKit.Filename do
 
   - `provider_url` - The original image URL from the provider
   - `provider` - Provider name (e.g., "google_places", "unsplash")
+  - `content_type` - Optional content type (e.g., "image/png", "image/webp"). Defaults to .jpg
 
   ## Returns
 
-  A short, deterministic filename in format: `{provider_code}-{hash}.jpg`
+  A short, deterministic filename in format: `{provider_code}-{hash}.{ext}`
 
   ## Examples
 
       iex> generate("https://maps.googleapis.com/maps/api/place/photo?photoreference=ABC123", "google_places")
-      "gp-a8f3d2.jpg"
+      "gp-a8f3d2ab.jpg"
 
-      iex> generate("https://images.unsplash.com/photo-123", "unsplash")
-      "us-7bc419.jpg"
+      iex> generate("https://images.unsplash.com/photo-123", "unsplash", "image/png")
+      "us-7bc419ab.png"
   """
-  @spec generate(String.t(), String.t()) :: String.t()
-  def generate(provider_url, provider) when is_binary(provider_url) and is_binary(provider) do
+  @spec generate(String.t(), String.t(), String.t() | nil) :: String.t()
+  def generate(provider_url, provider, content_type \\ nil) when is_binary(provider_url) and is_binary(provider) do
     provider_code = get_provider_code(provider)
     hash = generate_hash(provider_url)
+    extension = extension_from_content_type(content_type) || extension_from_url(provider_url) || "jpg"
 
-    "#{provider_code}-#{hash}.jpg"
+    "#{provider_code}-#{hash}.#{extension}"
   end
 
   @doc """
@@ -70,7 +72,7 @@ defmodule Eventasaurus.ImageKit.Filename do
   end
 
   @doc """
-  Generates a 6-character hash from a URL using MD5.
+  Generates an 8-character hash from a URL using MD5.
 
   The hash is deterministic - the same URL will always produce the same hash.
   This enables deduplication by checking if a file already exists before uploading.
@@ -82,7 +84,7 @@ defmodule Eventasaurus.ImageKit.Filename do
   ## Examples
 
       iex> generate_hash("https://example.com/image.jpg")
-      "a8f3d2"
+      "a8f3d2ab"
 
       iex> generate_hash("https://maps.googleapis.com/maps/api/place/photo?photoreference=ABC&key=123")
       # Same hash as with key=456 (only photoreference matters)
@@ -93,7 +95,7 @@ defmodule Eventasaurus.ImageKit.Filename do
 
     :crypto.hash(:md5, normalized_url)
     |> Base.encode16(case: :lower)
-    |> String.slice(0..5)
+    |> String.slice(0..7)
   end
 
   # Normalize URLs to ensure consistent hashing
@@ -177,6 +179,63 @@ defmodule Eventasaurus.ImageKit.Filename do
   end
 
   def valid_slug?(_), do: false
+
+  @doc """
+  Extracts file extension from content-type header.
+
+  ## Examples
+
+      iex> extension_from_content_type("image/png")
+      "png"
+
+      iex> extension_from_content_type("image/jpeg")
+      "jpg"
+
+      iex> extension_from_content_type("image/webp")
+      "webp"
+
+      iex> extension_from_content_type(nil)
+      nil
+  """
+  @spec extension_from_content_type(String.t() | nil) :: String.t() | nil
+  def extension_from_content_type(nil), do: nil
+  def extension_from_content_type("image/jpeg"), do: "jpg"
+  def extension_from_content_type("image/jpg"), do: "jpg"
+  def extension_from_content_type("image/png"), do: "png"
+  def extension_from_content_type("image/webp"), do: "webp"
+  def extension_from_content_type("image/gif"), do: "gif"
+  def extension_from_content_type("image/svg+xml"), do: "svg"
+  def extension_from_content_type(_), do: nil
+
+  @doc """
+  Extracts file extension from URL path.
+
+  ## Examples
+
+      iex> extension_from_url("https://example.com/image.png")
+      "png"
+
+      iex> extension_from_url("https://example.com/image.jpg")
+      "jpg"
+
+      iex> extension_from_url("https://example.com/no-extension")
+      nil
+  """
+  @spec extension_from_url(String.t()) :: String.t() | nil
+  def extension_from_url(url) when is_binary(url) do
+    uri = URI.parse(url)
+    path = uri.path || ""
+
+    case Path.extname(path) do
+      "." <> ext when ext in ~w(jpg jpeg png webp gif svg) ->
+        if ext == "jpeg", do: "jpg", else: ext
+
+      _ ->
+        nil
+    end
+  end
+
+  def extension_from_url(_), do: nil
 
   @doc """
   Builds the complete ImageKit path (folder + filename).

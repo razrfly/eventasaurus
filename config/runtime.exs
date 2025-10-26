@@ -70,26 +70,60 @@ config :eventasaurus, :imagekit,
 
 # Venue image enrichment configuration
 # Limit images processed in development to save API credits (Google Places + ImageKit)
-default_max_images = if config_env() == :prod, do: "10", else: "2"
+default_max_images = if config_env() == :prod, do: 10, else: 2
 
 max_images_env = System.get_env("MAX_IMAGES_PER_PROVIDER")
 safe_max_images =
   case max_images_env do
     nil -> default_max_images
     "" -> default_max_images
-    v -> v
-  end |> String.to_integer()
+    v ->
+      case Integer.parse(v) do
+        {int, _} -> int
+        :error ->
+          require Logger
+          Logger.error("Invalid MAX_IMAGES_PER_PROVIDER value: #{inspect(v)}, using default: #{default_max_images}")
+          default_max_images
+      end
+  end
 
 cooldown_env = System.get_env("NO_IMAGES_COOLDOWN_DAYS")
 safe_cooldown_days =
   case cooldown_env do
-    nil -> "7"
-    "" -> "7"
-    v -> v
-  end |> String.to_integer()
+    nil -> 7
+    "" -> 7
+    v ->
+      case Integer.parse(v) do
+        {int, _} -> int
+        :error ->
+          require Logger
+          Logger.error("Invalid NO_IMAGES_COOLDOWN_DAYS value: #{inspect(v)}, using default: 7")
+          7
+      end
+  end
+
+# Max images per venue (controls ImageKit storage costs)
+# Default: 25 images per venue (after per-provider limits applied)
+default_max_per_venue = if config_env() == :prod, do: 25, else: 10
+
+max_per_venue_env = System.get_env("MAX_IMAGES_PER_VENUE")
+safe_max_per_venue =
+  case max_per_venue_env do
+    nil -> default_max_per_venue
+    "" -> default_max_per_venue
+    v ->
+      case Integer.parse(v) do
+        {int, _} -> int
+        :error ->
+          require Logger
+          Logger.error("Invalid MAX_IMAGES_PER_VENUE value: #{inspect(v)}, using default: #{default_max_per_venue}")
+          default_max_per_venue
+      end
+  end
 
 config :eventasaurus, :venue_images,
   max_images_per_provider: safe_max_images,
+  max_images_per_venue: safe_max_per_venue,
   no_images_cooldown_days: safe_cooldown_days
 
 # Configure Mapbox for static maps
