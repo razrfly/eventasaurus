@@ -60,31 +60,24 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   end
 
   @impl true
-  def handle_event("filter_provider", %{"provider" => provider}, socket) do
+  def handle_event("filter_change", params, socket) do
+    # Parse provider filter
     provider_filter =
-      case provider do
+      case Map.get(params, "provider", "all") do
         "all" -> :all
         other -> other
       end
 
-    {:noreply, assign(socket, :provider_filter, provider_filter) |> load_operations()}
-  end
-
-  @impl true
-  def handle_event("filter_status", %{"status" => status}, socket) do
+    # Parse status filter
     status_filter =
-      case status do
+      case Map.get(params, "status", "all") do
         "all" -> :all
         other -> other
       end
 
-    {:noreply, assign(socket, :status_filter, status_filter) |> load_operations()}
-  end
-
-  @impl true
-  def handle_event("filter_city", %{"city" => city}, socket) do
+    # Parse city filter
     city_filter =
-      case city do
+      case Map.get(params, "city", "all") do
         "all" ->
           :all
 
@@ -95,20 +88,24 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
           end
       end
 
-    {:noreply, assign(socket, :city_filter, city_filter) |> load_operations()}
-  end
-
-  @impl true
-  def handle_event("filter_date", %{"date" => date}, socket) do
+    # Parse date filter
     date_filter =
-      case date do
+      case Map.get(params, "date", "all_time") do
         "all_time" -> :all_time
         "today" -> :today
         "week" -> :week
         "month" -> :month
+        _ -> :all_time
       end
 
-    {:noreply, assign(socket, :date_filter, date_filter) |> load_operations()}
+    # Apply all filters and reload operations
+    socket
+    |> assign(:provider_filter, provider_filter)
+    |> assign(:status_filter, status_filter)
+    |> assign(:city_filter, city_filter)
+    |> assign(:date_filter, date_filter)
+    |> load_operations()
+    |> then(&{:noreply, &1})
   end
 
   @impl true
