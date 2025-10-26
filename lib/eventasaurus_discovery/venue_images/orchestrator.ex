@@ -147,30 +147,34 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
   def needs_enrichment?(venue, false) do
     metadata = venue.image_enrichment_metadata || %{}
+    last_enriched = metadata["last_enriched_at"] || metadata[:last_enriched_at]
 
-    cond do
-      # Never enriched
-      is_nil(metadata["last_enriched_at"]) and is_nil(metadata[:last_enriched_at]) ->
-        true
+    # Never enriched - always needs enrichment
+    if is_nil(last_enriched) do
+      true
+    else
+      # Has been enriched before - check cooldown period
+      case parse_datetime(last_enriched) do
+        {:ok, last_enriched_dt} ->
+          days_since_enrichment = DateTime.diff(DateTime.utc_now(), last_enriched_dt, :day)
+          has_images = venue.venue_images && length(venue.venue_images) > 0
 
-      # No images
-      is_nil(venue.venue_images) or venue.venue_images == [] ->
-        true
+          if has_images do
+            # Has images: use 90-day staleness policy
+            days_since_enrichment > 90
+          else
+            # No images found: use shorter cooldown from config
+            # This prevents hammering APIs for venues that don't have images
+            cooldown_days = Application.get_env(:eventasaurus, :venue_images, [])
+                            |> Keyword.get(:no_images_cooldown_days, 7)
 
-      # Check staleness
-      true ->
-        last_enriched =
-          metadata["last_enriched_at"] || metadata[:last_enriched_at]
+            days_since_enrichment > cooldown_days
+          end
 
-        case parse_datetime(last_enriched) do
-          {:ok, last_enriched_dt} ->
-            staleness_days = DateTime.diff(DateTime.utc_now(), last_enriched_dt, :day)
-            staleness_days > 90
-
-          {:error, _} ->
-            # Can't parse timestamp, assume stale
-            true
-        end
+        {:error, _} ->
+          # Can't parse timestamp, assume stale
+          true
+      end
     end
   end
 
