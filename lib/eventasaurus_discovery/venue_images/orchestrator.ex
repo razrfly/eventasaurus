@@ -135,8 +135,11 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   A venue needs enrichment if:
   - It has never been enriched (no image_enrichment_metadata)
   - It has no images (empty venue_images)
-  - Images are stale (>90 days old)
+  - Images are stale (>90 days old) - see staleness policy below
   - Force flag is true
+
+  ## Staleness Policy
+  Images are considered stale after 90 days.
   """
   def needs_enrichment?(venue, force \\ false)
 
@@ -528,7 +531,8 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       end)
 
     # Apply per-venue limit (after per-provider limits)
-    limited_images = Enum.take(provider_limited_images, max_images_per_venue)
+    # Guard against negative values to prevent tail enumeration
+    limited_images = Enum.take(provider_limited_images, max(0, max_images_per_venue))
 
     # Log if we're limiting images
     if is_integer(max_images_per_provider) and length(images) > length(provider_limited_images) do

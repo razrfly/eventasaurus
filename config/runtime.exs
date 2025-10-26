@@ -79,8 +79,8 @@ safe_max_images =
     "" -> default_max_images
     v ->
       case Integer.parse(v) do
-        {int, _} -> int
-        :error ->
+        {int, _} when int >= 0 -> int
+        _ ->
           require Logger
           Logger.error("Invalid MAX_IMAGES_PER_PROVIDER value: #{inspect(v)}, using default: #{default_max_images}")
           default_max_images
@@ -94,8 +94,8 @@ safe_cooldown_days =
     "" -> 7
     v ->
       case Integer.parse(v) do
-        {int, _} -> int
-        :error ->
+        {int, _} when int >= 0 -> int
+        _ ->
           require Logger
           Logger.error("Invalid NO_IMAGES_COOLDOWN_DAYS value: #{inspect(v)}, using default: 7")
           7
@@ -113,8 +113,8 @@ safe_max_per_venue =
     "" -> default_max_per_venue
     v ->
       case Integer.parse(v) do
-        {int, _} -> int
-        :error ->
+        {int, _} when int >= 0 -> int
+        _ ->
           require Logger
           Logger.error("Invalid MAX_IMAGES_PER_VENUE value: #{inspect(v)}, using default: #{default_max_per_venue}")
           default_max_per_venue
