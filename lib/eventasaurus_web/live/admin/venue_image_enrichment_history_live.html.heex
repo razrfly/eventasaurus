@@ -334,6 +334,31 @@
                                 </div>
                               </div>
                             <% end %>
+                            <!-- Venue Details for Individual Enrichments -->
+                            <%= if op.venue_id do %>
+                              <%
+                                venue = Repo.get(EventasaurusApp.Venues.Venue, op.venue_id)
+                              %>
+                              <%= if venue do %>
+                                <div>
+                                  <h4 class="text-sm font-semibold text-gray-900 mb-2">Venue Details</h4>
+                                  <div class="bg-white p-3 rounded border border-gray-200">
+                                    <div class="text-sm">
+                                      <span class="font-medium">Name:</span> <%= venue.name %>
+                                    </div>
+                                    <div class="text-sm text-gray-600">
+                                      <span class="font-medium">Address:</span> <%= venue.address %>
+                                    </div>
+                                    <%= if venue.metadata && venue.metadata["google_place_id"] do %>
+                                      <div class="text-sm text-gray-600">
+                                        <span class="font-medium">Google Place ID:</span>
+                                        <code class="text-xs bg-gray-100 px-1 rounded"><%= venue.metadata["google_place_id"] %></code>
+                                      </div>
+                                    <% end %>
+                                  </div>
+                                </div>
+                              <% end %>
+                            <% end %>
                             <!-- Uploaded Images Gallery -->
                             <%
                               # Get successful images from either imagekit_urls (production) or venue_images (development)
@@ -348,21 +373,66 @@
                               end
                             %>
                             <%= if not Enum.empty?(successful_images) do %>
-                              <div>
+                              <div class="mt-4">
                                 <h4 class="text-sm font-semibold text-gray-900 mb-2">
                                   Successfully Processed Images (<%= length(successful_images) %>)
                                   <%= if Enum.any?(successful_images, fn img -> img["source"] == "provider" end) do %>
                                     <span class="text-xs text-gray-500 ml-1">(Development Mode - Source Images)</span>
                                   <% end %>
                                 </h4>
-                                <div class="grid grid-cols-4 gap-2">
-                                  <%= for img <- successful_images do %>
-                                    <div class="aspect-w-1 aspect-h-1">
-                                      <img
-                                        src={img["url"]}
-                                        alt="Venue image"
-                                        class="rounded object-cover"
-                                      />
+                                <div class="grid grid-cols-2 gap-4">
+                                  <%= for {img, idx} <- Enum.with_index(successful_images, 1) do %>
+                                    <div class="bg-white p-2 rounded border border-gray-200">
+                                      <div class="aspect-w-16 aspect-h-9 mb-2">
+                                        <img
+                                          src={img["url"]}
+                                          alt={"Image #{idx}"}
+                                          class="rounded object-cover w-full"
+                                        />
+                                      </div>
+                                      <%= if img["source"] == "provider" do %>
+                                        <div class="text-xs space-y-1">
+                                          <div>
+                                            <span class="font-medium">Provider:</span>
+                                            <%= format_provider_name(img["provider"]) %>
+                                          </div>
+                                          <%= if img["attribution"] do %>
+                                            <div>
+                                              <span class="font-medium">Credit:</span>
+                                              <%= raw(img["attribution"]) %>
+                                            </div>
+                                          <% end %>
+                                          <%= if img["width"] && img["height"] do %>
+                                            <div>
+                                              <span class="font-medium">Size:</span>
+                                              <%= img["width"] %>×<%= img["height"] %>px
+                                            </div>
+                                          <% end %>
+                                          <%= if img["fetched_at"] do %>
+                                            <div class="text-gray-500">
+                                              <span class="font-medium">Fetched:</span>
+                                              <%= Calendar.strftime(
+                                                elem(DateTime.from_iso8601(img["fetched_at"]), 1),
+                                                "%b %d, %Y %I:%M:%S %p"
+                                              ) %>
+                                            </div>
+                                          <% end %>
+                                          <%
+                                            # Extract photo_reference from URL to show uniqueness
+                                            uri = URI.parse(img["url"] || "")
+                                            query = URI.decode_query(uri.query || "")
+                                            photo_ref = query["photo_reference"]
+                                          %>
+                                          <%= if photo_ref do %>
+                                            <div class="text-gray-500 break-all">
+                                              <span class="font-medium">Photo ID:</span>
+                                              <code class="text-xs bg-gray-100 px-1 rounded">
+                                                <%= String.slice(photo_ref, 0..20) %>...
+                                              </code>
+                                            </div>
+                                          <% end %>
+                                        </div>
+                                      <% end %>
                                     </div>
                                   <% end %>
                                 </div>
