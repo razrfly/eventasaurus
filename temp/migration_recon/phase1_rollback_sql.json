@@ -1,0 +1,32 @@
+[
+  {
+    "ea_id": 457,
+    "ea_slug": "white-hart-whitechapel",
+    "original_images": [
+      {
+        "upload_status": "external",
+        "url": "test.jpg"
+      }
+    ]
+  },
+  {
+    "ea_id": 454,
+    "ea_slug": "skimmington-castle-reigate",
+    "original_images": []
+  },
+  {
+    "ea_id": 456,
+    "ea_slug": "unity-place-milton-keynes",
+    "original_images": []
+  },
+  {
+    "ea_id": 455,
+    "ea_slug": "sir-christopher-hatton-chancery-lane",
+    "original_images": []
+  },
+  {
+    "ea_id": 449,
+    "ea_slug": "three-johns-angel",
+    "original_images": []
+  }
+]
