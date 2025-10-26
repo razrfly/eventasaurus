@@ -112,8 +112,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     force = Keyword.get(opts, :force, false)
     providers = Keyword.get(opts, :providers)
 
-    # Load venues with venue_images preloaded (required for needs_enrichment?/1)
-    venues = Repo.all(from v in Venue, where: v.id in ^venue_ids, preload: [:venue_images])
+    # Load venues; JSON fields like venue_images are part of the struct
+    venues = Repo.all(from v in Venue, where: v.id in ^venue_ids)
 
     # Pre-filter using existing staleness logic
     stale_venues =

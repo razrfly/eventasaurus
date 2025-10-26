@@ -187,7 +187,7 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
             |> Keyword.get(:no_images_cooldown_days, 7)
           end
 
-          days_since_check > cooldown_days
+          days_since_check >= cooldown_days
 
         {:error, _} ->
           # Can't parse timestamp, assume stale
