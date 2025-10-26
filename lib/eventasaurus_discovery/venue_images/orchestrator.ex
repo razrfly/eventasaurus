@@ -130,46 +130,64 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
   end
 
   @doc """
-  Checks if a venue needs image enrichment.
+  Checks if a venue needs image enrichment using simplified 3-criteria logic.
 
-  A venue needs enrichment if:
-  - It has never been enriched (no image_enrichment_metadata)
-  - It has no images (empty venue_images)
-  - Images are stale (>90 days old) - see staleness policy below
-  - Force flag is true
+  ## The Three Criteria
 
-  ## Staleness Policy
-  Images are considered stale after 90 days.
+  1. **Never Checked Before** (Priority 1)
+     - No `last_checked_at` timestamp in metadata
+     - Always enqueue - we don't know if images exist
+
+  2. **When Last Checked** (Priority 2 & 3)
+     - Check `last_checked_at` timestamp against cooldown period
+     - Cooldown period depends on whether venue has images
+
+  3. **Has Images**
+     - Determines cooldown period:
+       - With images: 90 days (refresh quarterly)
+       - Without images: 7 days (retry weekly)
+
+  ## Examples
+
+  - Never checked → ✅ ENQUEUE
+  - Checked 3 days ago, no images → ❌ SKIP (within 7-day cooldown)
+  - Checked 10 days ago, no images → ✅ ENQUEUE (past 7-day cooldown)
+  - Checked 50 days ago, has images → ❌ SKIP (within 90-day cooldown)
+  - Checked 100 days ago, has images → ✅ ENQUEUE (past 90-day cooldown)
   """
   def needs_enrichment?(venue, force \\ false)
 
   def needs_enrichment?(_venue, true), do: true
 
   def needs_enrichment?(venue, false) do
-    metadata = venue.image_enrichment_metadata || %{}
-    last_enriched = metadata["last_enriched_at"] || metadata[:last_enriched_at]
+    # Simple 3-criteria check:
+    # 1. Never checked? → enqueue
+    # 2. When last checked? → compare to cooldown
+    # 3. Has images? → determines cooldown period (7 days vs 90 days)
 
-    # Never enriched - always needs enrichment
-    if is_nil(last_enriched) do
+    metadata = venue.image_enrichment_metadata || %{}
+    last_checked = metadata["last_checked_at"] || metadata[:last_checked_at]
+
+    # Priority 1: Never checked before
+    if is_nil(last_checked) do
       true
     else
-      # Has been enriched before - check cooldown period
-      case parse_datetime(last_enriched) do
-        {:ok, last_enriched_dt} ->
-          days_since_enrichment = DateTime.diff(DateTime.utc_now(), last_enriched_dt, :day)
+      # Priority 2 & 3: Check based on staleness + image status
+      case parse_datetime(last_checked) do
+        {:ok, last_checked_dt} ->
+          days_since_check = DateTime.diff(DateTime.utc_now(), last_checked_dt, :day)
           has_images = venue.venue_images && length(venue.venue_images) > 0
 
-          if has_images do
-            # Has images: use 90-day staleness policy
-            days_since_enrichment > 90
+          # Different cooldowns based on whether venue has images
+          cooldown_days = if has_images do
+            90  # Venues with images: refresh every 90 days
           else
-            # No images found: use shorter cooldown from config
-            # This prevents hammering APIs for venues that don't have images
-            cooldown_days = Application.get_env(:eventasaurus, :venue_images, [])
-                            |> Keyword.get(:no_images_cooldown_days, 7)
-
-            days_since_enrichment > cooldown_days
+            # Venues without images: retry every 7 days (configurable)
+            Application.get_env(:eventasaurus, :venue_images, [])
+            |> Keyword.get(:no_images_cooldown_days, 7)
           end
+
+          days_since_check > cooldown_days
 
         {:error, _} ->
           # Can't parse timestamp, assume stale
@@ -706,7 +724,8 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       # Schema versioning for future-proof migrations
       "schema_version" => "1.0",
       "scoring_version" => "1.0",
-      "last_enriched_at" => DateTime.to_iso8601(now),
+      # Single timestamp: when was this venue last checked for images?
+      "last_checked_at" => DateTime.to_iso8601(now),
       "completeness_score" => completeness_score,
       "next_enrichment_due" => next_enrichment,
       "providers_used" => all_providers_used,
@@ -716,12 +735,11 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       "enrichment_history" => [history_entry | existing_history] |> Enum.take(10),
       "providers_failed" => metadata.providers_failed || metadata[:providers_failed] || [],
       "error_details" => metadata.error_details || metadata[:error_details] || %{},
-      # Last attempt tracking for cooldown logic
-      "last_attempt_at" => DateTime.to_iso8601(now),
-      "last_attempt_result" => last_attempt_result,
-      "last_attempt_providers" => (metadata.providers_succeeded || metadata[:providers_succeeded] || []) ++
+      # Track result of last check (for debugging/reporting)
+      "last_check_result" => last_attempt_result,
+      "last_check_providers" => (metadata.providers_succeeded || metadata[:providers_succeeded] || []) ++
                                     (metadata.providers_failed || metadata[:providers_failed] || []),
-      "last_attempt_details" => last_attempt_details
+      "last_check_details" => last_attempt_details
     }
 
     # Use the specialized changeset function from Venue schema
