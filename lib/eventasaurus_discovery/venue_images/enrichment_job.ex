@@ -448,7 +448,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
         key: api_key
       ]
 
-      case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+      query = URI.encode_query(params)
+      case HTTPoison.get("#{url}?#{query}", [], recv_timeout: 10_000) do
         {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
           case parse_nearby_search_response(body, venue) do
             {:ok, place_id} ->
@@ -482,7 +483,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       key: api_key
     ]
 
-    case HTTPoison.get(url, [], params: params, recv_timeout: 10_000) do
+    query = URI.encode_query(params)
+    case HTTPoison.get("#{url}?#{query}", [], recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         case Jason.decode(body) do
           {:ok, %{"result" => result, "status" => "OK"}} ->
