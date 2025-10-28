@@ -30,7 +30,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     "karnet" => "krakow",
     "kino-krakow" => "krakow",
     "cinema-city" => "krakow",
-    "sortiraparis" => "paris"
+    "sortiraparis" => "paris",
+    "waw4free" => "warsaw"
   }
 
   @impl true

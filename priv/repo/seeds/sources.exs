@@ -196,6 +196,22 @@ sources = [
       "language" => "pl",
       "supports_screenings" => true
     }
+  },
+  %{
+    name: "Waw4Free",
+    slug: "waw4free",
+    website_url: "https://waw4free.pl",
+    priority: 35,
+    domains: ["cultural", "general"],
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 300,
+      "language" => "pl",
+      "supports_pagination" => false,
+      "all_events_free" => true,
+      "coverage" => "Warsaw, Poland",
+      "scope" => "city"
+    }
   }
 ]
 
