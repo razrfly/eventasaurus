@@ -902,7 +902,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             data.raw_event_data
           )
 
-        # Event with category string (works for all sources: Karnet, PubQuiz, etc.)
+        # Event with category string (works for all sources: Karnet, PubQuiz, Waw4Free, etc.)
         data.category ->
           CategoryExtractor.assign_categories_to_event(
             event.id,
