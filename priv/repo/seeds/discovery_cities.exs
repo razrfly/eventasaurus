@@ -6,6 +6,7 @@
 # - Melbourne (Australia): 2 sources
 # - Austin (United States): 1 source
 # - Paris (France): 1 source
+# - Warsaw (Poland): 2 sources
 #
 # Run with: mix run priv/repo/seeds/discovery_cities.exs
 # Or automatically via: mix ecto.setup
@@ -166,6 +167,22 @@ configure_city.("paris", [
   # Sortiraparis - Paris cultural events (concerts, exhibitions, theater)
   {"sortiraparis", %{
     "limit" => 100
+  }}
+])
+
+# ============================================================================
+# WARSAW, POLAND - 2 SOURCES
+# ============================================================================
+
+configure_city.("warsaw", [
+  # PubQuiz Poland - Weekly pub quiz events (Poland-wide)
+  {"pubquiz-pl", %{
+    "limit" => 100
+  }},
+
+  # Waw4Free - Free cultural events in Warsaw
+  {"waw4free", %{
+    "limit" => 200
   }}
 ])
 

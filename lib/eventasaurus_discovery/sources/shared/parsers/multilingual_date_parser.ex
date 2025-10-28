@@ -68,8 +68,8 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser do
   # Language plugin modules (add new languages here)
   @language_modules %{
     french: EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.French,
-    english: EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.English
-    # polish: EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish  # Coming in Phase 6
+    english: EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.English,
+    polish: EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish
   }
 
   @doc """

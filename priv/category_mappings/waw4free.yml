@@ -1,0 +1,73 @@
+# Waw4Free Category Mappings
+# Maps Waw4Free (Polish) categories to our internal category system
+# Source: https://waw4free.pl/ - Warsaw free events website
+
+mappings:
+  # Direct mappings from Polish waw4free categories to internal categories
+  koncerty: concerts
+  warsztaty: education
+  wystawy: arts
+  teatr: theatre
+  sport: sports
+  dla-dzieci: family
+  festiwale: festivals
+  inne: other
+
+  # Additional variations and singular forms
+  koncert: concerts
+  warsztat: education
+  wystawa: arts
+  teatry: theatre
+  sporty: sports
+  dzieci: family
+  festiwal: festivals
+
+  # Common Polish terms we might encounter
+  muzyka: concerts
+  muzyczne: concerts
+  muzyczny: concerts
+  jazzowe: concerts
+  rockowe: concerts
+  klasyczne: arts
+  wystawa: arts
+  galeria: arts
+  muzeum: arts
+  performance: theatre
+  spektakl: theatre
+  spektakle: theatre
+  balet: arts
+  taniec: arts
+  opera: arts
+  rodzinne: family
+  edukacyjne: education
+  sportowe: sports
+  kulturalne: arts
+  plenerowe: festivals
+  koncert-plenerowy: festivals
+
+# Pattern-based mappings (optional - for more complex matching)
+patterns:
+  - match: "jazz|blues|soul"
+    categories: [concerts, arts]
+  - match: "rock|metal|punk"
+    categories: [concerts, nightlife]
+  - match: "dzieci|dziecko|rodzin"
+    categories: [family, education]
+  - match: "klasycz|symfon|kamer|opera"
+    categories: [concerts, arts]
+  - match: "plener|outdoor|open.?air"
+    categories: [festivals, community]
+  - match: "edukac|warsztat|kurs|nauka"
+    categories: [education]
+  - match: "wystaw|galeri|muzeum|arty"
+    categories: [arts]
+  - match: "teatr|spektak|dramaty"
+    categories: [theatre]
+  - match: "sport|mecz|zawod|turniej"
+    categories: [sports]
+  - match: "festiwal|festival"
+    categories: [festivals]
+  - match: "wolontariat|charytatyw"
+    categories: [community]
+  - match: "dobrowolna zrzutka"
+    categories: [community]

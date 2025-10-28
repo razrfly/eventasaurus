@@ -50,7 +50,8 @@ defmodule Mix.Tasks.Discovery.Sync do
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
     "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
-    "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob
+    "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
+    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob
   }
 
   # Sources that don't require a city (country-wide)

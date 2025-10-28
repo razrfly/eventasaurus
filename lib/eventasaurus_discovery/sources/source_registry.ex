@@ -36,7 +36,8 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "geeks-who-drink" => EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob,
     "quizmeisters" => EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob,
     "inquizition" => EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob,
-    "speed-quizzing" => EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob
+    "speed-quizzing" => EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob,
+    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob
   }
 
   @doc """
@@ -166,6 +167,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   defp get_default_scope_for_slug("karnet"), do: "city"
   defp get_default_scope_for_slug("cinema-city"), do: "city"
   defp get_default_scope_for_slug("kino-krakow"), do: "city"
+  defp get_default_scope_for_slug("waw4free"), do: "city"
   # Safe default for unknown sources
   defp get_default_scope_for_slug(_), do: "city"
 
