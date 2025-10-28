@@ -154,7 +154,10 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
 
   # Private Functions
 
-  defp spawn_enrichment_jobs(venues, providers, _opts) do
+  defp spawn_enrichment_jobs(venues, providers, opts) do
+    # Extract geocode option - enables reverse geocoding for venues without provider IDs
+    geocode = Keyword.get(opts, :geocode, false)
+
     # Build job structs for all venues
     # IMPORTANT: We pass force: true because find_venues_without_images SQL query
     # already filtered for staleness using last_checked_at + cooldown period.
@@ -168,6 +171,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
         EventasaurusDiscovery.VenueImages.EnrichmentJob.new(%{
           venue_id: venue.id,
           providers: providers,
+          geocode: geocode,  # Pass geocode option to enable reverse geocoding
           force: true  # Trust BackfillOrchestrator's SQL staleness filtering
         })
       end)

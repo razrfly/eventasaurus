@@ -431,16 +431,12 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
         |> Map.new()
       end
 
-    operations =
-      jobs
-      |> Enum.map(&enrich_operation(&1, venues_map))
-
     # Apply Elixir-level filters
-    operations =
-      operations
-      |> apply_provider_filter(provider_filter)
-      |> apply_status_filter(status_filter)
-      |> apply_tab_filter(tab)
+    jobs
+    |> Enum.map(&enrich_operation(&1, venues_map))
+    |> apply_provider_filter(provider_filter)
+    |> apply_status_filter(status_filter)
+    |> apply_tab_filter(tab)
   end
 
   defp apply_provider_filter(operations, :all), do: operations
@@ -644,13 +640,6 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   defp provider_badge_class("here"), do: "bg-purple-100 text-purple-800"
   defp provider_badge_class("mapbox"), do: "bg-blue-100 text-blue-800"
   defp provider_badge_class(_), do: "bg-gray-100 text-gray-800"
-
-  defp status_badge_class("success"), do: "bg-green-100 text-green-800"
-  defp status_badge_class("partial"), do: "bg-yellow-100 text-yellow-800"
-  defp status_badge_class("no_images"), do: "bg-gray-100 text-gray-800"
-  defp status_badge_class("failed"), do: "bg-red-100 text-red-800"
-  defp status_badge_class("error"), do: "bg-red-100 text-red-800"
-  defp status_badge_class(_), do: "bg-gray-100 text-gray-800"
 
   defp failure_type_badge(:partial_failure), do: "bg-yellow-100 text-yellow-800"
   defp failure_type_badge(:complete_failure), do: "bg-red-100 text-red-800"

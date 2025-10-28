@@ -28,11 +28,11 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Geocoding do
 
         {:ok, %{"status" => status, "error_message" => message}} ->
           Logger.error("Google Geocoding API error: #{status} - #{message}")
-          {:error, "API error: #{status}"}
+          {:error, "API error: #{status} - #{message}"}
 
         {:ok, %{"status" => status}} ->
           Logger.error("Google Geocoding API returned status: #{status}")
-          {:error, "API returned status: #{status}"}
+          {:error, "API error: #{status} - No additional details provided"}
 
         {:error, reason} ->
           Logger.error("Google Geocoding failed: #{inspect(reason)}")

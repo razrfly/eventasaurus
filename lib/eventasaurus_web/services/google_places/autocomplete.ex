@@ -27,11 +27,11 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Autocomplete do
 
         {:ok, %{"status" => status, "error_message" => message}} ->
           Logger.error("Google Places Autocomplete API error: #{status} - #{message}")
-          {:error, "API error: #{status}"}
+          {:error, "API error: #{status} - #{message}"}
 
         {:ok, %{"status" => status}} ->
           Logger.error("Google Places Autocomplete API returned status: #{status}")
-          {:error, "API returned status: #{status}"}
+          {:error, "API error: #{status} - No additional details provided"}
 
         {:error, reason} ->
           Logger.error("Google Places Autocomplete failed: #{inspect(reason)}")
