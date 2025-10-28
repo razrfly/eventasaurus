@@ -264,7 +264,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
           {:error, reason} ->
             Logger.error("❌ Failed to enrich venue #{venue_id}: #{inspect(reason)}")
-            update_job_meta(job, build_error_metadata(reason, start_time))
+            update_job_meta(job, build_error_metadata(reason, start_time, venue))
             {:error, reason}
         end
     end
@@ -907,6 +907,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
     %{
       status: status,
+      venue_context: build_venue_context(enriched_venue),
       images_discovered: length(all_images),
       images_uploaded: length(successful_images),
       images_failed: length(failed_images),
@@ -921,16 +922,23 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     }
   end
 
-  defp build_error_metadata(reason, start_time) do
+  defp build_error_metadata(reason, start_time, venue \\ nil) do
     execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
 
-    %{
+    base_metadata = %{
       status: "error",
       error: inspect(reason),
       images_found: 0,
       execution_time_ms: execution_time,
       failed_at: DateTime.to_iso8601(DateTime.utc_now())
     }
+
+    # Add venue context if venue is available
+    if venue do
+      Map.put(base_metadata, :venue_context, build_venue_context(venue))
+    else
+      base_metadata
+    end
   end
 
   defp extract_imagekit_urls(venue_images) when is_list(venue_images) do
@@ -1123,5 +1131,27 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       _ ->
         false
     end
+  end
+
+  # Builds diagnostic context about the venue for metadata
+  # Helps debug issues like missing provider_ids, coordinates, etc.
+  defp build_venue_context(venue) do
+    provider_ids = venue.provider_ids || %{}
+
+    %{
+      venue_id: venue.id,
+      venue_name: venue.name,
+      venue_address: venue.address,
+      has_coordinates: not is_nil(venue.latitude) and not is_nil(venue.longitude),
+      coordinates:
+        if venue.latitude && venue.longitude do
+          "#{venue.latitude},#{venue.longitude}"
+        else
+          nil
+        end,
+      city_id: venue.city_id,
+      provider_ids_available: Map.keys(provider_ids) |> Enum.map(&to_string/1),
+      provider_ids_count: map_size(provider_ids)
+    }
   end
 end

@@ -43,11 +43,11 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Details do
 
         {:ok, %{"status" => status, "error_message" => message}} ->
           Logger.error("Google Places Details API error: #{status} - #{message}")
-          {:error, "API error: #{status}"}
+          {:error, "API error: #{status} - #{message}"}
 
         {:ok, %{"status" => status}} ->
           Logger.error("Google Places Details API returned status: #{status}")
-          {:error, "API returned status: #{status}"}
+          {:error, "API error: #{status} - No additional details provided"}
 
         {:error, reason} ->
           Logger.error("Google Places Details fetch failed: #{inspect(reason)}")

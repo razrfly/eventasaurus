@@ -27,11 +27,11 @@ defmodule EventasaurusWeb.Services.GooglePlaces.TextSearch do
 
         {:ok, %{"status" => status, "error_message" => message}} ->
           Logger.error("Google Places Text Search API error: #{status} - #{message}")
-          {:error, "API error: #{status}"}
+          {:error, "API error: #{status} - #{message}"}
 
         {:ok, %{"status" => status}} ->
           Logger.error("Google Places Text Search API returned status: #{status}")
-          {:error, "API returned status: #{status}"}
+          {:error, "API error: #{status} - No additional details provided"}
 
         {:error, reason} ->
           Logger.error("Google Places Text Search failed: #{inspect(reason)}")

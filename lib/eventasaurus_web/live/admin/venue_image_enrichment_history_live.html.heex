@@ -299,7 +299,7 @@
                                   Failed Images (<%= length(op.failed_images) %>)
                                 </h4>
                                 <div class="space-y-2">
-                                  <%= for {failed_img, idx} <- Enum.with_index(op.failed_images) do %>
+                                  <%= for failed_img <- op.failed_images do %>
                                     <div class="bg-white p-3 rounded border border-gray-200">
                                       <div class="flex justify-between items-start">
                                         <div class="flex-1">
