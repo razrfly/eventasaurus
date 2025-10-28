@@ -238,7 +238,28 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser do
     end
   end
 
-  # Date range (cross-year) - handles ranges that span year boundaries
+  # Date range (cross-year) - handles ranges that span year boundaries (type: :range_cross_year)
+  def normalize_to_iso(
+        %{
+          type: :range_cross_year,
+          start_day: start_day,
+          start_month: start_month,
+          start_year: start_year,
+          end_day: end_day,
+          end_month: end_month,
+          end_year: end_year
+        },
+        language_module
+      ) do
+    with {:ok, start_month_num} <- resolve_month(start_month, language_module),
+         {:ok, end_month_num} <- resolve_month(end_month, language_module) do
+      starts_at = format_iso_date(start_year, start_month_num, start_day)
+      ends_at = format_iso_date(end_year, end_month_num, end_day)
+      {:ok, %{starts_at: starts_at, ends_at: ends_at}}
+    end
+  end
+
+  # Date range (cross-year) - handles ranges that span year boundaries (type: :range)
   def normalize_to_iso(
         %{
           type: :range,

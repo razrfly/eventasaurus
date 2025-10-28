@@ -37,9 +37,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
         # Map Polish categories to English slugs (not IDs)
         # EventProcessor expects category as a STRING
         category_string =
-          if raw_event[:categories] && length(raw_event.categories) > 0 do
+          if raw_event[:categories] && length(raw_event[:categories]) > 0 do
             # Take first Polish category and map to English slug
-            polish_category = List.first(raw_event.categories)
+            polish_category = List.first(raw_event[:categories])
             map_polish_to_english_category(polish_category)
           else
             nil

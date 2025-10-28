@@ -205,7 +205,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger each job by rate_limit seconds (+ jitter) to avoid bursty first requests
-        delay_seconds = index * Config.rate_limit() + :rand.uniform(1) - 1
+        delay_seconds = index * Config.rate_limit() + :rand.uniform(2) - 1
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         job_args = %{
