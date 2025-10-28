@@ -262,22 +262,29 @@ def handle_event("enrich_single_venue", params, socket) do
   unless can_manage_backfill?(socket.assigns.current_user) do
     {:noreply, put_flash(socket, :error, "Unauthorized")}
   else
-    # Create enrichment job
-    case EventasaurusDiscovery.VenueImages.EnrichmentJob.new(%{
-      venue_id: String.to_integer(venue_id),
-      providers: providers,
-      geocode: geocode,
-      force: force
-    })
-    |> Oban.insert() do
-      {:ok, job} ->
-        {:noreply,
-          socket
-          |> put_flash(:info, "Enrichment job #{job.id} queued for venue #{venue_id}")
-          |> assign(:selected_venues, [])}
+    # Parse and validate venue_id
+    case Integer.parse(venue_id) do
+      {venue_id_int, ""} ->
+        # Create enrichment job
+        case EventasaurusDiscovery.VenueImages.EnrichmentJob.new(%{
+          venue_id: venue_id_int,
+          providers: providers,
+          geocode: geocode,
+          force: force
+        })
+        |> Oban.insert() do
+          {:ok, job} ->
+            {:noreply,
+              socket
+              |> put_flash(:info, "Enrichment job #{job.id} queued for venue #{venue_id}")
+              |> assign(:selected_venues, [])}
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to queue job: #{inspect(reason)}")}
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to queue job: #{inspect(reason)}")}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid venue ID")}
     end
   end
 end
