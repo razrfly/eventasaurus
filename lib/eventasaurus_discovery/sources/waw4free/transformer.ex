@@ -7,7 +7,6 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Categories.CategoryMapper
 
   @doc """
   Transform a raw Waw4Free event into our unified format.
@@ -16,7 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
   - title
   - external_id
   - starts_at (DateTime)
-  - venue (with name, latitude, longitude, address)
+  - venue (name required; coordinates will be geocoded by VenueProcessor)
 
   Optional fields:
   - description
@@ -35,22 +34,15 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
     # Validate venue has required fields
     case validate_venue(venue_data) do
       :ok ->
-        # Get category from database
-        category_lookup = get_category_lookup()
-
-        # Map Polish categories to internal categories
-        mapped_categories =
-          if raw_event[:categories] do
-            CategoryMapper.map_categories("waw4free", raw_event.categories, category_lookup)
+        # Map Polish categories to English slugs (not IDs)
+        # EventProcessor expects category as a STRING
+        category_string =
+          if raw_event[:categories] && length(raw_event.categories) > 0 do
+            # Take first Polish category and map to English slug
+            polish_category = List.first(raw_event.categories)
+            map_polish_to_english_category(polish_category)
           else
-            []
-          end
-
-        # Get primary category (first one) if available
-        primary_category =
-          case mapped_categories do
-            [{category_id, _is_primary} | _] -> category_id
-            [] -> nil
+            nil
           end
 
         transformed = %{
@@ -78,8 +70,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
 
           # Categories and tags
           tags: [],
-          category: primary_category,
-          categories: mapped_categories,
+          category: category_string,
 
           # Translations (Polish)
           title_translations: %{"pl" => extract_title(raw_event)},
@@ -226,14 +217,57 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
     end
   end
 
-  defp get_category_lookup do
-    # Get category lookup from database
-    # This is a simplified version - in production, this would be cached
-    import Ecto.Query
-    alias EventasaurusApp.Repo
-    alias EventasaurusDiscovery.Categories.Category
+  # Map Polish category to English slug using YAML configuration
+  defp map_polish_to_english_category(polish_category) when is_binary(polish_category) do
+    # Simple mapping from waw4free.yml
+    # In production, this would be loaded from YAML file
+    mappings = %{
+      "koncerty" => "concerts",
+      "koncert" => "concerts",
+      "warsztaty" => "education",
+      "warsztat" => "education",
+      "wystawy" => "arts",
+      "wystawa" => "arts",
+      "teatr" => "theatre",
+      "teatry" => "theatre",
+      "sport" => "sports",
+      "sporty" => "sports",
+      "dla-dzieci" => "family",
+      "dla dzieci" => "family",
+      "dzieci" => "family",
+      "festiwale" => "festivals",
+      "festiwal" => "festivals",
+      "inne" => "other",
+      # Music related
+      "muzyka" => "concerts",
+      "muzyczne" => "concerts",
+      "muzyczny" => "concerts",
+      "jazzowe" => "concerts",
+      "rockowe" => "concerts",
+      # Arts related
+      "klasyczne" => "arts",
+      "galeria" => "arts",
+      "muzeum" => "arts",
+      "performance" => "theatre",
+      "spektakl" => "theatre",
+      "spektakle" => "theatre",
+      "balet" => "arts",
+      "taniec" => "arts",
+      "opera" => "arts",
+      # Other
+      "rodzinne" => "family",
+      "edukacyjne" => "education",
+      "sportowe" => "sports",
+      "kulturalne" => "arts",
+      "plenerowe" => "festivals"
+    }
 
-    Repo.all(from c in Category, where: c.is_active == true, select: {c.slug, {c.id, true}})
-    |> Map.new()
+    # Normalize input (lowercase, trim)
+    normalized = polish_category |> String.downcase() |> String.trim()
+
+    # Look up mapping, return English slug or nil
+    Map.get(mappings, normalized)
   end
+
+  defp map_polish_to_english_category(_), do: nil
 end

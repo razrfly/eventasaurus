@@ -5,10 +5,11 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.IndexExtractor do
   Parses HTML to extract:
   - Event URLs (format: /wydarzenie-{id}-{slug})
   - Event titles
-  - Categories (Polish: koncerty, warsztaty, wystawy, etc.)
-  - Dates and times
-  - Districts (Warsaw neighborhoods)
-  - Voluntary donation indicators
+  - External IDs
+  - Extraction timestamps
+
+  Note: Detailed event data (categories, dates, districts) is extracted
+  by DetailExtractor from individual event pages.
   """
 
   require Logger
@@ -67,12 +68,17 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.IndexExtractor do
         # Extract external_id from URL
         external_id = Config.extract_external_id(url)
 
-        %{
-          url: url,
-          title: title,
-          external_id: external_id,
-          extracted_at: DateTime.utc_now()
-        }
+        # Guard against nil external_id
+        if is_nil(external_id) do
+          nil
+        else
+          %{
+            url: url,
+            title: title,
+            external_id: external_id,
+            extracted_at: DateTime.utc_now()
+          }
+        end
       else
         nil
       end

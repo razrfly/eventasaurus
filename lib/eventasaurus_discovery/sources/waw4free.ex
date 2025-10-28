@@ -110,13 +110,13 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free do
       source ->
         # Update metadata and domains if changed
         if source.metadata != Source.config() or
-             source.domains != ["free", "cultural", "general"] do
+             source.domains != ["cultural", "general"] do
           {:ok, updated} =
             Repo.update(
               SourceSchema.changeset(source, %{
                 metadata: Source.config(),
                 priority: Source.priority(),
-                domains: ["free", "cultural", "general"]
+                domains: ["cultural", "general"]
               })
             )
 

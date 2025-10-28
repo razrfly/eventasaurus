@@ -72,23 +72,34 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
 
   @impl true
   def patterns do
-    months = Enum.join(Map.keys(month_names()), "|")
+    # Escape and sort month tokens by length (longest first) for proper matching
+    month_tokens =
+      month_names()
+      |> Map.keys()
+      |> Enum.map(&Regex.escape/1)
+      |> Enum.sort_by(&String.length/1, :desc)
+
+    # Accept optional trailing "." for abbreviations
+    months = "(?:" <> Enum.join(month_tokens, "|") <> ")\\.?"
 
     [
-      # Date range cross-month: "od 19 marca do 7 lipca 2025"
-      ~r/\b(?:od)?\s*(\d{1,2})\s+(#{months})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})\b/i,
+      # Date range cross-year: "od 29 grudnia 2025 do 2 stycznia 2026"
+      ~r/\b(?:od\s*)?(\d{1,2})\s+(#{months})\s+(\d{4})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})\b/iu,
+
+      # Date range cross-month (same year): "od 19 marca do 7 lipca 2025"
+      ~r/\b(?:od\s*)?(\d{1,2})\s+(#{months})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})\b/iu,
 
       # Date range same month: "od 15 do 20 października 2025"
-      ~r/\b(?:od)?\s*(\d{1,2})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})\b/i,
+      ~r/\b(?:od\s*)?(\d{1,2})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})\b/iu,
 
       # Single date with day name: "poniedziałek, 3 listopada 2025"
-      ~r/\b(?:poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela),?\s*(\d{1,2})\s+(#{months})\s+(\d{4})\b/i,
+      ~r/\b(?:poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela),?\s*(\d{1,2})\s+(#{months})\s+(\d{4})\b/iu,
 
       # Single date without day name: "3 listopada 2025"
-      ~r/\b(\d{1,2})\s+(#{months})\s+(\d{4})\b/i,
+      ~r/\b(\d{1,2})\s+(#{months})\s+(\d{4})\b/iu,
 
       # Month and year only: "listopad 2025"
-      ~r/\b(#{months})\s+(\d{4})\b/i
+      ~r/\b(#{months})\s+(\d{4})\b/iu
     ]
   end
 
@@ -123,6 +134,30 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
   # Parse regex matches based on the pattern that matched
   defp parse_matches(matches, pattern, _original_text) do
     cond do
+      # Date range cross-year: [full, day1, month1, year1, day2, month2, year2]
+      length(matches) == 7 and Regex.match?(~r/do/i, Regex.source(pattern)) ->
+        [_, start_day, start_month, start_year, end_day, end_month, end_year] = matches
+
+        with {start_day_int, _} <- Integer.parse(start_day),
+             {end_day_int, _} <- Integer.parse(end_day),
+             {start_year_int, _} <- Integer.parse(start_year),
+             {end_year_int, _} <- Integer.parse(end_year),
+             {:ok, start_month_num} <- validate_month(start_month),
+             {:ok, end_month_num} <- validate_month(end_month) do
+          {:ok,
+           %{
+             type: :range_cross_year,
+             start_day: start_day_int,
+             start_month: start_month_num,
+             start_year: start_year_int,
+             end_day: end_day_int,
+             end_month: end_month_num,
+             end_year: end_year_int
+           }}
+        else
+          _ -> {:error, :invalid_date_components}
+        end
+
       # Date range cross-month: [full, day1, month1, day2, month2, year]
       length(matches) == 6 and Regex.match?(~r/do/i, Regex.source(pattern)) ->
         [_, start_day, start_month, end_day, end_month, year] = matches
@@ -206,7 +241,11 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
 
   # Validate month name and return month number
   defp validate_month(month_name) when is_binary(month_name) do
-    normalized_name = String.downcase(month_name)
+    # Strip optional trailing "." and normalize
+    normalized_name =
+      month_name
+      |> String.trim_trailing(".")
+      |> String.downcase()
 
     case Map.get(month_names(), normalized_name) do
       nil -> {:error, :invalid_month}

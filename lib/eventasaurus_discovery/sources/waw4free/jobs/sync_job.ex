@@ -126,6 +126,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
     all_events =
       events_by_category
       |> Enum.flat_map(fn {:ok, events} -> events end)
+      |> Enum.reject(&is_nil(&1.external_id))
       |> Enum.uniq_by(& &1.external_id)
 
     # Log errors
@@ -203,8 +204,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
       events
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
-        # Stagger jobs slightly to avoid thundering herd
-        delay_seconds = div(index, 10) * Config.rate_limit()
+        # Stagger each job by rate_limit seconds (+ jitter) to avoid bursty first requests
+        delay_seconds = index * Config.rate_limit() + :rand.uniform(1) - 1
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         job_args = %{

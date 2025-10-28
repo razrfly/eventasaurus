@@ -20,7 +20,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Client do
     attempt = Keyword.get(opts, :attempt, 1)
 
     # Apply rate limiting (except on first request)
-    if attempt == 1 && !Keyword.get(opts, :skip_rate_limit, false) do
+    if attempt > 1 and not Keyword.get(opts, :skip_rate_limit, false) do
       apply_rate_limit()
     end
 
