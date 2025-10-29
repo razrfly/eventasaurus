@@ -214,7 +214,10 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       {:ok, %City{alternate_names: ["Warszawa", ...]}}
 
       iex> add_alternate_name(city, "")
-      {:error, %Ecto.Changeset{}}
+      {:error, :empty_name}
+
+      iex> add_alternate_name(city, "Warszawa")  # when already exists
+      {:error, :already_exists}
   """
   def add_alternate_name(%City{} = city, alternate_name) when is_binary(alternate_name) do
     alternate_name = String.trim(alternate_name)

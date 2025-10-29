@@ -330,7 +330,19 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
     slug = Slug.slugify(city_name)
 
     # Try to find by slug and country_id (the actual unique constraint)
-    case Repo.get_by(City, slug: slug, country_id: country_id) do
+    city = Repo.get_by(City, slug: slug, country_id: country_id)
+
+    # If not found by slug, check alternate names (e.g., "Warszawa" should match "Warsaw")
+    city =
+      city ||
+        from(c in City,
+          where: c.country_id == ^country_id,
+          where: fragment("? = ANY(?)", ^city_name, c.alternate_names),
+          limit: 1
+        )
+        |> Repo.one()
+
+    case city do
       nil ->
         %City{}
         |> City.changeset(%{
@@ -349,8 +361,20 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
               nil ->
                 # Also try by name as fallback
                 case Repo.get_by(City, name: city_name, country_id: country_id) do
-                  nil -> {:error, changeset}
-                  city -> {:ok, city}
+                  nil ->
+                    # Last attempt: check alternate_names again
+                    case from(c in City,
+                           where: c.country_id == ^country_id,
+                           where: fragment("? = ANY(?)", ^city_name, c.alternate_names),
+                           limit: 1
+                         )
+                         |> Repo.one() do
+                      nil -> {:error, changeset}
+                      city -> {:ok, city}
+                    end
+
+                  city ->
+                    {:ok, city}
                 end
 
               city ->

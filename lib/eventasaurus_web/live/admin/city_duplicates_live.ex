@@ -74,15 +74,21 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
   @impl true
   def handle_event("select_city", %{"id" => id}, socket) do
     city_id = String.to_integer(id)
-    city = CityManager.get_city(city_id)
 
-    socket =
-      socket
-      |> assign(:selected_city, city)
-      |> assign(:new_alternate_name, "")
-      |> assign(:active_tab, "alternate_names")
+    case CityManager.get_city(city_id) do
+      nil ->
+        socket = put_flash(socket, :error, "City not found")
+        {:noreply, socket}
 
-    {:noreply, socket}
+      city ->
+        socket =
+          socket
+          |> assign(:selected_city, city)
+          |> assign(:new_alternate_name, "")
+          |> assign(:active_tab, "alternate_names")
+
+        {:noreply, socket}
+    end
   end
 
   @impl true
