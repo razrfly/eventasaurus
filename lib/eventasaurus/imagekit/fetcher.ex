@@ -95,7 +95,8 @@ defmodule Eventasaurus.ImageKit.Fetcher do
 
     # Build authentication header
     # ImageKit uses HTTP Basic Auth with private_key as username and empty password
-    auth = {:basic, Config.private_key(), ""}
+    # Req expects {username, password} tuple (not {:basic, username, password})
+    auth = {Config.private_key(), ""}
 
     case Req.get(
            api_url,

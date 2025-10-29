@@ -32,16 +32,25 @@ defmodule EventasaurusWeb.CityLive.Venues do
       |> assign(:view_mode, "grid")
       |> assign(:loading, false)
       |> assign(:filters, default_filters())
+      |> assign(:show_collections, true)
       |> load_venue_stats()
+      |> load_venue_collections()
 
     {:ok, socket}
   end
 
   @impl true
   def handle_params(params, _url, socket) do
+    # Hide collections when search or filters are active
+    has_active_filters =
+      params["search"] != nil ||
+      params["has_events"] == "true" ||
+      params["sort"] != nil
+
     socket =
       socket
       |> apply_params_to_filters(params)
+      |> assign(:show_collections, !has_active_filters)
       |> fetch_venues()
       |> assign_seo_meta_tags()
 
@@ -156,6 +165,13 @@ defmodule EventasaurusWeb.CityLive.Venues do
     socket
     |> assign(:total_venues, total_venues)
     |> assign(:active_venues, active_venues)
+  end
+
+  defp load_venue_collections(socket) do
+    city = socket.assigns.city
+    collections = Venues.get_venue_collections(city.id, 6)
+
+    assign(socket, :collections, collections)
   end
 
   defp assign_seo_meta_tags(socket) do
