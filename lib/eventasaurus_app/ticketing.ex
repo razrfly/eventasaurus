@@ -15,6 +15,7 @@ defmodule EventasaurusApp.Ticketing do
   alias EventasaurusApp.Events.{Event, Ticket, Order}
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.DateTimeHelper
+  alias EventasaurusWeb.UrlHelper
 
   # PubSub topic for real-time updates
   @pubsub_topic "ticketing_updates"
@@ -1462,9 +1463,8 @@ defmodule EventasaurusApp.Ticketing do
     idempotency_key = "order_#{order.id}_#{DateTime.utc_now() |> DateTime.to_unix()}"
 
     # Build URLs
-    base_url = get_base_url()
-    success_url = "#{base_url}/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}"
-    cancel_url = "#{base_url}/#{event.slug}"
+    success_url = UrlHelper.build_url("/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}")
+    cancel_url = UrlHelper.build_url("/#{event.slug}")
 
     metadata = %{
       "order_id" => to_string(order.id),
@@ -1499,26 +1499,6 @@ defmodule EventasaurusApp.Ticketing do
     }
 
     stripe_impl().create_checkout_session(checkout_params)
-  end
-
-  defp get_base_url do
-    # Get base URL from application config or environment
-    case Application.get_env(:eventasaurus_app, EventasaurusAppWeb.Endpoint)[:url] do
-      # Development fallback
-      nil ->
-        "http://localhost:4000"
-
-      url_config ->
-        scheme = if url_config[:scheme] == "https", do: "https", else: "http"
-        host = url_config[:host] || "localhost"
-        port = url_config[:port]
-
-        if port && port != 80 && port != 443 do
-          "#{scheme}://#{host}:#{port}"
-        else
-          "#{scheme}://#{host}"
-        end
-    end
   end
 
   defp validate_ticket_availability(%Ticket{} = ticket, quantity) do
@@ -1859,12 +1839,12 @@ defmodule EventasaurusApp.Ticketing do
         image_url
 
       %URI{path: "/" <> _rest} ->
-        # Absolute path, prepend base URL
-        "#{get_base_url()}#{image_url}"
+        # Absolute path, use UrlHelper to build full URL
+        UrlHelper.build_url(image_url)
 
       _ ->
         # Relative path, prepend base URL with /
-        "#{get_base_url()}/#{image_url}"
+        UrlHelper.build_url("/#{image_url}")
     end
   end
 
@@ -1898,12 +1878,10 @@ defmodule EventasaurusApp.Ticketing do
     idempotency_key = "multi_order_#{order_ids}_#{DateTime.utc_now() |> DateTime.to_unix()}"
 
     # Build URLs
-    base_url = get_base_url()
-
     success_url =
-      "#{base_url}/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true"
+      UrlHelper.build_url("/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true")
 
-    cancel_url = "#{base_url}/#{event.slug}"
+    cancel_url = UrlHelper.build_url("/#{event.slug}")
 
     metadata = %{
       "primary_order_id" => to_string(primary_order.id),

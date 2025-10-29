@@ -12,12 +12,16 @@
     <div class="flex-1 min-w-[200px]">
       <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">
         Theme Filter
+        <%= if @card_type == :city do %>
+          <span class="text-xs text-gray-500">(City cards use fixed theme)</span>
+        <% end %>
       </label>
       <form phx-change="change_theme">
         <select
           id="theme-select"
           name="theme"
           class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          disabled={@card_type == :city}
         >
           <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
           <%= for theme <- @themes do %>
@@ -41,6 +45,7 @@
         >
           <option value="event" selected={@card_type == :event}>Event Cards</option>
           <option value="poll" selected={@card_type == :poll}>Poll Cards</option>
+          <option value="city" selected={@card_type == :city}>City Cards</option>
         </select>
       </form>
     </div>
@@ -62,25 +67,37 @@
         </svg>
       </div>
       <div class="ml-3 flex-1">
-        <%= if @card_type == :poll do %>
-          <h3 class="text-sm font-medium text-blue-800">Mock Poll Data</h3>
-          <div class="mt-2 text-sm text-blue-700">
-            <p class="font-mono"><strong>Title:</strong> <%= @mock_poll.title %></p>
-            <p class="font-mono"><strong>Type:</strong> <%= @mock_poll.poll_type %></p>
-            <p class="font-mono"><strong>Phase:</strong> <%= @mock_poll.phase %></p>
-            <p class="text-xs text-blue-600 mt-1">
-              Phase 2 will allow editing mock data in real-time. For now, showing default mock poll.
-            </p>
-          </div>
-        <% else %>
-          <h3 class="text-sm font-medium text-blue-800">Mock Event Data</h3>
-          <div class="mt-2 text-sm text-blue-700">
-            <p class="font-mono"><strong>Title:</strong> <%= @mock_event.title %></p>
-            <p class="font-mono"><strong>Image:</strong> <%= @mock_event.cover_image_url %></p>
-            <p class="text-xs text-blue-600 mt-1">
-              Phase 2 will allow editing mock data in real-time. For now, showing default mock event.
-            </p>
-          </div>
+        <%= cond do %>
+          <% @card_type == :city -> %>
+            <h3 class="text-sm font-medium text-blue-800">Mock City Data</h3>
+            <div class="mt-2 text-sm text-blue-700">
+              <p class="font-mono"><strong>Name:</strong> <%= @mock_city.name %>, <%= @mock_city.country.name %></p>
+              <p class="font-mono"><strong>Events:</strong> <%= @mock_city.stats.events_count %></p>
+              <p class="font-mono"><strong>Venues:</strong> <%= @mock_city.stats.venues_count %></p>
+              <p class="font-mono"><strong>Categories:</strong> <%= @mock_city.stats.categories_count %></p>
+              <p class="text-xs text-blue-600 mt-1">
+                City cards use a fixed deep blue theme. Stats-heavy design showing event discovery metrics.
+              </p>
+            </div>
+          <% @card_type == :poll -> %>
+            <h3 class="text-sm font-medium text-blue-800">Mock Poll Data</h3>
+            <div class="mt-2 text-sm text-blue-700">
+              <p class="font-mono"><strong>Title:</strong> <%= @mock_poll.title %></p>
+              <p class="font-mono"><strong>Type:</strong> <%= @mock_poll.poll_type %></p>
+              <p class="font-mono"><strong>Phase:</strong> <%= @mock_poll.phase %></p>
+              <p class="text-xs text-blue-600 mt-1">
+                Phase 2 will allow editing mock data in real-time. For now, showing default mock poll.
+              </p>
+            </div>
+          <% true -> %>
+            <h3 class="text-sm font-medium text-blue-800">Mock Event Data</h3>
+            <div class="mt-2 text-sm text-blue-700">
+              <p class="font-mono"><strong>Title:</strong> <%= @mock_event.title %></p>
+              <p class="font-mono"><strong>Image:</strong> <%= @mock_event.cover_image_url %></p>
+              <p class="text-xs text-blue-600 mt-1">
+                Phase 2 will allow editing mock data in real-time. For now, showing default mock event.
+              </p>
+            </div>
         <% end %>
       </div>
     </div>
