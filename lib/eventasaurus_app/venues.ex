@@ -130,6 +130,109 @@ defmodule EventasaurusApp.Venues do
     list_venues(type: venue_type)
   end
 
+  @doc """
+  Lists all venues in a city with upcoming events count.
+
+  Returns venues with a virtual field `:upcoming_events_count` for display.
+
+  ## Options
+  - `:search` - Search term for venue name or address
+  - `:sort_by` - Sort order: `:name`, `:events_count`, `:id` (default: `:name`)
+  - `:has_events` - Filter to only venues with upcoming events (default: false)
+  - `:page` - Page number for pagination (default: 1)
+  - `:page_size` - Number of venues per page (default: 30)
+
+  ## Examples
+
+      list_city_venues(123)
+      list_city_venues(123, search: "theater", sort_by: :events_count)
+  """
+  def list_city_venues(city_id, opts \\ []) do
+    search = Keyword.get(opts, :search)
+    sort_by = Keyword.get(opts, :sort_by, :name)
+    has_events = Keyword.get(opts, :has_events, false)
+    page = Keyword.get(opts, :page, 1)
+    page_size = Keyword.get(opts, :page_size, 30)
+
+    offset = (page - 1) * page_size
+
+    base_query =
+      from v in Venue,
+        left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        where: v.city_id == ^city_id,
+        group_by: v.id,
+        select: %{
+          venue: v,
+          upcoming_events_count: count(pe.id)
+        }
+
+    base_query
+    |> maybe_search(search)
+    |> maybe_filter_has_events(has_events)
+    |> apply_sort(sort_by)
+    |> limit(^page_size)
+    |> offset(^offset)
+    |> Repo.all()
+  end
+
+  @doc """
+  Counts total venues in a city.
+  """
+  def count_city_venues(city_id) do
+    from(v in Venue, where: v.city_id == ^city_id, select: count(v.id))
+    |> Repo.one()
+  end
+
+  @doc """
+  Counts venues in a city with upcoming events.
+  """
+  def count_active_city_venues(city_id) do
+    from(v in Venue,
+      inner_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+      where: v.city_id == ^city_id,
+      distinct: true,
+      select: v.id
+    )
+    |> Repo.aggregate(:count)
+  end
+
+  # Private helpers for list_city_venues query building
+
+  defp maybe_search(query, nil), do: query
+
+  defp maybe_search(query, search_term) when is_binary(search_term) do
+    search_pattern = "%#{search_term}%"
+
+    from [v, pe] in query,
+      where: ilike(v.name, ^search_pattern) or ilike(v.address, ^search_pattern)
+  end
+
+  defp maybe_filter_has_events(query, false), do: query
+
+  defp maybe_filter_has_events(query, true) do
+    from [v, pe] in query,
+      having: count(pe.id) > 0
+  end
+
+  defp apply_sort(query, :name) do
+    from [v, _pe] in query,
+      order_by: [asc: v.name]
+  end
+
+  defp apply_sort(query, :events_count) do
+    from [v, pe] in query,
+      order_by: [desc: count(pe.id), asc: v.name]
+  end
+
+  defp apply_sort(query, :id) do
+    from [v, _pe] in query,
+      order_by: [desc: v.id]
+  end
+
+  defp apply_sort(query, _), do: apply_sort(query, :name)
+
   # Private helper functions for query filtering
 
   defp venue_type_filter(query, nil), do: query

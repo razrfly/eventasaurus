@@ -342,28 +342,30 @@ For responsive images that change size across breakpoints:
 ### ✅ Excellent: PublicEventShowLive
 
 ```elixir
-# lib/eventasaurus_web/live/public_event_show_live.ex:754
+# lib/eventasaurus_web/live/public_event_show_live.ex
 <img
   src={CDN.url(@event.cover_image_url, width: 1200, quality: 90)}
-  alt={@event.title}
-  class="w-full h-auto object-cover"
+  alt={@event.display_title}
+  class="w-full h-full object-cover"
 />
 ```
 
 **Why It's Good**:
 - Appropriate dimensions for hero image
 - High quality for focal point
+- Uses display_title for accessible alt text
 - Clean, readable code
 
 ### ✅ Excellent: Event Cards Component
 
 ```elixir
-# lib/eventasaurus_web/components/event_cards.ex:56
+# lib/eventasaurus_web/components/event_cards.ex
 <img
-  src={CDN.url(event.cover_image_url, width: 400, height: 300, fit: "cover", quality: 85)}
-  alt={event.title}
-  class="w-full h-48 object-cover"
+  src={CDN.url(@event.cover_image_url, width: 400, height: 300, fit: "cover", quality: 85)}
+  alt={@event.title}
+  class="w-full h-full object-cover"
   loading="lazy"
+  referrerpolicy="no-referrer"
 />
 ```
 
@@ -371,22 +373,27 @@ For responsive images that change size across breakpoints:
 - Matches card display size
 - Uses fit: "cover" for consistent aspect ratio
 - Includes loading="lazy" for performance
+- Uses referrerpolicy="no-referrer" for external images
 - Balanced quality for card context
 
 ### ✅ Excellent: Nearby Events Component
 
 ```elixir
-# lib/eventasaurus_web/live/components/nearby_events_component.ex:81
+# lib/eventasaurus_web/live/components/nearby_events_component.ex
 <img
   src={CDN.url(@image_url, width: 400, height: 300, fit: "cover", quality: 85)}
-  alt={@title}
-  class="w-full h-full object-cover"
+  alt={@display_title}
+  class="w-full h-48 object-cover group-hover:opacity-95 transition-opacity"
+  loading="lazy"
 />
 ```
 
 **Why It's Good**:
 - Appropriate for sidebar component
 - Consistent with card sizing patterns
+- Includes loading="lazy" for performance
+- Uses display_title for accessible alt text
+- Hover effect for better UX
 - Good quality/size balance
 
 ## Testing CDN URLs
