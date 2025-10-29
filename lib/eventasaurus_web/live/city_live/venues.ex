@@ -12,31 +12,38 @@ defmodule EventasaurusWeb.CityLive.Venues do
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
-    city = Locations.get_city_by_slug!(city_slug)
+    case Locations.get_city_by_slug(city_slug) do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "City not found")
+         |> push_navigate(to: ~p"/activities")}
 
-    # Capture request URI for correct URL generation (ngrok support)
-    raw_uri = get_connect_info(socket, :uri)
+      city ->
+        # Capture request URI for correct URL generation (ngrok support)
+        raw_uri = get_connect_info(socket, :uri)
 
-    request_uri =
-      cond do
-        match?(%URI{}, raw_uri) -> raw_uri
-        is_binary(raw_uri) -> URI.parse(raw_uri)
-        true -> nil
-      end
+        request_uri =
+          cond do
+            match?(%URI{}, raw_uri) -> raw_uri
+            is_binary(raw_uri) -> URI.parse(raw_uri)
+            true -> nil
+          end
 
-    socket =
-      socket
-      |> assign(:city, city)
-      |> assign(:request_uri, request_uri)
-      |> assign(:page_title, "Venues in #{city.name}")
-      |> assign(:view_mode, "grid")
-      |> assign(:loading, false)
-      |> assign(:filters, default_filters())
-      |> assign(:show_collections, true)
-      |> load_venue_stats()
-      |> load_venue_collections()
+        socket =
+          socket
+          |> assign(:city, city)
+          |> assign(:request_uri, request_uri)
+          |> assign(:page_title, "Venues in #{city.name}")
+          |> assign(:view_mode, "grid")
+          |> assign(:loading, false)
+          |> assign(:filters, default_filters())
+          |> assign(:show_collections, true)
+          |> load_venue_stats()
+          |> load_venue_collections()
 
-    {:ok, socket}
+        {:ok, socket}
+    end
   end
 
   @impl true
@@ -59,7 +66,10 @@ defmodule EventasaurusWeb.CityLive.Venues do
 
   @impl true
   def handle_event("search", %{"search" => search_term}, socket) do
-    filters = Map.put(socket.assigns.filters, :search, search_term)
+    filters =
+      socket.assigns.filters
+      |> Map.put(:search, search_term)
+      |> Map.put(:page, 1)
 
     socket =
       socket
@@ -71,7 +81,10 @@ defmodule EventasaurusWeb.CityLive.Venues do
 
   @impl true
   def handle_event("clear_search", _params, socket) do
-    filters = Map.put(socket.assigns.filters, :search, nil)
+    filters =
+      socket.assigns.filters
+      |> Map.put(:search, nil)
+      |> Map.put(:page, 1)
 
     socket =
       socket
@@ -88,7 +101,10 @@ defmodule EventasaurusWeb.CityLive.Venues do
 
   @impl true
   def handle_event("sort", %{"sort_by" => sort_by}, socket) do
-    filters = Map.put(socket.assigns.filters, :sort_by, String.to_atom(sort_by))
+    filters =
+      socket.assigns.filters
+      |> Map.put(:sort_by, parse_sort(sort_by))
+      |> Map.put(:page, 1)
 
     socket =
       socket
@@ -100,7 +116,10 @@ defmodule EventasaurusWeb.CityLive.Venues do
 
   @impl true
   def handle_event("filter", %{"has_events" => has_events}, socket) do
-    filters = Map.put(socket.assigns.filters, :has_events, has_events == "true")
+    filters =
+      socket.assigns.filters
+      |> Map.put(:has_events, has_events == "true")
+      |> Map.put(:page, 1)
 
     socket =
       socket

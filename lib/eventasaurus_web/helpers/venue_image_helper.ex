@@ -39,6 +39,7 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
     fit = Keyword.get(opts, :fit, "cover")
 
     cdn_opts = [width: width, height: height, fit: fit, quality: quality]
+    placeholder = "/images/venue-placeholder.jpg"
 
     cond do
       # 1. Use venue's own images if available
@@ -46,16 +47,16 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
         venue.venue_images
         |> List.first()
         |> get_venue_image_url()
-        |> CDN.url(cdn_opts)
+        |> cdn_url_or_fallback(cdn_opts, placeholder)
 
       # 2. Use random image from city's Unsplash gallery
       has_city_gallery?(city) ->
         get_random_city_image(venue.id, city.unsplash_gallery)
-        |> CDN.url(cdn_opts)
+        |> cdn_url_or_fallback(cdn_opts, placeholder)
 
       # 3. Fallback to placeholder
       true ->
-        "/images/venue-placeholder.jpg"
+        placeholder
     end
   end
 
@@ -103,4 +104,13 @@ defmodule EventasaurusWeb.Helpers.VenueImageHelper do
   end
 
   defp has_city_gallery?(_), do: false
+
+  defp cdn_url_or_fallback(nil, _opts, fallback), do: fallback
+
+  defp cdn_url_or_fallback(source, opts, fallback) do
+    case CDN.url(source, opts) do
+      nil -> fallback
+      url -> url
+    end
+  end
 end

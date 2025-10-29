@@ -151,8 +151,16 @@ defmodule EventasaurusApp.Venues do
     search = Keyword.get(opts, :search)
     sort_by = Keyword.get(opts, :sort_by, :name)
     has_events = Keyword.get(opts, :has_events, false)
-    page = Keyword.get(opts, :page, 1)
-    page_size = Keyword.get(opts, :page_size, 30)
+
+    page =
+      opts
+      |> Keyword.get(:page, 1)
+      |> max(1)
+
+    page_size =
+      opts
+      |> Keyword.get(:page_size, 30)
+      |> max(1)
 
     offset = (page - 1) * page_size
 
