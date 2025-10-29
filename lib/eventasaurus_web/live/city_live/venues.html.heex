@@ -1,0 +1,144 @@
+<div class="container mx-auto px-4 py-8">
+  <%!-- Header Section --%>
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+      Venues in <%= @city.name %>
+    </h1>
+
+    <%!-- Stats --%>
+    <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+      <span>
+        <%= @total_venues %> <%= if @total_venues == 1, do: "venue", else: "venues" %>
+      </span>
+      <%= if @active_venues > 0 do %>
+        <span class="text-blue-600 dark:text-blue-400">
+          <%= @active_venues %> with upcoming events
+        </span>
+      <% end %>
+    </div>
+  </div>
+
+  <%!-- Search and Controls --%>
+  <div class="mb-6 space-y-4">
+    <%!-- Search Bar --%>
+    <form phx-submit="search" class="relative">
+      <input
+        type="text"
+        name="search"
+        value={@filters.search || ""}
+        placeholder="Search venues by name or address..."
+        class="w-full px-4 py-3 pr-24 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      />
+
+      <%= if @filters.search do %>
+        <button
+          type="button"
+          phx-click="clear_search"
+          class="absolute right-14 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        >
+          <.icon name="hero-x-mark" class="h-5 w-5" />
+        </button>
+      <% end %>
+
+      <button
+        type="submit"
+        class="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        Search
+      </button>
+    </form>
+
+    <%!-- Controls Row --%>
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <%!-- View Mode Toggle --%>
+      <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+        <button
+          phx-click="toggle_view"
+          phx-value-mode="grid"
+          class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "grid", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
+        >
+          <.icon name="hero-squares-2x2" class="h-5 w-5" />
+        </button>
+        <button
+          phx-click="toggle_view"
+          phx-value-mode="list"
+          class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "list", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
+        >
+          <.icon name="hero-list-bullet" class="h-5 w-5" />
+        </button>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <%!-- Filter: Has Events --%>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            phx-change="filter"
+            name="has_events"
+            value={!@filters.has_events}
+            checked={@filters.has_events}
+            class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+          />
+          <span class="text-sm text-gray-700 dark:text-gray-300">
+            With upcoming events
+          </span>
+        </label>
+
+        <%!-- Sort Dropdown --%>
+        <select
+          phx-change="sort"
+          name="sort_by"
+          class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="name" selected={@filters.sort_by == :name}>Name (A-Z)</option>
+          <option value="events_count" selected={@filters.sort_by == :events_count}>
+            Most Events
+          </option>
+          <option value="id" selected={@filters.sort_by == :id}>Recently Added</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <%!-- Venues Display --%>
+  <%= if @loading do %>
+    <VenueCards.loading_skeleton count={12} layout={String.to_atom(@view_mode)} />
+  <% else %>
+    <%= if Enum.empty?(@venues) do %>
+      <VenueCards.empty_state search_term={@filters.search} />
+    <% else %>
+      <%= if @view_mode == "grid" do %>
+        <VenueCards.venue_grid venues={@venues} city={@city} />
+      <% else %>
+        <VenueCards.venue_list venues={@venues} city={@city} />
+      <% end %>
+
+      <%!-- Pagination --%>
+      <%= if length(@venues) == @filters.page_size do %>
+        <div class="mt-8 flex justify-center gap-2">
+          <%= if @filters.page > 1 do %>
+            <button
+              phx-click="paginate"
+              phx-value-page={@filters.page - 1}
+              class="px-4 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <.icon name="hero-chevron-left" class="h-5 w-5" />
+            </button>
+          <% end %>
+
+          <span class="px-4 py-2 rounded-lg bg-blue-600 text-white">
+            Page <%= @filters.page %>
+          </span>
+
+          <button
+            phx-click="paginate"
+            phx-value-page={@filters.page + 1}
+            class="px-4 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <.icon name="hero-chevron-right" class="h-5 w-5" />
+          </button>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+</div>
