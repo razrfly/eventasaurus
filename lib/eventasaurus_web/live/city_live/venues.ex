@@ -337,35 +337,4 @@ defmodule EventasaurusWeb.CityLive.Venues do
   defp parse_boolean("false"), do: false
   defp parse_boolean(value) when is_boolean(value), do: value
   defp parse_boolean(_), do: false
-
-  # Language helper functions - copied from city_live/index.ex
-  defp language_flag(lang) do
-    country_code = language_to_country_code(lang)
-    country_code_to_flag(country_code)
-  end
-
-  defp language_to_country_code(lang) do
-    case lang do
-      "en" -> "GB"
-      "pl" -> "PL"
-      "es" -> "ES"
-      "fr" -> "FR"
-      "de" -> "DE"
-      _ -> "XX"
-    end
-  end
-
-  defp country_code_to_flag("XX"), do: "🌐"
-
-  defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
-    code
-    |> String.upcase()
-    |> String.to_charlist()
-    |> Enum.map(fn char ->
-      char - ?A + 0x1F1E6
-    end)
-    |> List.to_string()
-  end
-
-  defp country_code_to_flag(_), do: "🌐"
 end

@@ -1,10 +1,14 @@
 defmodule Eventasaurus.Sitemap do
   @moduledoc """
   Generates XML sitemaps for the Wombie website.
-  Uses Sitemapper to generate sitemaps for activities, cities, venues, and static pages.
+  Uses Sitemapper to generate sitemaps for activities, cities, venues, containers, and static pages.
 
-  ## Phase 1: Activities (Primary Focus)
-  Activities (/activities/:slug) are the most important content for SEO.
+  ## Completed Phases
+  - Phase 1: Static pages (/, /activities, /about, etc.)
+  - Phase 2: Activities (/activities/:slug)
+  - Phase 3: Cities (/c/:city_slug and subpages)
+  - Phase 4: Venues (/c/:city_slug/venues/:venue_slug)
+  - Phase 5: Containers (festivals, conferences, tours, etc.)
   """
 
   alias EventasaurusApp.Repo
@@ -14,7 +18,7 @@ defmodule Eventasaurus.Sitemap do
 
   @doc """
   Generates and persists a sitemap for the website.
-  Phase 1 includes activities and static pages.
+  Phase 1 includes static pages, activities, cities, and venues.
 
   ## Options
   * `:environment` - Override environment detection (e.g., :prod, :dev)
@@ -66,14 +70,20 @@ defmodule Eventasaurus.Sitemap do
 
   @doc """
   Creates a stream of URLs for the sitemap.
-  Phase 1: Static pages and activities.
+  Includes: Static pages, activities, cities, venues, and containers.
 
   ## Options
   * `:host` - Override host for URL generation
   """
   def stream_urls(opts \\ []) do
     # Combine all streams
-    [static_urls(opts), activity_urls(opts)]
+    [
+      static_urls(opts),
+      activity_urls(opts),
+      city_urls(opts),
+      venue_urls(opts),
+      container_urls(opts)
+    ]
     |> Enum.reduce(Stream.concat([]), fn stream, acc ->
       Stream.concat(acc, stream)
     end)
@@ -174,6 +184,175 @@ defmodule Eventasaurus.Sitemap do
       }
     end)
   end
+
+  # Returns a stream of all active cities and their important pages
+  defp city_urls(opts) do
+    base_url = get_base_url(opts)
+
+    # Query cities where discovery_enabled = true
+    from(c in EventasaurusDiscovery.Locations.City,
+      select: %{slug: c.slug, name: c.name, updated_at: c.updated_at},
+      where: c.discovery_enabled == true
+    )
+    |> Repo.stream()
+    |> Stream.flat_map(fn city ->
+      lastmod =
+        if city.updated_at do
+          NaiveDateTime.to_date(city.updated_at)
+        else
+          Date.utc_today()
+        end
+
+      # Main city page + important sub-pages
+      [
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}",
+          changefreq: :daily,
+          priority: 0.9,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/venues",
+          changefreq: :weekly,
+          priority: 0.8,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/events",
+          changefreq: :daily,
+          priority: 0.85,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/search",
+          changefreq: :weekly,
+          priority: 0.7,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/festivals",
+          changefreq: :weekly,
+          priority: 0.75,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/conferences",
+          changefreq: :weekly,
+          priority: 0.75,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/tours",
+          changefreq: :weekly,
+          priority: 0.75,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/series",
+          changefreq: :weekly,
+          priority: 0.75,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/exhibitions",
+          changefreq: :weekly,
+          priority: 0.75,
+          lastmod: lastmod
+        },
+        %Sitemapper.URL{
+          loc: "#{base_url}/c/#{city.slug}/tournaments",
+          changefreq: :weekly,
+          priority: 0.75,
+          lastmod: lastmod
+        }
+      ]
+    end)
+  end
+
+  # Returns a stream of all venues in active cities
+  defp venue_urls(opts) do
+    base_url = get_base_url(opts)
+
+    # Query venues that belong to active cities
+    from(v in EventasaurusApp.Venues.Venue,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: v.city_id == c.id,
+      select: %{slug: v.slug, updated_at: v.updated_at, city_slug: c.slug},
+      where: c.discovery_enabled == true and not is_nil(v.slug)
+    )
+    |> Repo.stream()
+    |> Stream.map(fn venue ->
+      lastmod =
+        if venue.updated_at do
+          NaiveDateTime.to_date(venue.updated_at)
+        else
+          Date.utc_today()
+        end
+
+      %Sitemapper.URL{
+        loc: "#{base_url}/c/#{venue.city_slug}/venues/#{venue.slug}",
+        changefreq: :weekly,
+        priority: 0.6,
+        lastmod: lastmod
+      }
+    end)
+  end
+
+  # Returns a stream of all containers (festivals, conferences, etc.) in active cities
+  defp container_urls(opts) do
+    base_url = get_base_url(opts)
+
+    # Query containers via their member events to determine city associations
+    # A container can appear in multiple cities if it has events in different cities
+    from(pec in EventasaurusDiscovery.PublicEvents.PublicEventContainer,
+      join: pecm in EventasaurusDiscovery.PublicEvents.PublicEventContainerMembership,
+      on: pecm.container_id == pec.id,
+      join: pe in PublicEvent,
+      on: pe.id == pecm.event_id,
+      join: v in EventasaurusApp.Venues.Venue,
+      on: v.id == pe.venue_id,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: c.id == v.city_id,
+      select: %{
+        slug: pec.slug,
+        container_type: pec.container_type,
+        city_slug: c.slug,
+        updated_at: pec.updated_at
+      },
+      where:
+        not is_nil(pec.slug) and
+          c.discovery_enabled == true,
+      distinct: [pec.id, c.id]
+    )
+    |> Repo.stream()
+    |> Stream.map(fn container ->
+      lastmod =
+        if container.updated_at do
+          NaiveDateTime.to_date(container.updated_at)
+        else
+          Date.utc_today()
+        end
+
+      # Convert container_type atom to string for URL (e.g., :festival -> "festivals")
+      type_plural = pluralize_container_type(container.container_type)
+
+      %Sitemapper.URL{
+        loc: "#{base_url}/c/#{container.city_slug}/#{type_plural}/#{container.slug}",
+        changefreq: :weekly,
+        priority: 0.8,
+        lastmod: lastmod
+      }
+    end)
+  end
+
+  # Convert container type to plural form for URL generation
+  defp pluralize_container_type(:festival), do: "festivals"
+  defp pluralize_container_type(:conference), do: "conferences"
+  defp pluralize_container_type(:tour), do: "tours"
+  defp pluralize_container_type(:series), do: "series"
+  defp pluralize_container_type(:exhibition), do: "exhibitions"
+  defp pluralize_container_type(:tournament), do: "tournaments"
+  defp pluralize_container_type(_), do: "unknown"
 
   # Calculate changefreq based on event date
   defp calculate_changefreq(starts_at) when is_nil(starts_at), do: :weekly

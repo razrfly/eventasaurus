@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Helpers.LanguageDiscovery
+  alias EventasaurusWeb.Helpers.LanguageHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
@@ -705,9 +706,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     phx-click="change_language"
                     phx-value-language={lang}
                     class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                    title={String.upcase(lang)}
+                    title={LanguageHelpers.language_name(lang)}
                   >
-                    <%= language_flag(lang) %> <%= String.upcase(lang) %>
+                    <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
                   </button>
                 <% end %>
               </div>
@@ -1792,70 +1793,4 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  # Language display helper functions (for dynamic language switcher)
-  defp language_flag(lang) do
-    country_code = language_to_country_code(lang)
-    country_code_to_flag(country_code)
-  end
-
-  # Convert 2-letter language code to 2-letter country code for flag representation
-  # This is the ONLY acceptable hard-coding (visual flag representation)
-  defp language_to_country_code(lang) do
-    case String.downcase(lang) do
-      "en" -> "GB"
-      "fr" -> "FR"
-      "es" -> "ES"
-      "de" -> "DE"
-      "it" -> "IT"
-      "pt" -> "PT"
-      "pl" -> "PL"
-      "nl" -> "NL"
-      "ru" -> "RU"
-      "ja" -> "JP"
-      "zh" -> "CN"
-      "ko" -> "KR"
-      "ar" -> "SA"
-      "tr" -> "TR"
-      "sv" -> "SE"
-      "da" -> "DK"
-      "fi" -> "FI"
-      "no" -> "NO"
-      "cs" -> "CZ"
-      "el" -> "GR"
-      "he" -> "IL"
-      "hi" -> "IN"
-      "id" -> "ID"
-      "ms" -> "MY"
-      "th" -> "TH"
-      "vi" -> "VN"
-      "uk" -> "UA"
-      "ro" -> "RO"
-      "hu" -> "HU"
-      "sk" -> "SK"
-      "bg" -> "BG"
-      "hr" -> "HR"
-      "sr" -> "RS"
-      "sl" -> "SI"
-      "lt" -> "LT"
-      "lv" -> "LV"
-      "et" -> "EE"
-      # Default: use language code as country code (may not always be correct)
-      lang -> String.upcase(lang)
-    end
-  end
-
-  # Convert 2-letter country code to Unicode flag emoji using Regional Indicator Symbols
-  defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
-    code
-    |> String.upcase()
-    |> String.to_charlist()
-    |> Enum.map(fn char ->
-      # Convert A-Z (65-90) to Regional Indicator Symbols (127462-127487)
-      # This creates flag emojis algorithmically without hard-coding
-      char - ?A + 0x1F1E6
-    end)
-    |> List.to_string()
-  end
-
-  defp country_code_to_flag(_), do: "🏳️"
 end
