@@ -636,6 +636,10 @@ defmodule EventasaurusWeb.Router do
   scope "/", EventasaurusWeb do
     pipe_through :image
 
+    # City social card generation (matches city route at /c/:slug)
+    get "/social-cards/city/:slug/:hash/*rest", CitySocialCardController, :generate_card_by_slug,
+      as: :city_social_card_cached
+
     # Event social card generation (matches public event route at /:slug)
     get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
       as: :social_card_cached

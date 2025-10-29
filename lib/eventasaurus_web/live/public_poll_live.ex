@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.PublicPollLive do
   alias EventasaurusApp.Events
   alias EventasaurusWeb.{PublicGenericPollComponent, AnonymousVoterComponent}
   alias EventasaurusWeb.ReservedSlugs
-  alias Eventasaurus.SocialCards.PollHashGenerator
+  alias Eventasaurus.SocialCards.HashGenerator
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.PollHelpers
@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.PublicPollLive do
         socket
         |> assign(
           :meta_image,
-          "#{base_url}#{PollHashGenerator.generate_url_path(poll, event)}"
+          "#{base_url}#{HashGenerator.generate_url_path(poll, event)}"
         )
         |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.number}")
       else

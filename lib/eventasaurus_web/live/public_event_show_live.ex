@@ -9,9 +9,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Helpers.LanguageDiscovery
+  alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
+  alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.CDN
   import Ecto.Query
 
@@ -184,8 +186,37 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             gettext_backend: EventasaurusWeb.Gettext
           )
 
-        # Generate SEO data (includes JSON-LD structured data with breadcrumbs)
-        seo_data = generate_seo_data(enriched_event, breadcrumb_items, socket)
+        # Get the request URI for canonical URL (stored in assigns during mount)
+        uri = socket.assigns[:request_uri] || URI.new!("/activities/#{enriched_event.slug}")
+        base_url = UrlHelper.get_base_url()
+        canonical_url = "#{base_url}#{uri.path}"
+
+        # Generate JSON-LD structured data
+        event_json_ld = PublicEventSchema.generate(enriched_event)
+        breadcrumb_json_ld =
+          BreadcrumbListSchema.from_breadcrumb_builder_items(
+            breadcrumb_items,
+            canonical_url,
+            base_url
+          )
+        venue_json_ld =
+          if enriched_event.venue do
+            LocalBusinessSchema.generate(enriched_event.venue)
+          else
+            nil
+          end
+
+        json_ld_schemas =
+          [event_json_ld, breadcrumb_json_ld, venue_json_ld]
+          |> Enum.reject(&is_nil/1)
+
+        combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
+
+        # Get image URL for social card
+        image_url = enriched_event.cover_image_url || get_placeholder_image_url(enriched_event)
+
+        # Build meta description
+        description = enriched_event.display_description || truncate_for_description(enriched_event.display_title)
 
         # Get available languages for this activity's city (dynamic based on country + DB translations)
         available_languages =
@@ -204,11 +235,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:is_movie_screening, is_movie)
         |> assign(:aggregated_movie_url, aggregated_url)
         |> assign(:breadcrumb_items, breadcrumb_items)
-        |> assign(:json_ld, seo_data.json_ld)
-        |> assign(:open_graph, seo_data.open_graph)
-        |> assign(:canonical_url, seo_data.canonical_url)
-        |> assign(:page_title, enriched_event.display_title)
         |> assign(:available_languages, available_languages)
+        |> SEOHelpers.assign_meta_tags(
+          title: enriched_event.display_title,
+          description: description,
+          image: image_url,
+          type: "event",
+          canonical_url: canonical_url,
+          json_ld: combined_json_ld
+        )
     end
   end
 
@@ -1588,97 +1623,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp format_movie_runtime(_), do: nil
 
-  # SEO helper functions
-  defp generate_seo_data(event, breadcrumb_items, socket) do
-    # Get the request URI for canonical URL (stored in assigns during mount)
-    uri = socket.assigns[:request_uri] || URI.new!("/activities/#{event.slug}")
-    base_url = get_base_url()
-    canonical_url = "#{base_url}#{uri.path}"
-
-    # Generate JSON-LD structured data for the event
-    event_json_ld = PublicEventSchema.generate(event)
-
-    # Generate breadcrumb structured data using BreadcrumbBuilder items
-    # This ensures visual breadcrumbs and JSON-LD breadcrumbs stay in sync
-    breadcrumb_json_ld =
-      BreadcrumbListSchema.from_breadcrumb_builder_items(
-        breadcrumb_items,
-        canonical_url,
-        base_url
-      )
-
-    # Generate venue LocalBusiness structured data if venue exists
-    venue_json_ld =
-      if event.venue do
-        LocalBusinessSchema.generate(event.venue)
-      else
-        nil
-      end
-
-    # Combine all JSON-LD schemas into an array
-    json_ld_schemas =
-      [event_json_ld, breadcrumb_json_ld, venue_json_ld]
-      |> Enum.reject(&is_nil/1)
-
-    # Combine multiple JSON-LD schemas
-    combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
-
-    # Get image URL (fallback to placeholder if none available)
-    image_url = event.cover_image_url || get_placeholder_image_url(event)
-
-    # Build Open Graph meta tags directly
-    description = event.display_description || truncate_for_description(event.display_title)
-    locale = socket.assigns[:language] || "en"
-    locale_code = if locale == "pl", do: "pl_PL", else: "en_US"
-
-    # Escape values for safe HTML attribute usage
-    escaped_title =
-      event.display_title
-      |> to_string()
-      |> Phoenix.HTML.html_escape()
-      |> Phoenix.HTML.safe_to_string()
-
-    escaped_description =
-      description |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-    escaped_image =
-      image_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-    escaped_url =
-      canonical_url |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-    open_graph_html = """
-    <!-- Open Graph meta tags -->
-    <meta property="og:type" content="event" />
-    <meta property="og:title" content="#{escaped_title}" />
-    <meta property="og:description" content="#{escaped_description}" />
-    <meta property="og:image" content="#{escaped_image}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="#{escaped_url}" />
-    <meta property="og:site_name" content="Wombie" />
-    <meta property="og:locale" content="#{locale_code}" />
-
-    <!-- Twitter Card meta tags -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="#{escaped_title}" />
-    <meta name="twitter:description" content="#{escaped_description}" />
-    <meta name="twitter:image" content="#{escaped_image}" />
-
-    <!-- Standard meta description for SEO -->
-    <meta name="description" content="#{escaped_description}" />
-    """
-
-    # Get current path for hreflang alternate links
-    current_path = uri.path
-
-    %{
-      json_ld: combined_json_ld,
-      open_graph: open_graph_html,
-      canonical_url: canonical_url,
-      hreflang_path: current_path
-    }
-  end
+  # SEO helper functions - moved inline to use SEOHelpers module
 
   # Combine multiple JSON-LD schemas into a single script-ready string
   defp combine_json_ld_schemas([single_schema]) do
@@ -1691,22 +1636,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     schemas
     |> Enum.map(&Jason.decode!/1)
     |> Jason.encode!()
-  end
-
-  defp get_base_url do
-    endpoint = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, [])
-    url_config = Keyword.get(endpoint, :url, [])
-
-    scheme = Keyword.get(url_config, :scheme, "https")
-    host = Keyword.get(url_config, :host, "wombie.com")
-    port = Keyword.get(url_config, :port)
-
-    # Only include port if not standard (80 for http, 443 for https)
-    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
-      "#{scheme}://#{host}"
-    else
-      "#{scheme}://#{host}:#{port}"
-    end
   end
 
   defp get_placeholder_image_url(event) do

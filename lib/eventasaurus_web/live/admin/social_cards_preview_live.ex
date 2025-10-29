@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> assign(:card_type, :event)
      |> assign(:mock_event, mock_event)
      |> assign(:mock_poll, generate_mock_poll(mock_event))
+     |> assign(:mock_city, generate_mock_city())
      |> generate_previews()}
   end
 
@@ -47,6 +48,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       case type do
         "event" -> :event
         "poll" -> :poll
+        "city" -> :city
         _ -> socket.assigns.card_type
       end
 
@@ -55,43 +57,71 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   # Generate preview data for all (or selected) themes
   defp generate_previews(socket) do
-    themes =
-      if socket.assigns.selected_theme == :all do
-        socket.assigns.themes
-      else
-        [socket.assigns.selected_theme]
-      end
+    # City cards don't use themes, so only generate one preview
+    if socket.assigns.card_type == :city do
+      # Generate city card preview
+      city = socket.assigns.mock_city
+      stats = Map.get(city, :stats, %{})
+      svg = SocialCardView.render_city_card_svg(city, stats)
 
-    previews =
-      Enum.map(themes, fn theme ->
-        # Create event with the specified theme
-        event = %{socket.assigns.mock_event | theme: theme}
+      # City cards use fixed colors (deep blue theme)
+      colors = %{
+        "colors" => %{
+          "primary" => "#1e40af",
+          "secondary" => "#3b82f6"
+        }
+      }
 
-        # Generate SVG based on card type
-        svg =
-          case socket.assigns.card_type do
-            :poll ->
-              # Create poll with event association
-              poll = %{socket.assigns.mock_poll | event: event}
-              SocialCardView.render_poll_card_svg(poll)
-
-            :event ->
-              SocialCardView.render_social_card_svg(event)
-          end
-
-        # Get theme colors for display
-        colors = Themes.get_default_customizations(theme)
-
+      previews = [
         %{
-          theme: theme,
+          theme: :city,
           svg: svg,
           colors: colors,
-          # Format theme name for display
-          display_name: theme |> Atom.to_string() |> String.capitalize()
+          display_name: "City Card"
         }
-      end)
+      ]
 
-    assign(socket, :previews, previews)
+      assign(socket, :previews, previews)
+    else
+      # Event and poll cards use themes
+      themes =
+        if socket.assigns.selected_theme == :all do
+          socket.assigns.themes
+        else
+          [socket.assigns.selected_theme]
+        end
+
+      previews =
+        Enum.map(themes, fn theme ->
+          # Create event with the specified theme
+          event = %{socket.assigns.mock_event | theme: theme}
+
+          # Generate SVG based on card type
+          svg =
+            case socket.assigns.card_type do
+              :poll ->
+                # Create poll with event association
+                poll = %{socket.assigns.mock_poll | event: event}
+                SocialCardView.render_poll_card_svg(poll)
+
+              :event ->
+                SocialCardView.render_social_card_svg(event)
+            end
+
+          # Get theme colors for display
+          colors = Themes.get_default_customizations(theme)
+
+          %{
+            theme: theme,
+            svg: svg,
+            colors: colors,
+            # Format theme name for display
+            display_name: theme |> Atom.to_string() |> String.capitalize()
+          }
+        end)
+
+      assign(socket, :previews, previews)
+    end
   end
 
   # Generate mock event data for preview
@@ -117,6 +147,25 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       phase: "voting",
       event: event,
       event_id: 1,
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Generate mock city data for preview
+  defp generate_mock_city do
+    %{
+      id: 1,
+      name: "Warsaw",
+      slug: "warsaw",
+      country: %{
+        name: "Poland",
+        code: "PL"
+      },
+      stats: %{
+        events_count: 127,
+        venues_count: 45,
+        categories_count: 12
+      },
       updated_at: DateTime.utc_now()
     }
   end

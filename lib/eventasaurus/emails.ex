@@ -6,6 +6,8 @@ defmodule Eventasaurus.Emails do
   import Swoosh.Email
   require Logger
 
+  alias EventasaurusWeb.UrlHelper
+
   @from_email {"Wombie", "invitations@wombie.com"}
 
   # HTML escaping helper to prevent XSS attacks
@@ -569,21 +571,12 @@ defmodule Eventasaurus.Emails do
         image_url
 
       %URI{path: "/" <> _rest} ->
-        # Absolute path, prepend base URL
-        "#{get_base_url()}#{image_url}"
+        # Absolute path, use UrlHelper to build full URL
+        UrlHelper.build_url(image_url)
 
       _ ->
         # Relative path or invalid, prepend base URL
-        "#{get_base_url()}/#{image_url}"
-    end
-  end
-
-  defp get_base_url do
-    # In production, use PHX_HOST environment variable
-    # In development, use localhost
-    case System.get_env("PHX_HOST") do
-      nil -> "http://localhost:4000"
-      host -> "https://#{host}"
+        UrlHelper.build_url("/#{image_url}")
     end
   end
 

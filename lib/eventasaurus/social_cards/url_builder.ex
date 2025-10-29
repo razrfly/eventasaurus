@@ -33,7 +33,7 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
       # => "abc123"
   """
 
-  alias Eventasaurus.SocialCards.{HashGenerator, PollHashGenerator}
+  alias Eventasaurus.SocialCards.HashGenerator
 
   @doc """
   Builds a social card URL path for a given entity type.
@@ -62,9 +62,8 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
     HashGenerator.generate_url_path(event)
   end
 
-  def build_path(:poll, poll, opts) do
-    event = Keyword.fetch!(opts, :event)
-    PollHashGenerator.generate_url_path(poll, event)
+  def build_path(:poll, poll, _opts) do
+    HashGenerator.generate_url_path(poll, :poll)
   end
 
   @doc """
@@ -108,15 +107,7 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
   """
   @spec extract_hash(String.t()) :: String.t() | nil
   def extract_hash(path) when is_binary(path) do
-    # Try poll pattern first (more specific)
-    case PollHashGenerator.extract_hash_from_path(path) do
-      nil ->
-        # Fall back to event pattern
-        HashGenerator.extract_hash_from_path(path)
-
-      hash ->
-        hash
-    end
+    HashGenerator.extract_hash_from_path(path)
   end
 
   @doc """
@@ -140,7 +131,7 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
   end
 
   def validate_hash(:poll, poll, hash, _opts) do
-    PollHashGenerator.validate_hash(poll, hash)
+    HashGenerator.validate_hash(poll, hash, :poll)
   end
 
   @doc """
@@ -161,8 +152,12 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
   def detect_entity_type(path) when is_binary(path) do
     cond do
       # Poll pattern: contains /polls/ segment
-      String.contains?(path, "/polls/") && PollHashGenerator.extract_hash_from_path(path) ->
+      String.contains?(path, "/polls/") && HashGenerator.extract_hash_from_path(path) ->
         :poll
+
+      # City pattern: contains /social-cards/city/
+      String.contains?(path, "/social-cards/city/") && HashGenerator.extract_hash_from_path(path) ->
+        :city
 
       # Event pattern: simpler structure
       HashGenerator.extract_hash_from_path(path) ->

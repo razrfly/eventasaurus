@@ -9,15 +9,30 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   @social_card_version "v2.0.0"
 
   @doc """
-  Generates a cache-busting hash for a social card based on event data.
+  Generates a cache-busting hash for a social card based on event, poll, or city data.
 
-  The hash includes:
+  For events, the hash includes:
   - Event slug (unique identifier)
   - Event title
   - Event description
   - Cover image URL
   - Event updated_at timestamp
   - Any theme/styling data
+
+  For polls, the hash includes:
+  - Poll ID (unique identifier)
+  - Poll title
+  - Poll type
+  - Poll phase/status
+  - Parent event theme
+  - Poll options (IDs, titles, timestamps)
+  - Poll updated_at timestamp
+
+  For cities, the hash includes:
+  - City slug (unique identifier)
+  - City name
+  - Stats (events_count, venues_count, categories_count)
+  - City updated_at timestamp
 
   Returns a short hash suitable for URLs.
 
@@ -27,11 +42,19 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(event)
       "a1b2c3d4"
 
+      iex> poll = %{id: 1, title: "Movie Poll", poll_type: "movie", updated_at: ~N[2023-01-01 12:00:00]}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(poll, :poll)
+      "c3d4e5f6"
+
+      iex> city = %{slug: "warsaw", name: "Warsaw", stats: %{events_count: 127, venues_count: 45, categories_count: 12}}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(city, :city)
+      "b2c3d4e5"
+
   """
-  @spec generate_hash(map()) :: String.t()
-  def generate_hash(event) when is_map(event) do
-    event
-    |> build_fingerprint()
+  @spec generate_hash(map(), :event | :poll | :city) :: String.t()
+  def generate_hash(data, type \\ :event) when is_map(data) do
+    data
+    |> build_fingerprint(type)
     |> Jason.encode!(pretty: false, sort_keys: true)
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
@@ -41,7 +64,9 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   @doc """
   Generates a cache-busting URL path for a social card.
 
-  Format: /{slug}/social-card-{hash}.png
+  Format for events: /{slug}/social-card-{hash}.png
+  Format for polls: /{event_slug}/polls/{poll_number}/social-card-{hash}.png
+  Format for cities: /social-cards/city/{slug}/{hash}.png
 
   ## Examples
 
@@ -49,28 +74,84 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(event)
       "/my-awesome-event/social-card-a1b2c3d4.png"
 
-  """
-  @spec generate_url_path(map()) :: String.t()
-  def generate_url_path(event) when is_map(event) do
-    # Use the same robust slug generation logic
-    slug =
-      case {Map.get(event, :slug), Map.get(event, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "event-#{id}"
-        _ -> "unknown-event"
-      end
+      iex> poll = %{number: 1, title: "Movie Poll", event: %{slug: "my-event"}}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(poll, :poll)
+      "/my-event/polls/1/social-card-c3d4e5f6.png"
 
-    hash = generate_hash(event)
-    "/#{slug}/social-card-#{hash}.png"
+      iex> city = %{slug: "warsaw", name: "Warsaw", stats: %{events_count: 127}}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(city, :city)
+      "/social-cards/city/warsaw/a1b2c3d4.png"
+
+  """
+  @spec generate_url_path(map(), :event | :poll | :city) :: String.t()
+  def generate_url_path(data, type \\ :event) when is_map(data) do
+    hash = generate_hash(data, type)
+
+    case type do
+      :city ->
+        slug =
+          case {Map.get(data, :slug), Map.get(data, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "city-#{id}"
+            _ -> "unknown-city"
+          end
+
+        "/social-cards/city/#{slug}/#{hash}.png"
+
+      :poll ->
+        # Get event slug
+        event = Map.get(data, :event)
+
+        event_slug =
+          case {Map.get(event, :slug), Map.get(event, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "event-#{id}"
+            _ -> "unknown-event"
+          end
+
+        # Get poll number with fallback to ID
+        poll_number =
+          case Map.get(data, :number) do
+            number when is_integer(number) and number > 0 ->
+              number
+
+            _ ->
+              Map.get(data, :id) ||
+                raise ArgumentError, "poll.number not present for social card URL generation"
+          end
+
+        "/#{event_slug}/polls/#{poll_number}/social-card-#{hash}.png"
+
+      :event ->
+        slug =
+          case {Map.get(data, :slug), Map.get(data, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "event-#{id}"
+            _ -> "unknown-event"
+          end
+
+        "/#{slug}/social-card-#{hash}.png"
+    end
   end
 
   @doc """
   Extracts hash from a social card URL path.
   Returns nil if URL doesn't match expected pattern.
 
+  Supports multiple patterns:
+  - Event: /slug/social-card-hash.png
+  - Poll: /slug/polls/number/social-card-hash.png
+  - City: /social-cards/city/slug/hash.png
+
   ## Examples
 
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/my-event/social-card-a1b2c3d4.png")
+      "a1b2c3d4"
+
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/my-event/polls/1/social-card-a1b2c3d4.png")
+      "a1b2c3d4"
+
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/city/warsaw/a1b2c3d4.png")
       "a1b2c3d4"
 
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/invalid/path")
@@ -79,14 +160,29 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   """
   @spec extract_hash_from_path(String.t()) :: String.t() | nil
   def extract_hash_from_path(path) when is_binary(path) do
-    case Regex.run(~r/\/[^\/]+\/social-card-([a-f0-9]{8})(?:\.png)?$/, path) do
-      [_full_match, hash] -> hash
-      _ -> nil
+    cond do
+      # Poll pattern: /event-slug/polls/number/social-card-hash.png
+      match = Regex.run(~r/\/[^\/]+\/polls\/\d+\/social-card-([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      # City pattern: /social-cards/city/slug/hash.png
+      match = Regex.run(~r/\/social-cards\/city\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      # Event pattern: /slug/social-card-hash.png
+      match = Regex.run(~r/\/[^\/]+\/social-card-([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      true ->
+        nil
     end
   end
 
   @doc """
-  Validates that a given hash matches the current event data.
+  Validates that a given hash matches the current event, poll, or city data.
   Returns true if hash is current, false if stale.
 
   ## Examples
@@ -99,15 +195,27 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(event, "invalid")
       false
 
+      iex> poll = %{id: 1, title: "Movie Poll", updated_at: ~N[2023-01-01 12:00:00]}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(poll, :poll)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(poll, hash, :poll)
+      true
+
+      iex> city = %{slug: "warsaw", name: "Warsaw", stats: %{events_count: 127}}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(city, :city)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(city, hash, :city)
+      true
+
   """
-  @spec validate_hash(map(), String.t()) :: boolean()
-  def validate_hash(event, hash) when is_map(event) and is_binary(hash) do
-    generate_hash(event) == hash
+  @spec validate_hash(map(), String.t(), :event | :poll | :city) :: boolean()
+  def validate_hash(data, hash, type \\ :event) when is_map(data) and is_binary(hash) do
+    generate_hash(data, type) == hash
   end
 
   # Private helper functions
 
-  defp build_fingerprint(event) do
+  defp build_fingerprint(data, type \\ :event)
+
+  defp build_fingerprint(event, :event) do
     # Ensure we always have a valid slug, even if :id is missing
     slug =
       case {Map.get(event, :slug), Map.get(event, :id)} do
@@ -117,6 +225,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       end
 
     %{
+      type: :event,
       slug: slug,
       title: Map.get(event, :title, ""),
       description: Map.get(event, :description, ""),
@@ -127,6 +236,84 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       version: @social_card_version
     }
   end
+
+  defp build_fingerprint(poll, :poll) do
+    # Ensure we always have a valid poll ID
+    poll_id =
+      case Map.get(poll, :id) do
+        id when not is_nil(id) -> id
+        _ -> "unknown-poll"
+      end
+
+    # Get parent event for theme (if available)
+    event = Map.get(poll, :event)
+
+    theme =
+      if event && is_map(event) do
+        Map.get(event, :theme, :minimal)
+      else
+        :minimal
+      end
+
+    # Build option fingerprint to ensure cache busts when options change
+    # This is critical since social cards display poll options
+    options_fingerprint = build_options_fingerprint(Map.get(poll, :poll_options, []))
+
+    %{
+      type: :poll,
+      poll_id: poll_id,
+      title: Map.get(poll, :title, ""),
+      poll_type: Map.get(poll, :poll_type, "custom"),
+      phase: Map.get(poll, :phase, "list_building"),
+      theme: theme,
+      updated_at: format_timestamp(Map.get(poll, :updated_at)),
+      options: options_fingerprint,
+      version: @social_card_version
+    }
+  end
+
+  defp build_fingerprint(city, :city) do
+    # Ensure we always have a valid slug
+    slug =
+      case {Map.get(city, :slug), Map.get(city, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "city-#{id}"
+        _ -> "unknown-city"
+      end
+
+    # Get stats from the city map
+    stats = Map.get(city, :stats, %{})
+
+    %{
+      type: :city,
+      slug: slug,
+      name: Map.get(city, :name, ""),
+      events_count: Map.get(stats, :events_count, 0),
+      venues_count: Map.get(stats, :venues_count, 0),
+      categories_count: Map.get(stats, :categories_count, 0),
+      updated_at: format_timestamp(Map.get(city, :updated_at)),
+      version: @social_card_version
+    }
+  end
+
+  # Creates a stable fingerprint of poll options for cache busting
+  # Includes option IDs, titles, and updated_at timestamps
+  # Options are sorted by ID to ensure consistent ordering
+  defp build_options_fingerprint([]), do: []
+
+  defp build_options_fingerprint(options) when is_list(options) do
+    options
+    |> Enum.sort_by(& &1.id)
+    |> Enum.map(fn option ->
+      %{
+        id: option.id,
+        title: Map.get(option, :title, ""),
+        updated_at: format_timestamp(Map.get(option, :updated_at))
+      }
+    end)
+  end
+
+  defp build_options_fingerprint(_), do: []
 
   defp format_timestamp(nil), do: ""
   defp format_timestamp(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)

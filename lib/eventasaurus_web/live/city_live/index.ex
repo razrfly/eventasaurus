@@ -8,6 +8,8 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   use EventasaurusWeb, :live_view
 
+  import Ecto.Query, only: [from: 2]
+
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
@@ -16,6 +18,8 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.LanguageDiscovery
+  alias EventasaurusWeb.Helpers.SEOHelpers
+  alias EventasaurusWeb.JsonLd.CitySchema
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.Components.EventCards
@@ -39,6 +43,14 @@ defmodule EventasaurusWeb.CityLive.Index do
           # Get dynamically available languages for this city
           available_languages = LanguageDiscovery.get_available_languages_for_city(city_slug)
 
+          # Generate JSON-LD structured data for the city
+          city_stats = fetch_city_stats(city)
+          json_ld = CitySchema.generate(city, city_stats)
+
+          # Generate social card URL with city stats
+          city_with_stats = Map.put(city, :stats, city_stats)
+          social_card_url = SEOHelpers.build_social_card_url(city_with_stats, :city, stats: city_stats)
+
           {:ok,
            socket
            |> assign(:city, city)
@@ -51,10 +63,16 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:loading, false)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
-           |> assign(:page_title, page_title(city))
-           |> assign(:meta_description, meta_description(city))
            |> assign(:categories, Categories.list_categories())
            |> assign(:events, [])
+           |> SEOHelpers.assign_meta_tags(
+             title: page_title(city),
+             description: meta_description(city),
+             image: social_card_url,
+             type: "website",
+             canonical_path: "/c/#{city.slug}",
+             json_ld: json_ld
+           )
            |> assign(:pagination, %Pagination{
              entries: [],
              page_number: 1,
@@ -688,6 +706,8 @@ defmodule EventasaurusWeb.CityLive.Index do
     "Discover upcoming events in #{city.name}, #{city.country.name}. Find concerts, festivals, workshops, and more happening near you."
   end
 
+  # Helper functions moved to SEOHelpers module
+
   defp parse_id_list(nil), do: []
   defp parse_id_list([]), do: []
 
@@ -941,4 +961,48 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   defp country_code_to_flag(_), do: "🌐"
+
+  # Fetch aggregated statistics for city JSON-LD
+  defp fetch_city_stats(city) do
+    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
+
+    if lat && lng do
+      # Count total upcoming events in the city (within default radius)
+      {_start_date, _end_date} = PublicEventsEnhanced.calculate_date_range(:next_30_days)
+
+      events_count =
+        PublicEventsEnhanced.count_events(%{
+          center_lat: lat,
+          center_lng: lng,
+          radius_km: @default_radius_km,
+          show_past: false
+        })
+
+      # Count venues in the city
+      venues_count = EventasaurusApp.Repo.aggregate(
+        from(v in EventasaurusApp.Venues.Venue, where: v.city_id == ^city.id),
+        :count
+      )
+
+      # Count distinct categories from events in the city
+      # This is more complex - we need to query events and get their categories
+      # For now, we'll use a simpler approach and just count all available categories
+      # TODO: In the future, we could count only categories that have events in this city
+      categories_count = length(Categories.list_categories())
+
+      %{
+        events_count: events_count,
+        venues_count: venues_count,
+        categories_count: categories_count
+      }
+    else
+      # No coordinates, return zeros
+      %{
+        events_count: 0,
+        venues_count: 0,
+        categories_count: 0
+      }
+    end
+  end
 end

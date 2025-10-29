@@ -17,6 +17,8 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
 
   require Logger
 
+  alias EventasaurusWeb.UrlHelper
+
   @doc """
   Generates JSON-LD structured data for a venue as LocalBusiness.
 
@@ -133,28 +135,10 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
   # Add venue URL (using slug to build the URL)
   defp add_url(schema, venue) do
     if venue.slug do
-      # Get the base URL from endpoint configuration
-      base_url = get_base_url()
-      venue_url = "#{base_url}/venues/#{venue.slug}"
+      venue_url = UrlHelper.build_url("/venues/#{venue.slug}")
       Map.put(schema, "url", venue_url)
     else
       schema
-    end
-  end
-
-  defp get_base_url do
-    endpoint = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, [])
-    url_config = Keyword.get(endpoint, :url, [])
-
-    scheme = Keyword.get(url_config, :scheme, "https")
-    host = Keyword.get(url_config, :host, "wombie.com")
-    port = Keyword.get(url_config, :port)
-
-    # Only include port if not standard (80 for http, 443 for https)
-    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
-      "#{scheme}://#{host}"
-    else
-      "#{scheme}://#{host}:#{port}"
     end
   end
 end

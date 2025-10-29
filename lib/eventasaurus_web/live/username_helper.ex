@@ -9,6 +9,8 @@ defmodule EventasaurusWeb.Live.UsernameHelper do
   import Phoenix.LiveView, only: [send_update: 2]
   require Logger
 
+  alias EventasaurusWeb.UrlHelper
+
   @doc """
   Adds username checking capabilities to a LiveView.
 
@@ -97,7 +99,7 @@ defmodule EventasaurusWeb.Live.UsernameHelper do
   Returns a map with the API response or an error.
   """
   def check_username_availability(username) do
-    url = "#{get_base_url()}/api/username/availability/#{URI.encode(username)}"
+    url = UrlHelper.build_url("/api/username/availability/#{URI.encode(username)}")
 
     case HTTPoison.get(url, [], timeout: 5000, recv_timeout: 5000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -135,30 +137,6 @@ defmodule EventasaurusWeb.Live.UsernameHelper do
           "errors" => ["Network error"],
           "suggestions" => []
         }
-    end
-  end
-
-  # Get the base URL for API requests
-  defp get_base_url do
-    endpoint_config = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)
-
-    case endpoint_config[:url] do
-      # Development fallback
-      nil ->
-        "http://localhost:4000"
-
-      url_config ->
-        scheme = if url_config[:host] == "localhost", do: "http", else: "https"
-
-        port_suffix =
-          case url_config[:port] do
-            nil -> ""
-            80 -> ""
-            443 -> ""
-            port -> ":#{port}"
-          end
-
-        "#{scheme}://#{url_config[:host]}#{port_suffix}"
     end
   end
 end
