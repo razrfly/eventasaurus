@@ -101,6 +101,48 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
   end
 
   @impl true
+  def handle_event("add_alternate_name", %{"name" => name}, socket) do
+    city = socket.assigns.city
+
+    case CityManager.add_alternate_name(city, name) do
+      {:ok, updated_city} ->
+        socket =
+          socket
+          |> assign(:city, updated_city |> Repo.preload(:country))
+          |> put_flash(:info, "Alternate name \"#{name}\" added successfully")
+
+        {:noreply, socket}
+
+      {:error, :empty_name} ->
+        {:noreply, put_flash(socket, :error, "Alternate name cannot be empty")}
+
+      {:error, :already_exists} ->
+        {:noreply, put_flash(socket, :error, "This alternate name already exists")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to add alternate name")}
+    end
+  end
+
+  @impl true
+  def handle_event("remove_alternate_name", %{"name" => name}, socket) do
+    city = socket.assigns.city
+
+    case CityManager.remove_alternate_name(city, name) do
+      {:ok, updated_city} ->
+        socket =
+          socket
+          |> assign(:city, updated_city |> Repo.preload(:country))
+          |> put_flash(:info, "Alternate name \"#{name}\" removed successfully")
+
+        {:noreply, socket}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to remove alternate name")}
+    end
+  end
+
+  @impl true
   def handle_event("save", %{"city" => params}, socket) do
     save_city(socket, socket.assigns.city.id, params)
   end
@@ -164,17 +206,17 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
     # Popular countries to show first (based on common event locations)
     popular_codes = ["US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "NL", "PL"]
 
-    # Use the countries gem directly - no need to store in database
-    all_countries = Countries.all()
+    # Load countries from database with their IDs
+    all_countries = Repo.all(Country)
 
-    # Convert to format compatible with existing code (map with code/name keys)
+    # Convert to format compatible with existing code (map with id/code/name keys)
     popular =
-      Enum.filter(all_countries, fn c -> c.alpha2 in popular_codes end)
-      |> Enum.sort_by(fn c -> Enum.find_index(popular_codes, &(&1 == c.alpha2)) end)
+      Enum.filter(all_countries, fn c -> c.code in popular_codes end)
+      |> Enum.sort_by(fn c -> Enum.find_index(popular_codes, &(&1 == c.code)) end)
       |> Enum.map(&country_to_map/1)
 
     rest =
-      Enum.reject(all_countries, fn c -> c.alpha2 in popular_codes end)
+      Enum.reject(all_countries, fn c -> c.code in popular_codes end)
       |> Enum.sort_by(& &1.name)
       |> Enum.map(&country_to_map/1)
 
@@ -183,9 +225,8 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
 
   defp country_to_map(country) do
     %{
-      # No DB id needed
-      id: nil,
-      code: country.alpha2,
+      id: country.id,
+      code: country.code,
       name: country.name
     }
   end

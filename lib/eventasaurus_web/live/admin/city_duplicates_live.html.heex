@@ -1,0 +1,349 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="sm:flex sm:items-center sm:justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold text-gray-900">City Duplicates & Alternate Names</h1>
+      <p class="mt-2 text-sm text-gray-700">
+        Detect and merge duplicate cities, manage alternate city names for better data quality.
+      </p>
+    </div>
+    <div class="mt-4 sm:mt-0">
+      <button
+        phx-click="detect_duplicates"
+        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        disabled={@loading}
+      >
+        <%= if @loading do %>
+          <svg
+            class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+            </circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            >
+            </path>
+          </svg>
+          Detecting...
+        <% else %>
+          <svg
+            class="-ml-1 mr-2 h-5 w-5"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          Detect Duplicates
+        <% end %>
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg">
+    <!-- Tabs -->
+    <div class="border-b border-gray-200">
+      <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="duplicates"
+          class={"#{if @active_tab == "duplicates", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
+        >
+          Duplicates
+          <%= if length(@duplicate_groups) > 0 do %>
+            <span class="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600">
+              <%= length(@duplicate_groups) %>
+            </span>
+          <% end %>
+        </button>
+
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="alternate_names"
+          class={"#{if @active_tab == "alternate_names", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
+          disabled={is_nil(@selected_city)}
+        >
+          Alternate Names
+          <%= if @selected_city do %>
+            <span class="ml-2 text-xs text-gray-500">(<%= @selected_city.name %>)</span>
+          <% end %>
+        </button>
+      </nav>
+    </div>
+    <!-- Tab Content -->
+    <div class="p-6">
+      <%= if @active_tab == "duplicates" do %>
+        <!-- Duplicates Tab -->
+        <%= if Enum.empty?(@duplicate_groups) do %>
+          <div class="text-center py-12">
+            <svg
+              class="mx-auto h-12 w-12 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No duplicates found</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              Great! All cities appear to be unique. Click "Detect Duplicates" to scan again.
+            </p>
+          </div>
+        <% else %>
+          <div class="space-y-6">
+            <%= for {group, group_idx} <- Enum.with_index(@duplicate_groups) do %>
+              <div class="border border-gray-200 rounded-lg overflow-hidden">
+                <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  <h3 class="text-sm font-medium text-gray-900">
+                    Duplicate Group <%= group_idx + 1 %>
+                    <span class="ml-2 text-xs text-gray-500">
+                      (<%= hd(group).country.name %>)
+                    </span>
+                  </h3>
+                </div>
+
+                <div class="p-4">
+                  <div class="space-y-3">
+                    <%= for city <- group do %>
+                      <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md">
+                        <div class="flex-1">
+                          <div class="flex items-center">
+                            <h4 class="text-sm font-medium text-gray-900"><%= city.name %></h4>
+                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                              ID: <%= city.id %>
+                            </span>
+                            <%= if city.venue_count > 0 do %>
+                              <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                <%= city.venue_count %> venues
+                              </span>
+                            <% else %>
+                              <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                0 venues
+                              </span>
+                            <% end %>
+                          </div>
+
+                          <%= if city.alternate_names && length(city.alternate_names) > 0 do %>
+                            <div class="mt-1 text-xs text-gray-500">
+                              Alternates: <%= Enum.join(city.alternate_names, ", ") %>
+                            </div>
+                          <% end %>
+
+                          <%= if city.latitude && city.longitude do %>
+                            <div class="mt-1 text-xs text-gray-500">
+                              Location: <%= Decimal.to_string(city.latitude) %>, <%= Decimal.to_string(
+                                city.longitude
+                              ) %>
+                            </div>
+                          <% end %>
+                        </div>
+
+                        <button
+                          phx-click="select_city"
+                          phx-value-id={city.id}
+                          class="ml-4 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          Manage Alternates
+                        </button>
+                      </div>
+                    <% end %>
+                  </div>
+                  <!-- Merge Form -->
+                  <form
+                    phx-submit="merge_cities"
+                    class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md"
+                  >
+                    <h4 class="text-sm font-medium text-yellow-900 mb-3">Merge These Cities</h4>
+
+                    <div class="space-y-3">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                          Keep which city? (Target)
+                        </label>
+                        <select
+                          name="target_id"
+                          required
+                          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        >
+                          <%= for city <- group do %>
+                            <option value={city.id}>
+                              <%= city.name %> (ID: <%= city.id %>) - <%= city.venue_count %> venues
+                            </option>
+                          <% end %>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                          All venues and events will be moved to this city
+                        </p>
+                      </div>
+
+                      <input
+                        type="hidden"
+                        name="source_ids"
+                        value={group |> Enum.map(& &1.id) |> Enum.join(",")}
+                      />
+
+                      <div class="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={"add_alternates_#{group_idx}"}
+                          name="add_as_alternates"
+                          value="true"
+                          checked
+                          class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label
+                          for={"add_alternates_#{group_idx}"}
+                          class="ml-2 block text-sm text-gray-700"
+                        >
+                          Add other city names as alternate names
+                        </label>
+                      </div>
+
+                      <button
+                        type="submit"
+                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      >
+                        <svg
+                          class="-ml-1 mr-2 h-5 w-5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fill-rule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clip-rule="evenodd"
+                          />
+                        </svg>
+                        Merge Cities (Irreversible!)
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      <% else %>
+        <!-- Alternate Names Tab -->
+        <%= if @selected_city do %>
+          <div class="space-y-6">
+            <!-- City Info -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-lg font-medium text-blue-900"><%= @selected_city.name %></h3>
+                  <p class="mt-1 text-sm text-blue-700">
+                    <%= @selected_city.country.name %>
+                    <%= if @selected_city.latitude && @selected_city.longitude do %>
+                      · <%= Decimal.to_string(@selected_city.latitude) %>, <%= Decimal.to_string(
+                        @selected_city.longitude
+                      ) %>
+                    <% end %>
+                  </p>
+                </div>
+                <button
+                  phx-click="close_city_panel"
+                  class="text-blue-600 hover:text-blue-800"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <!-- Add Alternate Name Form -->
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-sm font-medium text-gray-900 mb-3">Add Alternate Name</h4>
+              <form phx-submit="add_alternate_name" class="flex space-x-2">
+                <input
+                  type="text"
+                  name="name"
+                  value={@new_alternate_name}
+                  placeholder="Enter alternate name (e.g., Warszawa)"
+                  required
+                  class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                />
+                <button
+                  type="submit"
+                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Add
+                </button>
+              </form>
+              <p class="mt-2 text-xs text-gray-500">
+                Alternate names help prevent duplicate cities when event sources use different language variations.
+              </p>
+            </div>
+            <!-- Current Alternate Names -->
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-sm font-medium text-gray-900 mb-3">Current Alternate Names</h4>
+
+              <%= if @selected_city.alternate_names && length(@selected_city.alternate_names) > 0 do %>
+                <ul class="space-y-2">
+                  <%= for alt_name <- @selected_city.alternate_names do %>
+                    <li class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                      <span class="text-sm text-gray-900"><%= alt_name %></span>
+                      <button
+                        phx-click="remove_alternate_name"
+                        phx-value-name={alt_name}
+                        data-confirm="Are you sure you want to remove this alternate name?"
+                        class="text-sm text-red-600 hover:text-red-800"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  <% end %>
+                </ul>
+              <% else %>
+                <p class="text-sm text-gray-500">No alternate names defined yet.</p>
+              <% end %>
+            </div>
+          </div>
+        <% else %>
+          <div class="text-center py-12">
+            <svg
+              class="mx-auto h-12 w-12 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No city selected</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              Select a city from the duplicates tab to manage its alternate names.
+            </p>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+</div>
