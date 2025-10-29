@@ -312,6 +312,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           )
           |> Repo.one()
 
+      # If still not found, check alternate names (e.g., "Warszawa" matches city with name "Warsaw")
+      city =
+        city ||
+          from(c in City,
+            where: c.country_id == ^country.id,
+            where: fragment("? = ANY(?)", ^city_name, c.alternate_names),
+            limit: 1
+          )
+          |> Repo.one()
+
       # If still not found, create it
       city = city || create_city(city_name, country, data)
 

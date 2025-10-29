@@ -3,7 +3,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
 
   alias EventasaurusDiscovery.Scraping.Processors.VenueProcessor
   alias EventasaurusDiscovery.Locations.{City, Country}
-  alias EventasaurusApp.Sources.Source
+  alias EventasaurusDiscovery.Sources.Source
 
   describe "VenueProcessor city validation (Layer 2 safety net)" do
     setup do
@@ -180,9 +180,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       invalid_city_count = Repo.all(
         from c in City,
         where: c.country_id == ^country.id and
-               (c.name ~* "^[A-Z]{1,2}[0-9]{1,2}" or  # Postcodes
-                c.name ~* "^\\d+$" or                  # Pure numbers
-                c.name ~* "^\\d+\\s+")                 # Street addresses
+               (fragment("? ~* ?", c.name, "^[A-Z]{1,2}[0-9]{1,2}") or  # Postcodes
+                fragment("? ~* ?", c.name, "^\\d+$") or                  # Pure numbers
+                fragment("? ~* ?", c.name, "^\\d+\\s+"))                 # Street addresses
       ) |> length()
 
       assert invalid_city_count == 0, "Found #{invalid_city_count} invalid cities in database"
@@ -275,6 +275,205 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       assert log_output =~ "VenueProcessor REJECTED invalid city name"
       assert log_output =~ "00-001"
       assert log_output =~ "Poland"
+    end
+  end
+
+  describe "VenueProcessor alternate names matching" do
+    setup do
+      # Create Poland
+      {:ok, poland} = %Country{}
+        |> Country.changeset(%{
+          name: "Poland",
+          code: "PL",
+          slug: "poland"
+        })
+        |> Repo.insert()
+
+      # Create Warsaw with alternate names
+      {:ok, warsaw} = %City{}
+        |> City.changeset(%{
+          name: "Warsaw",
+          country_id: poland.id,
+          alternate_names: ["Warszawa", "Warschau"]
+        })
+        |> Repo.insert()
+
+      # Create Kraków with alternate names
+      {:ok, krakow} = %City{}
+        |> City.changeset(%{
+          name: "Kraków",
+          country_id: poland.id,
+          alternate_names: ["Krakow", "Krakau", "Cracow"]
+        })
+        |> Repo.insert()
+
+      %{poland: poland, warsaw: warsaw, krakow: krakow}
+    end
+
+    test "finds city by canonical name", %{warsaw: warsaw} do
+      venue_data = %{
+        name: "Test Venue",
+        city: "Warsaw",
+        country: "Poland",
+        latitude: 52.2297,
+        longitude: 21.0122
+      }
+
+      {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+      assert venue.city_id == warsaw.id
+      assert venue.city.name == "Warsaw"
+    end
+
+    test "finds city by alternate name (Warszawa)", %{warsaw: warsaw} do
+      venue_data = %{
+        name: "Test Venue",
+        city: "Warszawa",
+        country: "Poland",
+        latitude: 52.2297,
+        longitude: 21.0122
+      }
+
+      {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+      # Should match existing Warsaw city via alternate name
+      assert venue.city_id == warsaw.id
+      assert venue.city.name == "Warsaw"  # Returns canonical name
+    end
+
+    test "finds city by alternate name (Warschau)", %{warsaw: warsaw} do
+      venue_data = %{
+        name: "Test Venue",
+        city: "Warschau",
+        country: "Poland",
+        latitude: 52.2297,
+        longitude: 21.0122
+      }
+
+      {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+      assert venue.city_id == warsaw.id
+      assert venue.city.name == "Warsaw"
+    end
+
+    test "finds Kraków by various alternate spellings", %{krakow: krakow} do
+      alternate_spellings = ["Krakow", "Krakau", "Cracow"]
+
+      for spelling <- alternate_spellings do
+        venue_data = %{
+          name: "Test Venue #{spelling}",
+          city: spelling,
+          country: "Poland",
+          latitude: 50.0647,
+          longitude: 19.9450
+        }
+
+        {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+        assert venue.city_id == krakow.id,
+               "Expected #{spelling} to match Kraków"
+        assert venue.city.name == "Kraków"
+      end
+    end
+
+    test "does not create duplicate when alternate name is used", %{warsaw: warsaw} do
+      # Count cities before
+      initial_count = Repo.aggregate(City, :count)
+
+      # Process venue with alternate name
+      venue_data = %{
+        name: "Test Venue",
+        city: "Warszawa",
+        country: "Poland",
+        latitude: 52.2297,
+        longitude: 21.0122
+      }
+
+      {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+      # Count cities after
+      final_count = Repo.aggregate(City, :count)
+
+      # Should not have created a new city
+      assert final_count == initial_count
+      assert venue.city_id == warsaw.id
+    end
+
+    test "case insensitive alternate name matching", %{warsaw: warsaw} do
+      # Try various case variations
+      case_variations = ["WARSZAWA", "warszawa", "WaRsZaWa"]
+
+      for variation <- case_variations do
+        venue_data = %{
+          name: "Test Venue #{variation}",
+          city: variation,
+          country: "Poland",
+          latitude: 52.2297,
+          longitude: 21.0122
+        }
+
+        {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+        assert venue.city_id == warsaw.id,
+               "Expected #{variation} to match Warsaw"
+      end
+    end
+
+    test "alternate names do not match across countries" do
+      # Create Germany
+      {:ok, germany} = %Country{}
+        |> Country.changeset(%{
+          name: "Germany",
+          code: "DE",
+          slug: "germany"
+        })
+        |> Repo.insert()
+
+      # Try to use "Warszawa" in Germany
+      venue_data = %{
+        name: "Test Venue",
+        city: "Warszawa",
+        country: "Germany",
+        latitude: 52.5200,
+        longitude: 13.4050
+      }
+
+      {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+      # Should create new city in Germany, not match Polish Warsaw
+      assert venue.city.country_id == germany.id
+      assert venue.city.name == "Warszawa"
+      refute venue.city.id == nil
+    end
+
+    test "empty alternate names array does not cause errors" do
+      {:ok, country} = %Country{}
+        |> Country.changeset(%{
+          name: "France",
+          code: "FR",
+          slug: "france"
+        })
+        |> Repo.insert()
+
+      {:ok, paris} = %City{}
+        |> City.changeset(%{
+          name: "Paris",
+          country_id: country.id,
+          alternate_names: []  # Empty array
+        })
+        |> Repo.insert()
+
+      venue_data = %{
+        name: "Test Venue",
+        city: "Paris",
+        country: "France",
+        latitude: 48.8566,
+        longitude: 2.3522
+      }
+
+      {:ok, venue} = VenueProcessor.process_venue(venue_data)
+
+      assert venue.city_id == paris.id
     end
   end
 end

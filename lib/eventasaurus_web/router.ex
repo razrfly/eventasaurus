@@ -95,6 +95,7 @@ defmodule EventasaurusWeb.Router do
       live "/cities", Admin.CityIndexLive, :index
       live "/cities/new", Admin.CityFormLive, :new
       live "/cities/:id/edit", Admin.CityFormLive, :edit
+      live "/cities/duplicates", Admin.CityDuplicatesLive, :index
 
       # Design tools (dev - no auth)
       live "/design/social-cards", Admin.SocialCardsPreviewLive
@@ -194,6 +195,7 @@ defmodule EventasaurusWeb.Router do
       live "/cities", EventasaurusWeb.Admin.CityIndexLive, :index
       live "/cities/new", EventasaurusWeb.Admin.CityFormLive, :new
       live "/cities/:id/edit", EventasaurusWeb.Admin.CityFormLive, :edit
+      live "/cities/duplicates", EventasaurusWeb.Admin.CityDuplicatesLive, :index
 
       # Design tools (with admin authentication)
       live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive

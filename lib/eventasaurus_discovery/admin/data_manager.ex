@@ -219,13 +219,13 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         0
       else
         # Delete related records
-        from(pep in PublicEventPerformer, where: pep.public_event_id in ^event_ids)
+        from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
         |> Repo.delete_all()
 
         from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
         |> Repo.delete_all()
 
-        from(pes in PublicEventSource, where: pes.public_event_id in ^event_ids)
+        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
         |> Repo.delete_all()
 
         # Delete events
@@ -272,13 +272,13 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         0
       else
         # Delete related records
-        from(pep in PublicEventPerformer, where: pep.public_event_id in ^event_ids)
+        from(pep in PublicEventPerformer, where: pep.event_id in ^event_ids)
         |> Repo.delete_all()
 
         from(pec in PublicEventCategory, where: pec.event_id in ^event_ids)
         |> Repo.delete_all()
 
-        from(pes in PublicEventSource, where: pes.public_event_id in ^event_ids)
+        from(pes in PublicEventSource, where: pes.event_id in ^event_ids)
         |> Repo.delete_all()
 
         # Delete events
@@ -570,7 +570,7 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         event_ids =
           from(pes in PublicEventSource,
             where: pes.source == ^source,
-            select: pes.public_event_id
+            select: pes.event_id
           )
           |> Repo.all()
           |> Enum.uniq()
