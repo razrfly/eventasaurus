@@ -61,26 +61,35 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
 
   @doc """
   Categories available on waw4free.pl (in Polish).
+  Loads from categories.yml configuration file.
   """
   def categories do
-    [
-      "koncerty",
-      # concerts
-      "warsztaty",
-      # workshops
-      "wystawy",
-      # exhibitions
-      "teatr",
-      # theater
-      "sport",
-      # sports
-      "dla-dzieci",
-      # for children
-      "festiwale",
-      # festivals
-      "inne"
-      # other
-    ]
+    load_categories()
+    |> Enum.map(& &1["slug"])
+  end
+
+  @doc """
+  Get full category information including translations.
+  Returns list of category maps with slug, name_pl, name_en, and description.
+  """
+  def category_info do
+    load_categories()
+  end
+
+  # Private function to load categories from YAML file
+  defp load_categories do
+    categories_file = Path.join(__DIR__, "categories.yml")
+
+    case YamlElixir.read_from_file(categories_file) do
+      {:ok, %{"categories" => categories}} when is_list(categories) ->
+        categories
+
+      {:ok, _} ->
+        raise "Invalid categories.yml structure for Waw4Free - expected 'categories' key with list"
+
+      {:error, reason} ->
+        raise "Failed to load Waw4Free categories.yml: #{inspect(reason)}"
+    end
   end
 
   @doc """
