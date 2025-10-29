@@ -73,11 +73,10 @@ defmodule EventasaurusWeb.Components.VenueCards do
           referrerpolicy="no-referrer"
         />
 
-        <%!-- Event Count Badge --%>
+        <%!-- Event Count Badge - MOVED TO TOP LEFT to match city page --%>
         <%= if @events_count > 0 do %>
-          <div class="absolute bottom-3 right-3 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
-            <.icon name="hero-calendar" class="h-3 w-3 mr-1" />
-            <%= @events_count %> <%= if @events_count == 1, do: "event", else: "events" %>
+          <div class="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
+            <%= @events_count %><%= if @events_count == 1, do: " event", else: " events" %>
           </div>
         <% end %>
       </div>
@@ -88,8 +87,7 @@ defmodule EventasaurusWeb.Components.VenueCards do
         </h3>
 
         <%= if @venue.address do %>
-          <div class="mt-2 flex items-center text-sm text-gray-600 dark:text-gray-400">
-            <.icon name="hero-map-pin" class="h-4 w-4 mr-1" />
+          <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
             <%= @venue.address %>
           </div>
         <% end %>
@@ -131,16 +129,14 @@ defmodule EventasaurusWeb.Components.VenueCards do
         </h3>
 
         <%= if @venue.address do %>
-          <div class="mt-1 flex items-center text-sm text-gray-600 dark:text-gray-400">
-            <.icon name="hero-map-pin" class="h-4 w-4 mr-1" />
+          <div class="mt-1 text-sm text-gray-600 dark:text-gray-400">
             <%= @venue.address %>
           </div>
         <% end %>
 
         <%= if @events_count > 0 do %>
           <div class="mt-2 flex items-center text-sm text-blue-600 dark:text-blue-400">
-            <.icon name="hero-calendar" class="h-4 w-4 mr-1" />
-            <%= @events_count %> <%= if @events_count == 1, do: "upcoming event", else: "upcoming events" %>
+            <%= @events_count %><%= if @events_count == 1, do: " upcoming event", else: " upcoming events" %>
           </div>
         <% end %>
       </div>

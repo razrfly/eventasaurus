@@ -8,7 +8,9 @@ defmodule EventasaurusWeb.CityLive.Venues do
   alias EventasaurusApp.Venues
   alias EventasaurusDiscovery.Locations
   alias EventasaurusWeb.Helpers.SEOHelpers
+  alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Components.VenueCards
+  alias EventasaurusWeb.Components.Breadcrumbs
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
@@ -20,6 +22,12 @@ defmodule EventasaurusWeb.CityLive.Venues do
          |> push_navigate(to: ~p"/activities")}
 
       city ->
+        # Get language from session or default to English
+        language = get_connect_params(socket)["locale"] || socket.assigns[:language] || "en"
+
+        # Get dynamically available languages for this city
+        available_languages = LanguageDiscovery.get_available_languages_for_city(city_slug)
+
         # Capture request URI for correct URL generation (ngrok support)
         raw_uri = get_connect_info(socket, :uri)
 
@@ -30,12 +38,23 @@ defmodule EventasaurusWeb.CityLive.Venues do
             true -> nil
           end
 
+        # Build breadcrumb items: Home / City Name / Venues
+        breadcrumb_items = [
+          %{label: "Home", path: ~p"/"},
+          %{label: city.name, path: ~p"/c/#{city.slug}"},
+          %{label: "Venues", path: nil}
+        ]
+
         socket =
           socket
           |> assign(:city, city)
+          |> assign(:language, language)
+          |> assign(:available_languages, available_languages)
           |> assign(:request_uri, request_uri)
           |> assign(:page_title, "Venues in #{city.name}")
+          |> assign(:breadcrumb_items, breadcrumb_items)
           |> assign(:view_mode, "grid")
+          |> assign(:show_filters, false)
           |> assign(:loading, false)
           |> assign(:filters, default_filters())
           |> assign(:show_collections, true)
@@ -51,8 +70,8 @@ defmodule EventasaurusWeb.CityLive.Venues do
     # Hide collections when search or filters are active
     has_active_filters =
       params["search"] != nil ||
-      params["has_events"] == "true" ||
-      params["sort"] != nil
+        params["has_events"] == "true" ||
+        params["sort"] != nil
 
     socket =
       socket
@@ -95,15 +114,26 @@ defmodule EventasaurusWeb.CityLive.Venues do
   end
 
   @impl true
-  def handle_event("toggle_view", %{"mode" => mode}, socket) do
-    {:noreply, assign(socket, :view_mode, mode)}
+  def handle_event("change_view", %{"view" => view}, socket) do
+    {:noreply, assign(socket, :view_mode, view)}
   end
 
   @impl true
-  def handle_event("sort", %{"sort_by" => sort_by}, socket) do
+  def handle_event("toggle_filters", _params, socket) do
+    {:noreply, update(socket, :show_filters, &(!&1))}
+  end
+
+  @impl true
+  def handle_event("change_language", %{"language" => language}, socket) do
+    {:noreply, assign(socket, :language, language)}
+  end
+
+  @impl true
+  def handle_event("filter", %{"has_events" => has_events}, socket) when is_binary(has_events) do
+    # Handle quick filter button (phx-value-has_events="true")
     filters =
       socket.assigns.filters
-      |> Map.put(:sort_by, parse_sort(sort_by))
+      |> Map.put(:has_events, parse_boolean(has_events))
       |> Map.put(:page, 1)
 
     socket =
@@ -115,16 +145,30 @@ defmodule EventasaurusWeb.CityLive.Venues do
   end
 
   @impl true
-  def handle_event("filter", %{"has_events" => has_events}, socket) do
+  def handle_event("filter", %{"filter" => filter_params}, socket) do
+    # Handle filter form submission
     filters =
       socket.assigns.filters
-      |> Map.put(:has_events, has_events == "true")
+      |> Map.put(:sort_by, parse_sort(filter_params["sort_by"]))
+      |> Map.put(:has_events, parse_boolean(filter_params["has_events"]))
       |> Map.put(:page, 1)
 
     socket =
       socket
       |> assign(:filters, filters)
       |> push_patch(to: build_path(socket, filters))
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("clear_filters", _params, socket) do
+    cleared_filters = default_filters()
+
+    socket =
+      socket
+      |> assign(:filters, cleared_filters)
+      |> push_patch(to: build_path(socket, cleared_filters))
 
     {:noreply, socket}
   end
@@ -224,8 +268,7 @@ defmodule EventasaurusWeb.CityLive.Venues do
                 "@type" => "Place",
                 "name" => venue_data.venue.name,
                 "address" => venue_data.venue.address,
-                "url" =>
-                  EventasaurusWeb.UrlHelper.build_url(~p"/venues/#{venue_data.venue.slug}")
+                "url" => EventasaurusWeb.UrlHelper.build_url(~p"/venues/#{venue_data.venue.slug}")
               }
             }
           end)
@@ -294,4 +337,35 @@ defmodule EventasaurusWeb.CityLive.Venues do
   defp parse_boolean("false"), do: false
   defp parse_boolean(value) when is_boolean(value), do: value
   defp parse_boolean(_), do: false
+
+  # Language helper functions - copied from city_live/index.ex
+  defp language_flag(lang) do
+    country_code = language_to_country_code(lang)
+    country_code_to_flag(country_code)
+  end
+
+  defp language_to_country_code(lang) do
+    case lang do
+      "en" -> "GB"
+      "pl" -> "PL"
+      "es" -> "ES"
+      "fr" -> "FR"
+      "de" -> "DE"
+      _ -> "XX"
+    end
+  end
+
+  defp country_code_to_flag("XX"), do: "🌐"
+
+  defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
+    code
+    |> String.upcase()
+    |> String.to_charlist()
+    |> Enum.map(fn char ->
+      char - ?A + 0x1F1E6
+    end)
+    |> List.to_string()
+  end
+
+  defp country_code_to_flag(_), do: "🌐"
 end

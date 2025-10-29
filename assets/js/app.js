@@ -19,6 +19,7 @@ import PlacesHooks from "./hooks/places-search/index";
 import DragDropHooks from "./hooks/poll-drag-drop";
 import { ChartHook } from "./hooks/chart_hook";
 import VenuesMap from "./hooks/venues-map";
+import MapboxVenuesMap from "./hooks/mapbox-venues-map";
 
 // Supabase client setup for identity management
 let supabaseClient = null;
@@ -61,7 +62,8 @@ const ModularHooks = {
   ...DragDropHooks,
   SupabaseAuthHandler, // Individual hook import
   ChartHook, // Chart.js hook for Phase 6
-  VenuesMap // Interactive map for venues page
+  VenuesMap, // Interactive Google Maps for venues page
+  MapboxVenuesMap // Interactive Mapbox map for venues page
 };
 
 // Merge all hooks - modular ones take precedence if there are conflicts

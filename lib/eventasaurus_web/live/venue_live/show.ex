@@ -5,10 +5,12 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEvents
+  alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.VenueLive.Components.ImageGallery
   alias EventasaurusWeb.VenueLive.Components.EventCard
   alias EventasaurusWeb.StaticMapComponent
-  alias EventasaurusWeb.VenueLive.Components.VenueCard
+  alias EventasaurusWeb.Components.VenueCards
+  alias EventasaurusWeb.Components.Breadcrumbs
   import Ecto.Query
 
   @impl true
@@ -52,14 +54,20 @@ defmodule EventasaurusWeb.VenueLive.Show do
         # Get events for this venue
         events = get_venue_events(venue.id)
 
-        # Get related venues in the same city
+        # Get related venues in the same city with events count
         related_venues =
           if venue.city_id do
-            Venues.list_related_venues(venue.id, venue.city_id, 6)
-            |> Repo.preload(city_ref: :country)
+            Venues.list_related_venues_with_events_count(venue.id, venue.city_id, 6)
+            |> Enum.map(fn venue_data ->
+              # Preload associations for the venue
+              Map.update!(venue_data, :venue, &Repo.preload(&1, city_ref: :country))
+            end)
           else
             []
           end
+
+        # Build breadcrumb items with city hierarchy
+        breadcrumb_items = build_venue_breadcrumbs(venue)
 
         socket =
           socket
@@ -68,6 +76,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
           |> assign(:future_events, events.future)
           |> assign(:past_events, events.past)
           |> assign(:related_venues, related_venues)
+          |> assign(:breadcrumb_items, breadcrumb_items)
           |> assign(:loading, false)
           |> assign(:page_title, venue.name)
 
@@ -171,6 +180,123 @@ defmodule EventasaurusWeb.VenueLive.Show do
     |> Repo.preload([:performers, :categories, venue: [city_ref: :country]])
   end
 
+  defp build_venue_breadcrumbs(venue) do
+    base_items = [%{label: "Home", path: ~p"/"}]
+
+    # Add city breadcrumb with metro area hierarchy if applicable
+    items_with_city = add_venue_city_breadcrumb(base_items, venue)
+
+    # Add Venues breadcrumb (links to city venues page)
+    items_with_venues = add_venues_breadcrumb(items_with_city, venue)
+
+    # Add current venue (no link)
+    items_with_venues ++ [%{label: venue.name, path: nil}]
+  end
+
+  defp add_venue_city_breadcrumb(items, %{
+         city_ref: %{id: city_id, slug: city_slug, name: city_name}
+       }) do
+    # Check if this city is part of a metro area (e.g., Paris 6 is part of Paris)
+    case find_metro_primary_city(city_id) do
+      nil ->
+        # Standalone city or is itself the primary
+        items ++ [%{label: city_name, path: ~p"/c/#{city_slug}"}]
+
+      primary_city ->
+        # City is part of a metro area - show hierarchy
+        items ++
+          [
+            %{label: primary_city.name, path: ~p"/c/#{primary_city.slug}"},
+            %{label: city_name, path: ~p"/c/#{city_slug}"}
+          ]
+    end
+  end
+
+  defp add_venue_city_breadcrumb(items, _venue) do
+    # No city - just return base items
+    items
+  end
+
+  defp add_venues_breadcrumb(items, %{city_ref: %{slug: city_slug}}) do
+    # Add "Venues" breadcrumb linking to city venues page
+    items ++ [%{label: "Venues", path: ~p"/c/#{city_slug}/venues"}]
+  end
+
+  defp add_venues_breadcrumb(items, _venue) do
+    # No city - just return items without Venues breadcrumb
+    items
+  end
+
+  defp find_metro_primary_city(city_id) do
+    # Get the current city with coordinates
+    current_city =
+      Repo.one(
+        from(c in City,
+          where: c.id == ^city_id,
+          select: %{
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            latitude: c.latitude,
+            longitude: c.longitude,
+            country_id: c.country_id,
+            discovery_enabled: c.discovery_enabled
+          }
+        )
+      )
+
+    # If the current city itself is discovery-enabled, it's the primary - don't add parent
+    if current_city && current_city.discovery_enabled do
+      nil
+    else
+      # Look for a nearby discovery-enabled city (the main city we promote)
+      find_nearby_discovery_city(current_city)
+    end
+  end
+
+  defp find_nearby_discovery_city(city) when is_nil(city), do: nil
+
+  defp find_nearby_discovery_city(city) do
+    if city.latitude && city.longitude do
+      # Calculate bounding box for 50km radius (larger radius to catch main cities)
+      lat = Decimal.to_float(city.latitude)
+      lng = Decimal.to_float(city.longitude)
+
+      lat_delta = 50.0 / 111.0
+      lng_delta = 50.0 / (111.0 * :math.cos(lat * :math.pi() / 180.0))
+
+      min_lat = lat - lat_delta
+      max_lat = lat + lat_delta
+      min_lng = lng - lng_delta
+      max_lng = lng + lng_delta
+
+      # Find the nearest discovery-enabled city
+      Repo.one(
+        from(c in City,
+          where: c.country_id == ^city.country_id,
+          where: c.discovery_enabled == true,
+          where: not is_nil(c.latitude) and not is_nil(c.longitude),
+          where: c.latitude >= ^min_lat and c.latitude <= ^max_lat,
+          where: c.longitude >= ^min_lng and c.longitude <= ^max_lng,
+          # Order by distance (approximation using lat/lng delta)
+          order_by: [
+            asc:
+              fragment(
+                "ABS(? - ?) + ABS(? - ?)",
+                c.latitude,
+                ^city.latitude,
+                c.longitude,
+                ^city.longitude
+              )
+          ],
+          limit: 1,
+          select: %{id: c.id, name: c.name, slug: c.slug}
+        )
+      )
+    else
+      nil
+    end
+  end
 
   @impl true
   def render(assigns) do
@@ -183,14 +309,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
       <% else %>
         <!-- Breadcrumb -->
         <nav class="bg-white border-b border-gray-200">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center space-x-2 text-sm text-gray-600 py-4">
-              <.link navigate={~p"/"} class="hover:text-gray-900">Home</.link>
-              <span>/</span>
-              <.link navigate={~p"/venues"} class="hover:text-gray-900">Venues</.link>
-              <span>/</span>
-              <span class="text-gray-900 font-medium"><%= @venue.name %></span>
-            </div>
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
           </div>
         </nav>
 
@@ -396,8 +516,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
                 🏢 More Venues in <%= @venue.city_ref.name %>
               </h2>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <%= for venue <- @related_venues do %>
-                  <VenueCard.venue_card venue={venue} />
+                <%= for venue_data <- @related_venues do %>
+                  <VenueCards.venue_card venue={venue_data.venue} city={@venue.city_ref} events_count={venue_data.upcoming_events_count} />
                 <% end %>
               </div>
             </div>
