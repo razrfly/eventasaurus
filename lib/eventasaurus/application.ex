@@ -57,6 +57,10 @@ defmodule Eventasaurus.Application do
     IO.puts("  Username: #{db_config[:username]}")
     IO.puts("DEBUG - Using Supabase PostgreSQL: #{db_config[:port] == 54322}")
 
+    # Seed the random number generator for this process
+    # This ensures non-deterministic behavior for things like job scheduling jitter
+    :rand.seed(:exsss, {System.system_time(), :erlang.phash2(node()), :erlang.unique_integer()})
+
     children = [
       EventasaurusWeb.Telemetry,
       # Start Ecto repository (used alongside Supabase)
