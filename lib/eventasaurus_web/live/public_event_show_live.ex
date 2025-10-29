@@ -187,7 +187,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           )
 
         # Get the request URI for canonical URL (stored in assigns during mount)
-        uri = socket.assigns[:request_uri] || URI.new!("/activities/#{enriched_event.slug}")
+        uri =
+          socket.assigns[:request_uri] ||
+            URI.parse("/activities/#{enriched_event.slug}")
+
         base_url = UrlHelper.get_base_url()
         canonical_url = "#{base_url}#{uri.path}"
 

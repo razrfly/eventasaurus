@@ -73,6 +73,7 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
     * `:canonical_path` - Canonical URL path (optional). Will be converted to absolute URL.
     * `:canonical_url` - Canonical URL absolute (optional). Takes precedence over `:canonical_path`.
     * `:json_ld` - JSON-LD structured data (optional). Should be JSON-encoded string.
+    * `:request_uri` - Request URI struct (optional). Used for building URLs with correct host (ngrok support).
 
   ## Examples
 
@@ -83,7 +84,8 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
         description: "Discover upcoming events in Warsaw, Poland"
       )
 
-      # Full usage with all options
+      # Full usage with all options and request context
+      request_uri = get_connect_info(socket, :uri)
       socket
       |> SEOHelpers.assign_meta_tags(
         title: "Summer Music Festival 2025",
@@ -91,15 +93,8 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
         image: "/images/festival-card.png",
         type: "event",
         canonical_path: "/events/summer-music-festival-2025",
-        json_ld: PublicEventSchema.generate(event)
-      )
-
-      # Using absolute canonical URL
-      socket
-      |> SEOHelpers.assign_meta_tags(
-        title: "About Us",
-        description: "Learn more about our mission",
-        canonical_url: "https://example.com/about"
+        json_ld: PublicEventSchema.generate(event),
+        request_uri: request_uri
       )
 
   ## Returns
@@ -117,6 +112,7 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
     image = Keyword.get(opts, :image)
     meta_type = Keyword.get(opts, :type, "website")
     json_ld = Keyword.get(opts, :json_ld)
+    request_uri = Keyword.get(opts, :request_uri)
 
     # Handle canonical URL - prefer explicit canonical_url, fallback to building from canonical_path
     canonical_url =
@@ -125,14 +121,14 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
           url
 
         path = Keyword.get(opts, :canonical_path) ->
-          build_canonical_url(path)
+          build_canonical_url(path, request_uri)
 
         true ->
           nil
       end
 
     # Normalize image URL to absolute if provided
-    absolute_image = normalize_image_url(image)
+    absolute_image = normalize_image_url(image, request_uri)
 
     # Assign all meta tag values to socket
     socket
@@ -224,33 +220,37 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
   Builds a canonical URL from a path.
 
   Converts a relative path to an absolute canonical URL by prepending the base URL.
-  The base URL is determined from the application's endpoint configuration.
+  The base URL is determined from the application's endpoint configuration or
+  from the request URI if provided (supports ngrok, proxies, etc.).
 
   ## Arguments
 
     * `path` - Relative path (must start with `/`)
+    * `request_uri` - Optional URI struct from the request context
 
   ## Examples
 
       SEOHelpers.build_canonical_url("/events/summer-festival")
       # => "https://wombie.com/events/summer-festival"
 
-      SEOHelpers.build_canonical_url("/c/warsaw")
-      # => "https://wombie.com/c/warsaw"
+      # With request context (ngrok)
+      request_uri = URI.parse("https://example.ngrok.io/some-path")
+      SEOHelpers.build_canonical_url("/c/warsaw", request_uri)
+      # => "https://example.ngrok.io/c/warsaw"
 
   ## Returns
 
   Absolute canonical URL as a string.
   """
-  @spec build_canonical_url(String.t()) :: String.t()
-  def build_canonical_url(path) when is_binary(path) do
-    UrlHelper.build_url(path)
+  @spec build_canonical_url(String.t(), URI.t() | nil) :: String.t()
+  def build_canonical_url(path, request_uri \\ nil) when is_binary(path) do
+    UrlHelper.build_url(path, request_uri)
   end
 
   # Private helper to normalize image URLs to absolute URLs
-  defp normalize_image_url(nil), do: nil
+  defp normalize_image_url(nil, _request_uri), do: nil
 
-  defp normalize_image_url(url) when is_binary(url) do
+  defp normalize_image_url(url, request_uri) when is_binary(url) do
     case URI.parse(url) do
       %URI{scheme: scheme} when scheme in ["http", "https"] ->
         # Already absolute
@@ -258,11 +258,11 @@ defmodule EventasaurusWeb.Helpers.SEOHelpers do
 
       %URI{path: "/" <> _rest} ->
         # Relative path starting with /
-        UrlHelper.build_url(url)
+        UrlHelper.build_url(url, request_uri)
 
       _ ->
         # Relative path without leading /
-        UrlHelper.build_url("/#{url}")
+        UrlHelper.build_url("/#{url}", request_uri)
     end
   end
 end
