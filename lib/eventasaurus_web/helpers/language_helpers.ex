@@ -90,23 +90,33 @@ defmodule EventasaurusWeb.Helpers.LanguageHelpers do
   @doc """
   Convert language code to flag emoji.
   Maps common language codes to their primary country code for flag emoji display.
+  Returns globe emoji for nil/invalid inputs.
   """
-  def language_flag(lang) do
-    country_code = language_to_country_code(lang)
-    country_code_to_flag(country_code)
+  def language_flag(lang) when is_binary(lang) and lang != "" do
+    lang
+    |> language_to_country_code()
+    |> country_code_to_flag()
   end
+
+  def language_flag(_), do: "🌐"
 
   @doc """
   Get language name display (uppercase language code).
+  Returns empty string for nil/invalid inputs.
   """
-  def language_name(lang) do
+  def language_name(lang) when is_binary(lang) and lang != "" do
     String.upcase(lang)
   end
 
+  def language_name(_), do: ""
+
   @doc """
   Map language codes to their most common country codes for flag display.
+  Returns "XX" (globe fallback) for nil/invalid inputs.
   """
-  def language_to_country_code(lang) do
+  def language_to_country_code(nil), do: "XX"
+
+  def language_to_country_code(lang) when is_binary(lang) do
     case String.downcase(lang) do
       "en" -> "GB"
       "es" -> "ES"
@@ -148,6 +158,8 @@ defmodule EventasaurusWeb.Helpers.LanguageHelpers do
       lang -> String.upcase(lang)
     end
   end
+
+  def language_to_country_code(_), do: "XX"
 
   @doc """
   Convert 2-letter country code to Unicode flag emoji.

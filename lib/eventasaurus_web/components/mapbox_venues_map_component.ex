@@ -78,33 +78,46 @@ defmodule EventasaurusWeb.MapboxVenuesMapComponent do
 
   defp prepare_venues_data(venues) do
     venues
-    |> Enum.filter(fn venue_data -> has_coordinates?(venue_data.venue) end)
-    |> Enum.map(fn venue_data ->
+    |> Enum.reduce([], fn venue_data, acc ->
       venue = venue_data.venue
+      lat = normalize_coordinate(venue.latitude)
+      lon = normalize_coordinate(venue.longitude)
 
-      %{
-        id: venue.id,
-        name: venue.name,
-        slug: venue.slug,
-        address: venue.address,
-        latitude: venue.latitude,
-        longitude: venue.longitude,
-        events_count: venue_data.upcoming_events_count,
-        url: "/venues/#{venue.slug}"
-      }
+      if lat && lon do
+        [
+          %{
+            id: venue.id,
+            name: venue.name,
+            slug: venue.slug,
+            address: venue.address,
+            latitude: lat,
+            longitude: lon,
+            events_count: venue_data.upcoming_events_count,
+            url: "/venues/#{venue.slug}"
+          }
+          | acc
+        ]
+      else
+        acc
+      end
     end)
+    |> Enum.reverse()
   end
 
-  defp has_coordinates?(%{latitude: lat, longitude: lon})
-       when is_number(lat) and is_number(lon),
-       do: true
-
-  defp has_coordinates?(_), do: false
+  defp normalize_coordinate(%Decimal{} = decimal), do: Decimal.to_float(decimal)
+  defp normalize_coordinate(coord) when is_number(coord), do: coord
+  defp normalize_coordinate(coord) when is_binary(coord) do
+    case Float.parse(coord) do
+      {float, _} -> float
+      :error -> nil
+    end
+  end
+  defp normalize_coordinate(_), do: nil
 
   defp get_city_center(city) do
     %{
-      lat: city.latitude || 52.2297,
-      lng: city.longitude || 21.0122
+      lat: normalize_coordinate(city.latitude) || 52.2297,
+      lng: normalize_coordinate(city.longitude) || 21.0122
     }
   end
 end
