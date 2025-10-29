@@ -233,11 +233,26 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
       end)
       |> Enum.sort_by(& &1.count, :desc)
 
+    # Check if any city in this cluster uses geographic matching (is_geographic: true)
+    # If so, use MAX count instead of SUM to avoid double-counting events
+    # (Geographic cities already include events from nearby inactive cities)
+    has_geographic = Enum.any?(city_stats_in_cluster, &Map.get(&1, :is_geographic, false))
+
+    total_count =
+      if has_geographic do
+        # Use MAX count when cluster contains geographic city
+        # (the geographic city's count already includes nearby cities)
+        Enum.max(Enum.map(city_stats_in_cluster, & &1.count))
+      else
+        # Use SUM for traditional city_id-based clusters
+        Enum.sum(Enum.map(city_stats_in_cluster, & &1.count))
+      end
+
     %{
       city_id: primary_city.id,
       city_name: primary_city.name,
       city_slug: primary_city.slug,
-      count: Enum.sum(Enum.map(city_stats_in_cluster, & &1.count)),
+      count: total_count,
       subcities: subcities
     }
   end
