@@ -29,12 +29,12 @@ defmodule EventasaurusWeb.PollSocialCardController do
          {:poll, poll} when not is_nil(poll) <-
            {:poll, get_poll_with_options_by_number(poll_number, event.id)},
          {:poll_belongs_to_event, true} <- {:poll_belongs_to_event, poll.event_id == event.id} do
-      # Validate that the hash matches current poll data
-      if SocialCardHelpers.validate_hash(poll, final_hash, :poll) do
-        Logger.info("Hash validated for poll ##{poll_number}: #{poll.title}")
+      # Preload event association for theme-sensitive hashing
+      poll_with_event = %{poll | event: event}
 
-        # Preload event association for theme
-        poll_with_event = %{poll | event: event}
+      # Validate that the hash matches current poll data
+      if SocialCardHelpers.validate_hash(poll_with_event, final_hash, :poll) do
+        Logger.info("Hash validated for poll ##{poll_number}: #{poll.title}")
 
         # Render SVG template with poll data
         svg_content = render_poll_card_svg(poll_with_event)
@@ -48,8 +48,16 @@ defmodule EventasaurusWeb.PollSocialCardController do
             SocialCardHelpers.send_error_response(conn, error)
         end
       else
-        expected_hash = HashGenerator.generate_hash(poll, :poll)
-        SocialCardHelpers.send_hash_mismatch_redirect(conn, poll, "poll_#{poll.id}", expected_hash, final_hash, :poll)
+        expected_hash = HashGenerator.generate_hash(poll_with_event, :poll)
+
+        SocialCardHelpers.send_hash_mismatch_redirect(
+          conn,
+          poll_with_event,
+          "poll_#{poll.id}",
+          expected_hash,
+          final_hash,
+          :poll
+        )
       end
     else
       {:event, nil} ->
@@ -95,12 +103,12 @@ defmodule EventasaurusWeb.PollSocialCardController do
     with {:event, event} when not is_nil(event) <- {:event, Events.get_event_by_slug(slug)},
          {:poll, poll} when not is_nil(poll) <- {:poll, Events.get_poll_with_options(poll_id)},
          {:poll_belongs_to_event, true} <- {:poll_belongs_to_event, poll.event_id == event.id} do
-      # Validate that the hash matches current poll data
-      if SocialCardHelpers.validate_hash(poll, final_hash, :poll) do
-        Logger.info("Hash validated for poll #{poll_id}: #{poll.title}")
+      # Preload event association for theme-sensitive hashing
+      poll_with_event = %{poll | event: event}
 
-        # Preload event association for theme
-        poll_with_event = %{poll | event: event}
+      # Validate that the hash matches current poll data
+      if SocialCardHelpers.validate_hash(poll_with_event, final_hash, :poll) do
+        Logger.info("Hash validated for poll #{poll_id}: #{poll.title}")
 
         # Render SVG template with poll data
         svg_content = render_poll_card_svg(poll_with_event)
@@ -114,8 +122,16 @@ defmodule EventasaurusWeb.PollSocialCardController do
             SocialCardHelpers.send_error_response(conn, error)
         end
       else
-        expected_hash = HashGenerator.generate_hash(poll, :poll)
-        SocialCardHelpers.send_hash_mismatch_redirect(conn, poll, "poll_#{poll.id}", expected_hash, final_hash, :poll)
+        expected_hash = HashGenerator.generate_hash(poll_with_event, :poll)
+
+        SocialCardHelpers.send_hash_mismatch_redirect(
+          conn,
+          poll_with_event,
+          "poll_#{poll.id}",
+          expected_hash,
+          final_hash,
+          :poll
+        )
       end
     else
       {:event, nil} ->

@@ -16,7 +16,7 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
 
   - Events: `/:event_slug/social-card-:hash.png`
   - Polls: `/:event_slug/polls/:poll_number/social-card-:hash.png`
-  - Future: `/:entity_slug/:type/:id/social-card-:hash.png`
+  - Cities: `/social-cards/city/:city_slug/:hash.png`
 
   ## Usage
 
@@ -27,6 +27,10 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
       # For polls
       UrlBuilder.build_path(:poll, poll, event: event)
       # => "/tech-meetup/polls/1/social-card-abc123.png"
+
+      # For cities
+      UrlBuilder.build_path(:city, city)
+      # => "/social-cards/city/warsaw/abc123.png"
 
       # Extract hash from any social card URL
       UrlBuilder.extract_hash("/tech-meetup/social-card-abc123.png")
@@ -40,7 +44,7 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
 
   ## Parameters
 
-    * `entity_type` - The type of entity (`:event`, `:poll`)
+    * `entity_type` - The type of entity (`:event`, `:poll`, `:city`)
     * `entity` - The entity struct/map
     * `opts` - Additional options (e.g., `event:` for polls)
 
@@ -66,12 +70,16 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
     HashGenerator.generate_url_path(poll, :poll)
   end
 
+  def build_path(:city, city, _opts) do
+    HashGenerator.generate_url_path(city, :city)
+  end
+
   @doc """
   Builds a complete social card URL with external domain.
 
   ## Parameters
 
-    * `entity_type` - The type of entity (`:event`, `:poll`)
+    * `entity_type` - The type of entity (`:event`, `:poll`, `:city`)
     * `entity` - The entity struct/map
     * `opts` - Additional options (e.g., `event:` for polls)
 
@@ -134,6 +142,10 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
     HashGenerator.validate_hash(poll, hash, :poll)
   end
 
+  def validate_hash(:city, city, hash, _opts) do
+    HashGenerator.validate_hash(city, hash, :city)
+  end
+
   @doc """
   Detects the entity type from a social card URL path.
 
@@ -174,6 +186,7 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
   Returns a map with relevant identifiers:
   - Events: `%{event_slug: "tech-meetup"}`
   - Polls: `%{event_slug: "tech-meetup", poll_number: 1}`
+  - Cities: `%{city_slug: "warsaw"}`
 
   ## Examples
 
@@ -182,6 +195,9 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
 
       iex> UrlBuilder.parse_path("/tech-meetup/polls/1/social-card-abc123.png")
       %{entity_type: :poll, event_slug: "tech-meetup", poll_number: 1, hash: "abc123"}
+
+      iex> UrlBuilder.parse_path("/social-cards/city/warsaw/abc123.png")
+      %{entity_type: :city, city_slug: "warsaw", hash: "abc123"}
   """
   @spec parse_path(String.t()) :: map() | nil
   def parse_path(path) when is_binary(path) do
@@ -197,6 +213,20 @@ defmodule Eventasaurus.SocialCards.UrlBuilder do
               entity_type: :poll,
               event_slug: event_slug,
               poll_number: String.to_integer(poll_number),
+              hash: hash
+            }
+
+          _ ->
+            nil
+        end
+
+      :city ->
+        # Extract: /social-cards/city/:city_slug/:hash.png
+        case Regex.run(~r/\/social-cards\/city\/([^\/]+)\/[a-f0-9]{8}(?:\.png)?$/, path) do
+          [_full, city_slug] ->
+            %{
+              entity_type: :city,
+              city_slug: city_slug,
               hash: hash
             }
 

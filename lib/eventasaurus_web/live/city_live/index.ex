@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.CitySchema
+  alias Eventasaurus.SocialCards.UrlBuilder
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.Components.EventCards
@@ -43,13 +44,22 @@ defmodule EventasaurusWeb.CityLive.Index do
           # Get dynamically available languages for this city
           available_languages = LanguageDiscovery.get_available_languages_for_city(city_slug)
 
+          # Capture request URI for proper URL generation (ngrok support)
+          raw_uri = get_connect_info(socket, :uri)
+          request_uri =
+            cond do
+              match?(%URI{}, raw_uri) -> raw_uri
+              is_binary(raw_uri) -> URI.parse(raw_uri)
+              true -> nil
+            end
+
           # Generate JSON-LD structured data for the city
           city_stats = fetch_city_stats(city)
           json_ld = CitySchema.generate(city, city_stats)
 
-          # Generate social card URL with city stats
+          # Generate social card URL path (relative, will be made absolute by SEOHelpers)
           city_with_stats = Map.put(city, :stats, city_stats)
-          social_card_url = SEOHelpers.build_social_card_url(city_with_stats, :city, stats: city_stats)
+          social_card_path = UrlBuilder.build_path(:city, city_with_stats)
 
           {:ok,
            socket
@@ -68,10 +78,11 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> SEOHelpers.assign_meta_tags(
              title: page_title(city),
              description: meta_description(city),
-             image: social_card_url,
+             image: social_card_path,
              type: "website",
              canonical_path: "/c/#{city.slug}",
-             json_ld: json_ld
+             json_ld: json_ld,
+             request_uri: request_uri
            )
            |> assign(:pagination, %Pagination{
              entries: [],

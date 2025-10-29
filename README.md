@@ -668,6 +668,107 @@ Most entities support soft delete, allowing data recovery:
 - Deleted items are excluded from queries by default
 - Can be restored through the admin interface
 
+## SEO & Social Cards
+
+Eventasaurus includes a comprehensive SEO and social media optimization system designed to maximize visibility and shareability.
+
+### Features
+
+- **JSON-LD Structured Data**: Schema.org-compliant structured data for rich search results
+  - Event schemas for Google event listings
+  - City schemas for location-based discovery
+  - LocalBusiness schemas for venue pages
+  - Breadcrumb schemas for site structure
+
+- **Dynamic Social Cards**: Auto-generated Open Graph images for social media
+  - Custom cards for events, polls, and cities
+  - Hash-based cache busting (updates automatically when content changes)
+  - 1200x630px optimized for Facebook, Twitter, LinkedIn
+  - SVG-to-PNG conversion for dynamic content
+
+- **Meta Tag Standardization**: Consistent SEO metadata across all pages
+  - Open Graph tags for social sharing
+  - Twitter Card tags for Twitter previews
+  - Canonical URLs for SEO
+  - Optimized page titles and descriptions
+
+### Quick Start
+
+Adding SEO to a new page:
+
+```elixir
+defmodule EventasaurusWeb.MyPageLive do
+  use EventasaurusWeb, :live_view
+
+  alias EventasaurusWeb.Helpers.SEOHelpers
+
+  def mount(_params, _session, socket) do
+    entity = load_my_entity()
+
+    socket =
+      socket
+      |> assign(:entity, entity)
+      |> SEOHelpers.assign_meta_tags(
+        title: "My Page Title",
+        description: "My page description for SEO",
+        image: social_card_url,
+        type: "website",
+        canonical_path: "/my-page"
+      )
+
+    {:ok, socket}
+  end
+end
+```
+
+### Social Card Types
+
+**Event Cards** - Show event title, date, venue, and theme:
+```elixir
+# URL: /:slug/social-card-:hash.png
+social_card_url = SEOHelpers.build_social_card_url(event, :event)
+```
+
+**Poll Cards** - Display poll questions and options:
+```elixir
+# URL: /:slug/polls/:number/social-card-:hash.png
+social_card_url = SEOHelpers.build_social_card_url(poll, :poll, event: event)
+```
+
+**City Cards** - Feature city stats and event count:
+```elixir
+# URL: /social-cards/city/:slug/:hash.png
+social_card_url = SEOHelpers.build_social_card_url(city, :city, stats: stats)
+```
+
+### Documentation
+
+For comprehensive SEO implementation guides, see:
+
+📖 **[SEO Best Practices Guide](docs/seo_best_practices.md)** - Complete guide covering:
+- JSON-LD structured data implementation
+- Social media card generation
+- Meta tag best practices
+- Testing and validation procedures
+- Troubleshooting common issues
+
+📋 **[ADR 001: Meta Tag Pattern](docs/adr/001-meta-tag-pattern-standardization.md)** - Architectural decision for meta tag standardization
+
+### Helper Modules
+
+- **`SEOHelpers`** - Standardized SEO metadata assignment for LiveViews
+- **`SocialCardHelpers`** - Shared logic for social card controllers
+- **`HashGenerator`** - Content-based hashing for cache busting
+- **`UrlHelper`** - Centralized URL generation
+
+### Testing SEO Implementation
+
+Validate your pages with these tools:
+- **Google Rich Results Test**: https://search.google.com/test/rich-results
+- **Facebook Sharing Debugger**: https://developers.facebook.com/tools/debug/
+- **Twitter Card Validator**: https://cards-dev.twitter.com/validator
+- **LinkedIn Post Inspector**: https://www.linkedin.com/post-inspector/
+
 ## Contributing
 
 1. Fork the repository

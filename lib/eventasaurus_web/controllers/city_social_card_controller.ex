@@ -6,6 +6,8 @@ defmodule EventasaurusWeb.CitySocialCardController do
   import Ecto.Query, only: [from: 2]
 
   alias EventasaurusDiscovery.Locations
+  alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusDiscovery.Categories
   alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.Helpers.SocialCardHelpers
   import EventasaurusWeb.SocialCardView
@@ -66,7 +68,7 @@ defmodule EventasaurusWeb.CitySocialCardController do
 
     events_count =
       if lat && lng do
-        EventasaurusApp.Events.PublicEventsEnhanced.count_events(%{
+        PublicEventsEnhanced.count_events(%{
           center_lat: lat,
           center_lng: lng,
           radius_km: default_radius_km,
@@ -82,7 +84,7 @@ defmodule EventasaurusWeb.CitySocialCardController do
         :count
       )
 
-    categories_count = length(EventasaurusApp.Categories.list_categories())
+    categories_count = length(Categories.list_categories())
 
     %{
       events_count: events_count,

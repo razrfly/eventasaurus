@@ -47,30 +47,72 @@ defmodule EventasaurusWeb.UrlHelper do
   """
   @spec get_base_url() :: String.t()
   def get_base_url do
-    System.get_env("BASE_URL") ||
-      Application.get_env(:eventasaurus, :base_url) ||
-      EventasaurusWeb.Endpoint.url()
+    # Use the same logic as Layouts.get_base_url for consistency
+    # This correctly handles ngrok and other proxy headers
+    endpoint = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint, [])
+    url_config = Keyword.get(endpoint, :url, [])
+    scheme = Keyword.get(url_config, :scheme, "https")
+    host = Keyword.get(url_config, :host, "wombie.com")
+    port = Keyword.get(url_config, :port)
+
+    # Only include port if not standard (80 for http, 443 for https)
+    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
+      "#{scheme}://#{host}"
+    else
+      "#{scheme}://#{host}:#{port}"
+    end
   end
 
   @doc """
   Builds a complete external URL by combining base URL with a path.
+
+  Accepts an optional URI struct from the request context. If provided,
+  uses the request's actual host (supporting ngrok, proxies, etc.).
 
   ## Examples
 
       iex> UrlHelper.build_url("/events/tech-meetup")
       "https://wombie.com/events/tech-meetup"
 
-      iex> UrlHelper.build_url("/events/tech-meetup/social-card-abc123.png")
-      "https://wombie.com/events/tech-meetup/social-card-abc123.png"
+      # With request URI (ngrok example)
+      iex> request_uri = URI.parse("https://example.ngrok.io/some-path")
+      iex> UrlHelper.build_url("/events/tech-meetup", request_uri)
+      "https://example.ngrok.io/events/tech-meetup"
   """
-  @spec build_url(String.t()) :: String.t()
-  def build_url(path) when is_binary(path) do
-    base_url = get_base_url()
+  @spec build_url(String.t(), URI.t() | nil) :: String.t()
+  def build_url(path, request_uri \\ nil)
 
-    # Remove trailing slash from base_url and leading slash from path if both present
+  def build_url(path, %URI{scheme: scheme, host: host, port: port}) when is_binary(path) do
+    # Build base URL from request URI (respects actual request host like ngrok)
+    base_url = build_base_url_from_uri(scheme, host, port)
+
+    # Remove trailing slash from base_url and ensure path starts with /
     base_url = String.trim_trailing(base_url, "/")
     path = if String.starts_with?(path, "/"), do: path, else: "/" <> path
 
     base_url <> path
+  end
+
+  def build_url(path, nil) when is_binary(path) do
+    # Fallback to config-based base URL
+    base_url = get_base_url()
+
+    # Remove trailing slash from base_url and ensure path starts with /
+    base_url = String.trim_trailing(base_url, "/")
+    path = if String.starts_with?(path, "/"), do: path, else: "/" <> path
+
+    base_url <> path
+  end
+
+  # Private helper to build base URL from URI components
+  defp build_base_url_from_uri(scheme, host, port) do
+    scheme = scheme || "https"
+
+    # Only include port if not standard (80 for http, 443 for https)
+    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) || is_nil(port) do
+      "#{scheme}://#{host}"
+    else
+      "#{scheme}://#{host}:#{port}"
+    end
   end
 end
