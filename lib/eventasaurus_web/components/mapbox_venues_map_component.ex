@@ -29,7 +29,6 @@ defmodule EventasaurusWeb.MapboxVenuesMapComponent do
       <div
         id={"mapbox-venues-map-#{@id}"}
         phx-hook="MapboxVenuesMap"
-        phx-update="ignore"
         data-venues={Jason.encode!(prepare_venues_data(@venues))}
         data-center={Jason.encode!(get_city_center(@city))}
         class="w-full h-full"

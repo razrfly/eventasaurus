@@ -86,4 +86,84 @@ defmodule EventasaurusWeb.Helpers.LanguageHelpers do
   def language_switch_params(current_params, new_language) do
     Map.put(current_params, "lang", new_language)
   end
+
+  @doc """
+  Convert language code to flag emoji.
+  Maps common language codes to their primary country code for flag emoji display.
+  """
+  def language_flag(lang) do
+    country_code = language_to_country_code(lang)
+    country_code_to_flag(country_code)
+  end
+
+  @doc """
+  Get language name display (uppercase language code).
+  """
+  def language_name(lang) do
+    String.upcase(lang)
+  end
+
+  @doc """
+  Map language codes to their most common country codes for flag display.
+  """
+  def language_to_country_code(lang) do
+    case String.downcase(lang) do
+      "en" -> "GB"
+      "es" -> "ES"
+      "fr" -> "FR"
+      "de" -> "DE"
+      "it" -> "IT"
+      "pt" -> "PT"
+      "pl" -> "PL"
+      "nl" -> "NL"
+      "ru" -> "RU"
+      "ja" -> "JP"
+      "zh" -> "CN"
+      "ko" -> "KR"
+      "ar" -> "SA"
+      "tr" -> "TR"
+      "sv" -> "SE"
+      "da" -> "DK"
+      "fi" -> "FI"
+      "no" -> "NO"
+      "cs" -> "CZ"
+      "el" -> "GR"
+      "he" -> "IL"
+      "hi" -> "IN"
+      "id" -> "ID"
+      "ms" -> "MY"
+      "th" -> "TH"
+      "vi" -> "VN"
+      "uk" -> "UA"
+      "ro" -> "RO"
+      "hu" -> "HU"
+      "sk" -> "SK"
+      "bg" -> "BG"
+      "hr" -> "HR"
+      "sr" -> "RS"
+      "sl" -> "SI"
+      "lt" -> "LT"
+      "lv" -> "LV"
+      "et" -> "EE"
+      lang -> String.upcase(lang)
+    end
+  end
+
+  @doc """
+  Convert 2-letter country code to Unicode flag emoji.
+  Uses Regional Indicator Symbols (🇦 = U+1F1E6, 🇿 = U+1F1FF).
+  """
+  def country_code_to_flag("XX"), do: "🌐"
+
+  def country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
+    code
+    |> String.upcase()
+    |> String.to_charlist()
+    |> Enum.map(fn char ->
+      char - ?A + 0x1F1E6
+    end)
+    |> List.to_string()
+  end
+
+  def country_code_to_flag(_), do: "🌐"
 end

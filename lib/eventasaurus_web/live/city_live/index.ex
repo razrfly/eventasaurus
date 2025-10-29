@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.LanguageDiscovery
+  alias EventasaurusWeb.Helpers.LanguageHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
@@ -284,9 +285,9 @@ defmodule EventasaurusWeb.CityLive.Index do
                     phx-click="change_language"
                     phx-value-language={lang}
                     class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                    title={language_name(lang)}
+                    title={LanguageHelpers.language_name(lang)}
                   >
-                    <%= language_flag(lang) %> <%= String.upcase(lang) %>
+                    <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
                   </button>
                 <% end %>
               </div>
@@ -895,83 +896,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp parse_boolean(true), do: true
   defp parse_boolean(false), do: false
   defp parse_boolean(_), do: false
-
-  # Language helper functions - NO HARD-CODING
-  # Uses ISO 639-1 to ISO 3166-1 alpha-2 mapping for flag emojis
-  defp language_flag(lang) do
-    # Map common language codes to their primary country code for flag emoji
-    # This uses Unicode Regional Indicator Symbols (U+1F1E6 to U+1F1FF)
-    country_code = language_to_country_code(lang)
-    country_code_to_flag(country_code)
-  end
-
-  defp language_name(lang) do
-    # Just return uppercase language code - no hard-coded names
-    # The browser and OS will display the language name in user's locale
-    String.upcase(lang)
-  end
-
-  # Map language codes to their most common country codes for flag display
-  # This is the ONLY acceptable mapping since it's about visual representation
-  defp language_to_country_code(lang) do
-    case lang do
-      # English -> UK flag (most common)
-      "en" -> "GB"
-      # Spanish -> Spain
-      "es" -> "ES"
-      # French -> France
-      "fr" -> "FR"
-      # German -> Germany
-      "de" -> "DE"
-      # Italian -> Italy
-      "it" -> "IT"
-      # Portuguese -> Portugal
-      "pt" -> "PT"
-      # Polish -> Poland
-      "pl" -> "PL"
-      # Dutch -> Netherlands
-      "nl" -> "NL"
-      # Russian -> Russia
-      "ru" -> "RU"
-      # Japanese -> Japan
-      "ja" -> "JP"
-      # Chinese -> China
-      "zh" -> "CN"
-      # Korean -> Korea
-      "ko" -> "KR"
-      # Arabic -> Saudi Arabia
-      "ar" -> "SA"
-      # Turkish -> Turkey
-      "tr" -> "TR"
-      # Swedish -> Sweden
-      "sv" -> "SE"
-      # Danish -> Denmark
-      "da" -> "DK"
-      # Norwegian -> Norway
-      "no" -> "NO"
-      # Finnish -> Finland
-      "fi" -> "FI"
-      # Unknown - will show globe
-      _ -> "XX"
-    end
-  end
-
-  # Convert 2-letter country code to Unicode flag emoji
-  # Uses Regional Indicator Symbols (🇦 = U+1F1E6, 🇿 = U+1F1FF)
-  defp country_code_to_flag("XX"), do: "🌐"
-
-  defp country_code_to_flag(code) when is_binary(code) and byte_size(code) == 2 do
-    code
-    |> String.upcase()
-    |> String.to_charlist()
-    |> Enum.map(fn char ->
-      # Convert A-Z (65-90) to Regional Indicator Symbols (127462-127487)
-      char - ?A + 0x1F1E6
-    end)
-    |> List.to_string()
-  end
-
-  defp country_code_to_flag(_), do: "🌐"
 
   # Fetch aggregated statistics for city JSON-LD
   defp fetch_city_stats(city) do
