@@ -213,7 +213,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
   # Private helper functions
 
-  defp build_fingerprint(data, type \\ :event)
+  defp build_fingerprint(data, type)
 
   defp build_fingerprint(event, :event) do
     # Ensure we always have a valid slug, even if :id is missing

@@ -84,6 +84,49 @@ defmodule EventasaurusApp.Venues do
   end
 
   @doc """
+  Lists related venues in the same city with upcoming events count.
+
+  Returns up to 6 venues from the same city with their upcoming events count,
+  excluding the current venue. Prioritizes venues with images.
+
+  Returns a list of maps with `:venue` and `:upcoming_events_count` keys,
+  matching the format used by `list_city_venues/2`.
+
+  ## Parameters
+  - venue_id: The ID of the current venue
+  - city_id: The city ID to find related venues in
+  - limit: Maximum number of venues to return (default: 6)
+
+  ## Examples
+
+      iex> list_related_venues_with_events_count(123, 456)
+      [
+        %{venue: %Venue{}, upcoming_events_count: 5},
+        %{venue: %Venue{}, upcoming_events_count: 3}
+      ]
+  """
+  def list_related_venues_with_events_count(venue_id, city_id, limit \\ 6)
+      when is_integer(venue_id) and is_integer(city_id) do
+    from(v in Venue,
+      left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+      on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+      where: v.city_id == ^city_id,
+      where: v.id != ^venue_id,
+      group_by: v.id,
+      order_by: [
+        desc: fragment("COALESCE(jsonb_array_length(?), 0)", v.venue_images),
+        desc: v.id
+      ],
+      limit: ^limit,
+      select: %{
+        venue: v,
+        upcoming_events_count: count(pe.id)
+      }
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Creates a venue.
   """
   def create_venue(attrs \\ %{}) do
@@ -165,15 +208,16 @@ defmodule EventasaurusApp.Venues do
     offset = (page - 1) * page_size
 
     base_query =
-      from v in Venue,
+      from(v in Venue,
         left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
         where: v.city_id == ^city_id,
         group_by: v.id,
         select: %{
           venue: v,
           upcoming_events_count: count(pe.id)
         }
+      )
 
     base_query
     |> maybe_search(search)
@@ -198,7 +242,7 @@ defmodule EventasaurusApp.Venues do
   def count_active_city_venues(city_id) do
     from(v in Venue,
       inner_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-        on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+      on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
       where: v.city_id == ^city_id,
       distinct: true,
       select: v.id
@@ -256,7 +300,7 @@ defmodule EventasaurusApp.Venues do
     venues =
       from(v in Venue,
         left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
         where: v.city_id == ^city_id,
         group_by: v.id,
         having: count(pe.id) > 0,
@@ -283,7 +327,7 @@ defmodule EventasaurusApp.Venues do
     venues =
       from(v in Venue,
         left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
         where: v.city_id == ^city_id,
         where: fragment("jsonb_array_length(?) > 0", v.venue_images),
         group_by: v.id,
@@ -310,7 +354,7 @@ defmodule EventasaurusApp.Venues do
     venues =
       from(v in Venue,
         left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
         where: v.city_id == ^city_id,
         group_by: v.id,
         order_by: [desc: v.inserted_at],
@@ -338,30 +382,35 @@ defmodule EventasaurusApp.Venues do
   defp maybe_search(query, search_term) when is_binary(search_term) do
     search_pattern = "%#{search_term}%"
 
-    from [v, pe] in query,
+    from([v, pe] in query,
       where: ilike(v.name, ^search_pattern) or ilike(v.address, ^search_pattern)
+    )
   end
 
   defp maybe_filter_has_events(query, false), do: query
 
   defp maybe_filter_has_events(query, true) do
-    from [v, pe] in query,
+    from([v, pe] in query,
       having: count(pe.id) > 0
+    )
   end
 
   defp apply_sort(query, :name) do
-    from [v, _pe] in query,
+    from([v, _pe] in query,
       order_by: [asc: v.name]
+    )
   end
 
   defp apply_sort(query, :events_count) do
-    from [v, pe] in query,
+    from([v, pe] in query,
       order_by: [desc: count(pe.id), asc: v.name]
+    )
   end
 
   defp apply_sort(query, :id) do
-    from [v, _pe] in query,
+    from([v, _pe] in query,
       order_by: [desc: v.id]
+    )
   end
 
   defp apply_sort(query, _), do: apply_sort(query, :name)

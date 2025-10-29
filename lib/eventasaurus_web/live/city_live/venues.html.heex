@@ -1,220 +1,213 @@
-<div class="container mx-auto px-4 py-8">
-  <%!-- Header Section --%>
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-      Venues in <%= @city.name %>
-    </h1>
+<div class="min-h-screen bg-gray-50">
+  <%!-- Header --%>
+  <div class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <%!-- Breadcrumbs --%>
+      <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
 
-    <%!-- Stats --%>
-    <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-      <span>
-        <%= @total_venues %> <%= if @total_venues == 1, do: "venue", else: "venues" %>
-      </span>
-      <%= if @active_venues > 0 do %>
-        <span class="text-blue-600 dark:text-blue-400">
-          <%= @active_venues %> with upcoming events
-        </span>
-      <% end %>
-    </div>
-  </div>
-
-  <%!-- Featured Collections --%>
-  <%= if @show_collections and not Enum.empty?(@collections) do %>
-    <div class="mb-10 space-y-8">
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-        Featured Collections
-      </h2>
-
-      <%= for collection <- @collections do %>
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <.icon name={collection.icon} class="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <div>
-                <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  <%= collection.name %>
-                </h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                  <%= collection.description %>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <%!-- Collection Venues - Horizontal Scroll --%>
-          <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
-            <%= for venue_data <- Enum.take(collection.venues, 6) do %>
-              <.link
-                navigate={~p"/venues/#{venue_data.venue.slug}"}
-                class="group flex-none w-64 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden snap-start"
+      <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-900">
+          Venues in <%= @city.name %>
+        </h1>
+        <div class="flex items-center space-x-4">
+          <%!-- Language Switcher --%>
+          <div class="flex bg-gray-100 rounded-lg p-1">
+            <%= for lang <- @available_languages do %>
+              <button
+                phx-click="change_language"
+                phx-value-language={lang}
+                class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
               >
-                <%!-- Venue Image --%>
-                <div class="h-40 bg-gray-100 dark:bg-gray-700 overflow-hidden relative">
-                  <img
-                    src={EventasaurusWeb.Helpers.VenueImageHelper.get_venue_image(venue_data.venue, @city, width: 400, height: 300, quality: 85)}
-                    alt={venue_data.venue.name}
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                    referrerpolicy="no-referrer"
-                  />
-
-                  <%!-- Event Count Badge --%>
-                  <%= if venue_data.upcoming_events_count > 0 do %>
-                    <div class="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
-                      <%= venue_data.upcoming_events_count %> <%= if venue_data.upcoming_events_count == 1, do: "event", else: "events" %>
-                    </div>
-                  <% end %>
-                </div>
-
-                <%!-- Venue Info --%>
-                <div class="p-3">
-                  <h4 class="font-semibold text-gray-900 dark:text-gray-100 mb-1 line-clamp-1">
-                    <%= venue_data.venue.name %>
-                  </h4>
-
-                  <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                    <%= venue_data.venue.address %>
-                  </p>
-                </div>
-              </.link>
+                <%= language_flag(lang) %> <%= String.upcase(lang) %>
+              </button>
             <% end %>
           </div>
+
+          <%!-- View Mode Toggle --%>
+          <div class="flex bg-gray-100 rounded-lg p-1">
+            <button
+              phx-click="change_view"
+              phx-value-view="grid"
+              class={"px-3 py-1 rounded #{if @view_mode == "grid", do: "bg-white shadow-sm", else: ""}"}
+            >
+              <Heroicons.squares_2x2 class="w-5 h-5" />
+            </button>
+            <button
+              phx-click="change_view"
+              phx-value-view="list"
+              class={"px-3 py-1 rounded #{if @view_mode == "list", do: "bg-white shadow-sm", else: ""}"}
+            >
+              <Heroicons.list_bullet class="w-5 h-5" />
+            </button>
+            <button
+              phx-click="change_view"
+              phx-value-view="map"
+              class={"px-3 py-1 rounded #{if @view_mode == "map", do: "bg-white shadow-sm", else: ""}"}
+            >
+              <Heroicons.map class="w-5 h-5" />
+            </button>
+          </div>
+
+          <%!-- Filter Toggle --%>
+          <button
+            phx-click="toggle_filters"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+          >
+            <Heroicons.funnel class="w-5 h-5" />
+            <span>Filters</span>
+          </button>
         </div>
-      <% end %>
-    </div>
-  <% end %>
-
-  <%!-- Search and Controls --%>
-  <div class="mb-6 space-y-4">
-    <%!-- Search Bar --%>
-    <form phx-submit="search" phx-change="search" class="relative">
-      <input
-        type="text"
-        name="search"
-        value={@filters.search || ""}
-        placeholder="Search venues by name or address..."
-        class="w-full px-4 py-3 pl-12 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-      />
-      <.icon name="hero-magnifying-glass" class="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
-      <%= if @filters.search do %>
-        <button
-          type="button"
-          phx-click="clear_search"
-          class="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          <.icon name="hero-x-mark" class="h-5 w-5" />
-        </button>
-      <% end %>
-    </form>
-
-    <%!-- Controls Row --%>
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <%!-- View Mode Toggle --%>
-      <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-        <button
-          phx-click="toggle_view"
-          phx-value-mode="grid"
-          class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "grid", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
-        >
-          <.icon name="hero-squares-2x2" class="h-5 w-5" />
-        </button>
-        <button
-          phx-click="toggle_view"
-          phx-value-mode="list"
-          class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "list", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
-        >
-          <.icon name="hero-list-bullet" class="h-5 w-5" />
-        </button>
-        <button
-          phx-click="toggle_view"
-          phx-value-mode="map"
-          class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "map", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
-        >
-          <.icon name="hero-map" class="h-5 w-5" />
-        </button>
       </div>
 
-      <div class="flex items-center gap-4">
-        <%!-- Filter: Has Events --%>
-        <form phx-change="filter" class="flex items-center gap-2">
+      <%!-- Search Bar --%>
+      <div class="mt-4">
+        <form phx-submit="search" class="relative">
           <input
-            type="checkbox"
-            name="has_events"
-            value="true"
-            checked={@filters.has_events}
-            class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+            type="text"
+            name="search"
+            value={@filters.search}
+            placeholder="Search venues..."
+            class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-          <span class="text-sm text-gray-700 dark:text-gray-300">
-            With upcoming events
-          </span>
+          <button type="submit" class="absolute right-3 top-3.5">
+            <.icon name="hero-magnifying-glass" class="w-5 h-5 text-gray-500" />
+          </button>
         </form>
+      </div>
 
-        <%!-- Sort Dropdown --%>
-        <form phx-change="sort">
-          <select
-            name="sort_by"
-            class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500"
+      <%!-- Quick Filters --%>
+      <div class="mt-4">
+        <h2 class="text-sm font-medium text-gray-700 mb-2">
+          Quick filters
+        </h2>
+        <div class="flex flex-wrap gap-2">
+          <button
+            phx-click="clear_filters"
+            class={"px-4 py-2 rounded-lg text-sm font-medium transition-colors #{if !@filters.has_events and !@filters.search, do: "bg-blue-600 text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
           >
-            <option value="name" selected={@filters.sort_by == :name}>Name (A-Z)</option>
-            <option value="events_count" selected={@filters.sort_by == :events_count}>
-              Most Events
-            </option>
-            <option value="id" selected={@filters.sort_by == :id}>Recently Added</option>
-          </select>
-        </form>
+            All Venues
+            <span class="ml-2"><%= @total_venues %></span>
+          </button>
+          <button
+            phx-click="filter"
+            phx-value-has_events="true"
+            class={"px-4 py-2 rounded-lg text-sm font-medium transition-colors #{if @filters.has_events, do: "bg-blue-600 text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+          >
+            With Events
+            <span class="ml-2"><%= @active_venues %></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <%!-- Venues Display --%>
-  <%= if @loading do %>
-    <VenueCards.loading_skeleton count={12} layout={String.to_atom(@view_mode)} />
-  <% else %>
-    <%= if Enum.empty?(@venues) do %>
-      <VenueCards.empty_state search_term={@filters.search} />
+  <%!-- Filters Panel --%>
+  <%= if @show_filters do %>
+    <div class="bg-white border-b">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <form phx-change="filter" class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <%!-- Sort By --%>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Sort By
+              </label>
+              <select
+                name="filter[sort_by]"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="name" selected={@filters.sort_by == :name}>Name (A-Z)</option>
+                <option value="events_count" selected={@filters.sort_by == :events_count}>
+                  Most Events
+                </option>
+                <option value="id" selected={@filters.sort_by == :id}>Recently Added</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  <% end %>
+
+  <%!-- Events Grid --%>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <%= if @loading do %>
+      <div class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
     <% else %>
-      <%= cond do %>
-        <% @view_mode == "grid" -> %>
-          <VenueCards.venue_grid venues={@venues} city={@city} />
-        <% @view_mode == "list" -> %>
-          <VenueCards.venue_list venues={@venues} city={@city} />
-        <% @view_mode == "map" -> %>
-          <.live_component
-            module={EventasaurusWeb.VenuesMapComponent}
-            id="venues-map"
-            venues={@venues}
-            city={@city}
-          />
-        <% true -> %>
-          <VenueCards.venue_grid venues={@venues} city={@city} />
-      <% end %>
-
-      <%!-- Pagination --%>
-      <%= if length(@venues) == @filters.page_size do %>
-        <div class="mt-8 flex justify-center gap-2">
-          <%= if @filters.page > 1 do %>
-            <button
-              phx-click="paginate"
-              phx-value-page={@filters.page - 1}
-              class="px-4 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              <.icon name="hero-chevron-left" class="h-5 w-5" />
-            </button>
-          <% end %>
-
-          <span class="px-4 py-2 rounded-lg bg-blue-600 text-white">
-            Page <%= @filters.page %>
-          </span>
-
-          <button
-            phx-click="paginate"
-            phx-value-page={@filters.page + 1}
-            class="px-4 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            <.icon name="hero-chevron-right" class="h-5 w-5" />
-          </button>
+      <%= if Enum.empty?(@venues) do %>
+        <div class="text-center py-12">
+          <.icon name="hero-map-pin" class="mx-auto h-12 w-12 text-gray-400" />
+          <h3 class="mt-2 text-lg font-medium text-gray-900">
+            No venues found
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">
+            Try adjusting your filters or search query
+          </p>
         </div>
+      <% else %>
+        <div class="mb-4 text-sm text-gray-600">
+          Found <%= length(@venues) %> venues
+        </div>
+
+        <%= cond do %>
+          <% @view_mode == "map" -> %>
+            <.live_component
+              module={EventasaurusWeb.MapboxVenuesMapComponent}
+              id="venues-map"
+              venues={@venues}
+              city={@city}
+            />
+          <% @view_mode == "grid" -> %>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <%= for venue_data <- @venues do %>
+                <VenueCards.venue_card venue={venue_data.venue} city={@city} events_count={venue_data.upcoming_events_count} />
+              <% end %>
+            </div>
+          <% true -> %>
+            <div class="space-y-4">
+              <%= for venue_data <- @venues do %>
+                <VenueCards.venue_list_item venue={venue_data.venue} city={@city} events_count={venue_data.upcoming_events_count} />
+              <% end %>
+            </div>
+        <% end %>
+
+        <%!-- Pagination --%>
+        <%= if length(@venues) == @filters.page_size do %>
+          <div class="mt-8">
+            <nav class="flex justify-center">
+              <div class="flex items-center space-x-2">
+                <%= if @filters.page > 1 do %>
+                  <button
+                    phx-click="paginate"
+                    phx-value-page={@filters.page - 1}
+                    class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                <% end %>
+
+                <div class="flex space-x-1">
+                  <button
+                    class="px-3 py-2 rounded-md bg-blue-600 text-white"
+                  >
+                    <%= @filters.page %>
+                  </button>
+                </div>
+
+                <button
+                  phx-click="paginate"
+                  phx-value-page={@filters.page + 1}
+                  class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
+          </div>
+        <% end %>
       <% end %>
     <% end %>
-  <% end %>
+  </div>
 </div>

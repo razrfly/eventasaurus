@@ -80,7 +80,11 @@
     
     <!-- Main application CSS (includes base theme system) -->
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
-    
+
+    <!-- Mapbox GL JS for interactive maps -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+
     <!-- Theme CSS files -->
     <%= if assigns[:theme] && assigns[:theme] != :minimal do %>
       <link phx-track-static rel="stylesheet" href={"/themes/#{assigns[:theme]}.css"} />
