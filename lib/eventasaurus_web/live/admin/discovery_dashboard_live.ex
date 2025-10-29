@@ -813,17 +813,35 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   defp get_city_statistics do
     # Get statistics for active (discovery-enabled) cities using geographic matching
-    active_city_stats = get_active_city_statistics()
+    active_city_stats =
+      get_active_city_statistics()
+      |> Enum.map(&Map.put(&1, :is_geographic, true))
 
     # Get statistics for inactive cities using traditional city_id matching
-    inactive_city_stats = get_inactive_city_statistics()
+    inactive_city_stats =
+      get_inactive_city_statistics()
+      |> Enum.map(&Map.put(&1, :is_geographic, false))
 
     # Combine stats
     combined_stats = active_city_stats ++ inactive_city_stats
 
+    # DEBUG: Log Warsaw/Warszawa stats before clustering
+    warsaw_stats = Enum.filter(combined_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
+    if length(warsaw_stats) > 0 do
+      Logger.info("Warsaw/Warszawa before clustering: #{inspect(warsaw_stats)}")
+    end
+
     # Apply geographic clustering to group nearby cities (e.g., Paris + Paris 8 + Paris 16)
     # This uses a 20km distance threshold to detect metropolitan areas
+    # When clustering contains both geographic (active) and city_id (inactive) cities,
+    # use MAX instead of SUM to avoid double-counting events
     clustered_stats = CityHierarchy.aggregate_stats_by_cluster(combined_stats, 20.0)
+
+    # DEBUG: Log Warsaw after clustering
+    warsaw_clustered = Enum.find(clustered_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
+    if warsaw_clustered do
+      Logger.info("Warsaw/Warszawa after clustering: #{inspect(warsaw_clustered)}")
+    end
 
     # Sort by count descending
     Enum.sort_by(clustered_stats, & &1.count, :desc)
