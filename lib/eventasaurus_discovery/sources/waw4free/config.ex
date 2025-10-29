@@ -61,11 +61,11 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
 
   @doc """
   Categories available on waw4free.pl (in Polish).
-  Loads from categories.yml configuration file.
+  Returns list of category slugs used in URLs.
   """
   def categories do
-    load_categories()
-    |> Enum.map(& &1["slug"])
+    category_info()
+    |> Enum.map(& &1.slug)
   end
 
   @doc """
@@ -73,23 +73,56 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
   Returns list of category maps with slug, name_pl, name_en, and description.
   """
   def category_info do
-    load_categories()
-  end
-
-  # Private function to load categories from YAML file
-  defp load_categories do
-    categories_file = Path.join(__DIR__, "categories.yml")
-
-    case YamlElixir.read_from_file(categories_file) do
-      {:ok, %{"categories" => categories}} when is_list(categories) ->
-        categories
-
-      {:ok, _} ->
-        raise "Invalid categories.yml structure for Waw4Free - expected 'categories' key with list"
-
-      {:error, reason} ->
-        raise "Failed to load Waw4Free categories.yml: #{inspect(reason)}"
-    end
+    [
+      %{
+        slug: "koncerty",
+        name_pl: "Koncerty",
+        name_en: "Concerts",
+        description: "Music concerts and live performances"
+      },
+      %{
+        slug: "warsztaty",
+        name_pl: "Warsztaty",
+        name_en: "Workshops",
+        description: "Educational workshops and hands-on activities"
+      },
+      %{
+        slug: "wystawy",
+        name_pl: "Wystawy",
+        name_en: "Exhibitions",
+        description: "Art exhibitions and gallery shows"
+      },
+      %{
+        slug: "teatr",
+        name_pl: "Teatr",
+        name_en: "Theatre",
+        description: "Theatre performances and dramatic arts"
+      },
+      %{
+        slug: "sport",
+        name_pl: "Sport",
+        name_en: "Sports",
+        description: "Sports events and activities"
+      },
+      %{
+        slug: "dla-dzieci",
+        name_pl: "Dla Dzieci",
+        name_en: "For Children",
+        description: "Family-friendly and children's events"
+      },
+      %{
+        slug: "festiwale",
+        name_pl: "Festiwale",
+        name_en: "Festivals",
+        description: "Festivals and multi-day events"
+      },
+      %{
+        slug: "inne",
+        name_pl: "Inne",
+        name_en: "Other",
+        description: "Miscellaneous events not fitting other categories"
+      }
+    ]
   end
 
   @doc """
