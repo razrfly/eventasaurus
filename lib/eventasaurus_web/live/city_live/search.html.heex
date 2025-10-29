@@ -208,7 +208,7 @@
                   <div class="aspect-w-16 aspect-h-9 relative">
                     <%= if event.cover_image_url do %>
                       <img
-                        src={event.cover_image_url}
+                        src={CDN.url(event.cover_image_url, width: 800, height: 450, fit: "cover", quality: 85)}
                         alt={event.title}
                         class="w-full h-48 object-cover"
                       />
@@ -269,7 +269,7 @@
                   <div class="flex gap-4">
                     <%= if event.cover_image_url do %>
                       <img
-                        src={event.cover_image_url}
+                        src={CDN.url(event.cover_image_url, width: 192, height: 192, fit: "cover", quality: 85)}
                         alt={event.title}
                         class="w-24 h-24 object-cover rounded-lg flex-shrink-0"
                       />

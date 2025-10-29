@@ -1,7 +1,7 @@
 # ADR 001: Meta Tag Pattern Standardization
 
 **Status:** Accepted
-**Date:** 2025-01-29
+**Date:** 2025-10-29
 **Decision Makers:** Development Team
 **Context:** Phase 2.1 of SEO & Social Cards Code Consolidation (#2058)
 

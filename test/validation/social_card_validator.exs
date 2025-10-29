@@ -251,19 +251,21 @@ defmodule SocialCardValidator do
   end
 
   defp get_sample_event do
-    # This would query the database in a real test
-    # For now, return example data
-    IO.puts("  ℹ️  Note: Using mock data. Set DATABASE_URL to test real endpoints.")
+    # TODO: Implement database queries when DATABASE_URL is available
+    # For now, using mock data
+    IO.puts("  ℹ️  Note: Using mock data. Update these functions to query real data.")
     {:ok, "sample-event", "abc12345"}
   end
 
   defp get_sample_poll do
-    IO.puts("  ℹ️  Note: Using mock data. Set DATABASE_URL to test real endpoints.")
+    # TODO: Implement database queries when DATABASE_URL is available
+    IO.puts("  ℹ️  Note: Using mock data. Update these functions to query real data.")
     {:ok, "sample-event", "1", "def67890"}
   end
 
   defp get_sample_city do
-    IO.puts("  ℹ️  Note: Using mock data. Set DATABASE_URL to test real endpoints.")
+    # TODO: Implement database queries when DATABASE_URL is available
+    IO.puts("  ℹ️  Note: Using mock data. Update these functions to query real data.")
     {:ok, "warsaw", "ghi11111"}
   end
 

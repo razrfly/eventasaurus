@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
 
   use EventasaurusWeb, :live_view
 
+  alias Eventasaurus.CDN
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
   alias EventasaurusDiscovery.PublicEventsEnhanced
@@ -441,7 +442,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
           <div class="flex-shrink-0">
             <div class="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden">
               <%= if Map.get(@event, :cover_image_url) do %>
-                <img src={Map.get(@event, :cover_image_url)} alt={@event.title} class="w-full h-full object-cover" loading="lazy">
+                <img src={CDN.url(Map.get(@event, :cover_image_url), width: 192, height: 192, fit: "cover", quality: 85)} alt={@event.title} class="w-full h-full object-cover" loading="lazy">
               <% else %>
                 <div class="w-full h-full flex items-center justify-center">
                   <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">

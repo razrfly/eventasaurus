@@ -1,7 +1,7 @@
 # ADR 002: Social Card Architecture
 
 **Status:** Accepted
-**Date:** 2025-01-29
+**Date:** 2025-10-29
 **Decision Makers:** Development Team
 **Context:** Phase 1-2 of SEO & Social Cards Code Consolidation (#2058)
 
