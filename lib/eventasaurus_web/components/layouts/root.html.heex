@@ -216,6 +216,20 @@
       })();
     </script>
 
+    <!-- Google Maps Marker Clusterer -->
+    <script>
+      (function() {
+        // Only load if Google Maps is being used
+        if (!window.USE_GOOGLE_MAPS) return;
+
+        // Load marker clusterer library
+        const markerClustererScript = document.createElement('script');
+        markerClustererScript.src = 'https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js';
+        markerClustererScript.async = true;
+        document.head.appendChild(markerClustererScript);
+      })();
+    </script>
+
     <!-- Mobile Navigation Script -->
     <script>
       document.addEventListener('DOMContentLoaded', function() {

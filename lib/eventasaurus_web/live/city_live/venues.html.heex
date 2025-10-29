@@ -18,34 +18,93 @@
     </div>
   </div>
 
+  <%!-- Featured Collections --%>
+  <%= if @show_collections and not Enum.empty?(@collections) do %>
+    <div class="mb-10 space-y-8">
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+        Featured Collections
+      </h2>
+
+      <%= for collection <- @collections do %>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <.icon name={collection.icon} class="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div>
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  <%= collection.name %>
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  <%= collection.description %>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Collection Venues - Horizontal Scroll --%>
+          <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
+            <%= for venue_data <- Enum.take(collection.venues, 6) do %>
+              <.link
+                navigate={~p"/venues/#{venue_data.venue.slug}"}
+                class="group flex-none w-64 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden snap-start"
+              >
+                <%!-- Venue Image --%>
+                <div class="h-40 bg-gray-100 dark:bg-gray-700 overflow-hidden relative">
+                  <img
+                    src={EventasaurusWeb.Helpers.VenueImageHelper.get_venue_image(venue_data.venue, @city, width: 400, height: 300, quality: 85)}
+                    alt={venue_data.venue.name}
+                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                  />
+
+                  <%!-- Event Count Badge --%>
+                  <%= if venue_data.upcoming_events_count > 0 do %>
+                    <div class="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium">
+                      <%= venue_data.upcoming_events_count %> <%= if venue_data.upcoming_events_count == 1, do: "event", else: "events" %>
+                    </div>
+                  <% end %>
+                </div>
+
+                <%!-- Venue Info --%>
+                <div class="p-3">
+                  <h4 class="font-semibold text-gray-900 dark:text-gray-100 mb-1 line-clamp-1">
+                    <%= venue_data.venue.name %>
+                  </h4>
+
+                  <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
+                    <%= venue_data.venue.address %>
+                  </p>
+                </div>
+              </.link>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
   <%!-- Search and Controls --%>
   <div class="mb-6 space-y-4">
     <%!-- Search Bar --%>
-    <form phx-submit="search" class="relative">
+    <form phx-submit="search" phx-change="search" class="relative">
       <input
         type="text"
         name="search"
         value={@filters.search || ""}
         placeholder="Search venues by name or address..."
-        class="w-full px-4 py-3 pr-24 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        class="w-full px-4 py-3 pl-12 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
       />
-
+      <.icon name="hero-magnifying-glass" class="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
       <%= if @filters.search do %>
         <button
           type="button"
           phx-click="clear_search"
-          class="absolute right-14 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          class="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
         >
           <.icon name="hero-x-mark" class="h-5 w-5" />
         </button>
       <% end %>
-
-      <button
-        type="submit"
-        class="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-      >
-        Search
-      </button>
     </form>
 
     <%!-- Controls Row --%>
@@ -65,6 +124,13 @@
           class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "list", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
         >
           <.icon name="hero-list-bullet" class="h-5 w-5" />
+        </button>
+        <button
+          phx-click="toggle_view"
+          phx-value-mode="map"
+          class={"px-4 py-2 rounded-md transition-colors #{if @view_mode == "map", do: "bg-white dark:bg-gray-700 shadow-sm", else: "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"}"}
+        >
+          <.icon name="hero-map" class="h-5 w-5" />
         </button>
       </div>
 
@@ -107,10 +173,20 @@
     <%= if Enum.empty?(@venues) do %>
       <VenueCards.empty_state search_term={@filters.search} />
     <% else %>
-      <%= if @view_mode == "grid" do %>
-        <VenueCards.venue_grid venues={@venues} city={@city} />
-      <% else %>
-        <VenueCards.venue_list venues={@venues} city={@city} />
+      <%= cond do %>
+        <% @view_mode == "grid" -> %>
+          <VenueCards.venue_grid venues={@venues} city={@city} />
+        <% @view_mode == "list" -> %>
+          <VenueCards.venue_list venues={@venues} city={@city} />
+        <% @view_mode == "map" -> %>
+          <.live_component
+            module={EventasaurusWeb.VenuesMapComponent}
+            id="venues-map"
+            venues={@venues}
+            city={@city}
+          />
+        <% true -> %>
+          <VenueCards.venue_grid venues={@venues} city={@city} />
       <% end %>
 
       <%!-- Pagination --%>

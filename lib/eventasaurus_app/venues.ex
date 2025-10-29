@@ -198,6 +198,131 @@ defmodule EventasaurusApp.Venues do
     |> Repo.aggregate(:count)
   end
 
+  @doc """
+  Gets featured venue collections for a city.
+
+  Returns a list of curated venue collections including:
+  - Most Active: Venues with the most upcoming events
+  - Best Documented: Venues with the most images
+  - Recently Added: Newest venues
+
+  Each collection includes up to 6 venues with their upcoming events count.
+
+  ## Parameters
+  - city_id: The city ID to get collections for
+  - limit: Number of venues per collection (default: 6)
+
+  ## Returns
+  List of maps with:
+  - `:name` - Collection name
+  - `:description` - Collection description
+  - `:slug` - URL-friendly collection identifier
+  - `:venues` - List of venue data maps
+  - `:icon` - Icon name for display
+
+  ## Examples
+
+      get_venue_collections(123)
+      # Returns: [
+      #   %{
+      #     name: "Most Active Venues",
+      #     description: "Venues hosting the most events",
+      #     slug: "most-active",
+      #     icon: "hero-fire",
+      #     venues: [...]
+      #   },
+      #   ...
+      # ]
+  """
+  def get_venue_collections(city_id, limit \\ 6) do
+    [
+      get_most_active_venues(city_id, limit),
+      get_best_documented_venues(city_id, limit),
+      get_recently_added_venues(city_id, limit)
+    ]
+    |> Enum.reject(fn collection -> Enum.empty?(collection.venues) end)
+  end
+
+  # Get venues with most upcoming events
+  defp get_most_active_venues(city_id, limit) do
+    venues =
+      from(v in Venue,
+        left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        where: v.city_id == ^city_id,
+        group_by: v.id,
+        having: count(pe.id) > 0,
+        order_by: [desc: count(pe.id)],
+        limit: ^limit,
+        select: %{
+          venue: v,
+          upcoming_events_count: count(pe.id)
+        }
+      )
+      |> Repo.all()
+
+    %{
+      name: "Most Active Venues",
+      description: "Venues hosting the most upcoming events",
+      slug: "most-active",
+      icon: "hero-fire",
+      venues: venues
+    }
+  end
+
+  # Get venues with most images
+  defp get_best_documented_venues(city_id, limit) do
+    venues =
+      from(v in Venue,
+        left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        where: v.city_id == ^city_id,
+        where: fragment("jsonb_array_length(?) > 0", v.venue_images),
+        group_by: v.id,
+        order_by: [desc: fragment("jsonb_array_length(?)", v.venue_images)],
+        limit: ^limit,
+        select: %{
+          venue: v,
+          upcoming_events_count: count(pe.id)
+        }
+      )
+      |> Repo.all()
+
+    %{
+      name: "Best Documented Venues",
+      description: "Venues with the best photo galleries",
+      slug: "best-documented",
+      icon: "hero-camera",
+      venues: venues
+    }
+  end
+
+  # Get most recently added venues
+  defp get_recently_added_venues(city_id, limit) do
+    venues =
+      from(v in Venue,
+        left_join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+          on: pe.venue_id == v.id and pe.starts_at > ^DateTime.utc_now(),
+        where: v.city_id == ^city_id,
+        group_by: v.id,
+        order_by: [desc: v.inserted_at],
+        limit: ^limit,
+        select: %{
+          venue: v,
+          upcoming_events_count: count(pe.id)
+        }
+      )
+      |> Repo.all()
+
+    %{
+      name: "Recently Added",
+      description: "Newest venues added to our platform",
+      slug: "recently-added",
+      icon: "hero-sparkles",
+      venues: venues
+    }
+  end
+
   # Private helpers for list_city_venues query building
 
   defp maybe_search(query, nil), do: query

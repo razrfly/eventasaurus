@@ -62,37 +62,36 @@ defmodule EventasaurusWeb.Components.VenueCards do
     ~H"""
     <.link
       navigate={~p"/venues/#{@venue.slug}"}
-      class="group block bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
+      class="block bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
     >
-      <div class="aspect-[4/3] w-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+      <div class="h-48 bg-gray-200 dark:bg-gray-700 rounded-t-lg relative overflow-hidden">
         <img
           src={@image_url}
           alt={"Photo of #{@venue.name}"}
-          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          class="w-full h-full object-cover"
           loading="lazy"
           referrerpolicy="no-referrer"
         />
+
+        <%!-- Event Count Badge --%>
+        <%= if @events_count > 0 do %>
+          <div class="absolute bottom-3 right-3 bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
+            <.icon name="hero-calendar" class="h-3 w-3 mr-1" />
+            <%= @events_count %> <%= if @events_count == 1, do: "event", else: "events" %>
+          </div>
+        <% end %>
       </div>
 
       <div class="p-4">
-        <h3 class="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-1">
+        <h3 class="font-semibold text-lg text-gray-900 dark:text-gray-100 line-clamp-2">
           <%= @venue.name %>
         </h3>
 
         <%= if @venue.address do %>
-          <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 mb-2">
+          <div class="mt-2 flex items-center text-sm text-gray-600 dark:text-gray-400">
+            <.icon name="hero-map-pin" class="h-4 w-4 mr-1" />
             <%= @venue.address %>
-          </p>
-        <% end %>
-
-        <%= if @events_count > 0 do %>
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-            <%= @events_count %> <%= if @events_count == 1, do: "event", else: "events" %>
-          </span>
-        <% else %>
-          <span class="text-xs text-gray-500 dark:text-gray-400">
-            No upcoming events
-          </span>
+          </div>
         <% end %>
       </div>
     </.link>
@@ -114,7 +113,7 @@ defmodule EventasaurusWeb.Components.VenueCards do
     ~H"""
     <.link
       navigate={~p"/venues/#{@venue.slug}"}
-      class="group flex items-start gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+      class="group flex items-start gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow"
     >
       <div class="flex-shrink-0">
         <img
@@ -127,27 +126,23 @@ defmodule EventasaurusWeb.Components.VenueCards do
       </div>
 
       <div class="flex-1 min-w-0">
-        <h3 class="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+        <h3 class="font-semibold text-lg text-gray-900 dark:text-gray-100">
           <%= @venue.name %>
         </h3>
 
         <%= if @venue.address do %>
-          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <div class="mt-1 flex items-center text-sm text-gray-600 dark:text-gray-400">
+            <.icon name="hero-map-pin" class="h-4 w-4 mr-1" />
             <%= @venue.address %>
-          </p>
+          </div>
         <% end %>
 
-        <div class="mt-2">
-          <%= if @events_count > 0 do %>
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              <%= @events_count %> <%= if @events_count == 1, do: "upcoming event", else: "upcoming events" %>
-            </span>
-          <% else %>
-            <span class="text-xs text-gray-500 dark:text-gray-400">
-              No upcoming events
-            </span>
-          <% end %>
-        </div>
+        <%= if @events_count > 0 do %>
+          <div class="mt-2 flex items-center text-sm text-blue-600 dark:text-blue-400">
+            <.icon name="hero-calendar" class="h-4 w-4 mr-1" />
+            <%= @events_count %> <%= if @events_count == 1, do: "upcoming event", else: "upcoming events" %>
+          </div>
+        <% end %>
       </div>
 
       <div class="flex-shrink-0">
