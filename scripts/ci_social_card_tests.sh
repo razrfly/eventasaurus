@@ -91,12 +91,12 @@ echo "📊 Step 5: Test Coverage"
 echo "----------------------------------------------------------------------"
 
 echo "Generating coverage report..."
-if mix test --cover; then
+COVERAGE_OUTPUT=$(mix test --cover 2>&1)
+if [ $? -eq 0 ]; then
     echo "✅ Coverage report generated"
 
     # Check coverage percentage (requires parsing coverage output)
-    # This is a simple check, adjust based on your coverage tool
-    if mix test --cover 2>&1 | grep -q "COV"; then
+    if echo "$COVERAGE_OUTPUT" | grep -q "COV"; then
         echo "Coverage data available"
     fi
 else

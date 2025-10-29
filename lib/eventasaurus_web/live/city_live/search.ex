@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.CityLive.Search do
   """
   use EventasaurusWeb, :live_view
 
+  alias Eventasaurus.CDN
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories

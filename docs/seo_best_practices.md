@@ -41,7 +41,7 @@ This guide documents SEO best practices for the Eventasaurus/Wombie platform, co
 ### Related Documentation
 
 - [ADR 001: Meta Tag Pattern Standardization](adr/001-meta-tag-pattern-standardization.md)
-- [Social Card Architecture Guide](#social-card-architecture) (this document)
+- [Social Card Architecture Guide](#social-card-system-architecture) (this document)
 - [Helper Module Reference](#seo-helper-modules) (this document)
 
 ---
@@ -1132,6 +1132,94 @@ defmodule EventasaurusWeb.PublicPollLive do
 end
 ```
 
+### Development & ngrok Support
+
+**⚠️ CRITICAL:** All LiveViews using `SEOHelpers.assign_meta_tags/2` **must** capture and pass `request_uri` to avoid localhost URLs in development.
+
+#### The Problem
+
+Without `request_uri`, URLs fall back to static configuration:
+- **Development:** Returns `localhost` → Social media crawlers **cannot** access localhost
+- **Production:** Works fine (returns production domain)
+- **ngrok/tunnels:** Broken (returns localhost instead of tunnel URL)
+
+#### The Solution
+
+**Step 1:** Capture `request_uri` in `mount/3`:
+
+```elixir
+def mount(_params, _session, socket) do
+  # Capture request URI for correct URL generation
+  raw_uri = get_connect_info(socket, :uri)
+  request_uri =
+    cond do
+      match?(%URI{}, raw_uri) -> raw_uri
+      is_binary(raw_uri) -> URI.parse(raw_uri)
+      true -> nil
+    end
+
+  # ... rest of mount logic
+end
+```
+
+**Step 2:** Pass `request_uri` to `SEOHelpers.assign_meta_tags/2`:
+
+```elixir
+socket
+|> SEOHelpers.assign_meta_tags(
+  title: "Page Title",
+  description: "Page description",
+  image: social_card_url,
+  type: "website",
+  canonical_path: "/page/path",
+  json_ld: json_ld,
+  request_uri: request_uri  # CRITICAL: Must pass this
+)
+```
+
+#### How It Works
+
+When `request_uri` is provided:
+1. `SEOHelpers` passes it to `UrlHelper.build_url(path, request_uri)`
+2. `UrlHelper` uses the **actual request host** (ngrok, production domain)
+3. Meta tags show correct URLs that social media crawlers can access
+
+Without `request_uri`:
+1. `SEOHelpers` calls `UrlHelper.build_url(path, nil)`
+2. Falls back to `UrlHelper.get_base_url()` (reads endpoint config)
+3. Returns localhost in development → social cards broken
+
+#### Testing with ngrok
+
+```bash
+# 1. Start Phoenix server
+mix phx.server
+
+# 2. Start ngrok tunnel
+ngrok http 4000
+
+# 3. Visit your page through ngrok
+https://your-subdomain.ngrok.io/your-page
+
+# 4. View page source and verify meta tags use ngrok URL
+<meta property="og:url" content="https://your-subdomain.ngrok.io/your-page">
+<meta property="og:image" content="https://your-subdomain.ngrok.io/path/to/social-card.png">
+```
+
+#### Checklist for All LiveViews
+
+Before marking a LiveView SEO implementation complete:
+
+- [ ] `get_connect_info(socket, :uri)` captured in `mount/3`
+- [ ] `request_uri` parsed and stored in socket assigns (optional) or local variable
+- [ ] `request_uri: request_uri` passed to `SEOHelpers.assign_meta_tags/2`
+- [ ] Tested with ngrok - meta tags show ngrok URL, not localhost
+- [ ] Tested with social media debuggers (Facebook, Twitter, LinkedIn)
+
+#### Reference Implementation
+
+See `lib/eventasaurus_web/live/public_event_show_live.ex:27-34` for the canonical implementation pattern.
+
 ---
 
 ## Troubleshooting
@@ -1164,6 +1252,73 @@ curl -I https://wombie.com/event/social-card-abc123.png
 # - Route is configured
 # - rsvg-convert is installed
 ```
+
+### Social Card URLs Show localhost
+
+**Problem:** Open Graph meta tags show `localhost` instead of actual domain (ngrok, production)
+
+**Symptoms:**
+```html
+<!-- Bad: Shows localhost -->
+<meta property="og:url" content="https://localhost/c/warsaw">
+<meta property="og:image" content="https://localhost/social-cards/city/warsaw/hash.png">
+
+<!-- Good: Shows actual domain -->
+<meta property="og:url" content="https://wombie.ngrok.io/c/warsaw">
+<meta property="og:image" content="https://wombie.ngrok.io/social-cards/city/warsaw/hash.png">
+```
+
+**Root Cause:** LiveView not capturing and passing `request_uri` to `SEOHelpers.assign_meta_tags/2`
+
+**Fix:**
+
+Step 1: Capture `request_uri` in LiveView's `mount/3`:
+```elixir
+def mount(_params, _session, socket) do
+  # Capture request URI for correct URL generation (ngrok support)
+  raw_uri = get_connect_info(socket, :uri)
+  request_uri =
+    cond do
+      match?(%URI{}, raw_uri) -> raw_uri
+      is_binary(raw_uri) -> URI.parse(raw_uri)
+      true -> nil
+    end
+
+  # ... rest of mount logic
+end
+```
+
+Step 2: Pass `request_uri` to `SEOHelpers.assign_meta_tags/2`:
+```elixir
+socket
+|> SEOHelpers.assign_meta_tags(
+  title: title,
+  description: description,
+  image: social_card_url,
+  type: "website",
+  canonical_path: "/path",
+  json_ld: json_ld,
+  request_uri: request_uri  # CRITICAL: Must include this
+)
+```
+
+**Why this happens:**
+- Without `request_uri`: URLs fall back to endpoint config (returns `localhost` in dev)
+- With `request_uri`: URLs use actual request host (ngrok URL, production domain)
+- Social media crawlers cannot access `localhost` URLs → cards fail to display
+
+**Testing:**
+```bash
+# View page source and check meta tags
+curl -s https://your-domain.ngrok.io/your-page | grep "og:url"
+curl -s https://your-domain.ngrok.io/your-page | grep "og:image"
+
+# Should show ngrok URL, not localhost
+# Bad:  content="https://localhost/..."
+# Good: content="https://your-domain.ngrok.io/..."
+```
+
+**Reference:** See [Development & ngrok Support](#development--ngrok-support) section and `lib/eventasaurus_web/live/public_event_show_live.ex:27-34` for the canonical implementation pattern.
 
 ### JSON-LD Not Recognized
 

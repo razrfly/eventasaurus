@@ -117,9 +117,13 @@ defmodule EventasaurusWeb.SocialCardPerformanceTest do
 
     test "concurrent requests don't degrade performance", %{conn: conn, event: event, hash: hash} do
       # Make 10 concurrent requests
+      parent = self()
+
       tasks =
         for _ <- 1..10 do
           Task.async(fn ->
+            Ecto.Adapters.SQL.Sandbox.allow(EventasaurusApp.Repo, parent, self())
+
             {time, response} =
               :timer.tc(fn ->
                 get(conn, "/#{event.slug}/social-card-#{hash}.png")

@@ -59,6 +59,48 @@ Once ngrok is running and BASE_URL is set:
 - See Phase 1 fixes in GitHub issue #1781
 
 #### Social card meta tags use localhost
+
+**Root Cause:** LiveView not capturing and passing `request_uri` to `SEOHelpers.assign_meta_tags/2`
+
+**Fix:**
+
+Step 1: Capture `request_uri` in LiveView's `mount/3`:
+```elixir
+def mount(_params, _session, socket) do
+  # Capture request URI for correct URL generation (ngrok support)
+  raw_uri = get_connect_info(socket, :uri)
+  request_uri =
+    cond do
+      match?(%URI{}, raw_uri) -> raw_uri
+      is_binary(raw_uri) -> URI.parse(raw_uri)
+      true -> nil
+    end
+
+  # ... rest of mount logic
+end
+```
+
+Step 2: Pass `request_uri` to `SEOHelpers.assign_meta_tags/2`:
+```elixir
+socket
+|> SEOHelpers.assign_meta_tags(
+  title: title,
+  description: description,
+  image: social_card_url,
+  type: "website",
+  canonical_path: "/path",
+  json_ld: json_ld,
+  request_uri: request_uri  # CRITICAL: Must pass this
+)
+```
+
+**Why this works:**
+- Without `request_uri`: URLs fall back to endpoint config (returns localhost in dev)
+- With `request_uri`: URLs use actual request host (ngrok URL, production domain)
+
+**Reference:** See `lib/eventasaurus_web/live/public_event_show_live.ex:27-34` for the canonical implementation
+
+**Alternative (Legacy):** Setting BASE_URL environment variable (not recommended)
 - Ensure `BASE_URL` environment variable is set
 - Restart Phoenix server after setting BASE_URL
 - Verify `UrlHelper.get_base_url()` returns external domain
