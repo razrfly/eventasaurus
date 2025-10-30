@@ -365,8 +365,8 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
 
   defp find_best_match(ta_venue, ea_venues) do
     ta_slug = ta_venue.slug
-    ta_lat = if ta_venue.latitude, do: Decimal.to_float(ta_venue.latitude), else: nil
-    ta_lng = if ta_venue.longitude, do: Decimal.to_float(ta_venue.longitude), else: nil
+    ta_lat = maybe_to_float(ta_venue.latitude)
+    ta_lng = maybe_to_float(ta_venue.longitude)
     ta_name = normalize_name(ta_venue.name)
     ta_place_id = ta_venue.place_id
 
@@ -382,8 +382,8 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
         cond do
           # Tier 1: Slug + Geo (proof positive)
           ta_slug && ea_slug && ta_slug == ea_slug ->
-            ea_lat = ea_venue.latitude
-            ea_lng = ea_venue.longitude
+            ea_lat = maybe_to_float(ea_venue.latitude)
+            ea_lng = maybe_to_float(ea_venue.longitude)
             distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
 
             if distance < 50 do
@@ -397,16 +397,16 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
 
           # Tier 2: place_id match
           ta_place_id && ea_place_id && ta_place_id == ea_place_id ->
-            ea_lat = ea_venue.latitude
-            ea_lng = ea_venue.longitude
+            ea_lat = maybe_to_float(ea_venue.latitude)
+            ea_lng = maybe_to_float(ea_venue.longitude)
             distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
             new_match = {ea_venue, "place_id", 0.95, distance, 0}
             {:cont, better_match(best_match, new_match)}
 
           # Tier 3b: Geo + name similarity
           best_match == nil || elem(best_match, 2) < 0.85 ->
-            ea_lat = ea_venue.latitude
-            ea_lng = ea_venue.longitude
+            ea_lat = maybe_to_float(ea_venue.latitude)
+            ea_lng = maybe_to_float(ea_venue.longitude)
             distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
 
             if distance < 50 do
@@ -590,4 +590,9 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
   defp convert_keys_to_strings(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
+
+  # Safely convert coordinates to floats for haversine distance calculations
+  defp maybe_to_float(%Decimal{} = value), do: Decimal.to_float(value)
+  defp maybe_to_float(value) when is_number(value), do: value
+  defp maybe_to_float(_), do: nil
 end

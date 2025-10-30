@@ -331,15 +331,23 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
   end
 
   defp merge_images(original_images, new_images) do
-    # Deduplicate by URL
-    existing_urls = MapSet.new(original_images, fn img -> img["url"] end)
+    # Deduplicate by URL (both against existing and within new batch)
+    initial_urls = MapSet.new(original_images, fn img -> img["url"] end)
 
-    unique_new_images =
-      Enum.reject(new_images, fn img ->
-        MapSet.member?(existing_urls, img["url"])
+    {unique_new_images, _} =
+      Enum.reduce(new_images, {[], initial_urls}, fn img, {acc, urls} ->
+        url = img["url"]
+
+        if MapSet.member?(urls, url) do
+          # Skip duplicate (already seen in original_images or earlier in new_images)
+          {acc, urls}
+        else
+          # Add this image and mark URL as seen
+          {[img | acc], MapSet.put(urls, url)}
+        end
       end)
 
-    original_images ++ unique_new_images
+    original_images ++ Enum.reverse(unique_new_images)
   end
 
   defp store_success_meta(job, results, venue_id, venue_slug) do
