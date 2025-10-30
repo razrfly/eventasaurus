@@ -1,0 +1,270 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <!-- Header -->
+  <div class="mb-8">
+    <div class="mb-4">
+      <.link navigate="/admin" class="text-sm text-blue-600 hover:text-blue-800 inline-block">
+        ← Back to Admin
+      </.link>
+    </div>
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Sitemap Statistics</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Expected URL counts for sitemap generation. Shows what WOULD be in the sitemap if generated now.
+        </p>
+        <%= if @last_updated do %>
+          <p class="mt-1 text-xs text-gray-500">
+            Last updated: <%= Calendar.strftime(@last_updated, "%Y-%m-%d %H:%M:%S UTC") %>
+          </p>
+        <% end %>
+      </div>
+      <div class="flex gap-2">
+        <button
+          phx-click="refresh"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <.icon name="hero-arrow-path" class="h-4 w-4 inline mr-1" />
+          Refresh Stats
+        </button>
+        <button
+          phx-click="generate_sitemap"
+          class="px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          phx-disable-with="Queueing..."
+          disabled={@generating}
+        >
+          <%= if @generating do %>
+            <.icon name="hero-clock" class="h-4 w-4 inline mr-1" />
+            Job Queued...
+          <% else %>
+            <.icon name="hero-document-plus" class="h-4 w-4 inline mr-1" />
+            Generate Sitemap Now
+          <% end %>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <%= if @stats do %>
+    <!-- Summary Card -->
+    <div class="bg-white overflow-hidden shadow rounded-lg mb-8">
+      <div class="p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-medium text-gray-900">Total Expected URLs</h2>
+            <p class="mt-1 text-3xl font-bold text-indigo-600"><%= format_number(@stats.total) %></p>
+          </div>
+          <div class="flex-shrink-0">
+            <.icon name="hero-document-text" class="h-12 w-12 text-indigo-400" />
+          </div>
+        </div>
+        <div class="mt-4 flex items-center text-sm text-gray-600">
+          <.icon name="hero-check-circle" class="h-5 w-5 text-green-500 mr-2" />
+          <span>Ready for generation</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Breakdown Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-medium text-gray-900">URL Breakdown by Category</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Category
+              </th>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Count
+              </th>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Status
+              </th>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Sample URL
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <!-- Static Pages -->
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                Static Pages
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= format_number(@stats.static) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="text-xl"><%= status_icon(@stats.static) %></span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                <code class="text-xs bg-gray-100 px-2 py-1 rounded"><%= @samples.static %></code>
+              </td>
+            </tr>
+            <!-- Activities -->
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                Activities
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= format_number(@stats.activities) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="text-xl"><%= status_icon(@stats.activities) %></span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                <%= if @samples.activities do %>
+                  <code class="text-xs bg-gray-100 px-2 py-1 rounded"><%= @samples.activities %></code>
+                <% else %>
+                  <span class="text-gray-400 italic">No activities found</span>
+                <% end %>
+              </td>
+            </tr>
+            <!-- Cities -->
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                Cities
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= format_number(@stats.cities) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="text-xl"><%= status_icon(@stats.cities) %></span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                <code class="text-xs bg-gray-100 px-2 py-1 rounded"><%= @samples.cities %></code>
+                <span class="text-xs text-gray-400 ml-2">(10 pages per city)</span>
+              </td>
+            </tr>
+            <!-- Venues -->
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                Venues
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= format_number(@stats.venues) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="text-xl"><%= status_icon(@stats.venues) %></span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                <%= if @samples.venues do %>
+                  <code class="text-xs bg-gray-100 px-2 py-1 rounded"><%= @samples.venues %></code>
+                <% else %>
+                  <span class="text-gray-400 italic">No venues found</span>
+                <% end %>
+              </td>
+            </tr>
+            <!-- Containers -->
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                Containers
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= format_number(@stats.containers) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="text-xl"><%= status_icon(@stats.containers) %></span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                <%= if @samples.containers do %>
+                  <code class="text-xs bg-gray-100 px-2 py-1 rounded"><%= @samples.containers %></code>
+                <% else %>
+                  <span class="text-gray-400 italic">No containers with slugs yet</span>
+                <% end %>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot class="bg-gray-50">
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                TOTAL
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                <%= format_number(@stats.total) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="text-xl">✅</span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Generation Info Box -->
+    <div class="mt-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <.icon name="hero-document-text" class="h-5 w-5 text-indigo-400" />
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-indigo-800">Sitemap Generation & Storage</h3>
+          <div class="mt-2 text-sm text-indigo-700 space-y-2">
+            <p>
+              <strong>Generates:</strong>
+              <code class="bg-indigo-100 px-1 rounded">sitemap.xml.gz</code>
+              with <%= format_number(@stats.total) %> URLs (static pages, activities, cities, venues, containers)
+            </p>
+            <p>
+              <strong>Storage:</strong> Uploaded to Supabase Storage at
+              <code class="bg-indigo-100 px-1 rounded">/sitemaps/</code>
+            </p>
+            <p>
+              <strong>Access:</strong>
+              <code class="bg-indigo-100 px-1 rounded">/sitemap</code>
+              or
+              <code class="bg-indigo-100 px-1 rounded">/sitemap.xml</code>
+              redirect to latest
+            </p>
+            <p>
+              <strong>Processing:</strong> Generation runs via Oban worker and may take a few minutes for large sitemaps
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Info Box -->
+    <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <.icon name="hero-information-circle" class="h-5 w-5 text-blue-400" />
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-blue-800">About These Statistics</h3>
+          <div class="mt-2 text-sm text-blue-700">
+            <ul class="list-disc list-inside space-y-1">
+              <li>These counts show what WOULD be in the sitemap if generated right now</li>
+              <li>Based on current database state (discovery-enabled cities, valid slugs, etc.)</li>
+              <li>Use "Refresh Stats" to see latest counts before generating</li>
+              <li>✅ = URLs ready for inclusion, ⚠️ = No URLs found</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% else %>
+    <!-- Loading State -->
+    <div class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600">
+      </div>
+      <p class="mt-4 text-gray-600">Loading sitemap statistics...</p>
+    </div>
+  <% end %>
+</div>

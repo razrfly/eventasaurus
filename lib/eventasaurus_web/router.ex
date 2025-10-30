@@ -49,6 +49,9 @@ defmodule EventasaurusWeb.Router do
       # Jobs Monitor Dashboard (dev - no auth)
       live "/jobs-monitor", Admin.JobMonitorLive
 
+      # Sitemap Statistics (dev - no auth)
+      live "/sitemap", Admin.SitemapLive
+
       # Discovery Dashboard (dev - no auth)
       live "/imports", Admin.DiscoveryDashboardLive
 
@@ -140,6 +143,9 @@ defmodule EventasaurusWeb.Router do
 
       # Jobs Monitor Dashboard with admin authentication
       live "/jobs-monitor", EventasaurusWeb.Admin.JobMonitorLive
+
+      # Sitemap Statistics with admin authentication
+      live "/sitemap", EventasaurusWeb.Admin.SitemapLive
 
       # Discovery Dashboard with admin authentication
       live "/imports", EventasaurusWeb.Admin.DiscoveryDashboardLive

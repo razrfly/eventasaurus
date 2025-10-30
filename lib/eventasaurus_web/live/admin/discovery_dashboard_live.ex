@@ -363,25 +363,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   @impl true
-  def handle_event("generate_sitemap", _params, socket) do
-    # Queue the sitemap generation worker
-    case Eventasaurus.Workers.SitemapWorker.new(%{}) |> Oban.insert() do
-      {:ok, job} ->
-        socket =
-          socket
-          |> put_flash(:info, "Queued sitemap generation job ##{job.id}")
-          |> assign(:import_running, true)
-          |> assign(:import_progress, "Generating sitemap...")
-
-        {:noreply, socket}
-
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to queue sitemap: #{inspect(reason)}")
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
   def handle_event("recalculate_coordinates", _params, socket) do
     # Queue the coordinate recalculation worker
     case EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker.new(%{})

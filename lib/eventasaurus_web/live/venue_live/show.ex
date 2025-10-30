@@ -16,8 +16,9 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    # Get language from session or default to English
-    language = get_connect_params(socket)["locale"] || "en"
+    # Get language from session params (if present) or default to English
+    params = get_connect_params(socket) || %{}
+    language = params["locale"] || "en"
 
     socket =
       socket

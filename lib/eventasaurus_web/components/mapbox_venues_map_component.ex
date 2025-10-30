@@ -107,9 +107,18 @@ defmodule EventasaurusWeb.MapboxVenuesMapComponent do
   defp normalize_coordinate(%Decimal{} = decimal), do: Decimal.to_float(decimal)
   defp normalize_coordinate(coord) when is_number(coord), do: coord
   defp normalize_coordinate(coord) when is_binary(coord) do
-    case Float.parse(coord) do
-      {float, _} -> float
-      :error -> nil
+    trimmed = String.trim(coord)
+
+    case Float.parse(trimmed) do
+      {float, rest} ->
+        if String.trim(rest) == "" do
+          float
+        else
+          nil
+        end
+
+      :error ->
+        nil
     end
   end
   defp normalize_coordinate(_), do: nil

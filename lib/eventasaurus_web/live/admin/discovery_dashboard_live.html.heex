@@ -227,28 +227,20 @@
         <h3 class="text-lg font-medium mb-3">SEO & Sitemap</h3>
 
         <div class="space-y-3">
-          <button
-            phx-click="generate_sitemap"
-            class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            phx-disable-with="Generating..."
-            disabled={@import_running}
+          <.link
+            navigate="/admin/sitemap"
+            class="block w-full px-4 py-2 bg-indigo-600 text-white text-center rounded hover:bg-indigo-700 transition-colors"
           >
-            <%= if @import_running do %>
-              Job Running...
-            <% else %>
-              Generate Sitemap Now
-            <% end %>
-          </button>
+            <.icon name="hero-document-text" class="h-4 w-4 inline mr-1" />
+            Manage Sitemap
+          </.link>
 
-          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p class="text-xs text-blue-900">
-              <strong>Generates:</strong> sitemap.xml.gz with all activities and static pages
+          <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+            <p class="text-xs text-indigo-900">
+              View sitemap statistics, generate sitemaps, and track URL counts by category.
             </p>
-            <p class="text-xs text-blue-900 mt-1">
-              <strong>Storage:</strong> Uploaded to Supabase Storage at /sitemaps
-            </p>
-            <p class="text-xs text-blue-900 mt-1">
-              <strong>Access:</strong> /sitemap or /sitemap.xml redirect to latest
+            <p class="text-xs text-indigo-900 mt-2">
+              <strong>Current:</strong> ~1,000+ URLs including activities, cities, and venues
             </p>
           </div>
         </div>
