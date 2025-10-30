@@ -11,11 +11,25 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Components.VenueCards
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.Helpers.SEOHelpers
+  alias EventasaurusWeb.JsonLd.LocalBusinessSchema
+  alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
+  alias EventasaurusWeb.UrlHelper
   import Ecto.Query
   import EventasaurusWeb.Components.EventCards
 
   @impl true
   def mount(_params, _session, socket) do
+    # CRITICAL: Capture request URI for correct URL generation (ngrok support)
+    raw_uri = get_connect_info(socket, :uri)
+
+    request_uri =
+      cond do
+        match?(%URI{}, raw_uri) -> raw_uri
+        is_binary(raw_uri) -> URI.parse(raw_uri)
+        true -> nil
+      end
+
     # Get language from session params (if present) or default to English
     params = get_connect_params(socket) || %{}
     language = params["locale"] || "en"
@@ -25,6 +39,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:venue, nil)
       |> assign(:loading, true)
       |> assign(:language, language)
+      |> assign(:request_uri, request_uri)
       |> assign(:upcoming_events, [])
       |> assign(:future_events, [])
       |> assign(:past_events, [])
@@ -75,6 +90,21 @@ defmodule EventasaurusWeb.VenueLive.Show do
         # Build breadcrumb items with city hierarchy
         breadcrumb_items = build_venue_breadcrumbs(venue)
 
+        # Generate JSON-LD structured data
+        json_ld_schemas =
+          generate_json_ld_schemas(venue, breadcrumb_items, socket.assigns.request_uri)
+
+        # Build venue description for SEO
+        description = build_venue_description(venue, events)
+
+        # Build canonical path
+        canonical_path =
+          if venue.city_ref do
+            "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+          else
+            "/venues/#{venue.slug}"
+          end
+
         socket =
           socket
           |> assign(:venue, venue)
@@ -84,7 +114,14 @@ defmodule EventasaurusWeb.VenueLive.Show do
           |> assign(:related_venues, related_venues)
           |> assign(:breadcrumb_items, breadcrumb_items)
           |> assign(:loading, false)
-          |> assign(:page_title, venue.name)
+          |> SEOHelpers.assign_meta_tags(
+            title: "#{venue.name} - Wombie",
+            description: description,
+            type: "website",
+            canonical_path: canonical_path,
+            json_ld: json_ld_schemas,
+            request_uri: socket.assigns.request_uri
+          )
 
         {:noreply, socket}
     end
@@ -315,6 +352,91 @@ defmodule EventasaurusWeb.VenueLive.Show do
     else
       nil
     end
+  end
+
+  # Generate combined JSON-LD schemas for venue page
+  defp generate_json_ld_schemas(venue, breadcrumb_items, request_uri) do
+    base_url = get_base_url_from_request(request_uri)
+
+    # 1. LocalBusiness schema for the venue
+    local_business_json = LocalBusinessSchema.generate(venue)
+
+    # 2. BreadcrumbList schema for navigation
+    breadcrumb_list_json =
+      BreadcrumbListSchema.from_breadcrumb_builder_items(
+        breadcrumb_items,
+        build_venue_url(venue, base_url),
+        base_url
+      )
+
+    # Combine schemas into a JSON-LD array
+    # Parse both JSON strings, combine into array, re-encode
+    with {:ok, business_schema} <- Jason.decode(local_business_json),
+         {:ok, breadcrumb_schema} <- Jason.decode(breadcrumb_list_json) do
+      # Return as JSON array of schemas
+      Jason.encode!([business_schema, breadcrumb_schema])
+    else
+      _ ->
+        # Fallback: return just the business schema if parsing fails
+        local_business_json
+    end
+  end
+
+  # Build venue description for SEO meta tags
+  defp build_venue_description(venue, events) do
+    city_name = if venue.city_ref, do: venue.city_ref.name, else: nil
+    upcoming_count = length(events.upcoming)
+
+    cond do
+      # If venue has address and city
+      city_name && venue.address ->
+        "#{venue.name} located at #{venue.address}, #{city_name}. " <>
+          "Discover #{upcoming_count} upcoming events and activities."
+
+      # If venue has city but no address
+      city_name ->
+        "#{venue.name} in #{city_name}. " <>
+          "Discover #{upcoming_count} upcoming events and activities."
+
+      # If venue has address but no city
+      venue.address ->
+        "#{venue.name} located at #{venue.address}. " <>
+          "Discover #{upcoming_count} upcoming events and activities."
+
+      # Fallback: just venue name
+      true ->
+        "#{venue.name} - Discover #{upcoming_count} upcoming events and activities."
+    end
+  end
+
+  # Build full venue URL using request_uri for ngrok support
+  defp build_venue_url(venue, base_url) do
+    path =
+      if venue.city_ref do
+        "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+      else
+        "/venues/#{venue.slug}"
+      end
+
+    "#{base_url}#{path}"
+  end
+
+  # Get base URL from request_uri or fallback to config
+  defp get_base_url_from_request(nil), do: UrlHelper.get_base_url()
+
+  defp get_base_url_from_request(%URI{} = uri) do
+    scheme = uri.scheme || "https"
+    host = uri.host || UrlHelper.get_base_url()
+
+    port_string =
+      case uri.port do
+        nil -> ""
+        80 when scheme == "http" -> ""
+        443 when scheme == "https" -> ""
+        port -> ":#{port}"
+      end
+
+    "#{scheme}://#{host}#{port_string}"
   end
 
   @impl true

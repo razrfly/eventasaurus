@@ -698,18 +698,78 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
             <!-- Completeness Metrics -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-              <!-- Venue Completeness -->
+              <!-- Venue Coverage & Quality (split view) -->
               <div class="p-4 border rounded-lg">
-                <div class="flex items-center justify-between mb-2">
-                  <p class="text-sm font-medium text-gray-700">Venues</p>
-                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.venue_completeness %>%</span>
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-3">
+                  <p class="text-sm font-medium text-gray-700">Venue Data</p>
+                  <span class="text-lg font-bold text-gray-900"><%= @quality_data.venue_quality %>%</span>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-2.5">
-                  <div class="bg-blue-600 h-2.5 rounded-full" style={"width: #{@quality_data.venue_completeness}%"}></div>
+
+                <!-- Coverage Bar -->
+                <div class="mb-3">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs text-gray-600">Coverage</span>
+                    <span class="text-xs font-semibold text-gray-700"><%= @quality_data.venue_coverage %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-green-600 h-2 rounded-full" style={"width: #{@quality_data.venue_coverage}%"}></div>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500">
+                    <%= @quality_data.missing_venues %> events missing venues
+                  </p>
                 </div>
-                <p class="mt-2 text-xs text-gray-500">
-                  <%= @quality_data.missing_venues %> events missing venue data
-                </p>
+
+                <!-- Name Quality Bar -->
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs text-gray-600">
+                      Name Quality
+                      <span class="text-gray-400 cursor-help" title="Compares scraped names vs geocoding provider names using similarity scoring">ⓘ</span>
+                    </span>
+                    <span class="text-xs font-semibold text-gray-700"><%= @quality_data.venue_name_quality %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2">
+                    <% quality_color = cond do
+                      @quality_data.venue_name_quality >= 80 -> "bg-green-600"
+                      @quality_data.venue_name_quality >= 60 -> "bg-yellow-600"
+                      true -> "bg-red-600"
+                    end %>
+                    <div class={"#{quality_color} h-2 rounded-full"} style={"width: #{@quality_data.venue_name_quality}%"}></div>
+                  </div>
+                  <%= if @quality_data.venues_with_low_quality_names > 0 do %>
+                    <p class="mt-1 text-xs text-orange-600">
+                      ⚠️ <%= @quality_data.venues_with_low_quality_names %> venues with low similarity to geocoded names
+                    </p>
+                    <%= if length(@quality_data.low_quality_venue_examples) > 0 do %>
+                      <details class="mt-2 text-xs">
+                        <summary class="cursor-pointer text-gray-600 hover:text-gray-900 font-medium">
+                          Show examples
+                        </summary>
+                        <ul class="mt-2 space-y-2 pl-3">
+                          <%= for example <- @quality_data.low_quality_venue_examples do %>
+                            <li class="border-l-2 border-orange-400 pl-2">
+                              <p class="text-red-600 font-medium">Scraped: "<%= example.venue_name %>"</p>
+                              <p class="text-green-600">Geocoded: "<%= example.geocoded_name %>"</p>
+                              <p class="text-gray-500">
+                                Similarity: <%= Float.round(example.similarity, 2) %>
+                                <%= if Map.get(example, :severity) == :moderate do %>
+                                  <span class="text-yellow-600">(moderate)</span>
+                                <% else %>
+                                  <span class="text-red-600">(severe)</span>
+                                <% end %>
+                              </p>
+                            </li>
+                          <% end %>
+                        </ul>
+                      </details>
+                    <% end %>
+                  <% else %>
+                    <p class="mt-1 text-xs text-green-600">
+                      ✓ All venue names match geocoding data
+                    </p>
+                  <% end %>
+                </div>
               </div>
 
               <!-- Image Completeness -->

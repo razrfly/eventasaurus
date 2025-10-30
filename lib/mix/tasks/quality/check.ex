@@ -73,7 +73,9 @@ defmodule Mix.Tasks.Quality.Check do
             quality_score: quality.quality_score,
             total_events: quality.total_events,
             metrics: %{
-              venue: quality.venue_completeness,
+              venue_coverage: quality.venue_coverage,
+              venue_name_quality: quality.venue_name_quality,
+              venue_quality: quality.venue_quality,
               image: quality.image_completeness,
               category: quality.category_completeness,
               specificity: quality.category_specificity,
@@ -82,6 +84,11 @@ defmodule Mix.Tasks.Quality.Check do
               performer: quality.performer_completeness,
               occurrence: quality.occurrence_richness,
               translation: quality.translation_completeness
+            },
+            venue_details: %{
+              missing_venues: quality.missing_venues,
+              venues_with_low_quality_names: quality.venues_with_low_quality_names,
+              low_quality_examples: quality.low_quality_venue_examples
             },
             recommendations: recommendations
           })
@@ -156,7 +163,7 @@ defmodule Mix.Tasks.Quality.Check do
     Mix.shell().info("")
 
     Mix.shell().info(IO.ANSI.bright() <> "Dimensions:" <> IO.ANSI.reset())
-    print_dimension("Venue", quality.venue_completeness)
+    print_venue_quality(quality)
     print_dimension("Image", quality.image_completeness)
     print_dimension("Category", quality.category_completeness)
     print_dimension("Specificity", quality.category_specificity)
@@ -203,6 +210,66 @@ defmodule Mix.Tasks.Quality.Check do
         IO.ANSI.reset() <>
         " #{indicator}"
     )
+  end
+
+  defp print_venue_quality(quality) do
+    # Print overall venue quality
+    print_dimension("Venue (Overall)", quality.venue_quality)
+
+    # Print breakdown
+    coverage_color = score_color(quality.venue_coverage)
+    coverage_indicator = score_indicator(quality.venue_coverage)
+
+    Mix.shell().info(
+      "    #{IO.ANSI.faint()}└ Coverage:#{IO.ANSI.reset()}    " <>
+        coverage_color <>
+        "#{String.pad_leading("#{quality.venue_coverage}%", 4)}" <>
+        IO.ANSI.reset() <>
+        " #{coverage_indicator} " <>
+        IO.ANSI.faint() <>
+        "(#{quality.missing_venues} missing)" <>
+        IO.ANSI.reset()
+    )
+
+    quality_color = score_color(quality.venue_name_quality)
+    quality_indicator = score_indicator(quality.venue_name_quality)
+
+    Mix.shell().info(
+      "    #{IO.ANSI.faint()}└ Name Quality:#{IO.ANSI.reset()} " <>
+        quality_color <>
+        "#{String.pad_leading("#{quality.venue_name_quality}%", 4)}" <>
+        IO.ANSI.reset() <>
+        " #{quality_indicator}"
+    )
+
+    # Show examples if there are low quality names
+    if quality.venues_with_low_quality_names > 0 do
+      Mix.shell().info(
+        "      #{IO.ANSI.yellow()}⚠️  #{quality.venues_with_low_quality_names} venues with low-quality names#{IO.ANSI.reset()}"
+      )
+
+      # Show first 3 examples
+      quality.low_quality_venue_examples
+      |> Enum.take(3)
+      |> Enum.each(fn example ->
+        severity_color = if Map.get(example, :severity) == :moderate, do: IO.ANSI.yellow(), else: IO.ANSI.red()
+        severity_text = if Map.get(example, :severity) == :moderate, do: "moderate", else: "severe"
+
+        Mix.shell().info(
+          "      #{IO.ANSI.faint()}•#{IO.ANSI.reset()} " <>
+            severity_color <>
+            "\"#{String.slice(example.venue_name, 0..40)}\"" <>
+            IO.ANSI.reset() <>
+            " vs " <>
+            IO.ANSI.green() <>
+            "\"#{String.slice(example.geocoded_name, 0..40)}\"" <>
+            IO.ANSI.reset() <>
+            IO.ANSI.faint() <>
+            " (similarity: #{Float.round(example.similarity, 2)}, #{severity_text})" <>
+            IO.ANSI.reset()
+        )
+      end)
+    end
   end
 
   defp score_color(score) when score >= 90, do: IO.ANSI.green()
