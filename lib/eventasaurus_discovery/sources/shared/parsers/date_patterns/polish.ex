@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
   - Single dates with day names: "poniedziałek, 3 listopada 2025"
   - Single dates without day names: "3 listopada 2025"
   - Date ranges: "od 19 marca do 21 marca 2025"
+  - Times: "18:00", "Godzina rozpoczęcia: 18:00", "o godz. 18:00"
 
   ## Examples
 
@@ -20,6 +21,9 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
         month: "marca",
         year: 2025
       }}
+
+      iex> Polish.extract_components("środa, 5 listopada 2025 ⌚ Godzina rozpoczęcia: 18:00")
+      {:ok, %{type: :single, day: 5, month: 11, year: 2025, hour: 18, minute: 0}}
   """
 
   @behaviour EventasaurusDiscovery.Sources.Shared.Parsers.DatePatternProvider
@@ -111,22 +115,33 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
     Logger.debug("🇵🇱 Polish parser: Processing '#{normalized}'")
 
     # Try each pattern in order
-    Enum.reduce_while(patterns(), {:error, :no_match}, fn pattern, _acc ->
-      case Regex.run(pattern, normalized) do
-        nil ->
-          {:cont, {:error, :no_match}}
+    result =
+      Enum.reduce_while(patterns(), {:error, :no_match}, fn pattern, _acc ->
+        case Regex.run(pattern, normalized) do
+          nil ->
+            {:cont, {:error, :no_match}}
 
-        matches ->
-          case parse_matches(matches, pattern, normalized) do
-            {:ok, components} ->
-              Logger.debug("✅ Polish parser: Extracted #{inspect(components)}")
-              {:halt, {:ok, components}}
+          matches ->
+            case parse_matches(matches, pattern, normalized) do
+              {:ok, components} ->
+                Logger.debug("✅ Polish parser: Extracted #{inspect(components)}")
+                {:halt, {:ok, components}}
 
-            {:error, _} = error ->
-              {:cont, error}
-          end
-      end
-    end)
+              {:error, _} = error ->
+                {:cont, error}
+            end
+        end
+      end)
+
+    # If we extracted date components, also try to extract time
+    case result do
+      {:ok, components} ->
+        time_components = extract_time(text)
+        {:ok, Map.merge(components, time_components)}
+
+      error ->
+        error
+    end
   end
 
   # Private functions
@@ -251,5 +266,43 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
       nil -> {:error, :invalid_month}
       month_num -> {:ok, month_num}
     end
+  end
+
+  # Extract time components from text
+  # Supports Polish time formats:
+  # - "Godzina rozpoczęcia: 18:00"
+  # - "o godz. 18:00"
+  # - "18:00" (standalone)
+  # - "18.00" (dot separator)
+  defp extract_time(text) when is_binary(text) do
+    time_patterns = [
+      # "Godzina rozpoczęcia: 18:00" or "Godzina: 18:00"
+      ~r/godzin[aą](?:\s+rozpoczęcia)?:\s*(\d{1,2})[:\.](\d{2})/iu,
+      # "o godz. 18:00"
+      ~r/o\s+godz\.?\s*(\d{1,2})[:\.](\d{2})/iu,
+      # Standalone time "18:00" or "18.00"
+      ~r/\b(\d{1,2})[:\.](\d{2})\b/u
+    ]
+
+    # Try each time pattern
+    Enum.reduce_while(time_patterns, %{}, fn pattern, _acc ->
+      case Regex.run(pattern, text) do
+        [_, hour_str, minute_str] ->
+          with {hour, _} <- Integer.parse(hour_str),
+               {minute, _} <- Integer.parse(minute_str),
+               true <- hour >= 0 and hour <= 23,
+               true <- minute >= 0 and minute <= 59 do
+            Logger.debug("⏰ Polish parser: Extracted time #{hour}:#{minute}")
+            {:halt, %{hour: hour, minute: minute}}
+          else
+            _ ->
+              Logger.debug("⚠️ Polish parser: Invalid time components in '#{text}'")
+              {:cont, %{}}
+          end
+
+        _ ->
+          {:cont, %{}}
+      end
+    end)
   end
 end

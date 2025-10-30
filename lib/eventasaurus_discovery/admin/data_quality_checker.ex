@@ -1475,17 +1475,27 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
   # Extract time (hour) from a date object in occurrences
   defp extract_time_from_date(date_obj) when is_map(date_obj) do
-    case date_obj do
-      %{"start_time" => start_time} when is_binary(start_time) ->
-        # Parse time string like "18:00" or "2025-11-05T18:00:00Z"
-        parse_time_to_hour(start_time)
+    cond do
+      # Check for "time" field first (e.g., Warsaw events use {"date": "2025-11-11", "time": "18:00"})
+      Map.has_key?(date_obj, "time") and is_binary(date_obj["time"]) ->
+        parse_time_to_hour(date_obj["time"])
 
-      %{"date" => date_str} when is_binary(date_str) ->
-        # Parse datetime like "2025-11-05T18:00:00Z"
-        parse_time_to_hour(date_str)
+      # Check for "start_time" field
+      Map.has_key?(date_obj, "start_time") and is_binary(date_obj["start_time"]) ->
+        parse_time_to_hour(date_obj["start_time"])
 
-      _ ->
-        # Default to midnight if no time info
+      # Check for "date" field that might contain datetime
+      Map.has_key?(date_obj, "date") and is_binary(date_obj["date"]) ->
+        # Only parse if it contains time info (has "T" for ISO datetime)
+        if String.contains?(date_obj["date"], "T") do
+          parse_time_to_hour(date_obj["date"])
+        else
+          # Date only, no time info - default to midnight
+          0
+        end
+
+      # No time info found
+      true ->
         0
     end
   end
