@@ -160,20 +160,37 @@ defmodule EventasaurusApp.Venues.VenueNameFixer do
       name_similarity = VenueNameValidator.calculate_similarity(new_name, candidate.name)
 
       # Check if locations are close (within ~50 meters)
-      distance = calculate_distance(
-        {venue.latitude, venue.longitude},
-        {candidate.latitude, candidate.longitude}
-      )
+      distance_meters =
+        calculate_distance_meters(
+          {venue.latitude, venue.longitude},
+          {candidate.latitude, candidate.longitude}
+        )
 
       # It's a duplicate if names are very similar and locations are close
-      name_similarity >= 0.8 && distance < 0.05
+      name_similarity >= 0.8 && distance_meters < 50
     end)
   end
 
-  defp calculate_distance({lat1, lng1}, {lat2, lng2}) do
-    # Simple Euclidean distance for rough proximity check
-    # (good enough for ~50m radius)
-    :math.sqrt(:math.pow(lat1 - lat2, 2) + :math.pow(lng1 - lng2, 2))
+  defp calculate_distance_meters({lat1, lng1}, {lat2, lng2}) do
+    # Haversine formula for accurate distance calculation on Earth's surface
+    # Convert Decimal to float if needed
+    lat1 = if is_struct(lat1, Decimal), do: Decimal.to_float(lat1), else: lat1
+    lat2 = if is_struct(lat2, Decimal), do: Decimal.to_float(lat2), else: lat2
+    lng1 = if is_struct(lng1, Decimal), do: Decimal.to_float(lng1), else: lng1
+    lng2 = if is_struct(lng2, Decimal), do: Decimal.to_float(lng2), else: lng2
+
+    earth_radius_m = 6_371_000
+    lat1_rad = :math.pi() * lat1 / 180
+    lat2_rad = :math.pi() * lat2 / 180
+    delta_lat = lat2_rad - lat1_rad
+    delta_lng = :math.pi() * (lng2 - lng1) / 180
+
+    a =
+      :math.pow(:math.sin(delta_lat / 2), 2) +
+        :math.cos(lat1_rad) * :math.cos(lat2_rad) * :math.pow(:math.sin(delta_lng / 2), 2)
+
+    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
+    earth_radius_m * c
   end
 
   defp apply_rename(venue, new_name, dry_run) do
