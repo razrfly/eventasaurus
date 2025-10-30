@@ -12,6 +12,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Venues.DuplicateDetection
   alias EventasaurusDiscovery.Locations.{City, Country, CountryResolver}
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Helpers.{CityResolver, AddressGeocoder}
@@ -23,25 +24,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   # ========================================
   # Venue Matching Configuration
   # ========================================
-  # These thresholds control how aggressively we match venues to prevent duplicates.
-  # Higher GPS radius and lower similarity thresholds = more aggressive matching (fewer duplicates, more false positives)
-  # Lower GPS radius and higher similarity thresholds = less aggressive matching (more duplicates, fewer false positives)
-
-  # GPS-based matching thresholds (in meters)
-  @gps_tight_radius_meters 50
-  # Increased from 100m to catch venues across street
-  @gps_broad_radius_meters 200
-
-  # Name similarity thresholds (0.0 = completely different, 1.0 = identical)
-  # Uses Jaro distance algorithm: https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance
-  # Very low threshold for tight GPS matches (venues at same coords)
-  @name_similarity_tight_gps 0.2
-  # Medium threshold for broader GPS matches (within 200m)
-  @name_similarity_broad_gps 0.5
-
+  # Duplicate detection now uses unified DuplicateDetection module with distance-based
+  # similarity thresholds. See EventasaurusApp.Venues.DuplicateDetection for details.
+  #
+  # Legacy threshold constants kept for name-only matching fallback:
   # PostgreSQL similarity() function threshold (uses trigram matching)
-  # This is different from Jaro distance - uses character n-grams
-  # Lowered from 0.7 to 0.6 to catch more variants (e.g., "Kino Cinema" vs "Cinema Hall")
   @postgres_similarity_threshold 0.6
 
   # ========================================
@@ -72,81 +59,74 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   @doc """
   Finds an existing venue by place_id, coordinates, or name/city combination.
+
+  Uses unified DuplicateDetection module with distance-based similarity thresholds.
   GPS coordinates are prioritized for matching since venues exist at fixed physical locations.
+
+  ## Matching Strategy
+  1. place_id (if available) - exact match
+  2. GPS coordinates + name (if available) - uses DuplicateDetection with distance-based thresholds
+  3. Name only - fuzzy match using PostgreSQL trigram similarity
   """
   def find_existing_venue(%{place_id: place_id}) when not is_nil(place_id) do
     Repo.get_by(Venue, place_id: place_id)
   end
 
-  # GPS-based matching with relaxed name similarity
+  # GPS-based matching using unified DuplicateDetection
   def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id, name: name})
       when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) and not is_nil(name) do
-    # First try tight GPS matching
-    gps_match = find_venue_by_coordinates(lat, lng, city_id, @gps_tight_radius_meters)
-
-    case gps_match do
+    # Use unified duplicate detection with distance-based similarity thresholds
+    case DuplicateDetection.find_duplicate(%{
+           latitude: lat,
+           longitude: lng,
+           city_id: city_id,
+           name: name
+         }) do
       nil ->
-        # No GPS match, try broader search then fall back to name-based
-        broader_match = find_venue_by_coordinates(lat, lng, city_id, @gps_broad_radius_meters)
-
-        if broader_match do
-          # Check name similarity for broader GPS match
-          similarity = calculate_similarity(broader_match.name, name)
-
-          if similarity > @name_similarity_broad_gps do
-            Logger.info(
-              "🏛️📍 Found venue by GPS (#{@gps_broad_radius_meters}m): '#{broader_match.name}' for '#{name}' (similarity: #{similarity})"
-            )
-
-            broader_match
-          else
-            # GPS match but names too different, fall back to name search
-            find_existing_venue(%{name: name, city_id: city_id})
-          end
-        else
-          # No GPS match at all, use name-based search
-          find_existing_venue(%{name: name, city_id: city_id})
-        end
+        # No GPS-based match, fall back to name-based search
+        find_existing_venue(%{name: name, city_id: city_id})
 
       venue ->
-        # Found within tight radius - verify with very relaxed name similarity
-        similarity = calculate_similarity(venue.name, name)
+        similarity = DuplicateDetection.calculate_name_similarity(venue.name, name)
 
-        if similarity > @name_similarity_tight_gps do
-          Logger.info(
-            "🏛️📍 Found venue by GPS (#{@gps_tight_radius_meters}m): '#{venue.name}' for '#{name}' (GPS match, similarity: #{similarity})"
-          )
+        Logger.info(
+          "🏛️📍 Found venue by GPS+similarity: '#{venue.name}' for '#{name}' " <>
+            "(#{Float.round(venue.distance, 1)}m away, #{Float.round(similarity * 100, 1)}% similar, ID: #{venue.id})"
+        )
 
-          venue
-        else
-          # GPS matches but names are completely different - log warning but accept it
-          Logger.warning(
-            "🏛️⚠️ GPS match but very low name similarity: '#{venue.name}' vs '#{name}' (similarity: #{similarity})"
-          )
-
-          # Still return the GPS match as venues at same coordinates are likely the same
-          venue
-        end
+        # Convert map from PostGIS query to Venue struct
+        Repo.get(Venue, venue.id)
     end
   end
 
   # Fallback to coordinates without name
   def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id} = attrs)
       when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
-    # Try coordinates (tight radius preferred, broad radius fallback)
-    venue =
-      find_venue_by_coordinates(lat, lng, city_id, @gps_tight_radius_meters) ||
-        find_venue_by_coordinates(lat, lng, city_id, @gps_broad_radius_meters)
-
-    # If no coordinate match, try by name if available
-    if is_nil(venue) and Map.has_key?(attrs, :name) do
-      find_existing_venue(%{name: attrs.name, city_id: city_id})
+    # If name is available, use it for better matching
+    if Map.has_key?(attrs, :name) and not is_nil(attrs.name) do
+      find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id, name: attrs.name})
     else
-      venue
+      # No name available - find closest venue within 50m
+      # This is a fallback for cases where we only have coordinates
+      nearby = DuplicateDetection.find_nearby_venues_postgis(lat, lng, city_id, 50)
+
+      case nearby do
+        [closest | _] ->
+          Logger.info(
+            "🏛️📍 Found venue by GPS only (no name): '#{closest.name}' at (#{lat}, #{lng}), " <>
+              "#{Float.round(closest.distance, 1)}m away, ID: #{closest.id}"
+          )
+
+          Repo.get(Venue, closest.id)
+
+        [] ->
+          nil
+      end
     end
   end
 
-  def find_existing_venue(%{name: name, city_id: city_id}) do
+  # Name-only matching fallback
+  def find_existing_venue(%{name: name, city_id: city_id}) when not is_nil(city_id) do
     # Clean UTF-8 before any database operations
     clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
 
@@ -171,8 +151,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         |> Repo.one()
 
       if fuzzy_match do
+        similarity = DuplicateDetection.calculate_name_similarity(fuzzy_match.name, clean_name)
+
         Logger.info(
-          "🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{clean_name}' (PostgreSQL similarity > #{@postgres_similarity_threshold}, Jaro: #{calculate_similarity(fuzzy_match.name, clean_name)})"
+          "🏛️ Using similar venue (name only): '#{fuzzy_match.name}' for '#{clean_name}' " <>
+            "(#{Float.round(similarity * 100, 1)}% similar, ID: #{fuzzy_match.id})"
         )
 
         fuzzy_match
@@ -186,14 +169,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   def find_existing_venue(_), do: nil
 
-  defp calculate_similarity(name1, name2) do
-    # PostgreSQL boundary protection: clean UTF-8 before similarity calculation
-    # Elixir's jaro_distance crashes on invalid UTF-8
-    clean_name1 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name1)
-    clean_name2 = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name2)
-    Float.round(String.jaro_distance(clean_name1, clean_name2), 2)
-  end
-
   # Detects if a changeset error is due to unique constraint violation on place_id
   # Used to handle TOCTOU race conditions where multiple workers try to insert the same venue
   defp has_place_id_constraint_error?(changeset) do
@@ -204,42 +179,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       _ ->
         false
     end)
-  end
-
-  defp find_venue_by_coordinates(lat, lng, city_id, radius_meters) do
-    # Convert to float if needed
-    lat_float =
-      case lat do
-        %Decimal{} -> Decimal.to_float(lat)
-        val -> val
-      end
-
-    lng_float =
-      case lng do
-        %Decimal{} -> Decimal.to_float(lng)
-        val -> val
-      end
-
-    # Simple distance calculation using degrees
-    # At latitude ~50° (Kraków), 1 degree ≈ 111km, so 100m ≈ 0.0009 degrees
-    lat_delta = radius_meters / 111_000.0
-    lng_delta = radius_meters / (111_000.0 * :math.cos(lat_float * :math.pi() / 180))
-
-    min_lat = lat_float - lat_delta
-    max_lat = lat_float + lat_delta
-    min_lng = lng_float - lng_delta
-    max_lng = lng_float + lng_delta
-
-    from(v in Venue,
-      where:
-        v.city_id == ^city_id and
-          fragment("CAST(? AS float8) >= ?", v.latitude, ^min_lat) and
-          fragment("CAST(? AS float8) <= ?", v.latitude, ^max_lat) and
-          fragment("CAST(? AS float8) >= ?", v.longitude, ^min_lng) and
-          fragment("CAST(? AS float8) <= ?", v.longitude, ^max_lng),
-      limit: 1
-    )
-    |> Repo.one()
   end
 
   defp normalize_venue_data(data) do

@@ -705,6 +705,15 @@ defmodule EventasaurusWeb.MyPageLive do
   def mount(_params, _session, socket) do
     entity = load_my_entity()
 
+    # Capture request URI for correct URL generation (ngrok support)
+    raw_uri = get_connect_info(socket, :uri)
+    request_uri =
+      cond do
+        match?(%URI{}, raw_uri) -> raw_uri
+        is_binary(raw_uri) -> URI.parse(raw_uri)
+        true -> nil
+      end
+
     socket =
       socket
       |> assign(:entity, entity)
@@ -713,7 +722,8 @@ defmodule EventasaurusWeb.MyPageLive do
         description: "My page description for SEO",
         image: social_card_url,
         type: "website",
-        canonical_path: "/my-page"
+        canonical_path: "/my-page",
+        request_uri: request_uri
       )
 
     {:ok, socket}

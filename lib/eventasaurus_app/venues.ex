@@ -440,60 +440,39 @@ defmodule EventasaurusApp.Venues do
   def find_venue_by_address(_), do: nil
 
   # Duplicate Detection Functions (Phase 1)
+  # Now uses unified DuplicateDetection module with distance-based similarity thresholds
+
+  alias EventasaurusApp.Venues.DuplicateDetection
 
   @doc """
   Finds venues within a specified distance of given coordinates.
 
   Uses PostGIS ST_DWithin with the existing GIST spatial index for efficient queries.
+  Delegates to DuplicateDetection module for unified duplicate detection logic.
 
   ## Parameters
   - `latitude` - Latitude coordinate
   - `longitude` - Longitude coordinate
-  - `distance_meters` - Search radius in meters (default: 100)
+  - `city_id` - City ID to search within
+  - `distance_meters` - Search radius in meters (default: 200)
 
   ## Returns
   List of venues within the specified distance, ordered by proximity.
 
   ## Examples
 
-      find_nearby_venues(51.5074, -0.1278, 100)
+      find_nearby_venues(51.5074, -0.1278, city_id, 100)
   """
-  def find_nearby_venues(latitude, longitude, distance_meters \\ nil)
+  def find_nearby_venues(latitude, longitude, city_id, distance_meters \\ 200)
       when is_number(latitude) and is_number(longitude) do
-    distance = distance_meters || get_distance_threshold()
-
-    query = """
-    SELECT id, name, address, latitude, longitude, slug,
-           ST_Distance(
-             ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
-             ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
-           ) as distance
-    FROM venues
-    WHERE ST_DWithin(
-      ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
-      ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
-      $3
-    )
-    ORDER BY distance
-    """
-
-    case Repo.query(query, [latitude, longitude, distance]) do
-      {:ok, %{rows: rows, columns: columns}} ->
-        Enum.map(rows, fn row ->
-          columns
-          |> Enum.zip(row)
-          |> Map.new()
-        end)
-
-      {:error, _} ->
-        []
-    end
+    DuplicateDetection.find_nearby_venues_postgis(latitude, longitude, city_id, distance_meters)
   end
 
   @doc """
   Calculates name similarity between two venue names using PostgreSQL trigram similarity.
 
   Returns a value between 0.0 (completely different) and 1.0 (identical).
+  Delegates to DuplicateDetection module for consistent similarity calculation.
 
   ## Examples
 
@@ -502,92 +481,39 @@ defmodule EventasaurusApp.Venues do
   """
   def calculate_name_similarity(name1, name2)
       when is_binary(name1) and is_binary(name2) do
-    query = "SELECT similarity($1, $2) as score"
-
-    case Repo.query(query, [name1, name2]) do
-      {:ok, %{rows: [[score]]}} -> score
-      {:error, _} -> 0.0
-    end
+    DuplicateDetection.calculate_name_similarity(name1, name2)
   end
 
   @doc """
   Checks if a venue would be a duplicate based on coordinates and name similarity.
 
-  Returns `{:ok, nil}` if no duplicate found, or `{:error, reason}` with duplicate details.
+  Uses distance-based similarity thresholds:
+  - < 50m: 0.0 similarity required (same location = same venue)
+  - 50-100m: 0.3 similarity required
+  - 100-200m: 0.6 similarity required
+  - > 200m: 0.8 similarity required
+
+  Returns `{:ok, nil}` if no duplicate found, or `{:error, reason, opts}` with duplicate details.
 
   ## Parameters
-  - `attrs` - Map with `:latitude`, `:longitude`, and `:name` keys
+  - `attrs` - Map with `:latitude`, `:longitude`, `:name`, and `:city_id` keys
 
   ## Examples
 
-      check_duplicate(%{latitude: 51.5074, longitude: -0.1278, name: "The Red Lion"})
-      # Returns: {:ok, nil} or {:error, "Duplicate venue found: ..."}
+      check_duplicate(%{latitude: 51.5074, longitude: -0.1278, name: "The Red Lion", city_id: 1})
+      # Returns: {:ok, nil} or {:error, "Duplicate venue found: ...", existing_id: 123}
   """
-  def check_duplicate(%{latitude: lat, longitude: lng, name: name} = _attrs)
+  def check_duplicate(%{latitude: lat, longitude: lng, name: name, city_id: city_id} = _attrs)
       when is_number(lat) and is_number(lng) and is_binary(name) do
-    nearby_venues = find_nearby_venues(lat, lng)
-    similarity_threshold = get_similarity_threshold()
-
-    duplicate =
-      Enum.find(nearby_venues, fn venue ->
-        similarity = calculate_name_similarity(name, venue["name"])
-        similarity >= similarity_threshold
-      end)
-
-    case duplicate do
-      nil ->
-        {:ok, nil}
-
-      venue ->
-        # Return error with venue ID in opts for structured extraction
-        {:error,
-         "Duplicate venue found: '#{venue["name"]}' at #{venue["address"]} " <>
-           "(#{Float.round(venue["distance"], 1)}m away, ID: #{venue["id"]})",
-         existing_id: venue["id"]}
-    end
+    DuplicateDetection.check_duplicate(%{
+      latitude: lat,
+      longitude: lng,
+      name: name,
+      city_id: city_id
+    })
   end
 
   def check_duplicate(_attrs), do: {:ok, nil}
-
-  @doc """
-  Gets the distance threshold for duplicate detection from environment or default.
-
-  Default: 100 meters
-  """
-  def get_distance_threshold do
-    case System.get_env("VENUE_DUPLICATE_DISTANCE_METERS") do
-      nil ->
-        100
-
-      value ->
-        # Extract numeric value (trim and handle inline comments)
-        value
-        |> String.split("#")
-        |> List.first()
-        |> String.trim()
-        |> String.to_integer()
-    end
-  end
-
-  @doc """
-  Gets the name similarity threshold for duplicate detection from environment or default.
-
-  Default: 0.80 (80% similar)
-  """
-  def get_similarity_threshold do
-    case System.get_env("VENUE_DUPLICATE_NAME_SIMILARITY") do
-      nil ->
-        0.80
-
-      value ->
-        # Extract numeric value (trim and handle inline comments)
-        value
-        |> String.split("#")
-        |> List.first()
-        |> String.trim()
-        |> String.to_float()
-    end
-  end
 
   # Duplicate Management Functions (Phase 2)
 
@@ -619,8 +545,10 @@ defmodule EventasaurusApp.Venues do
       # ]
   """
   def find_duplicate_groups(distance_threshold \\ nil, similarity_threshold \\ nil) do
-    distance = distance_threshold || get_distance_threshold()
-    similarity = similarity_threshold || get_similarity_threshold()
+    # For finding existing duplicates, use broader thresholds to catch more potential duplicates
+    # Default: 200m and 0.6 similarity (catches venues at "nearby" distance tier)
+    distance = distance_threshold || 200
+    similarity = similarity_threshold || 0.6
 
     # Use a single optimized SQL query to find all duplicate pairs at once
     # This replaces the O(n²) nested loop with n²/2 database queries

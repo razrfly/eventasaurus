@@ -517,10 +517,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     # Get all events with venues that have metadata
     events_with_venues = Repo.all(query)
 
-    # Calculate how many have low-quality names
-    {low_quality_count, examples} =
+    # Calculate how many unique venues have low-quality names
+    {low_quality_ids, examples_by_venue} =
       events_with_venues
-      |> Enum.reduce({0, []}, fn event, {count, examples} ->
+      |> Enum.reduce({MapSet.new(), %{}}, fn event, {ids, examples} ->
         case VenueNameValidator.validate_against_geocoded(event.venue_name, event.metadata) do
           {:error, :low_similarity, similarity} ->
             geocoded_name = VenueNameValidator.extract_geocoded_name(event.metadata)
@@ -533,7 +533,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
               severity: :severe
             }
 
-            {count + 1, [example | examples]}
+            {
+              MapSet.put(ids, event.venue_id),
+              Map.put_new(examples, event.venue_id, example)
+            }
 
           {:warning, :moderate_similarity, similarity} ->
             # Moderate similarity also counts as quality issue (but less severe)
@@ -547,15 +550,18 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
               severity: :moderate
             }
 
-            {count + 1, [example | examples]}
+            {
+              MapSet.put(ids, event.venue_id),
+              Map.put_new(examples, event.venue_id, example)
+            }
 
           _ ->
-            {count, examples}
+            {ids, examples}
         end
       end)
 
-    # Return count and first 5 examples
-    {low_quality_count, Enum.take(examples, 5)}
+    # Return count of unique venues and first 5 examples
+    {MapSet.size(low_quality_ids), examples_by_venue |> Map.values() |> Enum.take(5)}
   end
 
   defp count_missing_images(source_id) do
