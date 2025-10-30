@@ -219,10 +219,16 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser do
   def normalize_to_iso(components, language_module)
 
   # Single date
-  def normalize_to_iso(%{type: :single, day: day, month: month, year: year}, language_module) do
+  def normalize_to_iso(%{type: :single, day: day, month: month, year: year} = components, language_module) do
     with {:ok, month_num} <- resolve_month(month, language_module) do
       starts_at = format_iso_date(year, month_num, day)
-      {:ok, %{starts_at: starts_at, ends_at: nil}}
+
+      # Preserve time components if present
+      result = %{starts_at: starts_at, ends_at: nil}
+      result = if Map.has_key?(components, :hour), do: Map.put(result, :start_hour, components.hour), else: result
+      result = if Map.has_key?(components, :minute), do: Map.put(result, :start_minute, components.minute), else: result
+
+      {:ok, result}
     end
   end
 
@@ -376,21 +382,42 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser do
   @spec parse_and_validate(%{starts_at: String.t(), ends_at: String.t() | nil}, String.t()) ::
           {:ok, %{starts_at: DateTime.t(), ends_at: DateTime.t() | nil}}
           | {:error, :invalid_date}
-  def parse_and_validate(%{starts_at: starts_at_iso, ends_at: ends_at_iso}, timezone) do
-    with {:ok, starts_at} <- parse_iso_to_datetime(starts_at_iso, timezone, :start_of_day),
+  def parse_and_validate(%{starts_at: starts_at_iso, ends_at: ends_at_iso} = iso_dates, timezone) do
+    # Extract optional time components
+    start_time_components = extract_time_components(iso_dates, :start_hour, :start_minute)
+
+    with {:ok, starts_at} <- parse_iso_to_datetime(starts_at_iso, timezone, :start_of_day, start_time_components),
          {:ok, ends_at} <- parse_optional_end_date(ends_at_iso, timezone) do
       {:ok, %{starts_at: starts_at, ends_at: ends_at}}
     end
   end
 
-  @spec parse_iso_to_datetime(String.t(), String.t(), :start_of_day | :end_of_day) ::
+  # Extract time components from iso_dates map
+  defp extract_time_components(iso_dates, hour_key, minute_key) do
+    case {Map.get(iso_dates, hour_key), Map.get(iso_dates, minute_key)} do
+      {hour, minute} when is_integer(hour) and is_integer(minute) ->
+        %{hour: hour, minute: minute}
+
+      _ ->
+        nil
+    end
+  end
+
+  @spec parse_iso_to_datetime(String.t(), String.t(), :start_of_day | :end_of_day, %{hour: integer(), minute: integer()} | nil) ::
           {:ok, DateTime.t()} | {:error, :invalid_date}
-  defp parse_iso_to_datetime(iso_date, timezone, time_of_day) do
+  defp parse_iso_to_datetime(iso_date, timezone, time_of_day, time_components \\ nil) do
     # Parse ISO date string
     case Date.from_iso8601(iso_date) do
       {:ok, date} ->
-        # Add time component
-        time = if time_of_day == :start_of_day, do: ~T[00:00:00], else: ~T[23:59:59]
+        # Add time component - use extracted time if available, otherwise default
+        time =
+          case time_components do
+            %{hour: hour, minute: minute} ->
+              Time.new!(hour, minute, 0)
+
+            nil ->
+              if time_of_day == :start_of_day, do: ~T[00:00:00], else: ~T[23:59:59]
+          end
 
         # Create NaiveDateTime
         naive_datetime = NaiveDateTime.new!(date, time)
