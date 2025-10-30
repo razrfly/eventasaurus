@@ -126,6 +126,8 @@ config :eventasaurus, Oban,
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation
     maintenance: 2,
+    # Venue maintenance queue for venue data quality jobs (name fixing, deduplication)
+    venue_maintenance: 2,
     # Reports queue for generating analytics and cost reports
     reports: 1
   ],

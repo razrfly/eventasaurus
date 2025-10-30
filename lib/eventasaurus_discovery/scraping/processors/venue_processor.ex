@@ -17,6 +17,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Helpers.{CityResolver, AddressGeocoder}
   alias EventasaurusDiscovery.Geocoding.MetadataBuilder
+  alias EventasaurusDiscovery.Validation.VenueNameValidator
 
   import Ecto.Query
   require Logger
@@ -652,8 +653,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         end
       end
 
-    # Use scraped name and place_id
-    final_name = data.name
+    # Validate scraped name against geocoded name to prevent bad venue names
+    # This uses VenueNameValidator to compare scraped vs geocoded names
+    final_name = validate_and_choose_venue_name(data.name, geocoding_metadata, source_scraper)
+
     # Prefer geocoding provider's place_id over scraper's place_id
     final_place_id = geocoding_place_id || data.place_id
 
@@ -1072,5 +1075,49 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
       # Don't fail the main venue processing if coordinate scheduling fails
       :ok
+  end
+
+  # Validates venue name using VenueNameValidator and returns the best name to use
+  # This prevents bad venue names (UI elements, image captions) from entering the database
+  defp validate_and_choose_venue_name(scraped_name, geocoding_metadata, source_scraper) do
+    # Build metadata structure expected by VenueNameValidator
+    # VenueNameValidator expects: %{"geocoding_metadata" => geocoding_metadata}
+    metadata = %{"geocoding_metadata" => geocoding_metadata}
+
+    case VenueNameValidator.choose_name(scraped_name, metadata) do
+      {:ok, chosen_name, :scraped_validated} ->
+        # Scraped name validated as good quality (similarity >= 0.7)
+        Logger.debug(
+          "🏛️ ✅ Venue name validated: '#{scraped_name}' (scraper: #{source_scraper})"
+        )
+
+        chosen_name
+
+      {:ok, chosen_name, :geocoded_moderate_diff, similarity} ->
+        # Moderate difference - using geocoded name
+        Logger.info(
+          "🏛️ ⚠️ Using geocoded name: '#{chosen_name}' instead of '#{scraped_name}' " <>
+            "(similarity: #{Float.round(similarity * 100, 1)}%, scraper: #{source_scraper})"
+        )
+
+        chosen_name
+
+      {:ok, chosen_name, :geocoded_low_similarity, similarity} ->
+        # Very different - strongly preferring geocoded name
+        Logger.warning(
+          "🏛️ 🔴 Replacing bad venue name: '#{scraped_name}' → '#{chosen_name}' " <>
+            "(similarity: #{Float.round(similarity * 100, 1)}%, scraper: #{source_scraper})"
+        )
+
+        chosen_name
+
+      {:warning, scraped_name, :no_geocoded_name} ->
+        # No geocoded name available - use scraped and log warning
+        Logger.debug(
+          "🏛️ ℹ️ No geocoded name available, using scraped: '#{scraped_name}' (scraper: #{source_scraper})"
+        )
+
+        scraped_name
+    end
   end
 end
