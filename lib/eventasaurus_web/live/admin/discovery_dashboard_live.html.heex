@@ -449,6 +449,170 @@
     </div>
   </div>
 
+  <!-- Trivia Advisor Image Migration -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold">📦 Trivia Advisor Image Migration</h2>
+      <span class="px-3 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">
+        One-time Migration Tool
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Migration Form -->
+      <div>
+        <h3 class="text-lg font-medium mb-3">Start Migration</h3>
+
+        <form phx-submit="start_trivia_advisor_migration" class="space-y-4">
+          <div>
+            <label for="ta_migration_city_id" class="block text-sm font-medium text-gray-700">
+              City <span class="text-red-600">*</span>
+            </label>
+            <select
+              id="ta_migration_city_id"
+              name="city_id"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
+              phx-change="select_ta_migration_city"
+            >
+              <option value="">Select city...</option>
+              <%= for city <- @cities do %>
+                <option
+                  value={city.id}
+                  selected={@ta_migration_city_id == city.id}
+                >
+                  {city.name}, {city.country.name}
+                </option>
+              <% end %>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">
+              Only venues in this city will be matched and migrated
+            </p>
+          </div>
+
+          <div>
+            <label for="ta_migration_limit" class="block text-sm font-medium text-gray-700">
+              Venue Limit
+            </label>
+            <input
+              type="number"
+              id="ta_migration_limit"
+              name="limit"
+              value={@ta_migration_limit}
+              min="1"
+              max="100"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
+              phx-change="update_ta_migration_limit"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              Development: max 10 | Production: max 50
+            </p>
+          </div>
+
+          <div>
+            <label class="flex items-center">
+              <input
+                type="checkbox"
+                checked={@ta_migration_dry_run}
+                phx-click="toggle_ta_migration_dry_run"
+                class="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+              />
+              <span class="ml-2 text-sm text-gray-700">
+                Dry Run (preview without updating database)
+              </span>
+            </label>
+            <p class="mt-1 text-xs text-gray-500">
+              Useful for testing venue matching before actual migration
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            phx-disable-with="Migrating..."
+            disabled={
+              is_nil(@ta_migration_city_id) or
+              @ta_migration_running
+            }
+          >
+            <%= if @ta_migration_running do %>
+              Migration Running...
+            <% else %>
+              Migrate Images from Trivia Advisor
+            <% end %>
+          </button>
+        </form>
+      </div>
+
+      <!-- Info & Status -->
+      <div>
+        <h3 class="text-lg font-medium mb-3">About This Migration</h3>
+
+        <div class="space-y-3">
+          <div class="bg-orange-50 border border-orange-200 rounded-lg p-3">
+            <p class="text-xs text-orange-900">
+              <strong>Purpose:</strong> One-time migration of venue images from Trivia Advisor's Google Place images collection
+            </p>
+            <p class="text-xs text-orange-900 mt-1">
+              <strong>Source:</strong> Images stored in Trivia Advisor's Tigris S3 bucket
+            </p>
+            <p class="text-xs text-orange-900 mt-1">
+              <strong>Development Mode:</strong> Stores Tigris S3 URLs directly (no ImageKit upload)
+            </p>
+          </div>
+
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="text-xs text-blue-900">
+              <strong>Venue Matching:</strong>
+            </p>
+            <ul class="list-disc list-inside text-xs text-blue-900 mt-1">
+              <li><strong>Tier 1</strong> (100%): Slug match + within 50m</li>
+              <li><strong>Tier 2</strong> (95%): Google Place ID match</li>
+              <li><strong>Tier 3</strong> (85%): Fuzzy slug or name match</li>
+            </ul>
+          </div>
+
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p class="text-xs text-yellow-900">
+              <strong>Important Notes:</strong>
+            </p>
+            <ul class="list-disc list-inside text-xs text-yellow-900 mt-1">
+              <li>Requires <code>TRIVIA_ADVISOR_DATABASE_URL</code> environment variable</li>
+              <li>Images will not duplicate - URL matching prevents duplicates</li>
+              <li>Use dry run mode to preview matches before migration</li>
+              <li>This is a temporary tool - images will be refreshed via normal enrichment</li>
+            </ul>
+          </div>
+
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+            <p class="text-xs text-green-900">
+              <strong>Next Steps:</strong>
+            </p>
+            <ol class="list-decimal list-inside text-xs text-green-900 mt-1">
+              <li>Select a city to migrate</li>
+              <li>Set venue limit (start small for testing)</li>
+              <li>Enable dry run to preview matches</li>
+              <li>Monitor progress in <a href="/admin/oban" class="underline">Oban Dashboard</a></li>
+            </ol>
+          </div>
+
+          <%= if @ta_migration_last_result do %>
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p class="text-xs text-purple-900">
+                <strong>Last Migration Result:</strong>
+              </p>
+              <div class="text-xs text-purple-900 mt-1">
+                <div>Processed: <%= @ta_migration_last_result["venues_processed"] || 0 %> venues</div>
+                <div>Matched: <%= @ta_migration_last_result["venues_matched"] || 0 %> venues</div>
+                <div>Updated: <%= @ta_migration_last_result["venues_updated"] || 0 %> venues</div>
+                <div>Images Migrated: <%= @ta_migration_last_result["images_migrated"] || 0 %></div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- TMDB Maintenance -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">TMDB Maintenance</h2>

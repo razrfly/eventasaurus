@@ -176,7 +176,7 @@ config :eventasaurus, :cdn,
 # Disabled by default in development, enabled in production
 # Test locally with: IMAGEKIT_CDN_ENABLED=true mix phx.server
 config :eventasaurus, :imagekit,
-  enabled: false,
+  enabled: false,  # Disabled in dev - set to true to test orchestrator mode
   id: "wombie",
   endpoint: "https://ik.imagekit.io/wombie"
 
@@ -214,6 +214,12 @@ config :geocoder, :worker, provider: Geocoder.Providers.OpenStreetMaps
 config :eventasaurus, EventasaurusDiscovery.VenueImages.EnrichmentJob,
   batch_size: 100,
   max_retries: 3
+
+# Configure Trivia Advisor image migration job
+# This is a one-time migration tool for backfilling images from Trivia Advisor
+config :eventasaurus, EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob,
+  dev_limit: 10,
+  prod_default_limit: 50
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
