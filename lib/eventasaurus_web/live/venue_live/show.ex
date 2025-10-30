@@ -5,32 +5,37 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEvents
+  alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.VenueLive.Components.ImageGallery
-  alias EventasaurusWeb.VenueLive.Components.EventCard
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Components.VenueCards
   alias EventasaurusWeb.Components.Breadcrumbs
   import Ecto.Query
+  import EventasaurusWeb.Components.EventCards
 
   @impl true
   def mount(_params, _session, socket) do
+    # Get language from session or default to English
+    language = get_connect_params(socket)["locale"] || "en"
+
     socket =
       socket
       |> assign(:venue, nil)
       |> assign(:loading, true)
+      |> assign(:language, language)
       |> assign(:upcoming_events, [])
       |> assign(:future_events, [])
       |> assign(:past_events, [])
       |> assign(:show_past_events, false)
       |> assign(:show_future_events, false)
       |> assign(:related_venues, [])
-      |> assign(:upcoming_page_size, 10)
-      |> assign(:upcoming_visible_count, 10)
-      |> assign(:future_page_size, 10)
-      |> assign(:future_visible_count, 10)
-      |> assign(:past_page_size, 10)
-      |> assign(:past_visible_count, 10)
+      |> assign(:upcoming_page_size, 9)
+      |> assign(:upcoming_visible_count, 9)
+      |> assign(:future_page_size, 9)
+      |> assign(:future_visible_count, 9)
+      |> assign(:past_page_size, 9)
+      |> assign(:past_visible_count, 9)
 
     {:ok, socket}
   end
@@ -135,7 +140,13 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
     # Get upcoming events (limit 5000 - venues rarely have this many future events)
     # This ensures we capture all upcoming/future events even for high-volume venues
-    upcoming_events = PublicEvents.by_venue(venue_id, upcoming_only: true, limit: 5000)
+    # Preload all necessary associations for the shared event card component
+    upcoming_events =
+      PublicEvents.by_venue(venue_id,
+        upcoming_only: true,
+        limit: 5000,
+        preload: [:performers, :categories, :sources]
+      )
 
     # Get recent past events using a separate query with reverse chronological order
     # We want the MOST RECENT past events, not the oldest ones
@@ -144,8 +155,14 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Combine and group all events
     all_events = upcoming_events ++ past_events
 
+    # Add cover_image_url virtual field to events for compatibility with shared event card component
+    all_events_with_images =
+      Enum.map(all_events, fn event ->
+        Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
+      end)
+
     grouped =
-      Enum.group_by(all_events, fn event ->
+      Enum.group_by(all_events_with_images, fn event ->
         cond do
           DateTime.compare(event.starts_at, now) == :lt -> :past
           DateTime.compare(event.starts_at, thirty_days_from_now) == :lt -> :upcoming
@@ -177,7 +194,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
       limit: ^limit
     )
     |> Repo.all()
-    |> Repo.preload([:performers, :categories, venue: [city_ref: :country]])
+    # Preload sources so get_cover_image_url can extract image URLs
+    |> Repo.preload([:performers, :categories, :sources, venue: [city_ref: :country]])
   end
 
   defp build_venue_breadcrumbs(venue) do
@@ -378,9 +396,9 @@ defmodule EventasaurusWeb.VenueLive.Show do
             <%= if Enum.empty?(@upcoming_events) do %>
               <p class="text-gray-600 mb-6">No events in the next 30 days.</p>
             <% else %>
-              <div class="space-y-3 mb-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
                 <%= for event <- Enum.take(@upcoming_events, @upcoming_visible_count) do %>
-                  <EventCard.event_card event={event} />
+                  <.event_card event={event} language={@language} show_city={false} />
                 <% end %>
               </div>
               <%= if length(@upcoming_events) > @upcoming_visible_count do %>
@@ -428,9 +446,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
                 </button>
 
                 <%= if @show_future_events do %>
-                  <div class="mt-4 space-y-3 mb-4">
+                  <div class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
                     <%= for event <- Enum.take(@future_events, @future_visible_count) do %>
-                      <EventCard.event_card event={event} class="opacity-90" />
+                      <div class="opacity-90">
+                        <.event_card event={event} language={@language} show_city={false} />
+                      </div>
                     <% end %>
                   </div>
                   <%= if length(@future_events) > @future_visible_count do %>
@@ -477,9 +497,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
                 </button>
 
                 <%= if @show_past_events do %>
-                  <div class="mt-4 space-y-3 mb-4">
+                  <div class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
                     <%= for event <- Enum.take(@past_events, @past_visible_count) do %>
-                      <EventCard.event_card event={event} class="opacity-75" />
+                      <div class="opacity-75">
+                        <.event_card event={event} language={@language} show_city={false} />
+                      </div>
                     <% end %>
                   </div>
                   <%= if length(@past_events) > @past_visible_count do %>
