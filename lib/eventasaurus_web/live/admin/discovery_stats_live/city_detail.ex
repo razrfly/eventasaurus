@@ -343,8 +343,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
     %{
       total_venues: total_venues,
-      venues_with_old_format: venues_with_bad_format,
-      venues_with_new_format: total_venues - venues_with_bad_format,
+      venues_with_bad_format: venues_with_bad_format,
+      venues_with_good_format: total_venues - venues_with_bad_format,
       quality_percentage: quality_percentage
     }
   end
@@ -678,8 +678,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
                     >
                     </div>
                   </div>
-                  <%= if @slug_stats.venues_with_old_format > 0 do %>
-                    <p class="text-xs text-red-600 font-medium">⚠️ <%= @slug_stats.venues_with_old_format %> venues with old slug format</p>
+                  <%= if @slug_stats.venues_with_bad_format > 0 do %>
+                    <p class="text-xs text-red-600 font-medium">⚠️ <%= @slug_stats.venues_with_bad_format %> venues with bad slug format</p>
                     <button
                       phx-click="regenerate_venue_slugs"
                       class="mt-2 text-xs text-indigo-600 hover:text-indigo-900 font-medium underline"

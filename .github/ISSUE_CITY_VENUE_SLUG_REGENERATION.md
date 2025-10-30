@@ -56,7 +56,7 @@ When adding new cities to the scraping system, venue slugs are sometimes generat
 - Consistent with existing venue operations pattern
 
 **UI Addition**:
-```
+```text
 [Existing geocoding operations display]
 
 Venue Operations
@@ -74,7 +74,7 @@ Venue Operations
 - Less overhead for single operation
 
 **UI Addition**:
-```
+```text
 Cities Table
 │ Name     │ Country │ Venues │ Actions                        │
 ├──────────┼─────────┼────────┼───────────────────────────────┤
