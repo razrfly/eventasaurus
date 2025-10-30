@@ -188,19 +188,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           )
 
         # Get the request URI for canonical URL (stored in assigns during mount)
-        uri =
-          socket.assigns[:request_uri] ||
-            URI.parse("/activities/#{enriched_event.slug}")
+        request_uri = socket.assigns[:request_uri]
+        canonical_path = "/activities/#{enriched_event.slug}"
 
-        base_url = UrlHelper.get_base_url()
-        canonical_url = "#{base_url}#{uri.path}"
+        # Generate base URL for JSON-LD schemas (use UrlHelper to respect request context)
+        base_url = UrlHelper.build_url("", request_uri)
+        canonical_url_for_schemas = UrlHelper.build_url(canonical_path, request_uri)
 
         # Generate JSON-LD structured data
         event_json_ld = PublicEventSchema.generate(enriched_event)
         breadcrumb_json_ld =
           BreadcrumbListSchema.from_breadcrumb_builder_items(
             breadcrumb_items,
-            canonical_url,
+            canonical_url_for_schemas,
             base_url
           )
         venue_json_ld =
@@ -245,8 +245,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           description: description,
           image: image_url,
           type: "event",
-          canonical_url: canonical_url,
-          json_ld: combined_json_ld
+          canonical_path: canonical_path,
+          json_ld: combined_json_ld,
+          request_uri: request_uri
         )
     end
   end

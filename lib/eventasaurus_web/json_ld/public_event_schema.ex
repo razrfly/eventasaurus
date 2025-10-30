@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   """
 
   require Logger
+  alias Eventasaurus.CDN
 
   @doc """
   Generates JSON-LD structured data for a public event.
@@ -398,6 +399,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(5)
+    |> Enum.map(&CDN.url/1)  # Wrap all images with Cloudflare CDN
   end
 
   # Extract images from event sources

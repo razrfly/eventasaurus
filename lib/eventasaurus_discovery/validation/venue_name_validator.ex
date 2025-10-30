@@ -90,27 +90,24 @@ defmodule EventasaurusDiscovery.Validation.VenueNameValidator do
     geocoding_data = metadata["geocoding_metadata"] || metadata[:geocoding_metadata]
 
     if geocoding_data do
-      raw_response = geocoding_data["raw_response"] || geocoding_data[:raw_response]
+      raw_response =
+        case geocoding_data["raw_response"] || geocoding_data[:raw_response] do
+          value when is_map(value) -> value
+          _ -> %{}
+        end
 
-      # Try different provider formats
+      title =
+        Map.get(raw_response, "title") ||
+          Map.get(raw_response, :title)
+
+      name =
+        Map.get(raw_response, "name") ||
+          Map.get(raw_response, :name)
+
       cond do
-        # HERE provider - has "title" field with business name
-        raw_response["title"] && is_binary(raw_response["title"]) && raw_response["title"] != "" ->
-          raw_response["title"]
-
-        raw_response[:title] && is_binary(raw_response[:title]) && raw_response[:title] != "" ->
-          raw_response[:title]
-
-        # Google Places - has "name" field
-        raw_response["name"] && is_binary(raw_response["name"]) && raw_response["name"] != "" ->
-          raw_response["name"]
-
-        raw_response[:name] && is_binary(raw_response[:name]) && raw_response[:name] != "" ->
-          raw_response[:name]
-
-        # Other providers might only have street names
-        true ->
-          nil
+        is_binary(title) and title != "" -> title
+        is_binary(name) and name != "" -> name
+        true -> nil
       end
     else
       nil

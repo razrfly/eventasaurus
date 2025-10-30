@@ -971,6 +971,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                     <span class="text-sm text-gray-700"><%= rec %></span>
                   </li>
                 <% end %>
+
+                <%= if @quality_data.venues_with_low_quality_names > 0 do %>
+                  <li class="flex items-start">
+                    <span class="flex-shrink-0 w-1.5 h-1.5 mt-2 bg-orange-600 rounded-full mr-3"></span>
+                    <span class="text-sm text-gray-700">
+                      <.link navigate={~p"/admin/venues/name-fixer"} class="text-blue-600 hover:text-blue-800 font-medium underline">
+                        Use the Venue Name Fixer
+                      </.link>
+                      to clean up <%= @quality_data.venues_with_low_quality_names %> venues with low-quality names (current quality: <%= @quality_data.venue_name_quality %>%).
+                    </span>
+                  </li>
+                <% end %>
               </ul>
             </div>
           </div>

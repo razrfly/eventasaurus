@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.JsonLd.CitySchema do
   - Google Rich Results: https://developers.google.com/search/docs/appearance/structured-data
   """
 
+  alias Eventasaurus.CDN
   alias EventasaurusWeb.UrlHelper
 
   @doc """
@@ -134,7 +135,10 @@ defmodule EventasaurusWeb.JsonLd.CitySchema do
     relative_path = HashGenerator.generate_url_path(city_with_stats, :city)
     image_url = "#{base_url}#{relative_path}"
 
-    Map.put(schema, "image", image_url)
+    # Wrap with CDN for Cloudflare pass-through
+    cdn_image_url = CDN.url(image_url)
+
+    Map.put(schema, "image", cdn_image_url)
   end
 
   # Add sameAs links to external resources

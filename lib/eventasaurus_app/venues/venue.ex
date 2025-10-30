@@ -313,6 +313,7 @@ defmodule EventasaurusApp.Venues.Venue do
 
   # Duplicate Detection Validation (Phase 1)
   # Prevents creation of duplicate venues based on proximity and name similarity
+  # Uses distance-based similarity thresholds via DuplicateDetection module
   defp validate_no_duplicate(changeset) do
     # Only check for duplicates on new venue creation (not updates)
     # Skip if changeset already has errors
@@ -322,12 +323,18 @@ defmodule EventasaurusApp.Venues.Venue do
       lat = get_field(changeset, :latitude)
       lng = get_field(changeset, :longitude)
       name = get_field(changeset, :name)
+      city_id = get_field(changeset, :city_id)
 
       # Only perform duplicate check if we have all required fields
-      if lat && lng && name do
+      if lat && lng && name && city_id do
         alias EventasaurusApp.Venues
 
-        case Venues.check_duplicate(%{latitude: lat, longitude: lng, name: name}) do
+        case Venues.check_duplicate(%{
+               latitude: lat,
+               longitude: lng,
+               name: name,
+               city_id: city_id
+             }) do
           {:ok, nil} ->
             # No duplicate found
             changeset
