@@ -56,6 +56,7 @@ default_upload_enabled = if config_env() == :prod, do: "true", else: "false"
 # Use separate folders for dev vs production (never pollute production folder from dev)
 default_imagekit_folder = if config_env() == :prod, do: "/venues", else: "/venues_test"
 raw_imagekit_folder = System.get_env("IMAGEKIT_FOLDER", default_imagekit_folder) |> String.trim()
+
 sanitized_imagekit_folder =
   raw_imagekit_folder
   |> (fn f -> if String.starts_with?(f, "/"), do: f, else: "/" <> f end).()
@@ -73,28 +74,46 @@ config :eventasaurus, :imagekit,
 default_max_images = if config_env() == :prod, do: 10, else: 2
 
 max_images_env = System.get_env("MAX_IMAGES_PER_PROVIDER")
+
 safe_max_images =
   case max_images_env do
-    nil -> default_max_images
-    "" -> default_max_images
+    nil ->
+      default_max_images
+
+    "" ->
+      default_max_images
+
     v ->
       case Integer.parse(v) do
-        {int, _} when int >= 0 -> int
+        {int, _} when int >= 0 ->
+          int
+
         _ ->
           require Logger
-          Logger.error("Invalid MAX_IMAGES_PER_PROVIDER value: #{inspect(v)}, using default: #{default_max_images}")
+
+          Logger.error(
+            "Invalid MAX_IMAGES_PER_PROVIDER value: #{inspect(v)}, using default: #{default_max_images}"
+          )
+
           default_max_images
       end
   end
 
 cooldown_env = System.get_env("NO_IMAGES_COOLDOWN_DAYS")
+
 safe_cooldown_days =
   case cooldown_env do
-    nil -> 7
-    "" -> 7
+    nil ->
+      7
+
+    "" ->
+      7
+
     v ->
       case Integer.parse(v) do
-        {int, _} when int >= 0 -> int
+        {int, _} when int >= 0 ->
+          int
+
         _ ->
           require Logger
           Logger.error("Invalid NO_IMAGES_COOLDOWN_DAYS value: #{inspect(v)}, using default: 7")
@@ -107,16 +126,27 @@ safe_cooldown_days =
 default_max_per_venue = if config_env() == :prod, do: 25, else: 10
 
 max_per_venue_env = System.get_env("MAX_IMAGES_PER_VENUE")
+
 safe_max_per_venue =
   case max_per_venue_env do
-    nil -> default_max_per_venue
-    "" -> default_max_per_venue
+    nil ->
+      default_max_per_venue
+
+    "" ->
+      default_max_per_venue
+
     v ->
       case Integer.parse(v) do
-        {int, _} when int >= 0 -> int
+        {int, _} when int >= 0 ->
+          int
+
         _ ->
           require Logger
-          Logger.error("Invalid MAX_IMAGES_PER_VENUE value: #{inspect(v)}, using default: #{default_max_per_venue}")
+
+          Logger.error(
+            "Invalid MAX_IMAGES_PER_VENUE value: #{inspect(v)}, using default: #{default_max_per_venue}"
+          )
+
           default_max_per_venue
       end
   end

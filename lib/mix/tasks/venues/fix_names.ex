@@ -76,7 +76,9 @@ defmodule Mix.Tasks.Venues.FixNames do
 
     case venues do
       [] ->
-        Mix.shell().info("#{IO.ANSI.green()}✓ No venue name quality issues found!#{IO.ANSI.reset()}")
+        Mix.shell().info(
+          "#{IO.ANSI.green()}✓ No venue name quality issues found!#{IO.ANSI.reset()}"
+        )
 
       venues ->
         Mix.shell().info("Found #{length(venues)} venues with name quality issues")
@@ -87,19 +89,31 @@ defmodule Mix.Tasks.Venues.FixNames do
         moderate_count = Enum.count(venues, &(&1.severity == :moderate))
 
         Mix.shell().info("#{IO.ANSI.bright()}Severity breakdown:#{IO.ANSI.reset()}")
-        Mix.shell().info("  #{IO.ANSI.red()}🔴 Severe (< 0.3):#{IO.ANSI.reset()}    #{severe_count} venues")
-        Mix.shell().info("  #{IO.ANSI.yellow()}⚠️  Moderate (< 0.7):#{IO.ANSI.reset()}  #{moderate_count} venues")
+
+        Mix.shell().info(
+          "  #{IO.ANSI.red()}🔴 Severe (< 0.3):#{IO.ANSI.reset()}    #{severe_count} venues"
+        )
+
+        Mix.shell().info(
+          "  #{IO.ANSI.yellow()}⚠️  Moderate (< 0.7):#{IO.ANSI.reset()}  #{moderate_count} venues"
+        )
+
         Mix.shell().info("")
 
         # Process each venue and collect results
-        Mix.shell().info("#{IO.ANSI.bright()}Changes to apply (--severity #{severity}):#{IO.ANSI.reset()}")
+        Mix.shell().info(
+          "#{IO.ANSI.bright()}Changes to apply (--severity #{severity}):#{IO.ANSI.reset()}"
+        )
+
         Mix.shell().info("")
 
         results =
           venues
           |> Enum.with_index(1)
           |> Enum.map(fn {assessment, index} ->
-            result = VenueNameFixer.fix_venue_name(assessment, dry_run: true, check_duplicates: true)
+            result =
+              VenueNameFixer.fix_venue_name(assessment, dry_run: true, check_duplicates: true)
+
             {assessment, result, index}
           end)
 
@@ -112,17 +126,33 @@ defmodule Mix.Tasks.Venues.FixNames do
         Mix.shell().info("")
         Mix.shell().info("#{IO.ANSI.bright()}Summary:#{IO.ANSI.reset()}")
 
-        rename_count = Enum.count(results, fn {_, result, _} -> match?({:rename, _, _}, result) end)
-        duplicate_count = Enum.count(results, fn {_, result, _} -> match?({:duplicate_detected, _, _}, result) end)
+        rename_count =
+          Enum.count(results, fn {_, result, _} -> match?({:rename, _, _}, result) end)
+
+        duplicate_count =
+          Enum.count(results, fn {_, result, _} -> match?({:duplicate_detected, _, _}, result) end)
+
         skip_count = Enum.count(results, fn {_, result, _} -> match?({:skip, _}, result) end)
 
-        Mix.shell().info("  #{IO.ANSI.green()}✅ Renames:#{IO.ANSI.reset()} #{rename_count} venues")
-        Mix.shell().info("  #{IO.ANSI.yellow()}⚠️  Duplicates:#{IO.ANSI.reset()} #{duplicate_count} venues (need manual review)")
-        Mix.shell().info("  #{IO.ANSI.yellow()}⏭️  Skipped:#{IO.ANSI.reset()} #{skip_count} venues")
+        Mix.shell().info(
+          "  #{IO.ANSI.green()}✅ Renames:#{IO.ANSI.reset()} #{rename_count} venues"
+        )
+
+        Mix.shell().info(
+          "  #{IO.ANSI.yellow()}⚠️  Duplicates:#{IO.ANSI.reset()} #{duplicate_count} venues (need manual review)"
+        )
+
+        Mix.shell().info(
+          "  #{IO.ANSI.yellow()}⏭️  Skipped:#{IO.ANSI.reset()} #{skip_count} venues"
+        )
+
         Mix.shell().info("")
 
         if dry_run do
-          Mix.shell().info("#{IO.ANSI.yellow()}This was a dry run. No changes were applied.#{IO.ANSI.reset()}")
+          Mix.shell().info(
+            "#{IO.ANSI.yellow()}This was a dry run. No changes were applied.#{IO.ANSI.reset()}"
+          )
+
           Mix.shell().info("Run without --dry-run to apply changes.")
         else
           # Confirm before applying (only count renames, not duplicates)
@@ -141,21 +171,37 @@ defmodule Mix.Tasks.Venues.FixNames do
     similarity = format_similarity(assessment.similarity)
 
     Mix.shell().info("#{index}. #{IO.ANSI.bright()}Venue ##{venue.id}#{IO.ANSI.reset()}")
-    Mix.shell().info("   Current:  #{IO.ANSI.yellow()}\"#{String.slice(assessment.current_name, 0..50)}\"#{IO.ANSI.reset()}")
+
+    Mix.shell().info(
+      "   Current:  #{IO.ANSI.yellow()}\"#{String.slice(assessment.current_name, 0..50)}\"#{IO.ANSI.reset()}"
+    )
 
     case result do
       {:rename, new_name, event_count} ->
-        Mix.shell().info("   Geocoded: #{IO.ANSI.green()}\"#{String.slice(new_name, 0..50)}\"#{IO.ANSI.reset()}")
+        Mix.shell().info(
+          "   Geocoded: #{IO.ANSI.green()}\"#{String.slice(new_name, 0..50)}\"#{IO.ANSI.reset()}"
+        )
+
         Mix.shell().info("   Similarity: #{similarity} #{severity_icon}")
         Mix.shell().info("   Events: #{event_count}")
         Mix.shell().info("   Action: #{IO.ANSI.green()}Rename#{IO.ANSI.reset()}")
 
       {:duplicate_detected, existing_venue, event_count} ->
-        Mix.shell().info("   Geocoded: #{IO.ANSI.green()}\"#{String.slice(assessment.geocoded_name, 0..50)}\"#{IO.ANSI.reset()}")
+        Mix.shell().info(
+          "   Geocoded: #{IO.ANSI.green()}\"#{String.slice(assessment.geocoded_name, 0..50)}\"#{IO.ANSI.reset()}"
+        )
+
         Mix.shell().info("   Similarity: #{similarity} #{severity_icon}")
-        Mix.shell().info("   #{IO.ANSI.yellow()}⚠️  Duplicate found:#{IO.ANSI.reset()} Venue ##{existing_venue.id} \"#{existing_venue.name}\"")
+
+        Mix.shell().info(
+          "   #{IO.ANSI.yellow()}⚠️  Duplicate found:#{IO.ANSI.reset()} Venue ##{existing_venue.id} \"#{existing_venue.name}\""
+        )
+
         Mix.shell().info("   Events: #{event_count}")
-        Mix.shell().info("   Action: #{IO.ANSI.yellow()}Skip - needs manual review#{IO.ANSI.reset()}")
+
+        Mix.shell().info(
+          "   Action: #{IO.ANSI.yellow()}Skip - needs manual review#{IO.ANSI.reset()}"
+        )
 
       {:skip, reason} ->
         Mix.shell().info("   #{IO.ANSI.faint()}Skipped: #{reason}#{IO.ANSI.reset()}")
@@ -185,10 +231,14 @@ defmodule Mix.Tasks.Venues.FixNames do
 
       case result do
         {:renamed, updated_venue, event_count} ->
-          Mix.shell().info("  #{IO.ANSI.green()}✓ Renamed#{IO.ANSI.reset()} to \"#{updated_venue.name}\" (#{event_count} events)")
+          Mix.shell().info(
+            "  #{IO.ANSI.green()}✓ Renamed#{IO.ANSI.reset()} to \"#{updated_venue.name}\" (#{event_count} events)"
+          )
 
         {:duplicate_detected, existing_venue, _event_count} ->
-          Mix.shell().info("  #{IO.ANSI.yellow()}⚠️  Duplicate#{IO.ANSI.reset()} of venue ##{existing_venue.id} - skipped")
+          Mix.shell().info(
+            "  #{IO.ANSI.yellow()}⚠️  Duplicate#{IO.ANSI.reset()} of venue ##{existing_venue.id} - skipped"
+          )
 
         {:skip, reason} ->
           Mix.shell().info("  #{IO.ANSI.yellow()}⏭ Skipped:#{IO.ANSI.reset()} #{reason}")

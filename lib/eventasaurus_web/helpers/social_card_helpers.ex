@@ -180,7 +180,14 @@ defmodule EventasaurusWeb.Helpers.SocialCardHelpers do
   ## Returns
     - conn: The updated connection
   """
-  @spec send_hash_mismatch_redirect(Plug.Conn.t(), map(), String.t(), String.t(), String.t(), atom()) ::
+  @spec send_hash_mismatch_redirect(
+          Plug.Conn.t(),
+          map(),
+          String.t(),
+          String.t(),
+          String.t(),
+          atom()
+        ) ::
           Plug.Conn.t()
   def send_hash_mismatch_redirect(conn, data, slug, expected_hash, received_hash, type \\ :event) do
     import Plug.Conn

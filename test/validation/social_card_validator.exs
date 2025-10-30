@@ -238,7 +238,7 @@ defmodule SocialCardValidator do
     base_url = System.get_env("APP_URL") || "http://localhost:4000"
     url = "#{base_url}#{path}"
 
-    case :httpc.request(:get, {String.to_charlist(url), []}, [], [body_format: :binary]) do
+    case :httpc.request(:get, {String.to_charlist(url), []}, [], body_format: :binary) do
       {:ok, {{_version, status, _reason}, headers, body}} ->
         headers_list =
           Enum.map(headers, fn {k, v} -> {to_string(k), to_string(v)} end)

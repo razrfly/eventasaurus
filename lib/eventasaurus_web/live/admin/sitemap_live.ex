@@ -26,7 +26,10 @@ defmodule EventasaurusWeb.Admin.SitemapLive do
       {:ok, job} ->
         socket =
           socket
-          |> put_flash(:info, "✅ Queued sitemap generation job ##{job.id}. This will take a few minutes.")
+          |> put_flash(
+            :info,
+            "✅ Queued sitemap generation job ##{job.id}. This will take a few minutes."
+          )
           |> assign(:generating, true)
 
         {:noreply, socket}

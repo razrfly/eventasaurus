@@ -176,7 +176,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         end
 
       # Combined venue quality score (50% coverage, 50% name quality)
-      venue_quality = ((venue_coverage * 0.5 + venue_name_quality * 0.5) |> round())
+      venue_quality = (venue_coverage * 0.5 + venue_name_quality * 0.5) |> round()
 
       # Keep old name for backwards compatibility
       venue_completeness = venue_quality
@@ -1515,7 +1515,9 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       # Time only: "18:00" or "18:00:00"
       String.contains?(time_str, ":") ->
         case Time.from_iso8601(time_str) do
-          {:ok, time} -> time.hour
+          {:ok, time} ->
+            time.hour
+
           _ ->
             # Try parsing just HH:MM
             case String.split(time_str, ":") do

@@ -159,7 +159,9 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
         images_uploaded = meta["images_uploaded"] || 0
 
         enriched_count = if images_uploaded > 0, do: 1, else: 0
-        failed_count = if status in ["failed", "no_images"] or images_uploaded == 0, do: 1, else: 0
+
+        failed_count =
+          if status in ["failed", "no_images"] or images_uploaded == 0, do: 1, else: 0
 
         # Convert provider metadata from EnrichmentJob format
         provider_results =

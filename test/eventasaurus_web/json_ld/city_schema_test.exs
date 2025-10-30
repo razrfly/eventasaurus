@@ -60,16 +60,16 @@ defmodule EventasaurusWeb.JsonLd.CitySchemaTest do
       assert length(additional_props) == 3
 
       assert Enum.any?(additional_props, fn prop ->
-        prop["name"] == "Upcoming Events" && prop["value"] == 127
-      end)
+               prop["name"] == "Upcoming Events" && prop["value"] == 127
+             end)
 
       assert Enum.any?(additional_props, fn prop ->
-        prop["name"] == "Event Venues" && prop["value"] == 45
-      end)
+               prop["name"] == "Event Venues" && prop["value"] == 45
+             end)
 
       assert Enum.any?(additional_props, fn prop ->
-        prop["name"] == "Event Categories" && prop["value"] == 12
-      end)
+               prop["name"] == "Event Categories" && prop["value"] == 12
+             end)
     end
 
     test "handles city without coordinates" do

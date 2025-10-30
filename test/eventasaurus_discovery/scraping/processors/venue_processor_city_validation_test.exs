@@ -8,7 +8,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
   describe "VenueProcessor city validation (Layer 2 safety net)" do
     setup do
       # Create test country
-      {:ok, country} = %Country{}
+      {:ok, country} =
+        %Country{}
         |> Country.changeset(%{
           name: "United Kingdom",
           code: "GB",
@@ -17,7 +18,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
         |> Repo.insert()
 
       # Create test source
-      {:ok, source} = %Source{}
+      {:ok, source} =
+        %Source{}
         |> Source.changeset(%{
           name: "Test Source",
           slug: "test-source",
@@ -31,7 +33,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects UK postcodes", %{country: country} do
       venue_data = %{
         name: "Test Venue",
-        city_name: "SW18 2SS",  # UK postcode
+        # UK postcode
+        city_name: "SW18 2SS",
         country_name: "United Kingdom",
         latitude: 51.4566,
         longitude: -0.1917
@@ -48,7 +51,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects US ZIP codes", %{country: country} do
       venue_data = %{
         name: "Test Venue",
-        city_name: "90210",  # US ZIP code
+        # US ZIP code
+        city_name: "90210",
         country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
@@ -63,7 +67,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects street addresses starting with numbers", %{country: country} do
       venue_data = %{
         name: "Test Venue",
-        city_name: "13 Bollo Lane",  # Street address
+        # Street address
+        city_name: "13 Bollo Lane",
         country_name: "United Kingdom",
         latitude: 51.4936,
         longitude: -0.2663
@@ -78,7 +83,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects pure numeric values", %{country: country} do
       venue_data = %{
         name: "Test Venue",
-        city_name: "12345",  # Pure number
+        # Pure number
+        city_name: "12345",
         country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
@@ -93,7 +99,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "accepts valid city names", %{country: country, source: source} do
       venue_data = %{
         name: "Test Venue",
-        city_name: "London",  # Valid city
+        # Valid city
+        city_name: "London",
         country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
@@ -110,7 +117,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "allows nil city names", %{source: source} do
       venue_data = %{
         name: "Test Venue",
-        city_name: nil,  # Nil is allowed
+        # Nil is allowed
+        city_name: nil,
         country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
@@ -137,7 +145,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       # Simulate a buggy transformer passing invalid city
       venue_data = %{
         name: "Test Venue",
-        city_name: "76 Narrow Street",  # Street address from buggy transformer
+        # Street address from buggy transformer
+        city_name: "76 Narrow Street",
         country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
@@ -153,11 +162,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "prevents database pollution from any source", %{country: country} do
       # Test that multiple invalid city names are all rejected
       invalid_cities = [
-        "SW18 2SS",         # UK postcode
-        "90210",            # US ZIP
-        "13 Bollo Lane",    # Street address
-        "999",              # Numeric
-        "The Rose Crown"    # Could be venue name
+        # UK postcode
+        "SW18 2SS",
+        # US ZIP
+        "90210",
+        # Street address
+        "13 Bollo Lane",
+        # Numeric
+        "999",
+        # Could be venue name
+        "The Rose Crown"
       ]
 
       for invalid_city <- invalid_cities do
@@ -177,13 +191,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       end
 
       # Verify no invalid cities were created
-      invalid_city_count = Repo.all(
-        from c in City,
-        where: c.country_id == ^country.id and
-               (fragment("? ~* ?", c.name, "^[A-Z]{1,2}[0-9]{1,2}") or  # Postcodes
-                fragment("? ~* ?", c.name, "^\\d+$") or                  # Pure numbers
-                fragment("? ~* ?", c.name, "^\\d+\\s+"))                 # Street addresses
-      ) |> length()
+      invalid_city_count =
+        Repo.all(
+          from(c in City,
+            # Postcodes
+            # Pure numbers
+            # Street addresses
+            where:
+              c.country_id == ^country.id and
+                (fragment("? ~* ?", c.name, "^[A-Z]{1,2}[0-9]{1,2}") or
+                   fragment("? ~* ?", c.name, "^\\d+$") or
+                   fragment("? ~* ?", c.name, "^\\d+\\s+"))
+          )
+        )
+        |> length()
 
       assert invalid_city_count == 0, "Found #{invalid_city_count} invalid cities in database"
     end
@@ -191,7 +212,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
 
   describe "VenueProcessor integration with transformers" do
     setup do
-      {:ok, country} = %Country{}
+      {:ok, country} =
+        %Country{}
         |> Country.changeset(%{
           name: "United States",
           code: "US",
@@ -199,7 +221,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
         })
         |> Repo.insert()
 
-      {:ok, source} = %Source{}
+      {:ok, source} =
+        %Source{}
         |> Source.changeset(%{
           name: "Test Source",
           slug: "test-source",
@@ -214,7 +237,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       # Simulate a good transformer providing validated city
       venue_data = %{
         name: "Test Venue",
-        city_name: "New York",  # Already validated by transformer
+        # Already validated by transformer
+        city_name: "New York",
         country_name: "United States",
         latitude: 40.7128,
         longitude: -74.0060
@@ -231,7 +255,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       # Simulate a transformer that forgot to validate
       venue_data = %{
         name: "Test Venue",
-        city_name: "10001",  # ZIP code that transformer didn't catch
+        # ZIP code that transformer didn't catch
+        city_name: "10001",
         country_name: "United States",
         latitude: 40.7128,
         longitude: -74.0060
@@ -246,7 +271,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
 
   describe "VenueProcessor logging" do
     setup do
-      {:ok, country} = %Country{}
+      {:ok, country} =
+        %Country{}
         |> Country.changeset(%{
           name: "Poland",
           code: "PL",
@@ -260,16 +286,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "logs detailed error for invalid city names", %{country: country} do
       venue_data = %{
         name: "Test Venue",
-        city_name: "00-001",  # Polish postcode
+        # Polish postcode
+        city_name: "00-001",
         country_name: "Poland",
         latitude: 52.2297,
         longitude: 21.0122
       }
 
       # Capture log output
-      log_output = ExUnit.CaptureLog.capture_log(fn ->
-        VenueProcessor.process_venue_data(venue_data, country.id, nil)
-      end)
+      log_output =
+        ExUnit.CaptureLog.capture_log(fn ->
+          VenueProcessor.process_venue_data(venue_data, country.id, nil)
+        end)
 
       # Should log rejection with details
       assert log_output =~ "VenueProcessor REJECTED invalid city name"
@@ -281,7 +309,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
   describe "VenueProcessor alternate names matching" do
     setup do
       # Create Poland
-      {:ok, poland} = %Country{}
+      {:ok, poland} =
+        %Country{}
         |> Country.changeset(%{
           name: "Poland",
           code: "PL",
@@ -290,7 +319,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
         |> Repo.insert()
 
       # Create Warsaw with alternate names
-      {:ok, warsaw} = %City{}
+      {:ok, warsaw} =
+        %City{}
         |> City.changeset(%{
           name: "Warsaw",
           country_id: poland.id,
@@ -299,7 +329,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
         |> Repo.insert()
 
       # Create Kraków with alternate names
-      {:ok, krakow} = %City{}
+      {:ok, krakow} =
+        %City{}
         |> City.changeset(%{
           name: "Kraków",
           country_id: poland.id,
@@ -338,7 +369,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
 
       # Should match existing Warsaw city via alternate name
       assert venue.city_id == warsaw.id
-      assert venue.city.name == "Warsaw"  # Returns canonical name
+      # Returns canonical name
+      assert venue.city.name == "Warsaw"
     end
 
     test "finds city by alternate name (Warschau)", %{warsaw: warsaw} do
@@ -372,6 +404,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
 
         assert venue.city_id == krakow.id,
                "Expected #{spelling} to match Kraków"
+
         assert venue.city.name == "Kraków"
       end
     end
@@ -421,7 +454,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
 
     test "alternate names do not match across countries" do
       # Create Germany
-      {:ok, germany} = %Country{}
+      {:ok, germany} =
+        %Country{}
         |> Country.changeset(%{
           name: "Germany",
           code: "DE",
@@ -447,7 +481,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     end
 
     test "empty alternate names array does not cause errors" do
-      {:ok, country} = %Country{}
+      {:ok, country} =
+        %Country{}
         |> Country.changeset(%{
           name: "France",
           code: "FR",
@@ -455,11 +490,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
         })
         |> Repo.insert()
 
-      {:ok, paris} = %City{}
+      {:ok, paris} =
+        %City{}
         |> City.changeset(%{
           name: "Paris",
           country_id: country.id,
-          alternate_names: []  # Empty array
+          # Empty array
+          alternate_names: []
         })
         |> Repo.insert()
 

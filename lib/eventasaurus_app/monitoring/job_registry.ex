@@ -105,7 +105,11 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   defp extract_queue_from_worker(worker_name) when is_binary(worker_name) do
     try do
       # Convert string to module atom, handling existing Elixir prefix
-      module_name = if String.starts_with?(worker_name, "Elixir."), do: worker_name, else: "Elixir.#{worker_name}"
+      module_name =
+        if String.starts_with?(worker_name, "Elixir."),
+          do: worker_name,
+          else: "Elixir.#{worker_name}"
+
       module = String.to_existing_atom(module_name)
 
       # Ensure module is loaded
@@ -121,8 +125,10 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
         "default"
       end
     rescue
-      ArgumentError -> "default"  # Module doesn't exist
-      _ -> "default"  # Any other error
+      # Module doesn't exist
+      ArgumentError -> "default"
+      # Any other error
+      _ -> "default"
     end
   end
 
@@ -133,8 +139,11 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   defp get_description("EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator", _schedule),
     do: "Orchestrates city-wide event discovery at midnight UTC"
 
-  defp get_description("EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker", _schedule),
-    do: "Recalculates city coordinates daily at 1 AM UTC"
+  defp get_description(
+         "EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker",
+         _schedule
+       ),
+       do: "Recalculates city coordinates daily at 1 AM UTC"
 
   defp get_description("EventasaurusApp.Workers.UnsplashRefreshWorker", _schedule),
     do: "Refreshes Unsplash city images daily at 3 AM UTC"
@@ -189,19 +198,25 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   # Override mapping for sources that don't use standard SyncJob pattern
   defp get_parent_worker_for_source("bandsintown"),
     do: "EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob"
+
   defp get_parent_worker_for_source("ticketmaster"),
     do: "EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob"
+
   defp get_parent_worker_for_source("cinema-city"),
     do: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob"
+
   defp get_parent_worker_for_source("kino-krakow"),
     do: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob"
+
   defp get_parent_worker_for_source("karnet"),
     do: "EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob"
+
   # Default: use SourceRegistry mapping (converts module to string)
   defp get_parent_worker_for_source(source_slug) do
     case EventasaurusDiscovery.Sources.SourceRegistry.get_sync_job(source_slug) do
       {:ok, module} -> module |> Module.split() |> Enum.join(".")
-      {:error, _} -> "Unknown.Worker"  # Fallback for unknown sources
+      # Fallback for unknown sources
+      {:error, _} -> "Unknown.Worker"
     end
   end
 
@@ -219,6 +234,7 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   defp humanize_source_name("kino-krakow"), do: "Kino Krakow Sync"
   defp humanize_source_name("sortiraparis"), do: "SortirAParis Sync"
   defp humanize_source_name("karnet"), do: "Karnet Sync"
+
   defp humanize_source_name(slug) do
     slug
     |> String.split("-")
@@ -255,11 +271,16 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
     import Ecto.Query
 
     EventasaurusApp.Repo.all(
-      from j in Oban.Job,
-        where: fragment("? LIKE 'EventasaurusDiscovery.Sources.%' OR ? LIKE 'EventasaurusDiscovery.Apis.%'",
-                       j.worker, j.worker),
+      from(j in Oban.Job,
+        where:
+          fragment(
+            "? LIKE 'EventasaurusDiscovery.Sources.%' OR ? LIKE 'EventasaurusDiscovery.Apis.%'",
+            j.worker,
+            j.worker
+          ),
         distinct: true,
         select: j.worker
+      )
     )
   end
 
@@ -298,10 +319,13 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
     cond do
       String.ends_with?(job_type, "DetailJob") ->
         "Fetches detailed event information from #{source_display}"
+
       String.ends_with?(job_type, "EnrichmentJob") ->
         "Enriches events with additional information from #{source_display}"
+
       String.ends_with?(job_type, "ProcessorJob") ->
         "Processes events from #{source_display}"
+
       true ->
         "Background processing for #{source_display}"
     end
@@ -329,21 +353,37 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   # Humanize maintenance job names
   defp humanize_maintenance_job_name("EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob"),
     do: "City Coordinate Calculation"
+
   defp humanize_maintenance_job_name("EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"),
     do: "Geocoding Provider ID Backfill"
+
   defp humanize_maintenance_job_name("EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"),
     do: "Venue Images Backfill Orchestrator"
+
   defp humanize_maintenance_job_name(worker_name) do
-    worker_name |> String.split(".") |> List.last() |> String.replace("Job", "") |> humanize_string()
+    worker_name
+    |> String.split(".")
+    |> List.last()
+    |> String.replace("Job", "")
+    |> humanize_string()
   end
 
   # Generate maintenance job descriptions
-  defp generate_maintenance_job_description("EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob"),
-    do: "Calculates coordinates for cities"
-  defp generate_maintenance_job_description("EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"),
-    do: "Backfills provider IDs for existing geocoded venues"
-  defp generate_maintenance_job_description("EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"),
-    do: "Orchestrates venue image backfill operations"
+  defp generate_maintenance_job_description(
+         "EventasaurusDiscovery.Jobs.CityCoordinateCalculationJob"
+       ),
+       do: "Calculates coordinates for cities"
+
+  defp generate_maintenance_job_description(
+         "EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob"
+       ),
+       do: "Backfills provider IDs for existing geocoded venues"
+
+  defp generate_maintenance_job_description(
+         "EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob"
+       ),
+       do: "Orchestrates venue image backfill operations"
+
   defp generate_maintenance_job_description(_worker_name),
     do: "Maintenance background job"
 end

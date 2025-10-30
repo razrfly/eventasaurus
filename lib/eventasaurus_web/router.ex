@@ -178,7 +178,8 @@ defmodule EventasaurusWeb.Router do
       live "/venue-images/operations", EventasaurusWeb.Admin.VenueImageOperationsLive
 
       # Unified Venue Image Enrichment History with admin authentication
-      live "/venue-images/enrichment-history", EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive
+      live "/venue-images/enrichment-history",
+           EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive
 
       # Venue Duplicate Management with admin authentication
       live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
@@ -635,7 +636,6 @@ defmodule EventasaurusWeb.Router do
     # Calendar export endpoint
     get "/:slug/calendar/:format", CalendarController, :export
   end
-
 
   # Public social card generation (no auth required)
   # These routes mirror the public event/poll page structure at root scope

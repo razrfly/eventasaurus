@@ -15,7 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
   setup do
     # Create category lookup map from database
     categories =
-      Repo.all(from c in Category, where: c.is_active == true, select: {c.slug, {c.id, true}})
+      Repo.all(from(c in Category, where: c.is_active == true, select: {c.slug, {c.id, true}}))
       |> Map.new()
 
     {:ok, category_lookup: categories}
@@ -279,7 +279,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
 
       # Check actual categories
       category_ids = Enum.map(result, fn {id, _} -> id end)
-      categories = Repo.all(from c in Category, where: c.id in ^category_ids)
+      categories = Repo.all(from(c in Category, where: c.id in ^category_ids))
       slugs = Enum.map(categories, & &1.slug)
 
       assert "concerts" in slugs
@@ -310,7 +310,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
       assert length(result) > 0
 
       category_ids = Enum.map(result, fn {id, _} -> id end)
-      categories = Repo.all(from c in Category, where: c.id in ^category_ids)
+      categories = Repo.all(from(c in Category, where: c.id in ^category_ids))
       slugs = Enum.map(categories, & &1.slug)
 
       assert "concerts" in slugs
@@ -323,7 +323,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
       assert length(result) > 0
 
       category_ids = Enum.map(result, fn {id, _} -> id end)
-      categories = Repo.all(from c in Category, where: c.id in ^category_ids)
+      categories = Repo.all(from(c in Category, where: c.id in ^category_ids))
       slugs = Enum.map(categories, & &1.slug)
 
       assert "family" in slugs
@@ -336,7 +336,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
       assert length(result) > 0
 
       category_ids = Enum.map(result, fn {id, _} -> id end)
-      categories = Repo.all(from c in Category, where: c.id in ^category_ids)
+      categories = Repo.all(from(c in Category, where: c.id in ^category_ids))
       slugs = Enum.map(categories, & &1.slug)
 
       assert "festivals" in slugs
@@ -389,7 +389,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
 
       # Check categories include concerts and festivals
       category_ids = Enum.map(result, fn {id, _} -> id end)
-      categories = Repo.all(from c in Category, where: c.id in ^category_ids)
+      categories = Repo.all(from(c in Category, where: c.id in ^category_ids))
       slugs = Enum.map(categories, & &1.slug)
 
       assert "concerts" in slugs
@@ -402,7 +402,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.CategoryMappingTest do
       assert length(result) > 0
 
       category_ids = Enum.map(result, fn {id, _} -> id end)
-      categories = Repo.all(from c in Category, where: c.id in ^category_ids)
+      categories = Repo.all(from(c in Category, where: c.id in ^category_ids))
       slugs = Enum.map(categories, & &1.slug)
 
       assert "community" in slugs

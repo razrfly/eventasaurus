@@ -23,7 +23,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     TrendAnalyzer
   }
 
-  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusApp.Venues.{Venue, RegenerateSlugsByCityJob}
   alias EventasaurusDiscovery.VenueImages.QualityStats
 
   import Ecto.Query
@@ -99,6 +99,34 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("regenerate_venue_slugs", _params, socket) do
+    city = socket.assigns.city
+
+    case RegenerateSlugsByCityJob.enqueue(city.id, city.slug) do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(
+            :info,
+            "✅ Venue slug regeneration queued for #{city.name}. This will take a few minutes. The page will auto-refresh to show updated stats."
+          )
+          |> load_city_data()
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          socket
+          |> put_flash(
+            :error,
+            "❌ Failed to queue slug regeneration: #{inspect(reason)}"
+          )
+
+        {:noreply, socket}
+    end
+  end
+
   defp load_city_data(socket) do
     city_id = socket.assigns.city_id
     date_range = socket.assigns.date_range
@@ -132,6 +160,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     venues_needing_images = QualityStats.list_venues_without_images(city_id, 20)
     venues_with_images = QualityStats.list_venues_with_images(city_id, 20)
 
+    # Get venue slug quality stats
+    slug_stats = get_slug_quality_stats(city_id)
+
     socket
     |> assign(:sources_data, sources_data)
     |> assign(:top_venues, top_venues)
@@ -145,6 +176,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     |> assign(:recent_enrichments_30d, recent_enrichments_30d)
     |> assign(:venues_needing_images, venues_needing_images)
     |> assign(:venues_with_images, venues_with_images)
+    |> assign(:slug_stats, slug_stats)
   end
 
   defp get_sources_for_city(city_id) do
@@ -272,6 +304,42 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
       )
 
     Repo.one(query) || 0
+  end
+
+  defp get_slug_quality_stats(city_id) do
+    # Get total venues in city
+    total_venues =
+      from(v in Venue,
+        where: v.city_id == ^city_id,
+        select: count(v.id)
+      )
+      |> Repo.one()
+
+    # Detect old format slugs (contain numeric city ID pattern)
+    # Old format: venue-name-{city_id}-{random} e.g. "pub-name-123-abc456"
+    # New format: venue-name or venue-name-{city-slug}
+    venues_with_old_format =
+      from(v in Venue,
+        where: v.city_id == ^city_id,
+        # Match slugs ending with -{digits}-{alphanumeric}
+        where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+        select: count(v.id)
+      )
+      |> Repo.one()
+
+    quality_percentage =
+      if total_venues > 0 do
+        Float.round((total_venues - venues_with_old_format) / total_venues * 100, 1)
+      else
+        100.0
+      end
+
+    %{
+      total_venues: total_venues,
+      venues_with_old_format: venues_with_old_format,
+      venues_with_new_format: total_venues - venues_with_old_format,
+      quality_percentage: quality_percentage
+    }
   end
 
   @impl true
@@ -549,7 +617,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
             <!-- Data Quality Metrics -->
             <div class="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-6 mb-6">
               <h3 class="text-sm font-semibold text-gray-900 mb-4">🔍 Data Quality</h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Address Data -->
                 <div>
                   <div class="flex items-center justify-between mb-2">
@@ -587,6 +655,32 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
                     <p class="text-xs text-red-600 font-medium">⚠️ <%= @venue_stats.venues_missing_coordinates %> venues missing coordinates</p>
                   <% else %>
                     <p class="text-xs text-green-600 font-medium">✓ All venues have coordinates</p>
+                  <% end %>
+                </div>
+
+                <!-- Slug Quality -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-medium text-gray-600">Slug Quality</p>
+                    <span class={"text-sm font-bold #{if @slug_stats.quality_percentage < 95.0, do: "text-red-600", else: "text-green-600"}"}><%= @slug_stats.quality_percentage %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div
+                      class={"h-2 rounded-full transition-all #{if @slug_stats.quality_percentage < 95.0, do: "bg-red-500", else: "bg-green-500"}"}
+                      style={"width: #{@slug_stats.quality_percentage}%"}
+                    >
+                    </div>
+                  </div>
+                  <%= if @slug_stats.venues_with_old_format > 0 do %>
+                    <p class="text-xs text-red-600 font-medium">⚠️ <%= @slug_stats.venues_with_old_format %> venues with old slug format</p>
+                    <button
+                      phx-click="regenerate_venue_slugs"
+                      class="mt-2 text-xs text-indigo-600 hover:text-indigo-900 font-medium underline"
+                    >
+                      🔄 Regenerate All Slugs
+                    </button>
+                  <% else %>
+                    <p class="text-xs text-green-600 font-medium">✓ All venue slugs follow current pattern</p>
                   <% end %>
                 </div>
               </div>

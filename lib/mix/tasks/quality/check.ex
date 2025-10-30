@@ -252,8 +252,11 @@ defmodule Mix.Tasks.Quality.Check do
       quality.low_quality_venue_examples
       |> Enum.take(3)
       |> Enum.each(fn example ->
-        severity_color = if Map.get(example, :severity) == :moderate, do: IO.ANSI.yellow(), else: IO.ANSI.red()
-        severity_text = if Map.get(example, :severity) == :moderate, do: "moderate", else: "severe"
+        severity_color =
+          if Map.get(example, :severity) == :moderate, do: IO.ANSI.yellow(), else: IO.ANSI.red()
+
+        severity_text =
+          if Map.get(example, :severity) == :moderate, do: "moderate", else: "severe"
 
         Mix.shell().info(
           "      #{IO.ANSI.faint()}•#{IO.ANSI.reset()} " <>

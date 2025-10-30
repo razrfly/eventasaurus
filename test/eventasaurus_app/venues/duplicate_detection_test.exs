@@ -40,10 +40,13 @@ defmodule EventasaurusApp.Venues.DuplicateDetectionTest do
     setup do
       # Create test city
       {:ok, country} =
-        EventasaurusDiscovery.Locations.Country.changeset(%EventasaurusDiscovery.Locations.Country{}, %{
-          name: "Poland",
-          code: "PL"
-        })
+        EventasaurusDiscovery.Locations.Country.changeset(
+          %EventasaurusDiscovery.Locations.Country{},
+          %{
+            name: "Poland",
+            code: "PL"
+          }
+        )
         |> Repo.insert()
 
       {:ok, city} =
@@ -244,10 +247,13 @@ defmodule EventasaurusApp.Venues.DuplicateDetectionTest do
     setup do
       # Create test city
       {:ok, country} =
-        EventasaurusDiscovery.Locations.Country.changeset(%EventasaurusDiscovery.Locations.Country{}, %{
-          name: "Poland",
-          code: "PL"
-        })
+        EventasaurusDiscovery.Locations.Country.changeset(
+          %EventasaurusDiscovery.Locations.Country{},
+          %{
+            name: "Poland",
+            code: "PL"
+          }
+        )
         |> Repo.insert()
 
       {:ok, city} =
@@ -307,10 +313,13 @@ defmodule EventasaurusApp.Venues.DuplicateDetectionTest do
     setup do
       # Create test city
       {:ok, country} =
-        EventasaurusDiscovery.Locations.Country.changeset(%EventasaurusDiscovery.Locations.Country{}, %{
-          name: "Poland",
-          code: "PL"
-        })
+        EventasaurusDiscovery.Locations.Country.changeset(
+          %EventasaurusDiscovery.Locations.Country{},
+          %{
+            name: "Poland",
+            code: "PL"
+          }
+        )
         |> Repo.insert()
 
       {:ok, city} =

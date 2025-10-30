@@ -74,7 +74,11 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Transformer do
 
           # Translations (Polish)
           title_translations: %{"pl" => extract_title(raw_event)},
-          description_translations: (if extract_description(raw_event), do: %{"pl" => extract_description(raw_event)}, else: nil),
+          description_translations:
+            if(extract_description(raw_event),
+              do: %{"pl" => extract_description(raw_event)},
+              else: nil
+            ),
 
           # Original URL for reference
           source_url: raw_event[:source_url],

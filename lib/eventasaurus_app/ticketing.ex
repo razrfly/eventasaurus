@@ -1463,7 +1463,9 @@ defmodule EventasaurusApp.Ticketing do
     idempotency_key = "order_#{order.id}_#{DateTime.utc_now() |> DateTime.to_unix()}"
 
     # Build URLs
-    success_url = UrlHelper.build_url("/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}")
+    success_url =
+      UrlHelper.build_url("/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}")
+
     cancel_url = UrlHelper.build_url("/#{event.slug}")
 
     metadata = %{
@@ -1879,7 +1881,9 @@ defmodule EventasaurusApp.Ticketing do
 
     # Build URLs
     success_url =
-      UrlHelper.build_url("/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true")
+      UrlHelper.build_url(
+        "/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true"
+      )
 
     cancel_url = UrlHelper.build_url("/#{event.slug}")
 

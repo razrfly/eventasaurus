@@ -24,8 +24,10 @@ defmodule EventasaurusDiscovery.Validation.VenueNameValidator do
   """
 
   # Similarity thresholds
-  @high_similarity 0.7 # Names match well (valid venue name)
-  @low_similarity 0.3 # Names very different (likely UI element or bad scrape)
+  # Names match well (valid venue name)
+  @high_similarity 0.7
+  # Names very different (likely UI element or bad scrape)
+  @low_similarity 0.3
 
   @doc """
   Validates scraped venue name against geocoded name from metadata.
