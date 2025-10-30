@@ -44,6 +44,7 @@ defmodule EventasaurusWeb.Admin.SitemapLive do
     |> assign(:stats, stats)
     |> assign(:samples, samples)
     |> assign(:last_updated, DateTime.utc_now())
+    |> assign(:generating, false)
   end
 
   defp assign_defaults(socket) do
@@ -63,8 +64,9 @@ defmodule EventasaurusWeb.Admin.SitemapLive do
     |> String.graphemes()
     |> Enum.reverse()
     |> Enum.chunk_every(3)
-    |> Enum.join(",")
-    |> String.reverse()
+    |> Enum.map(&Enum.reverse/1)
+    |> Enum.reverse()
+    |> Enum.map_join(",", &Enum.join(&1, ""))
   end
 
   defp format_number(_), do: "0"
