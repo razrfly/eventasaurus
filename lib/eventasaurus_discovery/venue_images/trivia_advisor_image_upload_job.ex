@@ -174,8 +174,17 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
       current_images = venue.venue_images || []
 
       # Transform Tigris images to venue_images format
+      # Filter out images without original_url (required for deduplication)
       new_images =
         trivia_advisor_images
+        |> Enum.filter(fn ta_image ->
+          if ta_image["original_url"] do
+            true
+          else
+            Logger.warning("⚠️  Skipping image without original_url: #{ta_image["local_path"]}")
+            false
+          end
+        end)
         |> Enum.map(fn ta_image ->
           local_path = ta_image["local_path"]
           tigris_url = "#{@tigris_base_url}#{local_path}"
@@ -233,9 +242,20 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
 
       Logger.info("Current venue images: #{length(current_images)}")
 
-      # Upload each image to ImageKit
+      # Filter out images without original_url (required for deduplication)
+      valid_images =
+        Enum.filter(trivia_advisor_images, fn ta_image ->
+          if ta_image["original_url"] do
+            true
+          else
+            Logger.warning("⚠️  Skipping upload for image without original_url: #{ta_image["local_path"]}")
+            false
+          end
+        end)
+
+      # Upload each valid image to ImageKit
       upload_results =
-        trivia_advisor_images
+        valid_images
         |> Enum.with_index(1)
         |> Enum.map(fn {ta_image, position} ->
           upload_single_image(venue_slug, ta_image, position)
