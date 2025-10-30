@@ -78,7 +78,7 @@ defmodule EventasaurusWeb.Router do
       live "/venue-images/enrichment-history", Admin.VenueImageEnrichmentHistoryLive
 
       # Venue Duplicate Management (dev - no auth)
-      live "/venues/duplicates", AdminVenueDuplicatesLive
+      live "/venues/duplicates", Admin.VenueDuplicatesLive
 
       # Venue Name Fixer (dev - no auth)
       live "/venues/name-fixer", Admin.VenueNameFixerLive
@@ -184,7 +184,7 @@ defmodule EventasaurusWeb.Router do
       live "/venue-images/enrichment-history", EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive
 
       # Venue Duplicate Management with admin authentication
-      live "/venues/duplicates", EventasaurusWeb.AdminVenueDuplicatesLive
+      live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
 
       # Venue Name Fixer with admin authentication
       live "/venues/name-fixer", EventasaurusWeb.Admin.VenueNameFixerLive
