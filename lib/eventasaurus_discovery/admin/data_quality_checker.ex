@@ -120,7 +120,18 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
             exhibition_single_date: 0,
             total_validity_issues: 0
           },
-          validity_score: 100
+          validity_score: 100,
+          time_quality_metrics: %{
+            time_quality: 100,
+            total_occurrences: 0,
+            midnight_count: 0,
+            midnight_percentage: 0,
+            most_common_time: nil,
+            most_common_time_count: 0,
+            same_time_percentage: 0,
+            hour_distribution: %{},
+            time_diversity_score: 100
+          }
         },
         supports_translations: false
       }
@@ -187,6 +198,9 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
       # Calculate occurrence richness
       occurrence_metrics = calculate_occurrence_richness(source_id)
+
+      # Calculate time quality
+      time_quality_metrics = calculate_time_quality(source_id)
 
       quality_score =
         calculate_quality_score(
@@ -256,7 +270,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           avg_dates_per_event: occurrence_metrics.avg_dates_per_event,
           type_distribution: occurrence_metrics.type_distribution,
           validation_issues: occurrence_metrics.validation_issues,
-          validity_score: occurrence_metrics.validity_score
+          validity_score: occurrence_metrics.validity_score,
+          time_quality_metrics: time_quality_metrics
         },
         translation_completeness: translation_completeness,
         supports_translations: has_translations
@@ -437,6 +452,31 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
           msg =
             "⚠️ Occurrence data issues: #{issues.pattern_missing_dates} pattern events missing recurrence rules, #{issues.explicit_single_date} explicit events with single date"
+
+          [msg | recommendations]
+        else
+          recommendations
+        end
+
+      # Add time quality warning if there are suspicious time patterns
+      recommendations =
+        if quality.occurrence_metrics.time_quality_metrics.time_quality < 70 do
+          metrics = quality.occurrence_metrics.time_quality_metrics
+
+          msg =
+            cond do
+              metrics.midnight_percentage > 50 ->
+                "⚠️ Time parsing issues: #{Float.round(metrics.midnight_percentage, 1)}% of events at midnight (00:00) - likely missing time parsing"
+
+              metrics.same_time_percentage > 80 ->
+                "⚠️ Suspicious time pattern: #{Float.round(metrics.same_time_percentage, 1)}% of events at #{metrics.most_common_time} - check for hardcoded times"
+
+              metrics.time_diversity_score < 50 ->
+                "⚠️ Low time diversity: score #{metrics.time_diversity_score}/100 - verify time extraction is working correctly"
+
+              true ->
+                "⚠️ Time quality issues detected - review time parsing implementation (score: #{metrics.time_quality}/100)"
+            end
 
           [msg | recommendations]
         else
@@ -1359,6 +1399,238 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       }
     end
   end
+
+  # Calculate time quality for occurrence dates.
+  #
+  # Detects suspicious time patterns that indicate parsing failures:
+  # - High % of events at midnight (00:00) → likely missing time parsing
+  # - High % of events at same time (>80%) → likely hardcoded default
+  # - Low time diversity → limited time variety
+  #
+  # Time quality is crucial for event scheduling and user experience.
+  defp calculate_time_quality(source_id) do
+    # Get occurrence data per event
+    query =
+      from(e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        where: pes.source_id == ^source_id,
+        where: not is_nil(e.occurrences),
+        where: fragment("jsonb_typeof(?) = 'object'", e.occurrences),
+        select: %{
+          event_id: e.id,
+          occurrences: e.occurrences
+        }
+      )
+
+    occurrence_data = Repo.all(query)
+    total_events = length(occurrence_data)
+
+    if total_events == 0 do
+      %{
+        time_quality: 100,
+        total_occurrences: 0,
+        midnight_count: 0,
+        midnight_percentage: 0,
+        most_common_time: nil,
+        most_common_time_count: 0,
+        same_time_percentage: 0,
+        hour_distribution: %{},
+        time_diversity_score: 100
+      }
+    else
+      # Extract all times from occurrence dates
+      times =
+        occurrence_data
+        |> Enum.flat_map(fn event ->
+          case event.occurrences do
+            %{"dates" => dates} when is_list(dates) ->
+              Enum.map(dates, fn date_obj ->
+                extract_time_from_date(date_obj)
+              end)
+
+            _ ->
+              []
+          end
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      if Enum.empty?(times) do
+        %{
+          time_quality: 100,
+          total_occurrences: 0,
+          midnight_count: 0,
+          midnight_percentage: 0,
+          most_common_time: nil,
+          most_common_time_count: 0,
+          same_time_percentage: 0,
+          hour_distribution: %{},
+          time_diversity_score: 100
+        }
+      else
+        analyze_time_quality(times)
+      end
+    end
+  end
+
+  # Extract time (hour) from a date object in occurrences
+  defp extract_time_from_date(date_obj) when is_map(date_obj) do
+    case date_obj do
+      %{"start_time" => start_time} when is_binary(start_time) ->
+        # Parse time string like "18:00" or "2025-11-05T18:00:00Z"
+        parse_time_to_hour(start_time)
+
+      %{"date" => date_str} when is_binary(date_str) ->
+        # Parse datetime like "2025-11-05T18:00:00Z"
+        parse_time_to_hour(date_str)
+
+      _ ->
+        # Default to midnight if no time info
+        0
+    end
+  end
+
+  defp extract_time_from_date(_), do: nil
+
+  # Parse time string to hour (0-23)
+  defp parse_time_to_hour(time_str) when is_binary(time_str) do
+    cond do
+      # ISO 8601 datetime: "2025-11-05T18:00:00Z"
+      String.contains?(time_str, "T") ->
+        case DateTime.from_iso8601(time_str) do
+          {:ok, dt, _} -> dt.hour
+          _ -> 0
+        end
+
+      # Time only: "18:00" or "18:00:00"
+      String.contains?(time_str, ":") ->
+        case Time.from_iso8601(time_str) do
+          {:ok, time} -> time.hour
+          _ ->
+            # Try parsing just HH:MM
+            case String.split(time_str, ":") do
+              [hour_str | _] ->
+                case Integer.parse(hour_str) do
+                  {hour, _} when hour >= 0 and hour <= 23 -> hour
+                  _ -> 0
+                end
+
+              _ ->
+                0
+            end
+        end
+
+      # No time info, default to midnight
+      true ->
+        0
+    end
+  end
+
+  defp parse_time_to_hour(_), do: 0
+
+  # Analyze time distribution and calculate quality metrics
+  defp analyze_time_quality(times) do
+    total_occurrences = length(times)
+
+    # Count occurrences by hour (0-23)
+    hour_distribution =
+      times
+      |> Enum.frequencies()
+      |> Map.new(fn {hour, count} -> {hour, count} end)
+
+    # Calculate midnight count and percentage
+    midnight_count = Map.get(hour_distribution, 0, 0)
+    midnight_percentage = Float.round(midnight_count / total_occurrences * 100, 1)
+
+    # Find most common time
+    {most_common_hour, most_common_count} =
+      hour_distribution
+      |> Enum.max_by(fn {_hour, count} -> count end, fn -> {nil, 0} end)
+
+    most_common_time = if most_common_hour, do: format_hour(most_common_hour), else: nil
+    same_time_percentage = Float.round(most_common_count / total_occurrences * 100, 1)
+
+    # Calculate time diversity using Shannon entropy
+    time_diversity_score = calculate_time_diversity(hour_distribution, total_occurrences)
+
+    # Calculate overall time quality score
+    # Weighted components:
+    # - midnight_penalty: High % at 00:00 suggests parsing failure (40%)
+    # - diversity_score: Low diversity suggests hardcoded times (40%)
+    # - same_time_penalty: >80% at same time is suspicious (20%)
+
+    midnight_penalty =
+      cond do
+        midnight_percentage > 50 -> 0
+        midnight_percentage > 30 -> 50
+        true -> 100
+      end
+
+    same_time_penalty =
+      cond do
+        same_time_percentage > 90 -> 0
+        same_time_percentage > 80 -> 25
+        same_time_percentage > 70 -> 50
+        true -> 100
+      end
+
+    time_quality =
+      round(
+        midnight_penalty * 0.4 +
+          time_diversity_score * 0.4 +
+          same_time_penalty * 0.2
+      )
+
+    %{
+      time_quality: time_quality,
+      total_occurrences: total_occurrences,
+      midnight_count: midnight_count,
+      midnight_percentage: midnight_percentage,
+      most_common_time: most_common_time,
+      most_common_time_count: most_common_count,
+      same_time_percentage: same_time_percentage,
+      hour_distribution: hour_distribution,
+      time_diversity_score: time_diversity_score
+    }
+  end
+
+  # Calculate time diversity using Shannon entropy
+  defp calculate_time_diversity(hour_distribution, total_occurrences) do
+    if total_occurrences == 0 or map_size(hour_distribution) == 0 do
+      100
+    else
+      # Calculate Shannon entropy: H = -Σ(p_i * log2(p_i))
+      entropy =
+        hour_distribution
+        |> Enum.reduce(0, fn {_hour, count}, acc ->
+          p = count / total_occurrences
+
+          if p > 0 do
+            acc - p * :math.log2(p)
+          else
+            acc
+          end
+        end)
+
+      # Normalize to 0-100 scale
+      # Maximum entropy is log2(24) since we have 24 hours
+      max_entropy = :math.log2(24)
+
+      if max_entropy > 0 do
+        round(entropy / max_entropy * 100)
+      else
+        100
+      end
+    end
+  end
+
+  # Format hour (0-23) to HH:MM string
+  defp format_hour(hour) when is_integer(hour) and hour >= 0 and hour <= 23 do
+    hour_str = hour |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{hour_str}:00"
+  end
+
+  defp format_hour(_), do: nil
 
   # Calculate type diversity using Shannon entropy
   defp calculate_type_diversity(type_counts, total_events) do

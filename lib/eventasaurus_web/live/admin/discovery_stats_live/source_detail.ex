@@ -996,6 +996,37 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                     </p>
                   </div>
                 <% end %>
+
+                <!-- Time Quality Metrics -->
+                <%= if @quality_data.occurrence_metrics.time_quality_metrics do %>
+                  <div class="mt-2 pt-2 border-t border-gray-200">
+                    <p class="text-xs font-medium text-gray-700 mb-1">Time Quality: <%= @quality_data.occurrence_metrics.time_quality_metrics.time_quality %>%</p>
+                    <%= if @quality_data.occurrence_metrics.time_quality_metrics.time_quality < 70 do %>
+                      <div class="space-y-1">
+                        <%= if @quality_data.occurrence_metrics.time_quality_metrics.midnight_percentage > 30 do %>
+                          <p class="text-xs text-orange-600">
+                            ⚠️ <%= Float.round(@quality_data.occurrence_metrics.time_quality_metrics.midnight_percentage, 1) %>% at midnight (00:00)
+                          </p>
+                        <% end %>
+                        <%= if @quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage > 80 do %>
+                          <p class="text-xs text-orange-600">
+                            ⚠️ <%= Float.round(@quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage, 1) %>% at <%= @quality_data.occurrence_metrics.time_quality_metrics.most_common_time %>
+                          </p>
+                        <% end %>
+                        <%= if @quality_data.occurrence_metrics.time_quality_metrics.time_diversity_score < 50 do %>
+                          <p class="text-xs text-orange-600">
+                            ⚠️ Low diversity: <%= @quality_data.occurrence_metrics.time_quality_metrics.time_diversity_score %>%
+                          </p>
+                        <% end %>
+                      </div>
+                    <% else %>
+                      <p class="text-xs text-green-600">✓ Time parsing working correctly</p>
+                    <% end %>
+                    <p class="mt-1 text-xs text-gray-500">
+                      <%= @quality_data.occurrence_metrics.time_quality_metrics.total_occurrences %> occurrences analyzed
+                    </p>
+                  </div>
+                <% end %>
               </div>
 
               <!-- Translation Completeness (conditionally displayed) -->
