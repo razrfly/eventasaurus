@@ -24,48 +24,47 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
       %{city: city, country: country}
     end
 
-    test "detects old format slugs correctly", %{city: city} do
-      # Create venues with old format slugs
+    test "detects bad format slugs correctly", %{city: city} do
+      # Create venues with bad format slugs (numbers in wrong positions)
       Repo.insert!(%Venue{
-        name: "Old Format Venue 1",
-        slug: "old-format-venue-1-#{city.id}-abc123",
+        name: "Bad Slug 1",
+        slug: "bad-slug-1-#{city.id}-abc123",
         city_id: city.id,
         latitude: 51.5074,
         longitude: -0.1278
       })
 
       Repo.insert!(%Venue{
-        name: "Old Format Venue 2",
-        slug: "old-format-venue-2-#{city.id}-def456",
+        name: "Bad Slug 2",
+        slug: "white-horse-wembley-53-824",
         city_id: city.id,
         latitude: 51.5075,
         longitude: -0.1279
       })
 
-      # Create venue with new format slug
+      # Create venue with good format slug (no numbers)
       Repo.insert!(%Venue{
-        name: "New Format Venue",
-        slug: "new-format-venue",
+        name: "Good Format Venue",
+        slug: "good-format-venue",
         city_id: city.id,
         latitude: 51.5076,
         longitude: -0.1280
       })
 
-      # Test the private function via the module
-      # We'll need to make this testable, but for now verify the query works
-      old_format_count =
+      # Test detection: slugs NOT matching (no numbers) OR (10-digit ending)
+      bad_format_count =
         from(v in Venue,
           where: v.city_id == ^city.id,
-          where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+          where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
           select: count(v.id)
         )
         |> Repo.one()
 
-      assert old_format_count == 2
+      assert bad_format_count == 2
     end
 
-    test "correctly identifies new format slugs", %{city: city} do
-      # Create venues with new format slugs
+    test "correctly identifies good format slugs", %{city: city} do
+      # Create venues with good format slugs (no numbers)
       Repo.insert!(%Venue{
         name: "Simple Slug",
         slug: "simple-slug",
@@ -82,20 +81,29 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
         longitude: -0.1279
       })
 
-      # These should NOT match the old format pattern
-      old_format_count =
+      # Create venue with timestamp fallback (also good)
+      Repo.insert!(%Venue{
+        name: "Timestamp Slug",
+        slug: "timestamp-slug-1698765432",
+        city_id: city.id,
+        latitude: 51.5076,
+        longitude: -0.1280
+      })
+
+      # These should NOT be detected as bad
+      bad_format_count =
         from(v in Venue,
           where: v.city_id == ^city.id,
-          where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+          where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
           select: count(v.id)
         )
         |> Repo.one()
 
-      assert old_format_count == 0
+      assert bad_format_count == 0
     end
 
     test "calculates quality percentage correctly", %{city: city} do
-      # Create 8 new format and 2 old format = 80% quality
+      # Create 8 good format and 2 bad format = 80% quality
       for i <- 1..8 do
         Repo.insert!(%Venue{
           name: "Good Venue #{i}",
@@ -120,18 +128,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
         from(v in Venue, where: v.city_id == ^city.id, select: count(v.id))
         |> Repo.one()
 
-      old_format =
+      bad_format =
         from(v in Venue,
           where: v.city_id == ^city.id,
-          where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+          where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
           select: count(v.id)
         )
         |> Repo.one()
 
-      quality_percentage = Float.round((total - old_format) / total * 100, 1)
+      quality_percentage = Float.round((total - bad_format) / total * 100, 1)
 
       assert total == 10
-      assert old_format == 2
+      assert bad_format == 2
       assert quality_percentage == 80.0
     end
 
@@ -147,16 +155,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
       assert quality_percentage == 100.0
     end
 
-    test "regex pattern matches various old formats", %{city: city} do
-      # Test various old format patterns
-      old_slugs = [
-        "venue-1-abc123",
-        "the-pub-123-def456",
-        "my-restaurant-9999-xyz789",
-        "place-1-a1b2c3"
+    test "regex pattern matches various bad formats", %{city: city} do
+      # Test various bad format patterns
+      bad_slugs = [
+        "venue-1-abc123",           # Short numbers with alphanumeric
+        "the-pub-123-def456",       # Numbers in middle
+        "my-restaurant-9999-xyz789", # Non-timestamp numbers
+        "place-1-a1b2c3",           # Old format with city_id
+        "ha9-0hp-wembley-park",     # Postcode
+        "289-upper-richmond-road"   # Street number
       ]
 
-      for slug <- old_slugs do
+      for slug <- bad_slugs do
         Repo.insert!(%Venue{
           name: "Test #{slug}",
           slug: slug,
@@ -166,28 +176,30 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
         })
       end
 
-      old_format_count =
+      bad_format_count =
         from(v in Venue,
           where: v.city_id == ^city.id,
-          where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+          where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
           select: count(v.id)
         )
         |> Repo.one()
 
-      assert old_format_count == 4
+      assert bad_format_count == 6
     end
 
-    test "regex pattern does not match new formats", %{city: city} do
-      # Test various new format patterns that should NOT match
-      new_slugs = [
-        "simple-venue",
-        "the-pub",
-        "my-restaurant-london",
-        "venue-name-test-city",
-        "place-with-many-words"
+    test "regex pattern does not match good formats", %{city: city} do
+      # Test various good format patterns that should NOT be detected as bad
+      good_slugs = [
+        "simple-venue",              # Name only
+        "the-pub",                   # Name only
+        "my-restaurant-london",      # Name-city
+        "venue-name-test-city",      # Name-city
+        "place-with-many-words",     # Name only
+        "white-horse-1698765432",    # Name-timestamp (10 digits)
+        "the-crown-1234567890"       # Name-timestamp (10 digits)
       ]
 
-      for slug <- new_slugs do
+      for slug <- good_slugs do
         Repo.insert!(%Venue{
           name: "Test #{slug}",
           slug: slug,
@@ -197,15 +209,15 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
         })
       end
 
-      old_format_count =
+      bad_format_count =
         from(v in Venue,
           where: v.city_id == ^city.id,
-          where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+          where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
           select: count(v.id)
         )
         |> Repo.one()
 
-      assert old_format_count == 0
+      assert bad_format_count == 0
     end
   end
 end

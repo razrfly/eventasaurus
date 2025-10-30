@@ -315,29 +315,36 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
       )
       |> Repo.one()
 
-    # Detect old format slugs (contain numeric city ID pattern)
-    # Old format: venue-name-{city_id}-{random} e.g. "pub-name-123-abc456"
-    # New format: venue-name or venue-name-{city-slug}
-    venues_with_old_format =
+    # Detect bad slugs that DON'T match current generation pattern
+    # Current generation produces:
+    #   1. Name only (no numbers): "white-horse"
+    #   2. Name-city (no numbers): "white-horse-london"
+    #   3. Name-timestamp (10-digit fallback): "white-horse-1698765432"
+    #
+    # Bad slugs have numbers in other positions/formats:
+    #   - Postcodes: "ha9-0hp-wembley-park-boulevard"
+    #   - Addresses: "289-upper-richmond-road-london-sw15-6sp"
+    #   - Old formats: "white-horse-wembley-53-824"
+    venues_with_bad_format =
       from(v in Venue,
         where: v.city_id == ^city_id,
-        # Match slugs ending with -{digits}-{alphanumeric}
-        where: fragment("slug ~ ?", "-[0-9]{1,6}-[a-z0-9]{6}$"),
+        # Slugs that don't match: (no numbers) OR (ends with exactly 10 digits)
+        where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
         select: count(v.id)
       )
       |> Repo.one()
 
     quality_percentage =
       if total_venues > 0 do
-        Float.round((total_venues - venues_with_old_format) / total_venues * 100, 1)
+        Float.round((total_venues - venues_with_bad_format) / total_venues * 100, 1)
       else
         100.0
       end
 
     %{
       total_venues: total_venues,
-      venues_with_old_format: venues_with_old_format,
-      venues_with_new_format: total_venues - venues_with_old_format,
+      venues_with_old_format: venues_with_bad_format,
+      venues_with_new_format: total_venues - venues_with_bad_format,
       quality_percentage: quality_percentage
     }
   end
