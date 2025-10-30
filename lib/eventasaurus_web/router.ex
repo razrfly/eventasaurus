@@ -80,9 +80,6 @@ defmodule EventasaurusWeb.Router do
       # Venue Duplicate Management (dev - no auth)
       live "/venues/duplicates", Admin.VenueDuplicatesLive
 
-      # Venue Name Fixer (dev - no auth)
-      live "/venues/name-fixer", Admin.VenueNameFixerLive
-
       # City Discovery Configuration (dev - no auth)
       live "/discovery/config", Admin.CityDiscoveryConfigLive, :index
       live "/discovery/config/:slug", Admin.CityDiscoveryConfigLive, :show
@@ -185,9 +182,6 @@ defmodule EventasaurusWeb.Router do
 
       # Venue Duplicate Management with admin authentication
       live "/venues/duplicates", EventasaurusWeb.Admin.VenueDuplicatesLive
-
-      # Venue Name Fixer with admin authentication
-      live "/venues/name-fixer", EventasaurusWeb.Admin.VenueNameFixerLive
 
       # City Discovery Configuration
       live "/discovery/config", EventasaurusWeb.Admin.CityDiscoveryConfigLive, :index

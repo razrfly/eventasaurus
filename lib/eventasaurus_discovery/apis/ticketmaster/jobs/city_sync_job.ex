@@ -116,21 +116,13 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
   end
 
   defp process_single_event(event_data, source, city) do
-    # Process venue first
-    venue =
-      if event_data.venue_data do
-        process_venue(event_data.venue_data, city)
-      else
-        nil
-      end
-
     # Process performers
     performers = process_performers(event_data.performers, source)
 
     # Process event with venue and performers
+    # EventProcessor.process_event handles venue creation internally via venue_data
     event_attrs =
       Map.merge(event_data, %{
-        venue_id: venue && venue.id,
         performer_names: Enum.map(performers, & &1.name)
       })
 
@@ -142,27 +134,6 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
       {:error, reason} ->
         Logger.error("❌ Failed to process event: #{inspect(reason)}")
         nil
-    end
-  end
-
-  defp process_venue(venue_data, city) do
-    venue_attrs =
-      Map.merge(venue_data, %{
-        city_id: city.id
-      })
-
-    case VenueProcessor.process_venue(venue_attrs, "ticketmaster") do
-      {:ok, venue} ->
-        venue
-
-      {:error, _reason} ->
-        # Try to create without coordinates if that was the issue
-        venue_attrs_without_coords = Map.drop(venue_attrs, [:latitude, :longitude])
-
-        case VenueProcessor.process_venue(venue_attrs_without_coords, "ticketmaster") do
-          {:ok, venue} -> venue
-          _ -> nil
-        end
     end
   end
 

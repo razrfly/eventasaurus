@@ -11,6 +11,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Venues.FixVenueNamesJob
+  alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.Locations.CityHierarchy
 
@@ -210,6 +212,40 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         # Invalid city-id, no-op gracefully
         {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_event("fix_venue_names", _params, socket) do
+    source_slug = socket.assigns.source_slug
+
+    # Find all cities that have venues from this source with low quality names
+    affected_cities = find_cities_with_venue_quality_issues(source_slug)
+
+    # Enqueue a job for each affected city
+    jobs_enqueued =
+      Enum.map(affected_cities, fn city_id ->
+        %{city_id: city_id, severity: "all"}
+        |> FixVenueNamesJob.new()
+        |> Oban.insert()
+      end)
+      |> Enum.count(fn result -> match?({:ok, _}, result) end)
+
+    socket =
+      if jobs_enqueued > 0 do
+        put_flash(
+          socket,
+          :info,
+          "✅ Enqueued #{jobs_enqueued} venue name fix job(s) for #{jobs_enqueued} #{if jobs_enqueued == 1, do: "city", else: "cities"}. Jobs will process in the background."
+        )
+      else
+        put_flash(
+          socket,
+          :warning,
+          "⚠️ No jobs were enqueued. Please check that venues with quality issues exist."
+        )
+      end
+
+    {:noreply, socket}
   end
 
   defp load_source_data(socket) do
@@ -975,12 +1011,17 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 <%= if @quality_data.venues_with_low_quality_names > 0 do %>
                   <li class="flex items-start">
                     <span class="flex-shrink-0 w-1.5 h-1.5 mt-2 bg-orange-600 rounded-full mr-3"></span>
-                    <span class="text-sm text-gray-700">
-                      <.link navigate={~p"/admin/venues/name-fixer"} class="text-blue-600 hover:text-blue-800 font-medium underline">
-                        Use the Venue Name Fixer
-                      </.link>
-                      to clean up <%= @quality_data.venues_with_low_quality_names %> venues with low-quality names (current quality: <%= @quality_data.venue_name_quality %>%).
-                    </span>
+                    <div class="text-sm text-gray-700 flex items-center gap-2">
+                      <span>
+                        <%= @quality_data.venues_with_low_quality_names %> venues have low-quality names (current quality: <%= @quality_data.venue_name_quality %>%).
+                      </span>
+                      <button
+                        phx-click="fix_venue_names"
+                        class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        🔧 Fix Venue Names
+                      </button>
+                    </div>
                   </li>
                 <% end %>
               </ul>
@@ -1892,4 +1933,35 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   defp freshness_status_text_color(:degraded), do: "text-yellow-900"
   defp freshness_status_text_color(:healthy), do: "text-green-900"
   defp freshness_status_text_color(:no_data), do: "text-gray-900"
+
+  # Find all cities that have venues from this source with venue name quality issues
+  defp find_cities_with_venue_quality_issues(source_slug) do
+    # Get the source
+    source =
+      Repo.one(
+        from(s in EventasaurusDiscovery.Sources.Source,
+          where: s.slug == ^source_slug,
+          select: s
+        )
+      )
+
+    if source do
+      # Find all cities with venues from this source that have metadata
+      # The job will filter by actual quality on execution
+      from(v in Venue,
+        join: pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+        on: pe.venue_id == v.id,
+        join: pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
+        on: pes.event_id == pe.id,
+        where: pes.source_id == ^source.id,
+        where: not is_nil(v.metadata),
+        where: not is_nil(v.city_id),
+        select: v.city_id,
+        distinct: true
+      )
+      |> Repo.all()
+    else
+      []
+    end
+  end
 end
