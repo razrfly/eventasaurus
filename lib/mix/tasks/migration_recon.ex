@@ -35,7 +35,10 @@ defmodule Mix.Tasks.Migration.Recon do
     # Parse Trivia Advisor database URL
     ta_db_config = parse_database_url(ta_db_url)
 
-    IO.puts("✓ Trivia Advisor DB: #{ta_db_config[:hostname]}:#{ta_db_config[:port]}/#{ta_db_config[:database]}")
+    IO.puts(
+      "✓ Trivia Advisor DB: #{ta_db_config[:hostname]}:#{ta_db_config[:port]}/#{ta_db_config[:database]}"
+    )
+
     IO.puts("✓ Eventasaurus DB: Using existing Repo connection")
 
     # Connect to Trivia Advisor database
@@ -51,7 +54,10 @@ defmodule Mix.Tasks.Migration.Recon do
     IO.puts("Total images: #{ta_stats.total_images}")
     IO.puts("Avg images per venue: #{Float.round(ta_stats.avg_images_per_venue, 1)}")
     IO.puts("Venues with slugs: #{ta_stats.venues_with_slug} (#{ta_stats.slug_coverage_pct}%)")
-    IO.puts("Venues with place_id: #{ta_stats.venues_with_place_id} (#{ta_stats.place_id_coverage_pct}%)\n")
+
+    IO.puts(
+      "Venues with place_id: #{ta_stats.venues_with_place_id} (#{ta_stats.place_id_coverage_pct}%)\n"
+    )
 
     # Query Eventasaurus
     IO.puts("📊 Step 3: Eventasaurus Analysis")
@@ -60,7 +66,10 @@ defmodule Mix.Tasks.Migration.Recon do
     ea_stats = query_eventasaurus_stats()
     IO.puts("Total venues: #{ea_stats.total_venues}")
     IO.puts("Venues with slugs: #{ea_stats.venues_with_slug} (#{ea_stats.slug_coverage_pct}%)")
-    IO.puts("Venues with Google Place ID: #{ea_stats.venues_with_google_id} (#{ea_stats.google_id_coverage_pct}%)\n")
+
+    IO.puts(
+      "Venues with Google Place ID: #{ea_stats.venues_with_google_id} (#{ea_stats.google_id_coverage_pct}%)\n"
+    )
 
     # Load venues for matching
     IO.puts("📊 Step 4: Venue Matching Analysis")
@@ -75,38 +84,40 @@ defmodule Mix.Tasks.Migration.Recon do
 
     IO.puts("Finding matches...")
 
-    matches = Enum.map(ta_venues, fn ta_venue ->
-      case find_match(ta_venue, ea_venues) do
-        {ea_venue, match_type, confidence, distance, name_distance} ->
-          %{
-            ta_id: ta_venue.id,
-            ta_slug: ta_venue.slug,
-            ta_name: ta_venue.name,
-            ea_id: ea_venue.id,
-            ea_slug: ea_venue.slug,
-            ea_name: ea_venue.name,
-            match_type: match_type,
-            confidence: confidence,
-            distance_m: Float.round(distance, 1),
-            name_distance: name_distance,
-            images_count: length(ta_venue.google_place_images)
-          }
-        nil ->
-          %{
-            ta_id: ta_venue.id,
-            ta_slug: ta_venue.slug,
-            ta_name: ta_venue.name,
-            ea_id: nil,
-            ea_slug: nil,
-            ea_name: nil,
-            match_type: "no_match",
-            confidence: 0.0,
-            distance_m: nil,
-            name_distance: nil,
-            images_count: length(ta_venue.google_place_images)
-          }
-      end
-    end)
+    matches =
+      Enum.map(ta_venues, fn ta_venue ->
+        case find_match(ta_venue, ea_venues) do
+          {ea_venue, match_type, confidence, distance, name_distance} ->
+            %{
+              ta_id: ta_venue.id,
+              ta_slug: ta_venue.slug,
+              ta_name: ta_venue.name,
+              ea_id: ea_venue.id,
+              ea_slug: ea_venue.slug,
+              ea_name: ea_venue.name,
+              match_type: match_type,
+              confidence: confidence,
+              distance_m: Float.round(distance, 1),
+              name_distance: name_distance,
+              images_count: length(ta_venue.google_place_images)
+            }
+
+          nil ->
+            %{
+              ta_id: ta_venue.id,
+              ta_slug: ta_venue.slug,
+              ta_name: ta_venue.name,
+              ea_id: nil,
+              ea_slug: nil,
+              ea_name: nil,
+              match_type: "no_match",
+              confidence: 0.0,
+              distance_m: nil,
+              name_distance: nil,
+              images_count: length(ta_venue.google_place_images)
+            }
+        end
+      end)
 
     # Calculate match statistics
     matched = Enum.filter(matches, fn m -> m.confidence > 0 end)
@@ -118,11 +129,18 @@ defmodule Mix.Tasks.Migration.Recon do
 
     IO.puts("\n✓ Matching complete!")
     IO.puts("\nMatch Statistics:")
-    IO.puts("  Total matched: #{length(matched)} (#{Float.round(length(matched) / length(ta_venues) * 100, 1)}%)")
+
+    IO.puts(
+      "  Total matched: #{length(matched)} (#{Float.round(length(matched) / length(ta_venues) * 100, 1)}%)"
+    )
+
     IO.puts("  - Tier 1 (slug + geo): #{length(tier1)}")
     IO.puts("  - Tier 2 (place_id): #{length(tier2)}")
     IO.puts("  - Tier 3 (fuzzy): #{length(tier3)}")
-    IO.puts("  Unmatched: #{length(unmatched)} (#{Float.round(length(unmatched) / length(ta_venues) * 100, 1)}%)\n")
+
+    IO.puts(
+      "  Unmatched: #{length(unmatched)} (#{Float.round(length(unmatched) / length(ta_venues) * 100, 1)}%)\n"
+    )
 
     # Calculate total images to migrate
     total_images_to_migrate = Enum.reduce(matched, 0, fn m, acc -> acc + m.images_count end)
@@ -149,6 +167,7 @@ defmodule Mix.Tasks.Migration.Recon do
         case test_url_accessibility(url) do
           :ok ->
             IO.puts("  ✓ Image accessible")
+
           {:error, reason} ->
             IO.puts("  ✗ Image not accessible: #{inspect(reason)}")
         end
@@ -207,52 +226,74 @@ defmodule Mix.Tasks.Migration.Recon do
 
   defp query_trivia_advisor_stats(conn) do
     # Venues with images
-    {:ok, result} = Postgrex.query(conn, """
-      SELECT COUNT(*) as count
-      FROM venues
-      WHERE google_place_images IS NOT NULL
-      AND jsonb_typeof(google_place_images) = 'array'
-      AND jsonb_array_length(google_place_images) > 0
-    """, [])
+    {:ok, result} =
+      Postgrex.query(
+        conn,
+        """
+          SELECT COUNT(*) as count
+          FROM venues
+          WHERE google_place_images IS NOT NULL
+          AND jsonb_typeof(google_place_images) = 'array'
+          AND jsonb_array_length(google_place_images) > 0
+        """,
+        []
+      )
 
     venues_with_images = result.rows |> List.first() |> List.first()
 
     # Total images
-    {:ok, result} = Postgrex.query(conn, """
-      SELECT COALESCE(SUM(jsonb_array_length(google_place_images)), 0) as total
-      FROM venues
-      WHERE google_place_images IS NOT NULL
-      AND jsonb_typeof(google_place_images) = 'array'
-    """, [])
+    {:ok, result} =
+      Postgrex.query(
+        conn,
+        """
+          SELECT COALESCE(SUM(jsonb_array_length(google_place_images)), 0) as total
+          FROM venues
+          WHERE google_place_images IS NOT NULL
+          AND jsonb_typeof(google_place_images) = 'array'
+        """,
+        []
+      )
 
     total_images = result.rows |> List.first() |> List.first() || 0
 
     # Slug coverage
-    {:ok, result} = Postgrex.query(conn, """
-      SELECT
-        COUNT(*) as total,
-        COUNT(slug) as with_slug
-      FROM venues
-      WHERE google_place_images IS NOT NULL
-      AND jsonb_typeof(google_place_images) = 'array'
-      AND jsonb_array_length(google_place_images) > 0
-    """, [])
+    {:ok, result} =
+      Postgrex.query(
+        conn,
+        """
+          SELECT
+            COUNT(*) as total,
+            COUNT(slug) as with_slug
+          FROM venues
+          WHERE google_place_images IS NOT NULL
+          AND jsonb_typeof(google_place_images) = 'array'
+          AND jsonb_array_length(google_place_images) > 0
+        """,
+        []
+      )
 
     [total, with_slug] = result.rows |> List.first()
     slug_coverage_pct = if total > 0, do: Float.round(with_slug / total * 100, 1), else: 0.0
 
     # place_id coverage
-    {:ok, result} = Postgrex.query(conn, """
-      SELECT COUNT(place_id) as with_place_id
-      FROM venues
-      WHERE google_place_images IS NOT NULL
-      AND jsonb_typeof(google_place_images) = 'array'
-      AND jsonb_array_length(google_place_images) > 0
-      AND place_id IS NOT NULL
-    """, [])
+    {:ok, result} =
+      Postgrex.query(
+        conn,
+        """
+          SELECT COUNT(place_id) as with_place_id
+          FROM venues
+          WHERE google_place_images IS NOT NULL
+          AND jsonb_typeof(google_place_images) = 'array'
+          AND jsonb_array_length(google_place_images) > 0
+          AND place_id IS NOT NULL
+        """,
+        []
+      )
 
     with_place_id = result.rows |> List.first() |> List.first()
-    place_id_coverage_pct = if total > 0, do: Float.round(with_place_id / total * 100, 1), else: 0.0
+
+    place_id_coverage_pct =
+      if total > 0, do: Float.round(with_place_id / total * 100, 1), else: 0.0
 
     avg_images = if venues_with_images > 0, do: total_images / venues_with_images, else: 0.0
 
@@ -277,11 +318,17 @@ defmodule Mix.Tasks.Migration.Recon do
 
     # Slug coverage
     with_slug = from(v in Venue, where: not is_nil(v.slug)) |> Repo.aggregate(:count)
-    slug_coverage_pct = if total_venues > 0, do: Float.round(with_slug / total_venues * 100, 1), else: 0.0
+
+    slug_coverage_pct =
+      if total_venues > 0, do: Float.round(with_slug / total_venues * 100, 1), else: 0.0
 
     # Google Place ID coverage
-    with_google_id = from(v in Venue, where: fragment("? \\? ?", v.provider_ids, "google_places")) |> Repo.aggregate(:count)
-    google_id_coverage_pct = if total_venues > 0, do: Float.round(with_google_id / total_venues * 100, 1), else: 0.0
+    with_google_id =
+      from(v in Venue, where: fragment("? \\? ?", v.provider_ids, "google_places"))
+      |> Repo.aggregate(:count)
+
+    google_id_coverage_pct =
+      if total_venues > 0, do: Float.round(with_google_id / total_venues * 100, 1), else: 0.0
 
     %{
       total_venues: total_venues,
@@ -293,14 +340,19 @@ defmodule Mix.Tasks.Migration.Recon do
   end
 
   defp load_ta_venues_with_images(conn) do
-    {:ok, result} = Postgrex.query(conn, """
-      SELECT id, slug, name, place_id, latitude, longitude, google_place_images
-      FROM venues
-      WHERE google_place_images IS NOT NULL
-      AND jsonb_typeof(google_place_images) = 'array'
-      AND jsonb_array_length(google_place_images) > 0
-      ORDER BY id
-    """, [])
+    {:ok, result} =
+      Postgrex.query(
+        conn,
+        """
+          SELECT id, slug, name, place_id, latitude, longitude, google_place_images
+          FROM venues
+          WHERE google_place_images IS NOT NULL
+          AND jsonb_typeof(google_place_images) = 'array'
+          AND jsonb_array_length(google_place_images) > 0
+          ORDER BY id
+        """,
+        []
+      )
 
     Enum.map(result.rows, fn [id, slug, name, place_id, lat, lng, images] ->
       %{
@@ -342,64 +394,66 @@ defmodule Mix.Tasks.Migration.Recon do
     ta_place_id = ta_venue.place_id
 
     # Optimized matching with early termination
-    result = Enum.reduce_while(ea_venues, nil, fn ea_venue, best_match ->
-      ea_slug = ea_venue.slug
-      ea_place_id = Map.get(ea_venue.provider_ids || %{}, "google_places")
+    result =
+      Enum.reduce_while(ea_venues, nil, fn ea_venue, best_match ->
+        ea_slug = ea_venue.slug
+        ea_place_id = Map.get(ea_venue.provider_ids || %{}, "google_places")
 
-      cond do
-        # Tier 1: Slug + Geo (proof positive) - CHECK FIRST
-        ta_slug == ea_slug ->
-          ea_lat = ea_venue.latitude
-          ea_lng = ea_venue.longitude
-          distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
+        cond do
+          # Tier 1: Slug + Geo (proof positive) - CHECK FIRST
+          ta_slug == ea_slug ->
+            ea_lat = ea_venue.latitude
+            ea_lng = ea_venue.longitude
+            distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
 
-          if distance < 50 do
-            # Perfect match - stop searching
-            {:halt, {ea_venue, "slug_geo", 1.00, distance, 0}}
-          else
-            # Slug match but too far - Tier 3a
-            new_match = {ea_venue, "slug_only", 0.85, distance, 0}
-            {:cont, better_match(best_match, new_match)}
-          end
-
-        # Tier 2: place_id match
-        ta_place_id && ea_place_id && ta_place_id == ea_place_id ->
-          ea_lat = ea_venue.latitude
-          ea_lng = ea_venue.longitude
-          distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
-          new_match = {ea_venue, "place_id", 0.95, distance, 0}
-          {:cont, better_match(best_match, new_match)}
-
-        # Tier 3b: Geo + name similarity - only check if no better match yet
-        best_match == nil || elem(best_match, 2) < 0.85 ->
-          ea_lat = ea_venue.latitude
-          ea_lng = ea_venue.longitude
-          distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
-
-          if distance < 50 do
-            ea_name = normalize_name(ea_venue.name)
-            name_distance = levenshtein_distance(ta_name, ea_name)
-
-            if name_distance <= 3 do
-              new_match = {ea_venue, "geo_name", 0.85, distance, name_distance}
+            if distance < 50 do
+              # Perfect match - stop searching
+              {:halt, {ea_venue, "slug_geo", 1.00, distance, 0}}
+            else
+              # Slug match but too far - Tier 3a
+              new_match = {ea_venue, "slug_only", 0.85, distance, 0}
               {:cont, better_match(best_match, new_match)}
+            end
+
+          # Tier 2: place_id match
+          ta_place_id && ea_place_id && ta_place_id == ea_place_id ->
+            ea_lat = ea_venue.latitude
+            ea_lng = ea_venue.longitude
+            distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
+            new_match = {ea_venue, "place_id", 0.95, distance, 0}
+            {:cont, better_match(best_match, new_match)}
+
+          # Tier 3b: Geo + name similarity - only check if no better match yet
+          best_match == nil || elem(best_match, 2) < 0.85 ->
+            ea_lat = ea_venue.latitude
+            ea_lng = ea_venue.longitude
+            distance = haversine_distance(ta_lat, ta_lng, ea_lat, ea_lng)
+
+            if distance < 50 do
+              ea_name = normalize_name(ea_venue.name)
+              name_distance = levenshtein_distance(ta_name, ea_name)
+
+              if name_distance <= 3 do
+                new_match = {ea_venue, "geo_name", 0.85, distance, name_distance}
+                {:cont, better_match(best_match, new_match)}
+              else
+                {:cont, best_match}
+              end
             else
               {:cont, best_match}
             end
-          else
-            {:cont, best_match}
-          end
 
-        # Skip if we already have a good match
-        true ->
-          {:cont, best_match}
-      end
-    end)
+          # Skip if we already have a good match
+          true ->
+            {:cont, best_match}
+        end
+      end)
 
     result
   end
 
   defp better_match(nil, new_match), do: new_match
+
   defp better_match(best, new_match) do
     {_, _, best_conf, best_dist, _} = best
     {_, _, new_conf, new_dist, _} = new_match
@@ -422,14 +476,15 @@ defmodule Mix.Tasks.Migration.Recon do
     dlat = lat2_rad - lat1_rad
     dlon = lon2_rad - lon1_rad
 
-    a = :math.sin(dlat / 2) * :math.sin(dlat / 2) +
+    a =
+      :math.sin(dlat / 2) * :math.sin(dlat / 2) +
         :math.cos(lat1_rad) * :math.cos(lat2_rad) *
-        :math.sin(dlon / 2) * :math.sin(dlon / 2)
+          :math.sin(dlon / 2) * :math.sin(dlon / 2)
 
     c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
 
     # Earth radius in meters
-    6371000 * c
+    6_371_000 * c
   end
 
   defp levenshtein_distance(s1, s2) do
@@ -439,27 +494,34 @@ defmodule Mix.Tasks.Migration.Recon do
     l1 = String.length(s1)
     l2 = String.length(s2)
 
-    matrix = Enum.reduce(0..l1, %{}, fn i, acc ->
-      Map.put(acc, {i, 0}, i)
-    end)
-
-    matrix = Enum.reduce(0..l2, matrix, fn j, acc ->
-      Map.put(acc, {0, j}, j)
-    end)
-
-    matrix = Enum.reduce(1..l1, matrix, fn i, acc ->
-      Enum.reduce(1..l2, acc, fn j, acc2 ->
-        cost = if String.at(s1, i - 1) == String.at(s2, j - 1), do: 0, else: 1
-
-        Map.put(acc2, {i, j}, min(
-          Map.get(acc2, {i - 1, j}) + 1,
-          min(
-            Map.get(acc2, {i, j - 1}) + 1,
-            Map.get(acc2, {i - 1, j - 1}) + cost
-          )
-        ))
+    matrix =
+      Enum.reduce(0..l1, %{}, fn i, acc ->
+        Map.put(acc, {i, 0}, i)
       end)
-    end)
+
+    matrix =
+      Enum.reduce(0..l2, matrix, fn j, acc ->
+        Map.put(acc, {0, j}, j)
+      end)
+
+    matrix =
+      Enum.reduce(1..l1, matrix, fn i, acc ->
+        Enum.reduce(1..l2, acc, fn j, acc2 ->
+          cost = if String.at(s1, i - 1) == String.at(s2, j - 1), do: 0, else: 1
+
+          Map.put(
+            acc2,
+            {i, j},
+            min(
+              Map.get(acc2, {i - 1, j}) + 1,
+              min(
+                Map.get(acc2, {i, j - 1}) + 1,
+                Map.get(acc2, {i - 1, j - 1}) + cost
+              )
+            )
+          )
+        end)
+      end)
 
     Map.get(matrix, {l1, l2})
   end
@@ -470,6 +532,7 @@ defmodule Mix.Tasks.Migration.Recon do
     |> String.replace(~r/[^a-z0-9\s]/, "")
     |> String.trim()
   end
+
   defp normalize_name(_), do: ""
 
   defp construct_tigris_url(local_path) do
@@ -485,31 +548,33 @@ defmodule Mix.Tasks.Migration.Recon do
   end
 
   defp write_csv_report(matches, path) do
-    csv_content = [
-      "ta_id,ta_slug,ta_name,ea_id,ea_slug,ea_name,match_type,confidence,distance_m,name_distance,images_count"
-      | Enum.map(matches, fn m ->
-          [
-            m.ta_id,
-            escape_csv(m.ta_slug),
-            escape_csv(m.ta_name),
-            m.ea_id || "",
-            escape_csv(m.ea_slug),
-            escape_csv(m.ea_name),
-            m.match_type,
-            m.confidence,
-            m.distance_m || "",
-            m.name_distance || "",
-            m.images_count
-          ]
-          |> Enum.join(",")
-        end)
-    ]
-    |> Enum.join("\n")
+    csv_content =
+      [
+        "ta_id,ta_slug,ta_name,ea_id,ea_slug,ea_name,match_type,confidence,distance_m,name_distance,images_count"
+        | Enum.map(matches, fn m ->
+            [
+              m.ta_id,
+              escape_csv(m.ta_slug),
+              escape_csv(m.ta_name),
+              m.ea_id || "",
+              escape_csv(m.ea_slug),
+              escape_csv(m.ea_name),
+              m.match_type,
+              m.confidence,
+              m.distance_m || "",
+              m.name_distance || "",
+              m.images_count
+            ]
+            |> Enum.join(",")
+          end)
+      ]
+      |> Enum.join("\n")
 
     File.write!(path, csv_content)
   end
 
   defp escape_csv(nil), do: ""
+
   defp escape_csv(value) when is_binary(value) do
     if String.contains?(value, [",", "\"", "\n"]) do
       "\"#{String.replace(value, "\"", "\"\"")}\""

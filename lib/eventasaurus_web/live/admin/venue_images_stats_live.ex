@@ -44,7 +44,10 @@ defmodule EventasaurusWeb.Admin.VenueImagesStatsLive do
       {:ok, _job} ->
         socket =
           socket
-          |> put_flash(:info, "✅ Cleanup job enqueued - will scan venues and retry failed uploads")
+          |> put_flash(
+            :info,
+            "✅ Cleanup job enqueued - will scan venues and retry failed uploads"
+          )
           |> load_stats()
 
         {:noreply, socket}

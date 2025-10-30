@@ -171,8 +171,10 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
         EventasaurusDiscovery.VenueImages.EnrichmentJob.new(%{
           venue_id: venue.id,
           providers: providers,
-          geocode: geocode,  # Pass geocode option to enable reverse geocoding
-          force: true  # Trust BackfillOrchestrator's SQL staleness filtering
+          # Pass geocode option to enable reverse geocoding
+          geocode: geocode,
+          # Trust BackfillOrchestrator's SQL staleness filtering
+          force: true
         })
       end)
 
@@ -191,7 +193,8 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
 
   defp find_venues_without_images(city_id, limit, providers) do
     # Get cooldown days from config - this matches needs_enrichment? logic
-    cooldown_days = Application.get_env(:eventasaurus, :venue_images, [])[:no_images_cooldown_days] || 7
+    cooldown_days =
+      Application.get_env(:eventasaurus, :venue_images, [])[:no_images_cooldown_days] || 7
 
     base_query =
       from(v in Venue,
@@ -200,17 +203,18 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
         # Simple staleness check using last_checked_at
         # Skip venues checked within cooldown period (regardless of result)
         # This matches the simplified needs_enrichment? logic exactly
-        where: fragment(
-          """
-          ? IS NULL OR
-          ?->>'last_checked_at' IS NULL OR
-          (?->>'last_checked_at')::timestamp < (NOW() AT TIME ZONE 'UTC') - make_interval(days => ?)
-          """,
-          v.image_enrichment_metadata,
-          v.image_enrichment_metadata,
-          v.image_enrichment_metadata,
-          ^cooldown_days
-        ),
+        where:
+          fragment(
+            """
+            ? IS NULL OR
+            ?->>'last_checked_at' IS NULL OR
+            (?->>'last_checked_at')::timestamp < (NOW() AT TIME ZONE 'UTC') - make_interval(days => ?)
+            """,
+            v.image_enrichment_metadata,
+            v.image_enrichment_metadata,
+            v.image_enrichment_metadata,
+            ^cooldown_days
+          ),
         # Prioritize venues in this order:
         # 1. Never checked (highest priority - we don't know if images exist)
         # 2. Has coordinates (better success rate)

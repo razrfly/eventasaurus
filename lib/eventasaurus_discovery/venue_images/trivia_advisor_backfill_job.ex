@@ -29,13 +29,20 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
       # Backfill images for a specific city
       TriviaAdvisorBackfillJob.enqueue(city_id: 5, limit: 10)
 
+      # Process all remaining venues (unlimited)
+      TriviaAdvisorBackfillJob.enqueue(city_id: 5, limit: -1)
+
+      # Force re-process venues that already have images
+      TriviaAdvisorBackfillJob.enqueue(city_id: 5, limit: 10, force: true)
+
       # Dry run to preview changes
       TriviaAdvisorBackfillJob.enqueue(city_id: 5, limit: 5, dry_run: true)
 
   ## Job Arguments
 
   - `:city_id` - Required. Integer city ID to filter Eventasaurus venues
-  - `:limit` - Optional. Maximum number of venues to process (default: 10 in dev, 50 in prod)
+  - `:limit` - Optional. Maximum number of venues to process (default: 10 in dev, 50 in prod). Use -1 for unlimited.
+  - `:force` - Optional. Force re-process venues that already have trivia_advisor_migration images (default: false)
   - `:dry_run` - Optional. Preview changes without updating database (default: false)
 
   ## Environment Variables
@@ -129,12 +136,14 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
   def perform(%Oban.Job{args: args} = job) do
     city_id = Map.get(args, "city_id")
     limit = Map.get(args, "limit", get_default_limit())
+    force = Map.get(args, "force", false)
     dry_run = Map.get(args, "dry_run", false)
 
     Logger.info("""
     🖼️  Starting Trivia Advisor image backfill:
        - City ID: #{city_id}
-       - Limit: #{limit}
+       - Limit: #{if limit == -1, do: "unlimited", else: limit}
+       - Force: #{force}
        - Dry Run: #{dry_run}
     """)
 
@@ -154,7 +163,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
       {:error, error_msg}
     else
       # Execute migration
-      case execute_migration(ta_db_url, city_id, limit, dry_run) do
+      case execute_migration(ta_db_url, city_id, limit, force, dry_run) do
         {:ok, results} ->
           # Store success metadata
           store_success_meta(job, results, city_id, dry_run)
@@ -183,7 +192,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
 
   # Private Functions
 
-  defp execute_migration(ta_db_url, city_id, limit, dry_run) do
+  defp execute_migration(ta_db_url, city_id, limit, force, dry_run) do
     # Connect to Trivia Advisor database
     ta_db_config = parse_database_url(ta_db_url)
 
@@ -194,7 +203,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
           Logger.info("Loading venues for matching...")
 
           ta_venues = load_ta_venues_with_images(ta_conn)
-          ea_venues = load_ea_venues_for_city(city_id)
+          ea_venues = load_ea_venues_for_city(city_id, force)
 
           Logger.info("""
           Loaded venues:
@@ -296,14 +305,18 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
 
   defp load_ta_venues_with_images(conn) do
     {:ok, result} =
-      Postgrex.query(conn, """
-        SELECT id, slug, name, place_id, latitude, longitude, google_place_images
-        FROM venues
-        WHERE google_place_images IS NOT NULL
-        AND jsonb_typeof(google_place_images) = 'array'
-        AND jsonb_array_length(google_place_images) > 0
-        ORDER BY id
-      """, [])
+      Postgrex.query(
+        conn,
+        """
+          SELECT id, slug, name, place_id, latitude, longitude, google_place_images
+          FROM venues
+          WHERE google_place_images IS NOT NULL
+          AND jsonb_typeof(google_place_images) = 'array'
+          AND jsonb_array_length(google_place_images) > 0
+          ORDER BY id
+        """,
+        []
+      )
 
     Enum.map(result.rows, fn [id, slug, name, place_id, lat, lng, images] ->
       %{
@@ -318,49 +331,88 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
     end)
   end
 
-  defp load_ea_venues_for_city(city_id) do
-    from(v in Venue,
-      where: v.city_id == ^city_id,
-      where: not is_nil(v.latitude) and not is_nil(v.longitude),
-      select: %{
-        id: v.id,
-        slug: v.slug,
-        name: v.name,
-        latitude: v.latitude,
-        longitude: v.longitude,
-        provider_ids: v.provider_ids,
-        venue_images: v.venue_images
-      }
-    )
-    |> Repo.all()
+  defp load_ea_venues_for_city(city_id, force) do
+    query =
+      from(v in Venue,
+        where: v.city_id == ^city_id,
+        where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        select: %{
+          id: v.id,
+          slug: v.slug,
+          name: v.name,
+          latitude: v.latitude,
+          longitude: v.longitude,
+          provider_ids: v.provider_ids,
+          venue_images: v.venue_images
+        }
+      )
+
+    venues = Repo.all(query)
+
+    # Filter out venues that already have trivia_advisor_migration images (unless force=true)
+    if force do
+      Logger.info("  Force mode: Including all #{length(venues)} venues")
+      venues
+    else
+      filtered_venues =
+        Enum.reject(venues, fn venue ->
+          has_trivia_advisor_images?(venue.venue_images)
+        end)
+
+      skipped_count = length(venues) - length(filtered_venues)
+
+      if skipped_count > 0 do
+        Logger.info(
+          "  Skipped #{skipped_count} venues with existing trivia_advisor_migration images"
+        )
+      end
+
+      filtered_venues
+    end
   end
 
-  defp match_venues(ta_venues, ea_venues, limit) do
-    ta_venues
-    |> Enum.map(fn ta_venue ->
-      case find_best_match(ta_venue, ea_venues) do
-        {ea_venue, match_type, confidence, distance, name_distance} ->
-          %{
-            ta_id: ta_venue.id,
-            ta_slug: ta_venue.slug,
-            ta_name: ta_venue.name,
-            ta_images: ta_venue.google_place_images,
-            ea_id: ea_venue.id,
-            ea_slug: ea_venue.slug,
-            ea_name: ea_venue.name,
-            ea_venue: ea_venue,
-            match_type: match_type,
-            confidence: confidence,
-            distance_m: distance,
-            name_distance: name_distance
-          }
-
-        nil ->
-          nil
-      end
+  defp has_trivia_advisor_images?(venue_images) when is_list(venue_images) do
+    Enum.any?(venue_images, fn img ->
+      img["source"] == "trivia_advisor_migration"
     end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.take(limit)
+  end
+
+  defp has_trivia_advisor_images?(_), do: false
+
+  defp match_venues(ta_venues, ea_venues, limit) do
+    matches =
+      ta_venues
+      |> Enum.map(fn ta_venue ->
+        case find_best_match(ta_venue, ea_venues) do
+          {ea_venue, match_type, confidence, distance, name_distance} ->
+            %{
+              ta_id: ta_venue.id,
+              ta_slug: ta_venue.slug,
+              ta_name: ta_venue.name,
+              ta_images: ta_venue.google_place_images,
+              ea_id: ea_venue.id,
+              ea_slug: ea_venue.slug,
+              ea_name: ea_venue.name,
+              ea_venue: ea_venue,
+              match_type: match_type,
+              confidence: confidence,
+              distance_m: distance,
+              name_distance: name_distance
+            }
+
+          nil ->
+            nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    # Apply limit (-1 means unlimited)
+    if limit == -1 do
+      Logger.info("  Processing all #{length(matches)} matched venues (unlimited mode)")
+      matches
+    else
+      Enum.take(matches, limit)
+    end
   end
 
   defp find_best_match(ta_venue, ea_venues) do
@@ -462,7 +514,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
     c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
 
     # Earth radius in meters
-    6371000 * c
+    6_371_000 * c
   end
 
   defp levenshtein_distance(s1, s2) do

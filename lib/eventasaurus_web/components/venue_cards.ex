@@ -57,7 +57,16 @@ defmodule EventasaurusWeb.Components.VenueCards do
   attr :events_count, :integer, default: 0
 
   def venue_card(assigns) do
-    assigns = assign(assigns, :image_url, VenueImageHelper.get_venue_image(assigns.venue, assigns.city, width: 400, height: 300, quality: 85))
+    assigns =
+      assign(
+        assigns,
+        :image_url,
+        VenueImageHelper.get_venue_image(assigns.venue, assigns.city,
+          width: 400,
+          height: 300,
+          quality: 85
+        )
+      )
 
     ~H"""
     <.link
@@ -106,7 +115,16 @@ defmodule EventasaurusWeb.Components.VenueCards do
   attr :events_count, :integer, default: 0
 
   def venue_list_item(assigns) do
-    assigns = assign(assigns, :image_url, VenueImageHelper.get_venue_image(assigns.venue, assigns.city, width: 192, height: 192, quality: 85))
+    assigns =
+      assign(
+        assigns,
+        :image_url,
+        VenueImageHelper.get_venue_image(assigns.venue, assigns.city,
+          width: 192,
+          height: 192,
+          quality: 85
+        )
+      )
 
     ~H"""
     <.link

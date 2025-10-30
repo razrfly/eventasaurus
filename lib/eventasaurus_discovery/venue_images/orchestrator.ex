@@ -179,13 +179,15 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
           has_images = venue.venue_images && length(venue.venue_images) > 0
 
           # Different cooldowns based on whether venue has images
-          cooldown_days = if has_images do
-            90  # Venues with images: refresh every 90 days
-          else
-            # Venues without images: retry every 7 days (configurable)
-            Application.get_env(:eventasaurus, :venue_images, [])
-            |> Keyword.get(:no_images_cooldown_days, 7)
-          end
+          cooldown_days =
+            if has_images do
+              # Venues with images: refresh every 90 days
+              90
+            else
+              # Venues without images: retry every 7 days (configurable)
+              Application.get_env(:eventasaurus, :venue_images, [])
+              |> Keyword.get(:no_images_cooldown_days, 7)
+            end
 
           days_since_check >= cooldown_days
 
@@ -538,9 +540,10 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       |> Keyword.get(:max_images_per_venue, 25)
 
     # Group images by provider to apply per-provider limits
-    images_by_provider = Enum.group_by(images, fn img ->
-      img.provider || img["provider"]
-    end)
+    images_by_provider =
+      Enum.group_by(images, fn img ->
+        img.provider || img["provider"]
+      end)
 
     # Apply per-provider limits and flatten back to list
     provider_limited_images =
@@ -558,11 +561,15 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
 
     # Log if we're limiting images
     if is_integer(max_images_per_provider) and length(images) > length(provider_limited_images) do
-      Logger.info("📊 Found #{length(images)} images, processing only #{length(provider_limited_images)} (limit: #{max_images_per_provider}/provider)")
+      Logger.info(
+        "📊 Found #{length(images)} images, processing only #{length(provider_limited_images)} (limit: #{max_images_per_provider}/provider)"
+      )
     end
 
     if length(provider_limited_images) > length(limited_images) do
-      Logger.info("📊 Limiting to #{length(limited_images)} images per venue (max: #{max_images_per_venue})")
+      Logger.info(
+        "📊 Limiting to #{length(limited_images)} images per venue (max: #{max_images_per_venue})"
+      )
     end
 
     # Convert new images to proper structure with string keys (JSONB requirement)
@@ -694,18 +701,20 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
     # Only set "no_images" when providers explicitly returned ZERO_RESULTS
     # Set "error" for API errors (INVALID_REQUEST, auth failures, rate limits, etc.)
     # Set "success" when images were successfully fetched
-    last_attempt_result = determine_attempt_result(
-      new_structured_images,
-      metadata.providers_failed || metadata[:providers_failed] || [],
-      metadata.error_details || metadata[:error_details] || %{}
-    )
+    last_attempt_result =
+      determine_attempt_result(
+        new_structured_images,
+        metadata.providers_failed || metadata[:providers_failed] || [],
+        metadata.error_details || metadata[:error_details] || %{}
+      )
 
     # Store detailed information about this attempt for cooldown logic
-    last_attempt_details = build_attempt_details(
-      metadata.providers_succeeded || metadata[:providers_succeeded] || [],
-      metadata.providers_failed || metadata[:providers_failed] || [],
-      metadata.error_details || metadata[:error_details] || %{}
-    )
+    last_attempt_details =
+      build_attempt_details(
+        metadata.providers_succeeded || metadata[:providers_succeeded] || [],
+        metadata.providers_failed || metadata[:providers_failed] || [],
+        metadata.error_details || metadata[:error_details] || %{}
+      )
 
     # Calculate completeness score (0.0-1.0)
     # Measures how successful the enrichment was across all attempted providers
@@ -737,8 +746,9 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       "error_details" => metadata.error_details || metadata[:error_details] || %{},
       # Track result of last check (for debugging/reporting)
       "last_check_result" => last_attempt_result,
-      "last_check_providers" => (metadata.providers_succeeded || metadata[:providers_succeeded] || []) ++
-                                    (metadata.providers_failed || metadata[:providers_failed] || []),
+      "last_check_providers" =>
+        (metadata.providers_succeeded || metadata[:providers_succeeded] || []) ++
+          (metadata.providers_failed || metadata[:providers_failed] || []),
       "last_check_details" => last_attempt_details
     }
 
@@ -929,10 +939,11 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
         error = get_provider_error(error_details, provider)
         status = if is_zero_results?(error), do: "ZERO_RESULTS", else: "ERROR"
 
-        {provider, %{
-          "status" => status,
-          "message" => inspect(error)
-        }}
+        {provider,
+         %{
+           "status" => status,
+           "message" => inspect(error)
+         }}
       end)
       |> Map.new()
 
@@ -989,13 +1000,10 @@ defmodule EventasaurusDiscovery.VenueImages.Orchestrator do
       # Google Places: 2 requests/second = 500ms delay
       # Conservative to avoid rate limits when fetching photo URLs
       "google_places" -> 500
-
       # Foursquare: 5 requests/second = 200ms delay
       "foursquare" -> 200
-
       # Here: 5 requests/second = 200ms delay
       "here" -> 200
-
       # Default: 100ms for unknown providers
       _ -> 100
     end

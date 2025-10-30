@@ -224,13 +224,26 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
   end
 
   # Get configuration value from environment or use default
-  defp get_config(:distance_tight, default), do: get_env_int("VENUE_DUPLICATE_DISTANCE_TIGHT", default)
-  defp get_config(:distance_close, default), do: get_env_int("VENUE_DUPLICATE_DISTANCE_CLOSE", default)
-  defp get_config(:distance_nearby, default), do: get_env_int("VENUE_DUPLICATE_DISTANCE_NEARBY", default)
-  defp get_config(:similarity_tight, default), do: get_env_float("VENUE_DUPLICATE_SIMILARITY_TIGHT", default)
-  defp get_config(:similarity_close, default), do: get_env_float("VENUE_DUPLICATE_SIMILARITY_CLOSE", default)
-  defp get_config(:similarity_nearby, default), do: get_env_float("VENUE_DUPLICATE_SIMILARITY_NEARBY", default)
-  defp get_config(:similarity_distant, default), do: get_env_float("VENUE_DUPLICATE_SIMILARITY_DISTANT", default)
+  defp get_config(:distance_tight, default),
+    do: get_env_int("VENUE_DUPLICATE_DISTANCE_TIGHT", default)
+
+  defp get_config(:distance_close, default),
+    do: get_env_int("VENUE_DUPLICATE_DISTANCE_CLOSE", default)
+
+  defp get_config(:distance_nearby, default),
+    do: get_env_int("VENUE_DUPLICATE_DISTANCE_NEARBY", default)
+
+  defp get_config(:similarity_tight, default),
+    do: get_env_float("VENUE_DUPLICATE_SIMILARITY_TIGHT", default)
+
+  defp get_config(:similarity_close, default),
+    do: get_env_float("VENUE_DUPLICATE_SIMILARITY_CLOSE", default)
+
+  defp get_config(:similarity_nearby, default),
+    do: get_env_float("VENUE_DUPLICATE_SIMILARITY_NEARBY", default)
+
+  defp get_config(:similarity_distant, default),
+    do: get_env_float("VENUE_DUPLICATE_SIMILARITY_DISTANT", default)
 
   defp get_env_int(key, default) do
     case System.get_env(key) do

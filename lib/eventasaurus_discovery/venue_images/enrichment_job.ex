@@ -113,7 +113,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     providers = Keyword.get(opts, :providers)
 
     # Load venues; JSON fields like venue_images are part of the struct
-    venues = Repo.all(from v in Venue, where: v.id in ^venue_ids)
+    venues = Repo.all(from(v in Venue, where: v.id in ^venue_ids))
 
     # Pre-filter using existing staleness logic
     stale_venues =
@@ -135,11 +135,12 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
     # Batch insert only stale venues
     # Build job args with only the parameters that should be in the job
-    jobs = Enum.map(stale_venues, fn venue ->
-      job_args = %{venue_id: venue.id}
-      job_args = if providers, do: Map.put(job_args, :providers, providers), else: job_args
-      new(job_args)
-    end)
+    jobs =
+      Enum.map(stale_venues, fn venue ->
+        job_args = %{venue_id: venue.id}
+        job_args = if providers, do: Map.put(job_args, :providers, providers), else: job_args
+        new(job_args)
+      end)
 
     # Oban.insert_all returns a list of inserted jobs on success
     try do
@@ -244,9 +245,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                   true ->
                     # Providers failed but errors are neither permanent nor retryable
                     # This is the "no images available" case (e.g., ZERO_RESULTS)
-                    Logger.info(
-                      "ℹ️  Venue #{venue_id} completed but no images: #{error_messages}"
-                    )
+                    Logger.info("ℹ️  Venue #{venue_id} completed but no images: #{error_messages}")
 
                     :ok
                 end
@@ -255,11 +254,13 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
           {:skip, reason} ->
             Logger.info("⏭️  Skipped venue #{venue_id}: #{reason}")
+
             update_job_meta(job, %{
               status: "skipped",
               reason: to_string(reason),
               execution_time_ms: DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
             })
+
             :ok
 
           {:error, reason} ->
@@ -280,6 +281,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
     # Build batch metadata
     execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+
     metadata = %{
       status: "batch_completed",
       total_venues: results.total,
@@ -304,11 +306,13 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
     if Enum.empty?(stale_venues) do
       Logger.info("✅ No stale venues found")
+
       update_job_meta(job, %{
         status: "no_work",
         message: "No stale venues found",
         execution_time_ms: DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
       })
+
       :ok
     else
       Logger.info("📊 Found #{length(stale_venues)} stale venues to enrich")
@@ -316,6 +320,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
       # Build scheduled batch metadata
       execution_time = DateTime.diff(DateTime.utc_now(), start_time, :millisecond)
+
       metadata = %{
         status: "scheduled_batch_completed",
         total_venues: results.total,
@@ -497,7 +502,8 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     # Use Nearby Search to find the actual business
     case search_nearby_business(venue) do
       {:ok, place_id} ->
-        updated_provider_ids = Map.merge(venue.provider_ids || %{}, %{"google_places" => place_id})
+        updated_provider_ids =
+          Map.merge(venue.provider_ids || %{}, %{"google_places" => place_id})
 
         # Update venue in database
         case Repo.update_all(
@@ -516,7 +522,10 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
         end
 
       {:error, reason} ->
-        Logger.warning("⚠️ Could not find Google Places business ID for venue #{venue.id}: #{inspect(reason)}")
+        Logger.warning(
+          "⚠️ Could not find Google Places business ID for venue #{venue.id}: #{inspect(reason)}"
+        )
+
         {:error, reason}
     end
   end
@@ -532,11 +541,13 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
       params = [
         location: "#{venue.latitude},#{venue.longitude}",
-        radius: 50,  # 50 meter radius
+        # 50 meter radius
+        radius: 50,
         key: api_key
       ]
 
       query = URI.encode_query(params)
+
       case HTTPoison.get("#{url}?#{query}", [], recv_timeout: 10_000) do
         {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
           case parse_nearby_search_response(body, venue) do
@@ -572,6 +583,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     ]
 
     query = URI.encode_query(params)
+
     case HTTPoison.get("#{url}?#{query}", [], recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         case Jason.decode(body) do
@@ -590,6 +602,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                    - Photos: #{photo_count}
                    - Reason: This is a street address, not a business
                 """)
+
                 {:error, {:address_not_business, place_name, place_types}}
 
               is_business_place_id?(place_types) ->
@@ -599,6 +612,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                    - Types: #{inspect(Enum.take(place_types, 3))}
                    - Photos: #{photo_count}
                 """)
+
                 {:ok, place_id}
 
               true ->
@@ -609,6 +623,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
                    - Photos: #{photo_count}
                    - Accepting anyway (has #{photo_count} photos)
                 """)
+
                 {:ok, place_id}
             end
 
@@ -660,17 +675,19 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
   defp parse_nearby_search_response(body, venue) do
     case Jason.decode(body) do
-      {:ok, %{"results" => results, "status" => "OK"}} when is_list(results) and length(results) > 0 ->
+      {:ok, %{"results" => results, "status" => "OK"}}
+      when is_list(results) and length(results) > 0 ->
         # Try to find best matching result by name similarity
-        best_match = Enum.find(results, fn result ->
-          result_name = Map.get(result, "name", "")
-          venue_name = venue.name || ""
+        best_match =
+          Enum.find(results, fn result ->
+            result_name = Map.get(result, "name", "")
+            venue_name = venue.name || ""
 
-          # Simple name matching - could be improved with fuzzy matching
-          String.downcase(result_name) == String.downcase(venue_name) or
-            String.contains?(String.downcase(result_name), String.downcase(venue_name)) or
-            String.contains?(String.downcase(venue_name), String.downcase(result_name))
-        end)
+            # Simple name matching - could be improved with fuzzy matching
+            String.downcase(result_name) == String.downcase(venue_name) or
+              String.contains?(String.downcase(result_name), String.downcase(venue_name)) or
+              String.contains?(String.downcase(venue_name), String.downcase(result_name))
+          end)
 
         # If no name match, use first result (closest by distance)
         result = best_match || List.first(results)
@@ -836,10 +853,10 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   # ZERO_RESULTS is NOT an API error - it means "no images available"
   defp is_api_error?(error) do
     # Check if it's a permanent failure (auth, config, invalid request)
+    # Check if it's a retryable error (rate limit, timeout, network)
+    # Check for any other error patterns that are not ZERO_RESULTS
     permanent_failure?(error) or
-      # Check if it's a retryable error (rate limit, timeout, network)
       retryable_error?(error) or
-      # Check for any other error patterns that are not ZERO_RESULTS
       (is_binary(error) and not is_zero_results?(error))
   end
 
@@ -861,15 +878,17 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
     # Separate successful and failed images
     # Successful = uploaded (production) OR skipped_dev (development)
-    successful_images = Enum.filter(all_images, fn img ->
-      img["upload_status"] == "uploaded" or img["upload_status"] == "skipped_dev"
-    end)
+    successful_images =
+      Enum.filter(all_images, fn img ->
+        img["upload_status"] == "uploaded" or img["upload_status"] == "skipped_dev"
+      end)
+
     failed_images = Enum.filter(all_images, fn img -> img["upload_status"] == "failed" end)
 
     # Extract and normalize provider lists - deduplicate to avoid mixing atom/string keys
     providers_succeeded =
       (metadata["providers_succeeded"] || metadata[:providers_succeeded] ||
-       metadata["providers_used"] || metadata[:providers_used] || [])
+         metadata["providers_used"] || metadata[:providers_used] || [])
       |> Enum.map(&to_string/1)
       |> Enum.uniq()
 
@@ -918,7 +937,14 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       total_cost_usd: total_cost,
       execution_time_ms: execution_time,
       completed_at: DateTime.to_iso8601(DateTime.utc_now()),
-      summary: build_summary(status, providers_succeeded, providers_failed, length(successful_images), length(all_images))
+      summary:
+        build_summary(
+          status,
+          providers_succeeded,
+          providers_failed,
+          length(successful_images),
+          length(all_images)
+        )
     }
   end
 
@@ -963,7 +989,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
     # Extract and normalize provider lists - deduplicate to avoid mixing atom/string keys
     providers_succeeded =
       (metadata["providers_succeeded"] || metadata[:providers_succeeded] ||
-       metadata["providers_used"] || metadata[:providers_used] || [])
+         metadata["providers_used"] || metadata[:providers_used] || [])
       |> Enum.map(&to_string/1)
       |> Enum.uniq()
 
@@ -983,9 +1009,11 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
           end)
 
         images_fetched = length(provider_images)
-        images_uploaded = Enum.count(provider_images, fn img ->
-          (img["upload_status"] || img[:upload_status]) == "uploaded"
-        end)
+
+        images_uploaded =
+          Enum.count(provider_images, fn img ->
+            (img["upload_status"] || img[:upload_status]) == "uploaded"
+          end)
 
         imagekit_urls =
           provider_images
@@ -994,13 +1022,16 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
           end)
           |> Enum.map(fn img -> img["url"] || img[:url] end)
 
-        {provider, %{
-          status: "success",
-          images_fetched: images_fetched,
-          images_uploaded: images_uploaded,
-          imagekit_urls: imagekit_urls,
-          cost_usd: Map.get(cost_breakdown, provider) || Map.get(cost_breakdown, to_string(provider)) || 0.0
-        }}
+        {provider,
+         %{
+           status: "success",
+           images_fetched: images_fetched,
+           images_uploaded: images_uploaded,
+           imagekit_urls: imagekit_urls,
+           cost_usd:
+             Map.get(cost_breakdown, provider) || Map.get(cost_breakdown, to_string(provider)) ||
+               0.0
+         }}
       end)
       |> Map.new()
 
@@ -1010,20 +1041,30 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       |> Enum.map(fn provider ->
         error = Map.get(error_details, provider) || Map.get(error_details, to_string(provider))
 
-        {provider, %{
-          status: "failed",
-          reason: inspect(error)
-        }}
+        {provider,
+         %{
+           status: "failed",
+           reason: inspect(error)
+         }}
       end)
       |> Map.new()
 
     Map.merge(success_details, failed_details)
   end
 
-  defp build_summary(status, providers_succeeded, providers_failed, images_uploaded, images_discovered) do
+  defp build_summary(
+         status,
+         providers_succeeded,
+         providers_failed,
+         images_uploaded,
+         images_discovered
+       ) do
     case status do
       "success" ->
-        provider_names = if Enum.empty?(providers_succeeded), do: "unknown provider", else: Enum.join(providers_succeeded, ", ")
+        provider_names =
+          if Enum.empty?(providers_succeeded),
+            do: "unknown provider",
+            else: Enum.join(providers_succeeded, ", ")
 
         cond do
           images_uploaded == images_discovered ->
@@ -1031,6 +1072,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
 
           images_uploaded < images_discovered ->
             failed_count = images_discovered - images_uploaded
+
             "Found #{images_discovered} images from #{provider_names}, #{images_uploaded} processed, #{failed_count} failed"
         end
 
@@ -1038,7 +1080,9 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
         "No images found - venue has no available photos"
 
       "error" ->
-        failed_names = if Enum.empty?(providers_failed), do: "unknown", else: Enum.join(providers_failed, ", ")
+        failed_names =
+          if Enum.empty?(providers_failed), do: "unknown", else: Enum.join(providers_failed, ", ")
+
         "Failed - #{failed_names} encountered errors"
 
       _ ->
@@ -1078,10 +1122,10 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
       # String-based errors (from API responses)
       error when is_binary(error) ->
         # Google API authentication errors
+        # HTTP authentication/authorization errors
         String.contains?(error, "REQUEST_DENIED") or
           String.contains?(error, "INVALID_API_KEY") or
           String.contains?(error, "INVALID_REQUEST") or
-          # HTTP authentication/authorization errors
           String.starts_with?(error, "HTTP 400") or
           String.starts_with?(error, "HTTP 401") or
           String.starts_with?(error, "HTTP 403")

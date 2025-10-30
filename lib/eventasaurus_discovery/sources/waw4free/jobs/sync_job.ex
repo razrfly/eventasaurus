@@ -44,9 +44,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         # If no city_id provided, look up Warsaw by name
         import Ecto.Query
 
-        Repo.one(
-          from(c in City, where: c.name in ["Warszawa", "Warsaw", "Warschau"], limit: 1)
-        )
+        Repo.one(from(c in City, where: c.name in ["Warszawa", "Warsaw", "Warschau"], limit: 1))
       end
 
     case city do
@@ -132,6 +130,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
     # Log errors
     if length(errors) > 0 do
       Logger.warning("⚠️ Failed to scrape #{length(errors)} categories")
+
       Enum.each(errors, fn {:error, {category, reason}} ->
         Logger.error("Category '#{category}' failed: #{inspect(reason)}")
       end)
@@ -179,14 +178,15 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   defp filter_fresh_events(events, source_id) do
     # Use EventFreshnessChecker to filter out recently-seen events
     # EventFreshnessChecker expects maps with string keys
-    events_as_maps = Enum.map(events, fn event ->
-      %{
-        "external_id" => event.external_id,
-        "url" => event.url,
-        "title" => event.title,
-        "extracted_at" => event.extracted_at
-      }
-    end)
+    events_as_maps =
+      Enum.map(events, fn event ->
+        %{
+          "external_id" => event.external_id,
+          "url" => event.url,
+          "title" => event.title,
+          "extracted_at" => event.extracted_at
+        }
+      end)
 
     fresh_maps = EventFreshnessChecker.filter_events_needing_processing(events_as_maps, source_id)
     fresh_external_ids = MapSet.new(fresh_maps, & &1["external_id"])
@@ -205,7 +205,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger each job by rate_limit seconds (+ 0-2s jitter) to avoid bursty first requests
-        jitter = :rand.uniform(3) - 1  # Returns 0, 1, or 2 seconds
+        # Returns 0, 1, or 2 seconds
+        jitter = :rand.uniform(3) - 1
         delay_seconds = index * Config.rate_limit() + jitter
         scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 

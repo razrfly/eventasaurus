@@ -197,12 +197,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
         # Generate JSON-LD structured data
         event_json_ld = PublicEventSchema.generate(enriched_event)
+
         breadcrumb_json_ld =
           BreadcrumbListSchema.from_breadcrumb_builder_items(
             breadcrumb_items,
             canonical_url_for_schemas,
             base_url
           )
+
         venue_json_ld =
           if enriched_event.venue do
             LocalBusinessSchema.generate(enriched_event.venue)
@@ -220,7 +222,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         image_url = enriched_event.cover_image_url || get_placeholder_image_url(enriched_event)
 
         # Build meta description
-        description = enriched_event.display_description || truncate_for_description(enriched_event.display_title)
+        description =
+          enriched_event.display_description ||
+            truncate_for_description(enriched_event.display_title)
 
         # Get available languages for this activity's city (dynamic based on country + DB translations)
         available_languages =
@@ -1793,5 +1797,4 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       _ -> nil
     end
   end
-
 end

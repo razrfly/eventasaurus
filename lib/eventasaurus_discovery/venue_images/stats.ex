@@ -267,7 +267,7 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
     score =
       venue.failed_count * 10 +
         venue.failure_rate_pct +
-        (if transient_count > 0, do: 20, else: 0) +
+        if(transient_count > 0, do: 20, else: 0) +
         activity_bonus / 100
 
     Float.round(score, 1)
@@ -301,7 +301,7 @@ defmodule EventasaurusDiscovery.VenueImages.Stats do
       total_uploaded_images: Enum.sum(Enum.map(venues, & &1.uploaded_count)),
       average_failure_rate:
         if length(venues) > 0 do
-          Enum.sum(Enum.map(venues, & &1.failure_rate_pct)) / length(venues)
+          (Enum.sum(Enum.map(venues, & &1.failure_rate_pct)) / length(venues))
           |> Float.round(1)
         else
           0.0

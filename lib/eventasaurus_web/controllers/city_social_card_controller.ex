@@ -53,7 +53,15 @@ defmodule EventasaurusWeb.CitySocialCardController do
           end
         else
           expected_hash = HashGenerator.generate_hash(city_with_stats, :city)
-          SocialCardHelpers.send_hash_mismatch_redirect(conn, city_with_stats, slug, expected_hash, final_hash, :city)
+
+          SocialCardHelpers.send_hash_mismatch_redirect(
+            conn,
+            city_with_stats,
+            slug,
+            expected_hash,
+            final_hash,
+            :city
+          )
         end
     end
   end

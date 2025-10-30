@@ -1096,9 +1096,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     case VenueNameValidator.choose_name(scraped_name, metadata) do
       {:ok, chosen_name, :scraped_validated} ->
         # Scraped name validated as good quality (similarity >= 0.7)
-        Logger.debug(
-          "🏛️ ✅ Venue name validated: '#{scraped_name}' (scraper: #{source_scraper})"
-        )
+        Logger.debug("🏛️ ✅ Venue name validated: '#{scraped_name}' (scraper: #{source_scraper})")
 
         chosen_name
 

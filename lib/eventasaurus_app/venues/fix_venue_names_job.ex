@@ -41,7 +41,7 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
 
     # 2. Assess each venue using VenueNameValidator
     assessments = assess_all_venues(venues, severity)
-    needs_fix = Enum.count(assessments, &(&1.needs_fix))
+    needs_fix = Enum.count(assessments, & &1.needs_fix)
     Logger.info("#{needs_fix} venues need fixing (severity: #{severity})")
 
     # 3. Fix venues in batches
@@ -128,8 +128,8 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
   # Fix a batch of venues in a transaction
   defp fix_venue_batch(assessments) do
     case Repo.transaction(fn ->
-      Enum.map(assessments, &fix_single_venue/1)
-    end) do
+           Enum.map(assessments, &fix_single_venue/1)
+         end) do
       {:ok, results} ->
         # Count successful fixes
         Enum.count(results, &match?({:ok, _}, &1))
@@ -165,17 +165,13 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
           {:ok, updated_venue}
 
         {:error, changeset} ->
-          Logger.warning(
-            "Failed to fix venue ##{venue.id}: #{inspect(changeset.errors)}"
-          )
+          Logger.warning("Failed to fix venue ##{venue.id}: #{inspect(changeset.errors)}")
 
           {:error, changeset.errors}
       end
     rescue
       error ->
-        Logger.error(
-          "Exception fixing venue ##{venue.id}: #{inspect(error)}"
-        )
+        Logger.error("Exception fixing venue ##{venue.id}: #{inspect(error)}")
 
         {:error, :exception}
     end

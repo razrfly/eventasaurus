@@ -141,9 +141,7 @@ defmodule EventasaurusDiscovery.VenueImages.CleanupScheduler do
             %{transient_queued: 1}
 
           {:error, reason} ->
-            Logger.error(
-              "❌ Failed to queue retry for venue #{venue.id}: #{inspect(reason)}"
-            )
+            Logger.error("❌ Failed to queue retry for venue #{venue.id}: #{inspect(reason)}")
 
             %{errors: 1}
         end
@@ -158,9 +156,7 @@ defmodule EventasaurusDiscovery.VenueImages.CleanupScheduler do
 
       ambiguous_count > 0 ->
         # Only ambiguous failures, skip for now
-        Logger.debug(
-          "⏭️  Venue #{venue.id} has #{ambiguous_count} ambiguous failures (skipping)"
-        )
+        Logger.debug("⏭️  Venue #{venue.id} has #{ambiguous_count} ambiguous failures (skipping)")
 
         %{ambiguous_skipped: 1}
 

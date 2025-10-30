@@ -23,10 +23,11 @@ defmodule Mix.Tasks.Migration.Phase1 do
   def run(args) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} = OptionParser.parse(args,
-      switches: [limit: :integer, dry_run: :boolean],
-      aliases: [l: :limit, d: :dry_run]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        switches: [limit: :integer, dry_run: :boolean],
+        aliases: [l: :limit, d: :dry_run]
+      )
 
     limit = Keyword.get(opts, :limit)
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -59,9 +60,10 @@ defmodule Mix.Tasks.Migration.Phase1 do
     IO.puts("📊 Step 2: Migrating Images")
     IO.puts(String.duplicate("-", 80))
 
-    results = Enum.map(matches, fn match ->
-      migrate_venue_images(ta_conn, match, dry_run)
-    end)
+    results =
+      Enum.map(matches, fn match ->
+        migrate_venue_images(ta_conn, match, dry_run)
+      end)
 
     # Calculate statistics
     successful = Enum.count(results, fn r -> r.success end)
@@ -129,7 +131,8 @@ defmodule Mix.Tasks.Migration.Phase1 do
 
   defp load_matches(csv_path, limit) do
     File.stream!(csv_path)
-    |> Stream.drop(1)  # Skip header
+    # Skip header
+    |> Stream.drop(1)
     |> Stream.map(&parse_csv_line/1)
     |> Stream.filter(fn match -> match.confidence > 0 end)
     |> then(fn stream ->
@@ -141,7 +144,19 @@ defmodule Mix.Tasks.Migration.Phase1 do
     # Proper CSV parsing with quoted field support
     fields = parse_csv_fields(String.trim(line))
 
-    [ta_id, ta_slug, ta_name, ea_id, ea_slug, ea_name, match_type, confidence, distance_m, name_distance, images_count] = fields
+    [
+      ta_id,
+      ta_slug,
+      ta_name,
+      ea_id,
+      ea_slug,
+      ea_name,
+      match_type,
+      confidence,
+      distance_m,
+      name_distance,
+      images_count
+    ] = fields
 
     %{
       ta_id: String.to_integer(ta_id),
@@ -174,11 +189,16 @@ defmodule Mix.Tasks.Migration.Phase1 do
     IO.puts("  Match type: #{match.match_type} (#{Float.round(match.confidence * 100, 1)}%)")
 
     # Fetch trivia_advisor images
-    {:ok, result} = Postgrex.query(ta_conn, """
-      SELECT google_place_images
-      FROM venues
-      WHERE id = $1
-    """, [match.ta_id])
+    {:ok, result} =
+      Postgrex.query(
+        ta_conn,
+        """
+          SELECT google_place_images
+          FROM venues
+          WHERE id = $1
+        """,
+        [match.ta_id]
+      )
 
     ta_images = result.rows |> List.first() |> List.first()
 
@@ -262,7 +282,8 @@ defmodule Mix.Tasks.Migration.Phase1 do
 
     %{
       "url" => tigris_url,
-      "upload_status" => "external",  # Mark as external (not ImageKit)
+      # Mark as external (not ImageKit)
+      "upload_status" => "external",
       "width" => ta_image["width"],
       "height" => ta_image["height"],
       "source" => "trivia_advisor_migration",
@@ -274,22 +295,24 @@ defmodule Mix.Tasks.Migration.Phase1 do
     # Merge new images with existing, avoiding duplicates by URL
     existing_urls = MapSet.new(original_images, fn img -> img["url"] end)
 
-    unique_new_images = Enum.reject(new_images, fn img ->
-      MapSet.member?(existing_urls, img["url"])
-    end)
+    unique_new_images =
+      Enum.reject(new_images, fn img ->
+        MapSet.member?(existing_urls, img["url"])
+      end)
 
     original_images ++ unique_new_images
   end
 
   defp write_rollback_data(results, path) do
-    rollback_data = Enum.filter(results, fn r -> r.success end)
-    |> Enum.map(fn r ->
-      %{
-        ea_id: r.ea_id,
-        ea_slug: r.ea_slug,
-        original_images: r.original_images
-      }
-    end)
+    rollback_data =
+      Enum.filter(results, fn r -> r.success end)
+      |> Enum.map(fn r ->
+        %{
+          ea_id: r.ea_id,
+          ea_slug: r.ea_slug,
+          original_images: r.original_images
+        }
+      end)
 
     json = Jason.encode!(rollback_data, pretty: true)
     File.write!(path, json)
@@ -321,8 +344,7 @@ defmodule Mix.Tasks.Migration.Phase1 do
 
     #{Enum.map_join(results, "\n", fn r ->
       status = if r.success, do: "✓", else: "✗"
-      "#{status} ID #{r.ea_id} (#{r.ea_slug}): #{r.images_migrated} images" <>
-      if r.error, do: " - ERROR: #{r.error}", else: ""
+      "#{status} ID #{r.ea_id} (#{r.ea_slug}): #{r.images_migrated} images" <> if r.error, do: " - ERROR: #{r.error}", else: ""
     end)}
 
     ================================================================================
@@ -347,11 +369,7 @@ defmodule Mix.Tasks.Migration.Phase1 do
     #{if dry_run do
       "This was a DRY RUN. To execute the migration:\n  mix migration.phase1"
     else
-      "1. Verify images display correctly in eventasaurus UI\n" <>
-      "2. Test image loading performance\n" <>
-      "3. Check image metadata accuracy\n" <>
-      "4. Proceed to Phase 2 (ImageKit migration) when ready\n\n" <>
-      "Rollback available: temp/migration_recon/phase1_rollback.json"
+      "1. Verify images display correctly in eventasaurus UI\n" <> "2. Test image loading performance\n" <> "3. Check image metadata accuracy\n" <> "4. Proceed to Phase 2 (ImageKit migration) when ready\n\n" <> "Rollback available: temp/migration_recon/phase1_rollback.json"
     end}
 
     ================================================================================

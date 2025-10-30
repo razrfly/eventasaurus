@@ -90,16 +90,17 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
       }
 
       # Merge date parsing results
-      event_data = case date_result do
-        {:ok, %{starts_at: starts_at} = dates} ->
-          event_data
-          |> Map.put(:starts_at, starts_at)
-          |> Map.put(:ends_at, Map.get(dates, :ends_at))
+      event_data =
+        case date_result do
+          {:ok, %{starts_at: starts_at} = dates} ->
+            event_data
+            |> Map.put(:starts_at, starts_at)
+            |> Map.put(:ends_at, Map.get(dates, :ends_at))
 
-        {:error, reason} ->
-          Logger.warning("Failed to parse date '#{combined_date_text}': #{inspect(reason)}")
-          event_data
-      end
+          {:error, reason} ->
+            Logger.warning("Failed to parse date '#{combined_date_text}': #{inspect(reason)}")
+            event_data
+        end
 
       # Validate required fields
       if valid_event?(event_data) do
@@ -150,7 +151,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
         |> Enum.map(&Floki.text/1)
         |> Enum.map(&String.trim/1)
         |> Enum.reject(&(&1 == ""))
-        |> Enum.take(5)  # Limit to first 5 paragraphs
+        # Limit to first 5 paragraphs
+        |> Enum.take(5)
         |> Enum.join("\n\n")
         |> clean_text()
       else
@@ -166,7 +168,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
   defp extract_date_text(document) do
     # Try specific date selectors
     selectors = [
-      ".kiedy",           # Common Polish selector
+      # Common Polish selector
+      ".kiedy",
       ".data",
       ".date",
       "[class*='date']",
@@ -229,7 +232,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
   defp extract_venue(document) do
     # Try specific venue selectors
     selectors = [
-      ".gdzie",           # Common Polish selector
+      # Common Polish selector
+      ".gdzie",
       ".miejsce",
       ".venue",
       ".location",
@@ -271,6 +275,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.DetailExtractor do
     else
       # Try to extract from venue text
       venue = extract_venue(document)
+
       if venue && String.contains?(venue, " - ") do
         venue
         |> String.split(" - ")

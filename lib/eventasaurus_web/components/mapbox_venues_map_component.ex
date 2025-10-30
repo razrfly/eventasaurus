@@ -106,6 +106,7 @@ defmodule EventasaurusWeb.MapboxVenuesMapComponent do
 
   defp normalize_coordinate(%Decimal{} = decimal), do: Decimal.to_float(decimal)
   defp normalize_coordinate(coord) when is_number(coord), do: coord
+
   defp normalize_coordinate(coord) when is_binary(coord) do
     trimmed = String.trim(coord)
 
@@ -121,6 +122,7 @@ defmodule EventasaurusWeb.MapboxVenuesMapComponent do
         nil
     end
   end
+
   defp normalize_coordinate(_), do: nil
 
   defp get_city_center(city) do

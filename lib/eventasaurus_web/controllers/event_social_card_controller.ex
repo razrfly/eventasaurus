@@ -45,7 +45,15 @@ defmodule EventasaurusWeb.EventSocialCardController do
           end
         else
           expected_hash = HashGenerator.generate_hash(event)
-          SocialCardHelpers.send_hash_mismatch_redirect(conn, event, slug, expected_hash, final_hash, :event)
+
+          SocialCardHelpers.send_hash_mismatch_redirect(
+            conn,
+            event,
+            slug,
+            expected_hash,
+            final_hash,
+            :event
+          )
         end
     end
   end

@@ -128,11 +128,12 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
 
     case process_venue_images(venue_id, venue_slug, trivia_advisor_images, mode) do
       {:ok, results} ->
-        results_with_match = Map.merge(results, %{
-          match_tier: match_tier,
-          confidence: confidence,
-          mode: mode
-        })
+        results_with_match =
+          Map.merge(results, %{
+            match_tier: match_tier,
+            confidence: confidence,
+            mode: mode
+          })
 
         Logger.info("""
         ✅ Venue #{venue_id} completed (#{mode} mode):
@@ -248,7 +249,10 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
           if ta_image["original_url"] do
             true
           else
-            Logger.warning("⚠️  Skipping upload for image without original_url: #{ta_image["local_path"]}")
+            Logger.warning(
+              "⚠️  Skipping upload for image without original_url: #{ta_image["local_path"]}"
+            )
+
             false
           end
         end)

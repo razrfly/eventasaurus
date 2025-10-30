@@ -92,10 +92,10 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.IndexExtractor do
   # Validate that URL is actually an event URL and not navigation/pagination.
   defp valid_event_url?(url) do
     # Must contain "wydarzenie-" with a numeric ID
+    # Must have numeric ID after wydarzenie-
+    # Exclude common non-event pages
     String.contains?(url, "wydarzenie-") &&
-      # Must have numeric ID after wydarzenie-
       Regex.match?(~r/wydarzenie-\d+/, url) &&
-      # Exclude common non-event pages
       !String.contains?(url, "/page/") &&
       !String.contains?(url, "/kategorie/") &&
       !String.contains?(url, "/wydarzenia?") &&

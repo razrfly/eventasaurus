@@ -173,7 +173,11 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   end
 
   @impl true
-  def handle_event("retry_venue_images", %{"venue_id" => venue_id_str, "image_indexes" => indexes_json}, socket) do
+  def handle_event(
+        "retry_venue_images",
+        %{"venue_id" => venue_id_str, "image_indexes" => indexes_json},
+        socket
+      ) do
     case Integer.parse(venue_id_str) do
       {venue_id, ""} ->
         case Jason.decode(indexes_json) do
@@ -182,35 +186,45 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
             parsed =
               indexes
               |> Enum.map(fn
-                i when is_integer(i) and i >= 0 -> {:ok, i}
+                i when is_integer(i) and i >= 0 ->
+                  {:ok, i}
+
                 s when is_binary(s) ->
                   case Integer.parse(String.trim(s)) do
                     {i, ""} when i >= 0 -> {:ok, i}
                     _ -> :error
                   end
-                _ -> :error
+
+                _ ->
+                  :error
               end)
 
             if Enum.any?(parsed, &(&1 == :error)) do
-              {:noreply, put_flash(socket, :error, "❌ Image indexes must be non-negative integers")}
+              {:noreply,
+               put_flash(socket, :error, "❌ Image indexes must be non-negative integers")}
             else
               validated_indexes =
                 parsed
                 |> Enum.map(fn {:ok, i} -> i end)
                 |> Enum.uniq()
-                |> Enum.take(200) # Safety bound to prevent abuse
+                # Safety bound to prevent abuse
+                |> Enum.take(200)
 
               case FailedUploadRetryWorker.enqueue_venue_images(venue_id, validated_indexes) do
                 {:ok, _job} ->
                   socket =
                     socket
-                    |> put_flash(:info, "✅ Retry queued for #{length(validated_indexes)} images from venue ##{venue_id}")
+                    |> put_flash(
+                      :info,
+                      "✅ Retry queued for #{length(validated_indexes)} images from venue ##{venue_id}"
+                    )
                     |> load_operations()
 
                   {:noreply, socket}
 
                 {:error, reason} ->
-                  {:noreply, put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
+                  {:noreply,
+                   put_flash(socket, :error, "❌ Failed to enqueue retry: #{inspect(reason)}")}
               end
             end
 
@@ -286,10 +300,11 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
   defp load_cities(socket) do
     cities =
       Repo.all(
-        from c in City,
+        from(c in City,
           where: c.discovery_enabled == true,
           order_by: c.name,
           select: %{id: c.id, name: c.name}
+        )
       )
 
     assign(socket, :cities, cities)
@@ -411,13 +426,17 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
       |> Enum.filter(fn j -> String.ends_with?(j.worker, "EnrichmentJob") end)
       |> Enum.map(& &1.args["venue_id"])
       |> Enum.map(fn
-        id when is_integer(id) -> id
+        id when is_integer(id) ->
+          id
+
         id when is_binary(id) ->
           case Integer.parse(String.trim(id)) do
             {i, ""} -> i
             _ -> nil
           end
-        _ -> nil
+
+        _ ->
+          nil
       end)
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
@@ -489,7 +508,9 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
         images_uploaded = meta["images_uploaded"] || 0
 
         enriched_count = if images_uploaded > 0, do: 1, else: 0
-        failed_count = if status in ["failed", "no_images"] or images_uploaded == 0, do: 1, else: 0
+
+        failed_count =
+          if status in ["failed", "no_images"] or images_uploaded == 0, do: 1, else: 0
 
         # Convert provider metadata
         provider_results =
@@ -578,12 +599,13 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
                 img["upload_status"] in ["uploaded", "skipped_dev"]
               end)
 
-            failure_type = cond do
-              failed_count > 0 and uploaded_count > 0 -> :partial_failure
-              failed_count > 0 -> :complete_failure
-              uploaded_count > 0 -> :success
-              true -> :no_images
-            end
+            failure_type =
+              cond do
+                failed_count > 0 and uploaded_count > 0 -> :partial_failure
+                failed_count > 0 -> :complete_failure
+                uploaded_count > 0 -> :success
+                true -> :no_images
+              end
 
             {failure_type, venue_images}
         end
@@ -673,20 +695,24 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
 
   # Safely render HTML attribution from providers (XSS protection)
   defp safe_attribution(nil), do: ""
+
   defp safe_attribution(html) when is_binary(html) do
     html
     |> HtmlSanitizeEx.html5()
     |> Phoenix.HTML.raw()
   end
+
   defp safe_attribution(_), do: ""
 
   # Safely format timestamps with error handling
   defp format_timestamp(nil), do: "unknown"
+
   defp format_timestamp(timestamp) when is_binary(timestamp) do
     case DateTime.from_iso8601(timestamp) do
       {:ok, dt, _} -> Calendar.strftime(dt, "%b %d, %Y %I:%M:%S %p")
       _ -> timestamp
     end
   end
+
   defp format_timestamp(_), do: "unknown"
 end

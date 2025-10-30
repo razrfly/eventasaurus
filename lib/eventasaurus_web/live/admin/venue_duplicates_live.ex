@@ -78,7 +78,6 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
 
     case Venues.merge_venues(primary_id, duplicate_ids) do
       {:ok, _updated_venue} ->
-
         socket =
           socket
           |> put_flash(

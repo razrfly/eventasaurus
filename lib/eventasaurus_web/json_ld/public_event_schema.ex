@@ -399,7 +399,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(5)
-    |> Enum.map(&CDN.url/1)  # Wrap all images with Cloudflare CDN
+    # Wrap all images with Cloudflare CDN
+    |> Enum.map(&CDN.url/1)
   end
 
   # Extract images from event sources

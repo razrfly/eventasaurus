@@ -22,7 +22,7 @@ defmodule EventasaurusApp.Monitoring.Stats do
   """
   def get_last_execution(worker_name) when is_binary(worker_name) do
     query =
-      from j in Job,
+      from(j in Job,
         where: j.worker == ^worker_name,
         where: not is_nil(j.attempted_at),
         order_by: [desc: j.attempted_at],
@@ -36,6 +36,7 @@ defmodule EventasaurusApp.Monitoring.Stats do
           args: j.args,
           queue: j.queue
         }
+      )
 
     case Repo.one(query) do
       nil -> nil
@@ -59,28 +60,31 @@ defmodule EventasaurusApp.Monitoring.Stats do
 
     # Get counts by state
     counts_query =
-      from j in Job,
+      from(j in Job,
         where: j.worker == ^worker_name,
         where: j.attempted_at > ^time_ago,
         group_by: j.state,
         select: {j.state, count(j.id)}
+      )
 
     counts = Repo.all(counts_query) |> Enum.into(%{})
 
     # Get average duration for completed jobs
     duration_query =
-      from j in Job,
+      from(j in Job,
         where: j.worker == ^worker_name,
         where: j.attempted_at > ^time_ago,
         where: j.state == "completed",
         where: not is_nil(j.completed_at),
-        select: avg(
-          fragment(
-            "EXTRACT(EPOCH FROM (? - ?))",
-            j.completed_at,
-            j.attempted_at
+        select:
+          avg(
+            fragment(
+              "EXTRACT(EPOCH FROM (? - ?))",
+              j.completed_at,
+              j.attempted_at
+            )
           )
-        )
+      )
 
     avg_duration = Repo.one(duration_query) || Decimal.new(0)
 

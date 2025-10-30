@@ -99,7 +99,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Client do
 
   defp retry_request(url, opts, _retries, attempt) do
     # Exponential backoff: 2^attempt seconds
-    backoff_ms = :math.pow(2, attempt) * 1000 |> round()
+    backoff_ms = (:math.pow(2, attempt) * 1000) |> round()
     Logger.debug("⏳ Waiting #{backoff_ms}ms before retry...")
     Process.sleep(backoff_ms)
 

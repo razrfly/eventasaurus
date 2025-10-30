@@ -58,7 +58,8 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
   - venue_id: Integer venue ID
   - image_indexes: List of zero-based indexes of failed images to retry
   """
-  def enqueue_venue_images(venue_id, image_indexes) when is_integer(venue_id) and is_list(image_indexes) do
+  def enqueue_venue_images(venue_id, image_indexes)
+      when is_integer(venue_id) and is_list(image_indexes) do
     %{venue_id: venue_id, image_indexes: image_indexes}
     |> __MODULE__.new()
     |> Oban.insert()
@@ -79,7 +80,10 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
     image_indexes = args["image_indexes"]
 
     if image_indexes do
-      Logger.info("🔄 Starting retry for #{length(image_indexes)} specific images from venue #{venue.id}")
+      Logger.info(
+        "🔄 Starting retry for #{length(image_indexes)} specific images from venue #{venue.id}"
+      )
+
       perform_selective_retry(venue, image_indexes)
     else
       Logger.info("🔄 Starting full failed upload retry for venue #{venue.id} (#{venue.name})")
@@ -239,7 +243,9 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
         })
 
       true ->
-        Logger.info("🔄 Retrying upload attempt #{retry_count} for #{provider}: #{String.slice(provider_url, 0..80)}")
+        Logger.info(
+          "🔄 Retrying upload attempt #{retry_count} for #{provider}: #{String.slice(provider_url, 0..80)}"
+        )
 
         # Use existing upload_to_imagekit logic from orchestrator
         upload_result = upload_to_imagekit(venue, provider_url, provider)

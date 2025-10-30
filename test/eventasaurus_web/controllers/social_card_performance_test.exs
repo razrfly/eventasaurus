@@ -42,6 +42,7 @@ defmodule EventasaurusWeb.SocialCardPerformanceTest do
       time_ms = time_microseconds / 1000
 
       assert response.status == 200
+
       assert time_ms < 500,
              "Generation took #{Float.round(time_ms, 2)}ms (target: <500ms)"
 
@@ -175,6 +176,7 @@ defmodule EventasaurusWeb.SocialCardPerformanceTest do
       time_ms = time_microseconds / 1000
 
       assert response.status == 200
+
       assert time_ms < 500,
              "Generation took #{Float.round(time_ms, 2)}ms (target: <500ms)"
 
@@ -227,6 +229,7 @@ defmodule EventasaurusWeb.SocialCardPerformanceTest do
       time_ms = time_microseconds / 1000
 
       assert response.status == 200
+
       assert time_ms < 500,
              "Generation took #{Float.round(time_ms, 2)}ms (target: <500ms)"
 
@@ -301,9 +304,7 @@ defmodule EventasaurusWeb.SocialCardPerformanceTest do
       assert memory_diff_mb < 50,
              "Memory increased by #{Float.round(memory_diff_mb, 2)}MB (target: <50MB)"
 
-      IO.puts(
-        "\n  💾 Memory increase after 100 generations: #{Float.round(memory_diff_mb, 2)}MB"
-      )
+      IO.puts("\n  💾 Memory increase after 100 generations: #{Float.round(memory_diff_mb, 2)}MB")
     end
   end
 
@@ -434,7 +435,10 @@ defmodule EventasaurusWeb.SocialCardPerformanceTest do
       IO.puts("\n🔐 Hash Operations:")
       IO.puts("  Generation Time: #{Float.round(hash_gen_time / 1000, 2)}ms")
       IO.puts("  Validation Time: #{Float.round(hash_val_time / 1000, 2)}ms")
-      IO.puts("  Status: #{if hash_gen_time / 1000 < 5 and hash_val_time / 1000 < 10, do: "✅ PASS", else: "❌ FAIL"}")
+
+      IO.puts(
+        "  Status: #{if hash_gen_time / 1000 < 5 and hash_val_time / 1000 < 10, do: "✅ PASS", else: "❌ FAIL"}"
+      )
 
       IO.puts("\n" <> ("=" |> String.duplicate(70)))
       IO.puts("✅ Performance Report Complete")

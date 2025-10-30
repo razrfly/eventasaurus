@@ -47,6 +47,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
           # Capture request URI for proper URL generation (ngrok support)
           raw_uri = get_connect_info(socket, :uri)
+
           request_uri =
             cond do
               match?(%URI{}, raw_uri) -> raw_uri
@@ -915,10 +916,11 @@ defmodule EventasaurusWeb.CityLive.Index do
         })
 
       # Count venues in the city
-      venues_count = EventasaurusApp.Repo.aggregate(
-        from(v in EventasaurusApp.Venues.Venue, where: v.city_id == ^city.id),
-        :count
-      )
+      venues_count =
+        EventasaurusApp.Repo.aggregate(
+          from(v in EventasaurusApp.Venues.Venue, where: v.city_id == ^city.id),
+          :count
+        )
 
       # Count distinct categories from events in the city
       # This is more complex - we need to query events and get their categories

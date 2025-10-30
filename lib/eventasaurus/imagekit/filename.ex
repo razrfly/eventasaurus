@@ -44,10 +44,13 @@ defmodule Eventasaurus.ImageKit.Filename do
       "us-7bc419ab.png"
   """
   @spec generate(String.t(), String.t(), String.t() | nil) :: String.t()
-  def generate(provider_url, provider, content_type \\ nil) when is_binary(provider_url) and is_binary(provider) do
+  def generate(provider_url, provider, content_type \\ nil)
+      when is_binary(provider_url) and is_binary(provider) do
     provider_code = get_provider_code(provider)
     hash = generate_hash(provider_url)
-    extension = extension_from_content_type(content_type) || extension_from_url(provider_url) || "jpg"
+
+    extension =
+      extension_from_content_type(content_type) || extension_from_url(provider_url) || "jpg"
 
     "#{provider_code}-#{hash}.#{extension}"
   end

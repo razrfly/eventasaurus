@@ -92,6 +92,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     total_venues = Repo.aggregate(Venues.Venue, :count, :id)
 
     duplicate_count = length(groups)
+
     affected_venues =
       Enum.reduce(groups, 0, fn group, acc ->
         acc + length(group.venues)
@@ -605,8 +606,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           {:noreply, socket}
 
         {:error, reason} ->
-          {:noreply,
-           put_flash(socket, :error, "Failed to queue migration: #{inspect(reason)}")}
+          {:noreply, put_flash(socket, :error, "Failed to queue migration: #{inspect(reason)}")}
       end
     end
   end
@@ -907,6 +907,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
     # DEBUG: Log Warsaw/Warszawa stats before clustering
     warsaw_stats = Enum.filter(combined_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
+
     if length(warsaw_stats) > 0 do
       Logger.info("Warsaw/Warszawa before clustering: #{inspect(warsaw_stats)}")
     end
@@ -918,7 +919,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     clustered_stats = CityHierarchy.aggregate_stats_by_cluster(combined_stats, 20.0)
 
     # DEBUG: Log Warsaw after clustering
-    warsaw_clustered = Enum.find(clustered_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
+    warsaw_clustered =
+      Enum.find(clustered_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
+
     if warsaw_clustered do
       Logger.info("Warsaw/Warszawa after clustering: #{inspect(warsaw_clustered)}")
     end
