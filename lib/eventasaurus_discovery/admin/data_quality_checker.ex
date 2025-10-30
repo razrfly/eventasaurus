@@ -18,6 +18,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusDiscovery.Validation.VenueNameValidator
 
   @doc """
   Check data quality for a source by slug.
@@ -127,6 +129,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       missing_images = count_missing_images(source_id)
       missing_categories = count_missing_categories(source_id)
 
+      # NEW: Calculate venue name quality
+      {venues_with_low_quality_names, low_quality_examples} =
+        count_venues_with_low_quality_names(source_id)
+
       # Check if this source supports translations
       has_translations = supports_translations?(source_id)
 
@@ -146,7 +152,23 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           {nil, nil, nil, nil}
         end
 
-      venue_completeness = calculate_completeness(total_events, missing_venues)
+      # Calculate venue metrics (coverage + quality)
+      events_with_venues = total_events - missing_venues
+      venue_coverage = calculate_completeness(total_events, missing_venues)
+
+      # Calculate venue name quality based on similarity to geocoded names
+      venue_name_quality =
+        if events_with_venues > 0 do
+          calculate_completeness(events_with_venues, venues_with_low_quality_names)
+        else
+          100
+        end
+
+      # Combined venue quality score (50% coverage, 50% name quality)
+      venue_quality = ((venue_coverage * 0.5 + venue_name_quality * 0.5) |> round())
+
+      # Keep old name for backwards compatibility
+      venue_completeness = venue_quality
       image_completeness = calculate_completeness(total_events, missing_images)
       category_completeness = calculate_completeness(total_events, missing_categories)
 
@@ -189,6 +211,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         duplicate_translations: duplicate_translations,
         quality_score: quality_score,
         venue_completeness: venue_completeness,
+        venue_coverage: venue_coverage,
+        venue_name_quality: venue_name_quality,
+        venue_quality: venue_quality,
+        venues_with_low_quality_names: venues_with_low_quality_names,
+        low_quality_venue_examples: low_quality_examples,
         image_completeness: image_completeness,
         category_completeness: category_completeness,
         category_specificity: category_specificity,
@@ -252,14 +279,42 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       thresholds = get_quality_thresholds()
       recommendations = []
 
+      # Venue recommendations - check both coverage and quality
       recommendations =
-        if quality.venue_completeness < thresholds.venue_completeness do
-          [
-            "Improve venue matching - #{quality.missing_venues} events missing venues"
-            | recommendations
-          ]
-        else
-          recommendations
+        cond do
+          # Coverage issue: missing venues
+          quality.venue_coverage < thresholds.venue_completeness ->
+            [
+              "Improve venue matching - #{quality.missing_venues} events missing venues"
+              | recommendations
+            ]
+
+          # Quality issue: low similarity with geocoded names
+          quality.venue_name_quality < 80 ->
+            msg =
+              "Venue name quality issue - #{quality.venues_with_low_quality_names} venues have names that don't match geocoding data"
+
+            # Add examples if available
+            msg =
+              if length(quality.low_quality_venue_examples) > 0 do
+                examples =
+                  quality.low_quality_venue_examples
+                  |> Enum.take(3)
+                  |> Enum.map(fn ex ->
+                    sim = Float.round(ex.similarity, 2)
+                    "\"#{ex.venue_name}\" vs \"#{ex.geocoded_name}\" (similarity: #{sim})"
+                  end)
+                  |> Enum.join(", ")
+
+                "#{msg}: #{examples}"
+              else
+                msg
+              end
+
+            [msg | recommendations]
+
+          true ->
+            recommendations
         end
 
       recommendations =
@@ -439,6 +494,68 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       )
 
     Repo.one(query) || 0
+  end
+
+  defp count_venues_with_low_quality_names(source_id) do
+    query =
+      from(e in PublicEvent,
+        join: pes in PublicEventSource,
+        on: pes.event_id == e.id,
+        join: v in Venue,
+        on: v.id == e.venue_id,
+        where: pes.source_id == ^source_id,
+        where: not is_nil(e.venue_id),
+        where: not is_nil(v.metadata),
+        select: %{
+          event_id: e.id,
+          venue_id: v.id,
+          venue_name: v.name,
+          metadata: v.metadata
+        }
+      )
+
+    # Get all events with venues that have metadata
+    events_with_venues = Repo.all(query)
+
+    # Calculate how many have low-quality names
+    {low_quality_count, examples} =
+      events_with_venues
+      |> Enum.reduce({0, []}, fn event, {count, examples} ->
+        case VenueNameValidator.validate_against_geocoded(event.venue_name, event.metadata) do
+          {:error, :low_similarity, similarity} ->
+            geocoded_name = VenueNameValidator.extract_geocoded_name(event.metadata)
+
+            example = %{
+              venue_id: event.venue_id,
+              venue_name: event.venue_name,
+              geocoded_name: geocoded_name,
+              similarity: similarity,
+              severity: :severe
+            }
+
+            {count + 1, [example | examples]}
+
+          {:warning, :moderate_similarity, similarity} ->
+            # Moderate similarity also counts as quality issue (but less severe)
+            geocoded_name = VenueNameValidator.extract_geocoded_name(event.metadata)
+
+            example = %{
+              venue_id: event.venue_id,
+              venue_name: event.venue_name,
+              geocoded_name: geocoded_name,
+              similarity: similarity,
+              severity: :moderate
+            }
+
+            {count + 1, [example | examples]}
+
+          _ ->
+            {count, examples}
+        end
+      end)
+
+    # Return count and first 5 examples
+    {low_quality_count, Enum.take(examples, 5)}
   end
 
   defp count_missing_images(source_id) do
