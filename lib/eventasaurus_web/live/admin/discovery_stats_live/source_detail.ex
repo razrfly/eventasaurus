@@ -222,27 +222,55 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
     affected_cities = find_cities_with_venue_quality_issues(source_slug)
 
     # Enqueue a job for each affected city
-    jobs_enqueued =
+    results =
       Enum.map(affected_cities, fn city_id ->
         %{city_id: city_id, severity: "all"}
         |> FixVenueNamesJob.new()
         |> Oban.insert()
       end)
-      |> Enum.count(fn result -> match?({:ok, _}, result) end)
+
+    {successful, failed} = Enum.split_with(results, &match?({:ok, _}, &1))
+    jobs_enqueued = length(successful)
+    jobs_failed = length(failed)
+
+    # Log failures for debugging
+    Enum.each(failed, fn {:error, reason} ->
+      Logger.error("Failed to enqueue FixVenueNamesJob: #{inspect(reason)}")
+    end)
 
     socket =
-      if jobs_enqueued > 0 do
-        put_flash(
-          socket,
-          :info,
-          "✅ Enqueued #{jobs_enqueued} venue name fix job(s) for #{jobs_enqueued} #{if jobs_enqueued == 1, do: "city", else: "cities"}. Jobs will process in the background."
-        )
-      else
-        put_flash(
-          socket,
-          :warning,
-          "⚠️ No jobs were enqueued. Please check that venues with quality issues exist."
-        )
+      cond do
+        # No cities found with quality issues
+        Enum.empty?(affected_cities) ->
+          put_flash(
+            socket,
+            :warning,
+            "⚠️ No cities found with venues that have quality issues."
+          )
+
+        # All jobs failed to enqueue
+        jobs_enqueued == 0 and jobs_failed > 0 ->
+          put_flash(
+            socket,
+            :error,
+            "❌ Failed to enqueue #{jobs_failed} job(s). Check server logs for details."
+          )
+
+        # Partial success
+        jobs_failed > 0 ->
+          put_flash(
+            socket,
+            :warning,
+            "⚠️ Enqueued #{jobs_enqueued} job(s) successfully, but #{jobs_failed} failed. Check logs for details."
+          )
+
+        # All successful
+        true ->
+          put_flash(
+            socket,
+            :info,
+            "✅ Enqueued #{jobs_enqueued} venue name fix job(s) for #{jobs_enqueued} #{if jobs_enqueued == 1, do: "city", else: "cities"}. Jobs will process in the background."
+          )
       end
 
     {:noreply, socket}
