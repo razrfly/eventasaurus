@@ -791,7 +791,8 @@ defmodule EventasaurusApp.Venues do
         merged_images =
           ([primary.venue_images || []] ++
              Enum.flat_map(duplicates, fn dup -> dup.venue_images || [] end))
-          |> Enum.uniq_by(fn img -> img["url"] end)
+          |> Enum.filter(&is_map/1)
+          |> Enum.uniq_by(fn img -> Map.get(img, "url") end)
 
         # 6. Update primary venue with merged data
         primary

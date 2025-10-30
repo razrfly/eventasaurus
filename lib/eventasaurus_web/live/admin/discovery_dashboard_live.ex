@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Venues
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
@@ -64,10 +65,46 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:backfill_geocode, true)
       |> assign(:backfill_running, false)
       |> assign(:image_providers, [])
+      # Initialize venue_duplicates as nil
+      |> assign(:venue_duplicates, nil)
       |> load_data()
       |> schedule_refresh()
 
+    # Send message to self to load duplicates after mount completes
+    if connected?(socket) do
+      send(self(), :load_venue_duplicates)
+    end
+
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_info(:load_venue_duplicates, socket) do
+    # Load venue duplicate statistics
+    groups = Venues.find_duplicate_groups(200, 0.6)
+    total_venues = Repo.aggregate(Venues.Venue, :count, :id)
+
+    duplicate_count = length(groups)
+    affected_venues =
+      Enum.reduce(groups, 0, fn group, acc ->
+        acc + length(group.venues)
+      end)
+
+    percentage =
+      if total_venues > 0 do
+        Float.round(affected_venues / total_venues * 100, 1)
+      else
+        0.0
+      end
+
+    venue_duplicates = %{
+      duplicate_groups: duplicate_count,
+      affected_venues: affected_venues,
+      total_venues: total_venues,
+      percentage: percentage
+    }
+
+    {:noreply, assign(socket, :venue_duplicates, venue_duplicates)}
   end
 
   @impl true
@@ -1105,4 +1142,30 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       name -> String.capitalize(name)
     end
   end
+
+  # Severity class helpers for duplicate warnings
+  defp duplicate_severity_class(percentage) when percentage >= 5.0,
+    do: "border-red-500 bg-red-50"
+
+  defp duplicate_severity_class(percentage) when percentage >= 1.0,
+    do: "border-yellow-500 bg-yellow-50"
+
+  defp duplicate_severity_class(_), do: "border-blue-500 bg-blue-50"
+
+  defp duplicate_severity_icon_class(percentage) when percentage >= 5.0, do: "text-red-600"
+  defp duplicate_severity_icon_class(percentage) when percentage >= 1.0, do: "text-yellow-600"
+  defp duplicate_severity_icon_class(_), do: "text-blue-600"
+
+  defp duplicate_severity_text_class(percentage) when percentage >= 5.0, do: "text-red-900"
+  defp duplicate_severity_text_class(percentage) when percentage >= 1.0, do: "text-yellow-900"
+  defp duplicate_severity_text_class(_), do: "text-blue-900"
+
+  defp duplicate_severity_button_class(percentage) when percentage >= 5.0,
+    do: "border-red-700 text-red-900 bg-red-100 hover:bg-red-200"
+
+  defp duplicate_severity_button_class(percentage) when percentage >= 1.0,
+    do: "border-yellow-700 text-yellow-900 bg-yellow-100 hover:bg-yellow-200"
+
+  defp duplicate_severity_button_class(_),
+    do: "border-blue-700 text-blue-900 bg-blue-100 hover:bg-blue-200"
 end
