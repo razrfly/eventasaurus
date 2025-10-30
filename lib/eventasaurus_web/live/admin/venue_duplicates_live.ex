@@ -48,7 +48,11 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
         Map.put(group, :venues, venues_with_counts)
       end)
 
-    {:noreply, assign(socket, :duplicate_groups, enriched_groups)}
+    {:noreply,
+     socket
+     |> assign(:duplicate_groups, enriched_groups)
+     |> assign(:loading, false)
+     |> put_flash(:info, "Duplicate detection complete")}
   end
 
   @impl true
@@ -58,11 +62,6 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
       |> assign(:loading, true)
 
     send(self(), :load_duplicates)
-
-    socket =
-      socket
-      |> assign(:loading, false)
-      |> put_flash(:info, "Duplicate detection complete")
 
     {:noreply, socket}
   end
@@ -74,10 +73,11 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
     # Filter out the primary venue from the duplicate list
     duplicate_ids = Enum.reject(all_venue_ids, &(&1 == primary_id))
 
+    # Count events BEFORE merge (while duplicate venues still exist)
+    events_count = count_events_for_venues(duplicate_ids)
+
     case Venues.merge_venues(primary_id, duplicate_ids) do
       {:ok, _updated_venue} ->
-        # Count events moved
-        events_count = count_events_for_venues(duplicate_ids)
 
         socket =
           socket
