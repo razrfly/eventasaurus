@@ -104,25 +104,34 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
 
     test "calculates quality percentage correctly", %{city: city} do
       # Create 8 good format and 2 bad format = 80% quality
-      for i <- 1..8 do
+      good_names = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"]
+
+      for name <- good_names do
         Repo.insert!(%Venue{
-          name: "Good Venue #{i}",
-          slug: "good-venue-#{i}",
+          name: "Good Venue #{name}",
+          slug: "good-venue-#{name}",
           city_id: city.id,
           latitude: 51.5074,
           longitude: -0.1278
         })
       end
 
-      for i <- 1..2 do
-        Repo.insert!(%Venue{
-          name: "Bad Venue #{i}",
-          slug: "bad-venue-#{i}-#{city.id}-xyz#{i}#{i}#{i}",
-          city_id: city.id,
-          latitude: 51.5074,
-          longitude: -0.1278
-        })
-      end
+      # Create 2 bad format slugs (with numbers in wrong positions)
+      Repo.insert!(%Venue{
+        name: "Bad Venue 1",
+        slug: "bad-venue-one-#{city.id}-xyz111",
+        city_id: city.id,
+        latitude: 51.5074,
+        longitude: -0.1278
+      })
+
+      Repo.insert!(%Venue{
+        name: "Bad Venue 2",
+        slug: "bad-venue-two-53-824",
+        city_id: city.id,
+        latitude: 51.5074,
+        longitude: -0.1278
+      })
 
       total =
         from(v in Venue, where: v.city_id == ^city.id, select: count(v.id))
