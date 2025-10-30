@@ -55,7 +55,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
-  alias Eventasaurus.ImageKit.Uploader
+  alias Eventasaurus.ImageKit.{Uploader, Filename}
 
   @tigris_base_url "https://cdn.quizadvisor.com"
   @upload_delay_ms 500
@@ -182,10 +182,12 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
 
           %{
             "url" => tigris_url,
+            "provider_url" => ta_image["original_url"],
             "upload_status" => "external",
             "width" => ta_image["width"],
             "height" => ta_image["height"],
             "source" => "trivia_advisor_migration",
+            "fetched_at" => ta_image["fetched_at"],
             "migrated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
           }
         end)
@@ -252,10 +254,12 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
         |> Enum.map(fn result ->
           %{
             "url" => result.imagekit_url,
+            "provider_url" => result.original_url,
             "width" => nil,
             "height" => nil,
             "source" => "trivia_advisor_migration",
             "upload_status" => "uploaded",
+            "fetched_at" => result.fetched_at,
             "migrated_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
             "original_tigris_url" => result.tigris_url
           }
@@ -291,12 +295,14 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
   defp upload_single_image(venue_slug, ta_image, position) do
     local_path = ta_image["local_path"]
     tigris_url = "#{@tigris_base_url}#{local_path}"
+    original_url = ta_image["original_url"]
+    fetched_at = ta_image["fetched_at"]
 
     Logger.info("  [#{position}] Uploading from: #{tigris_url}")
 
-    # Upload to ImageKit with Google Places naming convention
+    # Upload to ImageKit with hash-based Google Places naming convention
     folder = "/venues/#{venue_slug}"
-    filename = "google_places_#{position}.jpg"
+    filename = Filename.generate(original_url, "google_places")
 
     case Uploader.upload_from_url(tigris_url,
            folder: folder,
@@ -314,6 +320,8 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
           position: position,
           tigris_url: tigris_url,
           imagekit_url: imagekit_url,
+          original_url: original_url,
+          fetched_at: fetched_at,
           error: nil
         }
 
@@ -325,6 +333,8 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorImageUploadJob do
           position: position,
           tigris_url: tigris_url,
           imagekit_url: nil,
+          original_url: original_url,
+          fetched_at: fetched_at,
           error: inspect(reason)
         }
     end
