@@ -19,7 +19,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Apis.Ticketmaster.Client
-  alias EventasaurusDiscovery.Scraping.Processors.{EventProcessor, VenueProcessor}
+  alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
   alias EventasaurusDiscovery.Performers.PerformerStore
 
   @impl Oban.Worker
@@ -115,7 +115,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
     Logger.info("Processing complete: #{success_count}/#{length(events)} successful")
   end
 
-  defp process_single_event(event_data, source, city) do
+  defp process_single_event(event_data, source, _city) do
     # Process performers
     performers = process_performers(event_data.performers, source)
 
