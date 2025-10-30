@@ -1082,7 +1082,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp validate_and_choose_venue_name(scraped_name, geocoding_metadata, source_scraper) do
     # Build metadata structure expected by VenueNameValidator
     # VenueNameValidator expects: %{"geocoding_metadata" => geocoding_metadata}
-    metadata = %{"geocoding_metadata" => geocoding_metadata}
+    # AddressGeocoder returns atom-keyed maps, but VenueNameValidator expects string keys
+    # (since it's designed for JSON-persisted data). Normalize via JSON round-trip.
+    metadata =
+      %{
+        "geocoding_metadata" =>
+          case geocoding_metadata do
+            nil -> %{}
+            data -> data |> Jason.encode!() |> Jason.decode!()
+          end
+      }
 
     case VenueNameValidator.choose_name(scraped_name, metadata) do
       {:ok, chosen_name, :scraped_validated} ->
