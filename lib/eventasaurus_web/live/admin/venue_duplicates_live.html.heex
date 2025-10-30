@@ -120,7 +120,12 @@
                       <div class="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-md">
                         <div class="flex-1">
                           <div class="flex items-center">
-                            <h4 class="text-sm font-medium text-gray-900"><%= venue.name %></h4>
+                            <.link
+                              navigate={~p"/venues/#{venue.slug}"}
+                              class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              <%= venue.name %>
+                            </.link>
                             <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                               ID: <%= venue.id %>
                             </span>
