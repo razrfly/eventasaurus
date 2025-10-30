@@ -142,17 +142,8 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
     ta_db_url = System.get_env("TRIVIA_ADVISOR_DATABASE_URL")
 
     unless ta_db_url do
-      # Debug: Check what TRIVIA/ADVISOR env vars are available
-      all_env = System.get_env()
-      matching_keys =
-        all_env
-        |> Map.keys()
-        |> Enum.filter(fn k -> String.contains?(String.upcase(k), "TRIVIA") or String.contains?(String.upcase(k), "ADVISOR") end)
-
-      Logger.error("❌ TRIVIA_ADVISOR_DATABASE_URL not set in environment")
-      Logger.error("   Available TRIVIA/ADVISOR env vars: #{inspect(matching_keys)}")
-
       error_msg = "TRIVIA_ADVISOR_DATABASE_URL not set in environment"
+      Logger.error("❌ #{error_msg}")
 
       store_failure_meta(job, %{
         status: "failed",
