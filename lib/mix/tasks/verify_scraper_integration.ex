@@ -56,56 +56,53 @@ defmodule Mix.Tasks.VerifyScraperIntegration do
         # Analyze results
         IO.puts("📊 Results:\n")
 
-        successes = 0
-        failures = 0
+        {successes, failures} =
+          Enum.reduce(results, {0, 0}, fn event, {ok_count, err_count} ->
+            # Check if last_seen_at was updated (after test started)
+            last_seen_updated =
+              event.last_seen_at && DateTime.compare(event.last_seen_at, test_dt) == :gt
 
-        results
-        |> Enum.each(fn event ->
-          # Check if last_seen_at was updated (after test started)
-          last_seen_updated =
-            event.last_seen_at && DateTime.compare(event.last_seen_at, test_dt) == :gt
+            # Check if starts_at is in future
+            starts_in_future =
+              event.starts_at && DateTime.compare(event.starts_at, now) == :gt
 
-          # Check if starts_at is in future
-          starts_in_future =
-            event.starts_at && DateTime.compare(event.starts_at, now) == :gt
+            # Check if event was updated (after test started)
+            event_updated =
+              event.updated_at &&
+                DateTime.compare(
+                  DateTime.from_naive!(event.updated_at, "Etc/UTC"),
+                  test_dt
+                ) == :gt
 
-          # Check if event was updated (after test started)
-          event_updated =
-            event.updated_at &&
-              DateTime.compare(
-                DateTime.from_naive!(event.updated_at, "Etc/UTC"),
-                test_dt
-              ) == :gt
+            success = last_seen_updated && starts_in_future && event_updated
 
-          success = last_seen_updated && starts_in_future && event_updated
+            if success do
+              IO.puts("✅ Event ##{event.id}: #{String.slice(event.title, 0, 50)}")
+              IO.puts("   starts_at: #{event.starts_at} (FUTURE ✅)")
+              IO.puts("   ends_at: #{event.ends_at}")
+              IO.puts("   last_seen_at: #{event.last_seen_at} (UPDATED ✅)")
+              IO.puts("")
+              {ok_count + 1, err_count}
+            else
+              IO.puts("❌ Event ##{event.id}: #{String.slice(event.title, 0, 50)}")
+              IO.puts("   starts_at: #{event.starts_at}")
 
-          if success do
-            IO.puts("✅ Event ##{event.id}: #{String.slice(event.title, 0, 50)}")
-            IO.puts("   starts_at: #{event.starts_at} (FUTURE ✅)")
-            IO.puts("   ends_at: #{event.ends_at}")
-            IO.puts("   last_seen_at: #{event.last_seen_at} (UPDATED ✅)")
-            IO.puts("")
-            successes = successes + 1
-          else
-            IO.puts("❌ Event ##{event.id}: #{String.slice(event.title, 0, 50)}")
-            IO.puts("   starts_at: #{event.starts_at}")
+              if !starts_in_future do
+                IO.puts("   ⚠️  starts_at is NOT in future")
+              end
 
-            if !starts_in_future do
-              IO.puts("   ⚠️  starts_at is NOT in future")
+              if !last_seen_updated do
+                IO.puts("   ⚠️  last_seen_at was NOT updated")
+              end
+
+              if !event_updated do
+                IO.puts("   ⚠️  Event was NOT updated")
+              end
+
+              IO.puts("")
+              {ok_count, err_count + 1}
             end
-
-            if !last_seen_updated do
-              IO.puts("   ⚠️  last_seen_at was NOT updated")
-            end
-
-            if !event_updated do
-              IO.puts("   ⚠️  Event was NOT updated")
-            end
-
-            IO.puts("")
-            failures = failures + 1
-          end
-        end)
+          end)
 
         IO.puts(String.duplicate("=", 60))
 
