@@ -629,6 +629,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp create_venue(data, city, _source, source_scraper) do
+    Logger.error("🔍 ENTER create_venue: name='#{data.name}', scraper=#{source_scraper}, has_coords=#{not is_nil(data.latitude)}")
+
     # Check if we need to geocode the venue address
     {latitude, longitude, geocoded_address, geocoding_metadata, geocoding_place_id, provider_ids} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
@@ -660,90 +662,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Prefer geocoding provider's place_id over scraper's place_id
     final_place_id = geocoding_place_id || data.place_id
 
-    # RACE CONDITION FIX: Re-check if venue already exists after geocoding
-    # This prevents duplicates when multiple Oban workers geocode the same venue in parallel
-    # Check provider_ids first (more reliable), then fall back to place_id
-    existing_venue =
-      if map_size(provider_ids) > 0 do
-        # Try to find by any provider ID we have
-        Enum.find_value(provider_ids, fn {provider_name, provider_id} ->
-          find_existing_venue_by_provider_id(provider_name, provider_id)
-        end)
-      else
-        nil
-      end
+    Logger.error("🔍 CALL insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude}), scraper=#{source_scraper}")
 
-    # Fallback to place_id lookup if no provider_ids match
-    existing_venue =
-      existing_venue ||
-        if final_place_id, do: find_existing_venue(%{place_id: final_place_id}), else: nil
-
-    if existing_venue do
-      # Another worker just created it, return existing venue
-      Logger.info(
-        "🏛️ ✅ Found existing venue after geocoding: '#{existing_venue.name}' (provider_ids: #{inspect(provider_ids)}, place_id: #{final_place_id})"
-      )
-
-      {:ok, existing_venue}
-    else
-      # Safe to insert, no existing venue found
-      # However, another worker could still insert between the check and insert (TOCTOU gap)
-      # The database unique constraint will catch this, so we handle constraint violations
-      case insert_new_venue(
-             data,
-             city,
-             final_name,
-             final_place_id,
-             latitude,
-             longitude,
-             geocoded_address,
-             geocoding_metadata,
-             source_scraper,
-             provider_ids
-           ) do
-        {:ok, venue} ->
-          {:ok, venue}
-
-        {:error, error} ->
-          # Check if it's a unique constraint violation on place_id
-          # Error could be a changeset or an error string
-          if is_struct(error, Ecto.Changeset) && has_place_id_constraint_error?(error) do
-            # Another worker beat us to the insert, fetch and return the existing venue
-            # Try provider_ids first, then place_id
-            refetch_existing =
-              if map_size(provider_ids) > 0 do
-                Enum.find_value(provider_ids, fn {provider_name, provider_id} ->
-                  find_existing_venue_by_provider_id(provider_name, provider_id)
-                end)
-              else
-                nil
-              end
-
-            refetch_existing =
-              refetch_existing || find_existing_venue(%{place_id: final_place_id})
-
-            case refetch_existing do
-              nil ->
-                # Unlikely: constraint fired but we can't find the venue
-                Logger.error(
-                  "🏛️ ❌ Unique constraint violation but venue not found: provider_ids=#{inspect(provider_ids)}, place_id=#{final_place_id}"
-                )
-
-                {:error, error}
-
-              existing ->
-                Logger.info(
-                  "🏛️ ✅ Resolved race condition via constraint: '#{existing.name}' (provider_ids: #{inspect(provider_ids)}, place_id: #{final_place_id})"
-                )
-
-                {:ok, existing}
-            end
-          else
-            # Some other error, propagate it (could be changeset or string)
-            {:error, error}
-          end
-      end
-    end
+    # Insert venue with PostgreSQL advisory lock to prevent race conditions
+    # This eliminates TOCTOU gaps by serializing inserts for the same location
+    insert_venue_with_advisory_lock(
+      data,
+      city,
+      final_name,
+      final_place_id,
+      latitude,
+      longitude,
+      geocoded_address,
+      geocoding_metadata,
+      source_scraper,
+      provider_ids
+    )
   end
 
   # Find existing venue by provider ID using GIN index
@@ -768,6 +702,117 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp detect_venue_source(_), do: "scraper"
+
+  # Insert venue with PostgreSQL advisory lock to prevent TOCTOU race conditions
+  #
+  # Uses pg_advisory_xact_lock to serialize concurrent inserts of venues at the same location.
+  # This prevents duplicate creation when multiple Oban workers process the same venue simultaneously.
+  #
+  # How it works:
+  # 1. Round coordinates to ~50m grid to match duplicate detection threshold
+  # 2. Generate lock key from (rounded_lat, rounded_lng, city_id)
+  # 3. Acquire advisory lock (blocks other workers trying to insert at same location)
+  # 4. Check one final time for duplicates (protected by lock)
+  # 5. Insert if no duplicate found, or return existing venue
+  # 6. Lock automatically released when transaction completes
+  #
+  # This eliminates the TOCTOU gap where two workers can both check for duplicates
+  # before either commits, causing both to insert and create duplicates.
+  defp insert_venue_with_advisory_lock(
+         data,
+         city,
+         final_name,
+         final_place_id,
+         latitude,
+         longitude,
+         geocoded_address,
+         geocoding_metadata,
+         source_scraper,
+         provider_ids
+       ) do
+    Logger.error("🔍 ENTER insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude})")
+
+    # Round coordinates to ~50m grid for lock key
+    # This matches our duplicate detection threshold (<50m = same venue)
+    lat_rounded = if latitude, do: Float.round(latitude, 3), else: 0.0
+    lng_rounded = if longitude, do: Float.round(longitude, 3), else: 0.0
+
+    # Generate lock key from GPS coordinates only (city-agnostic)
+    # phash2 generates 32-bit integer suitable for pg_advisory_xact_lock
+    # City assignment is subjective - GPS coordinates are objective
+    lock_key = :erlang.phash2({lat_rounded, lng_rounded})
+
+    Logger.error("🔍 Lock key=#{lock_key}, rounded=(#{lat_rounded}, #{lng_rounded}) [city-agnostic]")
+
+    # Execute insert in transaction with advisory lock
+    case Repo.transaction(fn ->
+           # Acquire advisory lock for this location
+           # Lock is held until transaction ends (commit or rollback)
+           # Other workers trying to insert at same location will block here
+           Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
+
+           Logger.error(
+             "🔒 Acquired advisory lock #{lock_key} for venue '#{final_name}' at (#{lat_rounded}, #{lng_rounded})"
+           )
+
+           # Now that we have the lock, do one final duplicate check
+           # This is safe because no other worker can insert at this location until we're done
+           Logger.error("🔍 Searching for duplicates: name='#{final_name}', coords=(#{latitude}, #{longitude}), city_id=#{city.id}")
+
+           existing_venue =
+             if latitude && longitude do
+               find_existing_venue(%{
+                 latitude: latitude,
+                 longitude: longitude,
+                 name: final_name,
+                 city_id: city.id
+               })
+             else
+               nil
+             end
+
+           Logger.error("🔍 Duplicate search result: #{if existing_venue, do: "FOUND ID #{existing_venue.id}", else: "NOT FOUND - will insert"}")
+
+           if existing_venue do
+             # Found duplicate while holding lock, return it
+             Logger.error(
+               "🏛️ ✅ DUPLICATE FOUND in locked transaction: '#{existing_venue.name}' (ID: #{existing_venue.id})"
+             )
+
+             existing_venue
+           else
+             # No duplicate found, safe to insert
+             Logger.error("🔍 NO DUPLICATE - calling insert_new_venue for '#{final_name}'")
+
+             case insert_new_venue(
+                    data,
+                    city,
+                    final_name,
+                    final_place_id,
+                    latitude,
+                    longitude,
+                    geocoded_address,
+                    geocoding_metadata,
+                    source_scraper,
+                    provider_ids
+                  ) do
+               {:ok, venue} ->
+                 Logger.error("✅ INSERT SUCCESS: venue ID #{venue.id}, name='#{venue.name}'")
+                 venue
+
+               {:error, error} ->
+                 Logger.error("❌ Insert failed in locked transaction: #{inspect(error)}, rolling back")
+                 Repo.rollback(error)
+             end
+           end
+         end) do
+      {:ok, venue} ->
+        {:ok, venue}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
 
   defp insert_new_venue(
          data,

@@ -131,7 +131,7 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
   def find_nearby_venues_postgis(
         latitude,
         longitude,
-        city_id,
+        _city_id,
         max_distance_meters \\ @distance_nearby
       )
       when is_number(latitude) and is_number(longitude) do
@@ -143,8 +143,7 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
         ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
       ) as distance
     FROM venues
-    WHERE city_id = $4
-      AND latitude IS NOT NULL
+    WHERE latitude IS NOT NULL
       AND longitude IS NOT NULL
       AND ST_DWithin(
         ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
@@ -154,7 +153,9 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
     ORDER BY distance
     """
 
-    case Repo.query(query, [latitude, longitude, max_distance_meters, city_id]) do
+    # Note: city_id parameter kept for backwards compatibility but not used in query
+    # GPS coordinates are absolute - duplicates should be detected regardless of city assignment
+    case Repo.query(query, [latitude, longitude, max_distance_meters]) do
       {:ok, %{rows: rows, columns: columns}} ->
         Enum.map(rows, fn row ->
           columns
