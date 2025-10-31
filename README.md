@@ -299,6 +299,40 @@ mix discovery.sync --city krakow --source all
 mix discovery.sync --city krakow --source resident-advisor --limit 50
 ```
 
+### Testing Recurring Event Regeneration
+
+For pattern-based scrapers (Question One, Inquizition, etc.), test the automatic date regeneration feature for recurring events:
+
+```bash
+# Test Question One scraper with default settings (5 events)
+mix discovery.test_recurring question-one
+
+# Test with auto-scrape (automatically triggers scraper and verifies)
+mix discovery.test_recurring question-one --auto-scrape
+
+# Test specific number of events
+mix discovery.test_recurring question-one --limit 10
+
+# Test specific events by ID
+mix discovery.test_recurring inquizition --ids 54,192,193
+
+# Verify results after manual scraper run
+mix discovery.test_recurring question-one --verify-only
+```
+
+**Supported scrapers**: `question-one`, `inquizition`, `speed-quizzing`, `pubquiz`, `quizmeisters`, `geeks-who-drink`
+
+**What it does**:
+1. Ages selected events to expired state (dates in past, last_seen_at > 7 days ago)
+2. Optionally triggers scraper automatically or provides instructions
+3. Verifies that RecurringEventUpdater regenerated future dates from patterns
+4. Reports success/failure with detailed event-by-event analysis
+
+**Use cases**:
+- Testing RecurringEventUpdater integration after code changes
+- Verifying scraper correctly handles expired pattern-based events
+- Debugging date regeneration issues for specific events
+
 ### Quality Assessment & Analysis
 
 Eventasaurus provides command-line tools for assessing data quality and analyzing category patterns across event sources. These tools are designed for programmatic access (ideal for Claude Code and other AI agents) with both human-readable and JSON output formats.

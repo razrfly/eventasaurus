@@ -163,7 +163,7 @@ schedule_detail_jobs(events_to_process)
 **Question One scraper DOES update `last_seen_at` but FAILS to regenerate future dates from recurring patterns.**
 
 **Evidence from Phase 1 Testing**:
-```
+```text
 After running scraper:
 ├─ 160 VenueDetailJob processed
 ├─ 45 events updated (last_seen_at touched to NOW) ✅

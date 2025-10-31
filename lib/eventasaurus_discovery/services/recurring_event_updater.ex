@@ -125,6 +125,11 @@ defmodule EventasaurusDiscovery.Services.RecurringEventUpdater do
             {:error, changeset}
         end
 
+      {:skip, reason} ->
+        # Pattern type not yet supported - return event unchanged
+        Logger.debug("Skipping date regeneration for event ##{event.id}: #{reason}")
+        {:ok, event}
+
       {:error, reason} ->
         Logger.error(
           "❌ Failed to calculate next occurrence for event ##{event.id}: #{reason}"
@@ -160,7 +165,10 @@ defmodule EventasaurusDiscovery.Services.RecurringEventUpdater do
         calculate_next_weekly_occurrence(pattern, timezone)
 
       "monthly" ->
-        calculate_next_monthly_occurrence(pattern, timezone)
+        # Monthly patterns not yet implemented - skip regeneration gracefully
+        # This allows monthly pattern events to continue processing without errors
+        Logger.info("Monthly patterns not yet implemented, skipping date regeneration")
+        {:skip, :monthly_not_implemented}
 
       _ ->
         {:error, "Unsupported frequency: #{frequency}"}
@@ -192,10 +200,6 @@ defmodule EventasaurusDiscovery.Services.RecurringEventUpdater do
     end
   end
 
-  defp calculate_next_monthly_occurrence(_pattern, _timezone) do
-    {:error, "Monthly patterns not yet implemented"}
-  end
-
   @doc """
   Finds the next date matching the weekly pattern.
 
@@ -209,18 +213,27 @@ defmodule EventasaurusDiscovery.Services.RecurringEventUpdater do
       end)
       |> Enum.sort()
 
-    # Get current day number
-    current_day_number = Date.day_of_week(DateTime.to_date(now))
-
     # Build candidate dates for next 7 days
     candidates =
       Enum.map(0..7, fn days_ahead ->
         date = Date.add(DateTime.to_date(now), days_ahead)
-        day_number = Date.day_of_week(date)
 
         # Create DateTime for this candidate
         {:ok, naive} = NaiveDateTime.new(date, Time.new!(hour, minute, 0))
-        DateTime.from_naive!(naive, timezone)
+
+        # Handle DST transitions gracefully
+        case DateTime.from_naive(naive, timezone) do
+          {:ok, dt} ->
+            dt
+
+          {:ambiguous, earlier, _later} ->
+            # During fall-back (e.g., 2:30 AM occurs twice), use earlier occurrence
+            earlier
+
+          {:gap, _just_before, just_after} ->
+            # During spring-forward (e.g., 2:30 AM doesn't exist), use time just after gap
+            just_after
+        end
       end)
 
     # Filter to matching day of week and future dates
