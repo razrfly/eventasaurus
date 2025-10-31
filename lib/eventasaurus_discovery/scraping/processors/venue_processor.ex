@@ -170,19 +170,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   def find_existing_venue(_), do: nil
 
-  # Detects if a changeset error is due to unique constraint violation on place_id
-  # Used to handle TOCTOU race conditions where multiple workers try to insert the same venue
-  # Currently unused but kept for future race condition handling
-  defp _has_place_id_constraint_error?(changeset) do
-    Enum.any?(changeset.errors, fn
-      {:place_id, {_msg, [constraint: :unique, constraint_name: "venues_place_id_unique_index"]}} ->
-        true
-
-      _ ->
-        false
-    end)
-  end
-
   defp normalize_venue_data(data) do
     # Normalize the venue name and clean UTF-8 after normalization
     # Normalizer.normalize_text can corrupt UTF-8 with its regex operations
@@ -680,20 +667,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       provider_ids
     )
   end
-
-  # Find existing venue by provider ID using GIN index
-  # Uses the JSONB containment operator @> for efficient lookups
-  # Currently unused but kept for future provider-based venue lookup
-  defp _find_existing_venue_by_provider_id(provider_name, provider_id)
-       when is_binary(provider_name) and is_binary(provider_id) do
-    from(v in Venue,
-      where: fragment("? @> ?", v.provider_ids, ^%{provider_name => provider_id}),
-      limit: 1
-    )
-    |> Repo.one()
-  end
-
-  defp _find_existing_venue_by_provider_id(_, _), do: nil
 
   # Detects venue source from geocoding metadata
   # Returns the geocoding provider name (mapbox, google, geoapify, etc.)
