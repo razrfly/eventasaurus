@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Scraping.Processors.VenueProcessor
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Services.CollisionDetector
+  alias EventasaurusDiscovery.Services.RecurringEventUpdater
   alias EventasaurusDiscovery.Categories.CategoryExtractor
   alias EventasaurusDiscovery.Sources.Source
   alias Eventasaurus.Discovery.OccurrenceValidator
@@ -561,12 +562,25 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Note: metadata is now stored only in public_event_sources, not in public_events
 
-    if Enum.any?(updates) do
-      event
-      |> PublicEvent.changeset(Map.new(updates))
-      |> Repo.update()
-    else
-      {:ok, event}
+    # Apply field updates if any
+    event_result =
+      if Enum.any?(updates) do
+        event
+        |> PublicEvent.changeset(Map.new(updates))
+        |> Repo.update()
+      else
+        {:ok, event}
+      end
+
+    # After updating fields, check if recurring event needs date regeneration
+    # This handles the case where pattern-based events have expired dates
+    case event_result do
+      {:ok, updated_event} ->
+        # Regenerate dates if event is expired recurring pattern
+        RecurringEventUpdater.maybe_regenerate_dates(updated_event)
+
+      error ->
+        error
     end
   end
 
@@ -1527,12 +1541,23 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             nil
         end
 
-      parent_event
-      |> PublicEvent.changeset(%{
-        starts_at: new_start_date,
-        ends_at: new_end_date
-      })
-      |> Repo.update()
+      result =
+        parent_event
+        |> PublicEvent.changeset(%{
+          starts_at: new_start_date,
+          ends_at: new_end_date
+        })
+        |> Repo.update()
+
+      # After updating the pattern-based event, check if dates need regeneration
+      # This handles cases where the event was updated with an expired date
+      case result do
+        {:ok, updated_event} ->
+          RecurringEventUpdater.maybe_regenerate_dates(updated_event)
+
+        error ->
+          error
+      end
     else
       # Explicit-type occurrence - add to dates array
       # Create new date entry
