@@ -56,6 +56,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:selected_city, nil)
       |> assign(:import_limit, 100)
       |> assign(:import_radius, 50)
+      |> assign(:force_import, false)
       |> assign(:city_specific_sources, @city_specific_sources)
       |> assign(:expanded_source_jobs, MapSet.new())
       |> assign(:expanded_metro_areas, MapSet.new())
@@ -219,6 +220,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           {:noreply, socket}
 
         {:ok, city_id_val} ->
+          force = Map.get(params, "force", false)
+
           # Build job_args conditionally based on whether source requires city
           job_args =
             if city_required do
@@ -226,14 +229,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
                 "source" => source,
                 "city_id" => city_id_val,
                 "limit" => limit,
-                "radius" => radius
+                "radius" => radius,
+                "force" => force
               }
             else
               # Country-wide/regional sources don't need city_id
               %{
                 "source" => source,
                 "limit" => limit,
-                "radius" => radius
+                "radius" => radius,
+                "force" => force
               }
             end
 
@@ -363,6 +368,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @impl true
   def handle_event("update_radius", %{"radius" => radius}, socket) do
     socket = assign(socket, :import_radius, parse_int(radius, socket.assigns.import_radius))
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_force_import", _params, socket) do
+    socket = assign(socket, :force_import, !socket.assigns.force_import)
     {:noreply, socket}
   end
 

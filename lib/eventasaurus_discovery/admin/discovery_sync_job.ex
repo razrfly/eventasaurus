@@ -26,10 +26,15 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     city_id = args["city_id"]
     limit = args["limit"] || 100
     _radius = args["radius"] || 50
+    force = args["force"] || false
 
     # Log retry attempts
     if attempt > 1 do
       Logger.info("🔄 Retry attempt #{attempt}/3 for #{source} sync (city_id: #{city_id})")
+    end
+
+    if force do
+      Logger.info("⚡ Force mode enabled for #{source} - bypassing EventFreshnessChecker")
     end
 
     # Broadcast start
@@ -75,7 +80,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
       # Handle different source types
       case source do
         "all" ->
-          sync_all_sources(city, limit, args)
+          sync_all_sources(city, limit, args, force)
 
         source ->
           # Check if source is registered in SourceRegistry
@@ -83,7 +88,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
             {:ok, _job_module} ->
               # Build job arguments based on source (single source path only)
               options = build_source_options(source, args)
-              sync_single_source(source, city, limit, options)
+              sync_single_source(source, city, limit, options, force)
 
             {:error, :not_found} ->
               broadcast_progress(:error, %{message: "Unknown source: #{source}"})
@@ -93,7 +98,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     end
   end
 
-  defp sync_single_source(source_name, city, limit, options) do
+  defp sync_single_source(source_name, city, limit, options, force) do
     # Get job module from registry
     case SourceRegistry.get_sync_job(source_name) do
       {:error, :not_found} ->
@@ -108,12 +113,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
             %{
               "city_id" => city.id,
               "limit" => limit,
-              "options" => options
+              "options" => options,
+              "force" => force
             }
           else
             # Regional/country sources or when city_id not provided
             %{
-              "limit" => limit
+              "limit" => limit,
+              "force" => force
             }
           end
 
@@ -145,11 +152,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     end
   end
 
-  defp sync_all_sources(city, limit, args) do
+  defp sync_all_sources(city, limit, args, force) do
     Logger.info("""
     📊 Admin Dashboard: Syncing from ALL sources
     City: #{city.name}
     Total limit: #{limit} events
+    Force mode: #{force}
     """)
 
     # Get all sources from registry
@@ -173,11 +181,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
             %{
               "city_id" => city.id,
               "limit" => source_limit,
-              "options" => per_source_options
+              "options" => per_source_options,
+              "force" => force
             }
           else
             %{
-              "limit" => source_limit
+              "limit" => source_limit,
+              "force" => force
             }
           end
 

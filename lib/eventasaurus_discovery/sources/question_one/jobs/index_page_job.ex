@@ -39,6 +39,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     page = args["page"] || 1
     source_id = args["source_id"]
     limit = args["limit"]
+    force = args["force"] || false
 
     Logger.info("🔄 Processing Question One RSS feed page #{page}")
 
@@ -56,17 +57,21 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
         else
           Logger.info("📋 Found #{length(venues)} venues on page #{page}")
 
-          # CRITICAL: EventFreshnessChecker filters out fresh venues
-          scheduled_count = schedule_detail_jobs(venues, source_id, limit)
+          # CRITICAL: EventFreshnessChecker filters out fresh venues (unless force=true)
+          scheduled_count = schedule_detail_jobs(venues, source_id, limit, force)
 
-          Logger.info("""
-          📤 Scheduled #{scheduled_count} detail jobs
-          (#{length(venues) - scheduled_count} venues skipped - recently updated)
-          """)
+          if force do
+            Logger.info("📤 Scheduled #{scheduled_count} detail jobs (force mode - no filtering)")
+          else
+            Logger.info("""
+            📤 Scheduled #{scheduled_count} detail jobs
+            (#{length(venues) - scheduled_count} venues skipped - recently updated)
+            """)
+          end
 
           # Enqueue next page if not limited
           should_continue = is_nil(limit) || scheduled_count > 0
-          if should_continue, do: enqueue_next_page(page + 1, source_id, limit)
+          if should_continue, do: enqueue_next_page(page + 1, source_id, limit, force)
 
           {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
         end
@@ -106,7 +111,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
   end
 
   # CRITICAL: EventFreshnessChecker integration
-  defp schedule_detail_jobs(venues, source_id, limit) do
+  defp schedule_detail_jobs(venues, source_id, limit, force) do
     # Generate external_ids for freshness checking
     # For pattern-based scrapers, venue is the unique identifier
     # Day of week is metadata, not part of the external_id
@@ -122,8 +127,13 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
       end)
 
     # Filter out venues that were recently updated (default: 7 days)
+    # In force mode, skip filtering to process all venues
     venues_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(venues_with_ids, source_id)
+      if force do
+        venues_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(venues_with_ids, source_id)
+      end
 
     # Apply limit if provided
     venues_to_process =
@@ -152,11 +162,12 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
     length(venues_to_process)
   end
 
-  defp enqueue_next_page(next_page, source_id, limit) do
+  defp enqueue_next_page(next_page, source_id, limit, force) do
     %{
       "page" => next_page,
       "source_id" => source_id,
-      "limit" => limit
+      "limit" => limit,
+      "force" => force
     }
     |> __MODULE__.new(schedule_in: 5)
     |> Oban.insert()

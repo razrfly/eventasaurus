@@ -21,18 +21,24 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob do
     Logger.info("🔄 Starting Question One sync job")
 
     limit = args["limit"]
+    force = args["force"] || false
     source = SourceStore.get_by_key!(QuestionOne.Source.key())
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Enqueue first index page job (starts at page 1)
     %{
       "source_id" => source.id,
       "page" => 1,
-      "limit" => limit
+      "limit" => limit,
+      "force" => force
     }
     |> QuestionOne.Jobs.IndexPageJob.new()
     |> Oban.insert()
 
     Logger.info("✅ Enqueued index page job 1 for Question One")
-    {:ok, %{source_id: source.id, limit: limit}}
+    {:ok, %{source_id: source.id, limit: limit, force: force}}
   end
 end
