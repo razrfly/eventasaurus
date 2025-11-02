@@ -81,14 +81,8 @@ defmodule EventasaurusDiscovery.Sources.Processor do
           error_types =
             failed
             |> Enum.map(fn {:error, reason} ->
-              # Extract error type for aggregation
-              case reason do
-                {:constraint, _} -> :constraint_violation
-                {:conflict, _} -> :duplicate_conflict
-                {:validation, _} -> :validation_error
-                other when is_atom(other) -> other
-                _ -> :unknown_error
-              end
+              # Categorize based on actual error formats returned by processors
+              categorize_error(reason)
             end)
             |> Enum.frequencies()
 
@@ -245,4 +239,47 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     source_priority = if is_struct(source), do: source.priority, else: 10
     EventProcessor.process_event(event_with_performers, source_id, source_priority)
   end
+
+  # Categorize errors based on actual formats returned by VenueProcessor and EventProcessor
+  defp categorize_error(reason) when is_binary(reason) do
+    # String errors - categorize by content patterns
+    cond do
+      String.contains?(reason, ["City is required", "city"]) -> :missing_city
+      String.contains?(reason, ["Venue name is required", "name is required"]) ->
+        :missing_venue_name
+      String.contains?(reason, ["GPS coordinates", "coordinates required"]) ->
+        :missing_coordinates
+      String.contains?(reason, "Failed to create venue") -> :venue_creation_failed
+      String.contains?(reason, "Failed to update venue") -> :venue_update_failed
+      String.contains?(reason, "geocoding failed") -> :geocoding_failed
+      String.contains?(reason, "Unknown country") -> :unknown_country
+      true -> :validation_error
+    end
+  end
+
+  # Ecto changeset errors
+  defp categorize_error(%Ecto.Changeset{} = changeset) do
+    if changeset.errors == [] do
+      :changeset_invalid
+    else
+      # Check for specific error types in changeset
+      error_types = Enum.map(changeset.errors, fn {field, _} -> field end)
+
+      cond do
+        :slug in error_types -> :duplicate_slug
+        :name in error_types -> :invalid_name
+        :latitude in error_types or :longitude in error_types -> :invalid_coordinates
+        true -> :validation_error
+      end
+    end
+  end
+
+  # Atom errors - preserve as-is
+  defp categorize_error(reason) when is_atom(reason), do: reason
+
+  # Tuple errors (e.g., {:http_error, 404})
+  defp categorize_error({error_type, _detail}) when is_atom(error_type), do: error_type
+
+  # Unknown error format
+  defp categorize_error(_), do: :unknown_error
 end
