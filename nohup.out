@@ -1,0 +1,26 @@
+flyctl Model Context Protocol.
+
+Usage:
+  fly mcp [command]
+
+Available Commands:
+  add         [experimental] Add MCP proxy client to a MCP client configuration
+  destroy     [experimental] Destroy an MCP stdio server
+  inspect     [experimental] Inspect a MCP stdio server
+  launch      [experimental] Launch an MCP stdio server
+  list        [experimental] List MCP servers
+  logs        [experimental] Show log for an MCP server
+  proxy       [experimental] Start an MCP proxy client
+  remove      [experimental] Remove MCP proxy client from a MCP client configuration
+  server      [experimental] Start a flyctl MCP server
+  wrap        [experimental] Wrap an MCP stdio program
+
+Flags:
+  -h, --help   help for mcp
+
+Global Flags:
+  -t, --access-token string   Fly API Access Token
+      --debug                 Print additional logs and traces
+      --verbose               Verbose output
+
+Use "fly mcp [command] --help" for more information about a command.

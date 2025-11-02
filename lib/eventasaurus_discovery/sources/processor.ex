@@ -74,7 +74,32 @@ defmodule EventasaurusDiscovery.Sources.Processor do
             Logger.error("  Event #{index} failed: #{inspect(reason)}")
           end)
 
-          {:error, :all_events_failed}
+          # Capture first error and error type aggregation for Oban metadata
+          first_error = List.first(failed)
+
+          # Aggregate error types for pattern analysis
+          error_types =
+            failed
+            |> Enum.map(fn {:error, reason} ->
+              # Extract error type for aggregation
+              case reason do
+                {:constraint, _} -> :constraint_violation
+                {:conflict, _} -> :duplicate_conflict
+                {:validation, _} -> :validation_error
+                other when is_atom(other) -> other
+                _ -> :unknown_error
+              end
+            end)
+            |> Enum.frequencies()
+
+          # Return structured error with debugging context preserved
+          {:error,
+           {:all_events_failed,
+            %{
+              first_error: first_error,
+              total_failed: length(failed),
+              error_types: error_types
+            }}}
 
         {successful, []} ->
           # All events succeeded

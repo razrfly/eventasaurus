@@ -92,7 +92,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Source do
   def sync_job_args(options \\ %{}) do
     %{
       "source" => key(),
-      "limit" => options[:limit]
+      "limit" => options[:limit],
+      "force_update" => options[:force_update] || false
     }
   end
 
