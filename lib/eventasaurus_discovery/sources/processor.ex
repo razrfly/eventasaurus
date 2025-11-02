@@ -243,16 +243,25 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   # Categorize errors based on actual formats returned by VenueProcessor and EventProcessor
   defp categorize_error(reason) when is_binary(reason) do
     # String errors - categorize by content patterns
+    # IMPORTANT: Specific patterns MUST come before broader patterns
     cond do
-      String.contains?(reason, ["City is required", "city"]) -> :missing_city
-      String.contains?(reason, ["Venue name is required", "name is required"]) ->
-        :missing_venue_name
-      String.contains?(reason, ["GPS coordinates", "coordinates required"]) ->
-        :missing_coordinates
+      # Most specific patterns first to avoid false matches
+      String.contains?(reason, "Unknown country") or
+          String.contains?(reason, "without a valid country") ->
+        :unknown_country
+
+      String.contains?(reason, "geocoding failed") -> :geocoding_failed
       String.contains?(reason, "Failed to create venue") -> :venue_creation_failed
       String.contains?(reason, "Failed to update venue") -> :venue_update_failed
-      String.contains?(reason, "geocoding failed") -> :geocoding_failed
-      String.contains?(reason, "Unknown country") -> :unknown_country
+
+      # Exact field requirement errors (no broad substring matches)
+      String.contains?(reason, "City is required") -> :missing_city
+      String.contains?(reason, ["Venue name is required", "name is required"]) ->
+        :missing_venue_name
+
+      String.contains?(reason, ["GPS coordinates", "coordinates required"]) ->
+        :missing_coordinates
+
       true -> :validation_error
     end
   end
