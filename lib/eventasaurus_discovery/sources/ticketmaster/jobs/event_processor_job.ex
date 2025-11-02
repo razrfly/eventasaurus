@@ -165,9 +165,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob do
         Logger.error("Event processing returned empty result - processing failed")
         {:error, :event_processing_failed}
 
-      {:error, :all_events_failed} ->
+      {:error, {:all_events_failed, error_details}} ->
         # The single event failed to process
-        Logger.error("Event processing failed")
+        Logger.error("Event processing failed: #{inspect(error_details)}")
         {:error, :event_processing_failed}
 
       {:error, {:partial_failure, _, _}} ->
