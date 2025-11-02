@@ -1,0 +1,35 @@
+--- a/c_src/GeocodingDriver.cpp
++++ b/c_src/GeocodingDriver.cpp
+@@ -93,17 +93,20 @@
+ // Load database of geonameId, latitude, longitude, continent, country code, city name
+ bool load_db(TKDTree& tree, const char* path) {
+     FILE* db_file = fopen(path, "r");
+-    char* line;
++    char* buffer = NULL;
++    size_t buffer_size = 0;
++    ssize_t nread;
+     char name[1024];
+     char continent[1024];
+-    size_t line_size;
+     int line_nb = 1;
+     double latitude, longitude;
+     int id;
+     char country_code[2];
+
+-    while ((line = fgetln(db_file, &line_size))) {
+-        char* end = line + line_size;
++    while ((nread = getline(&buffer, &buffer_size, db_file)) != -1) {
++        char* line = buffer;
++        if (nread > 0 && line[nread-1] == '\n') { line[nread-1] = '\0'; nread--; }
++        char* end = line + nread;
+
+         id = read_integer(&line);
+         if (line >= end) {
+@@ -141,6 +144,7 @@
+         tree.insert(node);
+         line_nb++;
+     }
++    if (buffer) free(buffer);
+
+     fclose(db_file);
+

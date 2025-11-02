@@ -20,8 +20,8 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 
 FROM ${BUILDER_IMAGE} as builder
 
-# install build dependencies (including Node.js for npm and libbsd for geocoding)
-RUN apt-get update -y && apt-get install -y build-essential git curl libbsd-dev \
+# install build dependencies (including Node.js for npm, libbsd for geocoding, and patch for applying fixes)
+RUN apt-get update -y && apt-get install -y build-essential git curl libbsd-dev patch \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
@@ -42,11 +42,18 @@ RUN mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # Patch geocoding library to use getline instead of fgetln for Linux compatibility
+COPY geocoding_fix.patch ./
 RUN if [ -f deps/geocoding/c_src/GeocodingDriver.cpp ]; then \
-    sed -i 's/char\* line;/char* line = NULL;/g' deps/geocoding/c_src/GeocodingDriver.cpp && \
-    sed -i 's/size_t line_size;/size_t line_size = 0;\n    ssize_t nread;/g' deps/geocoding/c_src/GeocodingDriver.cpp && \
-    sed -i 's/while ((line = fgetln(db_file, \&line_size)))/while ((nread = getline(\&line, \&line_size, db_file)) != -1)/g' deps/geocoding/c_src/GeocodingDriver.cpp && \
-    sed -i 's/fclose(db_file);/if (line) free(line);\n    fclose(db_file);/g' deps/geocoding/c_src/GeocodingDriver.cpp; \
+    echo "=== BEFORE PATCH ===" && \
+    grep -n "char\* end = line" deps/geocoding/c_src/GeocodingDriver.cpp && \
+    cd deps/geocoding && \
+    patch -p1 < ../../geocoding_fix.patch && \
+    echo "=== AFTER PATCH ===" && \
+    grep -n "char\* end = line" c_src/GeocodingDriver.cpp && \
+    echo "=== Geocoding patch applied successfully ==="; \
+else \
+    echo "ERROR: GeocodingDriver.cpp not found!"; \
+    exit 1; \
 fi
 
 # Fix Makefile to link math library and correct library order
