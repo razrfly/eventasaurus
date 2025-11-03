@@ -78,13 +78,14 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
 
       # Insert all jobs in a single transaction
       case Oban.insert_all(jobs) do
-        {count, _} when count > 0 ->
-          Logger.info("✅ Unsplash Refresh Coordinator: Queued #{count} city refresh jobs")
-          :ok
-
-        _ ->
+        [] ->
           Logger.error("❌ Unsplash Refresh Coordinator: Failed to queue city jobs")
           {:error, :queue_failed}
+
+        inserted_jobs ->
+          count = length(inserted_jobs)
+          Logger.info("✅ Unsplash Refresh Coordinator: Queued #{count} city refresh jobs")
+          :ok
       end
     end
   end

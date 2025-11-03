@@ -24,11 +24,6 @@ defmodule EventasaurusWeb.Router do
       # ImageKit CDN testing page (dev - no auth)
       get "/imagekit-test", Dev.ImagekitTestController, :index
 
-      # Unsplash integration testing page (dev - no auth)
-      get "/unsplash", Dev.UnsplashTestController, :index
-      post "/unsplash/fetch/:city_id", Dev.UnsplashTestController, :fetch_images
-      post "/unsplash/refresh-category/:city_id/:category", Dev.UnsplashTestController, :refresh_category
-
       # Venue Images testing page (dev - no auth)
       get "/venue-images", Dev.VenueImagesTestController, :index
       post "/venue-images/test-enrichment", Dev.VenueImagesTestController, :test_enrichment
@@ -104,6 +99,11 @@ defmodule EventasaurusWeb.Router do
 
       # Design tools (dev - no auth)
       live "/design/social-cards", Admin.SocialCardsPreviewLive
+
+      # Unsplash Integration (dev - no auth)
+      get "/unsplash", Admin.UnsplashTestController, :index
+      post "/unsplash/fetch/:city_id", Admin.UnsplashTestController, :fetch_images
+      post "/unsplash/refresh-category/:city_id/:category", Admin.UnsplashTestController, :refresh_category
     end
 
     # Category demo routes for testing

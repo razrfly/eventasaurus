@@ -286,7 +286,7 @@ IO.inspect(fallback_chain, label: "Fallback chain")
 
 ## View in Dev UI
 
-Visit `/dev/unsplash` to see:
+Visit `/admin/unsplash` to see:
 - All cities with categorized galleries
 - Category tabs for each city
 - Daily rotating images per category

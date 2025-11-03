@@ -3,7 +3,7 @@
 **GitHub Issue**: Follow-up to #1915
 **Purpose**: Development testing page for venue image aggregation system
 **Route**: `/dev/venue-images` (dev environment only)
-**Pattern**: Similar to `/dev/unsplash`
+**Pattern**: Similar to `/admin/unsplash`
 
 ---
 
@@ -570,7 +570,7 @@ end
 - Interactive test controls functional
 - Provider statistics accurate
 - Cost tracking operational
-- Similar visual quality to `/dev/unsplash`
+- Similar visual quality to `/admin/unsplash`
 
 ✅ **Testing**:
 - Loads without errors in dev environment

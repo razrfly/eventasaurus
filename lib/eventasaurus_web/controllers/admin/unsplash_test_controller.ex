@@ -1,6 +1,6 @@
-defmodule EventasaurusWeb.Dev.UnsplashTestController do
+defmodule EventasaurusWeb.Admin.UnsplashTestController do
   @moduledoc """
-  Development-only controller for visualizing Unsplash city image integration.
+  Admin controller for visualizing Unsplash city image integration.
 
   This page shows:
   - All active cities with cached image galleries
@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
   - Sample images from each city's gallery
   - Gallery metadata and refresh status
 
-  Access at: /dev/unsplash (dev environment only)
+  Access at: /admin/unsplash (dev environment only)
   """
   use EventasaurusWeb, :controller
 
@@ -166,13 +166,9 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
       end)
       |> Enum.into(%{})
 
-    # Get first available tab category for active selection
+    # Get first available tab category for active selection (finds first category that actually exists)
     active_tab_category =
-      if map_size(tab_categories) > 0 do
-        Enum.at(tab_category_names, 0)
-      else
-        nil
-      end
+      Enum.find(tab_category_names, fn name -> Map.has_key?(tab_categories, name) end)
 
     # Calculate total images across all categories
     total_images =
@@ -213,17 +209,17 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
       {:ok, _updated_city} ->
         conn
         |> put_flash(:info, "✓ Successfully fetched categories for #{city.name}")
-        |> redirect(to: ~p"/dev/unsplash")
+        |> redirect(to: ~p"/admin/unsplash")
 
       {:error, :all_categories_failed} ->
         conn
         |> put_flash(:error, "Failed to fetch any categories for #{city.name}")
-        |> redirect(to: ~p"/dev/unsplash")
+        |> redirect(to: ~p"/admin/unsplash")
 
       {:error, reason} ->
         conn
         |> put_flash(:error, "Failed to fetch images: #{inspect(reason)}")
-        |> redirect(to: ~p"/dev/unsplash")
+        |> redirect(to: ~p"/admin/unsplash")
     end
   end
 
@@ -244,18 +240,18 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
           {:ok, _updated_city} ->
             conn
             |> put_flash(:info, "✓ Refreshed #{category_name} category for #{city.name}")
-            |> redirect(to: ~p"/dev/unsplash")
+            |> redirect(to: ~p"/admin/unsplash")
 
           {:error, reason} ->
             conn
             |> put_flash(:error, "Failed to store #{category_name}: #{inspect(reason)}")
-            |> redirect(to: ~p"/dev/unsplash")
+            |> redirect(to: ~p"/admin/unsplash")
         end
 
       {:error, reason} ->
         conn
         |> put_flash(:error, "Failed to fetch #{category_name}: #{inspect(reason)}")
-        |> redirect(to: ~p"/dev/unsplash")
+        |> redirect(to: ~p"/admin/unsplash")
     end
   end
 
