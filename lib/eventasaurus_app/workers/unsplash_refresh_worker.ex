@@ -4,8 +4,17 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
 
   Runs daily to:
   1. Find all cities with discovery enabled
-  2. Refresh cached Unsplash images for each city
+  2. Refresh all 5 categorized image galleries for each city
   3. Handle rate limiting and failures gracefully
+
+  ## Categories
+
+  Fetches images for all 5 categories per city:
+  - general: City skyline and cityscape
+  - architecture: Modern buildings and architecture
+  - historic: Historic buildings and monuments
+  - old_town: Old town and medieval areas
+  - city_landmarks: Famous landmarks and attractions
 
   ## Configuration
 
@@ -17,7 +26,7 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
 
   Unsplash has a rate limit of 5000 requests/hour in production. With the
   default configuration:
-  - 10 images per city
+  - 10 images per category (50 total per city)
   - Random page (1-5) for variety
   - Retry logic with exponential backoff
 
@@ -77,34 +86,31 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
     query =
       from(c in City,
         where: c.discovery_enabled == true,
-        order_by: c.name,
-        select: %{id: c.id, name: c.name}
+        order_by: c.name
       )
 
     Repo.all(query)
   end
 
   defp refresh_city_images(city) do
-    Logger.info("Refreshing images for #{city.name}")
+    Logger.info("Refreshing all categories for #{city.name}")
 
-    case UnsplashImageFetcher.fetch_and_store_city_images(city.name) do
-      {:ok, gallery} ->
-        image_count = length(gallery["images"])
-        Logger.info("  ✅ Successfully refreshed #{image_count} images for #{city.name}")
+    case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
+      {:ok, updated_city} ->
+        categories = get_in(updated_city.unsplash_gallery, ["categories"]) || %{}
+        total_images = Enum.reduce(categories, 0, fn {_name, data}, acc ->
+          acc + length(Map.get(data, "images", []))
+        end)
+        Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{city.name}")
         {:ok, city.name}
 
-      {:error, :rate_limited} ->
-        Logger.warning("  ⚠️  Rate limited while refreshing #{city.name}, will retry later")
-        {:error, :rate_limited}
+      {:error, :inactive_city} ->
+        Logger.warning("  ⚠️  City #{city.name} is not active (discovery_enabled = false)")
+        {:error, :inactive_city}
 
-      {:error, :max_retries_exceeded} ->
-        Logger.warning("  ⚠️  Max retries exceeded for #{city.name}, skipping this cycle")
-
-        {:error, :max_retries_exceeded}
-
-      {:error, :no_images} ->
-        Logger.warning("  ⚠️  No images found for #{city.name}")
-        {:error, :no_images}
+      {:error, :all_categories_failed} ->
+        Logger.error("  ❌ Failed to fetch any categories for #{city.name}")
+        {:error, :all_categories_failed}
 
       {:error, reason} ->
         Logger.error("  ❌ Failed to refresh #{city.name}: #{inspect(reason)}")
