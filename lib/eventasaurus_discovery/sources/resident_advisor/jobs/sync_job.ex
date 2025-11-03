@@ -65,6 +65,11 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
       start_date = args["start_date"] || default_start_date()
       end_date = args["end_date"] || default_end_date()
       page_size = args["page_size"] || 20
+      force = args["force"] || false
+
+      if force do
+        Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+      end
 
       Logger.info("""
       🎵 Starting Resident Advisor sync
@@ -84,7 +89,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
           city = Repo.preload(city, :country)
           source = get_or_create_ra_source()
 
-          sync_events(city, area_id, start_date, end_date, page_size, source)
+          sync_events(city, area_id, start_date, end_date, page_size, source, force)
       end
     else
       {:error, field, reason} ->
@@ -95,7 +100,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
 
   # Private functions
 
-  defp sync_events(city, area_id, start_date, end_date, page_size, source) do
+  defp sync_events(city, area_id, start_date, end_date, page_size, source, force) do
     Logger.info("🚀 Fetching RA events for #{city.name} (area #{area_id})")
 
     # GraphQL pagination state
@@ -114,7 +119,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
         Logger.info("📚 Fetched #{length(all_events)} events from RA GraphQL")
 
         # Transform events and queue individual processing jobs
-        {queued_count, failed_count} = schedule_event_detail_jobs(all_events, city, source)
+        {queued_count, failed_count} = schedule_event_detail_jobs(all_events, city, source, force)
 
         Logger.info("""
         ✅ RA sync completed
@@ -176,7 +181,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
     end
   end
 
-  defp schedule_event_detail_jobs(raw_events, city, source) do
+  defp schedule_event_detail_jobs(raw_events, city, source, force) do
     # PHASE 1: Use ContainerGrouper to detect and create festival containers
     Logger.info("🔍 Running multi-signal container detection...")
 
@@ -222,12 +227,16 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
       end)
       |> Enum.map(fn {:ok, event} -> event end)
 
-    # Apply freshness filter
+    # Apply freshness filter (unless force=true)
     events_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        transformed_for_check,
-        source.id
-      )
+      if force do
+        transformed_for_check
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          transformed_for_check,
+          source.id
+        )
+      end
 
     # Log efficiency metrics
     total_transformed = length(transformed_for_check)
@@ -236,7 +245,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
 
     Logger.info("""
     🔄 Resident Advisor Freshness Check
-    Processing #{length(events_to_process)}/#{total_transformed} events (#{skipped} fresh, threshold: #{threshold}h)
+    Processing #{length(events_to_process)}/#{total_transformed} events #{if force, do: "(Force mode)", else: "(#{skipped} fresh, threshold: #{threshold}h)"}
     """)
 
     # Create a set of external_ids to process for fast lookup

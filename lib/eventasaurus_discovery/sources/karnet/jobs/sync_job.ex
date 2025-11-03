@@ -94,6 +94,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     city_id = args["city_id"]
     limit = args["limit"] || 200
     max_pages = args["max_pages"] || calculate_max_pages(limit)
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Log if this is a chunk
     if args["chunk"] do
@@ -139,7 +144,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
             source: get_or_create_karnet_source(),
             limit: limit,
             max_pages: max_pages,
-            offset: args["chunk_offset"] || 0
+            offset: args["chunk_offset"] || 0,
+            force: force
           )
 
         # Schedule coordinate recalculation after successful sync
@@ -160,6 +166,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     limit = opts[:limit]
     max_pages = opts[:max_pages]
     offset = opts[:offset] || 0
+    force = opts[:force] || false
     events_per_page = 12
 
     # For chunks, use optimistic page discovery to avoid timeout
@@ -199,7 +206,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
               source.id,
               limit,
               start_page: start_page,
-              skip_in_first: skip_in_first
+              skip_in_first: skip_in_first,
+              force: force
             )
 
           Logger.info("""
@@ -250,7 +258,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
           source.id,
           limit,
           start_page: start_page,
-          skip_in_first: skip_in_first
+          skip_in_first: skip_in_first,
+          force: force
         )
 
       Logger.info("""
@@ -382,6 +391,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   defp schedule_index_page_jobs(total_pages, source_id, limit, opts) do
     start_page = Keyword.get(opts, :start_page, 1)
     skip_in_first = Keyword.get(opts, :skip_in_first, 0)
+    force = Keyword.get(opts, :force, false)
     events_per_page = 12
 
     Logger.info("📅 Scheduling #{total_pages} index page jobs (starting from page #{start_page})")
@@ -414,7 +424,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
             "source_id" => source_id,
             "chunk_budget" => page_budget,
             "skip_in_first" => if(page_num == start_page, do: skip_in_first, else: 0),
-            "total_pages" => total_pages
+            "total_pages" => total_pages,
+            "force" => force
           }
 
           job =

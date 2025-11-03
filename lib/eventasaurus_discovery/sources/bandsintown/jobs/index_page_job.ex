@@ -39,6 +39,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       # Optional arguments with defaults
       total_pages = validate_optional_integer(args["total_pages"])
       city_name = args["city_name"] || "Unknown"
+      force = args["force"] || false
 
       Logger.info("""
       🎵 Processing Bandsintown API page
@@ -48,7 +49,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       City ID: #{city_id}
       """)
 
-      process_page(page_number, latitude, longitude, source_id, city_id, total_pages)
+      process_page(page_number, latitude, longitude, source_id, city_id, total_pages, force)
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
@@ -56,11 +57,11 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     end
   end
 
-  defp process_page(page_number, latitude, longitude, source_id, city_id, _total_pages) do
+  defp process_page(page_number, latitude, longitude, source_id, city_id, _total_pages, force) do
     # Fetch the API page
     case Client.fetch_next_events_page(latitude, longitude, page_number) do
       {:ok, json_data} when is_map(json_data) ->
-        process_api_response(json_data, page_number, source_id, city_id)
+        process_api_response(json_data, page_number, source_id, city_id, force)
 
       {:ok, _html} ->
         Logger.warning("⚠️ Got HTML response instead of JSON for page #{page_number}")
@@ -117,7 +118,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
 
   defp validate_optional_integer(_), do: nil
 
-  defp process_api_response(json_data, page_number, source_id, city_id) do
+  defp process_api_response(json_data, page_number, source_id, city_id, force) do
     # Extract events from JSON response
     events = extract_events_from_json(json_data)
 
@@ -129,8 +130,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       # We process all events on scheduled pages
       events_to_process = events
 
-      # Schedule detail jobs for each event
-      scheduled_count = schedule_detail_jobs(events_to_process, source_id, city_id, page_number)
+      # Schedule detail jobs for each event (unless force=true bypasses freshness check)
+      scheduled_count = schedule_detail_jobs(events_to_process, source_id, city_id, page_number, force)
 
       Logger.info("""
       ✅ API page #{page_number} processed
@@ -210,7 +211,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     }
   end
 
-  defp schedule_detail_jobs(events, source_id, city_id, page_number) do
+  defp schedule_detail_jobs(events, source_id, city_id, page_number, force) do
     alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
     # Add bandsintown_ prefix to external_id for freshness checking
@@ -220,18 +221,22 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
         Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
       end)
 
-    # Filter to events needing processing based on freshness
+    # Filter to events needing processing based on freshness (unless force=true)
     events_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        events_with_prefixed_ids,
-        source_id
-      )
+      if force do
+        events_with_prefixed_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          events_with_prefixed_ids,
+          source_id
+        )
+      end
 
     skipped = length(events) - length(events_to_process)
     threshold = EventFreshnessChecker.get_threshold()
 
     Logger.info(
-      "📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)"
+      "📋 Bandsintown page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events #{if force, do: "(Force mode)", else: "(#{skipped} skipped, threshold: #{threshold}h)"}"
     )
 
     # Calculate base delay for this page to distribute load

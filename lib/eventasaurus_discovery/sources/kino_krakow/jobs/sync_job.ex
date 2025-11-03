@@ -35,6 +35,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     source_id = args["source_id"] || get_or_create_source_id()
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     Logger.info("""
     🎬 Starting Kino Krakow distributed sync
@@ -45,7 +50,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     case establish_session() do
       {:ok, cookies} ->
         # Schedule DayPageJobs for days 0-6
-        scheduled_count = schedule_day_jobs(cookies, source_id)
+        scheduled_count = schedule_day_jobs(cookies, source_id, force)
 
         Logger.info("""
         ✅ Kino Krakow sync job completed (distributed mode)
@@ -133,7 +138,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
   end
 
   # Schedule DayPageJobs for days 0-6
-  defp schedule_day_jobs(cookies, source_id) do
+  defp schedule_day_jobs(cookies, source_id, force) do
     # TEMPORARY: Only schedule day 0 (current day) until multi-day is implemented
     # Future: Change [0] to 0..6 when ready for multi-day support
     # Only current day for now
@@ -148,7 +153,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
           %{
             "day_offset" => day_offset,
             "cookies" => cookies,
-            "source_id" => source_id
+            "source_id" => source_id,
+            "force" => force
           },
           queue: :scraper_index,
           scheduled_at: scheduled_at

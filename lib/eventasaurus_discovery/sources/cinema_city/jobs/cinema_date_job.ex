@@ -39,6 +39,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
     cinema_city_id = args["cinema_city_id"]
     date = args["date"]
     source_id = args["source_id"]
+    force = args["force"] || false
 
     Logger.info("""
     🎬 Processing Cinema City: #{cinema_data["name"]}
@@ -53,7 +54,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
           Logger.info("📭 No events for #{cinema_data["name"]} on #{date}")
           {:ok, %{films: 0, events: 0, jobs_scheduled: 0}}
         else
-          process_film_events(films, events, cinema_data, cinema_city_id, date, source_id)
+          process_film_events(films, events, cinema_data, cinema_city_id, date, source_id, force)
         end
 
       {:error, reason} ->
@@ -66,7 +67,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
   end
 
   # Process films and events
-  defp process_film_events(films, events, cinema_data, cinema_city_id, date, source_id) do
+  defp process_film_events(films, events, cinema_data, cinema_city_id, date, source_id, force) do
     # Extract films
     extracted_films = Enum.map(films, &EventExtractor.extract_film/1)
 
@@ -98,7 +99,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
         cinema_city_id,
         date,
         source_id,
-        length(unique_film_ids)
+        length(unique_film_ids),
+        force
       )
 
     {:ok,
@@ -154,7 +156,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
   end
 
   # Schedule ShowtimeProcessJobs for each matched film/event
-  defp schedule_showtime_jobs(matched, cinema_data, cinema_city_id, date, source_id, movie_count) do
+  defp schedule_showtime_jobs(matched, cinema_data, cinema_city_id, date, source_id, movie_count, force) do
     # Calculate delay to give MovieDetailJobs time to complete first
     # Each MovieDetailJob is scheduled with delays based on its index: index * Config.rate_limit()
     # Last movie starts at: (movie_count - 1) * rate_limit
@@ -184,12 +186,16 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
         Map.put(%{film: film, event: event}, :external_id, external_id)
       end)
 
-    # Filter out fresh showtimes (seen within threshold)
+    # Filter out fresh showtimes (seen within threshold) unless force=true
     showtimes_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        showtimes_with_ids,
-        source_id
-      )
+      if force do
+        showtimes_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          showtimes_with_ids,
+          source_id
+        )
+      end
 
     # Log efficiency metrics
     total_showtimes = length(showtimes)
@@ -198,7 +204,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
 
     Logger.info("""
     🔄 Cinema City Freshness Check: #{cinema_data["name"]} on #{date}
-    Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes (#{skipped} fresh, threshold: #{threshold}h)
+    Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes #{if force, do: "(Force mode)", else: "(#{skipped} fresh, threshold: #{threshold}h)"}
     """)
 
     scheduled_jobs =

@@ -35,6 +35,11 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   def perform(%Oban.Job{args: args}) do
     city_id = args["city_id"]
     limit = args["limit"] || 200
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Get city (should be Warsaw/Warszawa)
     city =
@@ -70,7 +75,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         source = get_or_create_waw4free_source()
 
         # Scrape all category pages and enqueue EventDetailJobs
-        result = scrape_categories(source, limit)
+        result = scrape_categories(source, limit, force)
 
         case result do
           {:ok, stats} ->
@@ -107,7 +112,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
 
   # Private helper functions
 
-  defp scrape_categories(source, limit) do
+  defp scrape_categories(source, limit, force) do
     categories = Config.categories()
     Logger.info("📚 Scraping #{length(categories)} category pages")
 
@@ -138,8 +143,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
 
     Logger.info("📊 Discovered #{length(all_events)} unique events across all categories")
 
-    # Check freshness and filter events
-    fresh_events = filter_fresh_events(all_events, source.id)
+    # Check freshness and filter events (unless force=true)
+    fresh_events = filter_fresh_events(all_events, source.id, force)
 
     Logger.info("✨ #{length(fresh_events)} fresh events need processing")
 
@@ -175,8 +180,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
     end
   end
 
-  defp filter_fresh_events(events, source_id) do
-    # Use EventFreshnessChecker to filter out recently-seen events
+  defp filter_fresh_events(events, source_id, force) do
+    # Use EventFreshnessChecker to filter out recently-seen events (unless force=true)
     # EventFreshnessChecker expects maps with string keys
     events_as_maps =
       Enum.map(events, fn event ->
@@ -188,13 +193,18 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         }
       end)
 
-    fresh_maps = EventFreshnessChecker.filter_events_needing_processing(events_as_maps, source_id)
-    fresh_external_ids = MapSet.new(fresh_maps, & &1["external_id"])
+    if force do
+      # In force mode, skip freshness check and return all events
+      events
+    else
+      fresh_maps = EventFreshnessChecker.filter_events_needing_processing(events_as_maps, source_id)
+      fresh_external_ids = MapSet.new(fresh_maps, & &1["external_id"])
 
-    # Filter original events to only those in fresh set
-    Enum.filter(events, fn event ->
-      MapSet.member?(fresh_external_ids, event.external_id)
-    end)
+      # Filter original events to only those in fresh set
+      Enum.filter(events, fn event ->
+        MapSet.member?(fresh_external_ids, event.external_id)
+      end)
+    end
   end
 
   defp enqueue_event_detail_jobs(events, source_id) do
