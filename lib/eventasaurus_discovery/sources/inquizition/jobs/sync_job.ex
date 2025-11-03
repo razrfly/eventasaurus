@@ -34,7 +34,12 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
     Logger.info("🔄 Starting Inquizition sync job")
 
     limit = args["limit"]
+    force = args["force"] || false
     source = SourceStore.get_by_key!(Inquizition.Source.key())
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Fetch venues from StoreLocatorWidgets CDN
     case Inquizition.Client.fetch_venues() do
@@ -49,7 +54,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
             %{
               "source_id" => source.id,
               "stores" => stores,
-              "limit" => limit
+              "limit" => limit,
+              "force" => force
             }
             |> Inquizition.Jobs.IndexJob.new()
             |> Oban.insert()

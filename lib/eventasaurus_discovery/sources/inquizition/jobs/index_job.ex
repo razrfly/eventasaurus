@@ -44,7 +44,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
     source_id = args["source_id"]
     stores = args["stores"]
     limit = args["limit"]
-    force_update = args["force_update"] || false
+    force = args["force"] || false
 
     Logger.info("🔄 Processing #{length(stores)} Inquizition venues")
 
@@ -64,17 +64,17 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
           Logger.info("📋 Successfully parsed #{length(venues)} venues")
 
           # Filter and enqueue detail jobs
-          process_venues(venues, source_id, limit, force_update)
+          process_venues(venues, source_id, limit, force)
         end
     end
   end
 
   # Filter venues by freshness and enqueue detail jobs
-  defp process_venues(venues, source_id, limit, force_update) do
-    # Filter venues using freshness checker (skip if force_update)
+  defp process_venues(venues, source_id, limit, force) do
+    # Filter venues using freshness checker (skip if force=true)
     venues_to_process =
-      if force_update do
-        Logger.info("🔄 FORCE UPDATE: Bypassing freshness check for all #{length(venues)} venues")
+      if force do
+        Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker for all #{length(venues)} venues")
         # Apply limit but skip freshness filtering
         if limit, do: Enum.take(venues, limit), else: venues
       else
@@ -85,7 +85,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
 
     Logger.info("""
     📋 Enqueueing #{length(venues_to_process)} detail jobs
-    #{if force_update, do: "(FORCE UPDATE - freshness check bypassed)", else: "(#{skipped_count} venues skipped - recently updated)"}
+    #{if force, do: "(Force mode - freshness check bypassed)", else: "(#{skipped_count} venues skipped - recently updated)"}
     """)
 
     # Enqueue detail jobs for each venue

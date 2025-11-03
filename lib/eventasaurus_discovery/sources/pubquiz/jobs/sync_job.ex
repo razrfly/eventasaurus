@@ -22,11 +22,16 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
 
     source = get_or_create_pubquiz_source()
     limit = args["limit"]
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     with {:ok, html} <- Client.fetch_index(),
          city_urls <- CityExtractor.extract_cities(html),
          city_urls <- maybe_limit_cities(city_urls, limit),
-         scheduled_count <- schedule_city_jobs(city_urls, source.id) do
+         scheduled_count <- schedule_city_jobs(city_urls, source.id, force) do
       Logger.info("""
       ✅ PubQuiz sync completed
       Cities found: #{length(city_urls)}
@@ -53,7 +58,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
     Enum.take(city_urls, limit)
   end
 
-  defp schedule_city_jobs(city_urls, source_id) do
+  defp schedule_city_jobs(city_urls, source_id, force) do
     city_urls
     |> Enum.with_index()
     |> Enum.map(fn {city_url, index} ->
@@ -63,7 +68,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
 
       job_args = %{
         "city_url" => city_url,
-        "source_id" => source_id
+        "source_id" => source_id,
+        "force" => force
       }
 
       CityJob.new(job_args, scheduled_at: scheduled_at)

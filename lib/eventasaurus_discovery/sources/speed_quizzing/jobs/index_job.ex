@@ -32,15 +32,17 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
     source_id = args["source_id"]
     events = args["events"] || []
     limit = args["limit"]
+    force = args["force"] || false
 
     Logger.info("🔄 Processing #{length(events)} Speed Quizzing events")
 
-    # Filter events using freshness checker
-    events_to_process = filter_fresh_events(events, source_id, limit)
+    # Filter events using freshness checker (unless force=true)
+    events_to_process = filter_fresh_events(events, source_id, limit, force)
 
+    skipped_count = length(events) - length(events_to_process)
     Logger.info("""
     📋 Enqueueing #{length(events_to_process)} detail jobs
-    (#{length(events) - length(events_to_process)} events skipped - recently updated)
+    #{if force, do: "(Force mode - freshness check bypassed)", else: "(#{skipped_count} events skipped - recently updated)"}
     """)
 
     # Enqueue detail jobs for each event
@@ -48,7 +50,8 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
   end
 
   # Filter out events that were recently updated (default: 7 days)
-  defp filter_fresh_events(events, source_id, limit) do
+  # In force mode, skip filtering to process all events
+  defp filter_fresh_events(events, source_id, limit, force) do
     # Generate external_ids for each event (prefer event_id, fallback to id)
     events_with_external_ids =
       Enum.map(events, fn event ->
@@ -56,12 +59,16 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
         Map.put(event, "external_id", "speed-quizzing-#{id}")
       end)
 
-    # Filter out events that were recently updated
+    # Filter out events that were recently updated (unless force=true)
     events_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        events_with_external_ids,
-        source_id
-      )
+      if force do
+        events_with_external_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          events_with_external_ids,
+          source_id
+        )
+      end
 
     # Apply limit if provided (for testing)
     if limit do
