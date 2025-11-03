@@ -40,6 +40,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
     source_id = args["source_id"] || get_or_create_source_id()
     days_ahead = args["days_ahead"] || Config.days_ahead()
     target_cities = args["target_cities"] || Config.target_cities()
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     Logger.info("""
     🎬 Starting Cinema City distributed sync
@@ -65,7 +70,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
           {:ok, %{cinemas: 0, jobs_scheduled: 0}}
         else
           # Schedule CinemaDateJobs for each cinema × date
-          jobs_scheduled = schedule_cinema_date_jobs(filtered_cinemas, source_id, days_ahead)
+          jobs_scheduled = schedule_cinema_date_jobs(filtered_cinemas, source_id, days_ahead, force)
 
           Logger.info("""
           ✅ Cinema City sync job completed (distributed mode)
@@ -127,7 +132,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
   # Private functions
 
   # Schedule CinemaDateJobs for each cinema × date combination
-  defp schedule_cinema_date_jobs(cinemas, source_id, days_ahead) do
+  defp schedule_cinema_date_jobs(cinemas, source_id, days_ahead, force) do
     # Generate date range: today through days_ahead
     dates =
       0..(days_ahead - 1)
@@ -154,7 +159,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
             "cinema_data" => cinema_data,
             "cinema_city_id" => cinema_data.cinema_city_id,
             "date" => Date.to_iso8601(date),
-            "source_id" => source_id
+            "source_id" => source_id,
+            "force" => force
           },
           queue: :scraper_index,
           scheduled_at: scheduled_at

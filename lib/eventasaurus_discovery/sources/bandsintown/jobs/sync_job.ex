@@ -21,6 +21,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     city_id = args["city_id"]
     limit = args["limit"] || 200
     max_pages = args["max_pages"] || calculate_max_pages(limit)
+    force = args["force"] || false
 
     # Get city
     case Repo.get(EventasaurusDiscovery.Locations.City, city_id) do
@@ -30,6 +31,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
       city ->
         city = Repo.preload(city, :country)
+
+        if force do
+          Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+        end
 
         Logger.info("""
         🎵 Starting Bandsintown async sync
@@ -42,7 +47,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
           schedule_async_sync(city,
             source: get_or_create_bandsintown_source(),
             limit: limit,
-            max_pages: max_pages
+            max_pages: max_pages,
+            force: force
           )
 
         # Schedule coordinate recalculation after successful sync
@@ -62,6 +68,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     source = opts[:source]
     limit = opts[:limit]
     max_pages = opts[:max_pages]
+    force = opts[:force] || false
 
     Logger.info("🚀 Starting asynchronous Bandsintown sync")
 
@@ -95,7 +102,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
             source.id,
             city.id,
             city.name,
-            limit
+            limit,
+            force
           )
 
         Logger.info("""
@@ -180,7 +188,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
          source_id,
          city_id,
          city_name,
-         limit
+         limit,
+         force
        ) do
     Logger.info("📅 Scheduling #{total_pages} index page jobs")
 
@@ -202,7 +211,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
           "city_id" => city_id,
           "city_name" => city_name,
           "limit" => if(page_num == 1, do: limit, else: nil),
-          "total_pages" => total_pages
+          "total_pages" => total_pages,
+          "force" => force
         }
 
         EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob.new(

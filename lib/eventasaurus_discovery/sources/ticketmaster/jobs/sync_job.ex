@@ -21,6 +21,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     city_id = args["city_id"]
     limit = args["limit"] || 100
     options = args["options"] || %{}
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     with {:ok, city} <- get_city(city_id),
          {:ok, source} <- get_or_create_source(),
@@ -30,7 +35,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
            transform_events_with_options(raw_events, Map.put(options, "city", city)) do
       # Schedule individual jobs for each transformed event
       %{enqueued: enqueued_count, stale: stale_count, fresh: fresh_count} =
-        schedule_event_jobs(transformed_events, source.id)
+        schedule_event_jobs(transformed_events, source.id, force)
 
       efficiency =
         if length(transformed_events) > 0 do
@@ -71,7 +76,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     end
   end
 
-  defp schedule_event_jobs(events, source_id) do
+  defp schedule_event_jobs(events, source_id, force) do
     alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
     # DEBUG: Check what external_ids we have
@@ -79,13 +84,17 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     Logger.info("🔍 DEBUG: Sample external_ids from events: #{inspect(sample_ids)}")
     Logger.info("🔍 DEBUG: Total events to check: #{length(events)}, source_id: #{source_id}")
 
-    # Filter to events needing processing based on freshness
+    # Filter to events needing processing based on freshness (unless force=true)
     # EventFreshnessChecker already supports both string and atom keys
     events_needing_processing =
-      EventFreshnessChecker.filter_events_needing_processing(
-        events,
-        source_id
-      )
+      if force do
+        events
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          events,
+          source_id
+        )
+      end
 
     Logger.info("🔍 DEBUG: Events after freshness filter: #{length(events_needing_processing)}")
 
@@ -94,7 +103,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     threshold = EventFreshnessChecker.get_threshold()
 
     Logger.info(
-      "🔍 Freshness check: #{stale_count} stale, #{fresh_count} fresh (threshold: #{threshold}h)"
+      "🔍 Freshness check: #{stale_count} stale, #{fresh_count} fresh #{if force, do: "(Force mode)", else: "(threshold: #{threshold}h)"}"
     )
 
     # Schedule individual EventProcessorJob for each event needing processing

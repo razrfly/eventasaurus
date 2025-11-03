@@ -36,6 +36,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       chunk_budget = validate_optional_integer(args["chunk_budget"])
       total_pages = validate_optional_integer(args["total_pages"])
       skip_in_first = validate_optional_integer(args["skip_in_first"]) || 0
+      force = args["force"] || false
 
       Logger.info("""
       📄 Processing Karnet index page
@@ -45,7 +46,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       Budget: #{chunk_budget || "unlimited"}
       """)
 
-      process_page(page_number, source_id, chunk_budget, total_pages, skip_in_first)
+      process_page(page_number, source_id, chunk_budget, total_pages, skip_in_first, force)
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
@@ -53,14 +54,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     end
   end
 
-  defp process_page(page_number, source_id, chunk_budget, _total_pages, skip_in_first) do
+  defp process_page(page_number, source_id, chunk_budget, _total_pages, skip_in_first, force) do
     # Build URL for this specific page
     url = Config.build_events_url(page_number)
 
     # Fetch the page
     case Client.fetch_page(url) do
       {:ok, html} ->
-        process_index_page(html, page_number, source_id, chunk_budget, skip_in_first)
+        process_index_page(html, page_number, source_id, chunk_budget, skip_in_first, force)
 
       {:error, :not_found} ->
         Logger.info("📭 Page #{page_number} not found - likely past last page")
@@ -100,7 +101,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
 
   defp validate_optional_integer(_), do: nil
 
-  defp process_index_page(html, page_number, source_id, chunk_budget, skip_in_first) do
+  defp process_index_page(html, page_number, source_id, chunk_budget, skip_in_first, force) do
     # Check if page has events
     if has_events?(html) do
       # Extract events from this page
@@ -130,7 +131,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
         end
 
       # Schedule detail jobs for each event
-      scheduled_count = schedule_detail_jobs(events_to_process, source_id, page_number)
+      scheduled_count = schedule_detail_jobs(events_to_process, source_id, page_number, force)
 
       Logger.info("""
       ✅ Index page #{page_number} processed
@@ -150,7 +151,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     end
   end
 
-  defp schedule_detail_jobs(events, source_id, page_number) do
+  defp schedule_detail_jobs(events, source_id, page_number, force) do
     alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
     # Extract external_ids for all events (adds "karnet_" prefix automatically)
@@ -161,18 +162,22 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
         Map.put(event, :external_id, external_id)
       end)
 
-    # Filter to events needing processing based on freshness
+    # Filter to events needing processing based on freshness (unless force=true)
     events_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        events_with_ids,
-        source_id
-      )
+      if force do
+        events_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          events_with_ids,
+          source_id
+        )
+      end
 
     skipped = length(events) - length(events_to_process)
     threshold = EventFreshnessChecker.get_threshold()
 
     Logger.info(
-      "📋 Karnet page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events (#{skipped} skipped, threshold: #{threshold}h)"
+      "📋 Karnet page #{page_number}: Processing #{length(events_to_process)}/#{length(events)} events #{if force, do: "(Force mode)", else: "(#{skipped} skipped, threshold: #{threshold}h)"}"
     )
 
     # Calculate base delay for this page to distribute load

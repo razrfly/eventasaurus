@@ -38,6 +38,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     day_offset = args["day_offset"]
     cookies = args["cookies"]
     source_id = args["source_id"]
+    force = args["force"] || false
 
     Logger.info("""
     📅 Processing Kino Krakow day #{day_offset}
@@ -66,7 +67,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
       # These will wait for MovieDetailJobs to complete via caching mechanism
       # Pass unique_movies count to calculate appropriate delay
       showtimes_scheduled =
-        schedule_showtime_jobs(showtimes, source_id, day_offset, length(unique_movies))
+        schedule_showtime_jobs(showtimes, source_id, day_offset, length(unique_movies), force)
 
       {:ok,
        %{
@@ -160,7 +161,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
   end
 
   # Schedule ShowtimeProcessJobs for each showtime
-  defp schedule_showtime_jobs(showtimes, source_id, day_offset, movie_count) do
+  defp schedule_showtime_jobs(showtimes, source_id, day_offset, movie_count, force) do
     # Calculate delay to give MovieDetailJobs time to complete first
     # Each MovieDetailJob is scheduled with delays based on its index: index * Config.rate_limit()
     # Last movie starts at: (movie_count - 1) * rate_limit
@@ -192,12 +193,16 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
         Map.put(showtime_map, :external_id, external_id)
       end)
 
-    # Filter out fresh showtimes (seen within threshold)
+    # Filter out fresh showtimes (seen within threshold) unless force=true
     showtimes_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        showtimes_with_ids,
-        source_id
-      )
+      if force do
+        showtimes_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          showtimes_with_ids,
+          source_id
+        )
+      end
 
     # Log efficiency metrics
     total_showtimes = length(showtimes)
@@ -206,7 +211,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
 
     Logger.info("""
     🔄 Kino Krakow Freshness Check: Day #{day_offset}
-    Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes (#{skipped} fresh, threshold: #{threshold}h)
+    Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes #{if force, do: "(Force mode)", else: "(#{skipped} fresh, threshold: #{threshold}h)"}
     """)
 
     scheduled_jobs =
