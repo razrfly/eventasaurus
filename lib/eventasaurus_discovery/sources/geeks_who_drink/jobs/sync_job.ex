@@ -27,14 +27,20 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
     Logger.info("🔄 Starting Geeks Who Drink sync job")
 
     limit = args["limit"]
+    force = args["force"] || false
     source = SourceStore.get_by_key!(GeeksWhoDrink.Source.key())
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Enqueue index job with US bounds
     # Note: IndexJob fetches its own fresh nonce to avoid expiration issues
     %{
       "source_id" => source.id,
       "bounds" => GeeksWhoDrink.Config.us_bounds(),
-      "limit" => limit
+      "limit" => limit,
+      "force" => force
     }
     |> GeeksWhoDrink.Jobs.IndexJob.new()
     |> Oban.insert()

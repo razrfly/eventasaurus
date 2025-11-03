@@ -20,7 +20,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"city_url" => city_url, "source_id" => source_id}}) do
+  def perform(%Oban.Job{args: %{"city_url" => city_url, "source_id" => source_id} = args}) do
+    force = args["force"] || false
+
     # Extract city name from URL (e.g., "katowice" from "/kategoria-produktu/katowice/")
     city_name = extract_city_name_from_url(city_url)
     Logger.info("🏙️ Processing PubQuiz city: #{city_name}")
@@ -28,7 +30,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     with {:ok, html} <- Client.fetch_city_page(city_url),
          venues <- VenueExtractor.extract_venues(html),
          venues <- filter_valid_venues(venues),
-         scheduled_count <- schedule_venue_jobs(venues, source_id, city_name) do
+         scheduled_count <- schedule_venue_jobs(venues, source_id, city_name, force) do
       Logger.info("""
       ✅ City job completed: #{city_name}
       Venues found: #{length(venues)}
@@ -73,7 +75,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     end)
   end
 
-  defp schedule_venue_jobs(venues, source_id, city_name) do
+  defp schedule_venue_jobs(venues, source_id, city_name, force) do
     # Add external_ids to venues for freshness checking
     # Must match the external_id generation in VenueDetailJob
     venues_with_ids =
@@ -84,11 +86,16 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
       end)
 
     # Filter out fresh venues (seen within threshold)
+    # In force mode, skip filtering to process all venues
     venues_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(
-        venues_with_ids,
-        source_id
-      )
+      if force do
+        venues_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          venues_with_ids,
+          source_id
+        )
+      end
 
     # Log efficiency metrics
     total_venues = length(venues)

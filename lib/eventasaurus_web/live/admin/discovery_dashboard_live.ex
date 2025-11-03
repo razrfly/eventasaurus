@@ -743,23 +743,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         )
       )
 
-    # Get available sources
-    sources = [
-      "ticketmaster",
-      "bandsintown",
-      "resident-advisor",
-      "karnet",
-      "kino-krakow",
-      "cinema-city",
-      "sortiraparis",
-      "pubquiz-pl",
-      "question-one",
-      "geeks-who-drink",
-      "quizmeisters",
-      "inquizition",
-      "speed-quizzing",
-      "all"
-    ]
+    # Get available sources dynamically from SourceRegistry
+    # "all" is a special option for syncing from all sources
+    sources = SourceRegistry.all_sources() ++ ["all"]
 
     # Get queue statistics
     queue_stats = get_queue_statistics()

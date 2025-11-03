@@ -38,7 +38,12 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
     Logger.info("🔄 Starting Speed Quizzing sync job")
 
     limit = args["limit"]
+    force = args["force"] || false
     source = SourceStore.get_by_key!(SpeedQuizzing.Source.key())
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     with {:ok, html} <- SpeedQuizzing.Client.fetch_index(),
          _ = IO.puts("✓ HTML fetched, size: #{byte_size(html)} bytes"),
@@ -50,7 +55,8 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
       %{
         "source_id" => source.id,
         "events" => events,
-        "limit" => limit
+        "limit" => limit,
+        "force" => force
       }
       |> SpeedQuizzing.Jobs.IndexJob.new()
       |> Oban.insert()

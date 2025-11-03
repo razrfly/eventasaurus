@@ -44,6 +44,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
     source_id = args["source_id"]
     bounds = args["bounds"]
     limit = args["limit"]
+    force = args["force"] || false
 
     Logger.info("🔄 Fetching Geeks Who Drink venues from map API")
 
@@ -88,8 +89,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
           else
             Logger.info("📋 Found #{length(venues)} venues")
 
-            # CRITICAL: EventFreshnessChecker filters out fresh venues
-            scheduled_count = schedule_detail_jobs(venues, source_id, limit)
+            # CRITICAL: EventFreshnessChecker filters out fresh venues (unless force=true)
+            scheduled_count = schedule_detail_jobs(venues, source_id, limit, force)
 
             Logger.info("""
             📤 Scheduled #{scheduled_count} detail jobs
@@ -168,7 +169,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
   end
 
   # CRITICAL: EventFreshnessChecker integration
-  defp schedule_detail_jobs(venues, source_id, limit) do
+  defp schedule_detail_jobs(venues, source_id, limit, force) do
     # Generate external_ids for freshness checking
     venues_with_ids =
       Enum.map(venues, fn venue ->
@@ -176,8 +177,13 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
       end)
 
     # Filter out venues that were recently updated (default: 7 days)
+    # In force mode, skip filtering to process all venues
     venues_to_process =
-      EventFreshnessChecker.filter_events_needing_processing(venues_with_ids, source_id)
+      if force do
+        venues_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(venues_with_ids, source_id)
+      end
 
     # Apply limit if provided (for testing)
     venues_to_process =

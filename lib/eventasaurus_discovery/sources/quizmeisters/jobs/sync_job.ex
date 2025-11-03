@@ -32,7 +32,12 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
     Logger.info("🔄 Starting Quizmeisters sync job")
 
     limit = args["limit"]
+    force = args["force"] || false
     source = SourceStore.get_by_key!(Quizmeisters.Source.key())
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Fetch venues from storerocket.io API
     case Quizmeisters.Client.fetch_locations() do
@@ -47,7 +52,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
             %{
               "source_id" => source.id,
               "locations" => locations,
-              "limit" => limit
+              "limit" => limit,
+              "force" => force
             }
             |> Quizmeisters.Jobs.IndexJob.new()
             |> Oban.insert()
