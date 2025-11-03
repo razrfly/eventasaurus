@@ -262,6 +262,7 @@ defmodule EventasaurusDiscovery.Sources.Processor do
       String.contains?(reason, ["GPS coordinates", "coordinates required"]) ->
         :missing_coordinates
 
+      # Default to validation error
       true -> :validation_error
     end
   end

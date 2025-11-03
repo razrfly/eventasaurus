@@ -70,6 +70,8 @@ Implemented `categorize_error/1` function with pattern matching for **actual err
 
 ### Final Implementation
 
+**CRITICAL**: Pattern order matters! More specific patterns must come before broader ones to avoid false matches.
+
 ```elixir
 # String errors - categorize by content patterns
 # IMPORTANT: Specific patterns MUST come before broader patterns
@@ -92,6 +94,7 @@ defp categorize_error(reason) when is_binary(reason) do
     String.contains?(reason, ["GPS coordinates", "coordinates required"]) ->
       :missing_coordinates
 
+    # Default to validation error
     true -> :validation_error
   end
 end
@@ -157,6 +160,43 @@ After fix, `error_types` map will show meaningful categories:
 
 - `lib/eventasaurus_discovery/sources/processor.ex` - Added `categorize_error/1` function (lines 243-284)
 
+## Pattern Ordering Bug (Fixed)
+
+**Initial Implementation Bug**: The original pattern order had a critical flaw:
+
+```elixir
+# ❌ WRONG: Broad pattern matches too early
+String.contains?(reason, ["City is required", "city"]) -> :missing_city
+# ... later ...
+String.contains?(reason, "Unknown country") -> :unknown_country
+```
+
+**Problem**: Error message `"Cannot process city 'London' without a valid country"` contains `"city"`, so it incorrectly matched `:missing_city` instead of `:unknown_country`.
+
+**Fix**: Reorder patterns from most specific to least specific, and remove overly broad substring checks:
+
+```elixir
+# ✅ CORRECT: Specific patterns first
+String.contains?(reason, "Unknown country") -> :unknown_country
+# ... later ...
+String.contains?(reason, "City is required") -> :missing_city  # Exact phrase only
+```
+
+**Testing the Fix**:
+```elixir
+# Before fix:
+categorize_error("Cannot process city 'London' without a valid country")
+# => :missing_city ❌
+
+# After fix:
+categorize_error("Cannot process city 'London' without a valid country")
+# => :unknown_country ✅
+```
+
 ## Credit
 
-Issue identified by **CodeRabbit AI** code review - excellent catch! 🤖✨
+Issues identified by **CodeRabbit AI** code review:
+1. ✅ Original tuple pattern mismatch - excellent catch!
+2. ✅ Pattern ordering bug - critical fix!
+
+Thank you CodeRabbit! 🤖✨
