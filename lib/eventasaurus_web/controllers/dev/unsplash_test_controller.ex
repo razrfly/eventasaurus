@@ -121,41 +121,63 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
 
   defp enrich_categorized_gallery(city, gallery) do
     categories = Map.get(gallery, "categories", %{})
-    active_category = Map.get(gallery, "active_category", "general")
 
-    # Enrich each category with daily image info
-    enriched_categories =
-      Enum.map(categories, fn {category_name, category_data} ->
-        images = Map.get(category_data, "images", [])
-        last_refreshed = Map.get(category_data, "last_refreshed_at")
-        search_terms = Map.get(category_data, "search_terms", [])
+    # Helper function to enrich a single category
+    enrich_category = fn category_data ->
+      images = Map.get(category_data, "images", [])
+      last_refreshed = Map.get(category_data, "last_refreshed_at")
+      search_terms = Map.get(category_data, "search_terms", [])
 
-        current_image_index =
-          if length(images) > 0 do
-            UnsplashService.get_daily_image_index(length(images))
-          else
-            0
-          end
+      current_image_index =
+        if length(images) > 0 do
+          UnsplashService.get_daily_image_index(length(images))
+        else
+          0
+        end
 
-        current_image = if length(images) > 0, do: Enum.at(images, current_image_index), else: nil
+      current_image = if length(images) > 0, do: Enum.at(images, current_image_index), else: nil
 
-        {category_name,
-         %{
-           images: images,
-           image_count: length(images),
-           current_image: current_image,
-           current_index: current_image_index,
-           last_refreshed: last_refreshed,
-           search_terms: search_terms
-         }}
+      %{
+        images: images,
+        image_count: length(images),
+        current_image: current_image,
+        current_index: current_image_index,
+        last_refreshed: last_refreshed,
+        search_terms: search_terms
+      }
+    end
+
+    # Separate general category (for hero section) from tab categories
+    general_category_data =
+      case Map.get(categories, "general") do
+        nil -> nil
+        data -> enrich_category.(data)
+      end
+
+    # Tab categories: architecture, historic, old_town, city_landmarks
+    tab_category_names = ["architecture", "historic", "old_town", "city_landmarks"]
+
+    tab_categories =
+      tab_category_names
+      |> Enum.filter(fn name -> Map.has_key?(categories, name) end)
+      |> Enum.map(fn category_name ->
+        category_data = Map.get(categories, category_name)
+        {category_name, enrich_category.(category_data)}
       end)
       |> Enum.into(%{})
 
-    # Get active category data for quick access
-    active_category_data = Map.get(enriched_categories, active_category)
+    # Get first available tab category for active selection
+    active_tab_category =
+      if map_size(tab_categories) > 0 do
+        Enum.at(tab_category_names, 0)
+      else
+        nil
+      end
 
+    # Calculate total images across all categories
     total_images =
-      Enum.reduce(enriched_categories, 0, fn {_name, data}, acc ->
+      (if general_category_data, do: general_category_data.image_count, else: 0) +
+      Enum.reduce(tab_categories, 0, fn {_name, data}, acc ->
         acc + data.image_count
       end)
 
@@ -164,12 +186,16 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
       name: city.name,
       slug: city.slug,
       format: :categorized,
-      categories: enriched_categories,
-      active_category: active_category,
-      category_count: map_size(enriched_categories),
+      general_category: general_category_data,
+      tab_categories: tab_categories,
+      active_tab_category: active_tab_category,
+      category_count: map_size(categories),
       image_count: total_images,
-      current_image: if(active_category_data, do: active_category_data.current_image, else: nil),
-      current_index: if(active_category_data, do: active_category_data.current_index, else: 0),
+      # For backward compatibility
+      categories: Map.merge(
+        (if general_category_data, do: %{"general" => general_category_data}, else: %{}),
+        tab_categories
+      ),
       images: nil,
       last_refreshed: nil
     }

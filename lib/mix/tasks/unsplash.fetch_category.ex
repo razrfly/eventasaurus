@@ -138,61 +138,72 @@ defmodule Mix.Tasks.Unsplash.FetchCategory do
       IO.puts(String.duplicate("=", 60))
     end
 
-    # Get category definition
-    category_def = @category_definitions[category]
+    # Verify city exists first before making API calls
+    city = EventasaurusApp.Repo.get_by(EventasaurusDiscovery.Locations.City, name: city_name)
 
-    if is_nil(category_def) do
-      IO.puts("❌ Invalid category: #{category}")
-      :error
-    else
-      # Build search terms by replacing {city} with actual city name
-      search_terms =
-        Enum.map(category_def.search_terms_template, fn template ->
-          String.replace(template, "{city}", city_name)
-        end)
+    cond do
+      is_nil(city) ->
+        IO.puts("❌ City not found: #{city_name}")
+        :error
 
-      if verbose do
-        IO.puts("\nCategory: #{category}")
-        IO.puts("Description: #{category_def.description}")
-        IO.puts("Search terms: #{Enum.join(search_terms, ", ")}")
-      end
+      !city.discovery_enabled ->
+        IO.puts("❌ City #{city_name} is not active (discovery_enabled = false)")
+        :error
 
-      # Fetch category images
-      case EventasaurusApp.Services.UnsplashImageFetcher.fetch_category_images(
-             city_name,
-             category,
-             search_terms
-           ) do
-        {:ok, category_data} ->
-          # Store the category
-          city =
-            EventasaurusApp.Repo.get_by(EventasaurusDiscovery.Locations.City, name: city_name)
+      true ->
+        # Get category definition
+        category_def = @category_definitions[category]
 
-          case EventasaurusApp.Services.UnsplashImageFetcher.store_category(
-                 city,
-                 category,
-                 category_data
-               ) do
-            {:ok, _gallery} ->
-              image_count = length(category_data["images"])
+        if is_nil(category_def) do
+          IO.puts("❌ Invalid category: #{category}")
+          :error
+        else
+          # Build search terms by replacing {city} with actual city name
+          search_terms =
+            Enum.map(category_def.search_terms_template, fn template ->
+              String.replace(template, "{city}", city_name)
+            end)
 
-              if verbose do
-                IO.puts("\n✅ Success! Fetched #{image_count} images for category '#{category}'")
-                IO.puts("\nFirst image sample:")
-                IO.inspect(List.first(category_data["images"]), pretty: true, limit: :infinity)
-              end
-
-              :ok
-
-            {:error, reason} ->
-              IO.puts("❌ Error storing category: #{inspect(reason)}")
-              :error
+          if verbose do
+            IO.puts("\nCategory: #{category}")
+            IO.puts("Description: #{category_def.description}")
+            IO.puts("Search terms: #{Enum.join(search_terms, ", ")}")
           end
 
-        {:error, reason} ->
-          IO.puts("❌ Error fetching images: #{inspect(reason)}")
-          :error
-      end
+          # Fetch category images
+          case EventasaurusApp.Services.UnsplashImageFetcher.fetch_category_images(
+                 city_name,
+                 category,
+                 search_terms
+               ) do
+            {:ok, category_data} ->
+              # Store the category (city already fetched above)
+              case EventasaurusApp.Services.UnsplashImageFetcher.store_category(
+                     city,
+                     category,
+                     category_data
+                   ) do
+                {:ok, _gallery} ->
+                  image_count = length(category_data["images"])
+
+                  if verbose do
+                    IO.puts("\n✅ Success! Fetched #{image_count} images for category '#{category}'")
+                    IO.puts("\nFirst image sample:")
+                    IO.inspect(List.first(category_data["images"]), pretty: true, limit: :infinity)
+                  end
+
+                  :ok
+
+                {:error, reason} ->
+                  IO.puts("❌ Error storing category: #{inspect(reason)}")
+                  :error
+              end
+
+            {:error, reason} ->
+              IO.puts("❌ Error fetching images: #{inspect(reason)}")
+              :error
+          end
+        end
     end
   end
 
