@@ -8,9 +8,24 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
   1. Fetch event HTML page
   2. Extract event data (title, dates, venue, description, etc.)
-  3. Transform to unified format using Transformer
-  4. Process through VenueProcessor (geocoding, deduplication)
-  5. Store in database
+  3. **Date-based expiration filtering** (Phase 1 - NEW)
+  4. Transform to unified format using Transformer
+  5. Process through VenueProcessor (geocoding, deduplication)
+  6. Store in database
+
+  ## Date-Based Expiration Filtering (Phase 1)
+
+  Sortiraparis keeps expired events in sitemap forever as archived content.
+  To prevent re-creating expired events, we filter based on parsed end dates:
+
+  - Extract end date from raw event data (if available)
+  - Skip events with `ends_at < NOW() - 7 days` (grace period)
+  - Events with unparseable dates continue to transformer (unknown occurrence handling)
+
+  **Benefits:**
+  - Prevents expired events from being created/updated in database
+  - Primary expiration mechanism for sortiraparis (sitemap removal doesn't occur)
+  - Reduces database churn from re-processing expired content
 
   ## Bot Protection
 
@@ -28,6 +43,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
   ## Phase Status
 
+  **Phase 1**: Date-based expiration filtering (IMPLEMENTED)
   **Phase 3**: Skeleton structure (job args, error handling)
   **Phase 4**: Full implementation (HTML extraction, transformation, processing)
 
@@ -92,6 +108,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
 
     result =
       with {:ok, raw_event} <- fetch_and_extract_event(url, secondary_url, event_metadata),
+           :ok <- check_event_not_expired(raw_event, url),
            {:ok, transformed_events} <- transform_events(raw_event),
            {:ok, processed_count} <- process_events(transformed_events) do
         Logger.info("""
@@ -111,6 +128,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
            article_id: event_metadata["article_id"]
          }}
       else
+        {:error, :expired} ->
+          Logger.info("⏭️ Skipping expired event: #{url}")
+          {:ok, :skipped_expired}
+
         {:error, :bot_protection} = error ->
           Logger.warning("🚫 Bot protection 401 on event page: #{url}")
           # TODO Phase 4: Implement Playwright fallback
@@ -375,6 +396,92 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
       )
 
       {:ok, processed_count}
+    end
+  end
+
+  # Check if event is expired based on parsed end date.
+  #
+  # Uses 7-day grace period to avoid filtering events that might be updated.
+  #
+  # Returns:
+  # - `:ok` if event is not expired or has no parseable end date
+  # - `{:error, :expired}` if event ended more than 7 days ago
+  #
+  # Expiration Logic:
+  # 1. Extract dates from raw_event["dates"] or raw_event["date_string"]
+  # 2. Try to find latest date (end date)
+  # 3. If ends_at < NOW() - 7 days → expired
+  # 4. If can't parse dates → not expired (will fall into unknown occurrence handling)
+  defp check_event_not_expired(raw_event, url) do
+    grace_period_days = 7
+    cutoff = DateTime.add(DateTime.utc_now(), -grace_period_days * 86400, :second)
+
+    case extract_end_date_from_raw_event(raw_event) do
+      {:ok, ends_at} ->
+        if DateTime.compare(ends_at, cutoff) == :lt do
+          Logger.info("""
+          ⏭️ Skipping expired event (date-based filtering)
+          URL: #{url}
+          End date: #{Calendar.strftime(ends_at, "%Y-%m-%d")}
+          Cutoff: #{Calendar.strftime(cutoff, "%Y-%m-%d")}
+          Grace period: #{grace_period_days} days
+          """)
+          {:error, :expired}
+        else
+          Logger.debug("✅ Event not expired (ends_at: #{Calendar.strftime(ends_at, "%Y-%m-%d")})")
+          :ok
+        end
+
+      {:error, :no_end_date} ->
+        # No parseable end date - let it continue to transformer
+        # Will be handled by unknown occurrence fallback if needed
+        Logger.debug("ℹ️ No parseable end date, continuing to transformation")
+        :ok
+    end
+  end
+
+  # Extract end date from raw event data for expiration checking.
+  #
+  # Tries multiple strategies:
+  # 1. Look for pre-parsed dates list (from EventExtractor)
+  # 2. Look for date_string field
+  #
+  # Returns the LATEST date found (end date for exhibitions/multi-date events).
+  defp extract_end_date_from_raw_event(raw_event) do
+    cond do
+      # Strategy 1: Pre-parsed dates list
+      is_list(raw_event["dates"]) && length(raw_event["dates"]) > 0 ->
+        dates = raw_event["dates"]
+        # Dates could be DateTime structs or ISO8601 strings
+        parsed_dates = Enum.flat_map(dates, fn
+          %DateTime{} = dt -> [dt]
+          date_string when is_binary(date_string) ->
+            case DateTime.from_iso8601(date_string) do
+              {:ok, dt, _offset} -> [dt]
+              _ -> []
+            end
+          _ -> []
+        end)
+
+        if Enum.empty?(parsed_dates) do
+          {:error, :no_end_date}
+        else
+          # Return latest date (end date)
+          latest = Enum.max_by(parsed_dates, &DateTime.to_unix/1)
+          {:ok, latest}
+        end
+
+      # Strategy 2: date_string field (would need parsing - complex)
+      is_binary(raw_event["date_string"]) ->
+        # Date string parsing is complex (French dates, ranges, etc.)
+        # The transformer handles this via MultilingualDateParser
+        # For now, if we only have unparsed date_string, we can't determine expiration
+        # Let it continue to transformer which will handle it
+        {:error, :no_end_date}
+
+      # No dates found
+      true ->
+        {:error, :no_end_date}
     end
   end
 end

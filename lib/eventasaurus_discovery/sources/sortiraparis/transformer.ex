@@ -12,6 +12,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   - **Date parsing**: Handles 5+ date format variations (see DateParser)
   - **Venue geocoding**: Provides full addresses for multi-provider geocoding system
   - **Category mapping**: Provides raw event data to CategoryExtractor for YAML-based category mapping
+  - **Synthetic expiration**: Unknown-date events get 6-month expiration (Phase 4)
 
   ## Date Formats Handled
 
@@ -29,6 +30,21 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   VenueProcessor handle geocoding via multi-provider system.
 
   See: [Geocoding System Documentation](../../../docs/geocoding/GEOCODING_SYSTEM.md)
+
+  ## Synthetic Expiration for Unknown Dates (Phase 4)
+
+  Events with unparseable dates receive synthetic `ends_at` timestamps to prevent
+  database accumulation:
+
+  - **Synthetic ends_at**: `first_seen + 6 months`
+  - **Purpose**: Allow discovery and manual curation before expiration
+  - **Tracking**: Stored in metadata (`synthetic_ends_at`, `synthetic_expiration_months`)
+  - **Expiration**: Works with Phase 1 date-based filtering
+  - **Benefits**: Prevents unknown-date events from living forever
+
+  This works in conjunction with:
+  - Phase 1: Date-based expiration filtering (EventDetailJob)
+  - Phase 2: EventFreshnessChecker (SyncJob efficiency)
 
   ## External ID Format
 
@@ -61,8 +77,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   Supports **unknown occurrence fallback** for unparseable dates:
   - When date parsing fails, creates event with occurrence_type = "unknown"
   - Uses first_seen timestamp as starts_at
-  - Stores occurrence_type in metadata JSONB field
+  - **Phase 4**: Sets synthetic ends_at = first_seen + 6 months (expiration)
+  - Stores occurrence_type and synthetic_ends_at in metadata JSONB field
   - Prevents ~15-20% data loss from unparseable dates
+  - Allows natural expiration after 6 months if not manually updated
 
   ## Parameters
 
@@ -125,18 +143,19 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
           {:ok, events}
 
         {:error, :unsupported_date_format} ->
-          # FALLBACK: Create unknown occurrence event
+          # FALLBACK: Create unknown occurrence event with synthetic expiration
           Logger.info("""
           📅 Date parsing failed for Sortiraparis event - using unknown occurrence fallback
           Title: #{title}
           Date string: #{inspect(Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"))}
           Creating event with occurrence_type = "unknown" (stored in metadata JSONB)
+          Phase 4: Synthetic ends_at = now + 6 months (expiration mechanism)
           """)
 
           event =
             create_unknown_occurrence_event(article_id, title, venue_data, raw_event, options)
 
-          Logger.info("✅ Created unknown occurrence event: #{title}")
+          Logger.info("✅ Created unknown occurrence event with 6-month expiration: #{title}")
           {:ok, [event]}
 
         {:error, other_reason} ->
@@ -347,6 +366,12 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     # Generate external_id WITHOUT date suffix (unknown occurrence, single instance)
     external_id = Config.generate_external_id(article_id)
 
+    # Phase 4: Synthetic ends_at for expiration
+    # Set ends_at to 6 months after creation to allow natural expiration
+    # Events can be manually curated/updated before expiration
+    # Prevents unknown-date events from living forever in database
+    synthetic_ends_at = DateTime.add(first_seen, 6 * 30 * 86400, :second)
+
     %{
       # Required fields
       external_id: external_id,
@@ -370,8 +395,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
       },
 
       # Optional but recommended
-      # Unknown
-      ends_at: nil,
+      # Phase 4: Synthetic ends_at = first_seen + 6 months (expiration mechanism)
+      ends_at: synthetic_ends_at,
       description_translations: get_description_translations(raw_event),
       source_url: Config.build_url(raw_event["url"]),
       image_url: Map.get(raw_event, "image_url"),
@@ -395,6 +420,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         # Flag indicating fallback was used
         occurrence_fallback: true,
         first_seen_at: DateTime.to_iso8601(first_seen),
+        # Phase 4: Track synthetic expiration for manual curation
+        synthetic_ends_at: DateTime.to_iso8601(synthetic_ends_at),
+        synthetic_expiration_months: 6,
         original_date_string:
           Map.get(raw_event, "date_string") || Map.get(raw_event, "original_date_string"),
         category_url: Map.get(raw_event, "category"),

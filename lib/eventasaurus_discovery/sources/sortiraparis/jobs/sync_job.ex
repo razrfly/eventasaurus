@@ -9,14 +9,31 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
   Unlike pagination-based scrapers, Sortiraparis uses **sitemap-based discovery**:
   1. Fetch sitemap XML files (sitemap-en-1.xml through sitemap-en-4.xml)
   2. Extract event URLs using `Config.is_event_url?/1` filter
-  3. Schedule EventDetailJob for each event URL
-  4. Database-level deduplication handles existing events via unique constraints
+  3. **EventFreshnessChecker filtering** (Phase 2 - NEW)
+  4. Schedule EventDetailJob for each event URL
+  5. Database-level deduplication handles existing events via unique constraints
+
+  ## EventFreshnessChecker Integration (Phase 2)
+
+  Sortiraparis keeps expired events in sitemap forever as archived content.
+  To avoid re-processing articles within 7 days, we use EventFreshnessChecker:
+
+  - Article-level external_ids: `sortiraparis_article_{article_id}`
+  - Tracks `last_seen_at` timestamps for each article
+  - Skips re-processing articles seen within 7-day threshold
+  - Works with date-based filtering in EventDetailJob (Phase 1)
+  - Force flag support for manual overrides
+
+  **Benefits:**
+  - Reduces unnecessary HTTP requests for fresh articles
+  - Primary expiration handled by EventDetailJob date filtering
+  - Efficiency optimization, not primary expiration mechanism
 
   ## Bot Protection
 
   ~30% of requests return 401 errors even with browser-like headers.
   - Current: Conservative rate limiting, browser headers, retries
-  - Future (Phase 3+): Playwright fallback for persistent 401s
+  - Future (Phase 4+): Playwright fallback for persistent 401s
 
   ## Multi-Date Events
 
@@ -26,8 +43,10 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
   ## Phase Status
 
-  **Phase 2**: Skeleton implementation (structure only)
-  **Phase 3**: Complete sitemap discovery logic
+  **Phase 1**: Date-based expiration filtering (IMPLEMENTED in EventDetailJob)
+  **Phase 2**: EventFreshnessChecker integration (IMPLEMENTED)
+  **Phase 3**: Force flag support (IMPLEMENTED)
+  **Phase 4**: Synthetic ends_at for unknown dates (PENDING)
   **Phase 5**: Comprehensive testing and integration
   """
 
@@ -43,6 +62,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
   }
 
   alias EventasaurusDiscovery.Sources.Sortiraparis.Helpers.UrlFilter
+  alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Sources.Source
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -51,6 +73,14 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
     limit = args["limit"]
     # Optional: :en, :fr, or :all (default)
     language_filter = args["language"]
+    # Get source_id (required for EventFreshnessChecker)
+    source_id = args["source_id"] || get_source_id()
+    # Get force flag (defaults to false)
+    force = args["force"] || false
+
+    if force do
+      Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
+    end
 
     # Apply language filter if specified
     filtered_sitemaps =
@@ -66,6 +96,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
     🗺️ Starting Sortiraparis bilingual sitemap sync
     Sitemaps: #{length(filtered_sitemaps)} (#{Enum.map_join(filtered_sitemaps, ", ", & &1.language)})
     Limit: #{limit || "unlimited"}
+    Force mode: #{force}
     """)
 
     # TODO Phase 3: Implement full sitemap discovery workflow
@@ -73,7 +104,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
     with {:ok, event_urls_with_metadata} <- fetch_event_urls_from_sitemaps(filtered_sitemaps),
          {:ok, grouped_articles} <- group_urls_by_article(event_urls_with_metadata),
-         {:ok, fresh_articles} <- filter_fresh_events(grouped_articles, limit),
+         {:ok, fresh_articles} <- filter_fresh_events(grouped_articles, source_id, limit, force),
          {:ok, scheduled_count} <- schedule_event_detail_jobs(fresh_articles) do
       total_urls = length(event_urls_with_metadata)
       unique_articles = map_size(grouped_articles)
@@ -243,38 +274,77 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
     {:ok, grouped}
   end
 
-  defp filter_fresh_events(grouped_articles, limit) do
+  defp filter_fresh_events(grouped_articles, source_id, limit, force) do
     article_count = map_size(grouped_articles)
     Logger.info("🔍 Processing #{article_count} unique articles")
 
-    # Process all articles - database-level deduplication will handle existing events
-    # via unique constraint on (source, external_id)
     # Convert grouped map to list of {article_id, language_urls} tuples
     articles_list = Enum.to_list(grouped_articles)
 
-    # Apply limit to ARTICLES (not URL entries)
+    # Add external_ids to articles for freshness checking
+    # Format: "sortiraparis_article_{article_id}"
+    articles_with_ids =
+      Enum.map(articles_list, fn {article_id, language_urls} ->
+        external_id = "sortiraparis_article_#{article_id}"
+
+        # Convert to map for EventFreshnessChecker (needs :external_id key)
+        %{
+          article_id: article_id,
+          language_urls: language_urls,
+          external_id: external_id
+        }
+      end)
+
+    # Filter to articles needing processing based on freshness (unless force=true)
+    articles_to_process =
+      if force do
+        articles_with_ids
+      else
+        EventFreshnessChecker.filter_events_needing_processing(
+          articles_with_ids,
+          source_id
+        )
+      end
+
+    # Log efficiency metrics
+    skipped = length(articles_with_ids) - length(articles_to_process)
+    threshold = EventFreshnessChecker.get_threshold()
+
+    Logger.info("""
+    🔄 Sortiraparis Freshness Check
+    Processing #{length(articles_to_process)}/#{length(articles_with_ids)} articles #{if force, do: "(Force mode)", else: "(#{skipped} fresh, threshold: #{threshold}h)"}
+    """)
+
+    # Apply limit to ARTICLES (not URL entries) AFTER freshness filtering
     # This ensures we get complete language pairs for each article
     limited_articles =
       if limit do
-        Enum.take(articles_list, limit)
+        Enum.take(articles_to_process, limit)
       else
-        articles_list
+        articles_to_process
       end
 
-    if limit && length(limited_articles) < length(articles_list) do
+    if limit && length(limited_articles) < length(articles_to_process) do
       Logger.info(
-        "🔢 Applying limit: #{length(limited_articles)}/#{length(articles_list)} articles"
+        "🔢 Applying limit: #{length(limited_articles)}/#{length(articles_to_process)} articles (after freshness filter)"
       )
     end
 
     Logger.info("""
-    ✨ Article Processing:
-    - Total articles available: #{article_count}
-    - Articles to process (after limit): #{length(limited_articles)}
-    - Deduplication: Handled by database constraints
+    ✨ Article Processing Summary:
+    - Total articles in sitemap: #{article_count}
+    - After freshness filter: #{length(articles_to_process)}
+    - After limit: #{length(limited_articles)}
+    - Database deduplication: Handled by constraints
     """)
 
-    {:ok, limited_articles}
+    # Convert back to {article_id, language_urls} tuple format for schedule_event_detail_jobs
+    result =
+      Enum.map(limited_articles, fn article ->
+        {article.article_id, article.language_urls}
+      end)
+
+    {:ok, result}
   end
 
   defp schedule_event_detail_jobs(articles_list) do
@@ -349,6 +419,18 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
       """)
 
       {:ok, successful_count}
+    end
+  end
+
+  # Get source ID for sortiraparis
+  defp get_source_id do
+    case Repo.get_by(Source, slug: "sortiraparis") do
+      nil ->
+        Logger.warning("⚠️ Sortiraparis source not found in database")
+        nil
+
+      source ->
+        source.id
     end
   end
 end
