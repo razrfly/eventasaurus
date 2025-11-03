@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
 
     total_images =
       Enum.reduce(cities_with_galleries, 0, fn city, acc ->
-        acc + length(city.images)
+        acc + (city.image_count || 0)
       end)
 
     render(conn, :index,
@@ -79,6 +79,18 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
 
   defp enrich_city_data(city) do
     gallery = city.gallery || %{}
+
+    # Detect format: categorized vs legacy
+    is_categorized = Map.has_key?(gallery, "categories")
+
+    if is_categorized do
+      enrich_categorized_gallery(city, gallery)
+    else
+      enrich_legacy_gallery(city, gallery)
+    end
+  end
+
+  defp enrich_legacy_gallery(city, gallery) do
     images = Map.get(gallery, "images", [])
     last_refreshed = Map.get(gallery, "last_refreshed_at")
 
@@ -96,11 +108,139 @@ defmodule EventasaurusWeb.Dev.UnsplashTestController do
       id: city.id,
       name: city.name,
       slug: city.slug,
+      format: :legacy,
       images: images,
       image_count: length(images),
       current_image: current_image,
       current_index: current_image_index,
-      last_refreshed: last_refreshed
+      last_refreshed: last_refreshed,
+      categories: nil,
+      active_category: nil
     }
+  end
+
+  defp enrich_categorized_gallery(city, gallery) do
+    categories = Map.get(gallery, "categories", %{})
+    active_category = Map.get(gallery, "active_category", "general")
+
+    # Enrich each category with daily image info
+    enriched_categories =
+      Enum.map(categories, fn {category_name, category_data} ->
+        images = Map.get(category_data, "images", [])
+        last_refreshed = Map.get(category_data, "last_refreshed_at")
+        search_terms = Map.get(category_data, "search_terms", [])
+
+        current_image_index =
+          if length(images) > 0 do
+            UnsplashService.get_daily_image_index(length(images))
+          else
+            0
+          end
+
+        current_image = if length(images) > 0, do: Enum.at(images, current_image_index), else: nil
+
+        {category_name,
+         %{
+           images: images,
+           image_count: length(images),
+           current_image: current_image,
+           current_index: current_image_index,
+           last_refreshed: last_refreshed,
+           search_terms: search_terms
+         }}
+      end)
+      |> Enum.into(%{})
+
+    # Get active category data for quick access
+    active_category_data = Map.get(enriched_categories, active_category)
+
+    total_images =
+      Enum.reduce(enriched_categories, 0, fn {_name, data}, acc ->
+        acc + data.image_count
+      end)
+
+    %{
+      id: city.id,
+      name: city.name,
+      slug: city.slug,
+      format: :categorized,
+      categories: enriched_categories,
+      active_category: active_category,
+      category_count: map_size(enriched_categories),
+      image_count: total_images,
+      current_image: if(active_category_data, do: active_category_data.current_image, else: nil),
+      current_index: if(active_category_data, do: active_category_data.current_index, else: 0),
+      images: nil,
+      last_refreshed: nil
+    }
+  end
+
+  @doc """
+  Fetch all 5 categorized images for a city
+  """
+  def fetch_images(conn, %{"city_id" => city_id}) do
+    alias EventasaurusApp.Services.UnsplashImageFetcher
+
+    city = Repo.get!(City, city_id)
+
+    case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
+      {:ok, _updated_city} ->
+        conn
+        |> put_flash(:info, "✓ Successfully fetched categories for #{city.name}")
+        |> redirect(to: ~p"/dev/unsplash")
+
+      {:error, :all_categories_failed} ->
+        conn
+        |> put_flash(:error, "Failed to fetch any categories for #{city.name}")
+        |> redirect(to: ~p"/dev/unsplash")
+
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, "Failed to fetch images: #{inspect(reason)}")
+        |> redirect(to: ~p"/dev/unsplash")
+    end
+  end
+
+  @doc """
+  Refresh a specific category for a city
+  """
+  def refresh_category(conn, %{"city_id" => city_id, "category" => category_name}) do
+    alias EventasaurusApp.Services.UnsplashImageFetcher
+
+    city = Repo.get!(City, city_id)
+
+    # Get search terms for this category
+    search_terms = get_search_terms_for_category(city.name, category_name)
+
+    case UnsplashImageFetcher.fetch_category_images(city.name, category_name, search_terms) do
+      {:ok, category_data} ->
+        case UnsplashImageFetcher.store_category(city, category_name, category_data) do
+          {:ok, _updated_city} ->
+            conn
+            |> put_flash(:info, "✓ Refreshed #{category_name} category for #{city.name}")
+            |> redirect(to: ~p"/dev/unsplash")
+
+          {:error, reason} ->
+            conn
+            |> put_flash(:error, "Failed to store #{category_name}: #{inspect(reason)}")
+            |> redirect(to: ~p"/dev/unsplash")
+        end
+
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, "Failed to fetch #{category_name}: #{inspect(reason)}")
+        |> redirect(to: ~p"/dev/unsplash")
+    end
+  end
+
+  defp get_search_terms_for_category(city_name, category) do
+    case category do
+      "general" -> [city_name, "#{city_name} cityscape", "#{city_name} skyline"]
+      "architecture" -> ["#{city_name} architecture", "#{city_name} modern buildings", "#{city_name} buildings"]
+      "historic" -> ["#{city_name} historic buildings", "#{city_name} monuments", "#{city_name} old architecture"]
+      "old_town" -> ["#{city_name} old town", "#{city_name} medieval", "#{city_name} historic center"]
+      "city_landmarks" -> ["#{city_name} landmarks", "#{city_name} famous places", "#{city_name} attractions"]
+      _ -> [city_name]
+    end
   end
 end

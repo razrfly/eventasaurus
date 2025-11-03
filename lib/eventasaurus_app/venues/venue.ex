@@ -553,4 +553,110 @@ defmodule EventasaurusApp.Venues.Venue do
       changeset
     end
   end
+
+  @doc """
+  Get the best cover image for a venue with smart fallback chain.
+
+  Fallback priority:
+  1. Venue's own venue_images (first image)
+  2. City's categorized gallery (category determined by CategoryMapper)
+  3. City's "general" category (if primary category has no images)
+  4. nil (caller can provide placeholder)
+
+  All image URLs are wrapped with CDN optimization.
+
+  ## Parameters
+  - `venue` - Venue struct (must have city_ref preloaded if using city fallback)
+  - `opts` - CDN options (width, height, quality, etc.)
+
+  ## Returns
+  - `{:ok, image_url, source}` - Success with CDN-wrapped URL and source indicator
+  - `{:error, :no_image}` - No image available
+
+  ## Examples
+
+      iex> Venue.get_cover_image(venue)
+      {:ok, "https://cdn.wombie.com/cdn-cgi/image/...", :venue}
+
+      iex> Venue.get_cover_image(venue, width: 800, quality: 90)
+      {:ok, "https://cdn.wombie.com/cdn-cgi/image/w=800,q=90/...", :city_category}
+
+      iex> Venue.get_cover_image(venue_without_images)
+      {:error, :no_image}
+  """
+  def get_cover_image(%__MODULE__{} = venue, opts \\ []) do
+    cond do
+      # Priority 1: Venue's own images
+      has_venue_image?(venue) ->
+        image_url = get_first_venue_image(venue)
+        cdn_url = Eventasaurus.CDN.url(image_url, opts)
+        {:ok, cdn_url, :venue}
+
+      # Priority 2: City category images
+      has_city_with_gallery?(venue) ->
+        get_city_category_image(venue, opts)
+
+      # No images available
+      true ->
+        {:error, :no_image}
+    end
+  end
+
+  # Check if venue has its own images
+  defp has_venue_image?(%__MODULE__{venue_images: images}) when is_list(images) do
+    length(images) > 0
+  end
+
+  defp has_venue_image?(_), do: false
+
+  # Get first venue image URL
+  defp get_first_venue_image(%__MODULE__{venue_images: [first | _]}) do
+    case first do
+      %{"url" => url} when is_binary(url) -> url
+      %{url: url} when is_binary(url) -> url
+      _ -> nil
+    end
+  end
+
+  defp get_first_venue_image(_), do: nil
+
+  # Check if venue has city with categorized gallery
+  defp has_city_with_gallery?(%__MODULE__{city_ref: city}) when not is_nil(city) do
+    alias EventasaurusDiscovery.Locations.City
+    City.has_categorized_gallery?(city)
+  end
+
+  defp has_city_with_gallery?(_), do: false
+
+  # Get image from city's categorized gallery
+  defp get_city_category_image(%__MODULE__{city_ref: city} = venue, opts) do
+    alias EventasaurusApp.Venues.CategoryMapper
+    alias EventasaurusDiscovery.Locations.City
+
+    # Determine best category for this venue
+    category = CategoryMapper.determine_category(venue)
+
+    # Try primary category first, then fallback to general
+    case City.get_category_image(city, category) do
+      {:ok, image} ->
+        image_url = Map.get(image, "url")
+        cdn_url = Eventasaurus.CDN.url(image_url, opts)
+        {:ok, cdn_url, :city_category}
+
+      {:error, _} when category != "general" ->
+        # Fallback to general category
+        case City.get_category_image(city, "general") do
+          {:ok, image} ->
+            image_url = Map.get(image, "url")
+            cdn_url = Eventasaurus.CDN.url(image_url, opts)
+            {:ok, cdn_url, :city_general}
+
+          {:error, _} ->
+            {:error, :no_image}
+        end
+
+      {:error, _} ->
+        {:error, :no_image}
+    end
+  end
 end

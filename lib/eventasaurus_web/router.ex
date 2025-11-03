@@ -26,6 +26,8 @@ defmodule EventasaurusWeb.Router do
 
       # Unsplash integration testing page (dev - no auth)
       get "/unsplash", Dev.UnsplashTestController, :index
+      post "/unsplash/fetch/:city_id", Dev.UnsplashTestController, :fetch_images
+      post "/unsplash/refresh-category/:city_id/:category", Dev.UnsplashTestController, :refresh_category
 
       # Venue Images testing page (dev - no auth)
       get "/venue-images", Dev.VenueImagesTestController, :index
