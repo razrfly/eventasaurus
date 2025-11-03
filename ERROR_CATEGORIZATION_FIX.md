@@ -52,23 +52,47 @@ Analysis of `VenueProcessor` and `EventProcessor` revealed the **real error form
 
 Implemented `categorize_error/1` function with pattern matching for **actual error formats**.
 
+### Critical Fix: Pattern Order and Alternative Matches
+
+**Additional Problems Identified by CodeRabbit**:
+
+1. **Pattern Order Bug**: Broad `"city"` substring matched before specific patterns
+   - Error: `"Cannot process city 'London' without a valid country"`
+   - Incorrectly matched: `:missing_city` (due to "city" substring)
+   - Should match: `:unknown_country`
+
+2. **Missing Pattern Variant**: Actual error message from `VenueProcessor:224` is:
+   ```elixir
+   "Cannot process city '#{city_name}' without a valid country. Unknown country: '#{country_name}'"
+   ```
+   - Pattern `"Unknown country"` only matched literal substring at end
+   - Needed alternative: `"without a valid country"` to catch earlier in message
+
+### Final Implementation
+
 **CRITICAL**: Pattern order matters! More specific patterns must come before broader ones to avoid false matches.
 
 ```elixir
 # String errors - categorize by content patterns
-# IMPORTANT: Order matters! More specific patterns must come before broader ones
+# IMPORTANT: Specific patterns MUST come before broader patterns
 defp categorize_error(reason) when is_binary(reason) do
   cond do
-    # Specific patterns first to avoid false matches
-    String.contains?(reason, "Unknown country") -> :unknown_country
+    # Most specific patterns first to avoid false matches
+    String.contains?(reason, "Unknown country") or
+        String.contains?(reason, "without a valid country") ->
+      :unknown_country
+
     String.contains?(reason, "geocoding failed") -> :geocoding_failed
     String.contains?(reason, "Failed to create venue") -> :venue_creation_failed
     String.contains?(reason, "Failed to update venue") -> :venue_update_failed
 
-    # Then more specific required field errors
+    # Exact field requirement errors (no broad substring matches)
     String.contains?(reason, "City is required") -> :missing_city
-    String.contains?(reason, ["Venue name is required", "name is required"]) -> :missing_venue_name
-    String.contains?(reason, ["GPS coordinates", "coordinates required"]) -> :missing_coordinates
+    String.contains?(reason, ["Venue name is required", "name is required"]) ->
+      :missing_venue_name
+
+    String.contains?(reason, ["GPS coordinates", "coordinates required"]) ->
+      :missing_coordinates
 
     # Default to validation error
     true -> :validation_error
@@ -96,6 +120,13 @@ defp categorize_error({error_type, _detail}) when is_atom(error_type), do: error
 defp categorize_error(_), do: :unknown_error
 ```
 
+### Key Improvements
+
+1. ✅ Removed broad `"city"` substring match - only exact `"City is required"`
+2. ✅ Reordered patterns: specific errors first, field requirements second
+3. ✅ Added alternative pattern `"without a valid country"` for full error message coverage
+4. ✅ Prevents false matches by checking specific patterns before generic ones
+
 ## Expected Error Types in Oban Metadata
 
 After fix, `error_types` map will show meaningful categories:
@@ -112,9 +143,11 @@ After fix, `error_types` map will show meaningful categories:
 
 ## Testing
 
-1. ✅ Compilation successful
+1. ✅ Compilation successful (verified with `mix compile`)
 2. ✅ Pattern matching covers all observed error formats
-3. ⏳ Production verification needed after deployment
+3. ✅ Pattern order prevents false matches (specific before generic)
+4. ✅ Alternative pattern match added for "without a valid country"
+5. ⏳ Production verification needed after deployment
 
 ## Impact
 
