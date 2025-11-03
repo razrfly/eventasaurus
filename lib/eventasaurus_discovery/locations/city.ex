@@ -231,9 +231,9 @@ defmodule EventasaurusDiscovery.Locations.City do
             if Enum.empty?(images) do
               {:error, :no_images}
             else
-              # Get daily rotating image
+              # Get daily rotating image (day_of_year returns 1-365, normalize to 0-based)
               day_of_year = Date.utc_today() |> Date.day_of_year()
-              index = rem(day_of_year, length(images))
+              index = rem(day_of_year - 1, length(images))
               image = Enum.at(images, index)
               {:ok, image}
             end

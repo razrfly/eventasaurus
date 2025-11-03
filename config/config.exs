@@ -126,6 +126,9 @@ config :eventasaurus, Oban,
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation
     maintenance: 2,
+    # Unsplash queue for city image refresh jobs
+    # Process 3 cities concurrently to stay under Unsplash rate limits (5000 req/hour)
+    unsplash: 3,
     # Venue maintenance queue for venue data quality jobs (name fixing, deduplication)
     venue_maintenance: 2,
     # Reports queue for generating analytics and cost reports

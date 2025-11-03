@@ -98,7 +98,7 @@
                   <div>
                     <div class="text-sm text-indigo-100">Categories</div>
                     <div class="text-lg font-bold"><%= map_size(city.categories) %> / 5</div>
-                    <div class="text-xs text-indigo-200">Active: <%= city.active_category || "general" %></div>
+                    <div class="text-xs text-indigo-200">Active Tab: <%= city.active_tab_category || "architecture" %></div>
                   </div>
                 <% else %>
                   <div>
@@ -124,17 +124,17 @@
           </div>
 
 
-          <!-- Current Daily Image (Large) -->
-          <%= if city.current_image do %>
+          <!-- General Category Hero Image -->
+          <%= if city.general_category && city.general_category.current_image do %>
             <div class="p-6 bg-gray-50 border-b">
               <h4 class="text-lg font-semibold text-gray-900 mb-4">
-                📅 Today's Featured Image (Day <%= @day_of_year %>)
+                🌆 General Category - Today's Featured Image (Day <%= @day_of_year %>)
               </h4>
               <div class="bg-white rounded-lg shadow-lg overflow-hidden">
                 <div class="aspect-video bg-gray-100 relative">
                   <img
-                    src={city.current_image["url"]}
-                    alt={"#{city.name} - Image #{city.current_index}"}
+                    src={city.general_category.current_image["url"]}
+                    alt={"#{city.name} - Image #{city.general_category.current_index}"}
                     class="w-full h-full object-cover"
                     loading="lazy"
                   />
@@ -143,15 +143,15 @@
                       <div class="font-medium">
                         Photo by
                         <a
-                          href={city.current_image["attribution"]["photographer_url"]}
+                          href={city.general_category.current_image["attribution"]["photographer_url"]}
                           target="_blank"
                           class="underline hover:text-indigo-200"
                         >
-                          <%= city.current_image["attribution"]["photographer_name"] %>
+                          <%= city.general_category.current_image["attribution"]["photographer_name"] %>
                         </a>
                       </div>
                       <a
-                        href={city.current_image["attribution"]["unsplash_url"]}
+                        href={city.general_category.current_image["attribution"]["unsplash_url"]}
                         target="_blank"
                         class="text-xs text-gray-300 hover:text-white underline"
                       >
@@ -165,20 +165,20 @@
                     <div>
                       <span class="font-medium text-gray-700">Dimensions:</span>
                       <span class="ml-2 text-gray-600">
-                        <%= city.current_image["width"] %>×<%= city.current_image["height"] %>
+                        <%= city.general_category.current_image["width"] %>×<%= city.general_category.current_image["height"] %>
                       </span>
                     </div>
                     <div>
                       <span class="font-medium text-gray-700">Color:</span>
-                      <span class="ml-2 inline-block w-6 h-6 rounded border border-gray-300" style={"background-color: #{city.current_image["color"]}"}></span>
+                      <span class="ml-2 inline-block w-6 h-6 rounded border border-gray-300" style={"background-color: #{city.general_category.current_image["color"]}"}></span>
                     </div>
                     <div>
                       <span class="font-medium text-gray-700">ID:</span>
-                      <span class="ml-2 text-gray-600 font-mono text-xs"><%= city.current_image["id"] %></span>
+                      <span class="ml-2 text-gray-600 font-mono text-xs"><%= city.general_category.current_image["id"] %></span>
                     </div>
                     <div>
                       <span class="font-medium text-gray-700">Fetched:</span>
-                      <span class="ml-2 text-gray-600"><%= format_date(city.current_image["fetched_at"]) %></span>
+                      <span class="ml-2 text-gray-600"><%= format_date(city.general_category.current_image["fetched_at"]) %></span>
                     </div>
                   </div>
                 </div>
@@ -187,18 +187,18 @@
           <% end %>
 
           <!-- Gallery Display -->
-          <%= if city.categories && map_size(city.categories) > 0 do %>
-            <!-- Categorized Gallery with Tabs -->
+          <%= if city.tab_categories && map_size(city.tab_categories) > 0 do %>
+            <!-- Categorized Gallery with Tabs (Architecture, Historic, Old Town, City Landmarks) -->
             <div class="p-6">
-              <h4 class="text-lg font-semibold text-gray-900 mb-4">Categories</h4>
+              <h4 class="text-lg font-semibold text-gray-900 mb-4">Other Categories</h4>
 
               <!-- Category Tabs -->
               <div class="mb-6 border-b border-gray-200">
                 <nav class="-mb-px flex space-x-8" aria-label="Categories">
-                  <%= for {category_name, category_data} <- Enum.sort(city.categories) do %>
+                  <%= for {category_name, category_data} <- Enum.sort(city.tab_categories) do %>
                     <button
                       type="button"
-                      class={"#{if category_name == city.active_category, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
+                      class={"#{if category_name == city.active_tab_category, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
                       onclick={"toggleCategory('#{city.slug}', '#{category_name}')"}
                     >
                       <%= category_name %>
@@ -211,10 +211,10 @@
               </div>
 
               <!-- Category Content -->
-              <%= for {category_name, category_data} <- city.categories do %>
+              <%= for {category_name, category_data} <- city.tab_categories do %>
                 <div
                   id={"category-#{city.slug}-#{category_name}"}
-                  class={"category-content #{if category_name == city.active_category, do: "", else: "hidden"}"}
+                  class={"category-content #{if category_name == city.active_tab_category, do: "", else: "hidden"}"}
                 >
                   <!-- Category Info -->
                   <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
