@@ -1,4 +1,4 @@
-defmodule EventasaurusWeb.Dev.UnsplashTestHTML do
+defmodule EventasaurusWeb.Admin.UnsplashTestHTML do
   @moduledoc """
   HTML module for Unsplash testing page.
   """

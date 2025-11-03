@@ -98,7 +98,7 @@
                   <div>
                     <div class="text-sm text-indigo-100">Categories</div>
                     <div class="text-lg font-bold"><%= map_size(city.categories) %> / 5</div>
-                    <div class="text-xs text-indigo-200">Active Tab: <%= city.active_tab_category || "architecture" %></div>
+                    <div class="text-xs text-indigo-200">Active Tab: <%= city.active_tab_category || "none" %></div>
                   </div>
                 <% else %>
                   <div>
@@ -107,7 +107,7 @@
                     <div class="text-xs text-indigo-200">Click to fetch</div>
                   </div>
                 <% end %>
-                <.form :let={_f} for={%{}} action={~p"/dev/unsplash/fetch/#{city.id}"} method="post">
+                <.form :let={_f} for={%{}} action={~p"/admin/unsplash/fetch/#{city.id}"} method="post">
                   <button
                     type="submit"
                     class="px-4 py-2 bg-white text-indigo-700 rounded-lg font-medium hover:bg-indigo-50 transition-colors shadow-sm"
@@ -230,7 +230,7 @@
                           </div>
                         <% end %>
                       </div>
-                      <.form :let={_f} for={%{}} action={~p"/dev/unsplash/refresh-category/#{city.id}/#{category_name}"} method="post">
+                      <.form :let={_f} for={%{}} action={~p"/admin/unsplash/refresh-category/#{city.id}/#{category_name}"} method="post">
                         <button
                           type="submit"
                           class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
