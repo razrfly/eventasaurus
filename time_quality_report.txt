@@ -1,0 +1,500 @@
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=0.2ms idle=7.0ms
+SELECT count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p0."venue_id" IS NULL) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_venues/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:538[0m
+[debug] QUERY OK source="public_event_sources" db=0.3ms idle=6.6ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) AND ((p0."image_url" IS NULL) OR (p0."image_url" = '')) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_images/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:617[0m
+[debug] QUERY OK source="public_events" db=0.6ms idle=5.1ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p2."category_id" IS NULL) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:633[0m
+[debug] QUERY OK source="public_events" db=0.7ms idle=5.1ms
+SELECT p0."id", v2."id", v2."name", v2."metadata" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "venues" AS v2 ON v2."id" = p0."venue_id" WHERE (p1."source_id" = $1) AND (NOT (p0."venue_id" IS NULL)) AND (NOT (v2."metadata" IS NULL)) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_venues_with_low_quality_names/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:560[0m
+[debug] QUERY OK source="public_events" db=0.4ms idle=5.6ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) OR ((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1)) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_multilingual_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1736[0m
+[debug] QUERY OK source="public_events" db=0.4ms idle=5.3ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) OR ((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1)) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_multilingual_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1736[0m
+[debug] QUERY OK source="public_events" db=0.8ms idle=5.4ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND ((((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p0."title_translations")) > 1) OR (((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p1."description_translations")) > 1)) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_genuine_translations/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1773[0m
+[debug] QUERY OK source="public_events" db=0.7ms idle=5.1ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND ((((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p0."title_translations")) = 1) OR (((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p1."description_translations")) = 1)) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_duplicate_translations/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1809[0m
+[debug] QUERY OK source="public_event_sources" db=0.1ms idle=5.6ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=1.2ms idle=5.4ms
+SELECT c3."name", count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) GROUP BY c3."id", c3."name" ORDER BY count(p0."id") DESC [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.get_category_distribution/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:656[0m
+[debug] QUERY OK source="public_events" db=1.4ms idle=6.5ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) AND (LOWER(c3."name") = ANY($2)) [11, ["other", "miscellaneous", "general", "events", "various"]]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_generic_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:696[0m
+[debug] QUERY OK source="public_event_sources" db=0.6ms idle=7.5ms
+SELECT count(p0."id"), COUNT(CASE WHEN p0."min_price" IS NOT NULL OR p0."max_price" IS NOT NULL OR p0."is_free" = true THEN 1 END), COUNT(CASE WHEN p0."currency" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL AND p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."is_free" = true THEN 1 END) FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_price_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:837[0m
+[debug] QUERY OK source="public_event_sources" db=4.8ms idle=7.5ms
+SELECT count(p0."id"), COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."description_translations")) > 0
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) < 50
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) BETWEEN 50 AND 200
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) > 200
+  THEN 1
+END)
+, AVG(
+  CASE
+    WHEN p0."description_translations" IS NOT NULL
+    AND jsonb_typeof(p0."description_translations") = 'object'
+    THEN (
+      SELECT MAX(LENGTH(value::text))
+      FROM jsonb_each_text(p0."description_translations")
+    )
+    ELSE 0
+  END
+)
+ FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_description_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1072[0m
+[debug] QUERY OK source="public_events" db=14.4ms idle=11.7ms
+SELECT p0."id", count(p2."performer_id"), CASE WHEN jsonb_exists(p1."metadata", 'quizmaster') THEN 1 ELSE 0 END FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_performers" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) GROUP BY p0."id", p1."metadata" [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_performer_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1153[0m
+[debug] QUERY OK source="public_events" db=1.4ms idle=25.7ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_occurrence_richness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1237[0m
+[debug] QUERY OK source="public_events" db=1.4ms idle=26.6ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (NOT (p0."occurrences" IS NULL)) AND (jsonb_typeof(p0."occurrences") = 'object') [11]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_time_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1452[0m
+[debug] QUERY OK source="sources" db=0.6ms idle=27.2ms
+SELECT s0."id" FROM "sources" AS s0 WHERE (s0."slug" = $1) ["speed-quizzing"]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.check_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:39[0m
+[debug] QUERY OK source="public_event_sources" db=0.9ms idle=27.1ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=0.6ms idle=27.8ms
+SELECT count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p0."venue_id" IS NULL) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_venues/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:538[0m
+[debug] QUERY OK source="public_event_sources" db=0.9ms idle=27.3ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) AND ((p0."image_url" IS NULL) OR (p0."image_url" = '')) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_images/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:617[0m
+[debug] QUERY OK source="public_events" db=0.9ms idle=26.8ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p2."category_id" IS NULL) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:633[0m
+[debug] QUERY OK source="public_events" db=4.2ms idle=27.1ms
+SELECT p0."id", v2."id", v2."name", v2."metadata" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "venues" AS v2 ON v2."id" = p0."venue_id" WHERE (p1."source_id" = $1) AND (NOT (p0."venue_id" IS NULL)) AND (NOT (v2."metadata" IS NULL)) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_venues_with_low_quality_names/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:560[0m
+[debug] QUERY OK source="public_events" db=1.6ms idle=26.7ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) OR ((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1)) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_multilingual_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1736[0m
+[debug] QUERY OK source="public_event_sources" db=0.3ms idle=13.7ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=1.6ms idle=12.6ms
+SELECT c3."name", count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) GROUP BY c3."id", c3."name" ORDER BY count(p0."id") DESC [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.get_category_distribution/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:656[0m
+[debug] QUERY OK source="public_events" db=1.6ms idle=12.8ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) AND (LOWER(c3."name") = ANY($2)) [10, ["other", "miscellaneous", "general", "events", "various"]]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_generic_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:696[0m
+[debug] QUERY OK source="public_event_sources" db=0.6ms idle=13.9ms
+SELECT count(p0."id"), COUNT(CASE WHEN p0."min_price" IS NOT NULL OR p0."max_price" IS NOT NULL OR p0."is_free" = true THEN 1 END), COUNT(CASE WHEN p0."currency" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL AND p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."is_free" = true THEN 1 END) FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_price_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:837[0m
+[debug] QUERY OK source="public_event_sources" db=0.7ms idle=13.6ms
+SELECT p0."min_price", count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) AND (NOT (p0."min_price" IS NULL)) GROUP BY p0."min_price" ORDER BY count(p0."id") DESC [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_price_diversity/2, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:897[0m
+[debug] QUERY OK source="public_event_sources" db=2.8ms idle=13.7ms
+SELECT count(p0."id"), COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."description_translations")) > 0
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) < 50
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) BETWEEN 50 AND 200
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) > 200
+  THEN 1
+END)
+, AVG(
+  CASE
+    WHEN p0."description_translations" IS NOT NULL
+    AND jsonb_typeof(p0."description_translations") = 'object'
+    THEN (
+      SELECT MAX(LENGTH(value::text))
+      FROM jsonb_each_text(p0."description_translations")
+    )
+    ELSE 0
+  END
+)
+ FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_description_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1072[0m
+[debug] QUERY OK source="public_events" db=1.3ms idle=15.5ms
+SELECT p0."id", count(p2."performer_id"), CASE WHEN jsonb_exists(p1."metadata", 'quizmaster') THEN 1 ELSE 0 END FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_performers" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) GROUP BY p0."id", p1."metadata" [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_performer_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1153[0m
+[debug] QUERY OK source="public_events" db=0.9ms idle=16.0ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_occurrence_richness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1237[0m
+[debug] QUERY OK source="public_events" db=1.4ms idle=12.9ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (NOT (p0."occurrences" IS NULL)) AND (jsonb_typeof(p0."occurrences") = 'object') [10]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_time_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1452[0m
+[debug] QUERY OK source="sources" db=0.2ms idle=12.7ms
+SELECT s0."id" FROM "sources" AS s0 WHERE (s0."slug" = $1) ["ticketmaster"]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.check_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:39[0m
+[debug] QUERY OK source="public_event_sources" db=0.2ms idle=12.5ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=0.2ms idle=11.1ms
+SELECT count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p0."venue_id" IS NULL) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_venues/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:538[0m
+[debug] QUERY OK source="public_event_sources" db=0.2ms idle=9.8ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) AND ((p0."image_url" IS NULL) OR (p0."image_url" = '')) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_images/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:617[0m
+[debug] QUERY OK source="public_events" db=0.5ms idle=9.3ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p2."category_id" IS NULL) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:633[0m
+[debug] QUERY OK source="public_events" db=0.9ms idle=9.1ms
+SELECT p0."id", v2."id", v2."name", v2."metadata" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "venues" AS v2 ON v2."id" = p0."venue_id" WHERE (p1."source_id" = $1) AND (NOT (p0."venue_id" IS NULL)) AND (NOT (v2."metadata" IS NULL)) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_venues_with_low_quality_names/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:560[0m
+[debug] QUERY OK source="public_events" db=0.7ms idle=7.5ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) OR ((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1)) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_multilingual_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1736[0m
+[debug] QUERY OK source="public_events" db=0.5ms idle=6.9ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) OR ((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1)) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_multilingual_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1736[0m
+[debug] QUERY OK source="public_events" db=1.2ms idle=6.5ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND ((((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p0."title_translations")) > 1) OR (((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p1."description_translations")) > 1)) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_genuine_translations/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1773[0m
+[debug] QUERY OK source="public_events" db=1.0ms idle=6.2ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND ((((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p0."title_translations")) = 1) OR (((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1) AND (SELECT COUNT(DISTINCT value) FROM jsonb_each_text(p1."description_translations")) = 1)) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_duplicate_translations/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1809[0m
+[debug] QUERY OK source="public_event_sources" db=0.5ms idle=6.7ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=1.2ms idle=7.0ms
+SELECT c3."name", count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) GROUP BY c3."id", c3."name" ORDER BY count(p0."id") DESC [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.get_category_distribution/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:656[0m
+[debug] QUERY OK source="public_events" db=1.4ms idle=8.1ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) AND (LOWER(c3."name") = ANY($2)) [1, ["other", "miscellaneous", "general", "events", "various"]]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_generic_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:696[0m
+[debug] QUERY OK source="public_event_sources" db=0.6ms idle=9.2ms
+SELECT count(p0."id"), COUNT(CASE WHEN p0."min_price" IS NOT NULL OR p0."max_price" IS NOT NULL OR p0."is_free" = true THEN 1 END), COUNT(CASE WHEN p0."currency" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL AND p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."is_free" = true THEN 1 END) FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_price_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:837[0m
+[debug] QUERY OK source="public_event_sources" db=1.0ms idle=9.3ms
+SELECT count(p0."id"), COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."description_translations")) > 0
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) < 50
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) BETWEEN 50 AND 200
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) > 200
+  THEN 1
+END)
+, AVG(
+  CASE
+    WHEN p0."description_translations" IS NOT NULL
+    AND jsonb_typeof(p0."description_translations") = 'object'
+    THEN (
+      SELECT MAX(LENGTH(value::text))
+      FROM jsonb_each_text(p0."description_translations")
+    )
+    ELSE 0
+  END
+)
+ FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_description_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1072[0m
+[debug] QUERY OK source="public_events" db=7.0ms idle=9.4ms
+SELECT p0."id", count(p2."performer_id"), CASE WHEN jsonb_exists(p1."metadata", 'quizmaster') THEN 1 ELSE 0 END FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_performers" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) GROUP BY p0."id", p1."metadata" [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_performer_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1153[0m
+[debug] QUERY OK source="public_events" db=0.9ms idle=15.7ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_occurrence_richness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1237[0m
+[debug] QUERY OK source="public_events" db=1.3ms idle=16.0ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (NOT (p0."occurrences" IS NULL)) AND (jsonb_typeof(p0."occurrences") = 'object') [1]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_time_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1452[0m
+[debug] QUERY OK source="sources" db=0.6ms idle=16.2ms
+SELECT s0."id" FROM "sources" AS s0 WHERE (s0."slug" = $1) ["waw4free"]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.check_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:39[0m
+[debug] QUERY OK source="public_event_sources" db=0.6ms idle=15.8ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=0.6ms idle=15.9ms
+SELECT count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p0."venue_id" IS NULL) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_venues/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:538[0m
+[debug] QUERY OK source="public_event_sources" db=0.8ms idle=15.4ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) AND ((p0."image_url" IS NULL) OR (p0."image_url" = '')) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_images/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:617[0m
+[debug] QUERY OK source="public_events" db=0.9ms idle=14.8ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (p2."category_id" IS NULL) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_missing_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:633[0m
+[debug] QUERY OK source="public_events" db=27.7ms idle=15.1ms
+SELECT p0."id", v2."id", v2."name", v2."metadata" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "venues" AS v2 ON v2."id" = p0."venue_id" WHERE (p1."source_id" = $1) AND (NOT (p0."venue_id" IS NULL)) AND (NOT (v2."metadata" IS NULL)) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_venues_with_low_quality_names/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:560[0m
+[debug] QUERY OK source="public_events" db=3.3ms idle=43.6ms
+SELECT count(p1."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (((NOT (p0."title_translations" IS NULL) AND jsonb_typeof(p0."title_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."title_translations")) > 1) OR ((NOT (p1."description_translations" IS NULL) AND jsonb_typeof(p1."description_translations") = 'object') AND (SELECT COUNT(*) FROM jsonb_object_keys(p1."description_translations")) > 1)) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_multilingual_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1736[0m
+[debug] QUERY OK source="public_event_sources" db=0.6ms idle=39.9ms
+SELECT count(p0."id") FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_events/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:525[0m
+[debug] QUERY OK source="public_events" db=2.0ms idle=39.7ms
+SELECT c3."name", count(p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) GROUP BY c3."id", c3."name" ORDER BY count(p0."id") DESC [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.get_category_distribution/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:656[0m
+[debug] QUERY OK source="public_events" db=1.6ms idle=40.4ms
+SELECT count(DISTINCT p0."id") FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" INNER JOIN "public_event_categories" AS p2 ON p2."event_id" = p0."id" INNER JOIN "categories" AS c3 ON c3."id" = p2."category_id" WHERE (p1."source_id" = $1) AND (LOWER(c3."name") = ANY($2)) [14, ["other", "miscellaneous", "general", "events", "various"]]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.count_generic_categories/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:696[0m
+[debug] QUERY OK source="public_event_sources" db=0.5ms idle=41.4ms
+SELECT count(p0."id"), COUNT(CASE WHEN p0."min_price" IS NOT NULL OR p0."max_price" IS NOT NULL OR p0."is_free" = true THEN 1 END), COUNT(CASE WHEN p0."currency" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."min_price" IS NOT NULL AND p0."max_price" IS NOT NULL THEN 1 END), COUNT(CASE WHEN p0."is_free" = true THEN 1 END) FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_price_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:837[0m
+[debug] QUERY OK source="public_event_sources" db=12.5ms idle=41.3ms
+SELECT count(p0."id"), COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (SELECT COUNT(*) FROM jsonb_object_keys(p0."description_translations")) > 0
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) < 50
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) BETWEEN 50 AND 200
+  THEN 1
+END)
+, COUNT(CASE
+  WHEN p0."description_translations" IS NOT NULL
+  AND jsonb_typeof(p0."description_translations") = 'object'
+  AND (
+    SELECT MAX(LENGTH(value::text))
+    FROM jsonb_each_text(p0."description_translations")
+  ) > 200
+  THEN 1
+END)
+, AVG(
+  CASE
+    WHEN p0."description_translations" IS NOT NULL
+    AND jsonb_typeof(p0."description_translations") = 'object'
+    THEN (
+      SELECT MAX(LENGTH(value::text))
+      FROM jsonb_each_text(p0."description_translations")
+    )
+    ELSE 0
+  END
+)
+ FROM "public_event_sources" AS p0 WHERE (p0."source_id" = $1) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_description_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1072[0m
+[debug] QUERY OK source="public_events" db=8.0ms idle=53.3ms
+SELECT p0."id", count(p2."performer_id"), CASE WHEN jsonb_exists(p1."metadata", 'quizmaster') THEN 1 ELSE 0 END FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" LEFT OUTER JOIN "public_event_performers" AS p2 ON p2."event_id" = p0."id" WHERE (p1."source_id" = $1) GROUP BY p0."id", p1."metadata" [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_performer_completeness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1153[0m
+[debug] QUERY OK source="public_events" db=2.4ms idle=60.5ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_occurrence_richness/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1237[0m
+[debug] QUERY OK source="public_events" db=2.2ms idle=62.4ms
+SELECT p0."id", p0."occurrences" FROM "public_events" AS p0 INNER JOIN "public_event_sources" AS p1 ON p1."event_id" = p0."id" WHERE (p1."source_id" = $1) AND (NOT (p0."occurrences" IS NULL)) AND (jsonb_typeof(p0."occurrences") = 'object') [14]
+[90m↳ EventasaurusDiscovery.Admin.DataQualityChecker.calculate_time_quality/1, at: lib/eventasaurus_discovery/admin/data_quality_checker.ex:1452[0m
+
+📊 SUMMARY TABLE
+--------------------------------------------------------------------------------
+Source                   Events    Overall   Time Quality   Time Diversity
+--------------------------------------------------------------------------------
+Bandsintown                        N/A       N/A            N/A
+Cinema City                        N/A       N/A            N/A
+Geeks Who Drink                    N/A       N/A            N/A
+Inquizition                        N/A       N/A            N/A
+Karnet Kraków                      N/A       N/A            N/A
+Kino Krakow                        N/A       N/A            N/A
+PubQuiz Poland                     N/A       N/A            N/A
+Question One                       N/A       N/A            N/A
+Quizmeisters                       N/A       N/A            N/A
+Resident Advisor                   N/A       N/A            N/A
+Sortiraparis                       N/A       N/A            N/A
+Speed Quizzing                     N/A       N/A            N/A
+Ticketmaster                       N/A       N/A            N/A
+Waw4Free                           N/A       N/A            N/A
+--------------------------------------------------------------------------------
+
+
+📈 DETAILED TIME QUALITY ANALYSIS
+================================================================================
+
+Bandsintown (bandsintown)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Cinema City (cinema-city)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Geeks Who Drink (geeks-who-drink)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Inquizition (inquizition)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Karnet Kraków (karnet)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Kino Krakow (kino-krakow)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+PubQuiz Poland (pubquiz-pl)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Question One (question-one)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Quizmeisters (quizmeisters)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Resident Advisor (resident-advisor)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Sortiraparis (sortiraparis)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Speed Quizzing (speed-quizzing)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Ticketmaster (ticketmaster)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+Waw4Free (waw4free)
+--------------------------------------------------------------------------------
+  Events: 
+  Overall Quality: %
+
+  ℹ️  No time quality data available
+
+
+================================================================================
+END OF REPORT
+================================================================================
+

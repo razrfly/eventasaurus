@@ -20,10 +20,16 @@ event_source =
 
 IO.puts("Testing with event source: #{inspect(event_source)}")
 
+# Extract venue ID from external_id format: "geeks_who_drink_3084221980" -> "3084221980"
+venue_id = String.replace(event_source.external_id, "geeks_who_drink_", "")
+venue_url = "https://www.geekswhodrink.com/venues/#{venue_id}"
+
+IO.puts("Constructed venue URL: #{venue_url}")
+
 # Schedule the job
 job = %{
   "event_source_id" => event_source.id,
-  "venue_url" => event_source.external_id
+  "venue_url" => venue_url
 }
 |> VenueDetailJob.new()
 |> Oban.insert!()

@@ -266,12 +266,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
     # Strategy 1: Try visible text extraction first (most reliable when available)
     case extract_start_time_from_text(document) do
       nil ->
-        # Strategy 2: Fall back to data-time attribute from .time-moment
-        # Note: .time-moment contains the regular recurring schedule time in UTC
-        # (NOT .time-moment-date which is the next specific occurrence)
+        # Strategy 2: Fall back to data-time attribute from .time-moment-date
+        # Note: .time-moment-date contains the current/next occurrence time in UTC
+        # (.time-moment may contain outdated times, so we use .time-moment-date)
         data_time =
           document
-          |> Floki.find(".venueHero__time .time-moment")
+          |> Floki.find(".venueHero__time .time-moment-date")
           |> Floki.attribute("data-time")
           |> List.first()
 
