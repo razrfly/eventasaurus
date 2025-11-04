@@ -181,11 +181,73 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     |> normalize_coordinates()
     |> Map.merge(additional_details)
     |> Map.put(:starts_at, next_occurrence)
-    # Add timezone for recurrence_rule creation
-    # VenueDetailJob calculates next_occurrence in America/New_York timezone
-    # but returns it as UTC DateTime, so we need to pass timezone explicitly
-    |> Map.put(:timezone, "America/New_York")
+    # Add timezone dynamically from venue coordinates
+    |> add_timezone()
   end
+
+  # Determine timezone from venue coordinates using TzWorld
+  defp add_timezone(venue_data) do
+    timezone = determine_timezone(venue_data)
+    Map.put(venue_data, :timezone, timezone)
+  end
+
+  defp determine_timezone(venue_data) do
+    cond do
+      # Priority 1: Use timezone if already provided by source
+      is_binary(venue_data[:timezone]) ->
+        venue_data[:timezone]
+
+      # Priority 2: Calculate from coordinates using TzWorld
+      # TzWorld expects {longitude, latitude} format
+      venue_data[:latitude] && venue_data[:longitude] ->
+        case TzWorld.timezone_at({venue_data[:longitude], venue_data[:latitude]}) do
+          {:ok, timezone} ->
+            timezone
+
+          {:error, reason} ->
+            Logger.warning(
+              "TzWorld lookup failed for venue #{venue_data[:venue_id]} at (#{venue_data[:latitude]}, #{venue_data[:longitude]}): #{inspect(reason)}, using state-based fallback"
+            )
+
+            fallback_timezone_from_address(venue_data)
+        end
+
+      # Priority 3: Fallback to Eastern (most common, but log warning)
+      true ->
+        Logger.warning(
+          "Could not determine timezone for venue #{venue_data[:venue_id]} (no coordinates), using America/New_York fallback"
+        )
+
+        "America/New_York"
+    end
+  end
+
+  # State-based fallback if TzWorld lookup fails
+  defp fallback_timezone_from_address(venue_data) do
+    case get_state_from_address(venue_data[:address]) do
+      # West Coast
+      state when state in ["CA", "WA", "OR", "NV"] -> "America/Los_Angeles"
+      # Arizona (no DST)
+      "AZ" -> "America/Phoenix"
+      # Mountain Time
+      state when state in ["MT", "CO", "UT", "NM", "WY", "ID"] -> "America/Denver"
+      # Central Time
+      state when state in ["IL", "TX", "MN", "MO", "WI", "IA", "KS", "OK", "AR", "LA", "MS", "AL", "TN", "KY", "IN", "MI", "ND", "SD", "NE"] -> "America/Chicago"
+      # Eastern Time (default)
+      _ -> "America/New_York"
+    end
+  end
+
+  # Extract state abbreviation from address string
+  defp get_state_from_address(address) when is_binary(address) do
+    # Example: "1898 S. Flatiron Court Boulder, CO 80301" → "CO"
+    case Regex.run(~r/\b([A-Z]{2})\s+\d{5}/, address) do
+      [_, state] -> state
+      _ -> nil
+    end
+  end
+
+  defp get_state_from_address(_), do: nil
 
   # Normalize lat/lon to latitude/longitude for transformer compatibility
   defp normalize_coordinates(venue_data) do

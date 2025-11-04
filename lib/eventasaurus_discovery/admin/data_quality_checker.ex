@@ -1116,11 +1116,15 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # Calculate performer data completeness.
   #
   # Measures how well performer/artist information is populated:
-  # - Events with performers vs without
+  # - Events with performers vs without (checks both performers table AND metadata)
   # - Single vs multiple performers
   # - Average performers per event
   #
   # Performer data is crucial for music events, theater, and performances.
+  #
+  # Phase 2 Update: Now checks BOTH:
+  # 1. Performers table (public_event_performers) - traditional approach
+  # 2. Metadata field (pes.metadata["quizmaster"]) - hybrid approach used by Geeks Who Drink
   defp calculate_performer_completeness(source_id) do
     query =
       from(e in PublicEvent,
@@ -1129,10 +1133,18 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         left_join: pep in "public_event_performers",
         on: pep.event_id == e.id,
         where: pes.source_id == ^source_id,
-        group_by: e.id,
+        group_by: [e.id, pes.metadata],
         select: %{
           event_id: e.id,
-          performer_count: count(pep.performer_id)
+          # Count performers from performers table
+          table_performer_count: count(pep.performer_id),
+          # Check if metadata contains quizmaster (Geeks Who Drink pattern)
+          # Uses jsonb_exists() to check if 'quizmaster' key exists in metadata
+          has_metadata_performer:
+            fragment(
+              "CASE WHEN jsonb_exists(?, 'quizmaster') THEN 1 ELSE 0 END",
+              pes.metadata
+            )
         }
       )
 
@@ -1150,11 +1162,23 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         avg_performers_per_event: 0.0
       }
     else
-      # Calculate metrics
-      events_with_performers = Enum.count(performer_data, fn d -> d.performer_count > 0 end)
-      events_single = Enum.count(performer_data, fn d -> d.performer_count == 1 end)
-      events_multiple = Enum.count(performer_data, fn d -> d.performer_count > 1 end)
-      total_performers = Enum.reduce(performer_data, 0, fn d, acc -> acc + d.performer_count end)
+      # Calculate metrics combining both performer sources
+      # Total performer count = table performers + metadata performers
+      performer_data_with_total =
+        Enum.map(performer_data, fn d ->
+          Map.put(d, :total_performer_count, d.table_performer_count + d.has_metadata_performer)
+        end)
+
+      events_with_performers =
+        Enum.count(performer_data_with_total, fn d -> d.total_performer_count > 0 end)
+
+      events_single = Enum.count(performer_data_with_total, fn d -> d.total_performer_count == 1 end)
+
+      events_multiple =
+        Enum.count(performer_data_with_total, fn d -> d.total_performer_count > 1 end)
+
+      total_performers =
+        Enum.reduce(performer_data_with_total, 0, fn d, acc -> acc + d.total_performer_count end)
 
       avg_performers =
         if events_with_performers > 0 do
@@ -1163,7 +1187,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           0.0
         end
 
-      # Completeness = % of events with at least one performer
+      # Completeness = % of events with at least one performer (from either source)
       performer_completeness = round(events_with_performers / total_events * 100)
 
       %{
