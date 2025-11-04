@@ -338,7 +338,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
   defp extract_start_time_from_text(document) do
     visible_time =
       document
-      |> Floki.find(".venueHero__time .time-moment")
+      |> Floki.find(".venueHero__time .time-moment-date")
       |> Floki.text()
       |> String.trim()
 
