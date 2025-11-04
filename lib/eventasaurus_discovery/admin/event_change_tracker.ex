@@ -119,7 +119,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   ## Parameters
 
     * `source_slug` - The source name (string)
-    * `city_id` - Optional city filter (integer or nil)
+    * `city_id_or_ids` - Optional city filter (integer, list of integers, or nil)
 
   ## Returns
 
@@ -131,25 +131,28 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       iex> calculate_percentage_change("bandsintown", 1)
       15
 
+      iex> calculate_percentage_change("bandsintown", [1, 2, 3])
+      12
+
       iex> calculate_percentage_change("brand-new-source", nil)
       :first_scrape
 
       iex> calculate_percentage_change("bandsintown", nil)
       -5
   """
-  def calculate_percentage_change(source_slug, city_id \\ nil)
-      when is_binary(source_slug) and (is_integer(city_id) or is_nil(city_id)) do
+  def calculate_percentage_change(source_slug, city_id_or_ids \\ nil)
+      when is_binary(source_slug) and (is_integer(city_id_or_ids) or is_list(city_id_or_ids) or is_nil(city_id_or_ids)) do
     case get_source_id(source_slug) do
       nil ->
         0
 
       source_id ->
-        current_week = get_event_count(source_id, city_id, 0, 7)
-        previous_week = get_event_count(source_id, city_id, 7, 14)
+        current_week = get_event_count(source_id, city_id_or_ids, 0, 7)
+        previous_week = get_event_count(source_id, city_id_or_ids, 7, 14)
 
         # Check if this is truly a first scrape by looking at total historical events
         # If no events exist older than 14 days, this is the first scrape
-        historical_count = get_event_count(source_id, city_id, 14, 365)
+        historical_count = get_event_count(source_id, city_id_or_ids, 14, 365)
 
         cond do
           # First scrape: has current events but no previous or historical events
@@ -299,7 +302,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
     Repo.one(query)
   end
 
-  defp get_event_count(source_id, city_id, days_ago_start, days_ago_end) do
+  defp get_event_count(source_id, city_id_or_ids, days_ago_start, days_ago_end) do
     now = DateTime.utc_now()
     start_date = DateTime.add(now, -days_ago_end, :day)
     end_date = DateTime.add(now, -days_ago_start, :day)
@@ -312,19 +315,34 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       )
 
     query =
-      if city_id do
-        from([pes] in base_query,
-          join: e in PublicEvent,
-          on: e.id == pes.event_id,
-          join: v in EventasaurusApp.Venues.Venue,
-          on: v.id == e.venue_id,
-          where: v.city_id == ^city_id,
-          select: count(pes.id)
-        )
-      else
-        from([pes] in base_query,
-          select: count(pes.id)
-        )
+      cond do
+        # Clustered cities (list)
+        is_list(city_id_or_ids) && length(city_id_or_ids) > 0 ->
+          from([pes] in base_query,
+            join: e in PublicEvent,
+            on: e.id == pes.event_id,
+            join: v in EventasaurusApp.Venues.Venue,
+            on: v.id == e.venue_id,
+            where: v.city_id in ^city_id_or_ids,
+            select: count(pes.id)
+          )
+
+        # Single city (integer)
+        is_integer(city_id_or_ids) ->
+          from([pes] in base_query,
+            join: e in PublicEvent,
+            on: e.id == pes.event_id,
+            join: v in EventasaurusApp.Venues.Venue,
+            on: v.id == e.venue_id,
+            where: v.city_id == ^city_id_or_ids,
+            select: count(pes.id)
+          )
+
+        # All cities (nil or empty list)
+        true ->
+          from([pes] in base_query,
+            select: count(pes.id)
+          )
       end
 
     Repo.one(query) || 0
