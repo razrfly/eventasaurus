@@ -386,6 +386,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   # Get occurrence_type from metadata or detect from data
   defp get_occurrence_type(data) do
+    # DEBUG: Log recurrence_rule presence for Geeks Who Drink debugging
+    if data[:recurrence_rule] do
+      Logger.debug("""
+      ✅ [EventProcessor] Detected recurrence_rule, will use pattern type:
+      - recurrence_rule: #{inspect(data.recurrence_rule)}
+      """)
+    end
+
     cond do
       # Check event_type first (Sortiraparis uses :exhibition, :recurring, :one_time)
       data.event_type == :exhibition ->
@@ -400,10 +408,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       # Check for recurrence_rule (pattern type)
       data.recurrence_rule ->
+        Logger.info("[EventProcessor] Using pattern-type occurrence for recurring event")
         "pattern"
 
       # Default to explicit for one-time events
       true ->
+        Logger.debug("[EventProcessor] No recurrence_rule found, using explicit type")
         "explicit"
     end
   end
@@ -455,7 +465,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp build_occurrence_structure("recurring", data) do
     date_entry = %{
       "date" => format_date_only(data.start_at),
-      "time" => format_time_only(data.start_at),
+      "time" => format_time_only(data.start_at, data),
       "external_id" => data.external_id
     }
 
@@ -493,7 +503,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp build_occurrence_structure("explicit", data) do
     date_entry = %{
       "date" => format_date_only(data.start_at),
-      "time" => format_time_only(data.start_at),
+      "time" => format_time_only(data.start_at, data),
       "external_id" => data.external_id
     }
 
@@ -1563,7 +1573,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Create new date entry
       new_date = %{
         "date" => format_date_only(new_occurrence.start_at),
-        "time" => format_time_only(new_occurrence.start_at)
+        "time" => format_time_only(new_occurrence.start_at, new_occurrence)
       }
 
       # Add external_id if present
@@ -1674,15 +1684,59 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp format_date_only(_), do: nil
 
-  defp format_time_only(%DateTime{} = dt) do
+  # Format time with timezone awareness (2-arity version)
+  defp format_time_only(%DateTime{} = dt, event_data) when is_map(event_data) or is_nil(event_data) do
+    # Extract timezone from event data or use UTC as fallback
+    timezone = extract_timezone(event_data) || "Etc/UTC"
+
+    # Convert to local timezone before extracting time
+    # This ensures occurrence times show local time, not UTC
     dt
+    |> DateTime.shift_zone!(timezone)
     |> DateTime.to_time()
     |> Time.to_string()
     # HH:MM format
     |> String.slice(0..4)
+  rescue
+    # If timezone shift fails, fall back to UTC time extraction
+    ArgumentError ->
+      dt
+      |> DateTime.to_time()
+      |> Time.to_string()
+      |> String.slice(0..4)
   end
 
+  # Legacy 1-arity version for backward compatibility
+  defp format_time_only(%DateTime{} = dt) do
+    format_time_only(dt, nil)
+  end
+
+  # Catch-all for invalid inputs
   defp format_time_only(_), do: nil
+
+  # Extract timezone from event data hierarchy
+  # Priority: recurrence_rule > metadata > default
+  defp extract_timezone(nil), do: nil
+
+  defp extract_timezone(data) when is_map(data) do
+    cond do
+      # Priority 1: recurrence_rule timezone (for pattern events)
+      data[:recurrence_rule] && data[:recurrence_rule]["timezone"] ->
+        data[:recurrence_rule]["timezone"]
+
+      # Priority 2: metadata timezone (for all events)
+      data[:metadata] && data[:metadata]["timezone"] ->
+        data[:metadata]["timezone"]
+
+      # Priority 3: metadata timezone (string key fallback)
+      data["metadata"] && data["metadata"]["timezone"] ->
+        data["metadata"]["timezone"]
+
+      # No timezone found
+      true ->
+        nil
+    end
+  end
 
   defp latest_date(dates) do
     dates
