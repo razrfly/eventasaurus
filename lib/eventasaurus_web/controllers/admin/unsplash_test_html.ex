@@ -22,4 +22,16 @@ defmodule EventasaurusWeb.Admin.UnsplashTestHTML do
   end
 
   def format_date(_), do: "Invalid date"
+
+  @doc """
+  Format category name from snake_case to Title Case.
+  """
+  def format_category_name(category_name) when is_binary(category_name) do
+    category_name
+    |> String.split("_")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  def format_category_name(_), do: "Unknown"
 end

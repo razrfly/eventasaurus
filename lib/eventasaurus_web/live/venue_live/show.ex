@@ -57,8 +57,25 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   @impl true
+  def handle_params(%{"venue_slug" => venue_slug, "city_slug" => city_slug} = _params, _url, socket) do
+    # City-scoped venue route (e.g., /c/:city_slug/venues/:venue_slug)
+    venue = get_venue_by_slug(venue_slug, city_slug)
+
+    case venue do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, gettext("Venue not found"))
+         |> push_navigate(to: ~p"/")}
+
+      venue ->
+        load_and_assign_venue(venue, socket)
+    end
+  end
+
+  @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    # Handle both direct venue slug and city-scoped venue slug
+    # Direct venue slug route (e.g., /venues/:slug)
     venue = get_venue_by_slug(slug, params["city_slug"])
 
     case venue do
@@ -69,61 +86,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
          |> push_navigate(to: ~p"/")}
 
       venue ->
-        # Preload city and country
-        venue = Repo.preload(venue, city_ref: :country)
-
-        # Get events for this venue
-        events = get_venue_events(venue.id)
-
-        # Get related venues in the same city with events count
-        related_venues =
-          if venue.city_id do
-            Venues.list_related_venues_with_events_count(venue.id, venue.city_id, 6)
-            |> Enum.map(fn venue_data ->
-              # Preload associations for the venue
-              Map.update!(venue_data, :venue, &Repo.preload(&1, city_ref: :country))
-            end)
-          else
-            []
-          end
-
-        # Build breadcrumb items with city hierarchy
-        breadcrumb_items = build_venue_breadcrumbs(venue)
-
-        # Generate JSON-LD structured data
-        json_ld_schemas =
-          generate_json_ld_schemas(venue, breadcrumb_items, socket.assigns.request_uri)
-
-        # Build venue description for SEO
-        description = build_venue_description(venue, events)
-
-        # Build canonical path
-        canonical_path =
-          if venue.city_ref do
-            "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
-          else
-            "/venues/#{venue.slug}"
-          end
-
-        socket =
-          socket
-          |> assign(:venue, venue)
-          |> assign(:upcoming_events, events.upcoming)
-          |> assign(:future_events, events.future)
-          |> assign(:past_events, events.past)
-          |> assign(:related_venues, related_venues)
-          |> assign(:breadcrumb_items, breadcrumb_items)
-          |> assign(:loading, false)
-          |> SEOHelpers.assign_meta_tags(
-            title: "#{venue.name} - Wombie",
-            description: description,
-            type: "website",
-            canonical_path: canonical_path,
-            json_ld: json_ld_schemas,
-            request_uri: socket.assigns.request_uri
-          )
-
-        {:noreply, socket}
+        load_and_assign_venue(venue, socket)
     end
   end
 
@@ -156,6 +119,65 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   # Helper functions
+
+  # Shared logic for loading and assigning venue data to socket
+  defp load_and_assign_venue(venue, socket) do
+    # Preload city and country
+    venue = Repo.preload(venue, city_ref: :country)
+
+    # Get events for this venue
+    events = get_venue_events(venue.id)
+
+    # Get related venues in the same city with events count
+    related_venues =
+      if venue.city_id do
+        Venues.list_related_venues_with_events_count(venue.id, venue.city_id, 6)
+        |> Enum.map(fn venue_data ->
+          # Preload associations for the venue
+          Map.update!(venue_data, :venue, &Repo.preload(&1, city_ref: :country))
+        end)
+      else
+        []
+      end
+
+    # Build breadcrumb items with city hierarchy
+    breadcrumb_items = build_venue_breadcrumbs(venue)
+
+    # Generate JSON-LD structured data
+    json_ld_schemas =
+      generate_json_ld_schemas(venue, breadcrumb_items, socket.assigns.request_uri)
+
+    # Build venue description for SEO
+    description = build_venue_description(venue, events)
+
+    # Build canonical path
+    canonical_path =
+      if venue.city_ref do
+        "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+      else
+        "/venues/#{venue.slug}"
+      end
+
+    socket =
+      socket
+      |> assign(:venue, venue)
+      |> assign(:upcoming_events, events.upcoming)
+      |> assign(:future_events, events.future)
+      |> assign(:past_events, events.past)
+      |> assign(:related_venues, related_venues)
+      |> assign(:breadcrumb_items, breadcrumb_items)
+      |> assign(:loading, false)
+      |> SEOHelpers.assign_meta_tags(
+        title: "#{venue.name} - Wombie",
+        description: description,
+        type: "website",
+        canonical_path: canonical_path,
+        json_ld: json_ld_schemas,
+        request_uri: socket.assigns.request_uri
+      )
+
+    {:noreply, socket}
+  end
 
   defp get_venue_by_slug(slug, city_slug) when is_binary(city_slug) do
     # City-scoped lookup
