@@ -34,7 +34,6 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
 
   alias EventasaurusDiscovery.Sources.GeeksWhoDrink.{
     Extractors.VenueDetailsExtractor,
-    Helpers.TimeParser,
     Transformer
   }
 
@@ -60,9 +59,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     result =
       with {:ok, additional_details} <- fetch_additional_details(venue_url),
            _ <- log_additional_details(additional_details),
+           # CRITICAL FIX: Determine timezone BEFORE calculating next_occurrence
+           # Previously hardcoded to "America/New_York", causing 1-3 hour errors for non-Eastern venues
+           venue_timezone <- determine_timezone(venue_data),
            {:ok, {day_of_week, time}} <-
              parse_time_from_sources(venue_data.time_text, additional_details),
-           {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time),
+           {:ok, next_occurrence} <- calculate_next_occurrence(day_of_week, time, venue_timezone),
            enriched_venue_data <-
              enrich_venue_data(venue_data, additional_details, next_occurrence),
            _ <- log_enriched_data(enriched_venue_data),
@@ -164,9 +166,11 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     end
   end
 
-  defp calculate_next_occurrence(day_of_week, time) do
-    # Calculate next occurrence in America/New_York timezone
-    next_dt = TimeParser.next_occurrence(day_of_week, time, "America/New_York")
+  defp calculate_next_occurrence(day_of_week, time, timezone) do
+    # Calculate next occurrence in venue's actual timezone (not hardcoded!)
+    # This fixes the bug where all venues were calculated in Eastern timezone
+    Logger.info("🕐 Calculating next occurrence for #{day_of_week} at #{time} in #{timezone}")
+    next_dt = RecurringEventParser.next_occurrence(day_of_week, time, timezone)
     {:ok, next_dt}
   rescue
     error ->

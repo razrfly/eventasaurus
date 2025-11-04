@@ -3,12 +3,28 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
   Polish language date pattern provider for multilingual date parser.
 
   Supports various Polish date formats commonly found in event listings:
+  - Numeric dates: "04.09.2025" (DD.MM.YYYY format)
+  - Numeric date ranges: "04.09.2025 - 09.10.2025"
   - Single dates with day names: "poniedziałek, 3 listopada 2025"
   - Single dates without day names: "3 listopada 2025"
   - Date ranges: "od 19 marca do 21 marca 2025"
   - Times: "18:00", "Godzina rozpoczęcia: 18:00", "o godz. 18:00"
 
   ## Examples
+
+      iex> Polish.extract_components("04.09.2025")
+      {:ok, %{type: :single, day: 4, month: 9, year: 2025}}
+
+      iex> Polish.extract_components("04.09.2025 - 09.10.2025")
+      {:ok, %{
+        type: :range_cross_year,
+        start_day: 4,
+        start_month: 9,
+        start_year: 2025,
+        end_day: 9,
+        end_month: 10,
+        end_year: 2025
+      }}
 
       iex> Polish.extract_components("poniedziałek, 3 listopada 2025")
       {:ok, %{type: :single, day: 3, month: "listopada", year: 2025}}
@@ -87,6 +103,14 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
     months = "(?:" <> Enum.join(month_tokens, "|") <> ")\\.?"
 
     [
+      # DD.MM.YYYY date range: "04.09.2025 - 09.10.2025"
+      # Must come before text patterns to match numeric dates first
+      ~r/(\d{1,2})\.(\d{1,2})\.(\d{4})\s*-\s*(\d{1,2})\.(\d{1,2})\.(\d{4})/u,
+
+      # DD.MM.YYYY single date: "04.09.2025"
+      # Must come before text patterns to match numeric dates first
+      ~r/(\d{1,2})\.(\d{1,2})\.(\d{4})/u,
+
       # Date range cross-year: "od 29 grudnia 2025 do 2 stycznia 2026"
       ~r/\b(?:od\s*)?(\d{1,2})\s+(#{months})\s+(\d{4})\s+do\s+(\d{1,2})\s+(#{months})\s+(\d{4})\b/iu,
 
@@ -116,10 +140,11 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
 
     # Try each pattern in order
     result =
-      Enum.reduce_while(patterns(), {:error, :no_match}, fn pattern, _acc ->
+      Enum.reduce_while(patterns(), {:error, :no_match}, fn pattern, acc ->
         case Regex.run(pattern, normalized) do
           nil ->
-            {:cont, {:error, :no_match}}
+            # Pattern doesn't match - preserve accumulator (might have validation error from previous pattern)
+            {:cont, acc}
 
           matches ->
             case parse_matches(matches, pattern, normalized) do
@@ -128,6 +153,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
                 {:halt, {:ok, components}}
 
               {:error, _} = error ->
+                # Pattern matched but validation failed - continue with this error
                 {:cont, error}
             end
         end
@@ -148,9 +174,69 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
 
   # Parse regex matches based on the pattern that matched
   defp parse_matches(matches, pattern, _original_text) do
+    # Get the source of the pattern to check what kind of pattern it is
+    source = Regex.source(pattern)
+
     cond do
+      # DD.MM.YYYY date range: [full, day1, month1, year1, day2, month2, year2]
+      # E.g., "04.09.2025 - 09.10.2025"
+      # Check if pattern source contains "\." (escaped dot) which indicates numeric format
+      length(matches) == 7 and String.contains?(source, "\\.") ->
+        [_, start_day, start_month, start_year, end_day, end_month, end_year] = matches
+
+        with {start_day_int, _} <- Integer.parse(start_day),
+             {end_day_int, _} <- Integer.parse(end_day),
+             {start_month_int, _} <- Integer.parse(start_month),
+             {end_month_int, _} <- Integer.parse(end_month),
+             {start_year_int, _} <- Integer.parse(start_year),
+             {end_year_int, _} <- Integer.parse(end_year),
+             true <- valid_date?(start_day_int, start_month_int, start_year_int),
+             true <- valid_date?(end_day_int, end_month_int, end_year_int) do
+          {:ok,
+           %{
+             type: :range_cross_year,
+             start_day: start_day_int,
+             start_month: start_month_int,
+             start_year: start_year_int,
+             end_day: end_day_int,
+             end_month: end_month_int,
+             end_year: end_year_int
+           }}
+        else
+          _ -> {:error, :invalid_date_components}
+        end
+
+      # DD.MM.YYYY single date: [full, day, month, year]
+      # E.g., "04.09.2025"
+      # Distinguished from text month patterns by checking if month can be parsed as integer
+      length(matches) == 4 ->
+        [_, day, month, year] = matches
+
+        # Try to parse month as integer first (DD.MM.YYYY format)
+        case Integer.parse(month) do
+          {month_int, ""} ->
+            # Month is numeric - this is DD.MM.YYYY format
+            with {day_int, _} <- Integer.parse(day),
+                 {year_int, _} <- Integer.parse(year),
+                 true <- valid_date?(day_int, month_int, year_int) do
+              {:ok, %{type: :single, day: day_int, month: month_int, year: year_int}}
+            else
+              _ -> {:error, :invalid_date_components}
+            end
+
+          _ ->
+            # Month is text - this is text format (e.g., "3 listopada 2025")
+            with {day_int, _} <- Integer.parse(day),
+                 {year_int, _} <- Integer.parse(year),
+                 {:ok, month_num} <- validate_month(month) do
+              {:ok, %{type: :single, day: day_int, month: month_num, year: year_int}}
+            else
+              _ -> {:error, :invalid_date_components}
+            end
+        end
+
       # Date range cross-year: [full, day1, month1, year1, day2, month2, year2]
-      length(matches) == 7 and Regex.match?(~r/do/i, Regex.source(pattern)) ->
+      length(matches) == 7 and String.contains?(source, "do") ->
         [_, start_day, start_month, start_year, end_day, end_month, end_year] = matches
 
         with {start_day_int, _} <- Integer.parse(start_day),
@@ -174,7 +260,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
         end
 
       # Date range cross-month: [full, day1, month1, day2, month2, year]
-      length(matches) == 6 and Regex.match?(~r/do/i, Regex.source(pattern)) ->
+      length(matches) == 6 and String.contains?(source, "do") ->
         [_, start_day, start_month, end_day, end_month, year] = matches
 
         with {start_day_int, _} <- Integer.parse(start_day),
@@ -196,7 +282,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
         end
 
       # Date range same month: [full, day1, day2, month, year]
-      length(matches) == 5 and Regex.match?(~r/do/i, Regex.source(pattern)) ->
+      length(matches) == 5 and String.contains?(source, "do") ->
         [_, start_day, end_day, month, year] = matches
 
         with {start_day_int, _} <- Integer.parse(start_day),
@@ -211,18 +297,6 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
              month: month_num,
              year: year_int
            }}
-        else
-          _ -> {:error, :invalid_date_components}
-        end
-
-      # Single date: [full, day, month, year]
-      length(matches) == 4 ->
-        [_, day, month, year] = matches
-
-        with {day_int, _} <- Integer.parse(day),
-             {year_int, _} <- Integer.parse(year),
-             {:ok, month_num} <- validate_month(month) do
-          {:ok, %{type: :single, day: day_int, month: month_num, year: year_int}}
         else
           _ -> {:error, :invalid_date_components}
         end
@@ -268,6 +342,13 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
     end
   end
 
+  # Validate date components (day, month, year)
+  defp valid_date?(day, month, year) do
+    day >= 1 and day <= 31 and
+      month >= 1 and month <= 12 and
+      year >= 1900 and year <= 2100
+  end
+
   # Extract time components from text
   # Supports Polish time formats:
   # - "Godzina rozpoczęcia: 18:00"
@@ -280,8 +361,9 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.Polish do
       ~r/godzin[aą](?:\s+rozpoczęcia)?:\s*(\d{1,2})[:\.](\d{2})/iu,
       # "o godz. 18:00"
       ~r/o\s+godz\.?\s*(\d{1,2})[:\.](\d{2})/iu,
-      # Standalone time "18:00" or "18.00"
-      ~r/\b(\d{1,2})[:\.](\d{2})\b/u
+      # Standalone time "18:00" or "18.00" - must not be followed by more digits (to avoid matching dates)
+      # Also ensures we're matching actual time values (hours 0-23)
+      ~r/(?:^|\s|,)\s*(\d{1,2})[:\.](\d{2})(?!\.\d)/u
     ]
 
     # Try each time pattern

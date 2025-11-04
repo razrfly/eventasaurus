@@ -268,48 +268,47 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   defp number_to_day(6), do: "saturday"
   defp number_to_day(7), do: "sunday"
 
-  # Fallback: parse time_text using TimeParser (for backward compatibility)
+  # Fallback: parse time_text using RecurringEventParser (for backward compatibility)
   defp fallback_parse_time_text(time_text, venue_data) do
-    alias EventasaurusDiscovery.Sources.GeeksWhoDrink.Helpers.TimeParser
+    # RecurringEventParser doesn't have parse_time_text, so we need to parse day and time separately
+    with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
+         {:ok, time_struct} <- RecurringEventParser.parse_time(time_text) do
+      # Convert Time struct to HH:MM string format
+      time_string = Time.to_string(time_struct) |> String.slice(0, 5)
 
-    case TimeParser.parse_time_text(time_text) do
-      {:ok, {day_of_week, time_struct}} ->
-        # Convert Time struct to HH:MM string format
-        time_string = Time.to_string(time_struct) |> String.slice(0, 5)
+      # Get timezone from venue_data (VenueDetailJob MUST provide this)
+      timezone =
+        cond do
+          is_binary(venue_data[:timezone]) ->
+            venue_data[:timezone]
 
-        # Get timezone from venue_data (VenueDetailJob MUST provide this)
-        timezone =
-          cond do
-            is_binary(venue_data[:timezone]) ->
-              venue_data[:timezone]
+          is_binary(venue_data["timezone"]) ->
+            venue_data["timezone"]
 
-            is_binary(venue_data["timezone"]) ->
-              venue_data["timezone"]
+          true ->
+            # This should never happen now that VenueDetailJob determines timezone
+            Logger.error(
+              "Missing timezone in venue_data for venue #{venue_data[:venue_id]} during fallback parse. VenueDetailJob should always provide timezone."
+            )
 
-            true ->
-              # This should never happen now that VenueDetailJob determines timezone
-              Logger.error(
-                "Missing timezone in venue_data for venue #{venue_data[:venue_id]} during fallback parse. VenueDetailJob should always provide timezone."
-              )
-
-              nil
-          end
-
-        case timezone do
-          nil ->
-            {:error, "Missing timezone in venue_data"}
-
-          tz when is_binary(tz) ->
-            recurrence_rule = %{
-              "frequency" => "weekly",
-              "days_of_week" => [Atom.to_string(day_of_week)],
-              "time" => time_string,
-              "timezone" => tz
-            }
-
-            {:ok, recurrence_rule}
+            nil
         end
 
+      case timezone do
+        nil ->
+          {:error, "Missing timezone in venue_data"}
+
+        tz when is_binary(tz) ->
+          recurrence_rule = %{
+            "frequency" => "weekly",
+            "days_of_week" => [Atom.to_string(day_of_week)],
+            "time" => time_string,
+            "timezone" => tz
+          }
+
+          {:ok, recurrence_rule}
+      end
+    else
       {:error, _reason} ->
         {:error, "Could not extract day of week from time_text: #{time_text}"}
     end

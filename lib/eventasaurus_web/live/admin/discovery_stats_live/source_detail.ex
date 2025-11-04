@@ -1001,27 +1001,33 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
                 <%= if @quality_data.occurrence_metrics.time_quality_metrics do %>
                   <div class="mt-2 pt-2 border-t border-gray-200">
                     <p class="text-xs font-medium text-gray-700 mb-1">Time Quality: <%= @quality_data.occurrence_metrics.time_quality_metrics.time_quality %>%</p>
-                    <%= if @quality_data.occurrence_metrics.time_quality_metrics.time_quality < 70 do %>
-                      <div class="space-y-1">
-                        <%= if @quality_data.occurrence_metrics.time_quality_metrics.midnight_percentage > 30 do %>
-                          <p class="text-xs text-orange-600">
-                            ⚠️ <%= Float.round(@quality_data.occurrence_metrics.time_quality_metrics.midnight_percentage, 1) %>% at midnight (00:00)
-                          </p>
-                        <% end %>
-                        <%= if @quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage > 80 do %>
-                          <p class="text-xs text-orange-600">
-                            ⚠️ <%= Float.round(@quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage, 1) %>% at <%= @quality_data.occurrence_metrics.time_quality_metrics.most_common_time %>
-                          </p>
-                        <% end %>
-                        <%= if @quality_data.occurrence_metrics.time_quality_metrics.time_diversity_score < 50 do %>
-                          <p class="text-xs text-orange-600">
-                            ⚠️ Low diversity: <%= @quality_data.occurrence_metrics.time_quality_metrics.time_diversity_score %>%
-                          </p>
-                        <% end %>
-                      </div>
-                    <% else %>
-                      <p class="text-xs text-green-600">✓ Time parsing working correctly</p>
-                    <% end %>
+
+                    <!-- Always show variance metrics -->
+                    <div class="space-y-1">
+                      <!-- Same time percentage -->
+                      <%= if @quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage > 80 do %>
+                        <p class="text-xs text-orange-600 font-medium">
+                          WARNING: <%= :erlang.float_to_binary(@quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage * 1.0, decimals: 1) %>% of events at <%= @quality_data.occurrence_metrics.time_quality_metrics.most_common_time %>
+                        </p>
+                      <% else %>
+                        <p class={"text-xs #{if @quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage < 50, do: "text-green-600", else: "text-gray-600"}"}>
+                          <%= :erlang.float_to_binary(@quality_data.occurrence_metrics.time_quality_metrics.same_time_percentage * 1.0, decimals: 1) %>% of events at <%= @quality_data.occurrence_metrics.time_quality_metrics.most_common_time %>
+                        </p>
+                      <% end %>
+
+                      <!-- Time diversity score -->
+                      <p class={"text-xs #{if @quality_data.occurrence_metrics.time_quality_metrics.time_diversity_score < 50, do: "text-orange-600", else: "text-gray-600"}"}>
+                        Time diversity: <%= @quality_data.occurrence_metrics.time_quality_metrics.time_diversity_score %>%
+                      </p>
+
+                      <!-- Midnight warning -->
+                      <%= if @quality_data.occurrence_metrics.time_quality_metrics.midnight_percentage > 30 do %>
+                        <p class="text-xs text-orange-600">
+                          WARNING: <%= :erlang.float_to_binary(@quality_data.occurrence_metrics.time_quality_metrics.midnight_percentage * 1.0, decimals: 1) %>% at midnight (00:00)
+                        </p>
+                      <% end %>
+                    </div>
+
                     <p class="mt-1 text-xs text-gray-500">
                       <%= @quality_data.occurrence_metrics.time_quality_metrics.total_occurrences %> occurrences analyzed
                     </p>

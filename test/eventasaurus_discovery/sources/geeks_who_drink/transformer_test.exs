@@ -87,7 +87,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.TransformerTest do
         starts_at: ~U[2025-10-15 19:00:00Z],
         source_url: "https://example.com/venue/12345",
         time_text: "Tuesdays at 7:00 pm",
-        fee_text: "$5 per person"
+        fee_text: "$5 per person",
+        timezone: "America/New_York"
       }
 
       result = Transformer.transform_event(venue_data)
@@ -111,7 +112,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.TransformerTest do
         longitude: nil,
         starts_at: ~U[2025-10-15 19:00:00Z],
         source_url: "https://example.com/venue/12345",
-        time_text: "Tuesdays at 7:00 pm"
+        time_text: "Tuesdays at 7:00 pm",
+        timezone: "America/New_York"
       }
 
       result = Transformer.transform_event(venue_data)
@@ -130,7 +132,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.TransformerTest do
         longitude: nil,
         starts_at: ~U[2025-10-15 19:00:00Z],
         source_url: "https://example.com/venue/12345",
-        time_text: "Tuesdays at 7:00 pm"
+        time_text: "Tuesdays at 7:00 pm",
+        timezone: "America/New_York"
       }
 
       result = Transformer.transform_event(venue_data)
@@ -147,12 +150,13 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.TransformerTest do
         address: "123 Main St, New York, NY 10001",
         latitude: 40.7128,
         longitude: -74.0060,
-        starts_at: ~U[2025-10-15 19:00:00Z],
+        starts_at: ~U[2025-10-14 23:00:00Z],
         source_url: "https://example.com/venue/12345",
         time_text: "Tuesdays at 7:00 pm",
         fee_text: "$5 per person",
         phone: "555-1234",
-        website: "https://example.com"
+        website: "https://example.com",
+        timezone: "America/New_York"
       }
 
       result = Transformer.transform_event(venue_data)
@@ -160,7 +164,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.TransformerTest do
       # Verify all required fields
       assert result.external_id == "geeks_who_drink_12345"
       assert result.title == "Geeks Who Drink Trivia at The Trivia Bar"
-      assert result.starts_at == ~U[2025-10-15 19:00:00Z]
+      assert result.starts_at == ~U[2025-10-14 23:00:00Z]
       assert result.category == "trivia"
 
       # Verify venue data

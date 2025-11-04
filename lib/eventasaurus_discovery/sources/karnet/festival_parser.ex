@@ -8,7 +8,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.Karnet.DateParser
+  alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
 
   @doc """
   Detect if an event is a festival based on various indicators.
@@ -57,15 +57,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
   end
 
   defp extract_date_range(event_data) do
-    case DateParser.parse_date_string(event_data[:date_text]) do
-      {:ok, {start_dt, end_dt}} ->
+    case MultilingualDateParser.extract_and_parse(event_data[:date_text],
+           languages: [:polish],
+           timezone: "Europe/Warsaw"
+         ) do
+      {:ok, %{starts_at: start_dt, ends_at: end_dt}} ->
         %{
           start_date: start_dt,
-          end_date: end_dt,
-          duration_days: calculate_duration(start_dt, end_dt)
+          end_date: end_dt || start_dt,
+          duration_days: calculate_duration(start_dt, end_dt || start_dt)
         }
 
-      _ ->
+      {:error, _reason} ->
         %{
           text: event_data[:date_text],
           parsed: false

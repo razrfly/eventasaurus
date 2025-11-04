@@ -24,7 +24,8 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.{DateParser, TextHelper}
+  alias EventasaurusDiscovery.Sources.QuestionOne.Helpers.TextHelper
+  alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
   alias EventasaurusDiscovery.Locations.CountryResolver
 
   @doc """
@@ -54,8 +55,8 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     # Parse time text to get day and time
     {day_of_week, start_time} = parse_time_data(venue_data.time_text)
 
-    # Calculate next occurrence in UTC
-    starts_at = DateParser.next_occurrence(day_of_week, start_time)
+    # Calculate next occurrence in UTC (Question One events are in Europe/London timezone)
+    starts_at = RecurringEventParser.next_occurrence(day_of_week, start_time, "Europe/London")
 
     # Generate stable external_id
     # For pattern-based scrapers, venue is the unique identifier
@@ -64,8 +65,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
     external_id = "question_one_#{venue_slug}"
 
     # Use geocoded city and country (enriched by venue_detail_job)
+    # Default to United Kingdom since Question One is UK-specific
     city = Map.get(venue_data, :city_name)
-    country = Map.get(venue_data, :country_name)
+    country = Map.get(venue_data, :country_name, "United Kingdom")
 
     # Determine currency from country
     currency = determine_currency(country)
@@ -165,20 +167,21 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
   - `{:error, reason}` - Parsing failed
   """
   def parse_schedule_to_recurrence(time_text) when is_binary(time_text) do
-    case DateParser.parse_time_text(time_text) do
-      {:ok, {day_of_week, time_struct}} ->
-        # Convert Time struct to HH:MM string format
-        time_string = Time.to_string(time_struct) |> String.slice(0, 5)
+    # Parse day and time separately using RecurringEventParser
+    with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
+         {:ok, time_struct} <- RecurringEventParser.parse_time(time_text) do
+      # Convert Time struct to HH:MM string format
+      time_string = Time.to_string(time_struct) |> String.slice(0, 5)
 
-        recurrence_rule = %{
-          "frequency" => "weekly",
-          "days_of_week" => [Atom.to_string(day_of_week)],
-          "time" => time_string,
-          "timezone" => "Europe/London"
-        }
+      recurrence_rule = %{
+        "frequency" => "weekly",
+        "days_of_week" => [Atom.to_string(day_of_week)],
+        "time" => time_string,
+        "timezone" => "Europe/London"
+      }
 
-        {:ok, recurrence_rule}
-
+      {:ok, recurrence_rule}
+    else
       {:error, reason} ->
         {:error, "Could not parse time_text: #{reason}"}
     end
@@ -188,10 +191,11 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Transformer do
 
   # Parse time_text or return defaults if parsing fails
   defp parse_time_data(time_text) do
-    case DateParser.parse_time_text(time_text) do
-      {:ok, {day, time}} ->
-        {day, time}
-
+    # Parse day and time separately using RecurringEventParser
+    with {:ok, day} <- RecurringEventParser.parse_day_of_week(time_text),
+         {:ok, time} <- RecurringEventParser.parse_time(time_text) do
+      {day, time}
+    else
       {:error, reason} ->
         Logger.warning("⚠️ Failed to parse time_text '#{time_text}': #{reason}. Using defaults.")
         # Default to Monday at 7pm
