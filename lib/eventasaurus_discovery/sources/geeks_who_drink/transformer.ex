@@ -213,8 +213,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   # Extract day_of_week, time, and timezone from DateTime
   # Uses timezone from venue_data since UTC DateTime loses original timezone info
   defp extract_from_datetime(%DateTime{} = dt, venue_data) when is_map(venue_data) do
-    # Get timezone from venue_data (VenueDetailJob adds this)
-    # Fallback to America/New_York if not present
+    # Get timezone from venue_data (VenueDetailJob MUST provide this)
     timezone =
       cond do
         is_binary(venue_data[:timezone]) ->
@@ -224,24 +223,35 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
           venue_data["timezone"]
 
         true ->
-          "America/New_York"
+          # This should never happen now that VenueDetailJob determines timezone
+          Logger.error(
+            "Missing timezone in venue_data for venue #{venue_data[:venue_id]}. VenueDetailJob should always provide timezone."
+          )
+
+          {:error, "Missing timezone in venue_data"}
       end
 
-    # Convert UTC DateTime to local timezone to get correct day/time
-    local_dt = DateTime.shift_zone!(dt, timezone)
+    case timezone do
+      {:error, _} = error ->
+        error
 
-    # Get day of week as string (e.g., "tuesday") from LOCAL time
-    day_num = Date.day_of_week(DateTime.to_date(local_dt), :monday)
-    day_of_week = number_to_day(day_num)
+      tz when is_binary(tz) ->
+        # Convert UTC DateTime to local timezone to get correct day/time
+        local_dt = DateTime.shift_zone!(dt, tz)
 
-    # Get time in HH:MM format from LOCAL time
-    time_string =
-      local_dt
-      |> DateTime.to_time()
-      |> Time.to_string()
-      |> String.slice(0, 5)
+        # Get day of week as string (e.g., "tuesday") from LOCAL time
+        day_num = Date.day_of_week(DateTime.to_date(local_dt), :monday)
+        day_of_week = number_to_day(day_num)
 
-    {:ok, {day_of_week, time_string, timezone}}
+        # Get time in HH:MM format from LOCAL time
+        time_string =
+          local_dt
+          |> DateTime.to_time()
+          |> Time.to_string()
+          |> String.slice(0, 5)
+
+        {:ok, {day_of_week, time_string, tz}}
+    end
   rescue
     error ->
       {:error, "DateTime extraction failed: #{inspect(error)}"}
@@ -267,22 +277,38 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         # Convert Time struct to HH:MM string format
         time_string = Time.to_string(time_struct) |> String.slice(0, 5)
 
-        # Detect timezone from venue_data or use default
+        # Get timezone from venue_data (VenueDetailJob MUST provide this)
         timezone =
-          if is_binary(venue_data[:timezone]) do
-            venue_data[:timezone]
-          else
-            "America/New_York"
+          cond do
+            is_binary(venue_data[:timezone]) ->
+              venue_data[:timezone]
+
+            is_binary(venue_data["timezone"]) ->
+              venue_data["timezone"]
+
+            true ->
+              # This should never happen now that VenueDetailJob determines timezone
+              Logger.error(
+                "Missing timezone in venue_data for venue #{venue_data[:venue_id]} during fallback parse. VenueDetailJob should always provide timezone."
+              )
+
+              nil
           end
 
-        recurrence_rule = %{
-          "frequency" => "weekly",
-          "days_of_week" => [Atom.to_string(day_of_week)],
-          "time" => time_string,
-          "timezone" => timezone
-        }
+        case timezone do
+          nil ->
+            {:error, "Missing timezone in venue_data"}
 
-        {:ok, recurrence_rule}
+          tz when is_binary(tz) ->
+            recurrence_rule = %{
+              "frequency" => "weekly",
+              "days_of_week" => [Atom.to_string(day_of_week)],
+              "time" => time_string,
+              "timezone" => tz
+            }
+
+            {:ok, recurrence_rule}
+        end
 
       {:error, _reason} ->
         {:error, "Could not extract day of week from time_text: #{time_text}"}
