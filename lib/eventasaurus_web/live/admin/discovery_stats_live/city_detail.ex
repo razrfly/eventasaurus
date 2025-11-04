@@ -208,6 +208,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     # Use primary city_id for stats lookups (first in cluster)
     primary_city_id = List.first(clustered_city_ids)
 
+    # Batch fetch change tracking data for all sources (like main stats page)
+    source_slugs = Enum.map(sources, & &1.source_slug)
+    change_stats = EventChangeTracker.get_all_source_changes(source_slugs, clustered_city_ids)
+
     # Enrich with run stats and change tracking
     sources
     |> Enum.map(fn source ->
@@ -216,15 +220,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
       health_status = SourceHealthCalculator.calculate_health_score(stats)
       success_rate = SourceHealthCalculator.success_rate_percentage(stats)
 
-      # Get change tracking data
-      new_events = EventChangeTracker.calculate_new_events(source.source_slug, 24)
-      dropped_events = EventChangeTracker.calculate_dropped_events(source.source_slug, 48)
-
-      percentage_change =
-        EventChangeTracker.calculate_percentage_change(source.source_slug, clustered_city_ids)
+      # Get change tracking data from batched results
+      changes =
+        Map.get(change_stats, source.source_slug, %{
+          new_events: 0,
+          dropped_events: 0,
+          percentage_change: 0
+        })
 
       {trend_emoji, trend_text, trend_class} =
-        EventChangeTracker.get_trend_indicator(percentage_change)
+        EventChangeTracker.get_trend_indicator(changes.percentage_change)
 
       %{
         source_id: source.source_id,
@@ -234,9 +239,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         stats: stats,
         health_status: health_status,
         success_rate: success_rate,
-        new_events: new_events,
-        dropped_events: dropped_events,
-        percentage_change: percentage_change,
+        new_events: changes.new_events,
+        dropped_events: changes.dropped_events,
+        percentage_change: changes.percentage_change,
         trend_emoji: trend_emoji,
         trend_text: trend_text,
         trend_class: trend_class

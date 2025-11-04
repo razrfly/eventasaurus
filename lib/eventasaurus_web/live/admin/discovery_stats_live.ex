@@ -223,7 +223,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   end
 
   defp get_city_performance do
-    # Get cities with the most events
+    # Get all cities with events (low threshold before clustering)
+    # The clustering will aggregate nearby cities (e.g., Melbourne + suburbs)
+    # Then we take top 10 AFTER aggregation to get true metro area rankings
     query =
       from(e in PublicEvent,
         join: v in EventasaurusApp.Venues.Venue,
@@ -231,7 +233,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         join: c in City,
         on: c.id == v.city_id,
         group_by: [c.id, c.name, c.slug],
-        having: count(e.id) >= 10,
+        having: count(e.id) >= 1,
         select: %{
           city_id: c.id,
           city_name: c.name,
