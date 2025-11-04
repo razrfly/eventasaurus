@@ -142,10 +142,10 @@ defmodule EventasaurusWeb.AggregatedContentLive do
             <Heroicons.calendar class="w-4 h-4 mr-1" />
             <%= if PublicEvent.recurring?(@event) do %>
               <span class="text-green-600 font-medium">
-                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(PublicEvent.next_occurrence_date(@event)) %>
+                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime_with_tz(PublicEvent.next_occurrence_date(@event), @event) %>
               </span>
             <% else %>
-              <%= format_datetime(@event.starts_at) %>
+              <%= format_datetime_with_tz(@event.starts_at, @event) %>
             <% end %>
           </div>
           <%= if @event.venue do %>
@@ -191,17 +191,39 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     })
   end
 
-  defp format_datetime(%DateTime{} = datetime) do
+  # NEW: Format datetime with timezone conversion
+  # Extracts timezone from event.occurrences and converts UTC to local time
+  defp format_datetime_with_tz(%DateTime{} = datetime, event) do
+    # Extract timezone from occurrences (pattern events have timezone info)
+    timezone = extract_timezone_from_event(event)
+
+    # Convert UTC to local timezone
+    local_datetime =
+      case DateTime.shift_zone(datetime, timezone) do
+        {:ok, local_dt} -> local_dt
+        {:error, _} -> datetime
+      end
+
+    Calendar.strftime(local_datetime, "%b %d at %I:%M %p")
+    |> String.replace(" 0", " ")
+  end
+
+  defp format_datetime_with_tz(%NaiveDateTime{} = datetime, _event) do
     Calendar.strftime(datetime, "%b %d at %I:%M %p")
     |> String.replace(" 0", " ")
   end
 
-  defp format_datetime(%NaiveDateTime{} = datetime) do
-    Calendar.strftime(datetime, "%b %d at %I:%M %p")
-    |> String.replace(" 0", " ")
+  defp format_datetime_with_tz(_, _), do: "Date TBD"
+
+  # Extract timezone from event occurrences
+  # For pattern events: occurrences.pattern.timezone (e.g., "America/Denver")
+  # For explicit events: Fallback to UTC
+  defp extract_timezone_from_event(%{occurrences: %{"pattern" => %{"timezone" => tz}}})
+       when is_binary(tz) and tz != "" do
+    tz
   end
 
-  defp format_datetime(_), do: "Date TBD"
+  defp extract_timezone_from_event(_event), do: "Etc/UTC"
 
   defp format_page_title(content_type, identifier, city) do
     source_name = get_source_name(identifier)

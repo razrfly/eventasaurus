@@ -1463,15 +1463,21 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         time_diversity_score: 100
       }
     else
-      # Extract all times from occurrence dates
+      # Extract all times from occurrence dates AND patterns
       times =
         occurrence_data
         |> Enum.flat_map(fn event ->
           case event.occurrences do
+            # Explicit occurrences with dates array (movies, one-time events)
             %{"dates" => dates} when is_list(dates) ->
               Enum.map(dates, fn date_obj ->
                 extract_time_from_date(date_obj)
               end)
+
+            # Pattern occurrences (recurring events like trivia nights)
+            %{"pattern" => %{"time" => time_str}} when is_binary(time_str) ->
+              # Extract single time from pattern
+              [parse_time_to_hour(time_str)]
 
             _ ->
               []
@@ -1480,8 +1486,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         |> Enum.reject(&is_nil/1)
 
       if Enum.empty?(times) do
+        # CRITICAL: Return 0% quality when no data analyzed (not 100%)
+        # This prevents false positives where unsupported data structures
+        # appear as "perfect quality" when they're actually not analyzed
         %{
-          time_quality: 100,
+          time_quality: 0,
           total_occurrences: 0,
           midnight_count: 0,
           midnight_percentage: 0,
@@ -1489,7 +1498,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           most_common_time_count: 0,
           same_time_percentage: 0,
           hour_distribution: %{},
-          time_diversity_score: 100
+          time_diversity_score: 0
         }
       else
         analyze_time_quality(times)

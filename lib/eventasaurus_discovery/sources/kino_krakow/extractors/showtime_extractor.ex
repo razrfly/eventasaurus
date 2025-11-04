@@ -10,7 +10,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.KinoKrakow.DateParser
+  alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
 
   @doc """
   Extract all showtimes from HTML document.
@@ -177,8 +177,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
       |> Floki.attribute("href")
       |> List.first()
 
-    # Build datetime
-    case DateParser.parse_datetime(date_str, time_str) do
+    # Build datetime using MultilingualDateParser
+    case parse_datetime(date_str, time_str) do
       %DateTime{} = datetime ->
         %{
           movie_slug: film.slug,
@@ -194,6 +194,28 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
         nil
     end
   end
+
+  # Parse datetime using MultilingualDateParser (replaces old KinoKrakow.DateParser)
+  # Combines Polish date string and time string, delegates to shared parser
+  defp parse_datetime(date_str, time_str) when is_binary(date_str) and is_binary(time_str) do
+    # Combine date and time into a single string for MultilingualDateParser
+    # E.g., "czwartek, 2 października" + "15:30" -> "czwartek, 2 października 15:30"
+    combined_text = "#{date_str} #{time_str}"
+
+    case MultilingualDateParser.extract_and_parse(combined_text,
+           languages: [:polish],
+           timezone: "Europe/Warsaw"
+         ) do
+      {:ok, %{starts_at: datetime}} ->
+        datetime
+
+      {:error, reason} ->
+        Logger.debug("MultilingualDateParser failed for '#{combined_text}': #{inspect(reason)}")
+        nil
+    end
+  end
+
+  defp parse_datetime(_date_str, _time_str), do: nil
 
   # Extract cinema info from link element
   defp extract_cinema_info({_, attrs, [name]}) do

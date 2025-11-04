@@ -7,7 +7,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
   """
 
   require Logger
-  alias EventasaurusDiscovery.Sources.Karnet.DateParser
+  alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
 
   @doc """
   Transform a raw Karnet event into our unified format.
@@ -156,11 +156,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
         event[:starts_at]
 
       event[:date_text] ->
-        case DateParser.parse_date_string(event[:date_text]) do
-          {:ok, {start_dt, _end_dt}} ->
+        case MultilingualDateParser.extract_and_parse(event[:date_text],
+               languages: [:polish],
+               timezone: "Europe/Warsaw"
+             ) do
+          {:ok, %{starts_at: start_dt}} ->
             start_dt
 
-          _ ->
+          {:error, _reason} ->
             Logger.warning("Could not parse date for Karnet event: #{event[:date_text]}")
             # Fallback to 30 days from now
             DateTime.add(DateTime.utc_now(), 30 * 86400, :second)
@@ -178,8 +181,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
         event[:ends_at]
 
       event[:date_text] ->
-        case DateParser.parse_date_string(event[:date_text]) do
-          {:ok, {start_dt, end_dt}} when start_dt != end_dt -> end_dt
+        case MultilingualDateParser.extract_and_parse(event[:date_text],
+               languages: [:polish],
+               timezone: "Europe/Warsaw"
+             ) do
+          {:ok, %{ends_at: end_dt}} when not is_nil(end_dt) -> end_dt
           _ -> nil
         end
 
