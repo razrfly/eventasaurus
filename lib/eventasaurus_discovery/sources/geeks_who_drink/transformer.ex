@@ -175,7 +175,91 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   """
   def parse_schedule_to_recurrence(time_text, starts_at \\ nil, venue_data \\ %{})
 
+  def parse_schedule_to_recurrence(nil, _starts_at, _venue_data),
+    do: {:error, "Time text is nil"}
+
   def parse_schedule_to_recurrence(time_text, starts_at, venue_data) when is_binary(time_text) do
+    # Extract recurrence information from starts_at DateTime
+    # VenueDetailJob already calculated correct next occurrence with timezone
+    # We just need to extract day_of_week and time from it
+    # timezone comes from venue_data (VenueDetailJob adds it)
+
+    case extract_from_datetime(starts_at, venue_data) do
+      {:ok, {day_of_week, time_string, timezone}} ->
+        # Log for debugging pattern-type occurrence creation
+        Logger.debug("""
+        [Transformer] Creating recurrence_rule from starts_at:
+        - Day of week: #{day_of_week}
+        - Time: #{time_string}
+        - Timezone: #{timezone}
+        """)
+
+        recurrence_rule = %{
+          "frequency" => "weekly",
+          "days_of_week" => [day_of_week],
+          "time" => time_string,
+          "timezone" => timezone
+        }
+
+        {:ok, recurrence_rule}
+
+      {:error, reason} ->
+        # Fallback: try parsing time_text if starts_at extraction failed
+        Logger.warning("Failed to extract from starts_at (#{reason}), trying time_text...")
+        fallback_parse_time_text(time_text, venue_data)
+    end
+  end
+
+  # Extract day_of_week, time, and timezone from DateTime
+  # Uses timezone from venue_data since UTC DateTime loses original timezone info
+  defp extract_from_datetime(%DateTime{} = dt, venue_data) when is_map(venue_data) do
+    # Get timezone from venue_data (VenueDetailJob adds this)
+    # Fallback to America/New_York if not present
+    timezone =
+      cond do
+        is_binary(venue_data[:timezone]) ->
+          venue_data[:timezone]
+
+        is_binary(venue_data["timezone"]) ->
+          venue_data["timezone"]
+
+        true ->
+          "America/New_York"
+      end
+
+    # Convert UTC DateTime to local timezone to get correct day/time
+    local_dt = DateTime.shift_zone!(dt, timezone)
+
+    # Get day of week as string (e.g., "tuesday") from LOCAL time
+    day_num = Date.day_of_week(DateTime.to_date(local_dt), :monday)
+    day_of_week = number_to_day(day_num)
+
+    # Get time in HH:MM format from LOCAL time
+    time_string =
+      local_dt
+      |> DateTime.to_time()
+      |> Time.to_string()
+      |> String.slice(0, 5)
+
+    {:ok, {day_of_week, time_string, timezone}}
+  rescue
+    error ->
+      {:error, "DateTime extraction failed: #{inspect(error)}"}
+  end
+
+  defp extract_from_datetime(_, _), do: {:error, "Invalid or missing DateTime"}
+
+  # Convert ISO day number to day name string
+  defp number_to_day(1), do: "monday"
+  defp number_to_day(2), do: "tuesday"
+  defp number_to_day(3), do: "wednesday"
+  defp number_to_day(4), do: "thursday"
+  defp number_to_day(5), do: "friday"
+  defp number_to_day(6), do: "saturday"
+  defp number_to_day(7), do: "sunday"
+
+  # Fallback: parse time_text using TimeParser (for backward compatibility)
+  defp fallback_parse_time_text(time_text, venue_data) do
     alias EventasaurusDiscovery.Sources.GeeksWhoDrink.Helpers.TimeParser
 
     case TimeParser.parse_time_text(time_text) do
@@ -183,20 +267,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         # Convert Time struct to HH:MM string format
         time_string = Time.to_string(time_struct) |> String.slice(0, 5)
 
-        # Detect timezone with priority: starts_at > venue_data > default
+        # Detect timezone from venue_data or use default
         timezone =
-          cond do
-            # Priority 1: Extract from starts_at DateTime (most accurate)
-            match?(%DateTime{}, starts_at) ->
-              starts_at.time_zone
-
-            # Priority 2: Use explicit timezone from venue metadata
-            is_binary(venue_data[:timezone]) ->
-              venue_data[:timezone]
-
-            # Priority 3: Fallback to Eastern Time (most common for Geeks Who Drink)
-            true ->
-              "America/New_York"
+          if is_binary(venue_data[:timezone]) do
+            venue_data[:timezone]
+          else
+            "America/New_York"
           end
 
         recurrence_rule = %{
@@ -212,9 +288,6 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         {:error, "Could not extract day of week from time_text: #{time_text}"}
     end
   end
-
-  def parse_schedule_to_recurrence(nil, _starts_at, _venue_data),
-    do: {:error, "Time text is nil"}
 
   @doc """
   Resolves city and country from GPS coordinates using offline geocoding.

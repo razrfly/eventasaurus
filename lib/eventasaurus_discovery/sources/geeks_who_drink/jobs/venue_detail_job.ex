@@ -181,6 +181,10 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     |> normalize_coordinates()
     |> Map.merge(additional_details)
     |> Map.put(:starts_at, next_occurrence)
+    # Add timezone for recurrence_rule creation
+    # VenueDetailJob calculates next_occurrence in America/New_York timezone
+    # but returns it as UTC DateTime, so we need to pass timezone explicitly
+    |> Map.put(:timezone, "America/New_York")
   end
 
   # Normalize lat/lon to latitude/longitude for transformer compatibility
