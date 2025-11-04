@@ -208,6 +208,14 @@ defmodule EventasaurusWeb.Router do
 
       # Design tools (with admin authentication)
       live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive
+
+      # Unsplash Integration (with admin authentication)
+      get "/unsplash", EventasaurusWeb.Admin.UnsplashTestController, :index
+      post "/unsplash/fetch/:city_id", EventasaurusWeb.Admin.UnsplashTestController, :fetch_images
+
+      post "/unsplash/refresh-category/:city_id/:category",
+           EventasaurusWeb.Admin.UnsplashTestController,
+           :refresh_category
     end
   end
 

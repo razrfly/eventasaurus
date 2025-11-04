@@ -8,6 +8,36 @@
       </p>
     </div>
 
+    <!-- Category Keywords Reference -->
+    <div class="mb-8 p-6 bg-white rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4">📋 Category Search Terms</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Keywords used to search Unsplash for each category. These are combined with the city name.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="p-3 bg-gray-50 rounded-lg border">
+          <div class="font-semibold text-gray-900 mb-2">🌆 General</div>
+          <div class="text-sm text-gray-600">cityscape, skyline</div>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-lg border">
+          <div class="font-semibold text-gray-900 mb-2">🏛️ Architecture</div>
+          <div class="text-sm text-gray-600">architecture, modern buildings, buildings</div>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-lg border">
+          <div class="font-semibold text-gray-900 mb-2">🏰 Historic</div>
+          <div class="text-sm text-gray-600">historic buildings, monuments, old architecture</div>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-lg border">
+          <div class="font-semibold text-gray-900 mb-2">🏘️ Old Town</div>
+          <div class="text-sm text-gray-600">old town, medieval, historic center</div>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-lg border">
+          <div class="font-semibold text-gray-900 mb-2">🗼 City Landmarks</div>
+          <div class="text-sm text-gray-600">landmarks, famous places, attractions</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Configuration Status -->
     <div class="mb-8 p-6 bg-white rounded-lg shadow">
       <h2 class="text-xl font-semibold mb-4">Configuration Status</h2>
@@ -124,84 +154,22 @@
           </div>
 
 
-          <!-- General Category Hero Image -->
-          <%= if city.general_category && city.general_category.current_image do %>
-            <div class="p-6 bg-gray-50 border-b">
-              <h4 class="text-lg font-semibold text-gray-900 mb-4">
-                🌆 General Category - Today's Featured Image (Day <%= @day_of_year %>)
-              </h4>
-              <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-                <div class="aspect-video bg-gray-100 relative">
-                  <img
-                    src={city.general_category.current_image["url"]}
-                    alt={"#{city.name} - Image #{city.general_category.current_index}"}
-                    class="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                  <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                    <div class="text-white text-sm">
-                      <div class="font-medium">
-                        Photo by
-                        <a
-                          href={city.general_category.current_image["attribution"]["photographer_url"]}
-                          target="_blank"
-                          class="underline hover:text-indigo-200"
-                        >
-                          <%= city.general_category.current_image["attribution"]["photographer_name"] %>
-                        </a>
-                      </div>
-                      <a
-                        href={city.general_category.current_image["attribution"]["unsplash_url"]}
-                        target="_blank"
-                        class="text-xs text-gray-300 hover:text-white underline"
-                      >
-                        View on Unsplash
-                      </a>
-                    </div>
-                  </div>
-                </div>
-                <div class="p-4 bg-gray-50 border-t">
-                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span class="font-medium text-gray-700">Dimensions:</span>
-                      <span class="ml-2 text-gray-600">
-                        <%= city.general_category.current_image["width"] %>×<%= city.general_category.current_image["height"] %>
-                      </span>
-                    </div>
-                    <div>
-                      <span class="font-medium text-gray-700">Color:</span>
-                      <span class="ml-2 inline-block w-6 h-6 rounded border border-gray-300" style={"background-color: #{city.general_category.current_image["color"]}"}></span>
-                    </div>
-                    <div>
-                      <span class="font-medium text-gray-700">ID:</span>
-                      <span class="ml-2 text-gray-600 font-mono text-xs"><%= city.general_category.current_image["id"] %></span>
-                    </div>
-                    <div>
-                      <span class="font-medium text-gray-700">Fetched:</span>
-                      <span class="ml-2 text-gray-600"><%= format_date(city.general_category.current_image["fetched_at"]) %></span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          <% end %>
-
           <!-- Gallery Display -->
-          <%= if city.tab_categories && map_size(city.tab_categories) > 0 do %>
-            <!-- Categorized Gallery with Tabs (Architecture, Historic, Old Town, City Landmarks) -->
+          <%= if city.tab_categories && length(city.tab_categories) > 0 do %>
+            <!-- Categorized Gallery with Tabs (All Categories) -->
             <div class="p-6">
-              <h4 class="text-lg font-semibold text-gray-900 mb-4">Other Categories</h4>
+              <h4 class="text-lg font-semibold text-gray-900 mb-4">Image Categories</h4>
 
               <!-- Category Tabs -->
               <div class="mb-6 border-b border-gray-200">
-                <nav class="-mb-px flex space-x-8" aria-label="Categories">
-                  <%= for {category_name, category_data} <- Enum.sort(city.tab_categories) do %>
+                <nav class="-mb-px flex flex-wrap gap-4" aria-label="Categories">
+                  <%= for {category_name, category_data} <- city.tab_categories do %>
                     <button
                       type="button"
                       class={"#{if category_name == city.active_tab_category, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
                       onclick={"toggleCategory('#{city.slug}', '#{category_name}')"}
                     >
-                      <%= category_name %>
+                      <%= format_category_name(category_name) %>
                       <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium bg-gray-100 text-gray-900">
                         <%= category_data.image_count %>
                       </span>
@@ -218,28 +186,15 @@
                 >
                   <!-- Category Info -->
                   <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
-                    <div class="flex justify-between items-start">
-                      <div class="flex-1">
-                        <h5 class="font-semibold text-blue-900">Search Terms:</h5>
-                        <p class="text-sm text-blue-800 mt-1">
-                          <%= Enum.join(category_data.search_terms, ", ") %>
-                        </p>
-                        <%= if category_data.last_refreshed do %>
-                          <div class="text-xs text-blue-700 mt-2">
-                            Last refreshed: <%= format_date(category_data.last_refreshed) %>
-                          </div>
-                        <% end %>
+                    <h5 class="font-semibold text-blue-900">Search Terms:</h5>
+                    <p class="text-sm text-blue-800 mt-1">
+                      <%= Enum.join(category_data.search_terms, ", ") %>
+                    </p>
+                    <%= if category_data.last_refreshed do %>
+                      <div class="text-xs text-blue-700 mt-2">
+                        Last refreshed: <%= format_date(category_data.last_refreshed) %>
                       </div>
-                      <.form :let={_f} for={%{}} action={~p"/admin/unsplash/refresh-category/#{city.id}/#{category_name}"} method="post">
-                        <button
-                          type="submit"
-                          class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
-                          title={"Refresh #{category_name} category"}
-                        >
-                          🔄 Refresh
-                        </button>
-                      </.form>
-                    </div>
+                    <% end %>
                   </div>
 
                   <!-- Category Images -->
@@ -281,7 +236,7 @@
                 <h4 class="text-lg font-semibold text-gray-700 mb-2">No Images Yet</h4>
                 <p class="text-gray-600 mb-4">Click "Fetch Images" above to fetch all 5 categories</p>
                 <div class="text-sm text-gray-500">
-                  Categories: general, architecture, historic, old_town, city_landmarks
+                  Categories: General, Architecture, Historic, Old Town, City Landmarks
                 </div>
               </div>
             </div>

@@ -147,16 +147,11 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
       }
     end
 
-    # Separate general category (for hero section) from tab categories
-    general_category_data =
-      case Map.get(categories, "general") do
-        nil -> nil
-        data -> enrich_category.(data)
-      end
+    # All categories including general (all shown as tabs now)
+    # Order matters: general first, then others
+    tab_category_names = ["general", "architecture", "historic", "old_town", "city_landmarks"]
 
-    # Tab categories: architecture, historic, old_town, city_landmarks
-    tab_category_names = ["architecture", "historic", "old_town", "city_landmarks"]
-
+    # Keep as list of tuples to preserve order
     tab_categories =
       tab_category_names
       |> Enum.filter(fn name -> Map.has_key?(categories, name) end)
@@ -164,15 +159,16 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
         category_data = Map.get(categories, category_name)
         {category_name, enrich_category.(category_data)}
       end)
-      |> Enum.into(%{})
+
+    # Also create a map for easy lookup
+    tab_categories_map = Enum.into(tab_categories, %{})
 
     # Get first available tab category for active selection (finds first category that actually exists)
     active_tab_category =
-      Enum.find(tab_category_names, fn name -> Map.has_key?(tab_categories, name) end)
+      Enum.find(tab_category_names, fn name -> Map.has_key?(tab_categories_map, name) end)
 
     # Calculate total images across all categories
     total_images =
-      (if general_category_data, do: general_category_data.image_count, else: 0) +
       Enum.reduce(tab_categories, 0, fn {_name, data}, acc ->
         acc + data.image_count
       end)
@@ -182,16 +178,12 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
       name: city.name,
       slug: city.slug,
       format: :categorized,
-      general_category: general_category_data,
-      tab_categories: tab_categories,
+      tab_categories: tab_categories,  # List of tuples preserves order
       active_tab_category: active_tab_category,
       category_count: map_size(categories),
       image_count: total_images,
       # For backward compatibility
-      categories: Map.merge(
-        (if general_category_data, do: %{"general" => general_category_data}, else: %{}),
-        tab_categories
-      ),
+      categories: tab_categories_map,
       images: nil,
       last_refreshed: nil
     }
@@ -201,24 +193,20 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
   Fetch all 5 categorized images for a city
   """
   def fetch_images(conn, %{"city_id" => city_id}) do
-    alias EventasaurusApp.Services.UnsplashImageFetcher
+    alias EventasaurusApp.Workers.UnsplashCityRefreshWorker
 
     city = Repo.get!(City, city_id)
 
-    case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
-      {:ok, _updated_city} ->
+    # Queue background job to fetch all categories
+    case UnsplashCityRefreshWorker.new(%{city_id: city.id}) |> Oban.insert() do
+      {:ok, _job} ->
         conn
-        |> put_flash(:info, "✓ Successfully fetched categories for #{city.name}")
+        |> put_flash(:info, "✓ Queued refresh job for #{city.name}. Images will update in a few moments.")
         |> redirect(to: ~p"/admin/unsplash")
 
-      {:error, :all_categories_failed} ->
+      {:error, changeset} ->
         conn
-        |> put_flash(:error, "Failed to fetch any categories for #{city.name}")
-        |> redirect(to: ~p"/admin/unsplash")
-
-      {:error, reason} ->
-        conn
-        |> put_flash(:error, "Failed to fetch images: #{inspect(reason)}")
+        |> put_flash(:error, "Failed to queue refresh job: #{inspect(changeset.errors)}")
         |> redirect(to: ~p"/admin/unsplash")
     end
   end
