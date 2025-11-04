@@ -242,8 +242,8 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
         "ticketmaster" => %{new_events: 8, dropped_events: 1, percentage_change: 5}
       }
   """
-  def get_all_source_changes(source_slugs, city_id \\ nil)
-      when is_list(source_slugs) and (is_integer(city_id) or is_nil(city_id)) do
+  def get_all_source_changes(source_slugs, city_id_or_ids \\ nil)
+      when is_list(source_slugs) and (is_integer(city_id_or_ids) or is_list(city_id_or_ids) or is_nil(city_id_or_ids)) do
     if Enum.empty?(source_slugs) do
       %{}
     else
@@ -265,7 +265,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
           batch_calculate_dropped_events(source_ids, get_dropped_events_window())
 
         # Batch fetch percentage changes
-        percentage_changes_by_id = batch_calculate_percentage_changes(source_ids, city_id)
+        percentage_changes_by_id = batch_calculate_percentage_changes(source_ids, city_id_or_ids)
 
         # Map results back to source slugs
         source_slugs
@@ -403,19 +403,19 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
     |> Map.new()
   end
 
-  defp batch_calculate_percentage_changes(source_ids, city_id) do
+  defp batch_calculate_percentage_changes(source_ids, city_id_or_ids) do
     now = DateTime.utc_now()
 
     # Current week (last 7 days)
     current_week_start = DateTime.add(now, -7, :day)
-    current_week_counts = batch_get_event_counts(source_ids, city_id, current_week_start, now)
+    current_week_counts = batch_get_event_counts(source_ids, city_id_or_ids, current_week_start, now)
 
     # Previous week (7-14 days ago)
     previous_week_start = DateTime.add(now, -14, :day)
     previous_week_end = DateTime.add(now, -7, :day)
 
     previous_week_counts =
-      batch_get_event_counts(source_ids, city_id, previous_week_start, previous_week_end)
+      batch_get_event_counts(source_ids, city_id_or_ids, previous_week_start, previous_week_end)
 
     # Calculate percentage change for each source
     source_ids
@@ -435,7 +435,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
     |> Map.new()
   end
 
-  defp batch_get_event_counts(source_ids, city_id, start_date, end_date) do
+  defp batch_get_event_counts(source_ids, city_id_or_ids, start_date, end_date) do
     base_query =
       from(pes in PublicEventSource,
         where: pes.source_id in ^source_ids,
@@ -444,21 +444,37 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       )
 
     query =
-      if city_id do
-        from([pes] in base_query,
-          join: e in PublicEvent,
-          on: e.id == pes.event_id,
-          join: v in EventasaurusApp.Venues.Venue,
-          on: v.id == e.venue_id,
-          where: v.city_id == ^city_id,
-          group_by: pes.source_id,
-          select: {pes.source_id, count(pes.id)}
-        )
-      else
-        from([pes] in base_query,
-          group_by: pes.source_id,
-          select: {pes.source_id, count(pes.id)}
-        )
+      cond do
+        # Clustered cities (list)
+        is_list(city_id_or_ids) && length(city_id_or_ids) > 0 ->
+          from([pes] in base_query,
+            join: e in PublicEvent,
+            on: e.id == pes.event_id,
+            join: v in EventasaurusApp.Venues.Venue,
+            on: v.id == e.venue_id,
+            where: v.city_id in ^city_id_or_ids,
+            group_by: pes.source_id,
+            select: {pes.source_id, count(pes.id)}
+          )
+
+        # Single city (integer)
+        is_integer(city_id_or_ids) ->
+          from([pes] in base_query,
+            join: e in PublicEvent,
+            on: e.id == pes.event_id,
+            join: v in EventasaurusApp.Venues.Venue,
+            on: v.id == e.venue_id,
+            where: v.city_id == ^city_id_or_ids,
+            group_by: pes.source_id,
+            select: {pes.source_id, count(pes.id)}
+          )
+
+        # All cities (nil or empty list)
+        true ->
+          from([pes] in base_query,
+            group_by: pes.source_id,
+            select: {pes.source_id, count(pes.id)}
+          )
       end
 
     query
