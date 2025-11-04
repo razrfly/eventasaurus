@@ -29,14 +29,20 @@ Phase 3 only fixed **timezone calculation** but missed **time extraction bug**:
    - Return `nil` on extraction failure
    - Added logging for failures
 
-3. **ISO 8601 DateTime Parsing**:
+3. **ISO 8601 DateTime Parsing with UTC-to-Local Conversion**:
    ```elixir
    case DateTime.from_iso8601(data_time) do
      {:ok, dt, _offset} ->
-       time = DateTime.to_time(dt)
-       :io_lib.format("~2..0B:~2..0B", [time.hour, time.minute]) |> to_string()
+       # Convert UTC time to local time using best-effort heuristics
+       # Full timezone detection happens later via TzWorld in VenueDetailJob
+       convert_utc_to_local_time(dt)
+     _ ->
+       Logger.warning("⚠️ Failed to parse data-time: #{time_str}")
+       nil
    end
    ```
+
+   The `convert_utc_to_local_time/1` function applies heuristics to convert UTC times to likely local times for US venues (most trivia happens 6-9 PM local, which is 00:00-04:00 UTC across US timezones).
 
 ---
 
