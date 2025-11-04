@@ -263,7 +263,79 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
   end
 
   defp extract_start_time(document) do
-    # First, try to extract the visible time directly from the time-moment span
+    # Strategy 1: Try visible text extraction first (most reliable when available)
+    case extract_start_time_from_text(document) do
+      nil ->
+        # Strategy 2: Fall back to data-time attribute from .time-moment
+        # Note: .time-moment contains the regular recurring schedule time in UTC
+        # (NOT .time-moment-date which is the next specific occurrence)
+        data_time =
+          document
+          |> Floki.find(".venueHero__time .time-moment")
+          |> Floki.attribute("data-time")
+          |> List.first()
+
+        case data_time do
+          nil ->
+            Logger.warning("⚠️ No time found in HTML structure")
+            nil
+
+          time_str when is_binary(time_str) ->
+            # Parse ISO datetime from data-time attribute (in UTC)
+            case DateTime.from_iso8601(time_str) do
+              {:ok, dt, _offset} ->
+                # Convert UTC time to local time
+                # The data-time contains UTC time, we need to convert to local venue time
+                # Since we don't have venue coordinates here, we'll do a best-effort conversion
+                # based on common US timezones where Geeks Who Drink operates
+                convert_utc_to_local_time(dt)
+
+              _ ->
+                Logger.warning("⚠️ Failed to parse data-time: #{time_str}")
+                nil
+            end
+        end
+
+      time ->
+        time
+    end
+  end
+
+  # Convert UTC datetime to likely local time for US venues
+  # This is a best-effort conversion since we don't have venue coordinates at extraction time
+  # The job will later use proper timezone detection via TzWorld
+  defp convert_utc_to_local_time(utc_datetime) do
+    utc_hour = utc_datetime.hour
+    utc_minute = utc_datetime.minute
+
+    # Geeks Who Drink venues are across US timezones (UTC-5 to UTC-8)
+    # Most trivia happens 6-9 PM local time
+    # Common UTC times: 00:00-04:00 UTC = 6-9 PM in various US zones
+
+    # Heuristic: If UTC hour is 00:00-05:00, likely evening (6-10 PM) in US
+    # Convert assuming UTC-6 (Central) to UTC-7 (Mountain) as most common
+    local_hour = cond do
+      # 00:00-05:00 UTC = likely evening trivia
+      utc_hour >= 0 && utc_hour <= 5 ->
+        # Try UTC-7 (Mountain Time) as Geeks Who Drink HQ is in Denver
+        rem(utc_hour + 24 - 7, 24)
+
+      # Other times - use UTC-6 (Central) as it's most common US timezone
+      true ->
+        rem(utc_hour + 24 - 6, 24)
+    end
+
+    formatted_time = :io_lib.format("~2..0B:~2..0B", [local_hour, utc_minute]) |> to_string()
+
+    Logger.debug(
+      "📅 Converted UTC #{utc_hour}:#{String.pad_leading(to_string(utc_minute), 2, "0")} to local #{formatted_time}"
+    )
+
+    formatted_time
+  end
+
+  # Extract time from visible text (legacy format: "7:00 pm")
+  defp extract_start_time_from_text(document) do
     visible_time =
       document
       |> Floki.find(".venueHero__time .time-moment")
@@ -271,7 +343,6 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
       |> String.trim()
 
     if visible_time && visible_time != "" do
-      # Try to convert 12-hour time (7:00 pm) to 24-hour time (19:00)
       case Regex.run(~r/(\d+):(\d+)\s*(am|pm)/i, visible_time) do
         [_, hour_str, minute_str, period] ->
           hour = String.to_integer(hour_str)
@@ -284,16 +355,15 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
               _ -> hour
             end
 
-          # Format as HH:MM
           :io_lib.format("~2..0B:~2..0B", [hour, minute]) |> to_string()
 
         _ ->
-          # Default fallback if parsing fails
-          "20:00"
+          Logger.warning("⚠️ Failed to parse time from text: #{visible_time}")
+          nil
       end
     else
-      # Fallback to data-time attribute or default
-      "20:00"
+      Logger.warning("⚠️ No time found in HTML structure")
+      nil
     end
   end
 end

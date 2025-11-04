@@ -1706,14 +1706,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       |> String.slice(0..4)
   end
 
-  # Legacy 1-arity version for backward compatibility
-  defp format_time_only(%DateTime{} = dt) do
-    format_time_only(dt, nil)
-  end
-
-  # Catch-all for invalid inputs
-  defp format_time_only(_), do: nil
-
   # Extract timezone from event data hierarchy
   # Priority: recurrence_rule > metadata > default
   defp extract_timezone(nil), do: nil

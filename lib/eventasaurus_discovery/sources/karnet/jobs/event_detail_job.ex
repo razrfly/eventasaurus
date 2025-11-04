@@ -15,8 +15,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
-  alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor, DateParser}
+  alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor}
   alias EventasaurusDiscovery.Sources.Karnet
+  alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
@@ -189,12 +190,15 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   end
 
   defp add_parsed_dates(event_data) do
-    # Parse the date text into actual DateTime values
-    case DateParser.parse_date_string(event_data[:date_text]) do
-      {:ok, {start_dt, end_dt}} ->
+    # Parse the date text into actual DateTime values using MultilingualDateParser
+    case MultilingualDateParser.extract_and_parse(event_data[:date_text],
+           languages: [:polish],
+           timezone: "Europe/Warsaw"
+         ) do
+      {:ok, %{starts_at: start_dt, ends_at: end_dt}} ->
         event_data
         |> Map.put(:starts_at, start_dt)
-        |> Map.put(:ends_at, if(start_dt == end_dt, do: nil, else: end_dt))
+        |> Map.put(:ends_at, end_dt)
 
       _ ->
         # If we can't parse the date, use a fallback

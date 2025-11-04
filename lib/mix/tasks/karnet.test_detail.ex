@@ -11,7 +11,8 @@ defmodule Mix.Tasks.Karnet.TestDetail do
   use Mix.Task
   require Logger
 
-  alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor, DateParser}
+  alias EventasaurusDiscovery.Sources.Karnet.{Client, DetailExtractor}
+  alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
 
   @shortdoc "Test Karnet detail extraction functionality"
 
@@ -162,12 +163,15 @@ defmodule Mix.Tasks.Karnet.TestDetail do
       Logger.info("\nTesting: #{description}")
       Logger.info("Input: \"#{date_str}\"")
 
-      case DateParser.parse_date_string(date_str) do
-        {:ok, {start_dt, end_dt}} ->
+      case MultilingualDateParser.extract_and_parse(date_str,
+             languages: [:polish],
+             timezone: "Europe/Warsaw"
+           ) do
+        {:ok, %{starts_at: start_dt, ends_at: end_dt}} ->
           Logger.info("✓ Parsed successfully")
           Logger.info("  Start: #{start_dt}")
 
-          if start_dt != end_dt do
+          if end_dt && start_dt != end_dt do
             Logger.info("  End: #{end_dt}")
           end
 
