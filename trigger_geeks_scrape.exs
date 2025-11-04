@@ -1,5 +1,6 @@
 # Trigger Geeks Who Drink scrape with limit=1 for testing
 alias EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob
+alias EventasaurusApp.Repo
 
 IO.puts("🔄 Triggering Geeks Who Drink scrape (limit=1)...")
 

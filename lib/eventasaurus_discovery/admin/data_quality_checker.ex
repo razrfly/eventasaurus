@@ -69,6 +69,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         missing_categories: 0,
         quality_score: 100,
         venue_completeness: 100,
+        venue_coverage: 100,
+        venue_name_quality: 100,
         image_completeness: 100,
         category_completeness: 100,
         category_specificity: 100,
