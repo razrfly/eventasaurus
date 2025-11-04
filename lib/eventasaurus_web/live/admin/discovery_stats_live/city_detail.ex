@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
   alias EventasaurusDiscovery.Sources.Source
 
@@ -131,20 +131,24 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     city_id = socket.assigns.city_id
     date_range = socket.assigns.date_range
 
-    # Get all sources active in this city
-    sources_data = get_sources_for_city(city_id)
+    # Get all cities in this metro area cluster (e.g., Melbourne + suburbs)
+    # Uses same 20km clustering as main stats page
+    clustered_city_ids = CityHierarchy.get_cluster_city_ids(city_id)
+
+    # Get all sources active in this city cluster
+    sources_data = get_sources_for_city(clustered_city_ids)
 
     # Get top venues
-    top_venues = get_top_venues(city_id, 10)
+    top_venues = get_top_venues(clustered_city_ids, 10)
 
     # Get category distribution
-    category_distribution = get_category_distribution(city_id)
+    category_distribution = get_category_distribution(clustered_city_ids)
 
-    # Get total events for city
-    total_events = count_city_events(city_id)
+    # Get total events for city cluster
+    total_events = count_city_events(clustered_city_ids)
 
     # Get events added this week
-    events_this_week = count_city_events_this_week(city_id)
+    events_this_week = count_city_events_this_week(clustered_city_ids)
 
     # Get trend data (Phase 6) - uses date_range
     city_event_trend = TrendAnalyzer.get_city_event_trend(city_id, date_range)
@@ -161,7 +165,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     venues_with_images = QualityStats.list_venues_with_images(city_id, 20)
 
     # Get venue slug quality stats
-    slug_stats = get_slug_quality_stats(city_id)
+    slug_stats = get_slug_quality_stats(clustered_city_ids)
 
     socket
     |> assign(:sources_data, sources_data)
@@ -179,8 +183,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     |> assign(:slug_stats, slug_stats)
   end
 
-  defp get_sources_for_city(city_id) do
-    # Query for all sources that have events in this city
+  defp get_sources_for_city(clustered_city_ids) do
+    # Query for all sources that have events in this city cluster
     query =
       from(pes in PublicEventSource,
         join: e in PublicEvent,
@@ -189,7 +193,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         on: v.id == e.venue_id,
         join: s in Source,
         on: s.id == pes.source_id,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         group_by: [s.id, s.name, s.slug],
         select: %{
           source_id: s.id,
@@ -201,11 +205,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
 
     sources = Repo.all(query)
 
+    # Use primary city_id for stats lookups (first in cluster)
+    primary_city_id = List.first(clustered_city_ids)
+
     # Enrich with run stats and change tracking
     sources
     |> Enum.map(fn source ->
-      # Get run statistics
-      stats = DiscoveryStatsCollector.get_source_stats(city_id, source.source_slug)
+      # Get run statistics (using primary city for stats lookups)
+      stats = DiscoveryStatsCollector.get_source_stats(primary_city_id, source.source_slug)
       health_status = SourceHealthCalculator.calculate_health_score(stats)
       success_rate = SourceHealthCalculator.success_rate_percentage(stats)
 
@@ -214,7 +221,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
       dropped_events = EventChangeTracker.calculate_dropped_events(source.source_slug, 48)
 
       percentage_change =
-        EventChangeTracker.calculate_percentage_change(source.source_slug, city_id)
+        EventChangeTracker.calculate_percentage_change(source.source_slug, clustered_city_ids)
 
       {trend_emoji, trend_text, trend_class} =
         EventChangeTracker.get_trend_indicator(percentage_change)
@@ -238,12 +245,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     |> Enum.sort_by(& &1.event_count, :desc)
   end
 
-  defp get_top_venues(city_id, limit) do
+  defp get_top_venues(clustered_city_ids, limit) do
     query =
       from(e in PublicEvent,
         join: v in Venue,
         on: v.id == e.venue_id,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         group_by: [v.id, v.name, v.slug],
         order_by: [desc: count(e.id)],
         limit: ^limit,
@@ -258,7 +265,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     Repo.all(query)
   end
 
-  defp get_category_distribution(city_id) do
+  defp get_category_distribution(clustered_city_ids) do
     query =
       from(e in PublicEvent,
         join: v in Venue,
@@ -267,7 +274,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         on: pec.event_id == e.id,
         join: c in EventasaurusDiscovery.Categories.Category,
         on: c.id == pec.category_id,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         group_by: [c.id, c.name],
         order_by: [desc: count(e.id)],
         select: %{
@@ -279,26 +286,26 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     Repo.all(query)
   end
 
-  defp count_city_events(city_id) do
+  defp count_city_events(clustered_city_ids) do
     query =
       from(e in PublicEvent,
         join: v in Venue,
         on: v.id == e.venue_id,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         select: count(e.id)
       )
 
     Repo.one(query) || 0
   end
 
-  defp count_city_events_this_week(city_id) do
+  defp count_city_events_this_week(clustered_city_ids) do
     week_ago = DateTime.utc_now() |> DateTime.add(-7, :day)
 
     query =
       from(e in PublicEvent,
         join: v in Venue,
         on: v.id == e.venue_id,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         where: e.inserted_at >= ^week_ago,
         select: count(e.id)
       )
@@ -306,11 +313,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     Repo.one(query) || 0
   end
 
-  defp get_slug_quality_stats(city_id) do
-    # Get total venues in city
+  defp get_slug_quality_stats(clustered_city_ids) do
+    # Get total venues in city cluster
     total_venues =
       from(v in Venue,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         select: count(v.id)
       )
       |> Repo.one()
@@ -327,7 +334,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
     #   - Old formats: "white-horse-wembley-53-824"
     venues_with_bad_format =
       from(v in Venue,
-        where: v.city_id == ^city_id,
+        where: v.city_id in ^clustered_city_ids,
         # Slugs that don't match: (no numbers) OR (ends with exactly 10 digits)
         where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
         select: count(v.id)

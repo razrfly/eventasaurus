@@ -70,6 +70,57 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
   end
 
   @doc """
+  Returns all city IDs in the same geographic cluster as the given city.
+
+  Uses the same clustering algorithm as the main stats page to identify
+  metropolitan areas. Cities within the distance threshold are grouped together.
+
+  ## Parameters
+
+    - `city_id` - The ID of the city to find cluster members for
+    - `distance_threshold` - Maximum distance in km to group cities (default: 20.0)
+
+  ## Returns
+
+  List of city IDs in the cluster, including the given city_id:
+
+      [2, 460, 461, 490]  # Melbourne + South Melbourne + West Melbourne + Collingwood
+
+  ## Example
+
+      iex> CityHierarchy.get_cluster_city_ids(2)  # Melbourne
+      [2, 460, 461, 490, ...]  # All Melbourne metro area cities
+  """
+  def get_cluster_city_ids(city_id, distance_threshold \\ @default_distance_threshold_km) do
+    # Load the target city
+    city = Repo.get!(City, city_id)
+
+    # Get all cities in the same country (clustering respects country boundaries)
+    cities =
+      from(c in City,
+        where: c.country_id == ^city.country_id,
+        select: %{
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          latitude: c.latitude,
+          longitude: c.longitude,
+          country_id: c.country_id
+        }
+      )
+      |> Repo.all()
+
+    # Build clusters using the same algorithm as the main stats page
+    clusters = cluster_nearby_cities(cities, distance_threshold)
+
+    # Find which cluster contains our city_id
+    cluster = Enum.find(clusters, fn cluster -> city_id in cluster end)
+
+    # Return the cluster (or singleton list if no cluster found)
+    cluster || [city_id]
+  end
+
+  @doc """
   Clusters cities by geographic proximity.
 
   Uses connected components algorithm to group cities that are within
