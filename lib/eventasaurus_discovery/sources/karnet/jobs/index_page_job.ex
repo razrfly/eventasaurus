@@ -191,7 +191,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       |> Enum.map(fn {event, index} ->
         # Stagger job execution with rate limiting
         delay_seconds = base_delay + index * Config.rate_limit()
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         # Clean UTF-8 before storing in database
         job_args =
@@ -209,7 +208,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
         EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob.new(
           job_args,
           queue: :scraper_detail,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)

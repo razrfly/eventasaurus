@@ -218,7 +218,6 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
         # Returns 0, 1, or 2 seconds
         jitter = :rand.uniform(3) - 1
         delay_seconds = index * Config.rate_limit() + jitter
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         job_args = %{
           "url" => event.url,
@@ -230,7 +229,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
           }
         }
 
-        EventDetailJob.new(job_args, scheduled_at: scheduled_at)
+        EventDetailJob.new(job_args, schedule_in: delay_seconds)
         |> Oban.insert()
       end)
 

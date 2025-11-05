@@ -201,7 +201,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         # But allow some concurrency (pages can be processed in parallel)
         # 3 seconds rate limit
         delay_seconds = div(page_num - 1, 3) * 3
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         job_args = %{
           "page_number" => page_num,
@@ -218,7 +217,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob.new(
           job_args,
           queue: :scraper_index,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)

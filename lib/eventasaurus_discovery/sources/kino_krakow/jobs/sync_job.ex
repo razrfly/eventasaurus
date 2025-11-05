@@ -147,7 +147,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
       |> Enum.map(fn day_offset ->
         # Stagger jobs slightly to avoid thundering herd
         delay_seconds = day_offset * Config.rate_limit()
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         DayPageJob.new(
           %{
@@ -157,7 +156,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
             "force" => force
           },
           queue: :scraper_index,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)

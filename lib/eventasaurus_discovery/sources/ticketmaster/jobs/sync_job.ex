@@ -113,7 +113,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
       |> Enum.with_index()
       |> Enum.map(fn {event, index} ->
         # Stagger jobs slightly to avoid overwhelming the system
-        scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
+        delay_seconds = index * Config.rate_limit()
 
         # CRITICAL: Clean UTF-8 before storing in job args
         # This prevents PostgreSQL UTF-8 errors when the job is stored
@@ -126,7 +126,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
         EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob.new(job_args,
           queue: :scraper_detail,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)

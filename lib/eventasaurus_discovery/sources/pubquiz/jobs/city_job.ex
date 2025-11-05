@@ -112,7 +112,6 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     |> Enum.map(fn {venue, index} ->
       # Stagger venue jobs to respect rate limits (3 seconds between requests)
       delay_seconds = index * 3
-      scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
       # CRITICAL: Pass external_id in job args (BandsInTown A+ pattern)
       # This prevents drift and ensures consistency
@@ -125,7 +124,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
         "external_id" => venue.external_id
       }
 
-      VenueDetailJob.new(job_args, scheduled_at: scheduled_at)
+      VenueDetailJob.new(job_args, schedule_in: delay_seconds)
       |> Oban.insert()
     end)
     |> Enum.count(fn
