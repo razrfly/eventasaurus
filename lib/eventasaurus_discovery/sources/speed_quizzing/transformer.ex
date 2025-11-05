@@ -210,7 +210,15 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
   # Build time_text from venue_data components
   defp build_time_text(venue_data) do
     day = venue_data.day_of_week || "Unknown"
-    time = venue_data.start_time || "00:00"
+
+    # Handle both nil and empty string from venue extractor
+    time =
+      case venue_data.start_time do
+        "" -> "00:00"
+        nil -> "00:00"
+        t -> t
+      end
+
     "#{day} at #{time}"
   end
 

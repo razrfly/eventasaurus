@@ -56,6 +56,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
       # Extract optional fields (don't fail if missing)
       pricing = extract_pricing(html)
       performers = extract_performers(html)
+      time_string = extract_time_string(html)
 
       # Classify event type based on date pattern, title, and description
       event_type = classify_event_type(date_string, title, description)
@@ -64,6 +65,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
         "url" => url,
         "title" => title,
         "date_string" => date_string,
+        "time_string" => time_string,
         "description" => description,
         "image_url" => image_url,
         "is_ticketed" => pricing[:is_ticketed],
@@ -355,6 +357,47 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Extractors.EventExtractor d
       _ ->
         nil
     end
+  end
+
+  # Extract time string from HTML.
+  #
+  # NOTE: This function only EXTRACTS time text from HTML.
+  # Actual time PARSING happens in the Transformer using RecurringEventParser.
+  #
+  # Matches common time patterns from Sortiraparis pages:
+  # - "8:30 p.m." or "08:30 p.m." (with periods in a.m./p.m.)
+  # - "11:00 a.m." or "11 a.m." (with/without minutes)
+  # - "8.30pm" or "8:30pm" (UK format, optional periods)
+  # - "Starts at 7pm" (embedded in text)
+  # - "Open from 11:00 a.m. to 7:00 p.m." (extracts first time)
+  # - "à 20h30" (French format)
+  #
+  # Returns nil if no time found (events will default to midnight in transformer).
+  defp extract_time_string(html) do
+    text = Normalizer.clean_html(html)
+
+    # Time patterns (ordered by specificity)
+    patterns = [
+      # English: "8:30 p.m." or "8.30 p.m." (with dots or colons, spaces optional)
+      ~r/(\d{1,2}[:.]\d{2}\s*[ap]\.?m\.?)/i,
+      # English: "8pm" or "8 pm" (no minutes, spaces optional)
+      ~r/(\d{1,2}\s*[ap]\.?m\.?)/i,
+      # French: "à 20h30" or "20h30"
+      ~r/(?:à\s+)?(\d{1,2}h\d{2})/i,
+      # French: "à 20h" or "20h" (no minutes)
+      ~r/(?:à\s+)?(\d{1,2}h)/i,
+      # 24-hour format: "19:30" or "20:00"
+      ~r/(\d{1,2}:\d{2})/
+    ]
+
+    # Find and return first matching time string
+    patterns
+    |> Enum.find_value(fn pattern ->
+      case Regex.run(pattern, text) do
+        [_, time_str] -> String.trim(time_str)
+        _ -> nil
+      end
+    end)
   end
 
   defp extract_meta_description(html) do
