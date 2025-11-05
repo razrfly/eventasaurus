@@ -231,12 +231,14 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Extractors.VenueExtractor 
 
   # Extract date and time from p.mb-0 element with clock icon
   defp extract_date_time(document) do
-    # Find elements with clock icon
+    # Find elements with clock icon - try multiple patterns
     clock_elements =
       Floki.find(document, "p.mb-0")
       |> Enum.filter(fn el ->
         html = Floki.raw_html(el)
-        String.contains?(html, "fa-clock")
+        # Look for various clock-related classes and patterns
+        String.contains?(html, ["fa-clock", "clock", "time"]) or
+          String.match?(html, ~r/\d+\s*[ap]m/i)
       end)
 
     date_time_text =
@@ -261,7 +263,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Extractors.VenueExtractor 
     time =
       case Regex.run(~r/(\d+(?:\.\d+)?(?:\s*[ap]m|\s*PM|\s*AM))/i, text) do
         [_, t] -> t
-        _ -> "00:00"
+        _ -> ""
       end
 
     # Extract day
@@ -281,7 +283,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Extractors.VenueExtractor 
     {time, day, date}
   end
 
-  defp parse_date_time_text(_), do: {"00:00", "Unknown", "Unknown"}
+  defp parse_date_time_text(_), do: {"", "Unknown", "Unknown"}
 
   # Extract from og:title metadata
   defp extract_from_og_title(document) do

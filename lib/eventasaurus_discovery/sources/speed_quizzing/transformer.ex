@@ -153,7 +153,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
   def parse_schedule_to_recurrence(time_text, _starts_at, timezone)
       when is_binary(time_text) and is_binary(timezone) do
     with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
-         {:ok, time_struct} <- RecurringEventParser.parse_time(time_text) do
+         {:ok, time_struct} <- RecurringEventParser.parse_time_with_fallback(time_text) do
       # Use provided timezone (already detected from country/address)
       recurrence_rule =
         RecurringEventParser.build_recurrence_rule(day_of_week, time_struct, timezone)
@@ -275,7 +275,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
   # Calculate starts_at DateTime using RecurringEventParser
   defp calculate_starts_at(time_text, timezone, _venue_data) do
     with {:ok, day_of_week} <- RecurringEventParser.parse_day_of_week(time_text),
-         {:ok, time_struct} <- RecurringEventParser.parse_time(time_text) do
+         {:ok, time_struct} <- RecurringEventParser.parse_time_with_fallback(time_text) do
       RecurringEventParser.next_occurrence(day_of_week, time_struct, timezone)
     else
       {:error, reason} ->
