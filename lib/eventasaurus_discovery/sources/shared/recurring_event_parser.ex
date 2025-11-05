@@ -76,6 +76,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
   Supports multiple formats:
   - 12-hour with dots: "6.30pm", "7.45pm" (UK format)
   - 12-hour with colons: "7:30pm", "8:00 PM"
+  - French format: "20h30", "20h" (French "h" separator)
   - 24-hour format: "19:30", "20:00"
   - Standalone hours: "7", "8" (defaults to PM in trivia context)
 
@@ -90,6 +91,9 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
       iex> parse_time("6.30pm")  # UK format
       {:ok, ~T[18:30:00]}
 
+      iex> parse_time("20h30")  # French format
+      {:ok, ~T[20:30:00]}
+
       iex> parse_time("19:30")  # 24-hour
       {:ok, ~T[19:30:00]}
 
@@ -101,6 +105,10 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
       # Match "7pm", "7:30pm", "7.30pm", "7 pm", "7:30 p.m." (with optional periods in am/pm)
       time_12h = Regex.run(~r/(\d{1,2})(?:[:\.](\d{2}))?\s*([ap])\.?m\.?/i, text) ->
         parse_12h_time(time_12h)
+
+      # Match French "20h30" or "20h" format (must come before standalone hour pattern)
+      time_french = Regex.run(~r/(\d{1,2})h(\d{2})?/i, text) ->
+        parse_french_time(time_french)
 
       # Match "20:00", "19:30" (24-hour format)
       time_24h = Regex.run(~r/(\d{1,2}):(\d{2})/, text) ->
@@ -274,6 +282,27 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
     case Time.new(hour_int, minutes_int, 0) do
       {:ok, time} -> {:ok, time}
       {:error, _} -> {:error, "Invalid time: #{hour}:#{minutes}"}
+    end
+  end
+
+  # French format with minutes: "20h30"
+  defp parse_french_time([_full, hour, minutes]) when is_binary(minutes) do
+    hour_int = String.to_integer(hour)
+    minutes_int = String.to_integer(minutes)
+
+    case Time.new(hour_int, minutes_int, 0) do
+      {:ok, time} -> {:ok, time}
+      {:error, _} -> {:error, "Invalid time: #{hour}h#{minutes}"}
+    end
+  end
+
+  # French format without minutes: "20h"
+  defp parse_french_time([_full, hour]) do
+    hour_int = String.to_integer(hour)
+
+    case Time.new(hour_int, 0, 0) do
+      {:ok, time} -> {:ok, time}
+      {:error, _} -> {:error, "Invalid time: #{hour}h00"}
     end
   end
 

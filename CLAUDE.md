@@ -1,5 +1,62 @@
 # Task Master AI - Claude Code Integration Guide
 
+## ⚠️ CRITICAL: GIT WORKFLOW RULES
+
+**DO NOT USE GIT COMMANDS** unless explicitly requested by the user.
+
+### Why This Matters
+
+This project uses **Graphite** for stacked diffs and branch management. When Claude Code commits directly using `git commit`, it creates conflicts with the Graphite workflow and breaks the stack.
+
+### What You Should Do
+
+1. **Make code changes only** - Edit files, run tests, implement features
+2. **Let the user handle git** - They will commit and manage branches using Graphite
+3. **Report what you changed** - Summarize the files modified and changes made
+4. **Suggest commit messages** - Provide a commit message template the user can use
+
+### When Git Commands Are OK
+
+- **NEVER** use `git commit`
+- **NEVER** use `git add`
+- **NEVER** use `git push`
+- **NEVER** use `git branch`
+- **NEVER** use `git merge`
+- **NEVER** use `git rebase`
+
+You MAY use read-only git commands if needed:
+- `git status` - Check current state
+- `git diff` - View changes
+- `git log` - View history
+- `git show` - View specific commits
+
+### What This Means for You
+
+After implementing a fix or feature:
+1. ✅ Make all necessary code changes
+2. ✅ Run tests and verify the changes work
+3. ✅ Show `git diff` to summarize changes
+4. ✅ Provide a suggested commit message
+5. ❌ DO NOT run `git add` or `git commit`
+6. ✅ Tell the user: "Changes ready - please commit using Graphite"
+
+### Example Workflow
+
+```
+# GOOD ✅
+1. Edit files to implement fix
+2. Run tests to verify
+3. Show diff: git diff lib/some_file.ex
+4. Report: "Fixed X in lib/some_file.ex. Suggested commit message: 'fix: resolve Y issue'"
+5. User commits with Graphite
+
+# BAD ❌
+1. Edit files to implement fix
+2. Run: git add lib/some_file.ex
+3. Run: git commit -m "fix: resolve Y issue"
+4. Creates conflicts with Graphite stack
+```
+
 ## Essential Commands
 
 ### Core Workflow Commands
@@ -215,13 +272,14 @@ Add to `.claude/settings.json`:
   "allowedTools": [
     "Edit",
     "Bash(task-master *)",
-    "Bash(git commit:*)",
-    "Bash(git add:*)",
     "Bash(npm run *)",
+    "Bash(mix *)",
     "mcp__task_master_ai__*"
   ]
 }
 ```
+
+**Note**: Git commands are intentionally NOT in the allowlist. See "GIT WORKFLOW RULES" section above.
 
 ## Configuration & Setup
 
@@ -312,28 +370,32 @@ For large migrations or multi-step processes:
 4. Work through items systematically, checking them off as completed
 5. Use `task-master update-subtask` to log progress on each task/subtask and/or updating/researching them before/during implementation if getting stuck
 
-### Git Integration
+### Graphite Integration (User Workflow)
 
-Task Master works well with `gh` CLI:
+**NOTE: These commands are for the USER to run, not Claude Code.**
+
+This project uses Graphite for stacked diffs. After Claude Code makes changes:
 
 ```bash
-# Create PR for completed task
-gh pr create --title "Complete task 1.2: User authentication" --body "Implements JWT auth system as specified in task 1.2"
+# User commits using Graphite (NOT Claude Code)
+gt commit -m "feat: implement JWT auth (task 1.2)"
 
-# Reference task in commits
-git commit -m "feat: implement JWT auth (task 1.2)"
+# User creates stacked PRs
+gt stack submit
 ```
 
-### Parallel Development with Git Worktrees
+Task references in commit messages help track implementation:
+- `"feat: implement JWT auth (task 1.2)"`
+- `"fix: resolve validation bug (task 3.4)"`
+
+### GitHub CLI Integration (User Workflow)
+
+**NOTE: These commands are for the USER to run, not Claude Code.**
 
 ```bash
-# Create worktrees for parallel task development
-git worktree add ../project-auth feature/auth-system
-git worktree add ../project-api feature/api-refactor
-
-# Run Claude Code in each worktree
-cd ../project-auth && claude    # Terminal 1: Auth work
-cd ../project-api && claude     # Terminal 2: API work
+# Create PR for completed task (USER runs this)
+gh pr create --title "Complete task 1.2: User authentication" \
+             --body "Implements JWT auth system as specified in task 1.2"
 ```
 
 ## Troubleshooting

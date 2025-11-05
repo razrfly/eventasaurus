@@ -212,10 +212,11 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
     day = venue_data.day_of_week || "Unknown"
 
     # Handle both nil and empty string from venue extractor
+    # Return nil to trigger 8pm fallback in parse_time_with_fallback
     time =
       case venue_data.start_time do
-        "" -> "00:00"
-        nil -> "00:00"
+        "" -> nil
+        nil -> nil
         t -> t
       end
 

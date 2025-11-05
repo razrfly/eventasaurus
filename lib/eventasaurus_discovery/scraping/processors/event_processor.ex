@@ -429,6 +429,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp build_occurrence_structure("exhibition", data) do
     date_entry = %{
       "date" => format_date_only(data.start_at),
+      "time" => format_time_only(data.start_at, data),
       "external_id" => data.external_id
     }
 
