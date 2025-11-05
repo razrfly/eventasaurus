@@ -187,7 +187,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       radius_km: 50,
       include_pattern_events: true,
       # Get all results (max limit)
-      page_size: 500
+      page_size: 500,
+      # NEW: Pass browsing city for Unsplash fallback images
+      browsing_city_id: city.id
     })
   end
 

@@ -619,32 +619,56 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp create_venue(data, city, _source, source_scraper) do
     Logger.error("🔍 ENTER create_venue: name='#{data.name}', scraper=#{source_scraper}, has_coords=#{not is_nil(data.latitude)}")
 
-    # Check if we need to geocode the venue address
+    # ALWAYS geocode for venue name validation, even when coordinates are provided.
+    # The geocoding system serves two purposes:
+    # 1. Get coordinates (latitude/longitude for mapping)
+    # 2. Validate venue names (prevent bad names from entering database)
+    #
+    # Geocoding providers (Mapbox, HERE, etc.) give us authoritative venue names
+    # from their business databases, which we use to validate scraped names and
+    # catch UI elements, event dates, and other garbage that shouldn't be venue names.
+    #
+    # See: docs/geocoding/GEOCODING_SYSTEM.md - "Venue Name Validation" section
+    # Issue: #2165 - Venue name validation bypassed for scrapers providing complete data
+
     {latitude, longitude, geocoded_address, geocoding_metadata, geocoding_place_id, provider_ids} =
       if is_nil(data.latitude) || is_nil(data.longitude) do
-        # Case 1: No coordinates provided → forward geocode (address → coordinates + address)
+        # Case 1: No coordinates provided → forward geocode (address → coordinates + address + name)
         {lat, lng, address, metadata} = geocode_venue_address(data, city)
         # Extract place_id and provider_ids from geocoding metadata if available
         place_id = if metadata, do: Map.get(metadata, :place_id), else: nil
         provider_ids_map = extract_provider_ids_from_metadata(metadata)
         {lat, lng, address, metadata, place_id, provider_ids_map}
       else
-        # Case 2: Has coordinates
+        # Case 2: Has coordinates - still geocode for venue name validation
         if is_nil(data.address) do
-          # Case 2a: Has coordinates but no address → reverse geocode (coordinates → address)
+          # Case 2a: Has coordinates but no address → reverse geocode (coordinates → address + name)
           # This handles Resident Advisor and similar scrapers
           {address, reverse_metadata} =
             reverse_geocode_coordinates(data.latitude, data.longitude, city)
 
           {data.latitude, data.longitude, address, reverse_metadata, nil, %{}}
         else
-          # Case 2b: Has both coordinates and address → use them directly
-          {data.latitude, data.longitude, nil, nil, nil, %{}}
+          # Case 2b: Has both coordinates and address → forward geocode for venue name validation
+          # This is the fix for issue #2165: always geocode to get trusted venue name for validation
+          Logger.info(
+            "🔍 Geocoding for name validation despite having coordinates (scraper=#{source_scraper})"
+          )
+
+          {_geocoded_lat, _geocoded_lng, address, metadata} = geocode_venue_address(data, city)
+          # Extract place_id and provider_ids from geocoding metadata
+          place_id = if metadata, do: Map.get(metadata, :place_id), else: nil
+          provider_ids_map = extract_provider_ids_from_metadata(metadata)
+
+          # Use scraper-provided coordinates (may be more accurate than geocoded)
+          # But keep the geocoding metadata for name validation
+          {data.latitude, data.longitude, address, metadata, place_id, provider_ids_map}
         end
       end
 
     # Validate scraped name against geocoded name to prevent bad venue names
     # This uses VenueNameValidator to compare scraped vs geocoded names
+    # Now this will ALWAYS work because geocoding_metadata is always populated
     final_name = validate_and_choose_venue_name(data.name, geocoding_metadata, source_scraper)
 
     # Prefer geocoding provider's place_id over scraper's place_id

@@ -208,6 +208,94 @@ end
 
 ---
 
+## Venue Name Validation
+
+**Critical Design Pattern**: All scrapers MUST trigger geocoding to enable venue name validation, regardless of whether they provide coordinates.
+
+### Why We Always Geocode
+
+The geocoding system serves **two purposes**:
+1. **Get coordinates** (latitude/longitude for mapping)
+2. **Validate venue names** (prevent bad names from entering the database)
+
+Even if a scraper provides coordinates, we MUST geocode to get a trusted venue name from the geocoding provider for validation.
+
+### The Validation Process
+
+When VenueProcessor creates a venue, it:
+
+1. **Geocodes the address** (even if coordinates are provided)
+2. **Extracts the geocoded venue name** from the provider's response
+3. **Compares scraped name vs geocoded name** using similarity scoring
+4. **Chooses the best name**:
+   - High similarity (≥70%): Use scraped name (validated as correct)
+   - Moderate similarity (30-70%): Prefer geocoded name, log warning
+   - Low similarity (<30%): Use geocoded name, reject scraped name
+
+**Validation module**: `lib/eventasaurus_discovery/validation/venue_name_validator.ex`
+
+### Why This Matters
+
+Scrapers can extract bad venue names from HTML that include:
+- Event-specific information: `"Barchetta (Starts on November 3!)"`
+- UI elements: `"Click here for details"`
+- Image captions: `"View on map"`
+- Promotional text: `"50% off tickets!"`
+
+The geocoding provider (Mapbox, HERE, etc.) gives us the **authoritative venue name** from their business database, which we can trust.
+
+### Scraper Requirements
+
+**All scrapers MUST**:
+- Extract venue name from the source
+- Provide address for geocoding
+- Let VenueProcessor handle geocoding (don't skip it)
+
+**What NOT to do**:
+```elixir
+# ❌ BAD - Providing coordinates AND address bypasses validation
+%{
+  name: scraped_name,  # May be bad
+  address: "123 Main St",
+  latitude: 40.7128,   # ❌ Causes geocoding to be skipped
+  longitude: -74.0060  # ❌ No validation happens
+}
+```
+
+**Correct pattern**:
+```elixir
+# ✅ GOOD - Let VenueProcessor geocode for validation
+%{
+  name: scraped_name,        # Will be validated
+  address: "123 Main St",    # Used for geocoding
+  latitude: nil,             # ✅ Triggers geocoding
+  longitude: nil             # ✅ Enables validation
+}
+
+# ✅ ALSO GOOD - Provide coordinates, but still geocode for validation
+# (Future implementation: VenueProcessor will geocode even when coords exist)
+```
+
+### Current Status (As of Issue #2165)
+
+**Working correctly**:
+- Question One scraper ✅ (provides address only → geocoding happens → validation works)
+
+**Validation bypassed** (needs fix):
+- Geeks Who Drink ❌ (provides name + address + coordinates → skips geocoding)
+- Inquizition ❌ (provides name + address + coordinates → skips geocoding)
+- Speed Quizzing ❌ (provides name + address + coordinates → skips geocoding)
+
+**The fix**: Remove the optimization in VenueProcessor that skips geocoding when coordinates are provided. Always geocode to ensure venue name validation happens.
+
+### Design Philosophy
+
+**"Geocode everything for validation, even when we have coordinates."**
+
+The marginal API cost of geocoding is worth the data quality improvement from catching bad venue names before they enter the database. Geocoding providers have generous free tiers (100K-250K requests/month) that easily support this pattern.
+
+---
+
 ## Rate Limiting
 
 The system checks rate limits **before** calling providers to avoid wasted API calls and bans.
