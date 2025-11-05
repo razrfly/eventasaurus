@@ -38,6 +38,17 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Client do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         {:ok, %{status_code: 200, body: body}}
 
+      # WordPress AJAX sometimes returns 500 with valid content
+      # Accept 500 if the response body contains venue blocks
+      {:ok, %HTTPoison.Response{status_code: 500, body: body}} when is_binary(body) ->
+        if String.contains?(body, "quizBlock-") do
+          Logger.warning("⚠️ Got HTTP 500 but response contains valid venue data, accepting")
+          {:ok, %{status_code: 200, body: body}}
+        else
+          Logger.error("❌ HTTP 500 with invalid content when fetching: #{url}")
+          maybe_retry(:get, url, 500, retries, max_retries, options)
+        end
+
       {:ok, %HTTPoison.Response{status_code: status}} ->
         Logger.error("❌ HTTP #{status} when fetching: #{url}")
         maybe_retry(:get, url, status, retries, max_retries, options)

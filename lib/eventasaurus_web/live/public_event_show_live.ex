@@ -1,5 +1,6 @@
 defmodule EventasaurusWeb.PublicEventShowLive do
   use EventasaurusWeb, :live_view
+  require Logger
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
@@ -158,16 +159,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             user_id -> EventPlans.get_user_plan_for_event(user_id, event.id)
           end
 
-        # Extract browsing_city_id for Unsplash fallback
-        browsing_city_id = if event.venue && event.venue.city_ref, do: event.venue.city_ref.id, else: nil
-
-        # Enrich with display fields
+        # Enrich main event with cover image using unified API
+        # Use :own_city strategy so event uses its venue's city Unsplash gallery
         enriched_event =
-          event
+          [event]
+          |> PublicEventsEnhanced.preload_for_image_enrichment()
+          |> PublicEventsEnhanced.enrich_event_images(strategy: :own_city)
+          |> List.first()
           |> Map.put(:primary_category_id, primary_category_id)
           |> Map.put(:display_title, get_localized_title(event, language))
           |> Map.put(:display_description, get_localized_description(event, language))
-          |> Map.put(:cover_image_url, PublicEventsEnhanced.get_cover_image_url(event, browsing_city_id))
           |> Map.put(:occurrence_list, parse_occurrences(event))
 
         # Get nearby activities (with fallback)
@@ -179,6 +180,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             display_count: 4,
             language: language
           )
+          # Enrich nearby events with images using unified API
+          # Each nearby event uses its own venue's city for Unsplash fallback
+          |> PublicEventsEnhanced.preload_for_image_enrichment()
+          |> PublicEventsEnhanced.enrich_event_images(strategy: :own_city)
+          |> tap(fn enriched ->
+            Enum.each(enriched, fn e ->
+              Logger.info("📦 After enrichment - Event #{e.id}, cover_image_url: #{inspect(Map.get(e, :cover_image_url))}")
+            end)
+          end)
 
         movie = get_movie_data(event)
         is_movie = is_movie_screening?(event)
@@ -223,7 +233,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
 
         # Get image URL for social card
-        image_url = enriched_event.cover_image_url || get_placeholder_image_url(enriched_event)
+        image_url = Map.get(enriched_event, :cover_image_url) || get_placeholder_image_url(enriched_event)
 
         # Build meta description
         description =
@@ -440,11 +450,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     # Debug logging
     require Logger
 
-    Logger.debug(
+    Logger.info(
       "Plan with Friends modal - Socket assigns: user=#{inspect(socket.assigns[:user])}, auth_user=#{inspect(socket.assigns[:auth_user])}"
     )
 
-    Logger.debug("Selected occurrence: #{inspect(socket.assigns[:selected_occurrence])}")
+    Logger.info("Selected occurrence: #{inspect(socket.assigns[:selected_occurrence])}")
 
     cond do
       !socket.assigns[:auth_user] ->
@@ -758,10 +768,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   </div>
                 <% end %>
               <% else %>
-                <%= if @event.cover_image_url do %>
+                <%= if Map.get(@event, :cover_image_url) do %>
                   <div class="h-96 relative">
                     <img
-                      src={CDN.url(@event.cover_image_url, width: 1200, quality: 90)}
+                      src={CDN.url(Map.get(@event, :cover_image_url), width: 1200, quality: 90)}
                       alt={@event.display_title}
                       class="w-full h-full object-cover"
                     />
@@ -1266,7 +1276,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     # Get timezone for this venue (defaults to Poland timezone)
     timezone = get_event_timezone(event)
     require Logger
-    Logger.debug("Timezone for event: #{inspect(timezone)}")
+    Logger.info("Timezone for event: #{inspect(timezone)}")
 
     now = DateTime.utc_now()
 
