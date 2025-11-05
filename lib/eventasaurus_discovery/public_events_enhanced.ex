@@ -573,7 +573,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   @spec enrich_event_images([PublicEvent.t()], keyword()) :: [PublicEvent.t()]
   def enrich_event_images(events, opts \\ []) when is_list(events) do
-    IO.puts("🚨🚨🚨 ENRICHMENT CALLED WITH #{length(events)} EVENTS, OPTS: #{inspect(opts)}")
+    Logger.debug("Enriching #{length(events)} events with opts: #{inspect(opts)}")
     strategy = Keyword.get(opts, :strategy, :own_city)
     browsing_city_id = Keyword.get(opts, :browsing_city_id)
     force = Keyword.get(opts, :force, false)
@@ -581,9 +581,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     case strategy do
       :browsing_city when is_integer(browsing_city_id) ->
         # Fetch browsing city once, reuse for all events
-        browsing_city =
-          Repo.get(City, browsing_city_id)
-          |> Repo.preload(:unsplash_gallery)
+        browsing_city = Repo.get(City, browsing_city_id)
 
         if browsing_city do
           Enum.map(events, &enrich_with_browsing_city(&1, browsing_city, force))
@@ -626,19 +624,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   defp enrich_with_own_city(event, force) do
     # Check if cover_image_url already exists using Map.get (safe for Ecto structs)
     existing_url = Map.get(event, :cover_image_url)
-    IO.puts("🔎 enrich_with_own_city - Event #{event.id}, existing_url: #{inspect(existing_url)}, force: #{force}")
+    Logger.debug("enrich_with_own_city - Event #{event.id}, existing_url: #{inspect(existing_url)}, force: #{force}")
 
     if force || is_nil(existing_url) do
       # Get city struct from event's venue (preloaded by preload_for_image_enrichment)
       city = get_in(event, [Access.key(:venue), Access.key(:city_ref)])
 
-      IO.puts("🔍 enrich_with_own_city - Event: #{event.id}, City: #{inspect(city && city.name)}")
+      Logger.debug("enrich_with_own_city - Event: #{event.id}, City: #{inspect(city && city.name)}")
 
       if city do
         # Pass nil as browsing_city so it uses the venue's city (from the event itself)
-        IO.puts("⏩ Calling get_cover_image_url for event #{event.id}")
+        Logger.debug("Calling get_cover_image_url for event #{event.id}")
         cover_image_url = get_cover_image_url(event, nil)
-        IO.puts("⏪ get_cover_image_url returned: #{inspect(cover_image_url)}")
+        Logger.debug("get_cover_image_url returned: #{inspect(cover_image_url)}")
 
         Logger.info("🖼️  get_cover_image_url returned: #{inspect(cover_image_url)}")
 

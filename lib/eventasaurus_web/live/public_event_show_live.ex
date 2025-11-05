@@ -349,63 +349,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  defp get_cover_image_url(event) do
-    # Sort sources by priority and try to get the first available image
-    sorted_sources =
-      event.sources
-      |> Enum.sort_by(fn source ->
-        priority =
-          case source.metadata do
-            %{"priority" => p} when is_integer(p) ->
-              p
-
-            %{"priority" => p} when is_binary(p) ->
-              case Integer.parse(p) do
-                {num, _} -> num
-                _ -> 10
-              end
-
-            _ ->
-              10
-          end
-
-        # Newer timestamps first (negative for descending sort)
-        ts =
-          case source.last_seen_at do
-            %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-            _ -> 9_223_372_036_854_775_807
-          end
-
-        {priority, ts}
-      end)
-
-    # Try to extract image from sources with URL sanitization
-    Enum.find_value(sorted_sources, fn source ->
-      url = source.image_url || extract_image_from_metadata(source.metadata)
-      normalize_http_url(url)
-    end)
-  end
-
-  defp extract_image_from_metadata(nil), do: nil
-
-  defp extract_image_from_metadata(metadata) do
-    cond do
-      # Ticketmaster stores images in an array
-      images = get_in(metadata, ["ticketmaster_data", "images"]) ->
-        case images do
-          [%{"url" => url} | _] when is_binary(url) -> url
-          _ -> nil
-        end
-
-      # Bandsintown and Karnet store in image_url
-      url = metadata["image_url"] ->
-        url
-
-      true ->
-        nil
-    end
-  end
-
   @impl true
   def handle_event("change_language", %{"language" => language}, socket) do
     # Set cookie to persist language preference
