@@ -92,6 +92,9 @@ config :hammer,
 # Configure Oban for background job processing
 config :eventasaurus, Oban,
   repo: EventasaurusApp.Repo,
+  # How often to poll for scheduled jobs (in milliseconds)
+  # Default is 1000ms, setting explicitly to ensure staging works
+  stage_interval: 1_000,
   queues: [
     # Email queue with limited concurrency for Resend API rate limiting
     # Max 2 concurrent jobs to respect Resend's 2/second limit
