@@ -297,7 +297,8 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
   end
 
   # French format without minutes: "20h"
-  defp parse_french_time([_full, hour]) do
+  # Note: Regex.run returns ["20h", "20", nil] for "20h", so we match on nil minutes
+  defp parse_french_time([_full, hour, nil]) do
     hour_int = String.to_integer(hour)
 
     case Time.new(hour_int, 0, 0) do
