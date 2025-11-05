@@ -53,6 +53,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     title = venue_data.title
     address = venue_data.address
 
+    # Clean venue name by removing location suffixes and parenthetical notes
+    clean_title = clean_venue_name(title)
+
     # GPS coordinates provided directly
     latitude = venue_data.latitude
     longitude = venue_data.longitude
@@ -84,12 +87,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     %{
       # Required fields
       external_id: external_id,
-      title: "Geeks Who Drink Trivia at #{title}",
+      title: "Geeks Who Drink Trivia at #{clean_title}",
       starts_at: starts_at,
 
       # Venue data (REQUIRED - GPS coordinates provided)
       venue_data: %{
-        name: title,
+        name: clean_title,
         address: address,
         city: city,
         country: country,
@@ -388,6 +391,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
   # Build description from venue data
   # Includes quizmaster name and schedule details (hybrid approach - not stored in performers table)
   defp build_description(venue_data) do
+    # Clean venue name for description
+    clean_title = clean_venue_name(venue_data.title)
+
     # Parse day and time from time_text for enhanced description
     day_info = parse_day_from_time_text(venue_data[:time_text])
 
@@ -398,9 +404,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
     # Build base description with schedule if available
     base_description =
       if day_info && time_info do
-        "Weekly trivia every #{day_info} at #{time_info} at #{venue_data.title}"
+        "Weekly trivia every #{day_info} at #{time_info} at #{clean_title}"
       else
-        venue_data[:description] || "Weekly trivia night at #{venue_data.title}"
+        venue_data[:description] || "Weekly trivia night at #{clean_title}"
       end
 
     # Add quizmaster to description if present
@@ -488,6 +494,38 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Transformer do
         {false, nil}
     end
   end
+
+  @doc """
+  Cleans venue names by removing extraneous text from Geeks Who Drink API.
+
+  Removes:
+  - Location suffixes after @ symbol (e.g., "@Alamo Drafthouse Westminster")
+  - Parenthetical notes (e.g., "(check venue for reservations!)", "(Monday)")
+  - Extra whitespace
+
+  ## Examples
+
+      iex> clean_venue_name("Wild Corgi Pub (check venue for reservations!)")
+      "Wild Corgi Pub"
+
+      iex> clean_venue_name("Pandora's Box @Alamo Drafthouse Westminster (Monday)")
+      "Pandora's Box"
+
+      iex> clean_venue_name("Glass Half Full @Alamo Drafthouse Littleton (Wednesday)")
+      "Glass Half Full"
+  """
+  def clean_venue_name(name) when is_binary(name) do
+    name
+    # Remove everything after @ (location suffixes)
+    |> String.split("@")
+    |> List.first()
+    # Remove parenthetical notes
+    |> String.replace(~r/\s*\([^)]*\)/, "")
+    # Trim extra whitespace
+    |> String.trim()
+  end
+
+  def clean_venue_name(nil), do: nil
 
   # Add hours to a DateTime
   defp add_hours(datetime, hours) do
