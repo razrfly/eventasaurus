@@ -98,8 +98,8 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
   """
   def parse_time(text) when is_binary(text) do
     cond do
-      # Match "7pm", "7:30pm", "7.30pm", "7 pm" (with dots or colons)
-      time_12h = Regex.run(~r/(\d{1,2})(?:[:\.](\d{2}))?\s*(am|pm)/i, text) ->
+      # Match "7pm", "7:30pm", "7.30pm", "7 pm", "7:30 p.m." (with optional periods in am/pm)
+      time_12h = Regex.run(~r/(\d{1,2})(?:[:\.](\d{2}))?\s*([ap])\.?m\.?/i, text) ->
         parse_12h_time(time_12h)
 
       # Match "20:00", "19:30" (24-hour format)
@@ -250,12 +250,15 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
 
     meridiem_lower = String.downcase(meridiem)
 
+    # Handle both "a"/"p" (from "a.m."/"p.m.") and "am"/"pm" formats
+    is_pm = String.starts_with?(meridiem_lower, "p")
+
     # Convert to 24-hour format
     hour_24 =
       cond do
-        meridiem_lower == "am" and hour_int == 12 -> 0
-        meridiem_lower == "pm" and hour_int != 12 -> hour_int + 12
-        true -> hour_int
+        not is_pm and hour_int == 12 -> 0  # 12am = 0
+        is_pm and hour_int != 12 -> hour_int + 12  # 1pm-11pm = 13-23
+        true -> hour_int  # 1am-11am and 12pm stay the same
       end
 
     case Time.new(hour_24, minutes_int, 0) do

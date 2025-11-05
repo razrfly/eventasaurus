@@ -68,6 +68,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   require Logger
   alias EventasaurusDiscovery.Sources.Sortiraparis.Config
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
+  alias EventasaurusDiscovery.Sources.Shared.RecurringEventParser
 
   @doc """
   Transform raw event data into unified format.
@@ -254,17 +255,22 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
 
   defp extract_title(_), do: {:error, :missing_title}
 
-  defp extract_and_parse_dates(%{"dates" => dates}, options)
+  defp extract_and_parse_dates(%{"dates" => dates} = raw_event, options)
        when is_list(dates) and length(dates) > 0 do
+    # Extract time_string if available
+    time_string = Map.get(raw_event, "time_string")
+    timezone = Map.get(options, :timezone, "Europe/Paris")
+
     # Coerce entries to UTC DateTime; accept %DateTime{} or ISO8601 strings
     coerced =
       dates
       |> Enum.flat_map(fn
         %DateTime{} = dt ->
-          [dt]
+          # Apply time to already-parsed datetime if time_string available
+          [apply_time_to_datetime(dt, time_string, timezone)]
 
         bin when is_binary(bin) ->
-          case parse_with_multilingual_parser(bin, options) do
+          case parse_with_multilingual_parser(bin, time_string, options) do
             {:ok, [dt | _]} -> [dt]
             _ -> []
           end
@@ -276,15 +282,18 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
     if coerced == [], do: {:error, :no_dates_extracted}, else: {:ok, coerced}
   end
 
-  defp extract_and_parse_dates(%{"date_string" => date_string}, options)
+  defp extract_and_parse_dates(%{"date_string" => date_string} = raw_event, options)
        when is_binary(date_string) do
-    # Parse date string using MultilingualDateParser
-    parse_with_multilingual_parser(date_string, options)
+    # Extract time_string if available
+    time_string = Map.get(raw_event, "time_string")
+
+    # Parse date string using MultilingualDateParser with optional time
+    parse_with_multilingual_parser(date_string, time_string, options)
   end
 
-  defp extract_and_parse_dates(%{"date" => date}, options) when is_binary(date) do
-    # Fallback to generic "date" field
-    extract_and_parse_dates(%{"date_string" => date}, options)
+  defp extract_and_parse_dates(%{"date" => date} = raw_event, options) when is_binary(date) do
+    # Fallback to generic "date" field - preserve time_string
+    extract_and_parse_dates(Map.put(raw_event, "date_string", date), options)
   end
 
   defp extract_and_parse_dates(_, _), do: {:error, :missing_dates}
@@ -611,7 +620,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
   end
 
   # Wrapper to adapt MultilingualDateParser API to Transformer's expected format
-  defp parse_with_multilingual_parser(date_string, options) do
+  # Now also handles optional time parsing using RecurringEventParser
+  defp parse_with_multilingual_parser(date_string, time_string, options) do
     # Get timezone from options (defaults to Europe/Paris for Sortiraparis)
     timezone = Map.get(options, :timezone, "Europe/Paris")
 
@@ -621,13 +631,23 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
            languages: [:french, :english],
            timezone: timezone
          ) do
-      {:ok, %{starts_at: starts_at, ends_at: nil}} ->
-        # Single date - return list with one DateTime
-        {:ok, [starts_at]}
+      {:ok, %{starts_at: starts_at, ends_at: ends_at_from_range}} ->
+        # Parse time if available and combine with date(s)
+        starts_at_with_time = apply_time_to_datetime(starts_at, time_string, timezone)
 
-      {:ok, %{starts_at: starts_at, ends_at: ends_at}} when not is_nil(ends_at) ->
-        # Date range - return list with start and end DateTimes
-        {:ok, [starts_at, ends_at]}
+        ends_at_with_time =
+          if ends_at_from_range do
+            # For date ranges, don't apply time to end date (use end of day)
+            ends_at_from_range
+          else
+            nil
+          end
+
+        if ends_at_with_time do
+          {:ok, [starts_at_with_time, ends_at_with_time]}
+        else
+          {:ok, [starts_at_with_time]}
+        end
 
       {:error, :unsupported_date_format} = error ->
         # Pass through unsupported_date_format for unknown occurrence fallback
@@ -637,6 +657,38 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
         # Other errors
         Logger.debug("MultilingualDateParser error: #{inspect(reason)}")
         {:error, :unsupported_date_format}
+    end
+  end
+
+  # Apply parsed time to a DateTime, replacing the time component
+  # Falls back to original datetime if time parsing fails
+  defp apply_time_to_datetime(datetime, nil, _timezone), do: datetime
+
+  defp apply_time_to_datetime(datetime, time_string, timezone) when is_binary(time_string) do
+    case RecurringEventParser.parse_time(time_string) do
+      {:ok, time} ->
+        # Replace the time component of the datetime
+        date = DateTime.to_date(datetime)
+
+        case DateTime.new(date, time, timezone) do
+          {:ok, new_datetime} ->
+            # Convert to UTC
+            DateTime.shift_zone!(new_datetime, "Etc/UTC")
+
+          {:error, reason} ->
+            Logger.warning(
+              "⚠️ Failed to create DateTime with parsed time: #{inspect(reason)}. Using original datetime."
+            )
+
+            datetime
+        end
+
+      {:error, reason} ->
+        Logger.debug(
+          "⚠️ Failed to parse time '#{time_string}': #{inspect(reason)}. Using midnight default."
+        )
+
+        datetime
     end
   end
 end

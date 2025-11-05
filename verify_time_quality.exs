@@ -19,15 +19,24 @@ report = DataQualityChecker.check_quality(slug)
 # Extract time metrics
 time_metrics = get_in(report, [:occurrence_metrics, :time_quality_metrics]) || %{}
 
+# Normalize percentage values (handles Decimal, integer, float, nil)
+normalize_pct = fn
+  nil -> 0.0
+  %Decimal{} = value -> Decimal.to_float(value)
+  value when is_integer(value) -> value / 1.0
+  value when is_float(value) -> value
+end
+
 # Display current metrics
 IO.puts("\n📊 CURRENT METRICS")
 IO.puts("-" |> String.duplicate(100))
 IO.puts("Total Events: #{report[:total_events] || 0}")
 IO.puts("Events with Times: #{time_metrics[:total_occurrences] || 0}")
-IO.puts("Time Quality Score: #{time_metrics[:time_quality] || 0}%")
 
-diversity_score = time_metrics[:time_diversity_score] || 0
-diversity_float = if is_float(diversity_score), do: diversity_score, else: diversity_score / 1.0
+time_quality = normalize_pct.(time_metrics[:time_quality])
+IO.puts("Time Quality Score: #{Float.round(time_quality, 1)}%")
+
+diversity_float = normalize_pct.(time_metrics[:time_diversity_score])
 IO.puts("Time Diversity: #{Float.round(diversity_float, 1)}%")
 
 # Display time distribution
@@ -68,29 +77,29 @@ IO.puts("Midnight (00:00) Events: #{midnight_count} (#{midnight_pct}%)")
 IO.puts("\n📈 IMPROVEMENT ANALYSIS")
 IO.puts("-" |> String.duplicate(100))
 IO.puts("BEFORE: 59% time quality, 40.5% midnight, 48% diversity")
-IO.puts("AFTER:  #{time_metrics[:time_quality] || 0}% time quality, #{midnight_pct}% midnight, #{Float.round(diversity_float, 1)}% diversity")
+IO.puts("AFTER:  #{Float.round(time_quality, 1)}% time quality, #{midnight_pct}% midnight, #{Float.round(diversity_float, 1)}% diversity")
 
-# Calculate improvements
-time_qual_improvement = (time_metrics[:time_quality] || 0) - 59
+# Calculate improvements (using normalized float values)
+time_qual_improvement = time_quality - 59.0
 midnight_improvement = 40.5 - midnight_pct
 diversity_improvement = Float.round(diversity_float, 1) - 48.0
 
 if time_qual_improvement > 0 do
-  IO.puts("✅ Time Quality: +#{:erlang.float_to_binary(time_qual_improvement * 1.0, [:compact, decimals: 1])}%")
+  IO.puts("✅ Time Quality: +#{:erlang.float_to_binary(time_qual_improvement, [:compact, decimals: 1])}%")
 else
-  IO.puts("⚠️  Time Quality: #{:erlang.float_to_binary(time_qual_improvement * 1.0, [:compact, decimals: 1])}%")
+  IO.puts("⚠️  Time Quality: #{:erlang.float_to_binary(time_qual_improvement, [:compact, decimals: 1])}%")
 end
 
 if midnight_improvement > 0 do
-  IO.puts("✅ Midnight Reduction: -#{:erlang.float_to_binary(midnight_improvement * 1.0, [:compact, decimals: 1])}%")
+  IO.puts("✅ Midnight Reduction: -#{:erlang.float_to_binary(midnight_improvement, [:compact, decimals: 1])}%")
 else
-  IO.puts("⚠️  Midnight Increase: +#{:erlang.float_to_binary(abs(midnight_improvement) * 1.0, [:compact, decimals: 1])}%")
+  IO.puts("⚠️  Midnight Increase: +#{:erlang.float_to_binary(abs(midnight_improvement), [:compact, decimals: 1])}%")
 end
 
 if diversity_improvement > 0 do
-  IO.puts("✅ Diversity: +#{:erlang.float_to_binary(diversity_improvement * 1.0, [:compact, decimals: 1])}%")
+  IO.puts("✅ Diversity: +#{:erlang.float_to_binary(diversity_improvement, [:compact, decimals: 1])}%")
 else
-  IO.puts("⚠️  Diversity: #{:erlang.float_to_binary(diversity_improvement * 1.0, [:compact, decimals: 1])}%")
+  IO.puts("⚠️  Diversity: #{:erlang.float_to_binary(diversity_improvement, [:compact, decimals: 1])}%")
 end
 
 IO.puts("\n" <> ("=" |> String.duplicate(100)))
