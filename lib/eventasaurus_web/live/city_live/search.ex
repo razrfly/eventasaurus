@@ -285,8 +285,12 @@ defmodule EventasaurusWeb.CityLive.Search do
 
   defp parse_date(date_string) when is_binary(date_string) do
     case Date.from_iso8601(date_string) do
-      {:ok, date} -> date
-      _ -> nil
+      {:ok, date} ->
+        # Convert to DateTime at start of day for consistency with defaults
+        DateTime.new!(date, ~T[00:00:00])
+
+      _ ->
+        nil
     end
   end
 
