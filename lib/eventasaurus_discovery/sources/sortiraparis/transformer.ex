@@ -675,6 +675,24 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Transformer do
             # Convert to UTC
             DateTime.shift_zone!(new_datetime, "Etc/UTC")
 
+          # Handle ambiguous time during DST fall-back (clocks set back)
+          # Choose the first occurrence (before clocks are set back)
+          {:ambiguous, first_occurrence, _second_occurrence} ->
+            Logger.warning(
+              "⚠️ Ambiguous local time '#{time_string}' in #{timezone} during DST transition. Using first occurrence (before clocks set back)."
+            )
+
+            DateTime.shift_zone!(first_occurrence, "Etc/UTC")
+
+          # Handle gap during DST spring-forward (clocks jump ahead)
+          # Choose the time after the gap (the valid time after clocks jump forward)
+          {:gap, _before_gap, after_gap} ->
+            Logger.warning(
+              "⚠️ Gap in local time '#{time_string}' in #{timezone} during DST transition. Using time after gap (after clocks jump forward)."
+            )
+
+            DateTime.shift_zone!(after_gap, "Etc/UTC")
+
           {:error, reason} ->
             Logger.warning(
               "⚠️ Failed to create DateTime with parsed time: #{inspect(reason)}. Using original datetime."
