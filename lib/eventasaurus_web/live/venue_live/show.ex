@@ -9,7 +9,6 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.VenueLive.Components.ImageGallery
   alias EventasaurusWeb.StaticMapComponent
-  alias EventasaurusWeb.Components.VenueCards
   alias EventasaurusWeb.Components.Breadcrumbs
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
@@ -45,7 +44,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:past_events, [])
       |> assign(:show_past_events, false)
       |> assign(:show_future_events, false)
-      |> assign(:related_venues, [])
+      |> assign(:nearby_events, [])
       |> assign(:upcoming_page_size, 9)
       |> assign(:upcoming_visible_count, 9)
       |> assign(:future_page_size, 9)
@@ -120,6 +119,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
   # Helper functions
 
+  # Check if venue has any images
+  defp has_venue_images?(%Venue{venue_images: images}) when is_list(images) and length(images) > 0, do: true
+  defp has_venue_images?(_), do: false
+
   # Shared logic for loading and assigning venue data to socket
   defp load_and_assign_venue(venue, socket) do
     # Preload city and country
@@ -128,14 +131,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Get events for this venue
     events = get_venue_events(venue.id)
 
-    # Get related venues in the same city with events count
-    related_venues =
+    # Get nearby events in the same city (excluding events at this venue)
+    nearby_events =
       if venue.city_id do
-        Venues.list_related_venues_with_events_count(venue.id, venue.city_id, 6)
-        |> Enum.map(fn venue_data ->
-          # Preload associations for the venue
-          Map.update!(venue_data, :venue, &Repo.preload(&1, city_ref: :country))
-        end)
+        get_nearby_city_events(venue.city_id, venue.id, limit: 6)
       else
         []
       end
@@ -164,7 +163,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:upcoming_events, events.upcoming)
       |> assign(:future_events, events.future)
       |> assign(:past_events, events.past)
-      |> assign(:related_venues, related_venues)
+      |> assign(:nearby_events, nearby_events)
       |> assign(:breadcrumb_items, breadcrumb_items)
       |> assign(:loading, false)
       |> SEOHelpers.assign_meta_tags(
@@ -256,6 +255,31 @@ defmodule EventasaurusWeb.VenueLive.Show do
     |> Repo.all()
     # Preload sources so get_cover_image_url can extract image URLs
     |> Repo.preload([:performers, :categories, :sources, venue: [city_ref: :country]])
+  end
+
+  defp get_nearby_city_events(city_id, current_venue_id, opts) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
+    limit = Keyword.get(opts, :limit, 6)
+    now = DateTime.utc_now()
+
+    # Get upcoming events from other venues in the same city (excluding current venue)
+    from(pe in PublicEvent,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      where: v.city_id == ^city_id,
+      where: pe.venue_id != ^current_venue_id,
+      where:
+        (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+          (is_nil(pe.ends_at) and pe.starts_at > ^now),
+      order_by: [asc: pe.starts_at],
+      limit: ^limit
+    )
+    |> Repo.all()
+    |> Repo.preload([:performers, :categories, :sources, venue: [city_ref: :country]])
+    |> Enum.map(fn event ->
+      Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
+    end)
   end
 
   defp build_venue_breadcrumbs(venue) do
@@ -470,60 +494,70 @@ defmodule EventasaurusWeb.VenueLive.Show do
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
         </div>
       <% else %>
-        <!-- Breadcrumb -->
-        <nav class="bg-white border-b border-gray-200">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
-          </div>
-        </nav>
+        <!-- Hero Section -->
+        <div class="bg-gray-50">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Breadcrumb -->
+            <div class="mb-6">
+              <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
+            </div>
 
-        <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <!-- Venue Details Card -->
-          <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 mb-4"><%= @venue.name %></h1>
-
-            <div class="space-y-3 text-gray-700">
-              <!-- Address -->
-              <%= if @venue.address do %>
-                <div class="flex items-start">
-                  <svg
-                    class="h-5 w-5 text-gray-500 mr-3 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                    />
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
-                  <div>
-                    <div><%= @venue.address %></div>
-                    <%= if @venue.city_ref do %>
-                      <div>
-                        <%= @venue.city_ref.name %><%= if @venue.city_ref.country, do: ", #{@venue.city_ref.country.name}", else: "" %>
-                      </div>
-                    <% end %>
+            <!-- Venue Hero -->
+            <div class="flex flex-col lg:flex-row gap-8">
+              <!-- Venue Image (if available) -->
+              <%= if has_venue_images?(@venue) do %>
+                <div class="lg:w-2/5">
+                  <div class="aspect-[4/3] rounded-xl overflow-hidden shadow-lg">
+                    <ImageGallery.image_gallery venue={@venue} />
                   </div>
                 </div>
               <% end %>
+
+              <!-- Venue Details -->
+              <div class={if has_venue_images?(@venue), do: "lg:w-3/5", else: "w-full"}>
+                <h1 class="text-4xl font-bold text-gray-900 mb-6"><%= @venue.name %></h1>
+
+                <div class="space-y-4">
+                  <!-- Address -->
+                  <%= if @venue.address do %>
+                    <div class="flex items-start gap-3">
+                      <svg
+                        class="h-6 w-6 text-indigo-600 flex-shrink-0 mt-0.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                        />
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      <div class="text-lg">
+                        <div class="font-medium text-gray-900"><%= @venue.address %></div>
+                        <%= if @venue.city_ref do %>
+                          <div class="text-gray-600">
+                            <%= @venue.city_ref.name %><%= if @venue.city_ref.country, do: ", #{@venue.city_ref.country.name}", else: "" %>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Image Gallery -->
-          <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">📸 Photos</h2>
-            <ImageGallery.image_gallery venue={@venue} />
-          </div>
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
           <!-- Events -->
           <div class="bg-white rounded-lg shadow-md p-6 mb-8">
@@ -676,15 +710,15 @@ defmodule EventasaurusWeb.VenueLive.Show do
               size={:large}
             />
           </div>
-          <!-- Related Venues -->
-          <%= if !Enum.empty?(@related_venues) do %>
+          <!-- Nearby Events -->
+          <%= if !Enum.empty?(@nearby_events) do %>
             <div class="bg-white rounded-lg shadow-md p-6 mt-8">
               <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                🏢 More Venues in <%= @venue.city_ref.name %>
+                🎉 More Events in <%= @venue.city_ref.name %>
               </h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <%= for venue_data <- @related_venues do %>
-                  <VenueCards.venue_card venue={venue_data.venue} city={@venue.city_ref} events_count={venue_data.upcoming_events_count} />
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <%= for event <- @nearby_events do %>
+                  <.event_card event={event} language={@language} show_city={false} />
                 <% end %>
               </div>
             </div>
