@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
   alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.CDN
+  alias EventasaurusDiscovery.PublicEventsEnhanced
   import Ecto.Query
 
   @impl true
@@ -157,13 +158,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             user_id -> EventPlans.get_user_plan_for_event(user_id, event.id)
           end
 
+        # Extract browsing_city_id for Unsplash fallback
+        browsing_city_id = if event.venue && event.venue.city_ref, do: event.venue.city_ref.id, else: nil
+
         # Enrich with display fields
         enriched_event =
           event
           |> Map.put(:primary_category_id, primary_category_id)
           |> Map.put(:display_title, get_localized_title(event, language))
           |> Map.put(:display_description, get_localized_description(event, language))
-          |> Map.put(:cover_image_url, get_cover_image_url(event))
+          |> Map.put(:cover_image_url, PublicEventsEnhanced.get_cover_image_url(event, browsing_city_id))
           |> Map.put(:occurrence_list, parse_occurrences(event))
 
         # Get nearby activities (with fallback)

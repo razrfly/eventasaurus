@@ -55,7 +55,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     |> apply_sorting(opts[:sort_by], opts[:sort_order])
     |> paginate(opts[:page], opts[:page_size])
     |> Repo.all()
-    |> preload_with_sources(opts[:language])
+    |> preload_with_sources(opts[:language], opts[:browsing_city_id])
   end
 
   @doc """
@@ -383,7 +383,15 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   ## Preloading
 
-  defp preload_with_sources(events, language) do
+  defp preload_with_sources(events, language, browsing_city_id \\ nil) do
+    # Load browsing city with unsplash_gallery if provided
+    browsing_city =
+      if browsing_city_id do
+        Repo.get(City, browsing_city_id)
+      else
+        nil
+      end
+
     events
     |> Repo.preload([
       :categories,
@@ -400,7 +408,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       Map.merge(event, %{
         display_title: get_localized_title(event, language),
         display_description: get_localized_description(event, language),
-        cover_image_url: get_cover_image_url(event)
+        cover_image_url: get_cover_image_url(event, browsing_city)
       })
     end)
   end
@@ -472,16 +480,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   For movie events, prioritizes movie poster/backdrop from TMDb over source images.
   Falls back to source images if no movie image is available.
+  For aggregate events without source images, falls back to city Unsplash images.
 
   Sorts sources by priority and last_seen_at timestamp, then extracts
   the first available image from either the image_url field or metadata.
   """
-  def get_cover_image_url(event) do
+  def get_cover_image_url(event, browsing_city \\ nil) do
     # For movie events, prioritize movie images from TMDb
     case get_movie_image(event) do
       nil ->
         # Fall back to source image if no movie image available
-        get_image_from_sources(event)
+        get_image_from_sources(event, browsing_city)
 
       image_url ->
         image_url
@@ -503,7 +512,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     end
   end
 
-  defp get_image_from_sources(event) do
+  defp get_image_from_sources(event, browsing_city \\ nil) do
     # Sort sources by priority and try to get the first available image
     # Fix: Sort by newest last_seen_at first (negative timestamp)
     sorted_sources =
@@ -535,15 +544,22 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end)
 
     # Try to extract image from sources
-    Enum.find_value(sorted_sources, fn source ->
-      # First check the direct image_url field
-      if source.image_url do
-        source.image_url
-      else
-        # Fall back to metadata
-        extract_image_from_metadata(source.metadata)
-      end
-    end)
+    source_image =
+      Enum.find_value(sorted_sources, fn source ->
+        # First check the direct image_url field
+        if source.image_url do
+          source.image_url
+        else
+          # Fall back to metadata
+          extract_image_from_metadata(source.metadata)
+        end
+      end)
+
+    # If no source image found, fall back to city Unsplash images
+    case source_image do
+      nil -> get_city_fallback_image(event, browsing_city)
+      url -> url
+    end
   end
 
   defp extract_image_from_metadata(nil), do: nil
@@ -569,6 +585,134 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         nil
     end
   end
+
+  # Get city fallback image from Unsplash gallery.
+  #
+  # Returns an Unsplash image URL from the city's categorized gallery,
+  # selected based on the event type, source, and venue.
+  #
+  # Prioritizes browsing city gallery over venue city gallery for aggregate pages.
+  # Falls back gracefully through category chain if primary category has no images.
+  defp get_city_fallback_image(event, browsing_city \\ nil) do
+    # Try browsing city first (for aggregate pages like /c/london/trivia/speed-quizzing)
+    # Then fall back to venue's actual city
+    city =
+      cond do
+        browsing_city && has_unsplash_gallery?(browsing_city) ->
+          browsing_city
+
+        true ->
+          venue_city = get_event_city(event)
+          if has_unsplash_gallery?(venue_city), do: venue_city, else: nil
+      end
+
+    # Extract venue_id for image variation (ensures different images per venue on same day)
+    venue_id =
+      case event do
+        %{venue: %{id: id}} when is_integer(id) -> id
+        %{venue_id: id} when is_integer(id) -> id
+        _ -> 0
+      end
+
+    with city when not is_nil(city) <- city,
+         category <- determine_event_category(event),
+         fallback_chain <- [category, "general"] |> Enum.uniq(),
+         image_url when not is_nil(image_url) <- try_category_chain(city, fallback_chain, venue_id) do
+      # Apply CDN transformations if available
+      apply_cdn_transformations(image_url)
+    else
+      _ -> nil
+    end
+  end
+
+  # Get city from event (handles various preload scenarios)
+  defp get_event_city(%{venue: %{city_ref: %City{} = city}}), do: city
+  defp get_event_city(%{venue: %Venue{} = venue}) do
+    # Venue exists but city_ref not preloaded, load it
+    case Repo.preload(venue, :city_ref) do
+      %{city_ref: %City{} = city} -> city
+      _ -> nil
+    end
+  end
+  defp get_event_city(_), do: nil
+
+  # Check if city has unsplash_gallery populated
+  defp has_unsplash_gallery?(%City{unsplash_gallery: %{"categories" => categories}}) when is_map(categories) do
+    # Check if gallery has at least one category with images
+    Enum.any?(categories, fn {_category, category_data} ->
+      case category_data do
+        %{"images" => images} when is_list(images) -> length(images) > 0
+        _ -> false
+      end
+    end)
+  end
+  defp has_unsplash_gallery?(_), do: false
+
+  # Determine event category using EventCategoryMapper
+  defp determine_event_category(event) do
+    EventasaurusApp.Events.CategoryMapper.determine_category(event)
+  end
+
+  # Try to get image from category chain (primary → fallback → general)
+  defp try_category_chain(_city, [], _venue_id), do: nil
+  defp try_category_chain(city, [category | rest], venue_id) do
+    case get_category_image(city, category, venue_id) do
+      nil -> try_category_chain(city, rest, venue_id)
+      url -> url
+    end
+  end
+
+  # Get image from specific category in city's unsplash_gallery
+  defp get_category_image(%City{unsplash_gallery: %{"categories" => categories}}, category, venue_id \\ 0) when is_map(categories) do
+    # Get the category data (try both string and atom keys)
+    category_data = Map.get(categories, category) || Map.get(categories, String.to_atom(category))
+
+    case category_data do
+      %{"images" => images} when is_list(images) and length(images) > 0 ->
+        # Get today's image with venue variation (daily rotation + per-venue offset)
+        get_todays_image(images, venue_id)
+
+      _ ->
+        nil
+    end
+  end
+  defp get_category_image(_, _, _), do: nil
+
+  # Get today's image from category images (implements daily rotation with venue variation)
+  # Combines day of year + venue_id to ensure different images per venue on same day
+  defp get_todays_image(images, venue_id \\ 0) when is_list(images) and length(images) > 0 do
+    # Combine day + venue_id for unique but stable selection per venue
+    day_of_year = Date.utc_today() |> Date.day_of_year()
+    offset = day_of_year + venue_id
+    index = rem(offset, length(images))
+
+    case Enum.at(images, index) do
+      %{"url" => url} when is_binary(url) -> url
+      %{url: url} when is_binary(url) -> url
+      _ -> nil
+    end
+  end
+  defp get_todays_image(_, _), do: nil
+
+  # Apply CDN transformations to Unsplash images
+  defp apply_cdn_transformations(url) when is_binary(url) do
+    # Use ImageKit CDN for transformations (returns original if CDN disabled)
+    Eventasaurus.ImageKit.url(url, width: 800, quality: 85)
+  end
+  defp apply_cdn_transformations(nil), do: nil
+
+  # Get a general city image from Unsplash gallery for aggregate groups
+  # Uses "general" category with source_id for variation
+  defp get_city_general_image(%City{} = city, source_id) when is_integer(source_id) do
+    if has_unsplash_gallery?(city) do
+      # Use source_id for variation so different sources get different images
+      image_url = get_category_image(city, "general", source_id)
+      apply_cdn_transformations(image_url)
+    else
+      nil
+    end
+  end
+  defp get_city_general_image(_, _), do: nil
 
   defp parse_datetime(nil), do: nil
 
@@ -933,6 +1077,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         |> Map.new()
         |> Map.drop([:page, :offset, :limit])
         |> Map.put(:page_size, fetch_size)
+        # Extract browsing_city_id from viewing_city for Unsplash fallback
+        |> then(fn opts_map ->
+          case opts_map[:viewing_city] do
+            %{id: city_id} -> Map.put(opts_map, :browsing_city_id, city_id)
+            _ -> opts_map
+          end
+        end)
 
       events = list_events(opts_without_pagination)
       aggregated = aggregate_events(events, opts)
@@ -1155,14 +1306,23 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         |> Enum.flat_map(&(&1.categories || []))
         |> Enum.uniq_by(& &1.id)
 
-      # Use first event's cover image
-      cover_image_url = first_event.cover_image_url || List.first(events).cover_image_url
+      # Use viewing_city if provided (for city-specific pages), otherwise use first event's city
+      canonical_city = viewing_city || first_event.venue.city_ref
+
+      # For multi-venue aggregates (>3), use city images to avoid showing just one venue
+      # For small aggregates (1-3 venues), use first event's image (specific venue is OK)
+      cover_image_url =
+        if unique_venues > 3 do
+          # Many venues: use general city Unsplash image to represent city-wide presence
+          # Use source_id for variation so different sources get different images
+          get_city_general_image(canonical_city, source_id)
+        else
+          # Few venues: use first event's image (may show specific venue, which is appropriate)
+          first_event.cover_image_url
+        end
 
       # Check if any event is recurring
       is_recurring = Enum.any?(events, &PublicEvent.recurring?/1)
-
-      # Use viewing_city if provided (for city-specific pages), otherwise use first event's city
-      canonical_city = viewing_city || first_event.venue.city_ref
 
       %AggregatedEventGroup{
         source_id: source_id,
