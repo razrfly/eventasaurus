@@ -297,7 +297,18 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
   end
 
   # French format without minutes: "20h"
-  # Note: Regex.run returns ["20h", "20", nil] for "20h", so we match on nil minutes
+  # Note: When the optional minutes group doesn't match, Regex.run returns only 2 elements
+  # We need both 2-element and 3-element (with nil) clauses to handle all cases
+  defp parse_french_time([_full, hour]) do
+    hour_int = String.to_integer(hour)
+
+    case Time.new(hour_int, 0, 0) do
+      {:ok, time} -> {:ok, time}
+      {:error, _} -> {:error, "Invalid time: #{hour}h00"}
+    end
+  end
+
+  # Alternate form when minutes capture exists but is nil (some regex implementations)
   defp parse_french_time([_full, hour, nil]) do
     hour_int = String.to_integer(hour)
 
