@@ -131,8 +131,8 @@ defmodule EventasaurusWeb.CityLive.Search do
     %{
       categories: [],
       radius_km: 25,
-      start_date: Date.utc_today(),
-      end_date: Date.add(Date.utc_today(), 90),
+      start_date: DateTime.utc_now(),
+      end_date: DateTime.add(DateTime.utc_now(), 90, :day),
       min_price: nil,
       max_price: nil,
       sort_by: :date,
