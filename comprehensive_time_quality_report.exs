@@ -18,19 +18,19 @@ IO.puts("Found #{length(sources)} active sources\n")
 results = Enum.map(sources, fn {id, slug, name} ->
   try do
     report = DataQualityChecker.check_quality(slug)
-    time_metrics = get_in(report, [:dimensions, :time_quality]) || %{}
-    
+    time_metrics = get_in(report, [:occurrence_metrics, :time_quality_metrics]) || %{}
+
     %{
       id: id,
       slug: slug,
       name: name,
-      event_count: report[:event_count] || 0,
-      overall_score: report[:overall_score],
+      event_count: report[:total_events] || 0,
+      overall_score: report[:quality_score],
       time_quality_score: time_metrics[:time_quality] || 0,
-      time_diversity: time_metrics[:time_diversity] || 0.0,
-      events_with_times: time_metrics[:events_with_times] || 0,
-      time_distribution: time_metrics[:time_distribution] || [],
-      suspicious_patterns: time_metrics[:suspicious_patterns] || []
+      time_diversity: time_metrics[:time_diversity_score] || 0.0,
+      events_with_times: time_metrics[:total_occurrences] || 0,
+      time_distribution: time_metrics[:hour_distribution] || %{},
+      suspicious_patterns: []
     }
   rescue
     e ->
@@ -72,11 +72,16 @@ IO.puts(String.duplicate("-", 100))
 Enum.each(sorted_results, fn r ->
   overall_str = if r.overall_score, do: "#{r.overall_score}%", else: "N/A"
   time_qual_str = if r.time_quality_score > 0, do: "#{r.time_quality_score}%", else: "N/A"
-  diversity_str = if r.time_diversity > 0, do: "#{Float.round(r.time_diversity, 1)}%", else: "N/A"
+  diversity_str = if r.time_diversity > 0 do
+    diversity_float = if is_float(r.time_diversity), do: r.time_diversity, else: r.time_diversity / 1.0
+    "#{Float.round(diversity_float, 1)}%"
+  else
+    "N/A"
+  end
   
   status = cond do
-    length(r.suspicious_patterns) > 0 -> "⚠️  ISSUES"
-    r.time_diversity < 10 && r.time_quality_score > 0 -> "⚠️  LOW DIV"
+    r.time_quality_score < 70 && r.time_quality_score > 0 -> "⚠️  ISSUES"
+    r.time_diversity < 30 && r.time_quality_score > 0 -> "⚠️  LOW DIV"
     r.time_quality_score >= 90 -> "✅ GOOD"
     r.time_quality_score >= 70 -> "🟡 OK"
     r.time_quality_score > 0 -> "🟠 POOR"
@@ -108,26 +113,37 @@ Enum.each(sorted_results, fn r ->
   IO.puts("  Events with Times: #{r.events_with_times}")
   IO.puts("  Overall Quality: #{r.overall_score}%")
   IO.puts("  Time Quality Score: #{r.time_quality_score}%")
-  IO.puts("  Time Diversity: #{Float.round(r.time_diversity, 1)}%")
+  diversity_float = if is_float(r.time_diversity), do: r.time_diversity, else: r.time_diversity / 1.0
+  IO.puts("  Time Diversity: #{Float.round(diversity_float, 1)}%")
   
-  if length(r.time_distribution) > 0 do
+  if map_size(r.time_distribution) > 0 do
     IO.puts("\n  Time Distribution (Top 10):")
     r.time_distribution
+    |> Enum.sort_by(fn {_hour, count} -> count end, :desc)
     |> Enum.take(10)
-    |> Enum.each(fn {time, count} ->
-      pct = if r.event_count > 0, do: Float.round(count / r.event_count * 100, 1), else: 0.0
+    |> Enum.each(fn {hour, count} ->
+      pct = if r.events_with_times > 0, do: Float.round(count / r.events_with_times * 100, 1), else: 0.0
       bar = String.duplicate("█", round(pct / 2))
-      IO.puts("    #{String.pad_trailing(time, 8)} #{String.pad_leading("#{count}", 4)} events (#{String.pad_leading("#{pct}%", 6)}) #{bar}")
+      time_str = "#{String.pad_leading(to_string(hour), 2, "0")}:00"
+      IO.puts("    #{String.pad_trailing(time_str, 8)} #{String.pad_leading("#{count}", 4)} events (#{String.pad_leading("#{pct}%", 6)}) #{bar}")
     end)
   end
   
-  if length(r.suspicious_patterns) > 0 do
-    IO.puts("\n  ⚠️  Suspicious Patterns Detected:")
-    Enum.each(r.suspicious_patterns, fn pattern ->
-      IO.puts("    - #{pattern}")
-    end)
+  # Check for quality issues
+  issues = []
+  issues = if r.time_quality_score < 70 && r.time_quality_score > 0, do: issues ++ ["Low time quality score (#{r.time_quality_score}%)"], else: issues
+  issues = if r.time_diversity < 30 && r.time_diversity > 0 do
+    div_float = if is_float(r.time_diversity), do: r.time_diversity, else: r.time_diversity / 1.0
+    issues ++ ["Low time diversity (#{Float.round(div_float, 1)}%)"]
   else
-    IO.puts("\n  ✅ No suspicious time patterns detected")
+    issues
+  end
+
+  if length(issues) > 0 do
+    IO.puts("\n  ⚠️  Quality Issues:")
+    Enum.each(issues, fn issue -> IO.puts("    - #{issue}") end)
+  else
+    IO.puts("\n  ✅ No time quality issues detected")
   end
 end)
 
@@ -140,7 +156,7 @@ if length(sorted_results) > 0 do
   avg_time_quality = Enum.reduce(sorted_results, 0, fn r, acc -> acc + r.time_quality_score end) / length(sorted_results)
   avg_diversity = Enum.reduce(sorted_results, 0.0, fn r, acc -> acc + r.time_diversity end) / length(sorted_results)
   
-  sources_with_issues = Enum.count(sorted_results, fn r -> length(r.suspicious_patterns) > 0 end)
+  sources_with_issues = Enum.count(sorted_results, fn r -> r.time_quality_score < 70 || r.time_diversity < 30 end)
   sources_excellent = Enum.count(sorted_results, fn r -> r.time_quality_score >= 90 end)
   sources_good = Enum.count(sorted_results, fn r -> r.time_quality_score >= 70 && r.time_quality_score < 90 end)
   sources_poor = Enum.count(sorted_results, fn r -> r.time_quality_score > 0 && r.time_quality_score < 70 end)
