@@ -24,6 +24,10 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
 
   require Logger
 
+  # Default time for trivia events when extraction fails
+  # 8pm is a realistic default for most trivia events
+  @default_time_evening ~T[20:00:00]
+
   # Day of week patterns - defined as function to avoid compile-time Regex injection
   defp day_patterns do
     %{
@@ -112,6 +116,47 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
   end
 
   def parse_time(nil), do: {:error, "Text is nil"}
+
+  @doc """
+  Parse time from text with intelligent fallback to evening default.
+
+  This function wraps `parse_time/1` but provides a smart fallback strategy:
+  - If time parsing succeeds, returns the parsed time
+  - If time parsing fails, returns 8pm (20:00) as a reasonable default for trivia events
+  - Logs a warning when applying the fallback
+
+  This prevents the use of midnight (00:00) as a fallback, which is unrealistic
+  for trivia events and indicates missing data.
+
+  ## Examples
+
+      iex> parse_time_with_fallback("7:30pm")
+      {:ok, ~T[19:30:00]}
+
+      iex> parse_time_with_fallback("invalid time")
+      # Logs warning, returns {:ok, ~T[20:00:00]}
+
+  ## Returns
+  - `{:ok, time}` - Always returns a valid time (either parsed or default)
+  """
+  def parse_time_with_fallback(text) when is_binary(text) do
+    case parse_time(text) do
+      {:ok, time} ->
+        {:ok, time}
+
+      {:error, reason} ->
+        Logger.warning(
+          "⚠️ Time parsing failed, using 8pm default. Text: '#{text}', Reason: #{reason}"
+        )
+
+        {:ok, @default_time_evening}
+    end
+  end
+
+  def parse_time_with_fallback(nil) do
+    Logger.warning("⚠️ Time text is nil, using 8pm default")
+    {:ok, @default_time_evening}
+  end
 
   @doc """
   Calculate the next occurrence of a specific day/time from now.
