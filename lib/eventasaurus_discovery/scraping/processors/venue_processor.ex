@@ -829,16 +829,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Clean UTF-8 for venue name before database insert
 
     # Build geocoding metadata based on the geocoding path taken
+    # Convert structs to plain maps before building metadata
     final_geocoding_metadata =
       cond do
         # Multi-provider geocoding was used (from geocode_venue_address)
         geocoding_metadata != nil ->
-          geocoding_metadata
+          struct_to_map(geocoding_metadata)
           |> MetadataBuilder.add_scraper_source(source_scraper)
 
         # AddressGeocoder was used directly by scraper (Question One pattern)
         Map.has_key?(data, :geocoding_metadata) ->
-          data.geocoding_metadata
+          struct_to_map(data.geocoding_metadata)
           |> MetadataBuilder.add_scraper_source(source_scraper)
 
         # Coordinates provided directly by scraper (no geocoding needed)
@@ -879,10 +880,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
     # Build geocoding_performance for dashboard (flat structure)
     # This should be populated for ALL venues, including those with provided coordinates
+    # Convert structs to plain maps before building performance data
     geocoding_performance =
       if geocoding_metadata do
         # Venue was geocoded using multi-provider system
-        geocoding_metadata
+        struct_to_map(geocoding_metadata)
         |> Map.put(:source_scraper, valid_source_scraper)
         |> Map.put(:cost_per_call, Map.get(geocoding_metadata, :cost_per_call, 0.0))
       else
@@ -923,7 +925,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       geocoding_performance: geocoding_performance,
       metadata: %{
         geocoding: final_geocoding_metadata,
-        geocoding_metadata: geocoding_metadata
+        # Convert Geocoder.Coords structs to plain maps before database insertion
+        geocoding_metadata: struct_to_map(geocoding_metadata)
       }
     }
 
@@ -1121,6 +1124,31 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       :ok
   end
 
+  # Converts structs (like Geocoder.Coords) to plain maps for JSON encoding
+  # Recursively handles nested structs, tuples, lists, and maps
+  defp struct_to_map(nil), do: nil
+  defp struct_to_map(val) when is_struct(val) do
+    val
+    |> Map.from_struct()
+    |> Enum.map(fn {k, v} -> {k, struct_to_map(v)} end)
+    |> Enum.into(%{})
+  end
+  defp struct_to_map(map) when is_map(map) do
+    map
+    |> Enum.map(fn {k, v} -> {k, struct_to_map(v)} end)
+    |> Enum.into(%{})
+  end
+  defp struct_to_map(list) when is_list(list) do
+    Enum.map(list, &struct_to_map/1)
+  end
+  defp struct_to_map(tuple) when is_tuple(tuple) do
+    # Convert tuples to lists for JSON encoding
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&struct_to_map/1)
+  end
+  defp struct_to_map(val), do: val
+
   # Validates venue name using VenueNameValidator and returns the best name to use
   # This prevents bad venue names (UI elements, image captions) from entering the database
   defp validate_and_choose_venue_name(scraped_name, geocoding_metadata, source_scraper) do
@@ -1128,12 +1156,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # VenueNameValidator expects: %{"geocoding_metadata" => geocoding_metadata}
     # AddressGeocoder returns atom-keyed maps, but VenueNameValidator expects string keys
     # (since it's designed for JSON-persisted data). Normalize via JSON round-trip.
+    # Convert any structs (like Geocoder.Coords) to plain maps before JSON encoding
     metadata =
       %{
         "geocoding_metadata" =>
           case geocoding_metadata do
             nil -> %{}
-            data -> data |> Jason.encode!() |> Jason.decode!()
+            data -> data |> struct_to_map() |> Jason.encode!() |> Jason.decode!()
           end
       }
 

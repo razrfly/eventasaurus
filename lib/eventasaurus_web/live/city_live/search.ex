@@ -177,7 +177,9 @@ defmodule EventasaurusWeb.CityLive.Search do
         sort_by: filters[:sort_by],
         sort_order: :asc,
         page: filters[:page] || 1,
-        page_size: filters[:page_size] || 60
+        page_size: filters[:page_size] || 60,
+        # Phase 3.1: Pass browsing city for Unsplash fallback enrichment
+        browsing_city_id: city.id
       })
 
     alias EventasaurusDiscovery.PublicEventsEnhanced

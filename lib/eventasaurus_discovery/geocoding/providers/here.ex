@@ -124,6 +124,9 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
     # Extract address components
     address = get_in(item, ["address"]) || %{}
 
+    # Extract result type - "place" means POI found, "houseNumber" means address only
+    result_type = Map.get(item, "resultType")
+
     # Try multiple fields for city
     city =
       Map.get(address, "city") ||
@@ -156,6 +159,16 @@ defmodule EventasaurusDiscovery.Geocoding.Providers.Here do
       is_nil(city) ->
         Logger.warning("⚠️ HERE: could not extract city. Address: #{inspect(address)}")
         {:error, :no_city_found}
+
+      # NEW: Reject houseNumber results - these are addresses, not POIs
+      # This allows the orchestrator to try other providers that might have the POI
+      result_type == "houseNumber" ->
+        Logger.info(
+          "📍 HERE: skipping houseNumber result (address only, not a POI). " <>
+            "Title: '#{Map.get(item, "title")}'. Orchestrator will try next provider."
+        )
+
+        {:error, :no_poi_found}
 
       true ->
         {:ok,

@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   Shows geographically nearby upcoming activities with graceful fallbacks.
   """
   use EventasaurusWeb, :live_component
+  require Logger
 
   alias Eventasaurus.CDN
 
@@ -291,15 +292,33 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
   end
 
   defp get_event_image_url(event) do
-    # For movie events, prioritize movie poster/backdrop from TMDb
-    # This ensures we show correct movie images instead of potentially wrong scraper data
-    case get_movie_image(event) do
-      nil ->
-        # Fall back to source image if no movie image available
-        get_image_from_source(event)
+    # Check if cover_image_url was added by enrichment (Phase 2)
+    # This field is dynamically added by PublicEventsEnhanced.enrich_event_images/2
+    cover_url = Map.get(event, :cover_image_url)
+    Logger.info("🖼️  NearbyEventsComponent - Event #{event.id}, cover_image_url: #{inspect(cover_url)}")
 
-      image_url ->
-        image_url
+    case cover_url do
+      nil ->
+        Logger.info("⚠️  No cover_image_url, checking movie/source images")
+        # Not enriched yet, use legacy image selection logic
+        # For movie events, prioritize movie poster/backdrop from TMDb
+        # This ensures we show correct movie images instead of potentially wrong scraper data
+        case get_movie_image(event) do
+          nil ->
+            # Fall back to source image if no movie image available
+            result = get_image_from_source(event)
+            Logger.info("📸 Legacy image result: #{inspect(result)}")
+            result
+
+          image_url ->
+            Logger.info("🎬 Using movie image: #{String.slice(image_url, 0, 50)}...")
+            image_url
+        end
+
+      url when is_binary(url) ->
+        Logger.info("✅ Using enriched URL: #{String.slice(url, 0, 50)}...")
+        # Use enriched URL (includes Unsplash fallback if needed)
+        url
     end
   end
 
