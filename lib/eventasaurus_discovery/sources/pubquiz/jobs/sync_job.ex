@@ -64,7 +64,6 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
     |> Enum.map(fn {city_url, index} ->
       # Stagger jobs slightly to avoid thundering herd
       delay_seconds = index * 5
-      scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
       job_args = %{
         "city_url" => city_url,
@@ -72,7 +71,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
         "force" => force
       }
 
-      CityJob.new(job_args, scheduled_at: scheduled_at)
+      CityJob.new(job_args, schedule_in: delay_seconds)
       |> Oban.insert()
     end)
     |> Enum.count(fn

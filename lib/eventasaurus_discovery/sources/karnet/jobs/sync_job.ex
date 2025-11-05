@@ -66,9 +66,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         }
 
         # Stagger chunks by 30 seconds to avoid overwhelming the source
-        schedule_at = DateTime.add(DateTime.utc_now(), chunk_idx * 30, :second)
+        delay_seconds = chunk_idx * 30
 
-        __MODULE__.new(chunk_args, scheduled_at: schedule_at)
+        __MODULE__.new(chunk_args, schedule_in: delay_seconds)
         |> Oban.insert()
       end)
 
@@ -417,7 +417,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
           # Stagger the jobs slightly to avoid thundering herd
           delay_seconds = div(page_num - start_page, 3) * Config.rate_limit()
-          scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
           job_args = %{
             "page_number" => page_num,
@@ -432,7 +431,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
             EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob.new(
               job_args,
               queue: :scraper_index,
-              scheduled_at: scheduled_at
+              schedule_in: delay_seconds
             )
             |> Oban.insert()
 

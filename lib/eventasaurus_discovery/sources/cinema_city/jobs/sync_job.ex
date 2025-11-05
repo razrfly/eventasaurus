@@ -152,8 +152,6 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
         delay_seconds =
           date_offset * length(cinemas) * Config.rate_limit() + cinema_index * Config.rate_limit()
 
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
-
         CinemaDateJob.new(
           %{
             "cinema_data" => cinema_data,
@@ -163,7 +161,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
             "force" => force
           },
           queue: :scraper_index,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end

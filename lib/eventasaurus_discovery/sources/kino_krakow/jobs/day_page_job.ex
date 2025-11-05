@@ -140,7 +140,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
       |> Enum.map(fn {movie_slug, index} ->
         # Stagger job execution with rate limiting
         delay_seconds = index * Config.rate_limit()
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob.new(
           %{
@@ -148,7 +147,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
             "source_id" => source_id
           },
           queue: :scraper_detail,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)
@@ -221,7 +220,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
         # Stagger job execution
         # 2 seconds between showtimes
         delay_seconds = base_delay + index * 2
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob.new(
           %{
@@ -229,7 +227,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
             "source_id" => source_id
           },
           queue: :scraper,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)

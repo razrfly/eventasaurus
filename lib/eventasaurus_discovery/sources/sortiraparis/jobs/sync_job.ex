@@ -363,7 +363,6 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
           # Stagger jobs to respect rate limiting (5 seconds per request)
           # Note: bilingual fetching will take 2x time per article
           delay_seconds = idx * Config.rate_limit() * 2
-          scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
           # Use English URL as primary, French as secondary
           primary_url = Map.get(language_urls, "en") || Map.get(language_urls, "fr")
@@ -394,7 +393,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
           EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob.new(
             job_args,
             queue: :scraper_detail,
-            scheduled_at: scheduled_at
+            schedule_in: delay_seconds
           )
           |> Oban.insert()
         end)

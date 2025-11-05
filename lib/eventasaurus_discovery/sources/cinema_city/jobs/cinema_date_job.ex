@@ -134,7 +134,6 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
         # Stagger MovieDetailJobs to respect rate limiting
         # Each job waits index * rate_limit seconds
         delay_seconds = index * Config.rate_limit()
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob.new(
           %{
@@ -143,7 +142,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
             "source_id" => source_id
           },
           queue: :scraper_detail,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)
@@ -229,7 +228,6 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
         # Schedule with delay to ensure MovieDetailJobs complete first
         # Stagger showtimes every 2 seconds after base delay
         delay_seconds = base_delay + index * 2
-        scheduled_at = DateTime.add(DateTime.utc_now(), delay_seconds, :second)
 
         EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob.new(
           %{
@@ -238,7 +236,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
             "source_id" => source_id
           },
           queue: :scraper,
-          scheduled_at: scheduled_at
+          schedule_in: delay_seconds
         )
         |> Oban.insert()
       end)
