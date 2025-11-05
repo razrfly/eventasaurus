@@ -304,5 +304,115 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.TransformerTest do
       assert event[:min_price] == nil
       assert event[:max_price] == nil
     end
+
+    test "handles DST fall-back ambiguous time correctly" do
+      # October 26, 2025: Clocks fall back at 3am to 2am in Paris
+      # This means 2:30am occurs twice - test we select first occurrence
+      raw_event = %{
+        "url" => "https://www.sortiraparis.com/articles/123-dst-fallback",
+        "article_id" => "123",
+        "title" => "DST Fall-back Test",
+        "date_string" => "October 26, 2025",
+        "time_string" => "2h30",
+        # Time that occurs twice during fall-back
+        "venue" => %{
+          "name" => "Test Venue",
+          "address" => "123 Test St",
+          "city" => "Paris",
+          "country" => "France"
+        }
+      }
+
+      # Should succeed without crashing and pick first occurrence
+      assert {:ok, [event]} = Transformer.transform_event(raw_event)
+      assert event[:starts_at].time_zone == "Etc/UTC"
+
+      # Verify the time was processed (not midnight default)
+      # First occurrence of 2:30am CEST = 00:30 UTC (before clocks fall back)
+      # After clocks fall back, 2:30am CET = 01:30 UTC
+      # We should get 00:30 UTC (first occurrence)
+      assert event[:starts_at].hour == 0
+      assert event[:starts_at].minute == 30
+    end
+
+    test "handles DST spring-forward gap time correctly" do
+      # March 30, 2025: Clocks spring forward at 2am to 3am in Paris
+      # This means 2:30am never exists - test we select time after gap
+      raw_event = %{
+        "url" => "https://www.sortiraparis.com/articles/124-dst-gap",
+        "article_id" => "124",
+        "title" => "DST Spring-forward Test",
+        "date_string" => "March 30, 2025",
+        "time_string" => "2h30",
+        # Time in the gap (doesn't exist)
+        "venue" => %{
+          "name" => "Test Venue",
+          "address" => "123 Test St",
+          "city" => "Paris",
+          "country" => "France"
+        }
+      }
+
+      # Should succeed without crashing and pick time after gap
+      assert {:ok, [event]} = Transformer.transform_event(raw_event)
+      assert event[:starts_at].time_zone == "Etc/UTC"
+
+      # Verify the time was adjusted to after gap
+      # 2:30am doesn't exist - clocks jump from 2am to 3am
+      # After-gap time would be 3:30am CEST = 01:30 UTC
+      assert event[:starts_at].hour == 1
+      assert event[:starts_at].minute == 30
+    end
+
+    test "handles normal (non-DST-transition) time with time_string override" do
+      # Regular day with no DST transition to verify normal behavior
+      raw_event = %{
+        "url" => "https://www.sortiraparis.com/articles/125-normal",
+        "article_id" => "125",
+        "title" => "Normal Time Test",
+        "date_string" => "June 15, 2025",
+        "time_string" => "20h30",
+        # 8:30pm - normal time
+        "venue" => %{
+          "name" => "Test Venue",
+          "address" => "123 Test St",
+          "city" => "Paris",
+          "country" => "France"
+        }
+      }
+
+      assert {:ok, [event]} = Transformer.transform_event(raw_event)
+      assert event[:starts_at].time_zone == "Etc/UTC"
+
+      # June 15 is during CEST (UTC+2), so 20:30 CEST = 18:30 UTC
+      assert event[:starts_at].hour == 18
+      assert event[:starts_at].minute == 30
+    end
+
+    test "handles time_string without minutes during DST transition" do
+      # Test the French time parser fix with DST edge case
+      raw_event = %{
+        "url" => "https://www.sortiraparis.com/articles/126-dst-no-minutes",
+        "article_id" => "126",
+        "title" => "DST No Minutes Test",
+        "date_string" => "October 26, 2025",
+        "time_string" => "2h",
+        # Hour only, no minutes, during DST fall-back
+        "venue" => %{
+          "name" => "Test Venue",
+          "address" => "123 Test St",
+          "city" => "Paris",
+          "country" => "France"
+        }
+      }
+
+      # Should parse "2h" correctly and handle DST ambiguity
+      assert {:ok, [event]} = Transformer.transform_event(raw_event)
+      assert event[:starts_at].time_zone == "Etc/UTC"
+
+      # First occurrence of 2:00am CEST = 00:00 UTC
+      assert event[:starts_at].hour == 0
+      assert event[:starts_at].minute == 0
+    end
   end
 end
