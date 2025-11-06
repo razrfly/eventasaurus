@@ -134,6 +134,9 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   Returns list of cities with a virtual `:venue_count` field.
   """
   def list_cities_with_venue_counts(filters \\ %{}) do
+    sort_by = filters[:sort_by] || "name"
+    sort_dir = filters[:sort_dir] || "asc"
+
     City
     |> apply_filters(filters)
     |> join(:left, [c], v in assoc(c, :venues))
@@ -143,7 +146,7 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       venue_count: count(v.id)
     })
     |> preload([c], :country)
-    |> order_by([c], c.name)
+    |> apply_sorting(sort_by, sort_dir)
     |> Repo.all()
     |> Enum.map(fn %{city: city, venue_count: count} ->
       Map.put(city, :venue_count, count)
@@ -189,6 +192,12 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   defp filter_by_discovery(query, "true"), do: where(query, [c], c.discovery_enabled == true)
   defp filter_by_discovery(query, "false"), do: where(query, [c], c.discovery_enabled == false)
   defp filter_by_discovery(query, _), do: query
+
+  defp apply_sorting(query, "name", "asc"), do: order_by(query, [c], asc: c.name)
+  defp apply_sorting(query, "name", "desc"), do: order_by(query, [c], desc: c.name)
+  defp apply_sorting(query, "venue_count", "asc"), do: order_by(query, [c, v], asc: count(v.id))
+  defp apply_sorting(query, "venue_count", "desc"), do: order_by(query, [c, v], desc: count(v.id))
+  defp apply_sorting(query, _, _), do: order_by(query, [c], asc: c.name)
 
   defp validate_country_exists(changeset, %{country_id: country_id})
        when not is_nil(country_id) do
