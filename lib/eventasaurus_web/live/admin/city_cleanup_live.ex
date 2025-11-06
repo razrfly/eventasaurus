@@ -24,7 +24,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
 
   @impl true
   def handle_event("suggest", %{"venue_id" => venue_id}, socket) do
-    venue = Repo.get!(Venue, venue_id) |> Repo.preload(:city_ref)
+    venue = Repo.get!(Venue, venue_id)
 
     suggestion =
       case CityResolver.resolve_city(venue.latitude, venue.longitude) do
@@ -152,11 +152,13 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
     city_ids = Repo.all(city_ids_query)
 
     # Then load the cities with their venues and countries
+    # Sort by venue count descending to preserve ordering from first query
     from(c in City,
       where: c.id in ^city_ids,
       preload: [:venues, :country]
     )
     |> Repo.all()
+    |> Enum.sort_by(&length(&1.venues), :desc)
   end
 
   defp reassign_venue(venue, new_city_id) do
@@ -240,6 +242,24 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
       Regex.match?(~r/^the /i, city_name) -> "red"
       Regex.match?(~r/(street|road|avenue|lane)/i, city_name) -> "orange"
       true -> "gray"
+    end
+  end
+
+  defp pattern_badge_classes(city_name) do
+    case pattern_color(city_name) do
+      "orange" -> "bg-orange-100 text-orange-800"
+      "red" -> "bg-red-100 text-red-800"
+      "gray" -> "bg-gray-100 text-gray-800"
+      _ -> "bg-gray-100 text-gray-800"
+    end
+  end
+
+  defp confidence_badge_classes(confidence) do
+    case confidence_color(confidence) do
+      "green" -> "bg-green-100 text-green-800"
+      "yellow" -> "bg-yellow-100 text-yellow-800"
+      "red" -> "bg-red-100 text-red-800"
+      _ -> "bg-gray-100 text-gray-800"
     end
   end
 end
