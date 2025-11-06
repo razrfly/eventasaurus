@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Locations.City do
   use Ecto.Schema
   import Ecto.Changeset
   alias EventasaurusDiscovery.Locations.City.Slug
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   schema "cities" do
     field(:name, :string)
@@ -36,9 +37,42 @@ defmodule EventasaurusDiscovery.Locations.City do
       :alternate_names
     ])
     |> validate_required([:name, :country_id])
+    |> validate_city_name_content()
     |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)
     |> unique_constraint([:country_id, :slug])
+  end
+
+  # Layer 3 defense: Schema-level city name validation using GeoNames
+  defp validate_city_name_content(changeset) do
+    case {get_change(changeset, :name), get_change(changeset, :country_id) || get_field(changeset, :country_id)} do
+      {nil, _} ->
+        # No change to name, skip validation
+        changeset
+
+      {name, nil} ->
+        # Name changed but no country - can't validate yet
+        changeset
+
+      {name, country_id} ->
+        # Both name and country available - validate against GeoNames
+        country = EventasaurusApp.Repo.get(EventasaurusDiscovery.Locations.Country, country_id)
+
+        if country do
+          case CityResolver.validate_city_name(name, country.code) do
+            {:ok, _validated_name} ->
+              changeset
+
+            {:error, :not_a_valid_city} ->
+              add_error(changeset, :name, "is not a valid city in #{country.name}")
+
+            {:error, reason} ->
+              add_error(changeset, :name, "validation failed: #{reason}")
+          end
+        else
+          changeset
+        end
+    end
   end
 
   @doc """

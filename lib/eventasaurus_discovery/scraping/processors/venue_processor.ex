@@ -356,8 +356,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   # This is Layer 2 of defense in depth - prevents ANY garbage from entering database
   # even if transformers forget validation or have bugs
   defp create_city(name, country, data) when not is_nil(name) do
-    # Validate city name BEFORE database insertion
-    case CityResolver.validate_city_name(name) do
+    # Validate city name BEFORE database insertion (with GeoNames lookup)
+    case CityResolver.validate_city_name(name, country.code) do
       {:ok, validated_name} ->
         # Valid city name - proceed with creation
         attrs = %{
@@ -401,14 +401,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         end
 
       {:error, reason} ->
-        # REJECT invalid city name (postcode, street address, numeric value, etc.)
+        # REJECT invalid city name (GeoNames validation)
         Logger.error("""
-        ❌ VenueProcessor REJECTED invalid city name (Layer 2 safety net):
+        ❌ VenueProcessor REJECTED invalid city name (GeoNames validation - Layer 2):
         City name: #{inspect(name)}
-        Country: #{country.name}
+        Country: #{country.name} (#{country.code})
         Reason: #{reason}
-        Source transformer must provide valid city name or nil.
-        This prevents database pollution.
+        #{if reason == :not_a_valid_city, do: "⚠️  City not found in GeoNames database (likely street address, postcode, or invalid name)", else: ""}
+        Source transformer must provide valid city name from GeoNames or nil.
+        This prevents database pollution with fake cities.
         """)
 
         # Return nil - this causes venue/event creation to fail (correct behavior)

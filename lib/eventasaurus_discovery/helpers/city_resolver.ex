@@ -1,14 +1,15 @@
 defmodule EventasaurusDiscovery.Helpers.CityResolver do
   @moduledoc """
-  Offline city name resolution using reverse geocoding.
+  Offline city name resolution using reverse geocoding and GeoNames validation.
 
   This module provides cost-free city name resolution from GPS coordinates using
-  the `geocoding` library which contains 156,710+ cities from GeoNames database.
+  the `geocoding` library which contains 165,602+ cities from GeoNames database.
 
   ## Features
   - 100% offline, zero API costs
   - Fast k-d tree lookups (<1ms typical)
-  - Built-in validation to prevent garbage city names
+  - Positive validation using authoritative GeoNames database
+  - Prevents garbage city names (street addresses, postcodes, etc.)
   - Comprehensive error handling with logging
 
   ## Usage
@@ -19,18 +20,18 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       iex> CityResolver.resolve_city(51.5074, -0.1278)
       {:ok, "London"}
 
-      iex> CityResolver.validate_city_name("New York")
-      {:ok, "New York"}
+      iex> CityResolver.validate_city_name("London", "GB")
+      {:ok, "London"}
 
-      iex> CityResolver.validate_city_name("SW18 2SS")
-      {:error, :invalid_city_name}
+      iex> CityResolver.validate_city_name("10-16 Botchergate", "GB")
+      {:error, :not_a_valid_city}
 
-  ## Validation Rules
-  Rejects city names that are:
-  - UK/US postcodes (e.g., "SW18 2SS", "90210") or contain embedded postcodes (e.g., "England E5 8NN")
-  - Street addresses (containing numbers + street keywords)
-  - Pure numeric values
-  - Empty or whitespace-only strings
+  ## Validation Approach
+  Uses POSITIVE VALIDATION instead of regex patterns:
+  - Checks if name exists in GeoNames database of 165,602+ real cities
+  - Works for all countries equally (GB, AU, US, etc.)
+  - Rejects street addresses, postcodes, and invalid names automatically
+  - Zero maintenance needed (authoritative database)
   """
 
   require Logger
@@ -66,16 +67,17 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
     try do
       case :geocoding.reverse(latitude, longitude) do
         # Library returns {:ok, {continent, country_code, city_name, distance}}
-        {:ok, {_continent, _country_code, city_binary, _distance}} ->
+        {:ok, {_continent, country_code, city_binary, _distance}} ->
           city_name = to_string(city_binary)
+          country_code_str = to_string(country_code)
 
-          case validate_city_name(city_name) do
+          case validate_city_name(city_name, country_code_str) do
             {:ok, validated_name} ->
               {:ok, validated_name}
 
             {:error, reason} ->
               Logger.warning(
-                "City name failed validation: #{inspect(city_name)} (#{latitude}, #{longitude}) - #{reason}"
+                "City name failed validation: #{inspect(city_name)} (#{latitude}, #{longitude}) in #{country_code_str} - #{reason}"
               )
 
               {:error, :invalid_city_name}
@@ -112,45 +114,36 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   end
 
   @doc """
-  Validates a city name to prevent garbage data.
+  Validates city name by checking GeoNames database.
 
-  Rejects names that match patterns for:
-  - UK/US postcodes (e.g., "SW18 2SS", "90210", "12345-6789") or contain embedded postcodes (e.g., "England E5 8NN", "London W1F 8PU")
-  - Street addresses (e.g., "123 Main Street", "76 Narrow Street")
-  - Pure numeric values
-  - Empty/whitespace strings
-  - Single character names (likely abbreviations)
+  Uses POSITIVE VALIDATION instead of negative regex patterns.
+  Checks if the name is a real city in the authoritative GeoNames database
+  of 165,602+ cities worldwide.
 
   ## Parameters
-  - `name` - String to validate as a city name
+  - `name` - City name to validate
+  - `country_code` - ISO 3166-1 alpha-2 country code (e.g., "GB", "US", "AU")
 
   ## Returns
-  - `{:ok, name}` - Valid city name
+  - `{:ok, validated_name}` - City exists in GeoNames database
   - `{:error, :empty_name}` - Empty or whitespace-only
-  - `{:error, :too_short}` - Single character (likely abbreviation)
-  - `{:error, :contains_postcode}` - Contains UK postcode pattern anywhere in string
-  - `{:error, :street_address_pattern}` - Matches street address pattern
-  - `{:error, :numeric_only}` - Pure numeric value
+  - `{:error, :too_short}` - Single character
+  - `{:error, :not_a_valid_city}` - Not found in GeoNames database
 
   ## Examples
 
-      iex> CityResolver.validate_city_name("New York")
-      {:ok, "New York"}
+      iex> CityResolver.validate_city_name("London", "GB")
+      {:ok, "London"}
 
-      iex> CityResolver.validate_city_name("SW18 2SS")
-      {:error, :contains_postcode}
+      iex> CityResolver.validate_city_name("10-16 Botchergate", "GB")
+      {:error, :not_a_valid_city}
 
-      iex> CityResolver.validate_city_name("England E5 8NN")
-      {:error, :contains_postcode}
-
-      iex> CityResolver.validate_city_name("123 Main Street")
-      {:error, :street_address_pattern}
-
-      iex> CityResolver.validate_city_name("90210")
-      {:error, :contains_postcode}
+      iex> CityResolver.validate_city_name("425 Burwood Hwy", "AU")
+      {:error, :not_a_valid_city}
   """
-  @spec validate_city_name(String.t() | nil) :: {:ok, String.t()} | {:error, atom()}
-  def validate_city_name(name) when is_binary(name) do
+  @spec validate_city_name(String.t(), String.t()) ::
+          {:ok, String.t()} | {:error, atom()}
+  def validate_city_name(name, country_code) when is_binary(name) and is_binary(country_code) do
     trimmed = String.trim(name)
 
     cond do
@@ -162,35 +155,87 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       String.length(trimmed) == 1 ->
         {:error, :too_short}
 
-      # UK postcode pattern - detects postcodes ANYWHERE in string (e.g., "SW18 2SS", "England E5 8NN")
-      Regex.match?(~r/[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}/i, trimmed) ->
-        {:error, :contains_postcode}
-
-      # Street address pattern (starts with number + contains street keywords)
-      Regex.match?(
-        ~r/^\d+\s+.*(street|road|avenue|lane|drive|way|court|place|boulevard|st|rd|ave|ln|dr|blvd)/i,
-        trimmed
-      ) ->
-        {:error, :street_address_pattern}
-
-      # Pure numeric (likely postcode or address number)
-      Regex.match?(~r/^\d+$/, trimmed) ->
-        {:error, :contains_postcode}
-
-      # Likely venue name pattern (contains "at", "bar", "pub", etc.)
-      Regex.match?(~r/\b(at|bar|pub|restaurant|cafe|hotel|inn)\b/i, trimmed) ->
-        {:error, :venue_name_pattern}
-
-      # Valid city name
+      # Check if it's a REAL CITY in GeoNames database (positive validation)
       true ->
-        {:ok, trimmed}
+        case lookup_in_geonames(trimmed, country_code) do
+          {:ok, _geonames_data} ->
+            # City exists in authoritative database
+            {:ok, trimmed}
+
+          {:error, :not_found} ->
+            # Not a real city (catches ALL invalid inputs: addresses, postcodes, garbage)
+            Logger.debug(
+              "City name validation failed: '#{trimmed}' not found in GeoNames for country #{country_code}"
+            )
+
+            {:error, :not_a_valid_city}
+        end
     end
   end
 
   def validate_city_name(nil), do: {:error, :empty_name}
 
+  # Backward compatibility - if country not provided, return error
+  # All callers should be updated to provide country_code
+  def validate_city_name(name) when is_binary(name) do
+    # Check for empty/whitespace before returning country_required
+    trimmed = String.trim(name)
+
+    cond do
+      trimmed == "" ->
+        {:error, :empty_name}
+
+      String.length(trimmed) == 1 ->
+        {:error, :too_short}
+
+      true ->
+        Logger.warning(
+          "validate_city_name/1 called without country_code - update caller to use validate_city_name/2"
+        )
+
+        {:error, :country_required}
+    end
+  end
+
   def validate_city_name(name) do
     Logger.warning("Invalid city name type: #{inspect(name)}")
     {:error, :invalid_type}
+  end
+
+  # Use the existing :geocoding library's lookup function
+  # This library is already in mix.exs:148 and contains 165,602 cities
+  defp lookup_in_geonames(city_name, country_code) do
+    # :geocoding.lookup requires:
+    # - Country code as uppercase atom (e.g., :GB, :US, :AU)
+    # - City name as lowercase binary
+    country_atom = country_code |> String.upcase() |> String.to_atom()
+    city_binary = city_name |> String.downcase()
+
+    try do
+      case :geocoding.lookup(country_atom, city_binary) do
+        # Success: {:ok, {geoname_id, {lat, lng}, continent, country_code, city_name}}
+        {:ok, {_geoname_id, {_lat, _lng}, _continent, _country, _city}} ->
+          {:ok, :found}
+
+        # Not found in database (library returns :none atom, not {:error, ...})
+        :none ->
+          {:error, :not_found}
+
+        # Unexpected response
+        other ->
+          Logger.warning(
+            "Unexpected GeoNames lookup response for '#{city_name}', #{country_code}: #{inspect(other)}"
+          )
+
+          {:error, :not_found}
+      end
+    rescue
+      error ->
+        Logger.error(
+          "GeoNames lookup error for '#{city_name}', #{country_code}: #{inspect(error)}"
+        )
+
+        {:error, :not_found}
+    end
   end
 end

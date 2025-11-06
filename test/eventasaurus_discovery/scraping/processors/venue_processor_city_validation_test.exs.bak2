@@ -34,8 +34,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # UK postcode
-        city: "SW18 2SS",
-        country: "United Kingdom",
+        city_name: "SW18 2SS",
+        country_name: "United Kingdom",
         latitude: 51.4566,
         longitude: -0.1917
       }
@@ -52,8 +52,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # US ZIP code
-        city: "90210",
-        country: "United Kingdom",
+        city_name: "90210",
+        country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
       }
@@ -68,8 +68,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Street address
-        city: "13 Bollo Lane",
-        country: "United Kingdom",
+        city_name: "13 Bollo Lane",
+        country_name: "United Kingdom",
         latitude: 51.4936,
         longitude: -0.2663
       }
@@ -84,8 +84,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Pure number
-        city: "12345",
-        country: "United Kingdom",
+        city_name: "12345",
+        country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
       }
@@ -100,8 +100,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Valid city
-        city: "London",
-        country: "United Kingdom",
+        city_name: "London",
+        country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
       }
@@ -118,8 +118,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Nil is allowed
-        city: nil,
-        country: "United Kingdom",
+        city_name: nil,
+        country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
       }
@@ -146,8 +146,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Street address from buggy transformer
-        city: "76 Narrow Street",
-        country: "United Kingdom",
+        city_name: "76 Narrow Street",
+        country_name: "United Kingdom",
         latitude: 51.5074,
         longitude: -0.1278
       }
@@ -177,8 +177,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       for invalid_city <- invalid_cities do
         venue_data = %{
           name: "Test Venue",
-          city: invalid_city,
-          country: "United Kingdom",
+          city_name: invalid_city,
+          country_name: "United Kingdom",
           latitude: 51.5074,
           longitude: -0.1278
         }
@@ -238,8 +238,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Already validated by transformer
-        city: "New York",
-        country: "United States",
+        city_name: "New York",
+        country_name: "United States",
         latitude: 40.7128,
         longitude: -74.0060
       }
@@ -256,8 +256,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # ZIP code that transformer didn't catch
-        city: "10001",
-        country: "United States",
+        city_name: "10001",
+        country_name: "United States",
         latitude: 40.7128,
         longitude: -74.0060
       }
@@ -287,8 +287,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       venue_data = %{
         name: "Test Venue",
         # Polish postcode
-        city: "00-001",
-        country: "Poland",
+        city_name: "00-001",
+        country_name: "Poland",
         latitude: 52.2297,
         longitude: 21.0122
       }
@@ -532,49 +532,46 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       }
 
       {:ok, venue} = VenueProcessor.process_venue(venue_data)
-      venue = Repo.preload(venue, city_ref: :country)
 
-      assert venue.city_ref.name == "London"
-      assert venue.city_ref.country.name == "United Kingdom"
+      assert venue.city.name == "London"
+      assert venue.city.country.name == "United Kingdom"
     end
 
     test "accepts valid AU city from GeoNames", %{au: _au} do
       venue_data = %{
         name: "Test Venue",
-        city: "Sydney",
-        country: "Australia",
+        city_name: "Sydney",
+        country_name: "Australia",
         latitude: -33.8688,
         longitude: 151.2093
       }
 
       {:ok, venue} = VenueProcessor.process_venue(venue_data)
-      venue = Repo.preload(venue, city_ref: :country)
 
-      assert venue.city_ref.name == "Sydney"
-      assert venue.city_ref.country.name == "Australia"
+      assert venue.city.name == "Sydney"
+      assert venue.city.country.name == "Australia"
     end
 
     test "accepts valid US city from GeoNames", %{us: _us} do
       venue_data = %{
         name: "Test Venue",
-        city: "New York City",
-        country: "United States",
+        city_name: "New York City",
+        country_name: "United States",
         latitude: 40.7128,
         longitude: -74.0060
       }
 
       {:ok, venue} = VenueProcessor.process_venue(venue_data)
-      venue = Repo.preload(venue, city_ref: :country)
 
-      assert venue.city_ref.name == "New York City"
-      assert venue.city_ref.country.name == "United States"
+      assert venue.city.name == "New York City"
+      assert venue.city.country.name == "United States"
     end
 
     test "rejects UK street address from bug report (10-16 Botchergate)", %{gb: gb} do
       venue_data = %{
         name: "Test Venue",
-        city: "10-16 Botchergate",
-        country: "United Kingdom",
+        city_name: "10-16 Botchergate",
+        country_name: "United Kingdom",
         latitude: 54.8911,
         longitude: -2.9319
       }
@@ -588,8 +585,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects UK street address (168 Lower Briggate)", %{gb: gb} do
       venue_data = %{
         name: "Test Venue",
-        city: "168 Lower Briggate",
-        country: "United Kingdom",
+        city_name: "168 Lower Briggate",
+        country_name: "United Kingdom",
         latitude: 53.7957,
         longitude: -1.5461
       }
@@ -603,8 +600,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects UK street address (48 Chapeltown)", %{gb: gb} do
       venue_data = %{
         name: "Test Venue",
-        city: "48 Chapeltown",
-        country: "United Kingdom",
+        city_name: "48 Chapeltown",
+        country_name: "United Kingdom",
         latitude: 53.3811,
         longitude: -1.4701
       }
@@ -618,8 +615,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects AU street address from bug report (425 Burwood Hwy)", %{au: au} do
       venue_data = %{
         name: "Test Venue",
-        city: "425 Burwood Hwy",
-        country: "Australia",
+        city_name: "425 Burwood Hwy",
+        country_name: "Australia",
         latitude: -37.8692,
         longitude: 145.2442
       }
@@ -633,8 +630,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "rejects AU street address (46-54 Collie St)", %{au: au} do
       venue_data = %{
         name: "Test Venue",
-        city: "46-54 Collie St",
-        country: "Australia",
+        city_name: "46-54 Collie St",
+        country_name: "Australia",
         latitude: -37.8142,
         longitude: 144.9631
       }
@@ -659,8 +656,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
       for invalid_city <- invalid_cities_from_bug do
         venue_data = %{
           name: "Test Venue",
-          city: invalid_city,
-          country: "United Kingdom",
+          city_name: invalid_city,
+          country_name: "United Kingdom",
           latitude: 51.5074,
           longitude: -0.1278
         }
@@ -690,8 +687,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessorCityValidation
     test "logs GeoNames rejection with detailed error message", %{gb: gb} do
       venue_data = %{
         name: "Test Venue",
-        city: "10-16 Botchergate",
-        country: "United Kingdom",
+        city_name: "10-16 Botchergate",
+        country_name: "United Kingdom",
         latitude: 54.8911,
         longitude: -2.9319
       }

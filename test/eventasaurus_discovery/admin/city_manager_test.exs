@@ -284,4 +284,135 @@ defmodule EventasaurusDiscovery.Admin.CityManagerTest do
       assert hd(cities).venue_count == 2
     end
   end
+
+  describe "create_city/1 with GeoNames validation (Phase 2)" do
+    setup do
+      gb = insert(:country, name: "United Kingdom", code: "GB")
+      au = insert(:country, name: "Australia", code: "AU")
+      us = insert(:country, name: "United States", code: "US")
+      {:ok, gb: gb, au: au, us: us}
+    end
+
+    test "accepts valid UK city from GeoNames", %{gb: gb} do
+      attrs = %{
+        name: "London",
+        country_id: gb.id,
+        latitude: Decimal.new("51.5074"),
+        longitude: Decimal.new("-0.1278")
+      }
+
+      assert {:ok, %City{} = city} = CityManager.create_city(attrs)
+      assert city.name == "London"
+      assert city.country_id == gb.id
+    end
+
+    test "accepts valid AU city from GeoNames", %{au: au} do
+      attrs = %{
+        name: "Sydney",
+        country_id: au.id,
+        latitude: Decimal.new("-33.8688"),
+        longitude: Decimal.new("151.2093")
+      }
+
+      assert {:ok, %City{} = city} = CityManager.create_city(attrs)
+      assert city.name == "Sydney"
+      assert city.country_id == au.id
+    end
+
+    test "accepts valid US city from GeoNames", %{us: us} do
+      attrs = %{
+        name: "New York City",
+        country_id: us.id,
+        latitude: Decimal.new("40.7128"),
+        longitude: Decimal.new("-74.0060")
+      }
+
+      assert {:ok, %City{} = city} = CityManager.create_city(attrs)
+      assert city.name == "New York City"
+      assert city.country_id == us.id
+    end
+
+    test "rejects UK street address from bug report (10-16 Botchergate)", %{gb: gb} do
+      attrs = %{
+        name: "10-16 Botchergate",
+        country_id: gb.id,
+        latitude: Decimal.new("54.8911"),
+        longitude: Decimal.new("-2.9319")
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is not a valid city in United Kingdom" in errors_on(changeset).name
+    end
+
+    test "rejects UK street address (168 Lower Briggate)", %{gb: gb} do
+      attrs = %{
+        name: "168 Lower Briggate",
+        country_id: gb.id
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is not a valid city in United Kingdom" in errors_on(changeset).name
+    end
+
+    test "rejects AU street address from bug report (425 Burwood Hwy)", %{au: au} do
+      attrs = %{
+        name: "425 Burwood Hwy",
+        country_id: au.id,
+        latitude: Decimal.new("-37.8692"),
+        longitude: Decimal.new("145.2442")
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is not a valid city in Australia" in errors_on(changeset).name
+    end
+
+    test "rejects AU street address (46-54 Collie St)", %{au: au} do
+      attrs = %{
+        name: "46-54 Collie St",
+        country_id: au.id
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is not a valid city in Australia" in errors_on(changeset).name
+    end
+
+    test "rejects UK postcode (SW18 2SS)", %{gb: gb} do
+      attrs = %{
+        name: "SW18 2SS",
+        country_id: gb.id
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is not a valid city in United Kingdom" in errors_on(changeset).name
+    end
+
+    test "rejects US ZIP code (90210)", %{us: us} do
+      attrs = %{
+        name: "90210",
+        country_id: us.id
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is not a valid city in United States" in errors_on(changeset).name
+    end
+
+    test "returns error when country is missing" do
+      attrs = %{
+        name: "London"
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is required for validation" in errors_on(changeset).country_id
+    end
+
+    test "returns error when country_id is invalid" do
+      attrs = %{
+        name: "London",
+        country_id: 999_999
+      }
+
+      assert {:error, changeset} = CityManager.create_city(attrs)
+      assert "is required for validation" in errors_on(changeset).country_id
+    end
+  end
 end

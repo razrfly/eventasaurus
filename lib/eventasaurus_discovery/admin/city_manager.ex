@@ -10,6 +10,7 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.{City, Country}
+  alias EventasaurusDiscovery.Helpers.CityResolver
 
   @doc """
   Creates a city with validation.
@@ -28,10 +29,49 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       {:error, %Ecto.Changeset{}}
   """
   def create_city(attrs) do
-    %City{}
-    |> City.changeset(attrs)
-    |> validate_country_exists(attrs)
-    |> Repo.insert()
+    # Get country to extract country code for validation
+    country_id = attrs[:country_id] || attrs["country_id"]
+    country = if country_id, do: Repo.get(Country, country_id), else: nil
+
+    if is_nil(country) do
+      # No country provided - return validation error
+      changeset =
+        %City{}
+        |> City.changeset(attrs)
+        |> Ecto.Changeset.add_error(:country_id, "is required for validation")
+
+      {:error, changeset}
+    else
+      # Validate city name using GeoNames database
+      case CityResolver.validate_city_name(attrs[:name] || attrs["name"], country.code) do
+        {:ok, validated_name} ->
+          # City name is valid in GeoNames database
+          attrs_with_validated_name = Map.put(attrs, :name, validated_name)
+
+          %City{}
+          |> City.changeset(attrs_with_validated_name)
+          |> validate_country_exists(attrs_with_validated_name)
+          |> Repo.insert()
+
+        {:error, :not_a_valid_city} ->
+          # City name not found in GeoNames database (catches addresses, postcodes, etc.)
+          changeset =
+            %City{}
+            |> City.changeset(attrs)
+            |> Ecto.Changeset.add_error(:name, "is not a valid city in #{country.name}")
+
+          {:error, changeset}
+
+        {:error, reason} ->
+          # Other validation error
+          changeset =
+            %City{}
+            |> City.changeset(attrs)
+            |> Ecto.Changeset.add_error(:name, "validation failed: #{reason}")
+
+          {:error, changeset}
+      end
+    end
   end
 
   @doc """

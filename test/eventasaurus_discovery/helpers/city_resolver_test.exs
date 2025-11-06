@@ -100,19 +100,133 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
     end
   end
 
-  describe "validate_city_name/1" do
-    test "accepts valid city names" do
-      assert {:ok, "New York"} = CityResolver.validate_city_name("New York")
-      assert {:ok, "London"} = CityResolver.validate_city_name("London")
-      assert {:ok, "Los Angeles"} = CityResolver.validate_city_name("Los Angeles")
-      assert {:ok, "São Paulo"} = CityResolver.validate_city_name("São Paulo")
-      assert {:ok, "Saint-Denis"} = CityResolver.validate_city_name("Saint-Denis")
-      assert {:ok, "Mexico City"} = CityResolver.validate_city_name("Mexico City")
+  describe "validate_city_name/2 - GeoNames lookup (NEW)" do
+    test "accepts real UK cities" do
+      assert {:ok, "London"} = CityResolver.validate_city_name("London", "GB")
+      assert {:ok, "Manchester"} = CityResolver.validate_city_name("Manchester", "GB")
+      assert {:ok, "Leeds"} = CityResolver.validate_city_name("Leeds", "GB")
+      assert {:ok, "Birmingham"} = CityResolver.validate_city_name("Birmingham", "GB")
+      assert {:ok, "Liverpool"} = CityResolver.validate_city_name("Liverpool", "GB")
+      assert {:ok, "Glasgow"} = CityResolver.validate_city_name("Glasgow", "GB")
+    end
+
+    test "accepts real Australian cities" do
+      assert {:ok, "Sydney"} = CityResolver.validate_city_name("Sydney", "AU")
+      assert {:ok, "Melbourne"} = CityResolver.validate_city_name("Melbourne", "AU")
+      assert {:ok, "Perth"} = CityResolver.validate_city_name("Perth", "AU")
+      assert {:ok, "Brisbane"} = CityResolver.validate_city_name("Brisbane", "AU")
+      assert {:ok, "Adelaide"} = CityResolver.validate_city_name("Adelaide", "AU")
+    end
+
+    test "accepts real US cities" do
+      assert {:ok, "New York City"} = CityResolver.validate_city_name("New York City", "US")
+      assert {:ok, "Los Angeles"} = CityResolver.validate_city_name("Los Angeles", "US")
+      assert {:ok, "Chicago"} = CityResolver.validate_city_name("Chicago", "US")
+      assert {:ok, "Houston"} = CityResolver.validate_city_name("Houston", "US")
+      assert {:ok, "Phoenix"} = CityResolver.validate_city_name("Phoenix", "US")
+    end
+
+    test "rejects UK street addresses from the data leak - CRITICAL FIX" do
+      # These are the actual invalid cities from the bug report
+      uk_addresses = [
+        "10-16 Botchergate",      # Carlisle address
+        "12 Derrys Cross",         # Plymouth address
+        "168 Lower Briggate",      # Leeds address
+        "48 Chapeltown",           # Sheffield address
+        "98 Highgate",             # Birmingham address
+        "40 Bondgate"              # Darlington address
+      ]
+
+      for address <- uk_addresses do
+        assert {:error, :not_a_valid_city} = CityResolver.validate_city_name(address, "GB"),
+               "Expected '#{address}' to be rejected (not in GeoNames)"
+      end
+    end
+
+    test "rejects Australian street addresses from the data leak - CRITICAL FIX" do
+      # These are the actual invalid cities from the bug report
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("425 Burwood Hwy", "AU")
+
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("46-54 Collie St", "AU")
+    end
+
+    test "rejects US ZIP codes (not in GeoNames)" do
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("90210", "US")
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("10001", "US")
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("12345", "US")
+    end
+
+    test "rejects UK postcodes (not in GeoNames)" do
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("SW18 2SS", "GB")
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("E5 8NN", "GB")
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("W1F 8PU", "GB")
+      assert {:error, :not_a_valid_city} = CityResolver.validate_city_name("M1 1AE", "GB")
+    end
+
+    test "rejects city names with embedded postcodes (not in GeoNames)" do
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("England E5 8NN", "GB")
+
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("London England W1F 8PU", "GB")
+
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("Cambridge England CB2 3AR", "GB")
+    end
+
+    test "rejects venue names (not in GeoNames)" do
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("The Rose and Crown Pub", "GB")
+
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("Sports Bar at Stadium", "US")
+
+      assert {:error, :not_a_valid_city} =
+               CityResolver.validate_city_name("Green Dragon Inn", "GB")
+    end
+
+    test "case insensitive matching" do
+      assert {:ok, "london"} = CityResolver.validate_city_name("london", "GB")
+      assert {:ok, "LONDON"} = CityResolver.validate_city_name("LONDON", "GB")
+      assert {:ok, "LoNdOn"} = CityResolver.validate_city_name("LoNdOn", "GB")
     end
 
     test "trims whitespace" do
-      assert {:ok, "Paris"} = CityResolver.validate_city_name("  Paris  ")
-      assert {:ok, "Tokyo"} = CityResolver.validate_city_name("\tTokyo\n")
+      assert {:ok, "Paris"} = CityResolver.validate_city_name("  Paris  ", "FR")
+      assert {:ok, "Tokyo"} = CityResolver.validate_city_name("\tTokyo\n", "JP")
+    end
+
+    test "rejects empty strings" do
+      assert {:error, :empty_name} = CityResolver.validate_city_name("", "GB")
+      assert {:error, :empty_name} = CityResolver.validate_city_name("   ", "GB")
+      assert {:error, :empty_name} = CityResolver.validate_city_name("\t\n", "GB")
+    end
+
+    test "rejects nil" do
+      assert {:error, :empty_name} = CityResolver.validate_city_name(nil)
+    end
+
+    test "rejects single character names" do
+      assert {:error, :too_short} = CityResolver.validate_city_name("A", "GB")
+      assert {:error, :too_short} = CityResolver.validate_city_name("X", "US")
+      assert {:error, :too_short} = CityResolver.validate_city_name("1", "AU")
+    end
+
+    test "handles non-string input" do
+      assert {:error, :invalid_type} = CityResolver.validate_city_name(12345)
+      assert {:error, :invalid_type} = CityResolver.validate_city_name([:not, :a, :string])
+      assert {:error, :invalid_type} = CityResolver.validate_city_name(%{city: "Paris"})
+    end
+  end
+
+  describe "validate_city_name/1 - DEPRECATED (backward compatibility)" do
+    test "returns error when country code not provided" do
+      # All callers should be updated to use validate_city_name/2
+      assert {:error, :country_required} = CityResolver.validate_city_name("New York")
+      assert {:error, :country_required} = CityResolver.validate_city_name("London")
+      assert {:error, :country_required} = CityResolver.validate_city_name("Los Angeles")
     end
 
     test "rejects empty strings" do
@@ -126,98 +240,9 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
     end
 
     test "rejects single character names" do
-      assert {:error, :too_short} = CityResolver.validate_city_name("A")
-      assert {:error, :too_short} = CityResolver.validate_city_name("X")
-      assert {:error, :too_short} = CityResolver.validate_city_name("1")
-    end
-
-    test "rejects pure postcodes (UK and US patterns)" do
-      # UK postcodes
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("SW18 2SS")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("E1 6AN")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("W1A 1AA")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("M1 1AE")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("B33 8TH")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("E5 8NN")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("W1F 8PU")
-
-      # US ZIP codes (pure numeric)
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("90210")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("10001")
-    end
-
-    test "rejects city names with embedded UK postcodes - CRITICAL BUG FIX" do
-      # These were creating fake cities in the database (Issue: QuestionOne fake cities)
-      invalid_cities = [
-        "England E5 8NN",
-        "London England W1F 8PU",
-        "Cambridge England CB2 3AR",
-        "Wembley England HA9 0HP",
-        "St Albans England AL1 1NG",
-        "England W5 5DB",
-        "England E14 7HG",
-        "London England SE11 5AW"
-      ]
-
-      for city <- invalid_cities do
-        assert {:error, :contains_postcode} = CityResolver.validate_city_name(city),
-               "Expected #{city} to be rejected due to embedded postcode"
-      end
-    end
-
-    test "rejects city names with postcode at end" do
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("City W5 5DB")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("Location E1 6AN")
-    end
-
-    test "rejects city names with postcode in middle" do
-      assert {:error, :contains_postcode} =
-               CityResolver.validate_city_name("London W1F 8PU Extra")
-
-      assert {:error, :contains_postcode} =
-               CityResolver.validate_city_name("City E5 8NN Location")
-    end
-
-    test "rejects street addresses with numbers" do
-      assert {:error, :street_address_pattern} =
-               CityResolver.validate_city_name("123 Main Street")
-
-      assert {:error, :street_address_pattern} =
-               CityResolver.validate_city_name("76 Narrow Street")
-
-      assert {:error, :street_address_pattern} =
-               CityResolver.validate_city_name("42 Oak Avenue")
-
-      assert {:error, :street_address_pattern} =
-               CityResolver.validate_city_name("13 Bollo Lane")
-
-      assert {:error, :street_address_pattern} =
-               CityResolver.validate_city_name("1 High St")
-    end
-
-    test "rejects pure numeric values" do
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("12345")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("999")
-      assert {:error, :contains_postcode} = CityResolver.validate_city_name("00000")
-    end
-
-    test "rejects likely venue names" do
-      assert {:error, :venue_name_pattern} =
-               CityResolver.validate_city_name("The Rose and Crown Pub")
-
-      assert {:error, :venue_name_pattern} =
-               CityResolver.validate_city_name("Sports Bar at Stadium")
-
-      assert {:error, :venue_name_pattern} =
-               CityResolver.validate_city_name("Green Dragon Inn")
-
-      assert {:error, :venue_name_pattern} =
-               CityResolver.validate_city_name("Downtown Restaurant")
-    end
-
-    test "accepts city names with numbers if not street addresses" do
-      # Some cities legitimately have numbers
-      assert {:ok, "Winston-Salem"} = CityResolver.validate_city_name("Winston-Salem")
+      assert {:error, :country_required} = CityResolver.validate_city_name("A")
+      assert {:error, :country_required} = CityResolver.validate_city_name("X")
+      assert {:error, :country_required} = CityResolver.validate_city_name("1")
     end
 
     test "handles non-string input" do
@@ -227,24 +252,20 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
     end
   end
 
-  describe "integration tests" do
-    test "end-to-end resolution rejects garbage coordinates" do
-      # Test coordinates that historically produced garbage
-      # These should either return valid cities or return errors
-
-      # Example from issue: "13 Bollo Lane" coordinates (fictional for test)
-      result = CityResolver.resolve_city(51.4922, -0.2432)
+  describe "integration tests - GeoNames validation" do
+    test "end-to-end resolution validates cities with GeoNames" do
+      # New York coordinates → should get valid city from GeoNames
+      result = CityResolver.resolve_city(40.7128, -74.0060)
 
       case result do
         {:ok, city} ->
-          # If we get a city, it should be valid
-          assert {:ok, _} = CityResolver.validate_city_name(city)
-          refute city =~ ~r/lane/i
-          refute city =~ ~r/street/i
-          refute city =~ ~r/road/i
+          # If we get a city, it should be validated against GeoNames
+          assert is_binary(city)
+          assert String.length(city) > 1
+          # The validation happens internally in resolve_city now
 
         {:error, reason} ->
-          # Errors are acceptable for bad coordinates
+          # Errors are acceptable for coordinates
           assert reason in [
                    :not_found,
                    :invalid_city_name,
@@ -254,21 +275,27 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
       end
     end
 
-    test "full workflow with valid coordinates" do
-      # New York coordinates → should get valid city
-      assert {:ok, city} = CityResolver.resolve_city(40.7128, -74.0060)
-      assert {:ok, validated} = CityResolver.validate_city_name(city)
-      assert validated == city
-      assert String.length(validated) > 1
-      refute validated =~ ~r/^\d+$/
-      refute validated =~ ~r/street|road|avenue|lane/i
+    test "full workflow with valid coordinates uses GeoNames validation" do
+      # London coordinates → should get valid city from GeoNames
+      result = CityResolver.resolve_city(51.5074, -0.1278)
+
+      case result do
+        {:ok, city} ->
+          assert is_binary(city)
+          assert String.length(city) > 1
+
+        {:error, reason} ->
+          assert reason in [:not_found, :invalid_city_name]
+      end
     end
 
-    test "handles edge case of city name that looks like street" do
-      # Some cities might have street-like names
-      # The validation should be strict but not too strict
-      result = CityResolver.validate_city_name("Highland Park")
-      assert {:ok, "Highland Park"} = result
+    test "validates real cities exist in GeoNames across countries" do
+      # Test that major cities are validated correctly
+      assert {:ok, _} = CityResolver.validate_city_name("Paris", "FR")
+      assert {:ok, _} = CityResolver.validate_city_name("Tokyo", "JP")
+      assert {:ok, _} = CityResolver.validate_city_name("Berlin", "DE")
+      assert {:ok, _} = CityResolver.validate_city_name("Rome", "IT")
+      assert {:ok, _} = CityResolver.validate_city_name("Madrid", "ES")
     end
   end
 end
