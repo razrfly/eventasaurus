@@ -139,7 +139,20 @@
                     scope="col"
                     class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6"
                   >
-                    City
+                    <button
+                      phx-click="sort"
+                      phx-value-column="name"
+                      class="group inline-flex items-center gap-1 hover:text-gray-600"
+                    >
+                      City
+                      <%= if @sort_by == "name" do %>
+                        <span class="text-gray-400">
+                          <%= if @sort_dir == "asc", do: "↑", else: "↓" %>
+                        </span>
+                      <% else %>
+                        <span class="text-gray-300 opacity-0 group-hover:opacity-100">↑</span>
+                      <% end %>
+                    </button>
                   </th>
                   <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                     Country
@@ -148,7 +161,20 @@
                     Coordinates
                   </th>
                   <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                    Venues
+                    <button
+                      phx-click="sort"
+                      phx-value-column="venue_count"
+                      class="group inline-flex items-center gap-1 hover:text-gray-600"
+                    >
+                      Venues
+                      <%= if @sort_by == "venue_count" do %>
+                        <span class="text-gray-400">
+                          <%= if @sort_dir == "asc", do: "↑", else: "↓" %>
+                        </span>
+                      <% else %>
+                        <span class="text-gray-300 opacity-0 group-hover:opacity-100">↑</span>
+                      <% end %>
+                    </button>
                   </th>
                   <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                     Discovery

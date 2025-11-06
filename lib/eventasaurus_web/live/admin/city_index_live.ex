@@ -23,6 +23,8 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
       |> assign(:search, "")
       |> assign(:country_filter, nil)
       |> assign(:discovery_filter, nil)
+      |> assign(:sort_by, "name")
+      |> assign(:sort_dir, "asc")
       |> load_cities()
 
     {:ok, socket}
@@ -35,6 +37,8 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
       |> assign(:search, params["search"] || "")
       |> assign(:country_filter, params["country_id"])
       |> assign(:discovery_filter, params["discovery_enabled"])
+      |> assign(:sort_by, params["sort_by"] || "name")
+      |> assign(:sort_dir, params["sort_dir"] || "asc")
       |> load_cities()
 
     {:noreply, socket}
@@ -57,6 +61,21 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
   def handle_event("filter_discovery", %{"discovery_enabled" => discovery}, socket) do
     discovery = if discovery == "", do: nil, else: discovery
     params = build_params(socket, %{discovery_enabled: discovery})
+    {:noreply, push_patch(socket, to: ~p"/admin/cities?#{params}")}
+  end
+
+  @impl true
+  def handle_event("sort", %{"column" => column}, socket) do
+    {sort_by, sort_dir} =
+      if socket.assigns.sort_by == column do
+        # Toggle direction if same column
+        {column, if(socket.assigns.sort_dir == "asc", do: "desc", else: "asc")}
+      else
+        # New column, default to asc
+        {column, "asc"}
+      end
+
+    params = build_params(socket, %{sort_by: sort_by, sort_dir: sort_dir})
     {:noreply, push_patch(socket, to: ~p"/admin/cities?#{params}")}
   end
 
@@ -95,7 +114,9 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
     filters = %{
       search: socket.assigns.search,
       country_id: socket.assigns.country_filter,
-      discovery_enabled: socket.assigns.discovery_filter
+      discovery_enabled: socket.assigns.discovery_filter,
+      sort_by: socket.assigns.sort_by,
+      sort_dir: socket.assigns.sort_dir
     }
 
     cities = CityManager.list_cities_with_venue_counts(filters)
@@ -106,7 +127,9 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
     %{
       search: updates[:search] || socket.assigns.search,
       country_id: updates[:country_id] || socket.assigns.country_filter,
-      discovery_enabled: updates[:discovery_enabled] || socket.assigns.discovery_filter
+      discovery_enabled: updates[:discovery_enabled] || socket.assigns.discovery_filter,
+      sort_by: updates[:sort_by] || socket.assigns.sort_by,
+      sort_dir: updates[:sort_dir] || socket.assigns.sort_dir
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) || v == "" end)
     |> Map.new()
