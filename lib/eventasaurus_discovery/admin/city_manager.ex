@@ -445,6 +445,223 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   end
 
   # ============================================================================
+  # Invalid Cities Cleanup
+  # ============================================================================
+
+  @doc """
+  Finds all cities that fail GeoNames validation.
+
+  Returns list of cities that are not real cities (street addresses, postcodes, etc.)
+  according to the authoritative GeoNames database.
+
+  ## Examples
+
+      iex> find_invalid_cities()
+      [
+        %City{id: 15, name: "10-16 Botchergate", country: %Country{code: "GB"}},
+        %City{id: 42, name: "425 Burwood Hwy", country: %Country{code: "AU"}}
+      ]
+  """
+  def find_invalid_cities do
+    cities = Repo.all(from(c in City, preload: :country))
+
+    Enum.filter(cities, fn city ->
+      case CityResolver.validate_city_name(city.name, city.country.code) do
+        {:ok, _} -> false  # Valid city
+        {:error, :not_a_valid_city} -> true  # Invalid city (fails all validation)
+        {:error, :street_address} -> true  # Street address pattern detected
+        {:error, _} -> false  # Other validation errors (empty, too short, etc.), skip
+      end
+    end)
+  end
+
+  @doc """
+  Analyzes venue addresses to suggest the correct replacement city for an invalid city.
+
+  Uses positive validation: extracts potential city names from venue addresses
+  and validates them against GeoNames database. Returns the most common valid city
+  as the suggested replacement.
+
+  ## Parameters
+
+  - `invalid_city` - City struct with preloaded country association
+
+  ## Returns
+
+  - `{:ok, city}` - Found or created valid city as replacement
+  - `{:error, :no_replacement_found}` - Could not determine valid replacement from venue addresses
+
+  ## Examples
+
+      iex> suggest_replacement_city(%City{id: 15, name: "10-16 Botchergate", country: %{code: "GB"}})
+      {:ok, %City{id: 8, name: "Carlisle"}}
+
+      iex> suggest_replacement_city(%City{id: 99, name: "Invalid", country: %{code: "GB"}})
+      {:error, :no_replacement_found}
+  """
+  def suggest_replacement_city(%City{} = invalid_city) do
+    # Load venues for this city
+    venues =
+      from(v in EventasaurusApp.Venues.Venue,
+        where: v.city_id == ^invalid_city.id,
+        select: v.address
+      )
+      |> Repo.all()
+      |> Enum.reject(&is_nil/1)
+
+    if Enum.empty?(venues) do
+      {:error, :no_replacement_found}
+    else
+      # Extract potential city names from venue addresses
+      city_candidates =
+        venues
+        |> Enum.flat_map(fn address ->
+          case extract_city_from_address(address, invalid_city.country.code) do
+            {:ok, city_name} -> [city_name]
+            _ -> []
+          end
+        end)
+
+      if Enum.empty?(city_candidates) do
+        {:error, :no_replacement_found}
+      else
+        # Find most common valid city
+        city_candidates
+        |> Enum.frequencies()
+        |> Enum.max_by(fn {_city, count} -> count end, fn -> nil end)
+        |> case do
+          {city_name, _count} ->
+            # Validate the suggested city name
+            case CityResolver.validate_city_name(city_name, invalid_city.country.code) do
+              {:ok, validated_name} ->
+                # Find or create the correct city
+                find_or_create_valid_city(validated_name, invalid_city.country_id)
+
+              {:error, _} ->
+                {:error, :no_replacement_found}
+            end
+
+          nil ->
+            {:error, :no_replacement_found}
+        end
+      end
+    end
+  end
+
+  @doc """
+  Extracts city name from a full address string.
+
+  Attempts to parse city name from common address formats:
+  - "123 Street Name, City, Postcode"
+  - "Street Address, City Name"
+  - "Building, Street, City, State Zip"
+
+  ## Parameters
+
+  - `address` - Full address string
+  - `country_code` - ISO country code (e.g., "GB", "US", "AU")
+
+  ## Returns
+
+  - `{:ok, city_name}` - Extracted city name
+  - `{:error, :no_city_found}` - Could not extract city from address
+
+  ## Examples
+
+      iex> extract_city_from_address("10-16 Botchergate, Carlisle, CA1 1PE", "GB")
+      {:ok, "Carlisle"}
+
+      iex> extract_city_from_address("425 Burwood Hwy, Wantirna South VIC 3152", "AU")
+      {:ok, "Wantirna South"}
+  """
+  def extract_city_from_address(address, country_code) when is_binary(address) do
+    # Split address by comma and clean up parts
+    parts =
+      address
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    case parts do
+      # Format: "Building, Street, City, Postcode/State" (4+ parts)
+      [_building, _street, city, _postcode_or_state | _] when byte_size(city) > 2 ->
+        # City is typically the second-to-last or third part in UK addresses
+        city_cleaned = clean_city_part(city, country_code)
+        if byte_size(city_cleaned) > 2 do
+          {:ok, city_cleaned}
+        else
+          {:error, :no_city_found}
+        end
+
+      # Format: "Street, City, Postcode/State" (3 parts)
+      [_street, city, _postcode_or_state] when byte_size(city) > 2 ->
+        # Remove any postcode/state info from city part
+        city_cleaned = clean_city_part(city, country_code)
+        if byte_size(city_cleaned) > 2 do
+          {:ok, city_cleaned}
+        else
+          {:error, :no_city_found}
+        end
+
+      # Format: "Street, City" (2 parts)
+      [_street, city] when byte_size(city) > 2 ->
+        city_cleaned = clean_city_part(city, country_code)
+        if byte_size(city_cleaned) > 2 do
+          {:ok, city_cleaned}
+        else
+          {:error, :no_city_found}
+        end
+
+      # Single part or couldn't parse
+      _ ->
+        {:error, :no_city_found}
+    end
+  end
+
+  def extract_city_from_address(nil, _country_code), do: {:error, :no_city_found}
+
+  # Clean city part by removing postcodes, state codes, and other noise
+  defp clean_city_part(city_part, _country_code) do
+    city_part
+    # Remove UK postcodes (e.g., "CA1 1PE", "SW18 2SS")
+    |> String.replace(~r/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i, "")
+    # Remove AU state codes BEFORE removing digits (e.g., "VIC 3152", "NSW 2000")
+    |> String.replace(~r/\b(VIC|NSW|QLD|SA|WA|TAS|NT|ACT)\s+\d{4}\b/, "")
+    # Remove standalone AU state codes (e.g., "VIC", "NSW", "QLD")
+    |> String.replace(~r/\b(VIC|NSW|QLD|SA|WA|TAS|NT|ACT)\b/, "")
+    # Remove AU postcodes (4 digits)
+    |> String.replace(~r/\b\d{4}\b/, "")
+    # Remove US ZIP codes (5 digits with optional -4 extension)
+    |> String.replace(~r/\b\d{5}(-\d{4})?\b/, "")
+    # Remove US state codes (e.g., "CA", "NY", "TX")
+    |> String.replace(~r/\b[A-Z]{2}\b/, "")
+    # Remove extra whitespace
+    |> String.trim()
+  end
+
+  # Find existing city or create new one with validated name
+  defp find_or_create_valid_city(city_name, country_id) do
+    # Try to find existing city with this name
+    existing_city =
+      from(c in City,
+        where: c.name == ^city_name and c.country_id == ^country_id
+      )
+      |> Repo.one()
+
+    case existing_city do
+      %City{} = city ->
+        {:ok, city}
+
+      nil ->
+        # Create new city with validated name
+        case create_city(%{name: city_name, country_id: country_id}) do
+          {:ok, city} -> {:ok, city}
+          {:error, _changeset} -> {:error, :could_not_create_city}
+        end
+    end
+  end
+
+  # ============================================================================
   # City Merging
   # ============================================================================
 
@@ -471,10 +688,22 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
         cities_deleted: 1
       }}
 
+      iex> merge_cities(6, 32)
+      {:ok, %{...}}
+
       iex> merge_cities(6, [999], true)
       {:error, :source_city_not_found}
   """
-  def merge_cities(target_city_id, source_city_ids, add_as_alternates \\ true)
+  # Function header for default values
+  def merge_cities(target_city_id, source_city_ids_or_id, add_as_alternates \\ true)
+
+  # Convenience overload for single source city
+  def merge_cities(target_city_id, source_city_id, add_as_alternates)
+      when is_integer(source_city_id) do
+    merge_cities(target_city_id, [source_city_id], add_as_alternates)
+  end
+
+  def merge_cities(target_city_id, source_city_ids, add_as_alternates)
       when is_list(source_city_ids) do
     Repo.transaction(fn ->
       # Load target city

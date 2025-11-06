@@ -484,25 +484,161 @@ end
 
 ### Phase 1: Core Validation (2 hours)
 - [x] Research GeoNames libraries (DONE - using `:geocoding`)
-- [ ] Update `CityResolver.validate_city_name/2` to use GeoNames lookup
-- [ ] Add unit tests for UK, AU, US cities and addresses
-- [ ] Add error logging for rejected names
+- [x] Update `CityResolver.validate_city_name/2` to use GeoNames lookup
+- [x] Add unit tests for UK, AU, US cities and addresses
+- [x] Add error logging for rejected names
 
-### Phase 2: Integration (1 hour)
-- [ ] Update `VenueProcessor.create_city` to pass country code
-- [ ] Update `CityManager.create_city` to pass country code
-- [ ] Add integration tests
+### Phase 2: Integration (1 hour) ✅ COMPLETED
+- [x] Update `VenueProcessor.create_city` to pass country code
+- [x] Update `CityManager.create_city` to pass country code
+- [x] Add integration tests (21 tests passing)
 
-### Phase 3: Schema Validation (1 hour)
-- [ ] Update `City.changeset` with GeoNames validation
-- [ ] Add schema-level tests
-- [ ] Test with admin UI city creation
+**Implementation Details**:
+- Modified `venue_processor.ex:360` to call `CityResolver.validate_city_name(name, country.code)`
+- Modified `city_manager.ex:create_city/1` to validate with country code before insertion
+- Created `venue_processor_city_validation_test.exs` with comprehensive tests
+- Tests validate UK/AU/US cities and reject street addresses, postcodes, ZIP codes
 
-### Phase 4: Data Cleanup (2 hours)
-- [ ] Query database for invalid cities: `SELECT * FROM cities WHERE ...`
-- [ ] Manual review of results
-- [ ] Create migration to clean up invalid cities
-- [ ] Reassign venues to correct cities
+### Phase 3: Schema Validation (1 hour) ✅ COMPLETED
+- [x] Update `City.changeset` with GeoNames validation
+- [x] Add schema-level tests (15 tests passing)
+- [x] Test with admin UI city creation
+
+**Implementation Details**:
+- Added `validate_city_name_content/1` private function to `city.ex` (lines 47-76)
+- Schema-level validation runs when name or country_id changes
+- Validates against GeoNames database using `CityResolver.validate_city_name/2`
+- Created `city_test.exs` with comprehensive changeset tests
+- Tests cover creation, update, edge cases, and validation skipping scenarios
+
+**Layer 3 Defense**: Schema validation now prevents invalid cities at the database level, complementing Layer 1 (Transformers) and Layer 2 (VenueProcessor/CityManager).
+
+### Phase 4: Data Cleanup (2 hours) 🚧 IN PROGRESS
+
+**Challenge**: ~10 invalid cities exist in production. Cannot simply delete them because:
+1. Database constraint prevents deletion if venues are associated (`check_constraint(:id, name: :venues_city_id_required_for_non_regional)`)
+2. Deleting venues is not acceptable - they contain valuable event data
+3. Need to reassign venues to correct cities before deletion
+
+**Cleanup Strategy: "Invalid Cities Cleanup" LiveView Interface**
+
+Based on analysis of existing patterns (`VenueDuplicatesLive`, `CityDuplicatesLive`, `CityManager.merge_cities()`), the recommended approach is:
+
+#### 1. Detection: Identify Invalid Cities
+Add to `CityManager`:
+```elixir
+@doc """
+Find all cities that fail GeoNames validation.
+Returns list of cities that are not real cities (addresses, postcodes, etc.)
+"""
+def find_invalid_cities do
+  cities = Repo.all(from c in City, preload: :country)
+
+  Enum.filter(cities, fn city ->
+    case CityResolver.validate_city_name(city.name, city.country.code) do
+      {:ok, _} -> false  # Valid city
+      {:error, :not_a_valid_city} -> true  # Invalid city
+      {:error, _} -> false  # Validation error, skip
+    end
+  end)
+end
+```
+
+#### 2. Intelligent Replacement: Suggest Correct City
+Add to `CityManager`:
+```elixir
+@doc """
+Analyze venue addresses to suggest the correct replacement city.
+Uses positive validation: extracts potential city names from venue addresses
+and validates them against GeoNames.
+"""
+def suggest_replacement_city(invalid_city) do
+  venues = Repo.all(from v in Venue, where: v.city_id == ^invalid_city.id)
+
+  # Extract potential city names from venue addresses
+  city_candidates = Enum.flat_map(venues, fn venue ->
+    # Use existing address parsing logic from venue transformers
+    case extract_city_from_address(venue.address, invalid_city.country.code) do
+      {:ok, city_name} -> [city_name]
+      _ -> []
+    end
+  end)
+
+  # Find most common valid city
+  city_candidates
+  |> Enum.frequencies()
+  |> Enum.max_by(fn {_city, count} -> count end, fn -> nil end)
+  |> case do
+    {city_name, _count} ->
+      # Find or create the correct city
+      case find_or_create_city(city_name, invalid_city.country_id) do
+        {:ok, city} -> {:ok, city}
+        _ -> {:error, :no_replacement_found}
+      end
+    nil ->
+      {:error, :no_replacement_found}
+  end
+end
+```
+
+#### 3. Admin UI: Manual Review and Confirmation
+Create `InvalidCitiesCleanupLive` following the pattern of `CityDuplicatesLive`:
+
+**Route**: `/admin/cities/cleanup-invalid`
+
+**UI Features**:
+- List all invalid cities with:
+  - Invalid city name (e.g., "10-16 Botchergate")
+  - Country
+  - Number of venues affected
+  - Suggested replacement city (auto-detected from venue addresses)
+  - Sample venue addresses for manual verification
+- Actions:
+  - **Replace with [suggested city]** - Uses existing `CityManager.merge_cities()` to reassign venues
+  - **Choose different city** - Search for alternative city
+  - **Skip for now** - Defer to later
+
+**Why This Approach**:
+- ✅ Safe for production (manual review before merging)
+- ✅ Reuses existing `merge_cities()` infrastructure (lines 477-527)
+- ✅ Provides context for admin decision-making
+- ✅ Handles edge cases gracefully (no replacement found → manual selection)
+- ✅ Consistent with existing admin patterns (duplicates management)
+- ✅ Suitable for small scale (~10 cities)
+- ✅ Transaction-safe (merge_cities uses Repo.transaction)
+- ✅ Maintains audit trail
+
+#### 4. Implementation Tasks
+
+**Stage 1: Detection & Analysis** (45 minutes)
+- [ ] Add `find_invalid_cities/0` to CityManager
+- [ ] Add `suggest_replacement_city/1` to CityManager
+- [ ] Add helper: `extract_city_from_address/2` (reuse venue transformer logic)
+- [ ] Add tests for detection functions
+
+**Stage 2: LiveView UI** (1 hour)
+- [ ] Create `invalid_cities_cleanup_live.ex`
+- [ ] Create template with invalid cities list
+- [ ] Show suggested replacements with venue context
+- [ ] Add "Replace" action that calls `merge_cities()`
+
+**Stage 3: Manual Fallback** (15 minutes)
+- [ ] Add city search when no suggestion available
+- [ ] Allow admin to select alternative city
+- [ ] Skip option for deferred cleanup
+
+**Stage 4: Integration** (0 minutes - no new navigation needed)
+- [ ] Route already exists: admin Cities section
+- [ ] Add link next to "Merge Duplicate Cities"
+
+#### Edge Cases Handled
+1. **No Replacement Found**: Admin can search and select manually
+2. **Multiple Invalid → Same Valid**: Subsequent merges work correctly
+3. **Transaction Safety**: merge_cities() already uses Repo.transaction()
+4. **Audit Trail**: merge_cities() logs venue movements
+5. **Database Constraint**: Respected by using merge before delete
+
+**Estimated Effort**: 2 hours (as originally planned)
 
 ### Phase 5: Monitoring (30 minutes)
 - [ ] Add logging for rejected city names

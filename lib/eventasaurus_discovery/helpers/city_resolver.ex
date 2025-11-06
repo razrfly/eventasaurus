@@ -114,32 +114,40 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   end
 
   @doc """
-  Validates city name by checking GeoNames database.
+  Validates city name using hybrid approach.
 
-  Uses POSITIVE VALIDATION instead of negative regex patterns.
-  Checks if the name is a real city in the authoritative GeoNames database
-  of 165,602+ cities worldwide.
+  Uses a three-tier validation strategy:
+  1. Pattern-based blacklist: Rejects obvious street addresses
+  2. GeoNames whitelist: Accepts cities in authoritative database
+  3. Heuristic whitelist: Accepts names with valid place name characteristics
+
+  This approach reduces false positives (real places not in GeoNames) while
+  maintaining precision (catching obvious street addresses).
 
   ## Parameters
   - `name` - City name to validate
   - `country_code` - ISO 3166-1 alpha-2 country code (e.g., "GB", "US", "AU")
 
   ## Returns
-  - `{:ok, validated_name}` - City exists in GeoNames database
+  - `{:ok, validated_name}` - Valid city name
   - `{:error, :empty_name}` - Empty or whitespace-only
   - `{:error, :too_short}` - Single character
-  - `{:error, :not_a_valid_city}` - Not found in GeoNames database
+  - `{:error, :street_address}` - Detected as street address pattern
+  - `{:error, :not_a_valid_city}` - Doesn't pass any validation criteria
 
   ## Examples
 
       iex> CityResolver.validate_city_name("London", "GB")
       {:ok, "London"}
 
+      iex> CityResolver.validate_city_name("Tower Hamlets", "GB")
+      {:ok, "Tower Hamlets"}
+
       iex> CityResolver.validate_city_name("10-16 Botchergate", "GB")
-      {:error, :not_a_valid_city}
+      {:error, :street_address}
 
       iex> CityResolver.validate_city_name("425 Burwood Hwy", "AU")
-      {:error, :not_a_valid_city}
+      {:error, :street_address}
   """
   @spec validate_city_name(String.t(), String.t()) ::
           {:ok, String.t()} | {:error, atom()}
@@ -155,7 +163,15 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
       String.length(trimmed) == 1 ->
         {:error, :too_short}
 
-      # Check if it's a REAL CITY in GeoNames database (positive validation)
+      # Pattern-based blacklist: Reject obvious street addresses
+      is_street_address?(trimmed) ->
+        Logger.debug(
+          "City name validation failed: '#{trimmed}' detected as street address pattern"
+        )
+
+        {:error, :street_address}
+
+      # GeoNames whitelist: Accept if in authoritative database
       true ->
         case lookup_in_geonames(trimmed, country_code) do
           {:ok, _geonames_data} ->
@@ -163,12 +179,22 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
             {:ok, trimmed}
 
           {:error, :not_found} ->
-            # Not a real city (catches ALL invalid inputs: addresses, postcodes, garbage)
-            Logger.debug(
-              "City name validation failed: '#{trimmed}' not found in GeoNames for country #{country_code}"
-            )
+            # Not in GeoNames - check heuristic validation
+            if has_valid_place_name_characteristics?(trimmed) do
+              # Likely a real place not in GeoNames (neighborhood, administrative area, etc.)
+              Logger.debug(
+                "City name accepted heuristically: '#{trimmed}' not in GeoNames but has valid characteristics"
+              )
 
-            {:error, :not_a_valid_city}
+              {:ok, trimmed}
+            else
+              # Doesn't pass any validation criteria
+              Logger.debug(
+                "City name validation failed: '#{trimmed}' not found in GeoNames and lacks valid characteristics"
+              )
+
+              {:error, :not_a_valid_city}
+            end
         end
     end
   end
@@ -200,6 +226,105 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   def validate_city_name(name) do
     Logger.warning("Invalid city name type: #{inspect(name)}")
     {:error, :invalid_type}
+  end
+
+  # Pattern-based detection for obvious street addresses
+  # Returns true if the name matches common street address patterns
+  defp is_street_address?(name) do
+    # Common street keywords (case-insensitive)
+    street_keywords = [
+      "street",
+      "road",
+      "highway",
+      "hwy",
+      "drive",
+      "avenue",
+      "ave",
+      "lane",
+      "ln",
+      "square",
+      "place",
+      "pl",
+      "court",
+      "ct",
+      "bondgate",
+      "whitegate",
+      "terrace",
+      "crescent",
+      "boulevard",
+      "blvd",
+      "way",
+      "close",
+      "row",
+      "walk",
+      "mews"
+    ]
+
+    # Build regex pattern for street keywords
+    keywords_pattern = Enum.join(street_keywords, "|")
+    street_keyword_regex = ~r/\b(#{keywords_pattern})\b/i
+
+    cond do
+      # Starts with hash/pound symbol (#59, #23A)
+      String.starts_with?(name, "#") ->
+        true
+
+      # Starts with number-dash-number (10-16, 7-9, 23-26)
+      String.match?(name, ~r/^\d+-\d+/) ->
+        true
+
+      # Starts with number followed by letter without space (17A, 6C, 7a)
+      String.match?(name, ~r/^\d+[a-zA-Z]\b/) ->
+        true
+
+      # Starts with number AND contains street keyword
+      # This catches "425 Burwood Hwy", "48 Chapeltown Road"
+      String.match?(name, ~r/^\d+/) and String.match?(name, street_keyword_regex) ->
+        true
+
+      # Contains street keyword AND has number somewhere
+      # This catches "8-9 Catalan Square" style addresses
+      String.match?(name, street_keyword_regex) and String.match?(name, ~r/\d/) ->
+        true
+
+      # None of the street address patterns matched
+      true ->
+        false
+    end
+  end
+
+  # Heuristic validation for place names
+  # Returns true if the name has characteristics of a valid place name
+  defp has_valid_place_name_characteristics?(name) do
+    cond do
+      # Must be at least 3 characters (excludes abbreviations)
+      String.length(name) < 3 ->
+        false
+
+      # Should start with a letter (not number or symbol)
+      # Use Unicode letter property to support international characters
+      not String.match?(name, ~r/^\p{L}/u) ->
+        false
+
+      # Should not end with a number (postcodes often end with numbers)
+      String.match?(name, ~r/\d$/) ->
+        false
+
+      # Should primarily consist of letters, spaces, and hyphens
+      # Allow parentheses for country codes like "Dublin (GB)"
+      # Allow apostrophes for names like "St. Mary's"
+      # Use \p{L} to match Unicode letters (supports international characters: á, č, š, ü, etc.)
+      not String.match?(name, ~r/^[\p{L}\s\-'.()]+$/u) ->
+        false
+
+      # Should not be ALL uppercase (likely abbreviation or postcode)
+      name == String.upcase(name) and String.length(name) > 3 ->
+        false
+
+      # Passes all heuristic checks
+      true ->
+        true
+    end
   end
 
   # Use the existing :geocoding library's lookup function
