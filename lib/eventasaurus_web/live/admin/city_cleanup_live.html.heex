@@ -33,7 +33,7 @@
               <div>
                 <h3 class="text-lg font-semibold text-gray-900"><%= city.name %></h3>
                 <div class="flex items-center gap-2 mt-1">
-                  <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-#{pattern_color(city.name)}-100 text-#{pattern_color(city.name)}-800"}>
+                  <span class={["inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium", pattern_badge_classes(city.name)]}>
                     <%= pattern_badge(city.name) %>
                   </span>
                   <span class="text-sm text-gray-500">
@@ -137,7 +137,7 @@
                                 do: ", #{@suggestion.city.country.name}" %>
                             </p>
                             <div class="flex items-center gap-3 mt-2">
-                              <span class={"inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-#{confidence_color(@suggestion.confidence)}-100 text-#{confidence_color(@suggestion.confidence)}-800"}>
+                              <span class={["inline-flex items-center px-2 py-1 rounded text-xs font-medium", confidence_badge_classes(@suggestion.confidence)]}>
                                 <%= confidence_label(@suggestion.confidence) %> Confidence (<%= trunc(
                                   @suggestion.confidence * 100
                                 ) %>%)
