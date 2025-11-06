@@ -81,14 +81,19 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
 
   @impl true
   def handle_event("delete_orphaned", _params, socket) do
-    {:ok, count} = CityManager.delete_orphaned_cities()
+    case CityManager.delete_orphaned_cities() do
+      {:ok, count} ->
+        socket =
+          socket
+          |> put_flash(:info, "Successfully deleted #{count} orphaned #{if count == 1, do: "city", else: "cities"}")
+          |> load_cities()
 
-    socket =
-      socket
-      |> put_flash(:info, "Successfully deleted #{count} orphaned #{if count == 1, do: "city", else: "cities"}")
-      |> load_cities()
+        {:noreply, socket}
 
-    {:noreply, socket}
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to delete orphaned cities: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
 
   @impl true

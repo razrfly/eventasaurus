@@ -228,24 +228,28 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   Deletes all cities with zero venues.
 
   Returns {:ok, count} where count is the number of cities deleted.
+  Returns {:error, reason} if the transaction fails.
   """
   def delete_orphaned_cities do
-    # Get IDs of cities with zero venues
-    orphaned_city_ids =
-      from(c in City,
-        left_join: v in assoc(c, :venues),
-        group_by: c.id,
-        having: count(v.id) == 0,
-        select: c.id
-      )
-      |> Repo.all()
+    Repo.transaction(fn ->
+      # Get IDs of cities with zero venues and lock them to prevent race conditions
+      orphaned_city_ids =
+        from(c in City,
+          left_join: v in assoc(c, :venues),
+          group_by: c.id,
+          having: count(v.id) == 0,
+          select: c.id,
+          lock: "FOR UPDATE"
+        )
+        |> Repo.all()
 
-    # Delete them all
-    {count, _} =
-      from(c in City, where: c.id in ^orphaned_city_ids)
-      |> Repo.delete_all()
+      # Delete them all within the transaction
+      {count, _} =
+        from(c in City, where: c.id in ^orphaned_city_ids)
+        |> Repo.delete_all()
 
-    {:ok, count}
+      count
+    end)
   end
 
   # ============================================================================
