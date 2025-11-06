@@ -210,6 +210,44 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
 
   defp validate_country_exists(changeset, _attrs), do: changeset
 
+  @doc """
+  Counts cities with zero venues.
+  """
+  def count_orphaned_cities do
+    from(c in City,
+      left_join: v in assoc(c, :venues),
+      group_by: c.id,
+      having: count(v.id) == 0,
+      select: c.id
+    )
+    |> Repo.all()
+    |> length()
+  end
+
+  @doc """
+  Deletes all cities with zero venues.
+
+  Returns {:ok, count} where count is the number of cities deleted.
+  """
+  def delete_orphaned_cities do
+    # Get IDs of cities with zero venues
+    orphaned_city_ids =
+      from(c in City,
+        left_join: v in assoc(c, :venues),
+        group_by: c.id,
+        having: count(v.id) == 0,
+        select: c.id
+      )
+      |> Repo.all()
+
+    # Delete them all
+    {count, _} =
+      from(c in City, where: c.id in ^orphaned_city_ids)
+      |> Repo.delete_all()
+
+    {:ok, count}
+  end
+
   # ============================================================================
   # Alternate Names Management
   # ============================================================================
