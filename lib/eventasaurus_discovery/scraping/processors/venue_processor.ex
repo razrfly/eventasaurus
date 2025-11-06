@@ -498,7 +498,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         # Build metadata for reverse geocoding
         metadata = %{
           provider: provider_name,
-          geocoded_at: DateTime.utc_now(),
+          geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
           attempts: length(attempted_providers),
           attempted_providers: attempted_providers,
           # Reverse geocoding typically free
@@ -894,7 +894,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           %{
             provider: "provided",
             source_scraper: valid_source_scraper,
-            geocoded_at: final_geocoding_metadata[:geocoded_at] || DateTime.utc_now(),
+            geocoded_at: final_geocoding_metadata[:geocoded_at] || (DateTime.utc_now() |> DateTime.to_iso8601()),
             cost_per_call: 0.0,
             attempts: 0,
             attempted_providers: []

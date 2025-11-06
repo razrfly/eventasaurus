@@ -53,7 +53,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
   def build_openstreetmap_metadata(address) do
     %{
       provider: "openstreetmap",
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       cost_per_call: Pricing.openstreetmap_cost(),
       original_address: address,
       fallback_used: false,
@@ -76,7 +76,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
   def build_google_maps_metadata(address, attempts \\ 1) do
     %{
       provider: "google_maps",
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       cost_per_call: Pricing.google_maps_cost(),
       original_address: address,
       fallback_used: true,
@@ -99,7 +99,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
   def build_google_places_metadata(google_response) do
     %{
       provider: "google_places",
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       cost_per_call: Pricing.google_places_cost(),
       google_places_response: google_response,
       geocoding_failed: false
@@ -118,7 +118,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
     %{
       provider: "provided",
       cost_per_call: 0.0,
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       geocoding_failed: false
     }
   end
@@ -135,7 +135,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
     %{
       provider: "city_resolver_offline",
       cost_per_call: 0.0,
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       geocoding_failed: false
     }
   end
@@ -153,7 +153,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
       provider: "deferred",
       needs_manual_geocoding: true,
       cost_per_call: 0.0,
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       geocoding_failed: false
     }
   end
