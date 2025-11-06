@@ -96,6 +96,7 @@ defmodule EventasaurusWeb.Router do
       live "/cities/new", Admin.CityFormLive, :new
       live "/cities/:id/edit", Admin.CityFormLive, :edit
       live "/cities/duplicates", Admin.CityDuplicatesLive, :index
+      live "/cities/cleanup", Admin.CityCleanupLive
 
       # Design tools (dev - no auth)
       live "/design/social-cards", Admin.SocialCardsPreviewLive
