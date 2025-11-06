@@ -1,0 +1,210 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Page Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">City Cleanup</h1>
+    <p class="mt-2 text-sm text-gray-600">
+      <%= length(@cities) %> problematic cities found •
+      <%= @cities |> Enum.map(&length(&1.venues)) |> Enum.sum() %> venues need reassignment
+    </p>
+  </div>
+
+  <!-- Cities List -->
+  <div class="space-y-6">
+    <%= if Enum.empty?(@cities) do %>
+      <div class="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
+        <svg class="mx-auto h-12 w-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-green-900">All Clean!</h3>
+        <p class="mt-2 text-sm text-green-700">No problematic cities found.</p>
+      </div>
+    <% else %>
+      <%= for city <- @cities do %>
+        <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <!-- City Header -->
+          <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🔴</span>
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900"><%= city.name %></h3>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-#{pattern_color(city.name)}-100 text-#{pattern_color(city.name)}-800"}>
+                    <%= pattern_badge(city.name) %>
+                  </span>
+                  <span class="text-sm text-gray-500">
+                    <%= length(city.venues) %> <%= if length(city.venues) == 1,
+                      do: "venue",
+                      else: "venues" %>
+                  </span>
+                  <%= if city.country do %>
+                    <span class="text-sm text-gray-500">• <%= city.country.name %></span>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+
+            <%= if Enum.empty?(city.venues) do %>
+              <button
+                phx-click="delete_city"
+                phx-value-id={city.id}
+                data-confirm="Delete this city? This cannot be undone."
+                class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Delete City
+              </button>
+            <% else %>
+              <span class="text-sm text-gray-500">
+                Move all venues to delete
+              </span>
+            <% end %>
+          </div>
+          <!-- Venues List -->
+          <div class="px-6 py-4 space-y-4">
+            <%= for venue <- city.venues do %>
+              <div class="border border-gray-200 rounded-lg p-4">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <h4 class="font-medium text-gray-900"><%= venue.name %></h4>
+                    <%= if venue.latitude && venue.longitude do %>
+                      <p class="text-sm text-gray-500 mt-1">
+                        📍 <%= Float.round(venue.latitude, 6) %>, <%= Float.round(
+                          venue.longitude,
+                          6
+                        ) %>
+                      </p>
+                    <% end %>
+                  </div>
+
+                  <%= if @current_venue && @current_venue.id == venue.id && @suggestion do %>
+                    <!-- Suggestion Active -->
+                    <button
+                      phx-click="clear_suggestion"
+                      class="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  <% else %>
+                    <!-- Suggest Button -->
+                    <button
+                      phx-click="suggest"
+                      phx-value-venue_id={venue.id}
+                      class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      Suggest
+                    </button>
+                  <% end %>
+                </div>
+                <!-- Suggestion Panel -->
+                <%= if @current_venue && @current_venue.id == venue.id && @suggestion do %>
+                  <div class="mt-4 pt-4 border-t border-gray-200">
+                    <%= if Map.get(@suggestion, :already_assigned, false) do %>
+                      <!-- Already correctly assigned -->
+                      <div class="bg-green-50 border border-green-200 rounded-md p-4">
+                        <p class="text-sm text-green-900">
+                          <strong>✓ Already correct:</strong>
+                          This venue is already assigned to <%= @suggestion.city_name %><%= if @suggestion.city.country,
+                            do: ", #{@suggestion.city.country.name}" %>
+                        </p>
+                        <p class="text-xs text-green-700 mt-1">
+                          The current city assignment appears to be correct. This city may be flagged as
+                          "problematic" due to its name pattern, but it's a legitimate city name.
+                        </p>
+                      </div>
+                    <% else %>
+                      <%= if @suggestion.needs_creation do %>
+                        <!-- City doesn't exist in DB -->
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                          <p class="text-sm text-yellow-900">
+                            <strong>Suggested city:</strong>
+                            <%= @suggestion.city_name %>
+                          </p>
+                          <p class="text-xs text-yellow-700 mt-1">
+                            This city doesn't exist in the database yet. Search for an existing city below.
+                          </p>
+                        </div>
+                      <% else %>
+                      <!-- City exists - show suggestion -->
+                      <div class="bg-blue-50 border border-blue-200 rounded-md p-4">
+                        <div class="flex items-center justify-between">
+                          <div class="flex-1">
+                            <p class="text-sm font-medium text-blue-900">
+                              Suggested: <%= @suggestion.city_name %><%= if @suggestion.city.country,
+                                do: ", #{@suggestion.city.country.name}" %>
+                            </p>
+                            <div class="flex items-center gap-3 mt-2">
+                              <span class={"inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-#{confidence_color(@suggestion.confidence)}-100 text-#{confidence_color(@suggestion.confidence)}-800"}>
+                                <%= confidence_label(@suggestion.confidence) %> Confidence (<%= trunc(
+                                  @suggestion.confidence * 100
+                                ) %>%)
+                              </span>
+                              <%= if @suggestion.distance do %>
+                                <span class="text-xs text-gray-600">
+                                  <%= Float.round(@suggestion.distance, 1) %> km away
+                                </span>
+                              <% end %>
+                            </div>
+                          </div>
+
+                          <button
+                            phx-click="reassign"
+                            phx-value-venue_id={venue.id}
+                            phx-value-city_id={@suggestion.city.id}
+                            class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          >
+                            ✓ Accept
+                          </button>
+                        </div>
+                      </div>
+                      <% end %>
+                    <% end %>
+                    <!-- Manual City Search -->
+                    <div class="mt-4">
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Or search for a different city:
+                      </label>
+                      <div class="flex gap-2">
+                        <input
+                          type="text"
+                          phx-keyup="search_cities"
+                          phx-debounce="300"
+                          name="query"
+                          value={@search_query}
+                          placeholder="Type city name..."
+                          class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        />
+                      </div>
+                      <!-- Search Results -->
+                      <%= if !Enum.empty?(@search_results) do %>
+                        <div class="mt-2 border border-gray-200 rounded-md divide-y divide-gray-200 max-h-48 overflow-y-auto">
+                          <%= for result <- @search_results do %>
+                            <button
+                              phx-click="reassign"
+                              phx-value-venue_id={venue.id}
+                              phx-value-city_id={result.id}
+                              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between"
+                            >
+                              <span>
+                                <%= result.name %><%= if result.country,
+                                  do: ", #{result.country.name}" %>
+                              </span>
+                              <span class="text-xs text-blue-600">Assign →</span>
+                            </button>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</div>
