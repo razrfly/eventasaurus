@@ -146,7 +146,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
           provider: first_result[:provider_name] || List.first(result.attempted),
           attempted_providers: Enum.reverse(result.attempted),
           attempts: length(result.attempted),
-          geocoded_at: DateTime.utc_now(),
+          geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
           raw_response: first_result[:raw_response],
           collection_mode: true
         }
@@ -169,7 +169,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
         metadata = %{
           attempted_providers: Enum.reverse(result.attempted),
           attempts: length(result.attempted),
-          geocoded_at: DateTime.utc_now(),
+          geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
           all_failed: true
         }
 
@@ -219,7 +219,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
     metadata = %{
       attempted_providers: Enum.reverse(attempted),
       attempts: length(attempted),
-      geocoded_at: DateTime.utc_now(),
+      geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       all_failed: true
     }
 
@@ -272,7 +272,7 @@ defmodule EventasaurusDiscovery.Geocoding.Orchestrator do
           provider: provider_name,
           attempted_providers: Enum.reverse([provider_name | attempted]),
           attempts: length(attempted) + 1,
-          geocoded_at: DateTime.utc_now(),
+          geocoded_at: DateTime.utc_now() |> DateTime.to_iso8601(),
           raw_response: Map.get(result, :raw_response)
         }
 

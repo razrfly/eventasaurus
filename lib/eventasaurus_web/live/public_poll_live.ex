@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.PublicPollLive do
         socket
         |> assign(
           :meta_image,
-          "#{base_url}#{HashGenerator.generate_url_path(poll, event)}"
+          "#{base_url}#{HashGenerator.generate_url_path(poll, :poll)}"
         )
         |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.number}")
       else
