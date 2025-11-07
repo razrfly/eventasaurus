@@ -170,17 +170,23 @@ defmodule Eventasaurus.Application do
         # Add phase information to distinguish scraping vs processing failures
         metadata_with_phase = Map.put(metadata, "phase", "scraping")
 
-        # Log the failure
-        EventasaurusDiscovery.ScraperProcessingLogs.log_failure(
-          source,
-          job_id,
-          reason,
-          metadata_with_phase
-        )
+        # Log the failure with error handling
+        case EventasaurusDiscovery.ScraperProcessingLogs.log_failure(
+               source,
+               job_id,
+               reason,
+               metadata_with_phase
+             ) do
+          {:ok, _log} ->
+            Logger.info(
+              "📝 Logged job-level failure for #{source.name} (Job ID: #{job_id}, Phase: scraping)"
+            )
 
-        Logger.info(
-          "📝 Logged job-level failure for #{source.name} (Job ID: #{job_id}, Phase: scraping)"
-        )
+          {:error, changeset} ->
+            Logger.error(
+              "Failed to persist job-level failure for #{source.name} (Job ID: #{job_id}): #{inspect(changeset.errors)}"
+            )
+        end
     end
   rescue
     error ->

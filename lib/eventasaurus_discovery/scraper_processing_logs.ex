@@ -119,7 +119,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
       %{success_count: 5123, failure_count: 2012, total_count: 7135, success_rate: 71.81}
   """
   def get_success_rate(source_name, days \\ 7) do
-    cutoff_date = DateTime.utc_now() |> DateTime.add(-days, :day)
+    cutoff_date = DateTime.utc_now() |> DateTime.add(-(days * 86_400))
 
     stats =
       from(l in ScraperProcessingLog,
@@ -168,7 +168,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
       [{"geocoding_failed", 234}, {"missing_coordinates", 156}]
   """
   def get_error_breakdown(source_name, days \\ 7) do
-    cutoff_date = DateTime.utc_now() |> DateTime.add(-days, :day)
+    cutoff_date = DateTime.utc_now() |> DateTime.add(-(days * 86_400))
 
     from(l in ScraperProcessingLog,
       where: l.source_name == ^source_name,
@@ -236,7 +236,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
       [%{source_name: "karnet", error_message: "timeout", ...}]
   """
   def get_unknown_errors(limit \\ 50) do
-    cutoff_date = DateTime.utc_now() |> DateTime.add(-7, :day)
+    cutoff_date = DateTime.utc_now() |> DateTime.add(-(7 * 86_400))
 
     from(l in ScraperProcessingLog,
       where: l.error_type == "unknown_error",
