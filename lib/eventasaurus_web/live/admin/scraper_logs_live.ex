@@ -37,6 +37,7 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
       |> assign(:status_filter, nil)
       |> assign(:sort_by, :processed_at)
       |> assign(:sort_dir, :desc)
+      |> assign(:expanded_source, nil)
       |> assign(:loading, true)
       |> load_analytics()
       |> load_recent_logs()
@@ -140,7 +141,15 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
 
   @impl true
   def handle_event("sort_column", %{"column" => column}, socket) do
-    column_atom = String.to_atom(column)
+    # Whitelist allowed columns to prevent atom table exhaustion (security)
+    column_atom =
+      case column do
+        "processed_at" -> :processed_at
+        "source_name" -> :source_name
+        "status" -> :status
+        "error_type" -> :error_type
+        _ -> socket.assigns.sort_by
+      end
 
     # Toggle direction if same column, else default to desc
     sort_dir =
@@ -157,6 +166,21 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
       |> assign(:loading, true)
       |> load_recent_logs()
       |> assign(:loading, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("view_source_details", %{"source" => source_name}, socket) do
+    # Toggle: if clicking same source, collapse it; otherwise expand the new one
+    expanded_source =
+      if socket.assigns.expanded_source == source_name do
+        nil
+      else
+        source_name
+      end
+
+    socket = assign(socket, :expanded_source, expanded_source)
 
     {:noreply, socket}
   end
@@ -255,10 +279,6 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
   defp health_color(rate) when rate >= 95, do: "text-green-600"
   defp health_color(rate) when rate >= 80, do: "text-yellow-600"
   defp health_color(_), do: "text-red-600"
-
-  defp health_bg(rate) when rate >= 95, do: "bg-green-50"
-  defp health_bg(rate) when rate >= 80, do: "bg-yellow-50"
-  defp health_bg(_), do: "bg-red-50"
 
   defp format_error_type(nil), do: "unknown"
   defp format_error_type(error_type) do
