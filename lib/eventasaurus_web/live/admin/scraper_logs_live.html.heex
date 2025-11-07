@@ -1,0 +1,344 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">Scraper Processing Logs</h1>
+    <p class="mt-2 text-sm text-gray-600">
+      Monitor scraper health, success rates, and error patterns across all sources.
+    </p>
+  </div>
+
+  <!-- Controls -->
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <form phx-change="update_filters">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Source Filter -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Source Filter
+          </label>
+          <select
+            name="source"
+            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="all" selected={is_nil(@selected_source)}>All Sources</option>
+            <%= for source <- @sources do %>
+              <option value={source.name} selected={@selected_source == source.name}>
+                <%= source.name %>
+              </option>
+            <% end %>
+          </select>
+        </div>
+
+        <!-- Time Range -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Time Range
+          </label>
+          <select
+            name="days"
+            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="1" selected={@time_range == 1}>Last 24 hours</option>
+            <option value="7" selected={@time_range == 7}>Last 7 days</option>
+            <option value="30" selected={@time_range == 30}>Last 30 days</option>
+            <option value="90" selected={@time_range == 90}>Last 90 days</option>
+          </select>
+        </div>
+
+        <!-- Status Filter -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Status Filter
+          </label>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              phx-click="filter_status"
+              phx-value-status="all"
+              class={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors #{if is_nil(@status_filter), do: "bg-indigo-600 text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              phx-click="filter_status"
+              phx-value-status="failure"
+              class={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors #{if @status_filter == "failure", do: "bg-red-600 text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+            >
+              Failures
+            </button>
+            <button
+              type="button"
+              phx-click="filter_status"
+              phx-value-status="success"
+              class={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors #{if @status_filter == "success", do: "bg-green-600 text-white", else: "bg-gray-200 text-gray-700 hover:bg-gray-300"}"}
+            >
+              Success
+            </button>
+          </div>
+        </div>
+
+        <!-- Refresh Button -->
+        <div class="flex items-end">
+          <button
+            type="button"
+            phx-click="refresh"
+            class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <%= if @loading do %>
+    <div class="bg-white shadow rounded-lg p-12 text-center">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <p class="mt-4 text-gray-600">Loading analytics...</p>
+    </div>
+  <% else %>
+    <!-- Source Analytics -->
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+      <h2 class="text-xl font-semibold text-gray-900 mb-4">Source Performance</h2>
+
+      <%= if Enum.empty?(@analytics.sources) do %>
+        <p class="text-gray-500 text-center py-8">
+          No processing logs found for the selected time range.
+        </p>
+      <% else %>
+        <div class="space-y-4">
+          <%= for source_data <- @analytics.sources do %>
+            <div class={"rounded-lg p-4 border-2 #{health_bg(source_data.stats.success_rate)}"}>
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-medium text-gray-900"><%= source_data.name %></h3>
+                <span class={"text-2xl font-bold #{health_color(source_data.stats.success_rate)}"}>
+                  <%= Float.round(source_data.stats.success_rate, 1) %>%
+                </span>
+              </div>
+
+              <!-- Stats Grid -->
+              <div class="grid grid-cols-3 gap-4 mb-3">
+                <div>
+                  <p class="text-sm text-gray-500">Total Processed</p>
+                  <p class="text-xl font-semibold text-gray-900">
+                    <%= source_data.stats.total_count %>
+                  </p>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">Successes</p>
+                  <p class="text-xl font-semibold text-green-600">
+                    <%= source_data.stats.success_count %>
+                  </p>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">Failures</p>
+                  <p class="text-xl font-semibold text-red-600">
+                    <%= source_data.stats.failure_count %>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Error Breakdown -->
+              <%= if length(source_data.errors) > 0 do %>
+                <div class="mt-4 border-t pt-3">
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">
+                    Top Error Types
+                  </h4>
+                  <div class="space-y-1">
+                    <%= for {error_type, count} <- Enum.take(source_data.errors, 5) do %>
+                      <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600">
+                          <%= format_error_type(error_type) %>
+                        </span>
+                        <span class="font-medium text-gray-900">
+                          <%= count %> (<%= Float.round(count / source_data.stats.failure_count * 100, 1) %>%)
+                        </span>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- Unknown Errors Section -->
+    <%= if length(@unknown_errors) > 0 do %>
+      <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-2 flex items-center">
+          <svg class="h-6 w-6 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Unknown Errors (Needs Investigation)
+        </h2>
+        <p class="text-sm text-gray-600 mb-4">
+          These errors haven't been categorized yet. Add patterns to the categorize_error function.
+        </p>
+
+        <div class="space-y-3">
+          <%= for error <- Enum.take(@unknown_errors, 10) do %>
+            <div class="bg-white rounded border border-yellow-300 p-3">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center space-x-2 mb-1">
+                    <span class="font-medium text-gray-900"><%= error.source_name %></span>
+                    <%= if error.job_id do %>
+                      <span class="text-xs text-gray-500">Job #<%= error.job_id %></span>
+                    <% end %>
+                  </div>
+                  <p class="text-sm text-gray-700"><%= truncate(error.error_message, 200) %></p>
+                  <%= if map_size(error.metadata) > 0 do %>
+                    <div class="mt-2 text-xs text-gray-500">
+                      <%= for {key, value} <- error.metadata do %>
+                        <span class="inline-block mr-3">
+                          <span class="font-medium"><%= key %>:</span>
+                          <%= truncate(to_string(value), 50) %>
+                        </span>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+                <span class="text-xs text-gray-400 whitespace-nowrap ml-4">
+                  <%= format_timestamp(error.processed_at) %>
+                </span>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Recent Logs -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-xl font-semibold text-gray-900">
+          Recent Processing Logs
+        </h2>
+      </div>
+
+      <%= if Enum.empty?(@recent_logs) do %>
+        <p class="text-gray-500 text-center py-8">
+          No logs found for the selected filters.
+        </p>
+      <% else %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  phx-click="sort_column"
+                  phx-value-column="processed_at"
+                >
+                  <div class="flex items-center">
+                    Timestamp
+                    <%= if @sort_by == :processed_at do %>
+                      <span class="ml-1">
+                        <%= if @sort_dir == :asc, do: "▲", else: "▼" %>
+                      </span>
+                    <% end %>
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  phx-click="sort_column"
+                  phx-value-column="source_name"
+                >
+                  <div class="flex items-center">
+                    Source
+                    <%= if @sort_by == :source_name do %>
+                      <span class="ml-1">
+                        <%= if @sort_dir == :asc, do: "▲", else: "▼" %>
+                      </span>
+                    <% end %>
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  phx-click="sort_column"
+                  phx-value-column="status"
+                >
+                  <div class="flex items-center">
+                    Status
+                    <%= if @sort_by == :status do %>
+                      <span class="ml-1">
+                        <%= if @sort_dir == :asc, do: "▲", else: "▼" %>
+                      </span>
+                    <% end %>
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  phx-click="sort_column"
+                  phx-value-column="error_type"
+                >
+                  <div class="flex items-center">
+                    Error Type
+                    <%= if @sort_by == :error_type do %>
+                      <span class="ml-1">
+                        <%= if @sort_dir == :asc, do: "▲", else: "▼" %>
+                      </span>
+                    <% end %>
+                  </div>
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Details
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for log <- @recent_logs do %>
+                <tr class="hover:bg-gray-50">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <%= Calendar.strftime(log.processed_at, "%m/%d %H:%M") %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <%= log.source_name %>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class={"px-2 inline-flex text-xs leading-5 font-semibold rounded-full #{status_badge_class(log.status)}"}>
+                      <%= log.status %>
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <%= if log.error_type do %>
+                      <%= format_error_type(log.error_type) %>
+                    <% else %>
+                      —
+                    <% end %>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-500">
+                    <%= if log.metadata["entity_name"] do %>
+                      <span class="font-medium"><%= truncate(log.metadata["entity_name"], 40) %></span>
+                    <% end %>
+                    <%= if log.error_message do %>
+                      <p class="text-xs text-gray-400 mt-1">
+                        <%= truncate(log.error_message, 80) %>
+                      </p>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

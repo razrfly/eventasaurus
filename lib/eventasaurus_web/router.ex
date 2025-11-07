@@ -57,6 +57,9 @@ defmodule EventasaurusWeb.Router do
       live "/discovery/stats/source/:source_slug", Admin.DiscoveryStatsLive.SourceDetail, :show
       live "/discovery/stats/city/:city_slug", Admin.DiscoveryStatsLive.CityDetail, :show
 
+      # Scraper Processing Logs (dev - no auth)
+      live "/scraper-logs", Admin.ScraperLogsLive
+
       # Category Analysis (dev - no auth)
       live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
 
