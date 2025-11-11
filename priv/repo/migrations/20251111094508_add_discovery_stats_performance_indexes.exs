@@ -64,7 +64,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddDiscoveryStatsPerformanceIndexes do
       ON oban_jobs USING GIN ((meta -> 'status'))
       """,
       """
-      DROP INDEX IF EXISTS oban_jobs_meta_status_idx
+      DROP INDEX CONCURRENTLY IF EXISTS oban_jobs_meta_status_idx
       """
     )
 
@@ -75,7 +75,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddDiscoveryStatsPerformanceIndexes do
       ON oban_jobs USING GIN ((args -> 'city_id'))
       """,
       """
-      DROP INDEX IF EXISTS oban_jobs_args_city_id_idx
+      DROP INDEX CONCURRENTLY IF EXISTS oban_jobs_args_city_id_idx
       """
     )
 
