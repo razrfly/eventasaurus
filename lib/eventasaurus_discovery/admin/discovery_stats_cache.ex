@@ -114,7 +114,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
           empty_stats()
       end
 
-    {:ok, %{stats: initial_stats, last_refresh: DateTime.utc_now()}}
+    {:ok, %{stats: initial_stats, last_refresh: DateTime.utc_now(), refreshing: false}}
   end
 
   @impl true
@@ -129,19 +129,27 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
 
   @impl true
   def handle_cast(:refresh, state) do
-    # Spawn async task to avoid blocking the GenServer
-    # This ensures get_stats() calls can still be served during refresh
-    Task.start(fn ->
-      case compute_stats() do
-        {:ok, new_stats} ->
-          GenServer.cast(__MODULE__, {:stats_computed, new_stats, :manual})
+    # Skip if refresh already in progress to prevent concurrent compute_stats operations
+    if state.refreshing do
+      Logger.info("Refresh already in progress, skipping duplicate request")
+      {:noreply, state}
+    else
+      # Spawn async task to avoid blocking the GenServer
+      # This ensures get_stats() calls can still be served during refresh
+      Task.start(fn ->
+        case compute_stats() do
+          {:ok, new_stats} ->
+            GenServer.cast(__MODULE__, {:stats_computed, new_stats, :manual})
 
-        {:error, reason} ->
-          Logger.error("Failed to refresh stats cache: #{inspect(reason)}")
-      end
-    end)
+          {:error, reason} ->
+            Logger.error("Failed to refresh stats cache: #{inspect(reason)}")
+            # Reset refreshing flag on error
+            GenServer.cast(__MODULE__, :refresh_failed)
+        end
+      end)
 
-    {:noreply, state}
+      {:noreply, Map.put(state, :refreshing, true)}
+    end
   end
 
   @impl true
@@ -153,7 +161,13 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
       end
 
     Logger.info(log_message)
-    {:noreply, %{state | stats: new_stats, last_refresh: DateTime.utc_now()}}
+    {:noreply, %{state | stats: new_stats, last_refresh: DateTime.utc_now(), refreshing: false}}
+  end
+
+  @impl true
+  def handle_cast(:refresh_failed, state) do
+    Logger.warning("Resetting refresh flag after failure")
+    {:noreply, Map.put(state, :refreshing, false)}
   end
 
   @impl true
@@ -161,18 +175,26 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
     # Schedule next refresh
     schedule_refresh()
 
-    # Spawn async task to avoid blocking the GenServer
-    Task.start(fn ->
-      case compute_stats() do
-        {:ok, new_stats} ->
-          GenServer.cast(__MODULE__, {:stats_computed, new_stats, :auto})
+    # Skip if refresh already in progress to prevent concurrent compute_stats operations
+    if state.refreshing do
+      Logger.info("Auto-refresh skipped - manual refresh already in progress")
+      {:noreply, state}
+    else
+      # Spawn async task to avoid blocking the GenServer
+      Task.start(fn ->
+        case compute_stats() do
+          {:ok, new_stats} ->
+            GenServer.cast(__MODULE__, {:stats_computed, new_stats, :auto})
 
-        {:error, reason} ->
-          Logger.error("Failed to auto-refresh stats cache: #{inspect(reason)}")
-      end
-    end)
+          {:error, reason} ->
+            Logger.error("Failed to auto-refresh stats cache: #{inspect(reason)}")
+            # Reset refreshing flag on error
+            GenServer.cast(__MODULE__, :refresh_failed)
+        end
+      end)
 
-    {:noreply, state}
+      {:noreply, Map.put(state, :refreshing, true)}
+    end
   end
 
   # Private Functions

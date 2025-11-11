@@ -103,21 +103,26 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
   @impl true
   def handle_event("force_refresh", _params, socket) do
-    # Capture the current timestamp before refresh
-    current_timestamp = DiscoveryStatsCache.last_refreshed_at()
+    # Prevent multiple concurrent refreshes to avoid duplicate polling loops
+    if socket.assigns.refreshing do
+      {:noreply, socket}
+    else
+      # Capture the current timestamp before refresh
+      current_timestamp = DiscoveryStatsCache.last_refreshed_at()
 
-    # Force immediate cache refresh (runs async in background)
-    DiscoveryStatsCache.refresh()
+      # Force immediate cache refresh (runs async in background)
+      DiscoveryStatsCache.refresh()
 
-    # Start polling to check when refresh completes
-    Process.send_after(self(), {:check_refresh_complete, current_timestamp, 0}, 1000)
+      # Start polling to check when refresh completes
+      Process.send_after(self(), {:check_refresh_complete, current_timestamp, 0}, 1000)
 
-    socket =
-      socket
-      |> assign(:refreshing, true)
-      |> put_flash(:info, "Cache refresh initiated. Stats will update in a moment...")
+      socket =
+        socket
+        |> assign(:refreshing, true)
+        |> put_flash(:info, "Cache refresh initiated. Stats will update in a moment...")
 
-    {:noreply, socket}
+      {:noreply, socket}
+    end
   end
 
   defp load_stats(socket) do
