@@ -96,6 +96,8 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Services.BroadcastThrottler,
       # Start Poll Stats Cache for performance optimization
       EventasaurusApp.Events.PollStatsCache,
+      # Start Discovery Stats Cache for admin page performance optimization
+      EventasaurusDiscovery.Admin.DiscoveryStatsCache,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry

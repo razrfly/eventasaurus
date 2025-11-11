@@ -13,19 +13,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   """
   use EventasaurusWeb, :live_view
 
-  alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.PublicEvents.PublicEvent
-  alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
-  alias EventasaurusDiscovery.Sources.SourceRegistry
+  alias EventasaurusDiscovery.Admin.{DiscoveryStatsCache, SourceHealthCalculator}
 
-  alias EventasaurusDiscovery.Admin.{
-    DiscoveryStatsCollector,
-    SourceHealthCalculator,
-    EventChangeTracker,
-    DataQualityChecker
-  }
-
-  import Ecto.Query
   require Logger
 
   # 30 seconds
@@ -62,6 +51,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   end
 
   @impl true
+  def handle_info(:refresh_after_force, socket) do
+    socket =
+      socket
+      |> load_stats()
+      |> put_flash(:info, "Cache refreshed successfully!")
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
     case Integer.parse(city_id) do
       {city_id_int, _} ->
@@ -82,236 +81,53 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     end
   end
 
+  @impl true
+  def handle_event("force_refresh", _params, socket) do
+    # Force immediate cache refresh
+    DiscoveryStatsCache.refresh()
+
+    # Wait a moment for the refresh to complete, then reload stats
+    Process.send_after(self(), :refresh_after_force, 1000)
+
+    socket =
+      socket
+      |> put_flash(:info, "Cache refresh initiated. Stats will update in a moment...")
+
+    {:noreply, socket}
+  end
+
   defp load_stats(socket) do
-    # Get all registered sources
-    source_names = SourceRegistry.all_sources()
+    # PHASE 2 OPTIMIZATION: Use cached stats instead of computing on every page load
+    # Stats are precomputed in background by DiscoveryStatsCache GenServer
+    # This reduces load time from 30+ seconds to milliseconds
+    case DiscoveryStatsCache.get_stats() do
+      nil ->
+        # Cache not ready yet (still initializing), show loading state
+        Logger.warning("Stats cache not ready, keeping loading state")
 
-    # Query stats aggregated across ALL cities (like Imports page does)
-    # This avoids the issue of filtering by a city that has no jobs
-    # Note: get_metadata_based_source_stats with nil city_id will aggregate across all cities
-    source_stats = DiscoveryStatsCollector.get_metadata_based_source_stats(nil, source_names)
+        socket
+        |> assign(:sources_data, [])
+        |> assign(:overall_health, 0)
+        |> assign(:total_sources, 0)
+        |> assign(:total_cities, 0)
+        |> assign(:events_this_week, 0)
+        |> assign(:city_stats, [])
 
-    # Get change tracking data aggregated across all cities
-    change_stats = EventChangeTracker.get_all_source_changes(source_names, nil)
-
-    # OPTIMIZED: Batch count events for all sources at once (was N+1 query)
-    event_counts = count_events_for_sources_batch(source_names)
-
-    # OPTIMIZED: Batch check quality for all sources at once (was N+1 query)
-    quality_checks = DataQualityChecker.check_quality_batch(source_names)
-
-    # Calculate enriched source data with health metrics
-    sources_data =
-      source_names
-      |> Enum.map(fn source_name ->
-        stats =
-          Map.get(source_stats, source_name, %{
-            # Metadata-based stats (NEW format)
-            events_processed: 0,
-            events_succeeded: 0,
-            events_failed: 0,
-            # Legacy stats (OLD format) - kept for backward compatibility
-            run_count: 0,
-            success_count: 0,
-            error_count: 0,
-            last_run_at: nil,
-            last_error: nil
-          })
-
-        health_status = SourceHealthCalculator.calculate_health_score(stats)
-        success_rate = SourceHealthCalculator.success_rate_percentage(stats)
-
-        # Get source scope
-        scope =
-          case SourceRegistry.get_scope(source_name) do
-            {:ok, scope} ->
-              scope
-
-            {:error, :not_found} ->
-              Logger.warning("Source #{source_name} has no scope configured in SourceRegistry")
-              "unknown"
-          end
-
-        # OPTIMIZED: Get event count from batched result
-        event_count = Map.get(event_counts, source_name, 0)
-
-        # Get change tracking data
-        changes =
-          Map.get(change_stats, source_name, %{
-            new_events: 0,
-            dropped_events: 0,
-            percentage_change: 0
-          })
-
-        {trend_emoji, trend_text, trend_class} =
-          EventChangeTracker.get_trend_indicator(changes.percentage_change)
-
-        # OPTIMIZED: Get data quality metrics from batched result
-        quality_data = Map.get(quality_checks, source_name, %{quality_score: 0, total_events: 0, not_found: true})
-
-        {quality_emoji, quality_text, quality_class} =
-          if Map.get(quality_data, :not_found, false) ||
-               Map.get(quality_data, :total_events, 0) == 0 do
-            {"⚪", "N/A", "text-gray-600"}
-          else
-            DataQualityChecker.quality_status(quality_data.quality_score)
-          end
-
-        %{
-          name: source_name,
-          scope: scope,
-          stats: stats,
-          health_status: health_status,
-          success_rate: success_rate,
-          event_count: event_count,
-          new_events: changes.new_events,
-          dropped_events: changes.dropped_events,
-          percentage_change: changes.percentage_change,
-          trend_emoji: trend_emoji,
-          trend_text: trend_text,
-          trend_class: trend_class,
-          quality_score: quality_data.quality_score,
-          quality_emoji: quality_emoji,
-          quality_text: quality_text,
-          quality_class: quality_class
-        }
-      end)
-      |> Enum.sort_by(& &1.name)
-
-    # Calculate overall health score
-    overall_health = SourceHealthCalculator.overall_health_score(source_stats)
-
-    # Get summary metrics
-    total_sources = length(source_names)
-    total_cities = count_cities()
-    events_this_week = count_events_this_week()
-
-    # Get city performance data
-    city_stats = get_city_performance()
-
-    socket
-    |> assign(:sources_data, sources_data)
-    |> assign(:overall_health, overall_health)
-    |> assign(:total_sources, total_sources)
-    |> assign(:total_cities, total_cities)
-    |> assign(:events_this_week, events_this_week)
-    |> assign(:city_stats, city_stats)
+      cached_stats ->
+        # Load from cache (fast!)
+        socket
+        |> assign(:sources_data, cached_stats.sources_data)
+        |> assign(:overall_health, cached_stats.overall_health)
+        |> assign(:total_sources, cached_stats.total_sources)
+        |> assign(:total_cities, cached_stats.total_cities)
+        |> assign(:events_this_week, cached_stats.events_this_week)
+        |> assign(:city_stats, cached_stats.city_stats)
+    end
   end
 
-  # Batched version to count events for multiple sources at once (replaces count_events_for_source/1)
-  defp count_events_for_sources_batch(source_names) when is_list(source_names) do
-    query =
-      from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
-        join: s in EventasaurusDiscovery.Sources.Source,
-        on: s.id == pes.source_id,
-        where: s.slug in ^source_names,
-        group_by: s.slug,
-        select: {s.slug, count(pes.id)}
-      )
-
-    query
-    |> Repo.all(timeout: 15_000)
-    |> Map.new()
-  end
-
-  defp count_cities do
-    Repo.aggregate(City, :count, :id, timeout: 15_000)
-  end
-
-  defp count_events_this_week do
-    week_ago = DateTime.utc_now() |> DateTime.add(-7, :day)
-
-    query =
-      from(e in PublicEvent,
-        where: e.inserted_at >= ^week_ago,
-        select: count(e.id)
-      )
-
-    Repo.one(query, timeout: 15_000) || 0
-  end
-
-  defp get_city_performance do
-    # Get all cities with events (low threshold before clustering)
-    # The clustering will aggregate nearby cities (e.g., Melbourne + suburbs)
-    # Then we take top 10 AFTER aggregation to get true metro area rankings
-    query =
-      from(e in PublicEvent,
-        join: v in EventasaurusApp.Venues.Venue,
-        on: v.id == e.venue_id,
-        join: c in City,
-        on: c.id == v.city_id,
-        group_by: [c.id, c.name, c.slug],
-        having: count(e.id) >= 1,
-        select: %{
-          city_id: c.id,
-          city_name: c.name,
-          city_slug: c.slug,
-          count: count(e.id)
-        },
-        order_by: [desc: count(e.id)]
-      )
-
-    cities = Repo.all(query, timeout: 15_000)
-
-    # Apply geographic clustering to group metro areas
-    clustered_cities = CityHierarchy.aggregate_stats_by_cluster(cities, 20.0)
-
-    # Take top 10 after clustering
-    top_cities = Enum.take(clustered_cities, 10)
-
-    # OPTIMIZED: Batch calculate city changes for all top cities at once (was N+1 query)
-    city_ids = Enum.map(top_cities, & &1.city_id)
-    city_changes = calculate_city_changes_batch(city_ids)
-
-    # Map the batched changes back to cities
-    top_cities
-    |> Enum.map(fn city ->
-      change = Map.get(city_changes, city.city_id)
-
-      city
-      |> Map.put(:event_count, city.count)
-      |> Map.put(:weekly_change, change)
-    end)
-  end
-
-  # Batched version to calculate city changes for multiple cities at once (replaces calculate_city_change/1)
-  defp calculate_city_changes_batch(city_ids) when is_list(city_ids) do
-    now = DateTime.utc_now()
-    one_week_ago = DateTime.add(now, -7, :day)
-    two_weeks_ago = DateTime.add(now, -14, :day)
-
-    # Get both this week and last week counts in a single query
-    query =
-      from(e in PublicEvent,
-        join: v in EventasaurusApp.Venues.Venue,
-        on: v.id == e.venue_id,
-        where: v.city_id in ^city_ids,
-        where: e.inserted_at >= ^two_weeks_ago,
-        group_by: v.city_id,
-        select: %{
-          city_id: v.city_id,
-          this_week: fragment("COUNT(CASE WHEN ? >= ? THEN 1 END)", e.inserted_at, ^one_week_ago),
-          last_week: fragment("COUNT(CASE WHEN ? >= ? AND ? < ? THEN 1 END)", e.inserted_at, ^two_weeks_ago, e.inserted_at, ^one_week_ago)
-        }
-      )
-
-    city_stats =
-      query
-      |> Repo.all(timeout: 15_000)
-      |> Map.new(fn stats ->
-        change =
-          if stats.last_week > 0 do
-            ((stats.this_week - stats.last_week) / stats.last_week * 100) |> round()
-          else
-            nil
-          end
-
-        {stats.city_id, change}
-      end)
-
-    # Return map with city_id => change percentage
-    city_stats
-  end
+  # All query functions have been moved to DiscoveryStatsCache GenServer
+  # Phase 1 batched queries are now executed in the background cache refresh
+  # This keeps the LiveView lightweight - it only reads from cache
 
   @impl true
   def render(assigns) do
@@ -323,15 +139,26 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
             <h1 class="text-3xl font-bold text-gray-900">🎯 Discovery Source Statistics</h1>
             <p class="mt-2 text-sm text-gray-600">Real-time monitoring of event discovery sources</p>
           </div>
-          <.link
-            navigate={~p"/admin/imports"}
-            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-            </svg>
-            Back to Imports
-          </.link>
+          <div class="flex gap-2">
+            <button
+              phx-click="force_refresh"
+              class="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="-ml-1 mr-2 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+              </svg>
+              Force Refresh
+            </button>
+            <.link
+              navigate={~p"/admin/imports"}
+              class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+              </svg>
+              Back to Imports
+            </.link>
+          </div>
         </div>
       </div>
 

@@ -54,17 +54,29 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
       }
   """
   def aggregate_stats_by_cluster(city_stats, distance_threshold \\ @default_distance_threshold_km) do
-    # Load all cities with their coordinates
+    # Load all cities with their coordinates from city_stats (cities with events)
     city_ids = Enum.map(city_stats, & &1.city_id)
-    cities = load_cities_with_coords(city_ids)
+    cities_with_events = load_cities_with_coords(city_ids)
 
-    # Build clusters based on geographic proximity
-    clusters = cluster_nearby_cities(cities, distance_threshold)
+    # PHASE 1: Find and include discovery-enabled parent cities
+    # For each city with events, check if there's a nearby discovery-enabled city
+    # (This is what breadcrumbs do, and it works correctly)
+    discovery_cities =
+      cities_with_events
+      |> Enum.map(&find_nearby_discovery_city(&1, 50.0))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq_by(& &1.id)
+
+    # Combine cities with events and discovery-enabled parent cities
+    all_cities = Enum.uniq_by(cities_with_events ++ discovery_cities, & &1.id)
+
+    # Build clusters based on geographic proximity (now includes parent cities)
+    clusters = cluster_nearby_cities(all_cities, distance_threshold)
 
     # For each cluster, aggregate stats
     clusters
     |> Enum.map(fn cluster ->
-      aggregate_cluster_stats(cluster, city_stats, cities)
+      aggregate_cluster_stats(cluster, city_stats, all_cities)
     end)
     |> Enum.sort_by(& &1.count, :desc)
   end
@@ -142,7 +154,12 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
     adjacency = build_adjacency_map(cities, distance_threshold)
 
     # Find connected components (each component is a metropolitan area)
-    find_connected_components(adjacency, MapSet.new(Enum.map(cities, & &1.id)))
+    clusters = find_connected_components(adjacency, MapSet.new(Enum.map(cities, & &1.id)))
+
+    # Validate clusters: Remove outliers from clusters that are too spread out
+    # This prevents villages from being grouped with major cities through transitive chains
+    # (e.g., Meaux → Chessy → Paris should NOT group Meaux with Paris)
+    validate_and_fix_clusters(clusters, cities, distance_threshold)
   end
 
   @doc """
@@ -197,7 +214,8 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
         slug: c.slug,
         latitude: c.latitude,
         longitude: c.longitude,
-        country_id: c.country_id
+        country_id: c.country_id,
+        discovery_enabled: c.discovery_enabled
       }
     )
     |> Repo.all()
@@ -257,23 +275,74 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
     end
   end
 
-  defp aggregate_cluster_stats(city_ids_in_cluster, city_stats, cities) do
+  defp aggregate_cluster_stats(city_ids_in_cluster, city_stats, _cities) do
     # Get stats for all cities in this cluster
     city_stats_in_cluster =
       Enum.filter(city_stats, fn stat ->
         stat.city_id in city_ids_in_cluster
       end)
 
-    # Find primary city (most events)
-    primary_stat = Enum.max_by(city_stats_in_cluster, & &1.count)
-    primary_city = Enum.find(cities, &(&1.id == primary_stat.city_id))
+    # Load FULL city records for all cities in cluster (not just those with events)
+    # We need discovery_enabled field and other metadata for base city detection
+    all_cities_in_cluster = load_full_cities_for_cluster(city_ids_in_cluster)
+
+    # PHASE 1: Detect potential base cities that might be missing from city_stats
+    # (cities with 0 events are filtered out by the query but should be parent cities)
+    potential_base_city = detect_base_city_in_cluster(all_cities_in_cluster)
+
+    # PHASE 2: Inject base city into candidates if it's missing from stats
+    city_stats_in_cluster_with_base =
+      if potential_base_city && !Enum.any?(city_stats_in_cluster, &(&1.city_id == potential_base_city.id)) do
+        # Base city not in stats (has 0 events), inject it
+        [%{city_id: potential_base_city.id, count: 0} | city_stats_in_cluster]
+      else
+        city_stats_in_cluster
+      end
+
+    # Find primary city using hierarchy-aware scoring
+    # Priority 0: Active discovery cities (discovery_enabled: true) - 100,000 points
+    # Priority 1: Parent city (name is prefix of 2+ other cities) - 10,000 points
+    # Priority 2: Base city (no numeric suffix in slug) - 1,000 points
+    # Priority 3: Shorter name - up to 100 points
+    # Priority 4: Most events - 1 point per event (fallback)
+
+    primary_city =
+      city_stats_in_cluster_with_base
+      |> Enum.map(fn stat ->
+        city = Enum.find(all_cities_in_cluster, &(&1.id == stat.city_id))
+
+        # Calculate priority score with hierarchy-aware bonuses
+        # Active discovery bonus: 100,000 points if city is actively monitored
+        # This ensures cities we're actively discovering ALWAYS become parent cities
+        discovery_bonus = if city.discovery_enabled, do: 100_000, else: 0
+
+        # Parent city bonus: 10,000 points if this city's name is a substring of other cities
+        # (e.g., "Paris" is substring of "Paris 1", "Paris 8" -> it's the parent)
+        parent_city_bonus =
+          if is_parent_city_of_cluster?(city, all_cities_in_cluster), do: 10_000, else: 0
+
+        # Base city bonus: 1,000 points if slug has no numeric suffix
+        base_city_bonus = if is_base_city?(city.slug), do: 1_000, else: 0
+
+        # Name length bonus: prefer shorter names (max 100 points)
+        name_length_bonus = max(0, 100 - String.length(city.name))
+
+        # Event count: 1 point per event (lowest priority, just a tiebreaker)
+        event_bonus = stat.count
+
+        score = discovery_bonus + parent_city_bonus + base_city_bonus + name_length_bonus + event_bonus
+
+        {city, score}
+      end)
+      |> Enum.max_by(fn {_city, score} -> score end)
+      |> elem(0)
 
     # Get all other cities in cluster as subcities
     subcities =
-      city_stats_in_cluster
+      city_stats_in_cluster_with_base
       |> Enum.reject(&(&1.city_id == primary_city.id))
       |> Enum.map(fn stat ->
-        city = Enum.find(cities, &(&1.id == stat.city_id))
+        city = Enum.find(all_cities_in_cluster, &(&1.id == stat.city_id))
 
         %{
           city_id: city.id,
@@ -287,16 +356,16 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
     # Check if any city in this cluster uses geographic matching (is_geographic: true)
     # If so, use MAX count instead of SUM to avoid double-counting events
     # (Geographic cities already include events from nearby inactive cities)
-    has_geographic = Enum.any?(city_stats_in_cluster, &Map.get(&1, :is_geographic, false))
+    has_geographic = Enum.any?(city_stats_in_cluster_with_base, &Map.get(&1, :is_geographic, false))
 
     total_count =
       if has_geographic do
         # Use MAX count when cluster contains geographic city
         # (the geographic city's count already includes nearby cities)
-        Enum.max(Enum.map(city_stats_in_cluster, & &1.count))
+        Enum.max(Enum.map(city_stats_in_cluster_with_base, & &1.count))
       else
         # Use SUM for traditional city_id-based clusters
-        Enum.sum(Enum.map(city_stats_in_cluster, & &1.count))
+        Enum.sum(Enum.map(city_stats_in_cluster_with_base, & &1.count))
       end
 
     %{
@@ -313,4 +382,217 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
   defp to_float(%Decimal{} = decimal), do: Decimal.to_float(decimal)
   defp to_float(float) when is_float(float), do: float
   defp to_float(int) when is_integer(int), do: int * 1.0
+
+  # Load full City records for all cities in a cluster
+  # This includes cities with 0 events that might have been filtered out
+  defp load_full_cities_for_cluster(city_ids) do
+    from(c in City,
+      where: c.id in ^city_ids,
+      select: %{
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        discovery_enabled: c.discovery_enabled,
+        country_id: c.country_id
+      }
+    )
+    |> Repo.all()
+  end
+
+  # Detect the base/parent city in a cluster that should be the primary city
+  # Prioritizes: 1) discovery_enabled cities, 2) parent cities, 3) base cities
+  defp detect_base_city_in_cluster(cities) do
+    cities
+    |> Enum.map(fn city ->
+      # Score each city as a potential base city
+      discovery_score = if city.discovery_enabled, do: 100_000, else: 0
+      parent_score = if is_parent_city_of_cluster?(city, cities), do: 10_000, else: 0
+      base_score = if is_base_city?(city.slug), do: 1_000, else: 0
+      name_score = max(0, 100 - String.length(city.name))
+
+      total_score = discovery_score + parent_score + base_score + name_score
+
+      {city, total_score}
+    end)
+    |> Enum.max_by(fn {_city, score} -> score end, fn -> {nil, 0} end)
+    |> elem(0)
+  end
+
+  # Check if a city is the "parent" city of a cluster
+  # A parent city's name appears as a prefix/substring in other city names
+  # Examples:
+  #   is_parent_city_of_cluster?("Paris", ["Paris 1", "Paris 8", "Meaux"]) -> true
+  #   is_parent_city_of_cluster?("Meaux", ["Paris 1", "Paris 8", "Meaux"]) -> false
+  defp is_parent_city_of_cluster?(city, all_cities_in_cluster) do
+    # Count how many OTHER cities in the cluster have this city's name as a prefix
+    matching_count =
+      all_cities_in_cluster
+      |> Enum.reject(&(&1.id == city.id))
+      |> Enum.count(fn other_city ->
+        # Check if other city's name starts with this city's name
+        # (case-insensitive, and handle spaces/dashes)
+        base_name = String.downcase(city.name)
+        other_name = String.downcase(other_city.name)
+
+        String.starts_with?(other_name, base_name <> " ") or
+          String.starts_with?(other_name, base_name <> "-")
+      end)
+
+    # If at least 2 other cities match, this is likely the parent
+    matching_count >= 2
+  end
+
+  # Check if a city is a "base" city without district/suburb suffixes
+  # Examples:
+  #   is_base_city?("paris") -> true
+  #   is_base_city?("paris-8") -> false
+  #   is_base_city?("london") -> true
+  #   is_base_city?("south-london") -> false
+  defp is_base_city?(slug) do
+    # A base city slug should not end with a dash followed by digits
+    # and should not have directional prefixes (north-, south-, east-, west-)
+    not String.match?(slug, ~r/-\d+$/) and
+      not String.match?(slug, ~r/^(north|south|east|west|central)-/)
+  end
+
+  # Find a nearby discovery-enabled city (the parent city for metro areas)
+  # This mimics the breadcrumb logic which correctly identifies parent cities
+  # Returns nil if the city itself is discovery-enabled or if no nearby discovery city found
+  defp find_nearby_discovery_city(city, radius_km) do
+    # If the city itself is discovery-enabled, it's already the parent
+    if city.discovery_enabled do
+      nil
+    else
+      # Look for nearby discovery-enabled cities within radius
+      if city.latitude && city.longitude do
+        # Calculate bounding box for search radius
+        lat = to_float(city.latitude)
+        lng = to_float(city.longitude)
+
+        lat_delta = radius_km / 111.0
+        lng_delta = radius_km / (111.0 * :math.cos(lat * :math.pi() / 180.0))
+
+        min_lat = lat - lat_delta
+        max_lat = lat + lat_delta
+        min_lng = lng - lng_delta
+        max_lng = lng + lng_delta
+
+        # Find the nearest discovery-enabled city
+        Repo.one(
+          from(c in City,
+            where: c.country_id == ^city.country_id,
+            where: c.discovery_enabled == true,
+            where: not is_nil(c.latitude) and not is_nil(c.longitude),
+            where: c.latitude >= ^min_lat and c.latitude <= ^max_lat,
+            where: c.longitude >= ^min_lng and c.longitude <= ^max_lng,
+            # Order by distance (approximation using lat/lng delta)
+            order_by: [
+              asc:
+                fragment(
+                  "ABS(? - ?) + ABS(? - ?)",
+                  c.latitude,
+                  ^city.latitude,
+                  c.longitude,
+                  ^city.longitude
+                )
+            ],
+            limit: 1,
+            select: %{
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              latitude: c.latitude,
+              longitude: c.longitude,
+              discovery_enabled: c.discovery_enabled,
+              country_id: c.country_id
+            }
+          )
+        )
+      else
+        nil
+      end
+    end
+  end
+
+  # Validate clusters and remove outliers from oversized clusters
+  # Prevents villages from being grouped with major cities through transitive chains
+  defp validate_and_fix_clusters(clusters, cities, distance_threshold) do
+    # Maximum allowed cluster diameter (1.5x the distance threshold)
+    max_diameter = distance_threshold * 1.5
+
+    # Create a map of city_id -> city for quick lookup
+    cities_by_id = Map.new(cities, fn city -> {city.id, city} end)
+
+    clusters
+    |> Enum.flat_map(fn cluster_ids ->
+      # Get cities in this cluster
+      cluster_cities = Enum.map(cluster_ids, &Map.get(cities_by_id, &1)) |> Enum.reject(&is_nil/1)
+
+      # Calculate cluster diameter (max distance between any two cities)
+      diameter = calculate_cluster_diameter(cluster_cities)
+
+      if diameter <= max_diameter do
+        # Cluster is valid, keep it as-is
+        [cluster_ids]
+      else
+        # Cluster is too spread out, split it by removing outliers
+        split_oversized_cluster(cluster_cities, cities_by_id, distance_threshold)
+      end
+    end)
+  end
+
+  # Calculate the maximum distance between any two cities in a cluster
+  defp calculate_cluster_diameter(cities) do
+    cities
+    |> Enum.flat_map(fn city1 ->
+      Enum.map(cities, fn city2 ->
+        if city1.id != city2.id and not is_nil(city1.latitude) and not is_nil(city2.latitude) do
+          haversine_distance(city1.latitude, city1.longitude, city2.latitude, city2.longitude)
+        else
+          0.0
+        end
+      end)
+    end)
+    |> Enum.max(fn -> 0.0 end)
+  end
+
+  # Split an oversized cluster by grouping cities around their geographic centroid
+  # Cities far from the centroid are excluded (outliers)
+  defp split_oversized_cluster(cluster_cities, _cities_by_id, distance_threshold) do
+    # Calculate geographic centroid of the cluster
+    {sum_lat, sum_lon, count} =
+      cluster_cities
+      |> Enum.filter(fn city -> not is_nil(city.latitude) and not is_nil(city.longitude) end)
+      |> Enum.reduce({0.0, 0.0, 0}, fn city, {lat_sum, lon_sum, cnt} ->
+        {lat_sum + to_float(city.latitude), lon_sum + to_float(city.longitude), cnt + 1}
+      end)
+
+    if count == 0 do
+      # No valid coordinates, return as single cluster
+      [Enum.map(cluster_cities, & &1.id)]
+    else
+      centroid_lat = sum_lat / count
+      centroid_lon = sum_lon / count
+
+      # Group cities into "core" (within threshold of centroid) and "outliers"
+      {core_cities, outlier_cities} =
+        cluster_cities
+        |> Enum.split_with(fn city ->
+          if not is_nil(city.latitude) and not is_nil(city.longitude) do
+            distance = haversine_distance(centroid_lat, centroid_lon, city.latitude, city.longitude)
+            distance <= distance_threshold
+          else
+            false
+          end
+        end)
+
+      # Return core as one cluster, each outlier as its own cluster
+      core_cluster = Enum.map(core_cities, & &1.id)
+      outlier_clusters = Enum.map(outlier_cities, fn city -> [city.id] end)
+
+      [core_cluster | outlier_clusters] |> Enum.reject(&Enum.empty?/1)
+    end
+  end
 end
