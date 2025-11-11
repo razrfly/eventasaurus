@@ -14,9 +14,16 @@ defmodule EventasaurusApp.Repo.Migrations.MakeCitySlugsGloballyUnique do
 
     # Step 4: Add global unique index
     create unique_index(:cities, [:slug], name: :cities_slug_index)
+
+    # Step 5: Add composite index for (name, country_id) lookups
+    # This supports the new lookup pattern in venue_store.ex
+    create index(:cities, [:name, :country_id], name: :cities_name_country_id_index)
   end
 
   def down do
+    # Reverse: drop composite index for name lookups
+    drop_if_exists index(:cities, [:name, :country_id], name: :cities_name_country_id_index)
+
     # Reverse: drop global unique index
     drop_if_exists unique_index(:cities, [:slug], name: :cities_slug_index)
 
@@ -63,9 +70,10 @@ defmodule EventasaurusApp.Repo.Migrations.MakeCitySlugsGloballyUnique do
         candidate_slug = "#{slug}-#{normalized_code}"
 
         # Check if candidate slug already exists to prevent collision
+        # Use microsecond precision to avoid collisions when processing multiple cities in same second
         new_slug =
           if slug_exists?(candidate_slug) do
-            "#{candidate_slug}-#{System.system_time(:second)}"
+            "#{candidate_slug}-#{System.system_time(:microsecond)}"
           else
             candidate_slug
           end

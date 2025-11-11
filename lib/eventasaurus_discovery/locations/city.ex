@@ -41,7 +41,8 @@ defmodule EventasaurusDiscovery.Locations.City.Slug do
           slug_with_country
         else
           # Fallback: base slug + timestamp (edge case, like Venue.Slug)
-          "#{base_slug}-#{System.system_time(:second)}"
+          # Use microsecond precision to avoid collisions
+          "#{base_slug}-#{System.system_time(:microsecond)}"
         end
     end
   end
