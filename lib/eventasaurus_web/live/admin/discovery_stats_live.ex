@@ -94,6 +94,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     # Get change tracking data aggregated across all cities
     change_stats = EventChangeTracker.get_all_source_changes(source_names, nil)
 
+    # OPTIMIZED: Batch count events for all sources at once (was N+1 query)
+    event_counts = count_events_for_sources_batch(source_names)
+
+    # OPTIMIZED: Batch check quality for all sources at once (was N+1 query)
+    quality_checks = DataQualityChecker.check_quality_batch(source_names)
+
     # Calculate enriched source data with health metrics
     sources_data =
       source_names
@@ -126,8 +132,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
               "unknown"
           end
 
-        # Count events for this source
-        event_count = count_events_for_source(source_name)
+        # OPTIMIZED: Get event count from batched result
+        event_count = Map.get(event_counts, source_name, 0)
 
         # Get change tracking data
         changes =
@@ -140,8 +146,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         {trend_emoji, trend_text, trend_class} =
           EventChangeTracker.get_trend_indicator(changes.percentage_change)
 
-        # Get data quality metrics (Phase 5)
-        quality_data = DataQualityChecker.check_quality(source_name)
+        # OPTIMIZED: Get data quality metrics from batched result
+        quality_data = Map.get(quality_checks, source_name, %{quality_score: 0, total_events: 0, not_found: true})
 
         {quality_emoji, quality_text, quality_class} =
           if Map.get(quality_data, :not_found, false) ||
@@ -192,22 +198,24 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     |> assign(:city_stats, city_stats)
   end
 
-  defp count_events_for_source(source_name) do
-    # Count events from this source using the public_event_sources join table
-    # Note: source_name is actually the source SLUG (e.g., "bandsintown", not "Bandsintown")
+  # Batched version to count events for multiple sources at once (replaces count_events_for_source/1)
+  defp count_events_for_sources_batch(source_names) when is_list(source_names) do
     query =
       from(pes in EventasaurusDiscovery.PublicEvents.PublicEventSource,
         join: s in EventasaurusDiscovery.Sources.Source,
         on: s.id == pes.source_id,
-        where: s.slug == ^source_name,
-        select: count(pes.id)
+        where: s.slug in ^source_names,
+        group_by: s.slug,
+        select: {s.slug, count(pes.id)}
       )
 
-    Repo.one(query) || 0
+    query
+    |> Repo.all(timeout: 15_000)
+    |> Map.new()
   end
 
   defp count_cities do
-    Repo.aggregate(City, :count, :id)
+    Repo.aggregate(City, :count, :id, timeout: 15_000)
   end
 
   defp count_events_this_week do
@@ -219,7 +227,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         select: count(e.id)
       )
 
-    Repo.one(query) || 0
+    Repo.one(query, timeout: 15_000) || 0
   end
 
   defp get_city_performance do
@@ -243,16 +251,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         order_by: [desc: count(e.id)]
       )
 
-    cities = Repo.all(query)
+    cities = Repo.all(query, timeout: 15_000)
 
     # Apply geographic clustering to group metro areas
     clustered_cities = CityHierarchy.aggregate_stats_by_cluster(cities, 20.0)
 
-    # Take top 10 after clustering and calculate week-over-week change
-    clustered_cities
-    |> Enum.take(10)
+    # Take top 10 after clustering
+    top_cities = Enum.take(clustered_cities, 10)
+
+    # OPTIMIZED: Batch calculate city changes for all top cities at once (was N+1 query)
+    city_ids = Enum.map(top_cities, & &1.city_id)
+    city_changes = calculate_city_changes_batch(city_ids)
+
+    # Map the batched changes back to cities
+    top_cities
     |> Enum.map(fn city ->
-      change = calculate_city_change(city.city_id)
+      change = Map.get(city_changes, city.city_id)
 
       city
       |> Map.put(:event_count, city.count)
@@ -260,42 +274,43 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     end)
   end
 
-  defp calculate_city_change(city_id) do
+  # Batched version to calculate city changes for multiple cities at once (replaces calculate_city_change/1)
+  defp calculate_city_changes_batch(city_ids) when is_list(city_ids) do
     now = DateTime.utc_now()
     one_week_ago = DateTime.add(now, -7, :day)
     two_weeks_ago = DateTime.add(now, -14, :day)
 
-    # Events added this week
-    this_week =
+    # Get both this week and last week counts in a single query
+    query =
       from(e in PublicEvent,
         join: v in EventasaurusApp.Venues.Venue,
         on: v.id == e.venue_id,
-        where: v.city_id == ^city_id,
-        where: e.inserted_at >= ^one_week_ago,
-        select: count(e.id)
+        where: v.city_id in ^city_ids,
+        where: e.inserted_at >= ^two_weeks_ago,
+        group_by: v.city_id,
+        select: %{
+          city_id: v.city_id,
+          this_week: fragment("COUNT(CASE WHEN ? >= ? THEN 1 END)", e.inserted_at, ^one_week_ago),
+          last_week: fragment("COUNT(CASE WHEN ? >= ? AND ? < ? THEN 1 END)", e.inserted_at, ^two_weeks_ago, e.inserted_at, ^one_week_ago)
+        }
       )
-      |> Repo.one() || 0
 
-    # Events added last week
-    last_week =
-      from(e in PublicEvent,
-        join: v in EventasaurusApp.Venues.Venue,
-        on: v.id == e.venue_id,
-        where: v.city_id == ^city_id,
-        where: e.inserted_at >= ^two_weeks_ago and e.inserted_at < ^one_week_ago,
-        select: count(e.id)
-      )
-      |> Repo.one() || 0
+    city_stats =
+      query
+      |> Repo.all(timeout: 15_000)
+      |> Map.new(fn stats ->
+        change =
+          if stats.last_week > 0 do
+            ((stats.this_week - stats.last_week) / stats.last_week * 100) |> round()
+          else
+            nil
+          end
 
-    # Calculate percentage change
-    # Note: When there's no baseline (last_week = 0), return nil instead of 100%
-    # This will be displayed as "New" in the UI
-    if last_week > 0 do
-      ((this_week - last_week) / last_week * 100) |> round()
-    else
-      # No baseline data - return nil to indicate "New" city
-      nil
-    end
+        {stats.city_id, change}
+      end)
+
+    # Return map with city_id => change percentage
+    city_stats
   end
 
   @impl true

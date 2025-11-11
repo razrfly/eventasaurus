@@ -56,6 +56,32 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   @doc """
+  Check data quality for multiple sources in parallel.
+
+  Returns a map of source_slug => quality data.
+  Uses Task.async_stream to parallelize quality checks for better performance.
+  """
+  def check_quality_batch(source_slugs) when is_list(source_slugs) do
+    source_slugs
+    |> Task.async_stream(
+      fn source_slug ->
+        {source_slug, check_quality(source_slug)}
+      end,
+      max_concurrency: 10,
+      timeout: 30_000,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce(%{}, fn
+      {:ok, {source_slug, quality_data}}, acc ->
+        Map.put(acc, source_slug, quality_data)
+
+      {:exit, _reason}, acc ->
+        # Task timed out or crashed, skip it
+        acc
+    end)
+  end
+
+  @doc """
   Check data quality for a source by ID.
   """
   def check_quality_by_id(source_id) when is_integer(source_id) do
