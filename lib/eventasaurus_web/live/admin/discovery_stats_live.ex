@@ -29,10 +29,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     socket =
       socket
       |> assign(:page_title, "Discovery Source Statistics")
-      |> assign(:loading, true)
+      |> assign(:refreshing, false)
       |> assign(:expanded_metro_areas, MapSet.new())
       |> load_stats()
-      |> assign(:loading, false)
 
     {:ok, socket}
   end
@@ -51,13 +50,34 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   end
 
   @impl true
-  def handle_info(:refresh_after_force, socket) do
-    socket =
-      socket
-      |> load_stats()
-      |> put_flash(:info, "Cache refreshed successfully!")
+  def handle_info({:check_refresh_complete, old_timestamp, poll_count}, socket) do
+    new_timestamp = DiscoveryStatsCache.last_refreshed_at()
 
-    {:noreply, socket}
+    cond do
+      # Timestamp changed - refresh completed!
+      new_timestamp != old_timestamp ->
+        socket =
+          socket
+          |> assign(:refreshing, false)
+          |> load_stats()
+          |> put_flash(:info, "Cache refreshed successfully!")
+
+        {:noreply, socket}
+
+      # Max polling attempts (30 seconds)
+      poll_count >= 30 ->
+        socket =
+          socket
+          |> assign(:refreshing, false)
+          |> put_flash(:error, "Cache refresh timeout. Please try again.")
+
+        {:noreply, socket}
+
+      # Keep polling
+      true ->
+        Process.send_after(self(), {:check_refresh_complete, old_timestamp, poll_count + 1}, 1000)
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -83,14 +103,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
   @impl true
   def handle_event("force_refresh", _params, socket) do
-    # Force immediate cache refresh
+    # Capture the current timestamp before refresh
+    current_timestamp = DiscoveryStatsCache.last_refreshed_at()
+
+    # Force immediate cache refresh (runs async in background)
     DiscoveryStatsCache.refresh()
 
-    # Wait a moment for the refresh to complete, then reload stats
-    Process.send_after(self(), :refresh_after_force, 1000)
+    # Start polling to check when refresh completes
+    Process.send_after(self(), {:check_refresh_complete, current_timestamp, 0}, 1000)
 
     socket =
       socket
+      |> assign(:refreshing, true)
       |> put_flash(:info, "Cache refresh initiated. Stats will update in a moment...")
 
     {:noreply, socket}
@@ -102,10 +126,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     # This reduces load time from 30+ seconds to milliseconds
     case DiscoveryStatsCache.get_stats() do
       nil ->
-        # Cache not ready yet (still initializing), show loading state
+        # Cache not ready yet (still initializing), keep loading state
         Logger.warning("Stats cache not ready, keeping loading state")
 
         socket
+        |> assign(:loading, true)
         |> assign(:sources_data, [])
         |> assign(:overall_health, 0)
         |> assign(:total_sources, 0)
@@ -116,6 +141,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
       cached_stats ->
         # Load from cache (fast!)
         socket
+        |> assign(:loading, false)
         |> assign(:sources_data, cached_stats.sources_data)
         |> assign(:overall_health, cached_stats.overall_health)
         |> assign(:total_sources, cached_stats.total_sources)

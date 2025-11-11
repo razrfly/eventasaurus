@@ -55,7 +55,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
   @doc """
   Get cached stats (fast - reads from memory).
 
-  Returns nil if cache is not yet initialized.
+  Returns nil on timeout or if the cache process is not running.
+  The cache is always initialized on startup with either computed stats or empty fallback data.
   """
   def get_stats do
     try do
@@ -128,17 +129,31 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
 
   @impl true
   def handle_cast(:refresh, state) do
-    # Refresh in current process (will block until done)
-    case compute_stats() do
-      {:ok, new_stats} ->
-        Logger.info("Stats cache manually refreshed")
-        {:noreply, %{state | stats: new_stats, last_refresh: DateTime.utc_now()}}
+    # Spawn async task to avoid blocking the GenServer
+    # This ensures get_stats() calls can still be served during refresh
+    Task.start(fn ->
+      case compute_stats() do
+        {:ok, new_stats} ->
+          GenServer.cast(__MODULE__, {:stats_computed, new_stats, :manual})
 
-      {:error, reason} ->
-        Logger.error("Failed to refresh stats cache: #{inspect(reason)}")
-        # Keep serving old stats
-        {:noreply, state}
-    end
+        {:error, reason} ->
+          Logger.error("Failed to refresh stats cache: #{inspect(reason)}")
+      end
+    end)
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:stats_computed, new_stats, source}, state) do
+    log_message =
+      case source do
+        :manual -> "Stats cache manually refreshed"
+        :auto -> "Stats cache auto-refreshed successfully"
+      end
+
+    Logger.info(log_message)
+    {:noreply, %{state | stats: new_stats, last_refresh: DateTime.utc_now()}}
   end
 
   @impl true
@@ -146,17 +161,18 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
     # Schedule next refresh
     schedule_refresh()
 
-    # Refresh stats asynchronously
-    case compute_stats() do
-      {:ok, new_stats} ->
-        Logger.info("Stats cache auto-refreshed successfully")
-        {:noreply, %{state | stats: new_stats, last_refresh: DateTime.utc_now()}}
+    # Spawn async task to avoid blocking the GenServer
+    Task.start(fn ->
+      case compute_stats() do
+        {:ok, new_stats} ->
+          GenServer.cast(__MODULE__, {:stats_computed, new_stats, :auto})
 
-      {:error, reason} ->
-        Logger.error("Failed to auto-refresh stats cache: #{inspect(reason)}")
-        # Keep serving old stats
-        {:noreply, state}
-    end
+        {:error, reason} ->
+          Logger.error("Failed to auto-refresh stats cache: #{inspect(reason)}")
+      end
+    end)
+
+    {:noreply, state}
   end
 
   # Private Functions
