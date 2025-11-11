@@ -1,5 +1,81 @@
 defmodule EventasaurusDiscovery.Locations.City.Slug do
   use EctoAutoslugField.Slug, from: :name, to: :slug
+  require Logger
+  import Ecto.Query
+  alias EventasaurusApp.Repo
+
+  @doc """
+  Build slug with smart collision handling.
+
+  Strategy (following Venue.Slug pattern):
+  1. Try base slug (city name only)
+  2. If taken, append country code (e.g., "manchester-us")
+  3. If taken (edge case), append timestamp
+
+  This ensures globally unique slugs while keeping clean slugs for the first city with each name.
+  """
+  def build_slug(sources, changeset) do
+    # Get base slug from EctoAutoslugField
+    base_slug = super(sources, changeset)
+
+    # Ensure uniqueness using progressive disambiguation
+    ensure_unique_slug(base_slug, changeset)
+  end
+
+  # Ensure slug is unique using progressive disambiguation (like Venue.Slug)
+  # Strategy: name -> name-countrycode -> name-timestamp
+  defp ensure_unique_slug(base_slug, changeset) do
+    existing_id = Ecto.Changeset.get_field(changeset, :id)
+
+    cond do
+      # Try base slug (city name only)
+      !slug_exists?(base_slug, existing_id) ->
+        base_slug
+
+      # Try base slug + country code
+      true ->
+        country_code = get_country_code(changeset)
+        slug_with_country = "#{base_slug}-#{country_code}"
+
+        if !slug_exists?(slug_with_country, existing_id) do
+          slug_with_country
+        else
+          # Fallback: base slug + timestamp (edge case, like Venue.Slug)
+          "#{base_slug}-#{System.system_time(:second)}"
+        end
+    end
+  end
+
+  # Get country code from city's country
+  defp get_country_code(changeset) do
+    country_id = Ecto.Changeset.get_field(changeset, :country_id)
+
+    if country_id do
+      case Repo.get(EventasaurusDiscovery.Locations.Country, country_id) do
+        %{code: code} when is_binary(code) -> String.downcase(code)
+        _ -> "unknown"
+      end
+    else
+      "unknown"
+    end
+  end
+
+  # Check if slug already exists (excluding current record if updating)
+  defp slug_exists?(slug, existing_id) do
+    query =
+      from(c in EventasaurusDiscovery.Locations.City,
+        where: c.slug == ^slug
+      )
+
+    query =
+      if existing_id do
+        from(c in query, where: c.id != ^existing_id)
+      else
+        query
+      end
+
+    Repo.exists?(query)
+  end
 end
 
 defmodule EventasaurusDiscovery.Locations.City do
@@ -38,7 +114,7 @@ defmodule EventasaurusDiscovery.Locations.City do
     |> validate_required([:name, :country_id])
     |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)
-    |> unique_constraint([:country_id, :slug])
+    |> unique_constraint(:slug)
   end
 
   @doc """
