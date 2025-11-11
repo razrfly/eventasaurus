@@ -2,7 +2,6 @@ defmodule EventasaurusWeb.VenueLive.Show do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Venues
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.PublicEventsEnhanced
