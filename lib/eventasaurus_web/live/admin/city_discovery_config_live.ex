@@ -16,7 +16,16 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   @impl true
   def mount(%{"slug" => city_slug}, _session, socket) do
-    city = Repo.get_by!(City, slug: city_slug) |> Repo.preload(:country)
+    # Handle potential duplicate cities by preferring discovery-enabled ones
+    # If multiple exist, pick the oldest (lowest ID) for deterministic behavior
+    city =
+      from(c in City,
+        where: c.slug == ^city_slug,
+        order_by: [desc: c.discovery_enabled, asc: c.id],
+        limit: 1
+      )
+      |> Repo.one!()
+      |> Repo.preload(:country)
 
     # Subscribe to discovery progress updates
     if connected?(socket) do
