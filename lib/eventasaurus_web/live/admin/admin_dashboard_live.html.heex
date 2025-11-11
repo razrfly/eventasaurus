@@ -1,0 +1,293 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+    <p class="mt-2 text-gray-600">Central hub for all admin functionality</p>
+  </div>
+
+  <!-- Statistics Overview -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">System Overview</h2>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+      <div class="bg-blue-50 p-4 rounded-lg">
+        <div class="text-sm text-blue-600 font-medium">Total Events</div>
+        <div class="text-2xl font-bold text-blue-900">
+          {format_number(@stats.total_events)}
+        </div>
+      </div>
+
+      <div class="bg-green-50 p-4 rounded-lg">
+        <div class="text-sm text-green-600 font-medium">Venues</div>
+        <div class="text-2xl font-bold text-green-900">
+          {format_number(@stats.unique_venues)}
+        </div>
+      </div>
+
+      <div class="bg-purple-50 p-4 rounded-lg">
+        <div class="text-sm text-purple-600 font-medium">Performers</div>
+        <div class="text-2xl font-bold text-purple-900">
+          {format_number(@stats.performers)}
+        </div>
+      </div>
+
+      <div class="bg-yellow-50 p-4 rounded-lg">
+        <div class="text-sm text-yellow-600 font-medium">Upcoming</div>
+        <div class="text-2xl font-bold text-yellow-900">
+          {format_number(@stats.upcoming_events)}
+        </div>
+      </div>
+
+      <div class="bg-gray-50 p-4 rounded-lg">
+        <div class="text-sm text-gray-600 font-medium">Past Events</div>
+        <div class="text-2xl font-bold text-gray-900">
+          {format_number(@stats.past_events)}
+        </div>
+      </div>
+
+      <div class="bg-indigo-50 p-4 rounded-lg">
+        <div class="text-sm text-indigo-600 font-medium">Active Jobs</div>
+        <div class="text-2xl font-bold text-indigo-900">
+          {format_number(@stats.active_jobs)}
+        </div>
+      </div>
+
+      <div class="bg-teal-50 p-4 rounded-lg">
+        <div class="text-sm text-teal-600 font-medium">Geocoding Queue</div>
+        <div class="text-2xl font-bold text-teal-900">
+          {format_number(@stats.geocoding_queue)}
+        </div>
+      </div>
+
+      <div class="bg-red-50 p-4 rounded-lg">
+        <div class="text-sm text-red-600 font-medium">Recent Errors (24h)</div>
+        <div class="text-2xl font-bold text-red-900">
+          {format_number(@stats.recent_errors)}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Sections -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Dashboards & Monitoring -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">🎯</span> Dashboards & Monitoring
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/imports"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Discovery Dashboard</div>
+          <div class="text-sm text-gray-600">Event import & sync operations</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/jobs-monitor"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Jobs Monitor</div>
+          <div class="text-sm text-gray-600">Background job status</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/oban"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Oban Dashboard</div>
+          <div class="text-sm text-gray-600">Job queue management</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/scraper-logs"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-red-400"
+        >
+          <div class="font-medium text-gray-900">Scraper Logs ⭐</div>
+          <div class="text-sm text-gray-600">Error tracking & debugging</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/sitemap"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Sitemap</div>
+          <div class="text-sm text-gray-600">Generation statistics</div>
+        </.link>
+      </div>
+    </div>
+    <!-- Discovery & Statistics -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">📈</span> Discovery & Statistics
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/discovery/stats"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Discovery Stats</div>
+          <div class="text-sm text-gray-600">Event discovery analytics</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/discovery/config"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">City Discovery Config</div>
+          <div class="text-sm text-gray-600">Configure city scrapers</div>
+        </.link>
+
+        <div class="pl-3 pt-2 text-sm text-gray-500">
+          <div class="mb-1">• Category Analysis (per source)</div>
+          <div>• Source & City Detail Views</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Geocoding Management -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">🌍</span> Geocoding
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/geocoding"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Geocoding Dashboard</div>
+          <div class="text-sm text-gray-600">Performance & cost tracking</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/geocoding/providers"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Geocoding Providers</div>
+          <div class="text-sm text-gray-600">Provider configuration</div>
+        </.link>
+      </div>
+    </div>
+
+    <!-- Venue Management -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">🏢</span> Venues
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/venues/duplicates"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Venue Duplicates</div>
+          <div class="text-sm text-gray-600">Merge duplicate venues</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/venue-images/stats"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Venue Images Stats</div>
+          <div class="text-sm text-gray-600">Coverage statistics</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/venue-images/operations"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Image Operations</div>
+          <div class="text-sm text-gray-600">Image enrichment</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/venue-images/enrichment-history"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Enrichment History</div>
+          <div class="text-sm text-gray-600">Processing logs</div>
+        </.link>
+      </div>
+    </div>
+
+    <!-- Content Management -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">📝</span> Content Management
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/cities"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Cities</div>
+          <div class="text-sm text-gray-600">Manage cities & locations</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/categories"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Categories</div>
+          <div class="text-sm text-gray-600">Manage event categories</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/sources"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Sources</div>
+          <div class="text-sm text-gray-600">Manage data sources</div>
+        </.link>
+      </div>
+    </div>
+
+    <!-- Data Quality -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">🧹</span> Data Quality
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/cities/duplicates"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">City Duplicates</div>
+          <div class="text-sm text-gray-600">Find & merge duplicates</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/cities/cleanup"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">City Cleanup</div>
+          <div class="text-sm text-gray-600">Validate city data</div>
+        </.link>
+      </div>
+    </div>
+
+    <!-- Design Tools -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span class="mr-2">🎨</span> Design
+      </h3>
+      <div class="space-y-2">
+        <.link
+          navigate={~p"/admin/design/social-cards"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Social Cards Preview</div>
+          <div class="text-sm text-gray-600">Card design preview</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/unsplash"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <div class="font-medium text-gray-900">Unsplash Integration</div>
+          <div class="text-sm text-gray-600">City images</div>
+        </.link>
+      </div>
+    </div>
+  </div>
+</div>
