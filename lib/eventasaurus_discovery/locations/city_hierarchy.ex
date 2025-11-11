@@ -459,60 +459,57 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
 
   # Find a nearby discovery-enabled city (the parent city for metro areas)
   # This mimics the breadcrumb logic which correctly identifies parent cities
-  # Returns nil if the city itself is discovery-enabled or if no nearby discovery city found
+  # Returns the nearest discovery-enabled city (excluding itself) or nil if none found
   defp find_nearby_discovery_city(city, radius_km) do
-    # If the city itself is discovery-enabled, it's already the parent
-    if city.discovery_enabled do
-      nil
-    else
-      # Look for nearby discovery-enabled cities within radius
-      if city.latitude && city.longitude do
-        # Calculate bounding box for search radius
-        lat = to_float(city.latitude)
-        lng = to_float(city.longitude)
+    # Look for nearby discovery-enabled cities within radius
+    # Exclude the current city to find a different parent even if this city is discovery-enabled
+    if city.latitude && city.longitude do
+      # Calculate bounding box for search radius
+      lat = to_float(city.latitude)
+      lng = to_float(city.longitude)
 
-        lat_delta = radius_km / 111.0
-        lng_delta = radius_km / (111.0 * :math.cos(lat * :math.pi() / 180.0))
+      lat_delta = radius_km / 111.0
+      lng_delta = radius_km / (111.0 * :math.cos(lat * :math.pi() / 180.0))
 
-        min_lat = lat - lat_delta
-        max_lat = lat + lat_delta
-        min_lng = lng - lng_delta
-        max_lng = lng + lng_delta
+      min_lat = lat - lat_delta
+      max_lat = lat + lat_delta
+      min_lng = lng - lng_delta
+      max_lng = lng + lng_delta
 
-        # Find the nearest discovery-enabled city
-        Repo.one(
-          from(c in City,
-            where: c.country_id == ^city.country_id,
-            where: c.discovery_enabled == true,
-            where: not is_nil(c.latitude) and not is_nil(c.longitude),
-            where: c.latitude >= ^min_lat and c.latitude <= ^max_lat,
-            where: c.longitude >= ^min_lng and c.longitude <= ^max_lng,
-            # Order by distance (approximation using lat/lng delta)
-            order_by: [
-              asc:
-                fragment(
-                  "ABS(? - ?) + ABS(? - ?)",
-                  c.latitude,
-                  ^city.latitude,
-                  c.longitude,
-                  ^city.longitude
-                )
-            ],
-            limit: 1,
-            select: %{
-              id: c.id,
-              name: c.name,
-              slug: c.slug,
-              latitude: c.latitude,
-              longitude: c.longitude,
-              discovery_enabled: c.discovery_enabled,
-              country_id: c.country_id
-            }
-          )
+      # Find the nearest discovery-enabled city (excluding current city)
+      Repo.one(
+        from(c in City,
+          where: c.country_id == ^city.country_id,
+          where: c.discovery_enabled == true,
+          where: c.id != ^city.id,
+          where: not is_nil(c.latitude) and not is_nil(c.longitude),
+          where: c.latitude >= ^min_lat and c.latitude <= ^max_lat,
+          where: c.longitude >= ^min_lng and c.longitude <= ^max_lng,
+          # Order by distance (approximation using lat/lng delta)
+          order_by: [
+            asc:
+              fragment(
+                "ABS(? - ?) + ABS(? - ?)",
+                c.latitude,
+                ^city.latitude,
+                c.longitude,
+                ^city.longitude
+              )
+          ],
+          limit: 1,
+          select: %{
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            latitude: c.latitude,
+            longitude: c.longitude,
+            discovery_enabled: c.discovery_enabled,
+            country_id: c.country_id
+          }
         )
-      else
-        nil
-      end
+      )
+    else
+      nil
     end
   end
 
