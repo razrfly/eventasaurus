@@ -90,6 +90,8 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Services.TmdbService,
       # Start Spotify Service for music data
       EventasaurusWeb.Services.SpotifyService,
+      # Start CocktailDB Service for cocktail data
+      EventasaurusWeb.Services.CocktailDbService,
       # Start Rich Data Manager for external API providers
       EventasaurusWeb.Services.RichDataManager,
       # Start Broadcast Throttler for real-time poll updates

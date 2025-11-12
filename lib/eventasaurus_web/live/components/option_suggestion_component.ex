@@ -474,20 +474,35 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                             class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           />
                         <% else %>
-                        <input
-                          type="text"
-                          name="poll_option[title]"
-                          id="option_title"
-                          value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll)}
-                          phx-debounce="300"
-                          phx-hook="PlacesSuggestionSearch"
-                          data-location-scope={@poll |> get_location_scope()}
-                          data-search-location={@poll |> get_search_location_json()}
-                          data-direct-add={to_string(@places_direct_mode)}
-                          autocomplete="off"
-                          class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
+                          <%= if @poll.poll_type == "cocktail" do %>
+                            <input
+                              type="text"
+                              name="poll_option[title]"
+                              id="option_title"
+                              value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                              placeholder={option_title_placeholder(@poll)}
+                              phx-change="search_cocktails"
+                              phx-target={@myself}
+                              phx-debounce="300"
+                              autocomplete="off"
+                              class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                          <% else %>
+                            <input
+                              type="text"
+                              name="poll_option[title]"
+                              id="option_title"
+                              value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                              placeholder={option_title_placeholder(@poll)}
+                              phx-debounce="300"
+                              phx-hook="PlacesSuggestionSearch"
+                              data-location-scope={@poll |> get_location_scope()}
+                              data-search-location={@poll |> get_search_location_json()}
+                              data-direct-add={to_string(@places_direct_mode)}
+                              autocomplete="off"
+                              class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                          <% end %>
                         <% end %>
                       <% end %>
                     <% else %>
@@ -619,6 +634,70 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </div>
                     <% end %>
 
+                    <!-- Cocktail search results dropdown -->
+                    <%= if @poll.poll_type == "cocktail" and length(@search_results) > 0 do %>
+                      <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        <%= for cocktail <- @search_results do %>
+                          <div class="flex items-center justify-between p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                            <!-- Cocktail info section (clickable for direct add) -->
+                            <div class="flex items-center flex-1 cursor-pointer"
+                                 phx-click="add_cocktail"
+                                 phx-value-cocktail-id={cocktail.id}
+                                 phx-target={@myself}>
+                              <% image_url = get_cocktail_image_url(cocktail) %>
+                              <%= if image_url do %>
+                                <img src={image_url} alt={cocktail.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                              <% else %>
+                                <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                                  </svg>
+                                </div>
+                              <% end %>
+                              <div class="flex-1 min-w-0">
+                                <h4 class="font-medium text-gray-900 truncate"><%= cocktail.title %></h4>
+                                <%= if cocktail.metadata do %>
+                                  <div class="text-sm text-gray-600 space-x-2">
+                                    <%= if cocktail.metadata["category"] do %>
+                                      <span><%= cocktail.metadata["category"] %></span>
+                                    <% end %>
+                                    <%= if cocktail.metadata["alcoholic"] do %>
+                                      <span>• <%= cocktail.metadata["alcoholic"] %></span>
+                                    <% end %>
+                                  </div>
+                                <% end %>
+                                <%= if is_binary(cocktail.description) && String.length(cocktail.description) > 0 do %>
+                                  <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= cocktail.description %></p>
+                                <% end %>
+                              </div>
+                            </div>
+
+                            <!-- Action buttons -->
+                            <div class="flex items-center space-x-2 ml-3">
+                              <!-- Direct Add Button -->
+                              <button type="button"
+                                      class="px-3 py-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
+                                      phx-click="add_cocktail"
+                                      phx-value-cocktail-id={cocktail.id}
+                                      phx-target={@myself}
+                                      title="Add cocktail directly">
+                                Add
+                              </button>
+                              <!-- Fill Form Button -->
+                              <button type="button"
+                                      class="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+                                      phx-click="select_cocktail"
+                                      phx-value-cocktail-id={cocktail.id}
+                                      phx-target={@myself}
+                                      title="Fill form with cocktail details">
+                                Edit
+                              </button>
+                            </div>
+                          </div>
+                        <% end %>
+                      </div>
+                    <% end %>
+
                     <!-- Loading indicator for movie search -->
                     <%= if @poll.poll_type == "movie" and @search_loading do %>
                       <div class="absolute right-3 top-9 flex items-center">
@@ -631,6 +710,16 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
                     <!-- Loading indicator for music track search -->
                     <%= if @poll.poll_type == "music_track" and @search_loading do %>
+                      <div class="absolute right-3 top-9 flex items-center">
+                        <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                    <% end %>
+
+                    <!-- Loading indicator for cocktail search -->
+                    <%= if @poll.poll_type == "cocktail" and @search_loading do %>
                       <div class="absolute right-3 top-9 flex items-center">
                         <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1554,6 +1643,66 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
+  def handle_event(
+        "search_cocktails",
+        %{"poll_option" => %{"title" => query}} = _params,
+        socket
+      ) do
+    # Only search if this is a cocktail poll
+    if socket.assigns.poll.poll_type == "cocktail" do
+      if String.length(String.trim(query)) >= 2 do
+        # Set loading state
+        socket = assign(socket, :search_loading, true)
+
+        # Use the centralized RichDataManager system
+        search_options = %{
+          providers: [:cocktaildb],
+          limit: 5,
+          content_type: :cocktail
+        }
+
+        case RichDataManager.search(query, search_options) do
+          {:ok, results_by_provider} ->
+            # Extract cocktail results from CocktailDB provider
+            cocktail_results =
+              case Map.get(results_by_provider, :cocktaildb) do
+                {:ok, results} when is_list(results) -> results
+                {:ok, result} -> [result]
+                _ -> []
+              end
+
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, cocktail_results)
+             |> assign(:search_loading, false)}
+
+          {:error, _} ->
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, [])
+             |> assign(:search_loading, false)}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:search_query, query)
+         |> assign(:search_results, [])
+         |> assign(:search_loading, false)}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Fallback handler for search_cocktails
+  @impl true
+  def handle_event("search_cocktails", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("select_movie", %{"movie-id" => movie_id}, socket) do
     # Find the selected movie in search results
     movie_data =
@@ -1694,6 +1843,147 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
               {:noreply,
                socket
                |> assign(:adding_movie, false)}
+            end
+          end
+      end
+    end
+  end
+
+  @impl true
+  def handle_event("select_cocktail", %{"cocktail-id" => cocktail_id}, socket) do
+    # Find the selected cocktail in search results
+    cocktail_data =
+      socket.assigns.search_results
+      |> Enum.find(fn cocktail ->
+        to_string(cocktail.id) == to_string(cocktail_id)
+      end)
+
+    if cocktail_data do
+      # Set loading state for rich data
+      socket = assign(socket, :loading_rich_data, true)
+
+      # Use the centralized RichDataManager to get detailed cocktail data
+      case RichDataManager.get_cached_details(:cocktaildb, cocktail_data.id, :cocktail) do
+        {:ok, rich_cocktail_data} ->
+          # Use the shared CocktailDataService to prepare cocktail data consistently
+          prepared_data =
+            EventasaurusWeb.Services.CocktailDataService.prepare_cocktail_option_data(
+              cocktail_data.id,
+              rich_cocktail_data
+            )
+
+          # Create changeset with the rich data
+          changeset = create_option_changeset(socket, prepared_data)
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)
+           |> assign(:search_results, [])
+           |> assign(:search_query, "")}
+
+        {:error, _reason} ->
+          # Fallback to basic cocktail data if rich data fetch fails
+          fallback_data = %{
+            "title" => cocktail_data.title,
+            "description" => cocktail_data.description || "",
+            "external_id" => to_string(cocktail_data.id),
+            "image_url" => cocktail_data.image_url
+          }
+
+          changeset = create_option_changeset(socket, fallback_data)
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)
+           |> assign(:search_results, [])
+           |> assign(:search_query, "")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_cocktail", %{"cocktail-id" => cocktail_id}, socket) do
+    # Check if already processing to prevent double-clicks
+    if socket.assigns[:adding_cocktail] do
+      {:noreply, socket}
+    else
+      case check_rate_limit(socket, :add_cocktail) do
+        {:error, :rate_limited} ->
+          {:noreply,
+           put_flash(socket, :error, "Please wait a moment before adding another cocktail.")}
+
+        {:ok, socket} ->
+          user = socket.assigns.user
+
+          if is_nil(user) do
+            {:noreply,
+             socket
+             |> put_flash(:error, "You must be logged in to add cocktails.")
+             |> assign(:adding_cocktail, false)}
+          else
+            # Find the selected cocktail in search results
+            cocktail_data =
+              socket.assigns.search_results
+              |> Enum.find(fn cocktail ->
+                to_string(cocktail.id) == to_string(cocktail_id)
+              end)
+
+            if cocktail_data do
+              # Set loading state to prevent duplicate submissions
+              socket = assign(socket, :adding_cocktail, true)
+
+              # Get rich data and create poll option directly
+              case RichDataManager.get_cached_details(:cocktaildb, cocktail_data.id, :cocktail) do
+                {:ok, rich_cocktail_data} ->
+                  # Prepare cocktail option data
+                  option_params =
+                    EventasaurusWeb.Services.CocktailDataService.prepare_cocktail_option_data(
+                      cocktail_data.id,
+                      rich_cocktail_data
+                    )
+                    |> Map.merge(%{
+                      "poll_id" => socket.assigns.poll.id,
+                      "suggested_by_id" => user.id
+                    })
+
+                  case Events.create_poll_option(option_params) do
+                    {:ok, _option} ->
+                      # Notify parent component of successful option creation
+                      send(self(), %{type: :option_suggested})
+
+                      {:noreply,
+                       socket
+                       |> assign(:adding_cocktail, false)
+                       |> assign(:suggestion_form_visible, false)
+                       |> assign(:search_query, "")
+                       |> assign(:search_results, [])}
+
+                    {:error, changeset} ->
+                      Logger.error("Failed to create cocktail option: #{inspect(changeset.errors)}")
+
+                      {:noreply,
+                       socket
+                       |> assign(:adding_cocktail, false)
+                       |> put_flash(:error, "Failed to add cocktail. Please try again.")}
+                  end
+
+                {:error, reason} ->
+                  Logger.error("Failed to fetch cocktail details: #{inspect(reason)}")
+
+                  {:noreply,
+                   socket
+                   |> assign(:adding_cocktail, false)
+                   |> put_flash(:error, "Failed to load cocktail details. Please try again.")}
+              end
+            else
+              {:noreply,
+               socket
+               |> assign(:adding_cocktail, false)
+               |> put_flash(:error, "Cocktail not found in search results.")}
             end
           end
       end
@@ -2913,6 +3203,27 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
+  # Helper function to extract image URL from cocktail data
+  defp get_cocktail_image_url(cocktail) do
+    cond do
+      # Check if cocktail has image_url field
+      Map.has_key?(cocktail, :image_url) && cocktail.image_url ->
+        cocktail.image_url
+
+      # Check if cocktail has images array
+      Map.has_key?(cocktail, :images) && is_list(cocktail.images) ->
+        image = List.first(cocktail.images)
+        if image, do: Map.get(image, :url), else: nil
+
+      # Check metadata for thumbnail
+      cocktail.metadata && cocktail.metadata["thumbnail"] ->
+        cocktail.metadata["thumbnail"]
+
+      true ->
+        nil
+    end
+  end
+
   # UI helper functions
 
   defp suggest_button_text(%{poll_type: poll_type} = poll) do
@@ -2986,6 +3297,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "music_track" ->
         "Start typing to search songs..."
 
+      "cocktail" ->
+        "Start typing to search cocktails..."
+
       _ ->
         "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
@@ -2997,6 +3311,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "places" -> "Start typing to search places..."
       "time" -> "Select a time..."
       "music_track" -> "Start typing to search songs..."
+      "cocktail" -> "Start typing to search cocktails..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
@@ -3008,6 +3323,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       # No description for time polls
       "time" -> ""
       "music_track" -> "Artist, album, or why you recommend it..."
+      "cocktail" -> "Ingredients, taste profile, or why you recommend it..."
       _ -> "Additional details or context..."
     end
   end
@@ -3019,6 +3335,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "time" -> "times"
       "date_selection" -> "dates"
       "music_track" -> "songs"
+      "cocktail" -> "cocktails"
       _ -> "options"
     end
   end
@@ -3084,7 +3401,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # Helper function to determine if a poll type should use API search
   defp should_use_api_search?(poll_type) do
-    poll_type in ["movie", "places", "time", "music_track"]
+    poll_type in ["movie", "places", "time", "music_track", "cocktail"]
   end
 
   # New helper functions for empty state
