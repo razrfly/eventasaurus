@@ -40,6 +40,9 @@ defmodule EventasaurusWeb.Router do
     scope "/admin", EventasaurusWeb do
       pipe_through :browser
 
+      # Main Admin Dashboard (dev - no auth)
+      live "/", Admin.AdminDashboardLive
+
       # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
 
@@ -143,6 +146,9 @@ defmodule EventasaurusWeb.Router do
 
     scope "/admin" do
       pipe_through :oban_admin
+
+      # Main Admin Dashboard with admin authentication
+      live "/", EventasaurusWeb.Admin.AdminDashboardLive
 
       # Oban Web UI with admin authentication
       oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
