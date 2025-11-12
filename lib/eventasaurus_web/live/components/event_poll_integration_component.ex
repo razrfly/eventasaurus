@@ -1706,10 +1706,13 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
     # Create poll options from the template data
     poll_options_attrs =
-      Enum.with_index(poll_data.options, fn option_title, index ->
+      poll_data.options
+      |> Enum.with_index()
+      |> Enum.map(fn {option_title, index} ->
         %{
           title: option_title,
-          display_order: index
+          order_index: index,
+          suggested_by_id: user.id
         }
       end)
 
@@ -1720,10 +1723,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
       voting_system: poll_data.voting_system,
       phase: :setup,
       event_id: event.id,
+      created_by_id: user.id,
       poll_options: poll_options_attrs
     }
 
-    case Events.create_poll(poll_attrs, user) do
+    case Events.create_poll(poll_attrs) do
       {:ok, poll} ->
         # Reload polls list
         polls = Events.list_polls(event)
