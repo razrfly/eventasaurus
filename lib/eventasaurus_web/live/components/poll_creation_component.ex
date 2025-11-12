@@ -128,9 +128,29 @@ defmodule EventasaurusWeb.PollCreationComponent do
           event_id: assigns.event.id,
           created_by_id: assigns.user.id,
           phase: "list_building",
-          poll_type: if(template_data, do: template_data["poll_type"], else: "custom"),
-          voting_system: if(template_data, do: template_data["voting_system"], else: "binary"),
-          title: if(template_data, do: template_data["suggested_title"], else: nil),
+          poll_type:
+            if(template_data,
+              do:
+                Map.get(template_data, "poll_type") ||
+                  Map.get(template_data, :poll_type) ||
+                  "custom",
+              else: "custom"
+            ),
+          voting_system:
+            if(template_data,
+              do:
+                Map.get(template_data, "voting_system") ||
+                  Map.get(template_data, :voting_system) ||
+                  "binary",
+              else: "binary"
+            ),
+          title:
+            if(template_data,
+              do:
+                Map.get(template_data, "suggested_title") ||
+                  Map.get(template_data, :suggested_title),
+              else: nil
+            ),
           # Now contains venue data if available
           settings: initial_settings
         }

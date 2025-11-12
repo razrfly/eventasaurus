@@ -132,7 +132,7 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
 
   @impl true
   def handle_event("cancel", _params, socket) do
-    send(self(), :close_template_editor)
+    send(self(), {:close_template_editor})
     {:noreply, socket}
   end
 
