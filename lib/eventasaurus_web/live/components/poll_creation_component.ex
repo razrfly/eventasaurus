@@ -68,6 +68,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
   def update(assigns, socket) do
     # Determine if we're editing or creating
     poll = assigns[:poll]
+    template_data = assigns[:template_data]
     is_editing = poll != nil
 
     # Create changeset
@@ -127,8 +128,9 @@ defmodule EventasaurusWeb.PollCreationComponent do
           event_id: assigns.event.id,
           created_by_id: assigns.user.id,
           phase: "list_building",
-          poll_type: "custom",
-          voting_system: "binary",
+          poll_type: if(template_data, do: template_data["poll_type"], else: "custom"),
+          voting_system: if(template_data, do: template_data["voting_system"], else: "binary"),
+          title: if(template_data, do: template_data["suggested_title"], else: nil),
           # Now contains venue data if available
           settings: initial_settings
         }
@@ -153,6 +155,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:current_poll_type, current_poll_type)
      |> assign(:poll_types, @poll_types)
      |> assign(:voting_systems, @voting_systems)
+     |> assign(:template_data, template_data)
      |> assign_new(:loading, fn -> false end)
      |> assign_new(:show, fn -> false end)
      |> assign_new(:show_voting_guidelines, fn -> false end)}
