@@ -147,8 +147,8 @@ defmodule EventasaurusDiscovery.Sources.Processor do
              process_performers(event_data[:performers] || event_data["performers"] || [], source),
            {:ok, event} <- process_event(event_data, source, venue, performers) do
         # Update metadata with city_id after successful venue processing
-        metadata = Map.put(metadata, "city_id", venue.city_id)
-        {:ok, event}
+        updated_metadata = Map.put(metadata, "city_id", venue.city_id)
+        {:ok, event, updated_metadata}
       else
         {:error, reason} = error when is_binary(reason) ->
           # Check if this is a GPS coordinate error that should fail the job
@@ -177,12 +177,12 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     source_for_logging = normalize_source_for_logging(source)
 
     case result do
-      {:ok, _event} ->
+      {:ok, event, updated_metadata} ->
         if source_for_logging do
-          ScraperProcessingLogs.log_success(source_for_logging, job_id, metadata)
+          ScraperProcessingLogs.log_success(source_for_logging, job_id, updated_metadata)
         end
 
-        result
+        {:ok, event}
 
       {:error, _reason} = error ->
         # Extract the actual error reason from error tuples

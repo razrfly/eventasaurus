@@ -620,7 +620,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp create_venue(data, city, _source, source_scraper) do
-    Logger.error(
+    Logger.debug(
       "🔍 ENTER create_venue: name='#{data.name}', scraper=#{source_scraper}, has_coords=#{not is_nil(data.latitude)}"
     )
 
@@ -679,7 +679,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Prefer geocoding provider's place_id over scraper's place_id
     final_place_id = geocoding_place_id || data.place_id
 
-    Logger.error(
+    Logger.debug(
       "🔍 CALL insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude}), scraper=#{source_scraper}"
     )
 
@@ -736,7 +736,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          source_scraper,
          provider_ids
        ) do
-    Logger.error(
+    Logger.debug(
       "🔍 ENTER insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude})"
     )
 
@@ -750,7 +750,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # City assignment is subjective - GPS coordinates are objective
     lock_key = :erlang.phash2({lat_rounded, lng_rounded})
 
-    Logger.error(
+    Logger.debug(
       "🔍 Lock key=#{lock_key}, rounded=(#{lat_rounded}, #{lng_rounded}) [city-agnostic]"
     )
 
@@ -761,13 +761,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
            # Other workers trying to insert at same location will block here
            Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
 
-           Logger.error(
+           Logger.debug(
              "🔒 Acquired advisory lock #{lock_key} for venue '#{final_name}' at (#{lat_rounded}, #{lng_rounded})"
            )
 
            # Now that we have the lock, do one final duplicate check
            # This is safe because no other worker can insert at this location until we're done
-           Logger.error(
+           Logger.debug(
              "🔍 Searching for duplicates: name='#{final_name}', coords=(#{latitude}, #{longitude}), city_id=#{city.id}"
            )
 
@@ -783,7 +783,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                nil
              end
 
-           Logger.error(
+           Logger.debug(
              "🔍 Duplicate search result: #{if existing_venue, do: "FOUND ID #{existing_venue.id}", else: "NOT FOUND - will insert"}"
            )
 
@@ -796,7 +796,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
              existing_venue
            else
              # No duplicate found, safe to insert
-             Logger.error("🔍 NO DUPLICATE - calling insert_new_venue for '#{final_name}'")
+             Logger.debug("🔍 NO DUPLICATE - calling insert_new_venue for '#{final_name}'")
 
              case insert_new_venue(
                     data,
@@ -811,7 +811,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                     provider_ids
                   ) do
                {:ok, venue} ->
-                 Logger.error("✅ INSERT SUCCESS: venue ID #{venue.id}, name='#{venue.name}'")
+                 Logger.info("✅ INSERT SUCCESS: venue ID #{venue.id}, name='#{venue.name}'")
                  venue
 
                {:error, error} ->
