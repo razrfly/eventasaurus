@@ -36,7 +36,9 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   # Import the other polling components
   alias EventasaurusWeb.PollCreationComponent
+  alias EventasaurusWeb.PollListComponent
   alias EventasaurusWeb.OptionSuggestionComponent
+  alias EventasaurusWeb.PollTemplateEditorComponent
 
   @impl true
   def mount(socket) do
@@ -45,6 +47,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:active_view, "overview")
      |> assign(:selected_poll, nil)
      |> assign(:showing_creation_modal, false)
+     |> assign(:showing_template_editor, false)
      |> assign(:showing_poll_details, false)
      |> assign(:error_message, nil)
      |> assign(:success_message, nil)
@@ -56,7 +59,9 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:selected_polls, [])
      |> assign(:open_poll_menu, nil)
      |> assign(:reorder_mode, false)
-     |> assign(:reordered_polls, [])}
+     |> assign(:reordered_polls, [])
+     |> assign(:template_data, nil)
+     |> assign(:template_suggestion, nil)}
   end
 
   @impl true
@@ -118,6 +123,9 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             assigns[:selected_poll]
         end
 
+      # Handle template_data - use from assigns if provided, otherwise keep current
+      template_data = assigns[:template_data] || socket.assigns[:template_data]
+
       {:ok,
        socket
        |> assign(assigns)
@@ -136,7 +144,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
        |> assign(:is_organizer, is_organizer)
        |> assign(:showing_creation_modal, showing_creation_modal)
        |> assign(:active_view, active_view)
-       |> assign(:selected_poll, updated_selected_poll)}
+       |> assign(:selected_poll, updated_selected_poll)
+       |> assign(:template_data, template_data)}
     else
       # If we don't have required data, just assign what we have and wait for full update
       {:ok, assign(socket, assigns)}
@@ -602,28 +611,15 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         <% end %>
           </div>
         <% else %>
-          <!-- Empty State -->
-          <div class="px-6 py-12 text-center">
-            <div class="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
-              <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900 mb-2">No polls yet</h3>
-            <p class="text-sm text-gray-600 mb-6">
-              Create your first poll to gather input from event participants.
-            </p>
-            <button
-              phx-click="show_creation_modal"
-              phx-target={@myself}
-              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Create Your First Poll
-            </button>
-          </div>
+          <!-- Use PollListComponent for empty state with suggestions -->
+          <.live_component
+            module={EventasaurusWeb.PollListComponent}
+            id="event-polls-list"
+            event={@event}
+            polls={@polls}
+            user={@current_user}
+            can_create_polls={@can_create_polls}
+          />
         <% end %>
 
       <!-- Poll Creation Modal -->
@@ -635,6 +631,17 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           user={@current_user}
           show={true}
           poll={@editing_poll}
+          template_data={@template_data}
+        />
+      <% end %>
+
+      <!-- Template Editor Modal -->
+      <%= if @showing_template_editor && @template_suggestion do %>
+        <.live_component
+          module={PollTemplateEditorComponent}
+          id="poll-template-editor"
+          event={@event}
+          suggestion={@template_suggestion}
         />
       <% end %>
       <% end %>
@@ -1676,6 +1683,70 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:showing_poll_details, false)
      |> assign(:editing_poll, nil)
      |> assign(:selected_poll, nil)}
+  end
+
+  # Handle template editor messages
+  def handle_info({:open_template_editor, suggestion}, socket) do
+    {:noreply,
+     socket
+     |> assign(:showing_template_editor, true)
+     |> assign(:template_suggestion, suggestion)}
+  end
+
+  def handle_info({:close_template_editor}, socket) do
+    {:noreply,
+     socket
+     |> assign(:showing_template_editor, false)
+     |> assign(:template_suggestion, nil)}
+  end
+
+  def handle_info({:create_poll_from_template, poll_data}, socket) do
+    event = socket.assigns.event
+    user = socket.assigns.current_user
+
+    # Create poll options from the template data
+    poll_options_attrs =
+      Enum.with_index(poll_data.options, fn option_title, index ->
+        %{
+          title: option_title,
+          display_order: index
+        }
+      end)
+
+    # Create the poll with the template data
+    poll_attrs = %{
+      title: poll_data.title,
+      poll_type: poll_data.poll_type,
+      voting_system: poll_data.voting_system,
+      phase: :setup,
+      event_id: event.id,
+      poll_options: poll_options_attrs
+    }
+
+    case Events.create_poll(poll_attrs, user) do
+      {:ok, poll} ->
+        # Reload polls list
+        polls = Events.list_polls(event)
+
+        # Recalculate stats
+        integration_stats = calculate_integration_stats_with_polls(polls, event)
+
+        {:noreply,
+         socket
+         |> assign(:polls, polls)
+         |> assign(:integration_stats, integration_stats)
+         |> assign(:showing_template_editor, false)
+         |> assign(:template_suggestion, nil)
+         |> assign(:success_message, "Poll created from template successfully!")}
+
+      {:error, changeset} ->
+        errors =
+          changeset.errors
+          |> Enum.map(fn {field, {message, _}} -> "#{field}: #{message}" end)
+          |> Enum.join(", ")
+
+        {:noreply, assign(socket, :error_message, "Failed to create poll: #{errors}")}
+    end
   end
 
   def handle_info(%{type: :polls_reordered, event_id: event_id} = _message, socket) do

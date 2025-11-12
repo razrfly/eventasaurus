@@ -1176,10 +1176,108 @@ defmodule EventasaurusWeb.EventManageLive do
     send_update(EventasaurusWeb.EventPollIntegrationComponent,
       id: "event-poll-integration",
       showing_creation_modal: true,
-      editing_poll: nil
+      editing_poll: nil,
+      template_data: nil
     )
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:show_create_poll_modal_with_template, _event, template}, socket) do
+    # Handle poll creation modal with template pre-fill
+    send_update(EventasaurusWeb.EventPollIntegrationComponent,
+      id: "event-poll-integration",
+      showing_creation_modal: true,
+      editing_poll: nil,
+      template_data: template
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:open_template_editor, suggestion}, socket) do
+    # Forward the template editor request to the EventPollIntegrationComponent
+    send_update(EventasaurusWeb.EventPollIntegrationComponent,
+      id: "event-poll-integration",
+      showing_template_editor: true,
+      template_suggestion: suggestion
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:create_poll_from_template, poll_data}, socket) do
+    # Create the poll from template
+    event = socket.assigns.event
+    user = socket.assigns.user
+
+    poll_attrs = %{
+      title: poll_data.title,
+      poll_type: poll_data.poll_type,
+      voting_system: poll_data.voting_system,
+      phase: :setup,
+      event_id: event.id,
+      created_by_id: user.id
+    }
+
+    case Events.create_poll(poll_attrs) do
+      {:ok, poll} ->
+        # Create poll options separately
+        option_results =
+          poll_data.options
+          |> Enum.with_index()
+          |> Enum.map(fn {option_title, index} ->
+            Events.create_poll_option(%{
+              title: option_title,
+              poll_id: poll.id,
+              suggested_by_id: user.id,
+              order_index: index
+            })
+          end)
+
+        # Check if all options were created successfully
+        failed_options =
+          Enum.filter(option_results, fn
+            {:error, _} -> true
+            _ -> false
+          end)
+
+        if Enum.empty?(failed_options) do
+          # Success - reload polls and update the component
+          polls = Events.list_polls(event)
+
+          send_update(EventasaurusWeb.EventPollIntegrationComponent,
+            id: "event-poll-integration",
+            polls: polls,
+            showing_template_editor: false,
+            template_suggestion: nil
+          )
+
+          {:noreply,
+           socket
+           |> put_flash(:info, "Poll created from template successfully!")
+           |> assign(:polls, polls)}
+        else
+          # Some options failed to create
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Poll created but some options failed to save. Please add them manually."
+           )}
+        end
+
+      {:error, changeset} ->
+        errors =
+          changeset.errors
+          |> Enum.map(fn {field, {message, _}} -> "#{field}: #{message}" end)
+          |> Enum.join(", ")
+
+        {:noreply, put_flash(socket, :error, "Failed to create poll: #{errors}")}
+    end
   end
 
   @impl true
