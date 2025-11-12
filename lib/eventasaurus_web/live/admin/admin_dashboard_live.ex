@@ -133,6 +133,7 @@ defmodule EventasaurusWeb.Admin.AdminDashboardLive do
     |> String.graphemes()
     |> Enum.reverse()
     |> Enum.chunk_every(3)
+    |> Enum.map(&Enum.join(&1, ""))
     |> Enum.join(",")
     |> String.reverse()
   end
