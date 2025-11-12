@@ -46,16 +46,19 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   - `source_scraper` - Optional scraper name for cost tracking (e.g., "question_one", "kino_krakow")
   """
   def process_venue(venue_data, source \\ "scraper", source_scraper \\ nil) do
-    # Data is already cleaned at HTTP client level (single entry point validation)
-    with {:ok, normalized_data} <- normalize_venue_data(venue_data),
-         {:ok, city} <- ensure_city(normalized_data),
-         {:ok, venue} <- find_or_create_venue(normalized_data, city, source, source_scraper) do
-      {:ok, venue}
-    else
-      {:error, reason} = error ->
-        Logger.error("Failed to process venue: #{inspect(reason)}")
-        error
-    end
+    # Wrap in transaction to ensure city is rolled back if venue creation fails
+    Repo.transaction(fn ->
+      # Data is already cleaned at HTTP client level (single entry point validation)
+      with {:ok, normalized_data} <- normalize_venue_data(venue_data),
+           {:ok, city} <- ensure_city(normalized_data),
+           {:ok, venue} <- find_or_create_venue(normalized_data, city, source, source_scraper) do
+        venue
+      else
+        {:error, reason} = error ->
+          Logger.error("Failed to process venue: #{inspect(reason)}")
+          Repo.rollback(reason)
+      end
+    end)
   end
 
   @doc """
@@ -617,7 +620,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp create_venue(data, city, _source, source_scraper) do
-    Logger.error("🔍 ENTER create_venue: name='#{data.name}', scraper=#{source_scraper}, has_coords=#{not is_nil(data.latitude)}")
+    Logger.error(
+      "🔍 ENTER create_venue: name='#{data.name}', scraper=#{source_scraper}, has_coords=#{not is_nil(data.latitude)}"
+    )
 
     # ALWAYS geocode for venue name validation, even when coordinates are provided.
     # The geocoding system serves two purposes:
@@ -674,7 +679,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Prefer geocoding provider's place_id over scraper's place_id
     final_place_id = geocoding_place_id || data.place_id
 
-    Logger.error("🔍 CALL insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude}), scraper=#{source_scraper}")
+    Logger.error(
+      "🔍 CALL insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude}), scraper=#{source_scraper}"
+    )
 
     # Insert venue with PostgreSQL advisory lock to prevent race conditions
     # This eliminates TOCTOU gaps by serializing inserts for the same location
@@ -729,7 +736,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          source_scraper,
          provider_ids
        ) do
-    Logger.error("🔍 ENTER insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude})")
+    Logger.error(
+      "🔍 ENTER insert_venue_with_advisory_lock: name='#{final_name}', coords=(#{latitude}, #{longitude})"
+    )
 
     # Round coordinates to ~50m grid for lock key
     # This matches our duplicate detection threshold (<50m = same venue)
@@ -741,7 +750,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # City assignment is subjective - GPS coordinates are objective
     lock_key = :erlang.phash2({lat_rounded, lng_rounded})
 
-    Logger.error("🔍 Lock key=#{lock_key}, rounded=(#{lat_rounded}, #{lng_rounded}) [city-agnostic]")
+    Logger.error(
+      "🔍 Lock key=#{lock_key}, rounded=(#{lat_rounded}, #{lng_rounded}) [city-agnostic]"
+    )
 
     # Execute insert in transaction with advisory lock
     case Repo.transaction(fn ->
@@ -756,7 +767,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
            # Now that we have the lock, do one final duplicate check
            # This is safe because no other worker can insert at this location until we're done
-           Logger.error("🔍 Searching for duplicates: name='#{final_name}', coords=(#{latitude}, #{longitude}), city_id=#{city.id}")
+           Logger.error(
+             "🔍 Searching for duplicates: name='#{final_name}', coords=(#{latitude}, #{longitude}), city_id=#{city.id}"
+           )
 
            existing_venue =
              if latitude && longitude do
@@ -770,7 +783,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                nil
              end
 
-           Logger.error("🔍 Duplicate search result: #{if existing_venue, do: "FOUND ID #{existing_venue.id}", else: "NOT FOUND - will insert"}")
+           Logger.error(
+             "🔍 Duplicate search result: #{if existing_venue, do: "FOUND ID #{existing_venue.id}", else: "NOT FOUND - will insert"}"
+           )
 
            if existing_venue do
              # Found duplicate while holding lock, return it
@@ -800,7 +815,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
                  venue
 
                {:error, error} ->
-                 Logger.error("❌ Insert failed in locked transaction: #{inspect(error)}, rolling back")
+                 Logger.error(
+                   "❌ Insert failed in locked transaction: #{inspect(error)}, rolling back"
+                 )
+
                  Repo.rollback(error)
              end
            end
@@ -894,7 +912,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           %{
             provider: "provided",
             source_scraper: valid_source_scraper,
-            geocoded_at: final_geocoding_metadata[:geocoded_at] || (DateTime.utc_now() |> DateTime.to_iso8601()),
+            geocoded_at:
+              final_geocoding_metadata[:geocoded_at] ||
+                DateTime.utc_now() |> DateTime.to_iso8601(),
             cost_per_call: 0.0,
             attempts: 0,
             attempted_providers: []
@@ -1127,26 +1147,31 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   # Converts structs (like Geocoder.Coords) to plain maps for JSON encoding
   # Recursively handles nested structs, tuples, lists, and maps
   defp struct_to_map(nil), do: nil
+
   defp struct_to_map(val) when is_struct(val) do
     val
     |> Map.from_struct()
     |> Enum.map(fn {k, v} -> {k, struct_to_map(v)} end)
     |> Enum.into(%{})
   end
+
   defp struct_to_map(map) when is_map(map) do
     map
     |> Enum.map(fn {k, v} -> {k, struct_to_map(v)} end)
     |> Enum.into(%{})
   end
+
   defp struct_to_map(list) when is_list(list) do
     Enum.map(list, &struct_to_map/1)
   end
+
   defp struct_to_map(tuple) when is_tuple(tuple) do
     # Convert tuples to lists for JSON encoding
     tuple
     |> Tuple.to_list()
     |> Enum.map(&struct_to_map/1)
   end
+
   defp struct_to_map(val), do: val
 
   # Validates venue name using VenueNameValidator and returns the best name to use

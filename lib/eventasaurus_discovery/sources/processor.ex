@@ -134,6 +134,8 @@ defmodule EventasaurusDiscovery.Sources.Processor do
       "entity_name" => event_data[:title] || event_data["title"],
       "external_id" => event_data[:external_id] || event_data["external_id"],
       "venue_name" => get_venue_name(venue_data),
+      "city_name" => get_city_name(venue_data),
+      "city_id" => nil,
       "phase" => "processing"
     }
 
@@ -144,6 +146,8 @@ defmodule EventasaurusDiscovery.Sources.Processor do
            {:ok, performers} <-
              process_performers(event_data[:performers] || event_data["performers"] || [], source),
            {:ok, event} <- process_event(event_data, source, venue, performers) do
+        # Update metadata with city_id after successful venue processing
+        metadata = Map.put(metadata, "city_id", venue.city_id)
         {:ok, event}
       else
         {:error, reason} = error when is_binary(reason) ->
@@ -234,10 +238,21 @@ defmodule EventasaurusDiscovery.Sources.Processor do
 
   # Helper to safely extract venue name from venue data
   defp get_venue_name(nil), do: nil
+
   defp get_venue_name(venue_data) when is_map(venue_data) do
     venue_data[:name] || venue_data["name"]
   end
+
   defp get_venue_name(_), do: nil
+
+  # Helper to safely extract city name from venue data
+  defp get_city_name(nil), do: nil
+
+  defp get_city_name(venue_data) when is_map(venue_data) do
+    venue_data[:city] || venue_data["city"]
+  end
+
+  defp get_city_name(_), do: nil
 
   defp process_venue(nil, _source, _scraper_name) do
     {:error, :venue_required}
