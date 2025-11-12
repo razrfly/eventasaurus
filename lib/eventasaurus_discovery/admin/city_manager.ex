@@ -232,14 +232,14 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   """
   def delete_orphaned_cities do
     Repo.transaction(fn ->
-      # Get IDs of cities with zero venues and lock them to prevent race conditions
+      # Get IDs of cities with zero venues
+      # Note: Transaction isolation + foreign key constraints prevent race conditions
       orphaned_city_ids =
         from(c in City,
           left_join: v in assoc(c, :venues),
           group_by: c.id,
           having: count(v.id) == 0,
-          select: c.id,
-          lock: "FOR UPDATE"
+          select: c.id
         )
         |> Repo.all()
 
