@@ -221,7 +221,7 @@ defmodule EventasaurusWeb.Services.CocktailDbService do
     url = "#{@base_url}/#{api_key}/search.php?s=#{URI.encode(query)}"
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("CocktailDB search URL: #{@base_url}/#{api_key}/search.php?s=#{URI.encode(query)}")
+    Logger.debug("CocktailDB search URL: #{@base_url}/[REDACTED]/search.php?s=#{URI.encode(query)}")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -252,7 +252,7 @@ defmodule EventasaurusWeb.Services.CocktailDbService do
     url = "#{@base_url}/#{api_key}/lookup.php?i=#{cocktail_id}"
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("CocktailDB details URL: #{@base_url}/#{api_key}/lookup.php?i=#{cocktail_id}")
+    Logger.debug("CocktailDB details URL: #{@base_url}/[REDACTED]/lookup.php?i=#{cocktail_id}")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -286,7 +286,7 @@ defmodule EventasaurusWeb.Services.CocktailDbService do
     headers = [{"Accept", "application/json"}]
 
     Logger.debug(
-      "CocktailDB category URL: #{@base_url}/#{api_key}/filter.php?c=#{URI.encode(category)}"
+      "CocktailDB category URL: #{@base_url}/[REDACTED]/filter.php?c=#{URI.encode(category)}"
     )
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
@@ -322,7 +322,7 @@ defmodule EventasaurusWeb.Services.CocktailDbService do
     url = "#{@base_url}/#{api_key}/random.php"
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("CocktailDB random URL: #{@base_url}/#{api_key}/random.php")
+    Logger.debug("CocktailDB random URL: #{@base_url}/[REDACTED]/random.php")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
