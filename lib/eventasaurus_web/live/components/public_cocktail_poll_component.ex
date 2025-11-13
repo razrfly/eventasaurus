@@ -18,7 +18,6 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
-  import Phoenix.HTML.SimplifiedHelpers.Truncate
 
   @impl true
   def mount(socket) do
@@ -383,8 +382,8 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
                         <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
 
                         <%= if option.description do %>
-                          <p class="text-sm text-gray-600 mb-2">
-                            <%= truncate(option.description, length: 80, separator: " ") %>
+                          <p class="text-sm text-gray-600 mb-2 line-clamp-2">
+                            <%= option.description %>
                           </p>
                         <% end %>
                         <!-- Show who suggested this cocktail -->

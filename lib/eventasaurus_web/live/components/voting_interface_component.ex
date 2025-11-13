@@ -364,7 +364,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
 
             <%= if option.description do %>
-              <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+              <p class={"text-sm text-gray-500 mt-1 " <> if(@poll.poll_type in ["movie", "cocktail"], do: "line-clamp-2", else: "")}><%= option.description %></p>
             <% end %>
             
             <!-- Show who suggested this option -->
@@ -556,7 +556,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
 
             <%= if option.description do %>
-              <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+              <p class={"text-sm text-gray-500 mt-1 " <> if(@poll.poll_type in ["movie", "cocktail"], do: "line-clamp-2", else: "")}><%= option.description %></p>
             <% end %>
             
             <!-- Show who suggested this option -->
@@ -712,7 +712,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                   <h4 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h4>
                 <% end %>
                 <%= if option.description do %>
-                  <p class={"text-xs text-gray-500 mt-0.5 sm:mt-1 " <> if(@poll.poll_type == "movie", do: "line-clamp-2", else: "")}><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+                  <p class={"text-xs text-gray-500 mt-0.5 sm:mt-1 " <> if(@poll.poll_type in ["movie", "cocktail"], do: "line-clamp-2", else: "")}><%= option.description %></p>
                 <% end %>
                 
                 <!-- Show who suggested this option -->
@@ -842,7 +842,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                       <h5 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h5>
                     <% end %>
                     <%= if option.description do %>
-                      <p class={"text-xs text-gray-500 mt-0.5 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-2", else: "mt-1")}><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+                      <p class={"text-xs text-gray-500 mt-0.5 " <> if(@poll.poll_type in ["movie", "cocktail"], do: "line-clamp-1 sm:line-clamp-2", else: "mt-1")}><%= option.description %></p>
                     <% end %>
                     
                     <!-- Show who suggested this option -->
@@ -929,6 +929,43 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     <%= for option <- @poll.poll_options do %>
       <div class="px-4 sm:px-6 py-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <!-- Movie/Cocktail Image -->
+          <%= if @poll.poll_type == "movie" do %>
+            <div class="flex sm:block">
+              <div class="w-12 h-18 sm:w-16 sm:h-24 mr-3 flex-shrink-0 overflow-hidden rounded">
+                <% image_url = MovieUtils.get_image_url(option) %>
+                <%= if image_url do %>
+                  <img
+                    src={image_url}
+                    alt={"#{option.title} poster"}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                <% else %>
+                  <div class="w-full h-full bg-gray-200 flex items-center justify-center">
+                    <svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                    </svg>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% else %>
+            <!-- Images for non-movie polls (cocktails, places, etc.) -->
+            <%= if option.image_url do %>
+              <div class="flex sm:block">
+                <div class="w-12 h-18 sm:w-16 sm:h-24 mr-3 flex-shrink-0 overflow-hidden rounded">
+                  <img
+                    src={option.image_url}
+                    alt={"#{option.title} image"}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            <% end %>
+          <% end %>
+
           <div class="flex-1 min-w-0">
             <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
             <%= if movie_url do %>
@@ -948,7 +985,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
             <% end %>
             <%= if option.description do %>
-              <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+              <p class={"text-sm text-gray-500 mt-1 " <> if(@poll.poll_type in ["movie", "cocktail"], do: "line-clamp-2", else: "")}><%= option.description %></p>
             <% end %>
             
             <!-- Show who suggested this option -->
