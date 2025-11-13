@@ -76,15 +76,26 @@
       <div class="space-y-4">
         <%= if is_poll_active?(@poll) do %>
           <!-- Active poll - show voting interface -->
-          <.live_component
-            module={PublicGenericPollComponent}
-            id={"poll-#{@poll.id}"}
-            poll={@poll}
-            event={@event}
-            current_user={@auth_user}
-            temp_votes={@temp_votes}
-            mode={:content}
-          />
+          <%= if @poll.poll_type == "cocktail" do %>
+            <.live_component
+              module={PublicCocktailPollComponent}
+              id={"cocktail-poll-#{@poll.id}"}
+              poll={@poll}
+              event={@event}
+              current_user={@auth_user}
+              temp_votes={@temp_votes}
+            />
+          <% else %>
+            <.live_component
+              module={PublicGenericPollComponent}
+              id={"poll-#{@poll.id}"}
+              poll={@poll}
+              event={@event}
+              current_user={@auth_user}
+              temp_votes={@temp_votes}
+              mode={:content}
+            />
+          <% end %>
 
           <%= if is_nil(@auth_user) do %>
             <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -104,16 +115,28 @@
           <% end %>
         <% else %>
           <!-- Historical poll - show results only -->
-          <.live_component
-            module={PublicGenericPollComponent}
-            id={"poll-results-#{@poll.id}"}
-            poll={@poll}
-            event={@event}
-            current_user={@auth_user}
-            temp_votes={%{}}
-            results_only={true}
-            mode={:content}
-          />
+          <%= if @poll.poll_type == "cocktail" do %>
+            <.live_component
+              module={PublicCocktailPollComponent}
+              id={"cocktail-poll-results-#{@poll.id}"}
+              poll={@poll}
+              event={@event}
+              current_user={@auth_user}
+              temp_votes={%{}}
+              results_only={true}
+            />
+          <% else %>
+            <.live_component
+              module={PublicGenericPollComponent}
+              id={"poll-results-#{@poll.id}"}
+              poll={@poll}
+              event={@event}
+              current_user={@auth_user}
+              temp_votes={%{}}
+              results_only={true}
+              mode={:content}
+            />
+          <% end %>
           
           <%= if @poll.finalized_date do %>
             <div class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
