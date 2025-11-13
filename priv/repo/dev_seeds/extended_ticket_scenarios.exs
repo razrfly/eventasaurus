@@ -469,7 +469,7 @@ defmodule DevSeeds.ExtendedTicketScenarios do
       ⏰ Garden will be open to all community members
       """,
       tagline: "Grow Community, Grow Together",
-      is_ticketed: false,
+      is_ticketed: true,
       taxation_type: "contribution_collection",
       status: :threshold,
       threshold_type: "revenue",
@@ -516,7 +516,7 @@ defmodule DevSeeds.ExtendedTicketScenarios do
       ⏰ Completion: Summer 2025
       """,
       tagline: "Where Children Play and Memories Are Made",
-      is_ticketed: false,
+      is_ticketed: true,
       taxation_type: "contribution_collection",
       status: :threshold,
       threshold_type: "revenue",
