@@ -1571,6 +1571,17 @@ defmodule EventasaurusWeb.PublicEventLive do
                         temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                       />
 
+                    <% poll.poll_type == "cocktail" -> %>
+                      <!-- Special handling for cocktail polls -->
+                      <.live_component
+                        module={EventasaurusWeb.PublicCocktailPollComponent}
+                        id={"cocktail-poll-#{poll.id}"}
+                        poll={poll}
+                        event={@event}
+                        current_user={@user}
+                        temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
+                      />
+
                     <% poll.poll_type == "music_track" -> %>
                       <!-- Special handling for music track polls -->
                       <.live_component
