@@ -5,20 +5,33 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
   """
 
   import Phoenix.HTML.SimplifiedHelpers.Truncate
+  require Logger
 
   @doc """
   Prepares cocktail option data in a consistent format for both admin and public interfaces.
   """
   def prepare_cocktail_option_data(cocktail_id, rich_data) do
+    # Debug logging to see what we're working with
+    Logger.debug("CocktailDataService.prepare_cocktail_option_data called with:")
+    Logger.debug("  cocktail_id type: #{inspect(__MODULE__.get_type(cocktail_id))}, value: #{inspect(cocktail_id)}")
+    Logger.debug("  rich_data type: #{inspect(__MODULE__.get_type(rich_data))}")
+    Logger.debug("  rich_data keys: #{inspect(if is_map(rich_data), do: Map.keys(rich_data), else: :not_a_map)}")
+
+    # Check each field we're trying to extract
+    if is_map(rich_data) do
+      Logger.debug("  rich_data['title'] type: #{inspect(__MODULE__.get_type(rich_data["title"]))}, value: #{inspect(rich_data["title"])}")
+      Logger.debug("  rich_data[:title] type: #{inspect(__MODULE__.get_type(rich_data[:title]))}, value: #{inspect(rich_data[:title])}")
+    end
+
     # Handle both string and atom keys for title
     # Check normalized provider data first (title), then raw API data (name/strDrink)
     title =
       cond do
-        is_map(rich_data) and Map.has_key?(rich_data, "title") -> rich_data["title"]
-        is_map(rich_data) and Map.has_key?(rich_data, :title) -> rich_data[:title]
-        is_map(rich_data) and Map.has_key?(rich_data, "name") -> rich_data["name"]
-        is_map(rich_data) and Map.has_key?(rich_data, :name) -> rich_data[:name]
-        is_map(rich_data) and Map.has_key?(rich_data, "strDrink") -> rich_data["strDrink"]
+        is_map(rich_data) and Map.has_key?(rich_data, "title") -> to_string_safe(rich_data["title"])
+        is_map(rich_data) and Map.has_key?(rich_data, :title) -> to_string_safe(rich_data[:title])
+        is_map(rich_data) and Map.has_key?(rich_data, "name") -> to_string_safe(rich_data["name"])
+        is_map(rich_data) and Map.has_key?(rich_data, :name) -> to_string_safe(rich_data[:name])
+        is_map(rich_data) and Map.has_key?(rich_data, "strDrink") -> to_string_safe(rich_data["strDrink"])
         true -> ""
       end
 
@@ -36,15 +49,18 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
     # Handle both normalized and raw data for description
     base_description =
       cond do
-        is_map(rich_data) and Map.has_key?(rich_data, "description") -> rich_data["description"]
-        is_map(rich_data) and Map.has_key?(rich_data, :description) -> rich_data[:description]
-        true -> get_instructions(rich_data, "en") || ""
+        is_map(rich_data) and Map.has_key?(rich_data, "description") -> to_string_safe(rich_data["description"]) || ""
+        is_map(rich_data) and Map.has_key?(rich_data, :description) -> to_string_safe(rich_data[:description]) || ""
+        true -> to_string_safe(get_instructions(rich_data, "en")) || ""
       end
 
     # Extract metadata for enhancement (works with both normalized and raw data)
-    category = get_field(rich_data, ["category", "strCategory"]) || get_in(rich_data, [:metadata, :category])
-    alcoholic = get_field(rich_data, ["alcoholic", "strAlcoholic"]) || get_in(rich_data, [:metadata, :alcoholic])
-    glass = get_field(rich_data, ["glass", "strGlass"]) || get_in(rich_data, [:metadata, :glass])
+    # Ensure all values are strings or nil
+    category = to_string_safe(get_field(rich_data, ["category", "strCategory"]) || get_in(rich_data, [:metadata, :category]))
+    alcoholic = to_string_safe(get_field(rich_data, ["alcoholic", "strAlcoholic"]) || get_in(rich_data, [:metadata, :alcoholic]))
+    glass = to_string_safe(get_field(rich_data, ["glass", "strGlass"]) || get_in(rich_data, [:metadata, :glass]))
+
+    Logger.debug("  Extracted metadata - category: #{inspect(category)}, alcoholic: #{inspect(alcoholic)}, glass: #{inspect(glass)}")
 
     # Build enhanced description
     enhanced_description = build_enhanced_description(base_description, category, alcoholic, glass, rich_data)
@@ -61,7 +77,7 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
     %{
       "title" => title,
       "description" => truncated_description,
-      "external_id" => to_string(cocktail_id),
+      "external_id" => to_string_safe(cocktail_id),
       "external_data" => rich_data,
       "image_url" => image_url
     }
@@ -104,15 +120,24 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
         ingredients_text =
           ingredients
           |> Enum.map(fn ing ->
-            if ing.measure do
-              "#{ing.measure} #{ing.ingredient}"
+            # Ensure ingredient and measure are strings
+            ingredient_str = to_string_safe(Map.get(ing, :ingredient) || Map.get(ing, "ingredient"))
+            measure_str = to_string_safe(Map.get(ing, :measure) || Map.get(ing, "measure"))
+
+            if measure_str && measure_str != "" do
+              "#{measure_str} #{ingredient_str}"
             else
-              ing.ingredient
+              ingredient_str
             end
           end)
+          |> Enum.reject(&(&1 == "" || is_nil(&1)))
           |> Enum.join(", ")
 
-        ["Ingredients: #{ingredients_text}" | parts]
+        if ingredients_text != "" do
+          ["Ingredients: #{ingredients_text}" | parts]
+        else
+          parts
+        end
       else
         parts
       end
@@ -201,4 +226,31 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
   end
 
   defp get_field(_data, _keys), do: nil
+
+  # Private helper to safely convert values to strings
+  # Returns nil for nil, empty string for empty strings, and converts other types to strings
+  defp to_string_safe(nil), do: nil
+  defp to_string_safe(""), do: ""
+  defp to_string_safe(value) when is_binary(value), do: value
+  defp to_string_safe(value) when is_integer(value), do: Integer.to_string(value)
+  defp to_string_safe(value) when is_float(value), do: Float.to_string(value)
+  defp to_string_safe(value) when is_atom(value), do: Atom.to_string(value)
+  defp to_string_safe(%{} = _map) do
+    Logger.warning("Attempted to convert a Map to string, returning nil")
+    nil
+  end
+  defp to_string_safe(value) do
+    Logger.warning("Unexpected type for string conversion: #{inspect(value)}")
+    nil
+  end
+
+  # Helper function for debugging types
+  def get_type(nil), do: :nil
+  def get_type(value) when is_binary(value), do: :binary
+  def get_type(value) when is_integer(value), do: :integer
+  def get_type(value) when is_float(value), do: :float
+  def get_type(value) when is_atom(value), do: :atom
+  def get_type(value) when is_list(value), do: :list
+  def get_type(%{}), do: :map
+  def get_type(value), do: {:unknown, inspect(value)}
 end
