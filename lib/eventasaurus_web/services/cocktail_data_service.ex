@@ -124,10 +124,12 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
             ingredient_str = to_string_safe(Map.get(ing, :ingredient) || Map.get(ing, "ingredient"))
             measure_str = to_string_safe(Map.get(ing, :measure) || Map.get(ing, "measure"))
 
-            if measure_str && measure_str != "" do
-              "#{measure_str} #{ingredient_str}"
-            else
-              ingredient_str
+            # Guard against missing ingredient to prevent "nil" strings in output
+            case {ingredient_str, measure_str} do
+              {ing, meas} when ing in [nil, ""] and meas in [nil, ""] -> nil
+              {ing, _} when ing in [nil, ""] -> nil
+              {ing, meas} when meas in [nil, ""] -> ing
+              {ing, meas} -> "#{meas} #{ing}"
             end
           end)
           |> Enum.reject(&(&1 == "" || is_nil(&1)))
