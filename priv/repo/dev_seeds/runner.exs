@@ -99,6 +99,11 @@ DevSeeds.TicketedEventOrganizers.ensure_ticketed_event_organizers()
 Code.require_file("add_interest_to_ticketed_events.exs", __DIR__)
 DevSeeds.AddInterestToTicketedEvents.add_interest_to_organizer_events()
 
+# Create Phase 1 extended ticket scenarios (Issue #2233)
+Helpers.section("Creating Phase 1: Extended Ticket Scenarios")
+Code.require_file("extended_ticket_scenarios.exs", __DIR__)
+DevSeeds.ExtendedTicketScenarios.seed_phase_1()
+
 # Create Phase I diverse polling events (date + movie star rating)
 Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")
 Code.require_file("diverse_polling_events.exs", __DIR__)
