@@ -34,13 +34,15 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   alias EventasaurusWeb.Services.GooglePlacesRichDataProvider
   alias EventasaurusWeb.Services.MusicBrainzRichDataProvider
   alias EventasaurusWeb.Services.SpotifyRichDataProvider
+  alias EventasaurusWeb.Services.CocktailDbRichDataProvider
 
   @registry_table :rich_data_providers
   @default_providers [
     TmdbRichDataProvider,
     GooglePlacesRichDataProvider,
     MusicBrainzRichDataProvider,
-    SpotifyRichDataProvider
+    SpotifyRichDataProvider,
+    CocktailDbRichDataProvider
   ]
 
   # ============================================================================

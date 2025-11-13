@@ -38,7 +38,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
     {"places", "Place", "Pick places to visit"},
     {"time", "Time/Schedule", "Schedule events"},
     {"date_selection", "DateTime", "Vote on possible dates"},
-    {"music_track", "Music", "Vote on songs and tracks to listen to"}
+    {"music_track", "Music", "Vote on songs and tracks to listen to"},
+    {"cocktail", "Cocktail", "Vote on cocktails to serve"}
   ]
 
   @voting_systems [
