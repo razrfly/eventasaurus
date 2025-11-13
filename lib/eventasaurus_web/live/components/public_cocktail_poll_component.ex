@@ -162,28 +162,37 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
 
   @impl true
   def handle_event("add_cocktail", %{"cocktail" => cocktail_id}, socket) do
+    require Logger
+    Logger.debug("add_cocktail handler called with cocktail_id=#{inspect(cocktail_id)}")
+    Logger.debug("  adding_cocktail=#{inspect(socket.assigns.adding_cocktail)}")
+    Logger.debug("  search_results count=#{length(socket.assigns.search_results)}")
+
     if socket.assigns.adding_cocktail do
+      Logger.debug("  EARLY EXIT: adding_cocktail is already true")
       {:noreply, socket}
     else
       user = socket.assigns.current_user
 
       # Check if user is authenticated
       if is_nil(user) do
+        Logger.debug("  EARLY EXIT: user is nil")
         {:noreply,
          socket
          |> put_flash(:error, "You must be logged in to add cocktails.")
          |> assign(:adding_cocktail, false)}
       else
         # Find the cocktail in search results
+        Logger.debug("  Searching for cocktail_id=#{inspect(cocktail_id)} in #{length(socket.assigns.search_results)} results")
+        Logger.debug("  Search results IDs: #{inspect(Enum.map(socket.assigns.search_results, & &1.id))}")
+
         cocktail_data =
           socket.assigns.search_results
           |> Enum.find(fn cocktail ->
-            # Compare both integer and string formats to handle type mismatches
-            case Integer.parse(cocktail_id) do
-              {id, _} -> cocktail.id == id
-              :error -> to_string(cocktail.id) == cocktail_id
-            end
+            # Compare as strings to handle type mismatches consistently
+            to_string(cocktail.id) == to_string(cocktail_id)
           end)
+
+        Logger.debug("  cocktail_data found: #{inspect(cocktail_data != nil)}")
 
         if cocktail_data do
           # Set adding_cocktail to true to prevent multiple requests
@@ -192,6 +201,10 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
           # Use the centralized RichDataManager to get detailed cocktail data (same as backend)
           case RichDataManager.get_cached_details(:cocktaildb, cocktail_data.id, :cocktail) do
             {:ok, rich_cocktail_data} ->
+              Logger.debug("  rich_cocktail_data keys: #{inspect(Map.keys(rich_cocktail_data))}")
+              Logger.debug("  rich_cocktail_data name field: #{inspect(Map.get(rich_cocktail_data, :name))}")
+              Logger.debug("  rich_cocktail_data instructions type: #{inspect(Map.get(rich_cocktail_data, :instructions))}")
+
               # Use the shared CocktailDataService to prepare cocktail data consistently
               option_params =
                 CocktailDataService.prepare_cocktail_option_data(
@@ -242,6 +255,7 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
                |> assign(:adding_cocktail, false)}
           end
         else
+          Logger.debug("  EARLY EXIT: cocktail_data is nil - not found in search results")
           {:noreply,
            socket
            |> put_flash(:error, "Cocktail not found in search results.")
