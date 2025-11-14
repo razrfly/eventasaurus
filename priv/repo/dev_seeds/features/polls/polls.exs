@@ -2,9 +2,7 @@
 # Creates polls with votes for testing, especially RCV movie polls
 
 alias EventasaurusApp.{Repo, Events, Accounts}
-alias EventasaurusApp.Events.{Poll, PollOption}
 alias EventasaurusWeb.Services.TmdbService
-alias EventasaurusWeb.Services.MovieConfig
 alias EventasaurusWeb.Services.MovieDataAdapter
 alias EventasaurusWeb.Services.GooglePlaces.TextSearch
 alias EventasaurusWeb.Services.GooglePlaces.Photos
@@ -21,7 +19,7 @@ defmodule PollSeed do
     Logger.info("Starting poll seeding...")
 
     # Load curated data for realistic content
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../../support/curated_data.exs", __DIR__)
 
     # Get users and events
     users = get_users()

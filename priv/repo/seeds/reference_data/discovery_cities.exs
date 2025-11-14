@@ -29,7 +29,7 @@
 #   - Warsaw (Poland): 2 sources (Waw4Free, Ticketmaster)
 #
 # Usage:
-#   mix run priv/repo/seeds/discovery_cities.exs
+#   mix run priv/repo/seeds/reference_data/discovery_cities.exs
 #   # Or via main seeds: mix run priv/repo/seeds.exs
 #
 # ============================================================================

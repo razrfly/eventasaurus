@@ -2,10 +2,6 @@
 # ⚠️ TEST DATA SEED: Poll Suggestions Test Scenario
 # ============================================================================
 #
-# ⚠️ WARNING: This is TEST DATA and should be moved to:
-#    priv/repo/dev_seeds/scenarios/poll_suggestions_test.exs
-#    See Issue #2239 for reorganization plan.
-#
 # Purpose:
 #   Creates a test event for testing the poll suggestions feature.
 #   Sets up a scenario where Holden is an organizer of an event with NO polls,
@@ -34,7 +30,7 @@
 #   (slug is displayed after running)
 #
 # Usage:
-#   mix run priv/repo/seeds/poll_suggestions_test_data.exs
+#   mix run priv/repo/dev_seeds/scenarios/poll_suggestions_test.exs
 #
 # ============================================================================
 

@@ -3,7 +3,7 @@
 
 # Load helpers if running independently
 unless Code.ensure_loaded?(DevSeeds.Helpers) do
-  Code.require_file("helpers.exs", __DIR__)
+  Code.require_file("../../support/helpers.exs", __DIR__)
 end
 
 defmodule EnhancedVarietyPolls do

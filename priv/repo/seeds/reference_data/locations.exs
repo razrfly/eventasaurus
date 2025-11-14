@@ -24,7 +24,7 @@
 #   - Includes: Name, slug, coordinates, timezone
 #
 # Usage:
-#   mix run priv/repo/seeds/locations.exs
+#   mix run priv/repo/seeds/reference_data/locations.exs
 #   # Or via main seeds: mix run priv/repo/seeds.exs
 #
 # ============================================================================

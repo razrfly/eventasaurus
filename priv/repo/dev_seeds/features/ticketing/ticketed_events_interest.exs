@@ -6,9 +6,9 @@ defmodule DevSeeds.AddInterestToTicketedEvents do
   
   alias EventasaurusApp.{Repo, Accounts, Events}
   alias EventasaurusApp.Events.{EventUser, EventParticipant}
-  
+
   # Load helpers
-  Code.require_file("helpers.exs", __DIR__)
+  Code.require_file("../../support/helpers.exs", __DIR__)
   alias DevSeeds.Helpers
   
   def add_interest_to_organizer_events do

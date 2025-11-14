@@ -2,9 +2,7 @@
 # Creates activities for events using real API data, following polling patterns
 
 alias EventasaurusApp.{Repo, Events, Accounts}
-alias EventasaurusApp.Events.{Event, EventActivity}
 alias EventasaurusWeb.Services.TmdbService
-alias EventasaurusWeb.Services.MovieConfig
 alias EventasaurusWeb.Services.MovieDataAdapter
 alias EventasaurusWeb.Services.GooglePlaces.TextSearch
 alias EventasaurusWeb.Services.GooglePlaces.Photos
@@ -21,7 +19,7 @@ defmodule ActivitySeed do
     Logger.info("Starting activity seeding...")
 
     # Load curated data for realistic content
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../../support/curated_data.exs", __DIR__)
 
     # Get users and events
     users = get_users()
@@ -258,11 +256,11 @@ defmodule ActivitySeed do
     warsaw_coordinates = {52.2297, 21.0122}
     
     case TextSearch.search("restaurants", %{
-      type: "restaurant", 
+      type: "restaurant",
       location: warsaw_coordinates,
       radius: 5000  # 5km radius
     }) do
-      {:ok, places} when length(places) > 0 ->
+      {:ok, places} when places != [] ->
         Logger.info("Successfully fetched #{length(places)} restaurants from Google Places")
         # Convert Google Places format to our expected format
         places
@@ -378,7 +376,7 @@ defmodule ActivitySeed do
   defp fetch_tmdb_movies do
     # Follow exact same pattern as poll_seed.exs
     case TmdbService.get_popular_movies(1) do
-      {:ok, movies} when length(movies) > 0 ->
+      {:ok, movies} when movies != [] ->
         movies
 
       {:error, reason} ->

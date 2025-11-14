@@ -322,17 +322,19 @@ Reusable service modules for complex seed data creation.
 
 ### Legacy Files ⚠️
 
-These files should be reviewed and potentially removed or refactored:
+~~These files have been removed in favor of proper changeset validation:~~
 
-#### `fix_venue_events.exs`
-- **Purpose**: Band-aid fix for venue-related issues
-- **Issue**: Fix scripts indicate data inconsistency problems
-- **Recommendation**: Incorporate logic into proper venue seeding or remove
+#### ~~`fix_venue_events.exs`~~ (REMOVED in Phase 4)
+- **Previous Purpose**: Band-aid fix for physical events without venues
+- **Resolution**: Added validation to Event changeset requiring `venue_id` for physical events (`is_virtual=false`)
+- **Status**: ✅ Removed - validation now prevents this issue at creation time
 
-#### `fix_virtual_events_with_venues.exs`
-- **Purpose**: Fixes virtual events that incorrectly have venues
-- **Issue**: Should be prevented during creation, not fixed after
-- **Recommendation**: Add validation to event creation, remove fix script
+#### ~~`fix_virtual_events_with_venues.exs`~~ (REMOVED in Phase 4)
+- **Previous Purpose**: Fixed virtual events that incorrectly had venues
+- **Resolution**: Enhanced Event changeset validation to prevent `venue_id` for virtual events (`is_virtual=true`)
+- **Status**: ✅ Removed - validation now prevents this issue at creation time
+
+**Note**: Venue consistency is now enforced in `lib/eventasaurus_app/events/event.ex` via `validate_virtual_event_venue/1` function.
 
 ## Seeding Flow & Dependencies
 
@@ -607,20 +609,64 @@ All development seeds create these test accounts (password: `testpass123`):
 - `movie_buff@example.com` - Movie event organizer
 - `foodie_friend@example.com` - Food event organizer
 
-## Related Documentation
+## Documentation
+
+### Essential Guides
+
+- **📘 [Best Practices Guide](BEST_PRACTICES.md)** - **START HERE** - Comprehensive guide for adding new seeds
+  - Quick start template
+  - Venue handling patterns (required for Phase 4 compliance)
+  - Service usage and common patterns
+  - Testing and troubleshooting
+  - Anti-patterns to avoid
+
+### Mix Task Reference
+
+- **[`mix seed.dev`](../../lib/mix/tasks/seed.dev.ex)** - Complete module documentation with:
+  - All options and flags
+  - Common workflows
+  - Event distribution
+  - Seeding order
+  - Troubleshooting guide
+
+- **[`mix seed.clean`](../../lib/mix/tasks/seed.clean.ex)** - Complete module documentation with:
+  - Entity types and cleaning order
+  - Safety mechanisms
+  - Common workflows
+  - Troubleshooting guide
+
+### Phase 4 Changes (Validation Enhancement)
+
+- **[Phase 4 Summary](../PHASE_4_SUMMARY.md)** - What changed in Phase 4:
+  - Venue validation implementation
+  - Fix scripts removal
+  - Seed script updates
+  - Before/after comparison
+
+- **[Phase 4 Audit Report](../PHASE_4_AUDIT_REPORT.md)** - Validation proof and statistics:
+  - 4 validation tests (all passing)
+  - Database statistics (100% venue consistency)
+  - Evidence of success
+  - Risk assessment
+
+### Other Documentation
 
 - **Production Seeds**: See `priv/repo/seeds/README.md`
-- **Mix Tasks**: See `lib/mix/tasks/seed.dev.ex` and `seed.clean.ex`
 - **Factory Definitions**: See `test/support/factory.ex`
 - **Reorganization Plan**: See [Issue #2239](https://github.com/razrfly/eventasaurus/issues/2239)
 
-## Future Improvements
+## Completed Improvements ✅
 
-See [Issue #2239](https://github.com/razrfly/eventasaurus/issues/2239) for planned improvements:
+See [Issue #2239](https://github.com/razrfly/eventasaurus/issues/2239) for details on completed reorganization:
 
-- Organize seeds into subdirectories (core/, features/, scenarios/, services/)
-- Consolidate similar seeds (multiple poll seeds)
-- Remove fix scripts, incorporate into proper seeds
+- ✅ **Phase 1-2**: Planning and analysis (COMPLETE)
+- ✅ **Phase 3**: Organized seeds into subdirectories (core/, features/, scenarios/, support/) (COMPLETE)
+- ✅ **Phase 3.5**: Fixed all Code.require_file dependencies (COMPLETE)
+- ✅ **Phase 4**: Removed fix scripts, added proper changeset validation (COMPLETE)
+
+### Potential Future Improvements
+
+- Consolidate similar seeds (multiple poll seeds) - Optional Phase 5
 - Add more inline documentation
 - Create visual dependency diagram
 - Improve selective seeding (--only flag)
@@ -628,10 +674,10 @@ See [Issue #2239](https://github.com/razrfly/eventasaurus/issues/2239) for plann
 ## Questions?
 
 **Where should I add my seed?**
-- Test scenario? → `dev_seeds/` (will move to `scenarios/` in Phase 3)
-- Core entity? → `dev_seeds/` (will move to `core/` in Phase 3)
-- Feature-specific? → `dev_seeds/` (will move to `features/` in Phase 3)
-- Shared logic? → `dev_seeds/services/` or add to `helpers.exs`
+- Test scenario? → `dev_seeds/scenarios/`
+- Core entity? → `dev_seeds/core/`
+- Feature-specific? → `dev_seeds/features/<feature_name>/`
+- Shared logic? → `dev_seeds/services/` or `dev_seeds/support/` (for helpers)
 
 **Should I make a separate seed file?**
 - Yes, if it's >100 lines or a distinct feature scenario
