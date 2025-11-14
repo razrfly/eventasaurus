@@ -1,15 +1,38 @@
-# Seed script to configure automated discovery for all cities
+# ============================================================================
+# PRODUCTION SEED: Discovery Cities Configuration
+# ============================================================================
 #
-# This file configures production discovery settings for:
-# - Kraków (Poland): 6 sources
-# - London (United Kingdom): 3 sources
-# - Melbourne (Australia): 2 sources
-# - Austin (United States): 1 source
-# - Paris (France): 1 source
-# - Warsaw (Poland): 2 sources
+# Purpose:
+#   Configures automated event discovery for cities. Links cities to active
+#   scraping sources and enables automated event fetching.
 #
-# Run with: mix run priv/repo/seeds/discovery_cities.exs
-# Or automatically via: mix ecto.setup
+# When to run:
+#   - During initial setup (mix ecto.setup)
+#   - When adding new cities for automated discovery
+#   - When enabling/disabling sources for a city
+#   - After database reset (mix ecto.reset)
+#
+# Dependencies:
+#   - REQUIRED: locations.exs (cities must exist)
+#   - REQUIRED: sources.exs (sources must exist)
+#
+# Idempotency:
+#   - YES: Uses DiscoveryConfigManager which handles upserts
+#   - Safe to run multiple times
+#
+# Cities configured:
+#   - Kraków (Poland): 6 sources (Ticketmaster, Bandsintown, Karnet, etc.)
+#   - London (United Kingdom): 3 sources
+#   - Melbourne (Australia): 2 sources
+#   - Austin (United States): 1 source
+#   - Paris (France): 1 source (Sortiraparis)
+#   - Warsaw (Poland): 2 sources (Waw4Free, Ticketmaster)
+#
+# Usage:
+#   mix run priv/repo/seeds/discovery_cities.exs
+#   # Or via main seeds: mix run priv/repo/seeds.exs
+#
+# ============================================================================
 
 alias EventasaurusApp.Repo
 alias EventasaurusDiscovery.Locations.City

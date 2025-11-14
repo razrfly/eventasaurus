@@ -1,5 +1,33 @@
-# Seeds for countries and cities with coordinates
-# This file sets up test cities for scraper development
+# ============================================================================
+# PRODUCTION SEED: Locations (Countries & Cities)
+# ============================================================================
+#
+# Purpose:
+#   Seeds core countries and cities with coordinates for event locations.
+#   This is reference data needed for event discovery and location matching.
+#
+# When to run:
+#   - During initial setup (mix ecto.setup)
+#   - When adding new cities for scraper coverage
+#   - After database reset (mix ecto.reset)
+#
+# Dependencies:
+#   - None (can run independently)
+#
+# Idempotency:
+#   - YES: Uses upsert pattern with conflict resolution
+#   - Safe to run multiple times
+#
+# Data created:
+#   - Countries: Poland, United Kingdom, United States, Australia, France
+#   - Cities: Kraków, Warsaw, London, Austin, Melbourne, Paris
+#   - Includes: Name, slug, coordinates, timezone
+#
+# Usage:
+#   mix run priv/repo/seeds/locations.exs
+#   # Or via main seeds: mix run priv/repo/seeds.exs
+#
+# ============================================================================
 
 alias EventasaurusApp.Repo
 alias EventasaurusDiscovery.Locations.{Country, City}

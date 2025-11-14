@@ -47,18 +47,18 @@ end
 
 # Seed locations (countries and cities)
 IO.puts("\n🌱 Seeding locations...")
-Code.eval_file("priv/repo/seeds/locations.exs")
+Code.eval_file("priv/repo/seeds/reference_data/locations.exs")
 
 # Seed categories for public events
 IO.puts("\n🌱 Seeding categories...")
-Code.eval_file("priv/repo/seeds/categories.exs")
+Code.eval_file("priv/repo/seeds/reference_data/categories.exs")
 
 # Seed sources for event scraping
 IO.puts("\n🌱 Seeding sources...")
-Code.eval_file("priv/repo/seeds/sources.exs")
+Code.eval_file("priv/repo/seeds/reference_data/sources.exs")
 
 # Seed automated discovery configuration for cities
 IO.puts("\n🌱 Seeding discovery configuration...")
-Code.eval_file("priv/repo/seeds/discovery_cities.exs")
+Code.eval_file("priv/repo/seeds/reference_data/discovery_cities.exs")
 
 IO.puts("\n🌱 Seeds completed!")

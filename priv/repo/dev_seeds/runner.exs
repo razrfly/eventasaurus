@@ -9,10 +9,10 @@ end
 
 # Load the factory and helpers
 Code.require_file("#{__DIR__}/../../../test/support/factory.ex")
-Code.require_file("#{__DIR__}/helpers.exs")
-Code.require_file("#{__DIR__}/users.exs")
-Code.require_file("#{__DIR__}/groups.exs")
-Code.require_file("#{__DIR__}/events.exs")
+Code.require_file("#{__DIR__}/support/helpers.exs")
+Code.require_file("#{__DIR__}/core/users.exs")
+Code.require_file("#{__DIR__}/core/groups.exs")
+Code.require_file("#{__DIR__}/core/events.exs")
 
 alias DevSeeds.{Helpers, Users, Groups, Events}
 alias EventasaurusApp.Repo
@@ -88,25 +88,25 @@ full_events = Events.create_full_events(all_users)
 all_events = events ++ full_events
 
 # Ensure key organizers have appropriate events (movie_buff, foodie_friend)
-Code.require_file("ensure_key_organizers.exs", __DIR__)
+Code.require_file("scenarios/key_organizers.exs", __DIR__)
 DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 
 # Create ticketed event organizer personas (Phase 1 from issue #1036)
-Code.require_file("ticketed_event_organizers.exs", __DIR__)
+Code.require_file("features/ticketing/ticketed_events.exs", __DIR__)
 DevSeeds.TicketedEventOrganizers.ensure_ticketed_event_organizers()
 
 # Add interested participants to ticketed events
-Code.require_file("add_interest_to_ticketed_events.exs", __DIR__)
+Code.require_file("features/ticketing/ticketed_events_interest.exs", __DIR__)
 DevSeeds.AddInterestToTicketedEvents.add_interest_to_organizer_events()
 
 # Create Phase 1 extended ticket scenarios (Issue #2233)
 Helpers.section("Creating Phase 1: Extended Ticket Scenarios")
-Code.require_file("extended_ticket_scenarios.exs", __DIR__)
+Code.require_file("features/ticketing/ticket_scenarios.exs", __DIR__)
 DevSeeds.ExtendedTicketScenarios.seed_phase_1()
 
 # Create Phase I diverse polling events (date + movie star rating)
 Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")
-Code.require_file("diverse_polling_events.exs", __DIR__)
+Code.require_file("features/polls/polling_events.exs", __DIR__)
 if Code.ensure_loaded?(DiversePollingEvents) and function_exported?(DiversePollingEvents, :run, 0) do
   DiversePollingEvents.run()
 else
@@ -115,19 +115,19 @@ end
 
 # Create polls for events
 Helpers.section("Creating Polls with Votes")
-Code.require_file("poll_seed.exs", __DIR__)
+Code.require_file("features/polls/polls.exs", __DIR__)
 # PollSeed.run() is called within the file
 polls = Repo.all(EventasaurusApp.Events.Poll)
 
 # Create activities for completed events
 Helpers.section("Creating Activities for Events")
-Code.require_file("activity_seed.exs", __DIR__)
+Code.require_file("features/activities/activities.exs", __DIR__)
 ActivitySeed.run()
 activities = Repo.all(EventasaurusApp.Events.EventActivity)
 
 # Create Phase IV: Enhanced Variety Polls
 Helpers.section("Creating Phase IV: Enhanced Variety Polls")
-Code.require_file("enhanced_variety_polls.exs", __DIR__)
+Code.require_file("features/polls/variety_polls.exs", __DIR__)
 if Code.ensure_loaded?(EnhancedVarietyPolls) and function_exported?(EnhancedVarietyPolls, :run, 0) do
   EnhancedVarietyPolls.run()
 else
