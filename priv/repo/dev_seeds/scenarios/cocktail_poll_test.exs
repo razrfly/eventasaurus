@@ -1,3 +1,44 @@
+# ============================================================================
+# ⚠️ TEST DATA SEED: Cocktail Poll Test Scenario
+# ============================================================================
+#
+# ⚠️ WARNING: This is TEST DATA and should be moved to:
+#    priv/repo/dev_seeds/scenarios/cocktail_poll_test.exs
+#    See Issue #2239 for reorganization plan.
+#
+# Purpose:
+#   Creates a cocktail poll with real CocktailDB data for testing the
+#   cocktail voting feature. Uses actual cocktail recipes and images.
+#
+# When to run:
+#   - DEVELOPMENT ONLY - Do not run in production
+#   - After running main development seeds (mix seed.dev)
+#   - When testing cocktail poll feature or mobile UI optimizations
+#
+# Dependencies:
+#   - REQUIRED: At least one event must exist (uses most recent event)
+#
+# Idempotency:
+#   - YES: Checks if event already has a cocktail poll
+#   - Safe to run multiple times
+#
+# Data created:
+#   - Cocktail poll with title "What cocktails should we serve?"
+#   - 5 cocktail options with CocktailDB data:
+#     * Margarita, Mojito, Old Fashioned, Cosmopolitan, Piña Colada
+#   - Each option includes: description, ingredients, image, external_id
+#
+# Test URL:
+#   http://localhost:4000/{event-slug}/polls/{poll-number}
+#   (URL is displayed after running)
+#
+# Test mobile view at 375px width to see line-clamp-2 optimization
+#
+# Usage:
+#   mix run priv/repo/seeds/cocktail_poll_test.exs
+#
+# ============================================================================
+
 alias EventasaurusApp.Repo
 alias EventasaurusApp.Events.{Event, Poll, PollOption}
 alias EventasaurusApp.Accounts.User

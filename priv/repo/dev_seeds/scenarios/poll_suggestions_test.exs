@@ -1,3 +1,43 @@
+# ============================================================================
+# ⚠️ TEST DATA SEED: Poll Suggestions Test Scenario
+# ============================================================================
+#
+# ⚠️ WARNING: This is TEST DATA and should be moved to:
+#    priv/repo/dev_seeds/scenarios/poll_suggestions_test.exs
+#    See Issue #2239 for reorganization plan.
+#
+# Purpose:
+#   Creates a test event for testing the poll suggestions feature.
+#   Sets up a scenario where Holden is an organizer of an event with NO polls,
+#   allowing the poll suggestions UI to suggest polls based on poll history.
+#
+# When to run:
+#   - DEVELOPMENT ONLY - Do not run in production
+#   - After running main development seeds (mix seed.dev)
+#   - When testing poll suggestions feature
+#
+# Dependencies:
+#   - REQUIRED: Main seeds (priv/repo/seeds.exs) for Holden's user account
+#   - REQUIRED: Group 6 (The Dinner Club) to exist
+#
+# Idempotency:
+#   - YES: Checks if test event exists before creating
+#   - Safe to run multiple times
+#
+# Data created:
+#   - Test event: "Summer BBQ & Games Night" in Group 6
+#   - Holden as organizer of the test event
+#   - NO polls (intentionally empty for suggestion testing)
+#
+# Test URL:
+#   http://localhost:4000/events/{slug}/polls
+#   (slug is displayed after running)
+#
+# Usage:
+#   mix run priv/repo/seeds/poll_suggestions_test_data.exs
+#
+# ============================================================================
+
 alias EventasaurusApp.Repo
 alias EventasaurusApp.Events.Event
 alias EventasaurusApp.Events.EventUser
