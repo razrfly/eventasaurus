@@ -4,19 +4,19 @@ defmodule DevSeeds.TicketedEventOrganizers do
   Phase 1 implementation from issue #1036.
   """
   
-  alias EventasaurusApp.{Repo, Accounts, Events}
+  alias EventasaurusApp.{Repo, Events}
   alias EventasaurusApp.Events.EventUser
   alias EventasaurusApp.Auth.SeedUserManager
-  
+
   # Load helpers
-  Code.require_file("helpers.exs", __DIR__)
+  Code.require_file("../../support/helpers.exs", __DIR__)
   alias DevSeeds.Helpers
   
   def ensure_ticketed_event_organizers do
     Helpers.section("Creating Ticketed Event Organizer Personas")
-    
+
     # Load curated data for realistic content
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../../support/curated_data.exs", __DIR__)
     
     # Create or get our event organizer personas
     organizers = create_organizer_personas()
@@ -218,7 +218,8 @@ defmodule DevSeeds.TicketedEventOrganizers do
           status: :confirmed,
           visibility: :public,
           theme: :velocity,
-          is_virtual: false,
+          is_virtual: true,  # Set to virtual since we don't create venues for these events
+          virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
           is_ticketed: event_data.is_ticketed,
           taxation_type: if(event_data.is_ticketed, do: "ticketed_event", else: "ticketless"),
           start_at: Faker.DateTime.forward(Enum.random(5..45)),
@@ -352,7 +353,8 @@ defmodule DevSeeds.TicketedEventOrganizers do
           status: :confirmed,
           visibility: :public,
           theme: :professional,
-          is_virtual: Enum.random([true, false]),
+          is_virtual: true,  # Set to virtual since we don't create venues for these events
+          virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
           is_ticketed: event_data.is_ticketed,
           taxation_type: if(event_data.is_ticketed, do: "ticketed_event", else: "ticketless"),
           start_at: Faker.DateTime.forward(Enum.random(3..40)),
@@ -490,7 +492,8 @@ defmodule DevSeeds.TicketedEventOrganizers do
           status: :confirmed,
           visibility: :public,
           theme: :celebration,
-          is_virtual: false,
+          is_virtual: true,  # Set to virtual since we don't create venues for these events
+          virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
           is_ticketed: event_data.is_ticketed,
           taxation_type: if(event_data.is_ticketed, do: "ticketed_event", else: "ticketless"),
           start_at: Faker.DateTime.forward(Enum.random(7..50)),
@@ -606,7 +609,8 @@ defmodule DevSeeds.TicketedEventOrganizers do
           status: :confirmed,
           visibility: :public,
           theme: :nature,
-          is_virtual: false,
+          is_virtual: true,  # Set to virtual since we don't create venues for these events
+          virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
           is_ticketed: event_data.is_ticketed,
           taxation_type: if(event_data.is_ticketed, do: "ticketed_event", else: "ticketless"),
           start_at: Faker.DateTime.forward(Enum.random(10..60)),

@@ -3,8 +3,6 @@
 # Addresses Phase I requirements from issue #900
 
 alias EventasaurusApp.{Repo, Events, Accounts, Groups}
-alias EventasaurusApp.Events.{Poll, PollOption}
-alias EventasaurusWeb.Services.TmdbService
 import Ecto.Query
 require Logger
 
@@ -20,9 +18,9 @@ defmodule DiversePollingEvents do
 
   def run do
     Logger.info("Starting Phase I: Diverse polling events with future dates...")
-    
+
     # Load curated movie data
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../../support/curated_data.exs", __DIR__)
     
     users = get_users()
     groups = get_groups()
@@ -48,9 +46,9 @@ defmodule DiversePollingEvents do
   
   defp create_date_movie_poll_events(users, groups) do
     Logger.info("Creating 15 events with date + movie star rating polls...")
-    
+
     # Load helpers for image assignment
-    Code.require_file("helpers.exs", __DIR__)
+    Code.require_file("../../support/helpers.exs", __DIR__)
     
     # Date + Movie combination templates
     event_templates = [
@@ -175,7 +173,7 @@ defmodule DiversePollingEvents do
         {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
         
         # Create date options
-        Enum.with_index(date_options, fn option, index ->
+        Enum.with_index(date_options, fn option, _index ->
           {:ok, _option} = Events.create_poll_option(%{
             poll_id: poll.id,
             title: option,
@@ -221,7 +219,7 @@ defmodule DiversePollingEvents do
         {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
         
         # Create movie options with rich data
-        Enum.with_index(movies, fn movie, index ->
+        Enum.with_index(movies, fn movie, _index ->
           {:ok, _option} = Events.create_poll_option(%{
             poll_id: poll.id,
             title: movie.title,

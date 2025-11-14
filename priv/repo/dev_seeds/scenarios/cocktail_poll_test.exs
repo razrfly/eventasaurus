@@ -2,10 +2,6 @@
 # ⚠️ TEST DATA SEED: Cocktail Poll Test Scenario
 # ============================================================================
 #
-# ⚠️ WARNING: This is TEST DATA and should be moved to:
-#    priv/repo/dev_seeds/scenarios/cocktail_poll_test.exs
-#    See Issue #2239 for reorganization plan.
-#
 # Purpose:
 #   Creates a cocktail poll with real CocktailDB data for testing the
 #   cocktail voting feature. Uses actual cocktail recipes and images.
@@ -35,7 +31,7 @@
 # Test mobile view at 375px width to see line-clamp-2 optimization
 #
 # Usage:
-#   mix run priv/repo/seeds/cocktail_poll_test.exs
+#   mix run priv/repo/dev_seeds/scenarios/cocktail_poll_test.exs
 #
 # ============================================================================
 

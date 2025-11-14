@@ -289,6 +289,10 @@ defmodule EventasaurusApp.Events.Event do
       {true, venue_id} when not is_nil(venue_id) ->
         add_error(changeset, :venue_id, "must be nil for virtual events")
 
+      # Physical events must have a venue
+      {false, nil} ->
+        add_error(changeset, :venue_id, "must be present for physical events")
+
       # All other combinations are valid
       _ ->
         changeset

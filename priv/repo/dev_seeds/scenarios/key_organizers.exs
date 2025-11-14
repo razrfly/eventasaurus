@@ -6,16 +6,16 @@ defmodule DevSeeds.EnsureKeyOrganizers do
   
   alias EventasaurusApp.{Repo, Accounts, Events}
   alias EventasaurusApp.Events.EventUser
-  
+
   # Load helpers
-  Code.require_file("helpers.exs", __DIR__)
+  Code.require_file("../support/helpers.exs", __DIR__)
   alias DevSeeds.Helpers
   
   def ensure_key_organizers do
     Helpers.section("Ensuring Key Organizers Have Events")
-    
+
     # Load curated data for realistic content
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../support/curated_data.exs", __DIR__)
     
     # Ensure movie_buff organizes movie events
     ensure_movie_events()
@@ -82,7 +82,8 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             status: :confirmed,
             visibility: :public,
             theme: :cosmic,
-            is_virtual: Enum.random([true, false]),
+            is_virtual: true,  # Set to virtual since we don't create venues for these events
+            virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
             start_at: Faker.DateTime.forward(Enum.random(1..30)),
             ends_at: Faker.DateTime.forward(Enum.random(31..32)),
             timezone: Faker.Address.time_zone()
@@ -172,7 +173,8 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             status: :confirmed,
             visibility: :public,
             theme: :celebration,
-            is_virtual: false,
+            is_virtual: true,  # Set to virtual since we don't create venues for these events
+            virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
             is_ticketed: false,
             start_at: Faker.DateTime.forward(Enum.random(1..30)),
             ends_at: Faker.DateTime.forward(Enum.random(31..32)),

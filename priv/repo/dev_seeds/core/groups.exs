@@ -121,14 +121,6 @@ defmodule DevSeeds.Groups do
     group
   end
 
-  # Helper function to truncate microseconds from datetime values
-  # Database schema expects datetime without microseconds
-  defp truncate_datetime(datetime) when is_struct(datetime, DateTime) do
-    DateTime.truncate(datetime, :second)
-  end
-
-  defp truncate_datetime(datetime), do: datetime
-  
   defp generate_group_name(group_type, index) do
     base_names = group_type.names
     base_name = Enum.random(base_names)

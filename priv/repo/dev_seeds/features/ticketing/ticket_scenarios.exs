@@ -11,7 +11,7 @@ defmodule DevSeeds.ExtendedTicketScenarios do
   alias EventasaurusApp.Auth.SeedUserManager
 
   # Load helpers
-  Code.require_file("helpers.exs", __DIR__)
+  Code.require_file("../../support/helpers.exs", __DIR__)
   alias DevSeeds.Helpers
 
   def seed_phase_1 do
@@ -322,8 +322,8 @@ defmodule DevSeeds.ExtendedTicketScenarios do
     # Generate start time
     start_at = Faker.DateTime.forward(Enum.random(7..60))
 
-    # Calculate ends_at based on duration
-    ends_at = DateTime.add(start_at, duration_hours * 3600, :second)
+    # Calculate ends_at based on duration (convert to integer for DateTime.add)
+    ends_at = DateTime.add(start_at, round(duration_hours * 3600), :second)
 
     event_params = Map.merge(%{
       title: unique_title(event_data.title),
@@ -332,7 +332,8 @@ defmodule DevSeeds.ExtendedTicketScenarios do
       status: :confirmed,
       visibility: :public,
       theme: theme,
-      is_virtual: false,
+      is_virtual: true,  # Set to virtual since we don't create venues for these events
+      virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
       is_ticketed: event_data.is_ticketed,
       taxation_type: if(event_data.is_ticketed, do: "ticketed_event", else: "ticketless"),
       start_at: start_at,
@@ -669,8 +670,8 @@ defmodule DevSeeds.ExtendedTicketScenarios do
     # Generate start time once
     start_at = Faker.DateTime.forward(Enum.random(30..90))
 
-    # Calculate ends_at based on duration
-    ends_at = DateTime.add(start_at, duration_hours * 3600, :second)
+    # Calculate ends_at based on duration (convert to integer for DateTime.add)
+    ends_at = DateTime.add(start_at, round(duration_hours * 3600), :second)
 
     event_params = Map.merge(%{
       title: unique_title(event_data.title),
@@ -679,7 +680,8 @@ defmodule DevSeeds.ExtendedTicketScenarios do
       status: event_data.status,
       visibility: :public,
       theme: theme,
-      is_virtual: false,
+      is_virtual: true,  # Set to virtual since we don't create venues for these events
+      virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
       is_ticketed: event_data.is_ticketed,
       taxation_type: event_data.taxation_type,
       threshold_type: event_data.threshold_type,

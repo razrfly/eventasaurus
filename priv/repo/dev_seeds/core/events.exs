@@ -19,7 +19,7 @@ defmodule DevSeeds.Events do
   """
   def seed(opts \\ []) do
     # Load curated data for realistic content
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../support/curated_data.exs", __DIR__)
     
     count = Keyword.get(opts, :count, 100)
     users = Keyword.get(opts, :users, [])
@@ -52,7 +52,7 @@ defmodule DevSeeds.Events do
     end
   end
   
-  defp create_time_distributed_events(count, users, groups, venue_pool \\ []) do
+  defp create_time_distributed_events(count, users, groups, venue_pool) do
     # Handle both map and integer count formats
     {past_count, upcoming_count, future_count} = if is_map(count) do
       {count[:past] || 0, count[:upcoming] || 0, count[:future] || 0}
@@ -188,7 +188,7 @@ defmodule DevSeeds.Events do
     end)
   end
   
-  defp create_event(attrs, users, groups, venue_pool \\ []) do
+  defp create_event(attrs, users, groups, venue_pool) do
     # Select a random organizer
     organizer = Enum.random(users)
 
@@ -304,14 +304,6 @@ defmodule DevSeeds.Events do
   
   defp random_theme do
     Enum.random([:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional])
-  end
-  
-  defp random_taxation_type do
-    Enum.random([
-      "ticketed_event", "ticketed_event",  # 50% ticketed
-      "contribution_collection",            # 25% contribution
-      "ticketless", "ticketless"           # 25% ticketless
-    ])
   end
 
   # Generate consistent taxation_type and is_ticketed values
@@ -544,8 +536,7 @@ defmodule DevSeeds.Events do
   
   defp create_fallback_theaters(count) do
     Helpers.log("Creating #{count} fallback theater venues...")
-    alias EventasaurusApp.Venues
-    
+
     fallback_theaters = [
       %{name: "AMC Theater Downtown", address: "987 Powell Street, San Francisco, CA 94102", lat: 37.7849, lng: -122.4094},
       %{name: "Century Theaters SF", address: "654 Geary Boulevard, San Francisco, CA 94102", lat: 37.7866, lng: -122.4196},
@@ -593,32 +584,6 @@ defmodule DevSeeds.Events do
     
     case city_component do
       %{"long_name" => city} -> city
-      _ -> nil
-    end
-  end
-  
-  defp extract_state_from_address(venue_data) do
-    address_components = venue_data["address_components"] || []
-    state_component = Enum.find(address_components, fn component ->
-      types = component["types"] || []
-      "administrative_area_level_1" in types
-    end)
-    
-    case state_component do
-      %{"short_name" => state} -> state
-      _ -> nil
-    end
-  end
-  
-  defp extract_country_from_address(venue_data) do
-    address_components = venue_data["address_components"] || []
-    country_component = Enum.find(address_components, fn component ->
-      types = component["types"] || []
-      "country" in types
-    end)
-
-    case country_component do
-      %{"long_name" => country} -> country
       _ -> nil
     end
   end

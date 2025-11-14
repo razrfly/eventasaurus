@@ -488,9 +488,9 @@ defmodule ComprehensiveSeed do
   # Phase I: Create date + movie star rating polls
   defp create_phase_1_polls(event, organizer) do
     Logger.info("Adding Phase I polls to polling event: #{event.title}")
-    
+
     # Load curated movie data
-    Code.require_file("curated_data.exs", __DIR__)
+    Code.require_file("../support/curated_data.exs", __DIR__)
     
     # Create date poll
     create_date_poll_for_event(event, organizer)
