@@ -104,6 +104,10 @@ Helpers.section("Creating Phase 1: Extended Ticket Scenarios")
 Code.require_file("features/ticketing/ticket_scenarios.exs", __DIR__)
 DevSeeds.ExtendedTicketScenarios.seed_phase_1()
 
+# Create Phase 2 Kickstarter/Threshold event scenarios (Issue #2243)
+Helpers.section("Creating Phase 2: Kickstarter/Threshold Event Scenarios")
+DevSeeds.ExtendedTicketScenarios.seed_phase_2()
+
 # Create Phase I diverse polling events (date + movie star rating)
 Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")
 Code.require_file("features/polls/polling_events.exs", __DIR__)
@@ -132,6 +136,20 @@ if Code.ensure_loaded?(EnhancedVarietyPolls) and function_exported?(EnhancedVari
   EnhancedVarietyPolls.run()
 else
   Helpers.error("EnhancedVarietyPolls module not properly loaded")
+end
+
+# Create Phase V: Mobile Testing Comprehensive Polls
+Helpers.section("Creating Phase V: Mobile Testing Comprehensive Polls")
+# Force recompile to avoid stale module cache
+if Code.ensure_loaded?(MobileTestingPolls) do
+  :code.purge(MobileTestingPolls)
+  :code.delete(MobileTestingPolls)
+end
+Code.compile_file("features/polls/mobile_testing_polls.exs", __DIR__)
+if Code.ensure_loaded?(MobileTestingPolls) and function_exported?(MobileTestingPolls, :run, 0) do
+  MobileTestingPolls.run()
+else
+  Helpers.error("MobileTestingPolls module not properly loaded")
 end
 
 # Validate seeding consistency
