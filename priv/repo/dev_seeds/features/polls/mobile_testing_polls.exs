@@ -30,6 +30,7 @@ end
 defmodule MobileTestingPolls do
   import Ecto.Query
   alias EventasaurusApp.{Repo, Events, Accounts, Groups, Venues}
+  alias EventasaurusWeb.Services.RichDataManager
   alias DevSeeds.Helpers
 
   IO.puts("📦 MobileTestingPolls module loaded")
@@ -493,18 +494,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created binary movie poll")
 
-        options = [
-          %{title: "The Shawshank Redemption", description: "Drama about hope and friendship"},
-          %{title: "The Godfather", description: "Crime saga of a powerful family"},
-          %{title: "The Dark Knight", description: "Batman faces the Joker"},
-          %{title: "Pulp Fiction", description: "Tarantino's crime anthology"}
-        ]
+        # Phase VI: Fetch real movie data from TMDB API
+        search_queries = ["The Shawshank Redemption", "The Godfather", "The Dark Knight", "Pulp Fiction"]
+        options = Enum.map(search_queries, &fetch_movie_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -536,18 +536,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created approval movie poll")
 
-        options = [
-          %{title: "Inception", description: "Dreams within dreams"},
-          %{title: "Forrest Gump", description: "Life is like a box of chocolates"},
-          %{title: "The Matrix", description: "Reality-bending sci-fi"},
-          %{title: "Goodfellas", description: "Rise and fall in the mob"}
-        ]
+        # Phase VI: Fetch real movie data from TMDB API
+        search_queries = ["Inception", "Forrest Gump", "The Matrix", "Goodfellas"]
+        options = Enum.map(search_queries, &fetch_movie_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -578,18 +577,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created ranked movie poll")
 
-        options = [
-          %{title: "Parasite", description: "Korean thriller masterpiece"},
-          %{title: "Spirited Away", description: "Miyazaki's magical animation"},
-          %{title: "Interstellar", description: "Space exploration epic"},
-          %{title: "The Prestige", description: "Dueling magicians"}
-        ]
+        # Phase VI: Fetch real movie data from TMDB API
+        search_queries = ["Parasite", "Spirited Away", "Interstellar", "The Prestige"]
+        options = Enum.map(search_queries, &fetch_movie_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -621,18 +619,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created star movie poll")
 
-        options = [
-          %{title: "Whiplash", description: "Intense drumming drama"},
-          %{title: "La La Land", description: "Musical love story"},
-          %{title: "Everything Everywhere All at Once", description: "Multiverse adventure"},
-          %{title: "The Grand Budapest Hotel", description: "Whimsical Wes Anderson tale"}
-        ]
+        # Phase VI: Fetch real movie data from TMDB API
+        search_queries = ["Whiplash", "La La Land", "Everything Everywhere All at Once", "The Grand Budapest Hotel"]
+        options = Enum.map(search_queries, &fetch_movie_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -668,17 +665,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created binary cocktail poll")
 
-        options = [
-          %{title: "Margarita", description: "Tequila, lime, triple sec"},
-          %{title: "Mojito", description: "Rum, mint, lime, soda"},
-          %{title: "Old Fashioned", description: "Whiskey, bitters, sugar"}
-        ]
+        # Phase VI: Fetch real cocktail data from CocktailDB API
+        search_queries = ["Margarita", "Mojito", "Old Fashioned"]
+        options = Enum.map(search_queries, &fetch_cocktail_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -710,17 +707,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created approval cocktail poll")
 
-        options = [
-          %{title: "Cosmopolitan", description: "Vodka, cranberry, lime"},
-          %{title: "Piña Colada", description: "Rum, coconut, pineapple"},
-          %{title: "Mai Tai", description: "Rum, orange liqueur, lime"}
-        ]
+        # Phase VI: Fetch real cocktail data from CocktailDB API
+        search_queries = ["Cosmopolitan", "Piña Colada", "Mai Tai"]
+        options = Enum.map(search_queries, &fetch_cocktail_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -751,17 +748,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created ranked cocktail poll")
 
-        options = [
-          %{title: "Whiskey Sour", description: "Whiskey, lemon, sugar"},
-          %{title: "Negroni", description: "Gin, Campari, vermouth"},
-          %{title: "Manhattan", description: "Whiskey, vermouth, bitters"}
-        ]
+        # Phase VI: Fetch real cocktail data from CocktailDB API
+        search_queries = ["Whiskey Sour", "Negroni", "Manhattan"]
+        options = Enum.map(search_queries, &fetch_cocktail_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -793,17 +790,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created star cocktail poll")
 
-        options = [
-          %{title: "Aperol Spritz", description: "Aperol, prosecco, soda"},
-          %{title: "Espresso Martini", description: "Vodka, coffee liqueur, espresso"},
-          %{title: "French 75", description: "Gin, champagne, lemon"}
-        ]
+        # Phase VI: Fetch real cocktail data from CocktailDB API
+        search_queries = ["Aperol Spritz", "Espresso Martini", "French 75"]
+        options = Enum.map(search_queries, &fetch_cocktail_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -839,18 +836,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created binary music poll")
 
-        options = [
-          %{title: "Billie Jean", description: "Michael Jackson"},
-          %{title: "Bohemian Rhapsody", description: "Queen"},
-          %{title: "Superstition", description: "Stevie Wonder"},
-          %{title: "Don't Stop Believin'", description: "Journey"}
-        ]
+        # Phase VI: Fetch real music data from Spotify API
+        search_queries = ["Billie Jean Michael Jackson", "Bohemian Rhapsody Queen", "Superstition Stevie Wonder", "Don't Stop Believin' Journey"]
+        options = Enum.map(search_queries, &fetch_music_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -882,18 +878,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created approval music poll")
 
-        options = [
-          %{title: "Blinding Lights", description: "The Weeknd"},
-          %{title: "Rolling in the Deep", description: "Adele"},
-          %{title: "Uptown Funk", description: "Mark Ronson ft. Bruno Mars"},
-          %{title: "Mr. Brightside", description: "The Killers"}
-        ]
+        # Phase VI: Fetch real music data from Spotify API
+        search_queries = ["Blinding Lights The Weeknd", "Rolling in the Deep Adele", "Uptown Funk Mark Ronson Bruno Mars", "Mr. Brightside The Killers"]
+        options = Enum.map(search_queries, &fetch_music_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -924,18 +919,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created ranked music poll")
 
-        options = [
-          %{title: "Sweet Child O' Mine", description: "Guns N' Roses"},
-          %{title: "September", description: "Earth, Wind & Fire"},
-          %{title: "Livin' on a Prayer", description: "Bon Jovi"},
-          %{title: "I Wanna Dance with Somebody", description: "Whitney Houston"}
-        ]
+        # Phase VI: Fetch real music data from Spotify API
+        search_queries = ["Sweet Child O' Mine Guns N' Roses", "September Earth Wind Fire", "Livin' on a Prayer Bon Jovi", "I Wanna Dance with Somebody Whitney Houston"]
+        options = Enum.map(search_queries, &fetch_music_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -967,18 +961,17 @@ defmodule MobileTestingPolls do
       {:ok, poll} ->
         IO.puts("  ✓ Created star music poll")
 
-        options = [
-          %{title: "Wonderwall", description: "Oasis"},
-          %{title: "Fast Car", description: "Tracy Chapman"},
-          %{title: "Hallelujah", description: "Jeff Buckley"},
-          %{title: "Tears in Heaven", description: "Eric Clapton"}
-        ]
+        # Phase VI: Fetch real music data from Spotify API
+        search_queries = ["Wonderwall Oasis", "Fast Car Tracy Chapman", "Hallelujah Jeff Buckley", "Tears in Heaven Eric Clapton"]
+        options = Enum.map(search_queries, &fetch_music_option/1)
 
         Enum.each(options, fn opt ->
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
             description: opt.description,
+            image_url: opt[:image_url],
+            metadata: opt[:metadata],
             suggested_by_id: organizer_id
           })
         end)
@@ -2075,6 +2068,67 @@ defmodule MobileTestingPolls do
       preload: [:user]
     )
   end
+
+  # ============================================================================
+  # Phase VI: Rich Data Helpers (API Integration)
+  # ============================================================================
+
+  defp fetch_movie_option(query) do
+    IO.puts("    🎬 Fetching movie: #{query}")
+    case RichDataManager.search(query, %{providers: [:tmdb], content_type: :movie, limit: 1}) do
+      {:ok, %{tmdb: {:ok, [result | _]}}} ->
+        IO.puts("      ✅ Got image: #{result.image_url}")
+        %{
+          title: result.title,
+          description: result.description || "Classic film",
+          image_url: result.image_url,
+          metadata: result.metadata
+        }
+
+      _ ->
+        # Fallback to simple data if API fails
+        IO.puts("      ⚠ TMDB API unavailable for '#{query}', using fallback")
+        %{title: query, description: "Classic film"}
+    end
+  end
+
+  defp fetch_cocktail_option(query) do
+    case RichDataManager.search(query, %{providers: [:cocktaildb], limit: 1}) do
+      {:ok, %{cocktaildb: {:ok, [result | _]}}} ->
+        %{
+          title: result.title,
+          description: result.description,
+          image_url: result.image_url,
+          metadata: result.metadata
+        }
+
+      _ ->
+        # Fallback to simple data if API fails
+        IO.puts("    ⚠ CocktailDB API unavailable for '#{query}', using fallback")
+        %{title: query, description: "Classic cocktail"}
+    end
+  end
+
+  defp fetch_music_option(query) do
+    case RichDataManager.search(query, %{providers: [:spotify], limit: 1}) do
+      {:ok, %{spotify: {:ok, [result | _]}}} ->
+        %{
+          title: result.title,
+          description: result.description,
+          image_url: result.image_url,
+          metadata: result.metadata
+        }
+
+      _ ->
+        # Fallback to simple data if API fails
+        IO.puts("    ⚠ Spotify API unavailable for '#{query}', using fallback")
+        %{title: query, description: "Popular track"}
+    end
+  end
+
+  # ============================================================================
+  # Helper Functions
+  # ============================================================================
 
   defp add_sample_votes(poll, participants, vote_count) do
     # Get poll options
