@@ -80,12 +80,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive movie poll testing across all voting systems",
       slug: "poll-test-movies",
       event_type: "social",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(7, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(3, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(7, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(3, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -105,10 +107,10 @@ defmodule MobileTestingPolls do
         participants = add_participants(event, users, 12)
 
         # Create 4 polls (one for each voting system)
-        create_movie_binary_poll(event, participants)
-        create_movie_approval_poll(event, participants)
-        create_movie_ranked_poll(event, participants)
-        create_movie_star_poll(event, participants)
+        create_movie_binary_poll(event, participants, organizer.id)
+        create_movie_approval_poll(event, participants, organizer.id)
+        create_movie_ranked_poll(event, participants, organizer.id)
+        create_movie_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create movie event: #{inspect(changeset.errors)}")
@@ -125,12 +127,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive cocktail poll testing across all voting systems",
       slug: "poll-test-cocktails",
       event_type: "social",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(8, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(8, :day) |> DateTime.add(3, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(8, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(8, :day) |> DateTime.add(3, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -147,10 +151,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_cocktail_binary_poll(event, participants)
-        create_cocktail_approval_poll(event, participants)
-        create_cocktail_ranked_poll(event, participants)
-        create_cocktail_star_poll(event, participants)
+        create_cocktail_binary_poll(event, participants, organizer.id)
+        create_cocktail_approval_poll(event, participants, organizer.id)
+        create_cocktail_ranked_poll(event, participants, organizer.id)
+        create_cocktail_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create cocktail event: #{inspect(changeset.errors)}")
@@ -167,12 +171,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive music poll testing across all voting systems",
       slug: "poll-test-music",
       event_type: "concert",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(9, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(9, :day) |> DateTime.add(6, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(9, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(9, :day) |> DateTime.add(6, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -189,10 +195,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_music_binary_poll(event, participants)
-        create_music_approval_poll(event, participants)
-        create_music_ranked_poll(event, participants)
-        create_music_star_poll(event, participants)
+        create_music_binary_poll(event, participants, organizer.id)
+        create_music_approval_poll(event, participants, organizer.id)
+        create_music_ranked_poll(event, participants, organizer.id)
+        create_music_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create music event: #{inspect(changeset.errors)}")
@@ -209,12 +215,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive restaurant poll testing across all voting systems",
       slug: "poll-test-places",
       event_type: "dining",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(10, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(10, :day) |> DateTime.add(2, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(10, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(10, :day) |> DateTime.add(2, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -231,10 +239,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_places_binary_poll(event, participants)
-        create_places_approval_poll(event, participants)
-        create_places_ranked_poll(event, participants)
-        create_places_star_poll(event, participants)
+        create_places_binary_poll(event, participants, organizer.id)
+        create_places_approval_poll(event, participants, organizer.id)
+        create_places_ranked_poll(event, participants, organizer.id)
+        create_places_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create places event: #{inspect(changeset.errors)}")
@@ -251,12 +259,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive venue poll testing across all voting systems",
       slug: "poll-test-venues",
       event_type: "planning",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(11, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(11, :day) |> DateTime.add(4, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(11, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(11, :day) |> DateTime.add(4, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -273,10 +283,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_venue_binary_poll(event, participants)
-        create_venue_approval_poll(event, participants)
-        create_venue_ranked_poll(event, participants)
-        create_venue_star_poll(event, participants)
+        create_venue_binary_poll(event, participants, organizer.id)
+        create_venue_approval_poll(event, participants, organizer.id)
+        create_venue_ranked_poll(event, participants, organizer.id)
+        create_venue_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create venue event: #{inspect(changeset.errors)}")
@@ -293,12 +303,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive time poll testing across all voting systems",
       slug: "poll-test-times",
       event_type: "workshop",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(12, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(12, :day) |> DateTime.add(3, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(12, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(12, :day) |> DateTime.add(3, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -315,10 +327,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_time_binary_poll(event, participants)
-        create_time_approval_poll(event, participants)
-        create_time_ranked_poll(event, participants)
-        create_time_star_poll(event, participants)
+        create_time_binary_poll(event, participants, organizer.id)
+        create_time_approval_poll(event, participants, organizer.id)
+        create_time_ranked_poll(event, participants, organizer.id)
+        create_time_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create time event: #{inspect(changeset.errors)}")
@@ -335,12 +347,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive date poll testing across all voting systems",
       slug: "poll-test-dates",
       event_type: "planning",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(13, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(13, :day) |> DateTime.add(2, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(13, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(13, :day) |> DateTime.add(2, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -357,10 +371,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_date_binary_poll(event, participants)
-        create_date_approval_poll(event, participants)
-        create_date_ranked_poll(event, participants)
-        create_date_star_poll(event, participants)
+        create_date_binary_poll(event, participants, organizer.id)
+        create_date_approval_poll(event, participants, organizer.id)
+        create_date_ranked_poll(event, participants, organizer.id)
+        create_date_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create date event: #{inspect(changeset.errors)}")
@@ -377,12 +391,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive general poll testing across all voting systems",
       slug: "poll-test-general",
       event_type: "planning",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(14, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(14, :day) |> DateTime.add(3, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(14, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(14, :day) |> DateTime.add(3, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -399,10 +415,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_general_binary_poll(event, participants)
-        create_general_approval_poll(event, participants)
-        create_general_ranked_poll(event, participants)
-        create_general_star_poll(event, participants)
+        create_general_binary_poll(event, participants, organizer.id)
+        create_general_approval_poll(event, participants, organizer.id)
+        create_general_ranked_poll(event, participants, organizer.id)
+        create_general_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create general event: #{inspect(changeset.errors)}")
@@ -419,12 +435,14 @@ defmodule MobileTestingPolls do
       description: "Comprehensive custom poll testing across all voting systems",
       slug: "poll-test-custom",
       event_type: "planning",
-      status: "published",
+      status: "polling",
       user_id: organizer.id,
       group_id: group.id,
       venue_id: venue.id,
-      starts_at: DateTime.utc_now() |> DateTime.add(15, :day),
-      ends_at: DateTime.utc_now() |> DateTime.add(15, :day) |> DateTime.add(3, :hour),
+      start_at: DateTime.utc_now() |> DateTime.add(15, :day),
+      end_at: DateTime.utc_now() |> DateTime.add(15, :day) |> DateTime.add(3, :hour),
+      timezone: "America/Los_Angeles",
+      polling_deadline: DateTime.utc_now() |> DateTime.add(5, :day),
       is_private: false
     }
 
@@ -441,10 +459,10 @@ defmodule MobileTestingPolls do
 
         participants = add_participants(event, users, 12)
 
-        create_custom_binary_poll(event, participants)
-        create_custom_approval_poll(event, participants)
-        create_custom_ranked_poll(event, participants)
-        create_custom_star_poll(event, participants)
+        create_custom_binary_poll(event, participants, organizer.id)
+        create_custom_approval_poll(event, participants, organizer.id)
+        create_custom_ranked_poll(event, participants, organizer.id)
+        create_custom_star_poll(event, participants, organizer.id)
 
       {:error, changeset} ->
         Helpers.error("Failed to create custom event: #{inspect(changeset.errors)}")
@@ -455,7 +473,7 @@ defmodule MobileTestingPolls do
   # Movie Polls
   # ============================================================================
 
-  defp create_movie_binary_poll(event, participants) do
+  defp create_movie_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "movie",
@@ -464,6 +482,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these movie options",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -485,7 +504,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -496,7 +516,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_movie_approval_poll(event, participants) do
+  defp create_movie_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "movie",
@@ -505,6 +525,7 @@ defmodule MobileTestingPolls do
       description: "Select all movies you'd be happy to watch (up to 2)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 2,
         "min_selections" => 1
@@ -526,7 +547,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -537,7 +559,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_movie_ranked_poll(event, participants) do
+  defp create_movie_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "movie",
@@ -546,6 +568,7 @@ defmodule MobileTestingPolls do
       description: "Rank these movies in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -566,7 +589,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -577,7 +601,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_movie_star_poll(event, participants) do
+  defp create_movie_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "movie",
@@ -586,6 +610,7 @@ defmodule MobileTestingPolls do
       description: "Rate each movie from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -607,7 +632,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -622,7 +648,7 @@ defmodule MobileTestingPolls do
   # Cocktail Polls
   # ============================================================================
 
-  defp create_cocktail_binary_poll(event, participants) do
+  defp create_cocktail_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "cocktail",
@@ -631,6 +657,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these cocktail options",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -651,7 +678,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -662,7 +690,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_cocktail_approval_poll(event, participants) do
+  defp create_cocktail_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "cocktail",
@@ -671,6 +699,7 @@ defmodule MobileTestingPolls do
       description: "Select all cocktails you'd enjoy (up to 3)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 3,
         "min_selections" => 1
@@ -691,7 +720,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -702,7 +732,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_cocktail_ranked_poll(event, participants) do
+  defp create_cocktail_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "cocktail",
@@ -711,6 +741,7 @@ defmodule MobileTestingPolls do
       description: "Rank these cocktails in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -730,7 +761,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -741,7 +773,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_cocktail_star_poll(event, participants) do
+  defp create_cocktail_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "cocktail",
@@ -750,6 +782,7 @@ defmodule MobileTestingPolls do
       description: "Rate each cocktail from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -770,7 +803,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -785,7 +819,7 @@ defmodule MobileTestingPolls do
   # Music Polls
   # ============================================================================
 
-  defp create_music_binary_poll(event, participants) do
+  defp create_music_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "music_track",
@@ -794,6 +828,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these opening tracks",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -815,7 +850,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -826,7 +862,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_music_approval_poll(event, participants) do
+  defp create_music_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "music_track",
@@ -835,6 +871,7 @@ defmodule MobileTestingPolls do
       description: "Select all tracks you'd enjoy (up to 3)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 3,
         "min_selections" => 1
@@ -856,7 +893,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -867,7 +905,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_music_ranked_poll(event, participants) do
+  defp create_music_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "music_track",
@@ -876,6 +914,7 @@ defmodule MobileTestingPolls do
       description: "Rank these encore tracks in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -896,7 +935,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -907,7 +947,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_music_star_poll(event, participants) do
+  defp create_music_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "music_track",
@@ -916,6 +956,7 @@ defmodule MobileTestingPolls do
       description: "Rate each acoustic track from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -937,7 +978,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -952,7 +994,7 @@ defmodule MobileTestingPolls do
   # Places (Restaurant) Polls
   # ============================================================================
 
-  defp create_places_binary_poll(event, participants) do
+  defp create_places_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "places",
@@ -961,6 +1003,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these restaurant options",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -981,7 +1024,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -992,7 +1036,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_places_approval_poll(event, participants) do
+  defp create_places_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "places",
@@ -1001,6 +1045,7 @@ defmodule MobileTestingPolls do
       description: "Select all restaurants you'd enjoy (up to 2)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 2,
         "min_selections" => 1
@@ -1021,7 +1066,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1032,7 +1078,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_places_ranked_poll(event, participants) do
+  defp create_places_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "places",
@@ -1041,6 +1087,7 @@ defmodule MobileTestingPolls do
       description: "Rank these restaurants in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -1060,7 +1107,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1071,7 +1119,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_places_star_poll(event, participants) do
+  defp create_places_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "places",
@@ -1080,6 +1128,7 @@ defmodule MobileTestingPolls do
       description: "Rate each restaurant from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -1100,7 +1149,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1115,7 +1165,7 @@ defmodule MobileTestingPolls do
   # Venue Polls
   # ============================================================================
 
-  defp create_venue_binary_poll(event, participants) do
+  defp create_venue_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "venue",
@@ -1124,6 +1174,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these venue options",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -1144,7 +1195,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1155,7 +1207,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_venue_approval_poll(event, participants) do
+  defp create_venue_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "venue",
@@ -1164,6 +1216,7 @@ defmodule MobileTestingPolls do
       description: "Select all venues you'd approve (up to 2)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 2,
         "min_selections" => 1
@@ -1184,7 +1237,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1195,7 +1249,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_venue_ranked_poll(event, participants) do
+  defp create_venue_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "venue",
@@ -1204,6 +1258,7 @@ defmodule MobileTestingPolls do
       description: "Rank these retreat venues in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -1223,7 +1278,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1234,7 +1290,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_venue_star_poll(event, participants) do
+  defp create_venue_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "venue",
@@ -1243,6 +1299,7 @@ defmodule MobileTestingPolls do
       description: "Rate each gallery venue from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -1263,7 +1320,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1278,7 +1336,7 @@ defmodule MobileTestingPolls do
   # Time Polls
   # ============================================================================
 
-  defp create_time_binary_poll(event, participants) do
+  defp create_time_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "time",
@@ -1287,6 +1345,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these time slots",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -1307,7 +1366,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1318,7 +1378,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_time_approval_poll(event, participants) do
+  defp create_time_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "time",
@@ -1327,6 +1387,7 @@ defmodule MobileTestingPolls do
       description: "Select all times that work for you (up to 2)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 2,
         "min_selections" => 1
@@ -1347,7 +1408,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1358,7 +1420,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_time_ranked_poll(event, participants) do
+  defp create_time_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "time",
@@ -1367,6 +1429,7 @@ defmodule MobileTestingPolls do
       description: "Rank these class schedules in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -1386,7 +1449,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1397,7 +1461,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_time_star_poll(event, participants) do
+  defp create_time_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "time",
@@ -1406,6 +1470,7 @@ defmodule MobileTestingPolls do
       description: "Rate each practice time from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -1426,7 +1491,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1441,7 +1507,7 @@ defmodule MobileTestingPolls do
   # Date Polls
   # ============================================================================
 
-  defp create_date_binary_poll(event, participants) do
+  defp create_date_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "date_selection",
@@ -1450,6 +1516,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these date options",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -1470,7 +1537,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1481,7 +1549,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_date_approval_poll(event, participants) do
+  defp create_date_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "date_selection",
@@ -1490,6 +1558,7 @@ defmodule MobileTestingPolls do
       description: "Select all dates that work for you (up to 2)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 2,
         "min_selections" => 1
@@ -1510,7 +1579,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1521,7 +1591,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_date_ranked_poll(event, participants) do
+  defp create_date_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "date_selection",
@@ -1530,6 +1600,7 @@ defmodule MobileTestingPolls do
       description: "Rank these retreat date ranges in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -1549,7 +1620,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1560,7 +1632,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_date_star_poll(event, participants) do
+  defp create_date_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "date_selection",
@@ -1569,6 +1641,7 @@ defmodule MobileTestingPolls do
       description: "Rate each potential launch date from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -1589,7 +1662,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1604,7 +1678,7 @@ defmodule MobileTestingPolls do
   # General Polls
   # ============================================================================
 
-  defp create_general_binary_poll(event, participants) do
+  defp create_general_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "general",
@@ -1613,6 +1687,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these activity options",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -1633,7 +1708,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1644,7 +1720,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_general_approval_poll(event, participants) do
+  defp create_general_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "general",
@@ -1653,6 +1729,7 @@ defmodule MobileTestingPolls do
       description: "Select all formats you'd approve (up to 2)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 2,
         "min_selections" => 1
@@ -1673,7 +1750,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1684,7 +1762,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_general_ranked_poll(event, participants) do
+  defp create_general_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "general",
@@ -1693,6 +1771,7 @@ defmodule MobileTestingPolls do
       description: "Rank these themes in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -1712,7 +1791,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1723,7 +1803,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_general_star_poll(event, participants) do
+  defp create_general_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "general",
@@ -1732,6 +1812,7 @@ defmodule MobileTestingPolls do
       description: "Rate each feature from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -1752,7 +1833,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1767,7 +1849,7 @@ defmodule MobileTestingPolls do
   # Custom Polls
   # ============================================================================
 
-  defp create_custom_binary_poll(event, participants) do
+  defp create_custom_binary_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "custom",
@@ -1776,6 +1858,7 @@ defmodule MobileTestingPolls do
       description: "Vote yes/no on these project priorities",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "allow_maybe" => true,
         "require_all_votes" => false
@@ -1796,7 +1879,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1807,7 +1891,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_custom_approval_poll(event, participants) do
+  defp create_custom_approval_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "custom",
@@ -1816,6 +1900,7 @@ defmodule MobileTestingPolls do
       description: "Select all initiatives you'd approve (up to 3)",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_selections" => 3,
         "min_selections" => 1
@@ -1836,7 +1921,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1847,7 +1933,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_custom_ranked_poll(event, participants) do
+  defp create_custom_ranked_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "custom",
@@ -1856,6 +1942,7 @@ defmodule MobileTestingPolls do
       description: "Rank these office perks in order of preference",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "require_full_ranking" => false
       }
@@ -1875,7 +1962,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1886,7 +1974,7 @@ defmodule MobileTestingPolls do
     end
   end
 
-  defp create_custom_star_poll(event, participants) do
+  defp create_custom_star_poll(event, participants, organizer_id) do
     poll_attrs = %{
       event_id: event.id,
       poll_type: "custom",
@@ -1895,6 +1983,7 @@ defmodule MobileTestingPolls do
       description: "Rate each tool category from 1-5 stars",
       phase: "voting",
       visibility: "public",
+    created_by_id: organizer_id,
       settings: %{
         "max_stars" => 5,
         "allow_half_stars" => false
@@ -1915,7 +2004,8 @@ defmodule MobileTestingPolls do
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: opt.title,
-            description: opt.description
+            description: opt.description,
+            suggested_by_id: organizer_id
           })
         end)
 
@@ -1931,15 +2021,27 @@ defmodule MobileTestingPolls do
   # ============================================================================
 
   defp get_available_users do
-    Repo.all(from u in Accounts.User, limit: 50)
+    # Query users directly without soft-delete filtering (users table doesn't have deleted_at)
+    Repo.all(from u in "users", limit: 50, select: %{
+      id: u.id,
+      email: u.email,
+      name: u.name
+    })
+    |> Enum.map(fn user_data ->
+      %Accounts.User{
+        id: user_data.id,
+        email: user_data.email,
+        name: user_data.name
+      }
+    end)
   end
 
   defp get_available_groups do
-    Repo.all(from g in Groups.Group, limit: 20)
+    Repo.all(from g in Groups.Group, where: is_nil(g.deleted_at), limit: 20, select: g)
   end
 
   defp get_available_venues do
-    Repo.all(from v in Venues.Venue, limit: 20)
+    Repo.all(from v in Venues.Venue, limit: 20, select: v)
   end
 
   defp add_participants(event, users, count) do

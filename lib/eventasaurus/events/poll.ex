@@ -143,10 +143,6 @@ defmodule EventasaurusApp.Events.Poll do
     |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
-    |> unique_constraint([:event_id, :poll_type],
-      name: :polls_event_poll_type_unique,
-      message: "A poll of this type already exists for this event"
-    )
   end
 
   @doc """
@@ -184,10 +180,6 @@ defmodule EventasaurusApp.Events.Poll do
     |> put_change(:phase, "list_building")
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
-    |> unique_constraint([:event_id, :poll_type],
-      name: :polls_event_poll_type_unique,
-      message: "A poll of this type already exists for this event"
-    )
   end
 
   @doc """
