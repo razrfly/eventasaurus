@@ -82,6 +82,41 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   end
 
   @doc """
+  Fetch images from Unsplash API for a specific country category.
+  Uses landscape orientation and sorts by popularity (likes).
+
+  ## Parameters
+    - country_name: Name of the country
+    - category_name: Category identifier (e.g., "general", "landmarks")
+    - search_terms: List of search terms for this category (e.g., ["france landscape", "france scenery"])
+
+  Returns {:ok, category_data} with structure:
+    %{
+      "collection_id" => nil,
+      "search_terms" => [...],
+      "images" => [...],
+      "last_refreshed_at" => "2025-11-03T..."
+    }
+  """
+  @spec fetch_category_images_for_country(String.t(), String.t(), list(String.t())) ::
+          {:ok, map()} | {:error, atom()}
+  def fetch_category_images_for_country(country_name, category_name, search_terms)
+      when is_binary(country_name) and is_binary(category_name) and is_list(search_terms) do
+    Logger.info("Fetching category '#{category_name}' images for country: #{country_name}")
+
+    # Note: Country struct is already validated by caller, no need to query database
+    cond do
+      Enum.empty?(search_terms) ->
+        Logger.warning("No search terms provided for category '#{category_name}'")
+        {:error, :no_search_terms}
+
+      true ->
+        # Try each search term in order until one returns results
+        try_search_terms(search_terms)
+    end
+  end
+
+  @doc """
   Fetch and store all 5 category images for a city in one operation.
 
   This is the primary method for populating a city's Unsplash gallery.
@@ -198,7 +233,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
     # Fetch and store each category - continue even if some fail
     # IMPORTANT: Use reduce to reload country after each store to prevent overwriting categories
     {results, _final_country} = Enum.reduce(categories_to_fetch, {[], country}, fn {category_name, search_terms}, {acc_results, current_country} ->
-      case fetch_category_images(country.name, category_name, search_terms) do
+      case fetch_category_images_for_country(country.name, category_name, search_terms) do
         {:ok, category_data} ->
           case store_category_for_country(current_country, category_name, category_data) do
             {:ok, _updated_gallery} ->
