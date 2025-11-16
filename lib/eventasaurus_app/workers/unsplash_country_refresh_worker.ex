@@ -24,7 +24,7 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
   ## Refresh Interval
 
   Images are only refreshed if stale (older than configured interval).
-  Default: 7 days (configurable via UNSPLASH_CITY_REFRESH_DAYS env var).
+  Default: 7 days (configurable via UNSPLASH_COUNTRY_REFRESH_DAYS env var).
 
   ## Rate Limiting
 
@@ -127,7 +127,7 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
         {true, "no refresh timestamps found"}
 
       true ->
-        oldest_refresh_str = Enum.min(refresh_timestamps, DateTime)
+        oldest_refresh_str = Enum.min(refresh_timestamps)
 
         case DateTime.from_iso8601(oldest_refresh_str) do
           {:ok, oldest_refresh, _offset} ->

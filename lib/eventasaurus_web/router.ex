@@ -111,6 +111,8 @@ defmodule EventasaurusWeb.Router do
       get "/unsplash", Admin.UnsplashTestController, :index
       post "/unsplash/fetch/:city_id", Admin.UnsplashTestController, :fetch_images
       post "/unsplash/refresh-category/:city_id/:category", Admin.UnsplashTestController, :refresh_category
+      post "/unsplash/refresh-all-cities", Admin.UnsplashTestController, :refresh_all_cities
+      post "/unsplash/refresh-all-countries", Admin.UnsplashTestController, :refresh_all_countries
     end
 
     # Category demo routes for testing

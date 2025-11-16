@@ -2,10 +2,40 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- Header -->
     <div class="mb-8">
-      <h1 class="text-3xl font-bold text-gray-900">Unsplash City Images Integration</h1>
-      <p class="mt-2 text-gray-600">
-        Visual verification of cached Unsplash images with daily rotation for active cities
-      </p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">Unsplash Image Management</h1>
+          <p class="mt-2 text-gray-600">
+            Visual verification of cached Unsplash images with daily rotation for cities and countries
+          </p>
+        </div>
+        <div class="flex gap-4">
+          <.form :let={_f} for={%{}} action={~p"/admin/unsplash/refresh-all-cities"} method="post">
+            <button
+              type="submit"
+              class="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-lg flex items-center gap-2"
+            >
+              <span class="text-xl">🏙️</span>
+              <div class="text-left">
+                <div>Refresh All Cities</div>
+                <div class="text-xs text-indigo-100"><%= @cities_for_refresh_count %> cities (venue_count ≥ 3)</div>
+              </div>
+            </button>
+          </.form>
+          <.form :let={_f} for={%{}} action={~p"/admin/unsplash/refresh-all-countries"} method="post">
+            <button
+              type="submit"
+              class="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors shadow-lg flex items-center gap-2"
+            >
+              <span class="text-xl">🌍</span>
+              <div class="text-left">
+                <div>Refresh All Countries</div>
+                <div class="text-xs text-purple-100"><%= @countries_for_refresh_count %> countries</div>
+              </div>
+            </button>
+          </.form>
+        </div>
+      </div>
     </div>
 
     <!-- Category Keywords Reference -->
@@ -41,7 +71,7 @@
     <!-- Configuration Status -->
     <div class="mb-8 p-6 bg-white rounded-lg shadow">
       <h2 class="text-xl font-semibold mb-4">Configuration Status</h2>
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div>
           <span class="font-medium">API Key:</span>
           <span class={"ml-2 px-3 py-1 rounded-full text-sm font-medium #{if @api_key_configured, do: "bg-green-100 text-green-800", else: "bg-red-100 text-red-800"}"}>
@@ -49,16 +79,20 @@
           </span>
         </div>
         <div>
-          <span class="font-medium">Active Cities:</span>
-          <span class="ml-2 text-gray-700"><%= @total_active_cities %></span>
-        </div>
-        <div>
           <span class="font-medium">Cities with Galleries:</span>
           <span class="ml-2 text-gray-700"><%= @cities_with_galleries_count %></span>
         </div>
         <div>
-          <span class="font-medium">Total Images:</span>
-          <span class="ml-2 text-gray-700"><%= @total_images %></span>
+          <span class="font-medium">Countries with Galleries:</span>
+          <span class="ml-2 text-gray-700"><%= @countries_with_galleries_count %></span>
+        </div>
+        <div>
+          <span class="font-medium">City Images:</span>
+          <span class="ml-2 text-gray-700"><%= @total_city_images %></span>
+        </div>
+        <div>
+          <span class="font-medium">Country Images:</span>
+          <span class="ml-2 text-gray-700"><%= @total_country_images %></span>
         </div>
         <div>
           <span class="font-medium">Day of Year:</span>
@@ -308,6 +342,120 @@ end</pre>
       </div>
     </div>
 
+    <!-- Countries Section -->
+    <%= if @countries_with_galleries_count > 0 do %>
+      <div class="mt-12 mb-8">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">🌍 Country Galleries</h2>
+
+        <%= for country <- @countries do %>
+          <div class="mb-8 bg-white rounded-lg shadow overflow-hidden">
+            <!-- Country Header -->
+            <div class="px-6 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xl font-bold"><%= country.name %> (<%= country.code %>)</h3>
+                  <p class="text-sm text-purple-100 mt-1">
+                    <%= country.category_count %> categories · <%= country.image_count %> total images
+                  </p>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm text-purple-100">Categories</div>
+                  <div class="text-lg font-bold"><%= map_size(country.categories) %> / 5</div>
+                  <div class="text-xs text-purple-200">Active Tab: <%= country.active_tab_category || "none" %></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gallery Display -->
+            <%= if country.tab_categories && length(country.tab_categories) > 0 do %>
+              <div class="p-6">
+                <h4 class="text-lg font-semibold text-gray-900 mb-4">Image Categories</h4>
+
+                <!-- Category Tabs -->
+                <div class="mb-6 border-b border-gray-200">
+                  <nav class="-mb-px flex flex-wrap gap-4" aria-label="Categories">
+                    <%= for {category_name, category_data} <- country.tab_categories do %>
+                      <button
+                        type="button"
+                        class={"#{if category_name == country.active_tab_category, do: "border-purple-500 text-purple-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
+                        onclick={"toggleCategory('country-#{country.slug}', '#{category_name}')"}
+                      >
+                        <%= format_category_name(category_name) %>
+                        <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium bg-gray-100 text-gray-900">
+                          <%= category_data.image_count %>
+                        </span>
+                      </button>
+                    <% end %>
+                  </nav>
+                </div>
+
+                <!-- Category Content -->
+                <%= for {category_name, category_data} <- country.tab_categories do %>
+                  <div
+                    id={"category-country-#{country.slug}-#{category_name}"}
+                    class={"category-content #{if category_name == country.active_tab_category, do: "", else: "hidden"}"}
+                  >
+                    <!-- Category Info -->
+                    <div class="mb-4 p-4 bg-purple-50 border-l-4 border-purple-400 rounded">
+                      <h5 class="font-semibold text-purple-900">Search Terms:</h5>
+                      <p class="text-sm text-purple-800 mt-1">
+                        <%= Enum.join(category_data.search_terms, ", ") %>
+                      </p>
+                      <%= if category_data.last_refreshed do %>
+                        <div class="text-xs text-purple-700 mt-2">
+                          Last refreshed: <%= format_date(category_data.last_refreshed) %>
+                        </div>
+                      <% end %>
+                    </div>
+
+                    <!-- Images Grid -->
+                    <%= if length(category_data.images) > 0 do %>
+                      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        <%= for image <- category_data.images do %>
+                          <div class="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow">
+                            <img
+                              src={image["regular"]}
+                              alt={image["alt_description"] || "#{country.name} #{category_name}"}
+                              class="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        <% end %>
+                      </div>
+                    <% else %>
+                      <p class="text-gray-500 italic">No images in this category</p>
+                    <% end %>
+
+                    <!-- Current Image Info -->
+                    <%= if category_data.current_image do %>
+                      <div class="mt-4 p-4 bg-gray-50 rounded border">
+                        <h6 class="font-medium text-gray-900 mb-2">Today's Featured Image (Day <%= @day_of_year %>)</h6>
+                        <div class="aspect-video rounded overflow-hidden mb-2">
+                          <img
+                            src={category_data.current_image["regular"]}
+                            alt={category_data.current_image["alt_description"] || "#{country.name} #{category_name}"}
+                            class="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                          <div>
+                            <span class="font-medium">Photographer:</span> <%= category_data.current_image["photographer"] %>
+                          </div>
+                          <div>
+                            <span class="font-medium">Index:</span> <%= category_data.current_index %> / <%= category_data.image_count - 1 %>
+                          </div>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
     <!-- API Reference -->
     <div class="mt-8 p-6 bg-white rounded-lg shadow">
       <h3 class="text-lg font-semibold text-gray-900 mb-4">API Reference</h3>
@@ -334,25 +482,29 @@ end</pre>
 </div>
 
 <script>
-  function toggleCategory(citySlug, categoryName) {
-    // Hide all category content for this city
-    const allCategories = document.querySelectorAll(`[id^="category-${citySlug}-"]`);
+  function toggleCategory(locationSlug, categoryName) {
+    // Determine if this is a city or country based on slug prefix
+    const isCountry = locationSlug.startsWith('country-');
+    const borderColor = isCountry ? 'border-purple-500 text-purple-600' : 'border-indigo-500 text-indigo-600';
+
+    // Hide all category content for this location
+    const allCategories = document.querySelectorAll(`[id^="category-${locationSlug}-"]`);
     allCategories.forEach(cat => cat.classList.add('hidden'));
 
     // Show selected category
-    const selectedCategory = document.getElementById(`category-${citySlug}-${categoryName}`);
+    const selectedCategory = document.getElementById(`category-${locationSlug}-${categoryName}`);
     if (selectedCategory) {
       selectedCategory.classList.remove('hidden');
     }
 
     // Update tab styles
-    const cityElement = document.querySelector(`button[onclick*="${citySlug}"]`)?.closest('.mb-8');
-    if (cityElement) {
-      const tabs = cityElement.querySelectorAll('nav button');
+    const locationElement = document.querySelector(`button[onclick*="${locationSlug}"]`)?.closest('.mb-8');
+    if (locationElement) {
+      const tabs = locationElement.querySelectorAll('nav button');
       tabs.forEach(tab => {
         if (tab.onclick && tab.onclick.toString().includes(categoryName)) {
           // Active tab
-          tab.className = 'border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm';
+          tab.className = `${borderColor} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`;
         } else {
           // Inactive tab
           tab.className = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm';

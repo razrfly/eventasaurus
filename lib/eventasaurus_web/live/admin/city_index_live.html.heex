@@ -280,17 +280,21 @@
                         <%= if Enum.empty?(refresh_timestamps) do %>
                           <span class="text-gray-400 italic">Never refreshed</span>
                         <% else %>
-                          <% oldest_refresh_str = Enum.min(refresh_timestamps, DateTime) %>
-                          <% {:ok, oldest_refresh, _offset} = DateTime.from_iso8601(oldest_refresh_str) %>
-                          <% age_days = div(DateTime.diff(DateTime.utc_now(), oldest_refresh, :second), 86400) %>
-                          <div class="flex flex-col">
-                            <span class="font-mono text-xs">
-                              <%= Calendar.strftime(oldest_refresh, "%Y-%m-%d") %>
-                            </span>
-                            <span class="text-xs text-gray-400">
-                              <%= age_days %> <%= if age_days == 1, do: "day", else: "days" %> ago
-                            </span>
-                          </div>
+                          <% oldest_refresh_str = Enum.min(refresh_timestamps) %>
+                          <%= case DateTime.from_iso8601(oldest_refresh_str) do %>
+                            <% {:ok, oldest_refresh, _offset} -> %>
+                              <% age_days = div(DateTime.diff(DateTime.utc_now(), oldest_refresh, :second), 86400) %>
+                              <div class="flex flex-col">
+                                <span class="font-mono text-xs">
+                                  <%= Calendar.strftime(oldest_refresh, "%Y-%m-%d") %>
+                                </span>
+                                <span class="text-xs text-gray-400">
+                                  <%= age_days %> <%= if age_days == 1, do: "day", else: "days" %> ago
+                                </span>
+                              </div>
+                            <% {:error, _} -> %>
+                              <span class="text-gray-400 italic">Invalid timestamp</span>
+                          <% end %>
                         <% end %>
                       <% else %>
                         <span class="text-gray-400 italic">No gallery</span>

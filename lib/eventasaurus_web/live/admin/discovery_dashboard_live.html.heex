@@ -22,7 +22,7 @@
           navigate={~p"/admin/unsplash"}
           class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          🖼️ City Images
+          🖼️ Manage Images
         </.link>
         <!-- Oban Links -->
         <.link
@@ -764,66 +764,6 @@
           </p>
           <p class="text-xs text-blue-900">
             <strong>Sitemap scrapers:</strong> Sortiraparis and other sitemap-based sources don't trigger automatic updates, so this job is essential
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-      <!-- Unsplash City Images Refresh -->
-      <div>
-        <h3 class="text-lg font-medium mb-3">Refresh City Images</h3>
-
-        <div class="space-y-4">
-          <p class="text-sm text-gray-600">
-            Refreshes cached Unsplash images for all active cities (discovery_enabled = true).
-          </p>
-
-          <button
-            phx-click="refresh_unsplash_images"
-            class="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            phx-disable-with="Refreshing..."
-            disabled={@import_running}
-          >
-            <%= if @import_running do %>
-              Job Running...
-            <% else %>
-              Refresh City Images Now
-            <% end %>
-          </button>
-
-          <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-2">
-            <p class="text-xs text-indigo-900">
-              <strong>Includes:</strong> All cities with discovery_enabled = true
-            </p>
-            <p class="text-xs text-indigo-900">
-              <strong>Process:</strong> Fetches 10 landscape images per city from Unsplash API
-            </p>
-            <p class="text-xs text-indigo-900">
-              <strong>Rotation:</strong> Images rotate daily based on day of year
-            </p>
-            <p class="text-xs text-indigo-900">
-              <strong>Schedule:</strong> Runs automatically daily at 3 AM UTC
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Info Panel -->
-      <div>
-        <h3 class="text-lg font-medium mb-3">About City Image Refresh</h3>
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
-          <p class="text-xs text-blue-900">
-            <strong>Why it matters:</strong> City images provide visual appeal and context for discovery pages
-          </p>
-          <p class="text-xs text-blue-900">
-            <strong>When to use:</strong> After enabling discovery for new cities or to refresh stale image galleries
-          </p>
-          <p class="text-xs text-blue-900">
-            <strong>Rate limiting:</strong> Unsplash has 5000 requests/hour limit (10 images × cities)
-          </p>
-          <p class="text-xs text-blue-900">
-            <strong>Test page:</strong> Visit <a href="/admin/unsplash" class="underline hover:text-blue-700">/admin/unsplash</a> to preview cached images
           </p>
         </div>
       </div>
