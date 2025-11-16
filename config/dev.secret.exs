@@ -9,7 +9,9 @@ config :eventasaurus, EventasaurusApp.Repo,
   database: "postgres",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  # Allow configurable pool size for seeding (default: 10, seeding: 30)
+  # Usage: SEED_POOL_SIZE=30 mix seed.dev
+  pool_size: String.to_integer(System.get_env("SEED_POOL_SIZE") || "10")
 
 # Stripe configuration has been moved to config/runtime.exs
 # This ensures it's loaded after .env files are processed

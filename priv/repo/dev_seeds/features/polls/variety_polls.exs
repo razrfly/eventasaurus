@@ -77,12 +77,16 @@ defmodule EnhancedVarietyPolls do
       # Add multiple participants with different group sizes
       participants = Enum.take_random(users, 15)
       Enum.each(participants, fn user ->
-        Events.create_event_participant(%{
+        case Events.create_event_participant(%{
           event_id: event.id,
           user_id: user.id,
-          status: "confirmed",
-          role: "participant"
-        })
+          status: "accepted",
+          role: "poll_voter"
+        }) do
+          {:ok, _} -> :ok
+          {:error, changeset} ->
+            Helpers.error("Failed to add participant #{user.id} to event #{event.id}: #{inspect(changeset.errors)}")
+        end
       end)
 
       # Poll 1: Conference Track Selection (ACTIVE state)
@@ -130,12 +134,16 @@ defmodule EnhancedVarietyPolls do
       # Smaller, intimate group
       participants = Enum.take_random(users, 8)
       Enum.each(participants, fn user ->
-        Events.create_event_participant(%{
+        case Events.create_event_participant(%{
           event_id: event.id,
           user_id: user.id,
-          status: "confirmed",
-          role: "participant"
-        })
+          status: "accepted",
+          role: "poll_voter"
+        }) do
+          {:ok, _} -> :ok
+          {:error, changeset} ->
+            Helpers.error("Failed to add participant #{user.id} to event #{event.id}: #{inspect(changeset.errors)}")
+        end
       end)
 
       # Wedding-specific polls with private settings
@@ -179,12 +187,16 @@ defmodule EnhancedVarietyPolls do
       # Large group - startup launch
       participants = Enum.take_random(users, 25)
       Enum.each(participants, fn user ->
-        Events.create_event_participant(%{
+        case Events.create_event_participant(%{
           event_id: event.id,
           user_id: user.id,
-          status: "confirmed",
-          role: "participant"
-        })
+          status: "accepted",
+          role: "poll_voter"
+        }) do
+          {:ok, _} -> :ok
+          {:error, changeset} ->
+            Helpers.error("Failed to add participant #{user.id} to event #{event.id}: #{inspect(changeset.errors)}")
+        end
       end)
 
       # Public polls with different voting systems
@@ -225,15 +237,21 @@ defmodule EnhancedVarietyPolls do
     end
     
     # Community-sized group
-    participants = Enum.take_random(users, 20)
-    Enum.each(participants, fn user ->
-      Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        status: "confirmed",
-        role: "participant"
-      })
-    end)
+    if event do
+      participants = Enum.take_random(users, 20)
+      Enum.each(participants, fn user ->
+        case Events.create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
+          status: "accepted",
+          role: "poll_voter"
+        }) do
+          {:ok, _} -> :ok
+          {:error, changeset} ->
+            Helpers.error("Failed to add participant #{user.id} to event #{event.id}: #{inspect(changeset.errors)}")
+        end
+      end)
+    end
 
     # Community polls with mixed settings
     create_festival_activities_poll(event, organizer)
@@ -275,12 +293,16 @@ defmodule EnhancedVarietyPolls do
     if event do
       participants = Enum.take_random(users, 12)
       Enum.each(participants, fn user ->
-        Events.create_event_participant(%{
+        case Events.create_event_participant(%{
           event_id: event.id,
           user_id: user.id,
-          status: "confirmed",
-          role: "participant"
-        })
+          status: "accepted",
+          role: "poll_voter"
+        }) do
+          {:ok, _} -> :ok
+          {:error, changeset} ->
+            Helpers.error("Failed to add participant #{user.id} to event #{event.id}: #{inspect(changeset.errors)}")
+        end
       end)
     end
 

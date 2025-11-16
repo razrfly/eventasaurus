@@ -110,16 +110,21 @@ defmodule DiversePollingEvents do
             
             # Add 4-8 participants for realistic voting
             participant_count = Enum.random(4..8)
-            participants = users 
-              |> Enum.reject(&(&1.id == organizer.id)) 
+            participants = users
+              |> Enum.reject(&(&1.id == organizer.id))
               |> Enum.take_random(participant_count)
-            
+
             Enum.each(participants, fn participant ->
-              Events.create_event_participant(%{
+              case Events.create_event_participant(%{
                 event_id: event.id,
                 user_id: participant.id,
-                status: "confirmed"
-              })
+                status: "accepted",
+                role: "poll_voter"
+              }) do
+                {:ok, _} -> :ok
+                {:error, changeset} ->
+                  Logger.warning("Failed to add participant #{participant.id} to event #{event.id}: #{inspect(changeset.errors)}")
+              end
             end)
             
             # Create Phase I polls: Date poll + Movie star rating poll
