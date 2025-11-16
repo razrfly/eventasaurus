@@ -214,6 +214,15 @@ config :eventasaurus,
     "various"
   ]
 
+# Unsplash image refresh configuration
+# Controls how often to refresh Unsplash images for cities and countries
+# Images are only refreshed if older than this threshold
+config :eventasaurus, :unsplash,
+  # Refresh interval in days for city images
+  city_refresh_days: 7,
+  # Refresh interval in days for country images
+  country_refresh_days: 7
+
 # Configure geocoder for forward geocoding (address → city/coordinates)
 config :geocoder, :worker, provider: Geocoder.Providers.OpenStreetMaps
 

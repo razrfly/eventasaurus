@@ -9,7 +9,9 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
   import Ecto.Query
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Workers.UnsplashCityRefreshWorker
   alias EventasaurusDiscovery.Admin.CityManager
+  alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.Country
 
   @impl true
@@ -92,6 +94,30 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
 
       {:error, reason} ->
         socket = put_flash(socket, :error, "Failed to delete orphaned cities: #{inspect(reason)}")
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("refresh_images", %{"id" => id}, socket) do
+    city_id = String.to_integer(id)
+
+    case Repo.get(City, city_id) do
+      nil ->
+        socket = put_flash(socket, :error, "City not found")
+        {:noreply, socket}
+
+      city ->
+        # Queue refresh job immediately
+        %{city_id: city.id}
+        |> UnsplashCityRefreshWorker.new()
+        |> Oban.insert()
+
+        socket =
+          socket
+          |> put_flash(:info, "Queued Unsplash image refresh for #{city.name}")
+          |> load_cities()
+
         {:noreply, socket}
     end
   end

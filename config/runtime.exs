@@ -156,6 +156,40 @@ config :eventasaurus, :venue_images,
   max_images_per_venue: safe_max_per_venue,
   no_images_cooldown_days: safe_cooldown_days
 
+# Configure Unsplash image refresh intervals
+# How often to refresh city and country images (in days)
+# Default: 7 days (weekly refresh keeps images fresh without wasting API quota)
+# Unsplash rate limit: 5000 requests/hour
+unsplash_city_refresh_days =
+  case System.get_env("UNSPLASH_CITY_REFRESH_DAYS") do
+    nil -> 7
+    days_str ->
+      case Integer.parse(days_str) do
+        {days, _} when days > 0 -> days
+        _ ->
+          require Logger
+          Logger.warning("Invalid UNSPLASH_CITY_REFRESH_DAYS: #{days_str}, using default: 7")
+          7
+      end
+  end
+
+unsplash_country_refresh_days =
+  case System.get_env("UNSPLASH_COUNTRY_REFRESH_DAYS") do
+    nil -> 7
+    days_str ->
+      case Integer.parse(days_str) do
+        {days, _} when days > 0 -> days
+        _ ->
+          require Logger
+          Logger.warning("Invalid UNSPLASH_COUNTRY_REFRESH_DAYS: #{days_str}, using default: 7")
+          7
+      end
+  end
+
+config :eventasaurus, :unsplash,
+  city_refresh_days: unsplash_city_refresh_days,
+  country_refresh_days: unsplash_country_refresh_days
+
 # Configure Mapbox for static maps
 config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
 

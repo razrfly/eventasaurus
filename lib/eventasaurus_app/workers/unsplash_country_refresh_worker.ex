@@ -1,25 +1,25 @@
-defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
+defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
   @moduledoc """
-  Oban worker that refreshes Unsplash images for a single city.
+  Oban worker that refreshes Unsplash images for a single country.
 
   This worker is queued by the UnsplashRefreshWorker coordinator to enable
-  parallel processing of city image refreshes.
+  parallel processing of country image refreshes.
 
   ## Process
 
-  1. Receives city_id as job argument
+  1. Receives country_id as job argument
   2. Checks if images are stale (based on last_refreshed_at and configured interval)
-  3. Fetches all 5 categorized image galleries for the city if stale
+  3. Fetches all 5 categorized image galleries for the country if stale
   4. Handles rate limiting and failures gracefully
 
   ## Categories
 
-  Fetches images for all 5 categories per city:
-  - general: City skyline and cityscape
+  Fetches images for all 5 categories per country:
+  - general: Country landscapes and iconic views
   - architecture: Modern buildings and architecture
   - historic: Historic buildings and monuments
-  - old_town: Old town and medieval areas
-  - city_landmarks: Famous landmarks and attractions
+  - landmarks: Famous landmarks and attractions
+  - nature: Natural landscapes and scenery
 
   ## Refresh Interval
 
@@ -29,7 +29,7 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
   ## Rate Limiting
 
   Unsplash has a rate limit of 5000 requests/hour in production.
-  Each city refresh makes approximately 5 API calls (one per category).
+  Each country refresh makes approximately 5 API calls (one per category).
   With staleness checking, actual API usage is reduced by ~85%.
 
   ## Retry Strategy
@@ -43,28 +43,28 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
 
   alias EventasaurusApp.Services.UnsplashImageFetcher
   alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.Country
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"city_id" => city_id}}) do
-    Logger.info("🖼️  Unsplash City Refresh: Starting refresh for city_id=#{city_id}")
+  def perform(%Oban.Job{args: %{"country_id" => country_id}}) do
+    Logger.info("🖼️  Unsplash Country Refresh: Starting refresh for country_id=#{country_id}")
 
-    case Repo.get(City, city_id) do
+    case Repo.get(Country, country_id) do
       nil ->
-        Logger.error("City not found: #{city_id}")
-        {:error, :city_not_found}
+        Logger.error("Country not found: #{country_id}")
+        {:error, :country_not_found}
 
-      city ->
-        refresh_days = Application.get_env(:eventasaurus, :unsplash)[:city_refresh_days] || 7
+      country ->
+        refresh_days = Application.get_env(:eventasaurus, :unsplash)[:country_refresh_days] || 7
 
-        case should_refresh?(city, refresh_days) do
+        case should_refresh?(country, refresh_days) do
           {true, reason} ->
-            Logger.info("🔄 Refreshing #{city.name} - #{reason}")
-            refresh_city_images(city)
+            Logger.info("🔄 Refreshing #{country.name} - #{reason}")
+            refresh_country_images(country)
 
           {false, age_days} ->
-            Logger.info("⏭️  Skipping #{city.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)")
+            Logger.info("⏭️  Skipping #{country.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)")
             :ok
         end
     end
@@ -72,36 +72,36 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
 
   # Private functions
 
-  defp refresh_city_images(city) do
-    Logger.info("Refreshing all categories for #{city.name} (id=#{city.id})")
+  defp refresh_country_images(country) do
+    Logger.info("Refreshing all categories for #{country.name} (id=#{country.id})")
 
-    case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
-      {:ok, updated_city} ->
-        categories = get_in(updated_city.unsplash_gallery, ["categories"]) || %{}
+    case UnsplashImageFetcher.fetch_and_store_all_categories_for_country(country) do
+      {:ok, updated_country} ->
+        categories = get_in(updated_country.unsplash_gallery, ["categories"]) || %{}
         total_images = Enum.reduce(categories, 0, fn {_name, data}, acc ->
           acc + length(Map.get(data, "images", []))
         end)
-        Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{city.name}")
+        Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{country.name}")
         :ok
 
       {:error, :all_categories_failed} ->
-        Logger.error("  ❌ Failed to fetch any categories for #{city.name}")
+        Logger.error("  ❌ Failed to fetch any categories for #{country.name}")
         {:error, :all_categories_failed}
 
       {:error, reason} ->
-        Logger.error("  ❌ Failed to refresh #{city.name}: #{inspect(reason)}")
+        Logger.error("  ❌ Failed to refresh #{country.name}: #{inspect(reason)}")
         {:error, reason}
     end
   end
 
-  # Check if a city's images need refreshing based on staleness.
+  # Check if a country's images need refreshing based on staleness.
   #
   # Returns {true, reason} if refresh needed, {false, age_days} if still fresh
-  defp should_refresh?(%City{unsplash_gallery: nil}, _refresh_days) do
+  defp should_refresh?(%Country{unsplash_gallery: nil}, _refresh_days) do
     {true, "no gallery exists"}
   end
 
-  defp should_refresh?(%City{unsplash_gallery: gallery}, refresh_days) when is_map(gallery) do
+  defp should_refresh?(%Country{unsplash_gallery: gallery}, refresh_days) when is_map(gallery) do
     categories = Map.get(gallery, "categories", %{})
 
     cond do
