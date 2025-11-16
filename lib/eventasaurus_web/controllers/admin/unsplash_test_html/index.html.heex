@@ -411,41 +411,34 @@ end</pre>
                     <!-- Images Grid -->
                     <%= if length(category_data.images) > 0 do %>
                       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        <%= for image <- category_data.images do %>
-                          <div class="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow">
-                            <img
-                              src={image["regular"]}
-                              alt={image["alt_description"] || "#{country.name} #{category_name}"}
-                              class="w-full h-full object-cover"
-                              loading="lazy"
-                            />
+                        <%= for {image, index} <- Enum.with_index(category_data.images) do %>
+                          <div class={"border rounded-lg overflow-hidden #{if index == category_data.current_index, do: "ring-4 ring-purple-500", else: ""}"}>
+                            <div class="aspect-video bg-gray-100 relative">
+                              <img
+                                src={image["thumb_url"]}
+                                alt={"#{country.name} - #{category_name} - Image #{index}"}
+                                class="w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                              <%= if index == category_data.current_index do %>
+                                <div class="absolute top-2 right-2 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded">
+                                  TODAY
+                                </div>
+                              <% end %>
+                            </div>
+                            <div class="px-2 py-2 bg-gray-50 border-t">
+                              <div class="text-xs text-gray-600">
+                                <div class="font-medium">Index: <%= index %></div>
+                                <div class="truncate">
+                                  by <%= image["attribution"]["photographer_name"] %>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         <% end %>
                       </div>
                     <% else %>
                       <p class="text-gray-500 italic">No images in this category</p>
-                    <% end %>
-
-                    <!-- Current Image Info -->
-                    <%= if category_data.current_image do %>
-                      <div class="mt-4 p-4 bg-gray-50 rounded border">
-                        <h6 class="font-medium text-gray-900 mb-2">Today's Featured Image (Day <%= @day_of_year %>)</h6>
-                        <div class="aspect-video rounded overflow-hidden mb-2">
-                          <img
-                            src={category_data.current_image["regular"]}
-                            alt={category_data.current_image["alt_description"] || "#{country.name} #{category_name}"}
-                            class="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                          <div>
-                            <span class="font-medium">Photographer:</span> <%= category_data.current_image["photographer"] %>
-                          </div>
-                          <div>
-                            <span class="font-medium">Index:</span> <%= category_data.current_index %> / <%= category_data.image_count - 1 %>
-                          </div>
-                        </div>
-                      </div>
                     <% end %>
                   </div>
                 <% end %>
