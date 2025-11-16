@@ -3,19 +3,19 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   Service for fetching and storing Unsplash image galleries in the database.
   Fetches landscape-oriented city images sorted by popularity.
 
-  Only works with active cities (discovery_enabled = true).
+  Works with any city (no longer requires discovery_enabled = true).
   """
 
   require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.Country
 
   # Number of images to store per city
   @max_images 10
 
   @doc """
   Fetch and store images for a city.
-  Only works for cities with discovery_enabled = true.
 
   Returns {:ok, gallery} or {:error, reason}.
   """
@@ -23,17 +23,13 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   def fetch_and_store_city_images(city_name) do
     Logger.info("Fetching images for city: #{city_name}")
 
-    # Verify city exists and is active
+    # Verify city exists
     city = Repo.get_by(City, name: city_name)
 
     cond do
       is_nil(city) ->
         Logger.warning("City not found: #{city_name}")
         {:error, :not_found}
-
-      !city.discovery_enabled ->
-        Logger.warning("City #{city_name} is not active (discovery_enabled = false)")
-        {:error, :inactive_city}
 
       true ->
         # Fetch images from Unsplash
@@ -67,17 +63,13 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       when is_binary(city_name) and is_binary(category_name) and is_list(search_terms) do
     Logger.info("Fetching category '#{category_name}' images for city: #{city_name}")
 
-    # Verify city exists and is active
+    # Verify city exists
     city = Repo.get_by(City, name: city_name)
 
     cond do
       is_nil(city) ->
         Logger.warning("City not found: #{city_name}")
         {:error, :not_found}
-
-      !city.discovery_enabled ->
-        Logger.warning("City #{city_name} is not active (discovery_enabled = false)")
-        {:error, :inactive_city}
 
       Enum.empty?(search_terms) ->
         Logger.warning("No search terms provided for category '#{category_name}'")
@@ -97,7 +89,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   and stores them in the categorized format.
 
   ## Parameters
-    - city: City struct (must have discovery_enabled = true)
+    - city: City struct
 
   ## Returns
     - {:ok, updated_city} - Successfully fetched and stored all categories
@@ -112,11 +104,6 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   @spec fetch_and_store_all_categories(City.t()) :: {:ok, City.t()} | {:error, any()}
   def fetch_and_store_all_categories(%City{} = city) do
     Logger.info("Fetching all categories for city: #{city.name}")
-
-    if !city.discovery_enabled do
-      Logger.warning("City #{city.name} is not active (discovery_enabled = false)")
-      {:error, :inactive_city}
-    else
 
     # Define all 5 categories with their search terms
     categories_to_fetch = [
@@ -173,6 +160,86 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
         Logger.error("Failed to fetch any categories for #{city.name}")
         {:error, :all_categories_failed}
     end
+  end
+
+  @doc """
+  Fetch and store all 5 category images for a country in one operation.
+
+  This is the primary method for populating a country's Unsplash gallery.
+  It fetches all categories (general, architecture, historic, landmarks, nature)
+  and stores them in the categorized format.
+
+  ## Parameters
+    - country: Country struct
+
+  ## Returns
+    - {:ok, updated_country} - Successfully fetched and stored all categories
+    - {:error, reason} - Failed to fetch or store images
+
+  ## Examples
+
+      iex> country = Repo.get_by(Country, code: "PL")
+      iex> UnsplashImageFetcher.fetch_and_store_all_categories_for_country(country)
+      {:ok, %Country{unsplash_gallery: %{"active_category" => "general", "categories" => %{...}}}}
+  """
+  @spec fetch_and_store_all_categories_for_country(Country.t()) :: {:ok, Country.t()} | {:error, any()}
+  def fetch_and_store_all_categories_for_country(%Country{} = country) do
+    Logger.info("Fetching all categories for country: #{country.name}")
+
+    # Define all 5 categories with their search terms for countries
+    categories_to_fetch = [
+      {"general", [country.name, "#{country.name} landscape", "#{country.name} scenery"]},
+      {"architecture", ["#{country.name} architecture", "#{country.name} modern buildings", "#{country.name} buildings"]},
+      {"historic", ["#{country.name} historic sites", "#{country.name} monuments", "#{country.name} heritage"]},
+      {"landmarks", ["#{country.name} landmarks", "#{country.name} famous places", "#{country.name} attractions"]},
+      {"nature", ["#{country.name} nature", "#{country.name} mountains", "#{country.name} natural beauty"]}
+    ]
+
+    # Fetch and store each category - continue even if some fail
+    # IMPORTANT: Use reduce to reload country after each store to prevent overwriting categories
+    {results, _final_country} = Enum.reduce(categories_to_fetch, {[], country}, fn {category_name, search_terms}, {acc_results, current_country} ->
+      case fetch_category_images(country.name, category_name, search_terms) do
+        {:ok, category_data} ->
+          case store_category_for_country(current_country, category_name, category_data) do
+            {:ok, _updated_gallery} ->
+              # Reload country from database to get latest data for next category
+              fresh_country = Repo.get!(Country, country.id)
+              Logger.info("  ✓ Successfully fetched #{category_name} for #{country.name}")
+              {[{:ok, category_name} | acc_results], fresh_country}
+            {:error, reason} ->
+              Logger.warning("  ✗ Failed to store #{category_name} for #{country.name}: #{inspect(reason)}")
+              {[{:error, category_name, reason} | acc_results], current_country}
+          end
+        {:error, reason} ->
+          Logger.warning("  ✗ Failed to fetch #{category_name} for #{country.name}: #{inspect(reason)}")
+          {[{:error, category_name, reason} | acc_results], current_country}
+      end
+    end)
+
+    # Reverse results to restore original order
+    results = Enum.reverse(results)
+
+    # Count successes and failures
+    successes = Enum.filter(results, &match?({:ok, _}, &1))
+    failures = Enum.filter(results, &match?({:error, _, _}, &1))
+
+    cond do
+      length(successes) == 5 ->
+        # All categories fetched successfully
+        updated_country = Repo.get!(Country, country.id)
+        Logger.info("Successfully fetched all 5 categories for #{country.name}")
+        {:ok, updated_country}
+
+      length(successes) > 0 ->
+        # Partial success - some categories fetched
+        updated_country = Repo.get!(Country, country.id)
+        Logger.info("Fetched #{length(successes)}/5 categories for #{country.name} (#{length(failures)} failed)")
+        {:ok, updated_country}
+
+      true ->
+        # All categories failed
+        Logger.error("Failed to fetch any categories for #{country.name}")
+        {:error, :all_categories_failed}
     end
   end
 
@@ -430,6 +497,55 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       {:error, changeset} ->
         Logger.error(
           "Failed to store category '#{category_name}' for #{city.name}: #{inspect(changeset.errors)}"
+        )
+
+        {:error, :store_failed}
+    end
+  end
+
+  @doc """
+  Store or update a category in a country's gallery.
+  Creates categorized structure if needed, or adds/updates a category.
+
+  ## Parameters
+    - country: Country struct
+    - category_name: Category identifier (e.g., "general", "landmarks")
+    - category_data: Map containing "search_terms", "images", "last_refreshed_at"
+
+  Returns {:ok, updated_gallery} or {:error, reason}
+  """
+  @spec store_category_for_country(Country.t(), String.t(), map()) :: {:ok, map()} | {:error, atom()}
+  def store_category_for_country(country, category_name, category_data) do
+    Logger.info("Storing category '#{category_name}' for country: #{country.name}")
+
+    # Get existing gallery or create new categorized structure
+    current_gallery = country.unsplash_gallery || %{}
+
+    updated_gallery =
+      if Map.has_key?(current_gallery, "categories") do
+        # Update existing categorized gallery
+        put_in(current_gallery, ["categories", category_name], category_data)
+      else
+        # Create new categorized gallery
+        %{
+          "active_category" => category_name,
+          "categories" => %{
+            category_name => category_data
+          }
+        }
+      end
+
+    case Repo.update(Country.gallery_changeset(country, updated_gallery)) do
+      {:ok, updated_country} ->
+        Logger.info(
+          "Successfully stored category '#{category_name}' for country: #{country.name} (#{length(category_data["images"])} images)"
+        )
+
+        {:ok, updated_country.unsplash_gallery}
+
+      {:error, changeset} ->
+        Logger.error(
+          "Failed to store category '#{category_name}' for #{country.name}: #{inspect(changeset.errors)}"
         )
 
         {:error, :store_failed}

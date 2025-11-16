@@ -1,15 +1,16 @@
 defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
   @moduledoc """
-  Coordinator worker that queues individual city image refresh jobs.
+  Coordinator worker that queues individual city and country image refresh jobs.
 
-  This worker acts as a coordinator, queuing UnsplashCityRefreshWorker jobs
-  for each active city. This enables parallel processing and better scalability.
+  This worker acts as a coordinator, queuing UnsplashCityRefreshWorker and
+  UnsplashCountryRefreshWorker jobs. This enables parallel processing and better scalability.
 
   ## Process
 
-  1. Find all cities with discovery_enabled = true
-  2. Queue individual UnsplashCityRefreshWorker jobs for each city
-  3. Jobs are processed in parallel by Oban's :unsplash queue
+  1. Find all cities with venue_count >= 3
+  2. Find all countries with cities
+  3. Queue individual refresh worker jobs for each city and country
+  4. Jobs are processed in parallel by Oban's :unsplash queue
 
   ## Benefits of Coordinator Pattern
 
@@ -53,8 +54,10 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
   use Oban.Worker, queue: :maintenance, max_attempts: 1
 
   alias EventasaurusApp.Workers.UnsplashCityRefreshWorker
+  alias EventasaurusApp.Workers.UnsplashCountryRefreshWorker
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Locations.Country
   import Ecto.Query
   require Logger
 
@@ -62,29 +65,43 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
   def perform(%Oban.Job{}) do
     Logger.info("🖼️  Unsplash Refresh Coordinator: Starting scheduled refresh")
 
-    # Get all active cities
+    # Get all cities with venues
     cities = get_active_cities()
+    total_venues = Enum.reduce(cities, 0, fn city, acc -> acc + city.venue_count end)
+    Logger.info("Found #{length(cities)} cities with venues (#{total_venues} total venues)")
 
-    Logger.info("Found #{length(cities)} active cities to queue for refresh")
+    # Get all countries
+    countries = get_countries()
+    Logger.info("Found #{length(countries)} countries")
 
-    if Enum.empty?(cities) do
-      Logger.info("No active cities found, skipping refresh")
+    # Queue individual city refresh jobs
+    city_jobs = Enum.map(cities, fn city ->
+      UnsplashCityRefreshWorker.new(%{city_id: city.id})
+    end)
+
+    # Queue individual country refresh jobs
+    country_jobs = Enum.map(countries, fn country ->
+      UnsplashCountryRefreshWorker.new(%{country_id: country.id})
+    end)
+
+    # Combine all jobs
+    all_jobs = city_jobs ++ country_jobs
+
+    if Enum.empty?(all_jobs) do
+      Logger.info("No cities or countries found, skipping refresh")
       :ok
     else
-      # Queue individual city refresh jobs
-      jobs = Enum.map(cities, fn city ->
-        UnsplashCityRefreshWorker.new(%{city_id: city.id})
-      end)
-
       # Insert all jobs in a single transaction
-      case Oban.insert_all(jobs) do
+      case Oban.insert_all(all_jobs) do
         [] ->
-          Logger.error("❌ Unsplash Refresh Coordinator: Failed to queue city jobs")
+          Logger.error("❌ Unsplash Refresh Coordinator: Failed to queue jobs")
           {:error, :queue_failed}
 
         inserted_jobs ->
           count = length(inserted_jobs)
-          Logger.info("✅ Unsplash Refresh Coordinator: Queued #{count} city refresh jobs")
+          city_count = length(city_jobs)
+          country_count = length(country_jobs)
+          Logger.info("✅ Unsplash Refresh Coordinator: Queued #{count} refresh jobs (#{city_count} cities, #{country_count} countries)")
           :ok
       end
     end
@@ -95,9 +112,24 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
   defp get_active_cities do
     query =
       from(c in City,
-        where: c.discovery_enabled == true,
+        left_join: v in assoc(c, :venues),
+        group_by: c.id,
+        having: count(v.id) >= 3,
         order_by: c.name,
-        select: %{id: c.id, name: c.name}
+        select: %{id: c.id, name: c.name, venue_count: count(v.id)}
+      )
+
+    Repo.all(query)
+  end
+
+  defp get_countries do
+    query =
+      from(c in Country,
+        left_join: cities in assoc(c, :cities),
+        group_by: c.id,
+        having: count(cities.id) > 0,
+        order_by: c.name,
+        select: %{id: c.id, name: c.name, city_count: count(cities.id)}
       )
 
     Repo.all(query)

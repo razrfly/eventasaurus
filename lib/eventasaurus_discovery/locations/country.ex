@@ -11,6 +11,7 @@ defmodule EventasaurusDiscovery.Locations.Country do
     field(:name, :string)
     field(:code, :string)
     field(:slug, Slug.Type)
+    field(:unsplash_gallery, :map)
 
     has_many(:cities, EventasaurusDiscovery.Locations.City)
 
@@ -35,5 +36,14 @@ defmodule EventasaurusDiscovery.Locations.Country do
       nil -> changeset
       code -> put_change(changeset, :code, String.upcase(code))
     end
+  end
+
+  @doc """
+  Changeset for updating the Unsplash gallery.
+  Used by UnsplashImageFetcher to store fetched images.
+  """
+  def gallery_changeset(country, gallery) do
+    country
+    |> cast(%{unsplash_gallery: gallery}, [:unsplash_gallery])
   end
 end
