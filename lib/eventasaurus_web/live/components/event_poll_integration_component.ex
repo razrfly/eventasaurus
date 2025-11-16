@@ -36,7 +36,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   # Import the other polling components
   alias EventasaurusWeb.PollCreationComponent
-  alias EventasaurusWeb.PollListComponent
   alias EventasaurusWeb.OptionSuggestionComponent
   alias EventasaurusWeb.PollTemplateEditorComponent
 
@@ -1728,7 +1727,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     }
 
     case Events.create_poll(poll_attrs) do
-      {:ok, poll} ->
+      {:ok, _poll} ->
         # Reload polls list
         polls = Events.list_polls(event)
 

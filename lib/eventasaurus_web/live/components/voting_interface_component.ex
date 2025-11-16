@@ -47,7 +47,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   alias EventasaurusWeb.EmbeddedProgressBarComponent
   import EventasaurusWeb.VoterCountDisplay
   import EventasaurusWeb.ClearVotesButton
-  import Phoenix.HTML.SimplifiedHelpers.Truncate
 
   @impl true
   def mount(socket) do

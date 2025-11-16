@@ -54,7 +54,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
            {:ok, venue} <- find_or_create_venue(normalized_data, city, source, source_scraper) do
         venue
       else
-        {:error, reason} = error ->
+        {:error, reason} ->
           Logger.error("Failed to process venue: #{inspect(reason)}")
           Repo.rollback(reason)
       end

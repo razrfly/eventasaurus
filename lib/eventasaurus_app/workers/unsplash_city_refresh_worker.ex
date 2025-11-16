@@ -127,7 +127,7 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
         {true, "no refresh timestamps found"}
 
       true ->
-        oldest_refresh_str = Enum.min(refresh_timestamps, DateTime)
+        oldest_refresh_str = Enum.min(refresh_timestamps)
 
         case DateTime.from_iso8601(oldest_refresh_str) do
           {:ok, oldest_refresh, _offset} ->
