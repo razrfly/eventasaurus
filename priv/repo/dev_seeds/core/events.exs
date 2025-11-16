@@ -64,10 +64,27 @@ defmodule DevSeeds.Events do
       {past, upcoming, future}
     end
     
-    past_events = create_past_events(past_count, users, groups, venue_pool)
-    upcoming_events = create_upcoming_events(upcoming_count, users, groups, venue_pool)
-    future_events = create_future_events(future_count, users, groups, venue_pool)
-    
+    # Create event categories in parallel (they're independent)
+    Helpers.log("Creating events in parallel (past/upcoming/future)...")
+
+    past_task = Task.async(fn ->
+      create_past_events(past_count, users, groups, venue_pool)
+    end)
+
+    upcoming_task = Task.async(fn ->
+      create_upcoming_events(upcoming_count, users, groups, venue_pool)
+    end)
+
+    future_task = Task.async(fn ->
+      create_future_events(future_count, users, groups, venue_pool)
+    end)
+
+    # Wait for all three to complete
+    [past_events, upcoming_events, future_events] =
+      Task.await_many([past_task, upcoming_task, future_task], :infinity)
+
+    Helpers.success("✓ Created #{length(past_events)} past, #{length(upcoming_events)} upcoming, #{length(future_events)} future events")
+
     past_events ++ upcoming_events ++ future_events
   end
   

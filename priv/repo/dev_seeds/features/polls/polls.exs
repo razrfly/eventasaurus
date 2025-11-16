@@ -35,10 +35,17 @@ defmodule PollSeed do
       exit(:no_events)
     end
 
-    # Seed polls for events
-    Enum.each(events, fn event ->
-      seed_polls_for_event(event, users)
-    end)
+    # Seed polls for events in parallel
+    Logger.info("Seeding polls for #{length(events)} events in parallel (max concurrency: 10)...")
+
+    events
+    |> Task.async_stream(
+      fn event -> seed_polls_for_event(event, users) end,
+      max_concurrency: 10,
+      timeout: :infinity,
+      on_timeout: :kill_task
+    )
+    |> Stream.run()
 
     Logger.info("Poll seeding complete!")
   end

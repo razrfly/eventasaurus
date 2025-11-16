@@ -117,17 +117,26 @@ else
   Helpers.error("DiversePollingEvents module not properly loaded")
 end
 
-# Create polls for events
-Helpers.section("Creating Polls with Votes")
-Code.require_file("features/polls/polls.exs", __DIR__)
-# PollSeed.run() is called within the file
-polls = Repo.all(EventasaurusApp.Events.Poll)
+# Create polls and activities in parallel (they operate on existing events independently)
+Helpers.section("Creating Polls and Activities (Parallel)")
 
-# Create activities for completed events
-Helpers.section("Creating Activities for Events")
-Code.require_file("features/activities/activities.exs", __DIR__)
-ActivitySeed.run()
-activities = Repo.all(EventasaurusApp.Events.EventActivity)
+poll_task = Task.async(fn ->
+  Code.require_file("features/polls/polls.exs", __DIR__)
+  # PollSeed.run() is called within the file
+  Repo.all(EventasaurusApp.Events.Poll)
+end)
+
+activity_task = Task.async(fn ->
+  Code.require_file("features/activities/activities.exs", __DIR__)
+  ActivitySeed.run()
+  Repo.all(EventasaurusApp.Events.EventActivity)
+end)
+
+# Wait for both to complete
+[polls, activities] = Task.await_many([poll_task, activity_task], :infinity)
+
+Helpers.success("✓ Polls created: #{length(polls)}")
+Helpers.success("✓ Activities created: #{length(activities)}")
 
 # Create Phase IV: Enhanced Variety Polls
 Helpers.section("Creating Phase IV: Enhanced Variety Polls")

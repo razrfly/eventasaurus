@@ -100,8 +100,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         # Add 12 participants
@@ -146,8 +146,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -190,8 +190,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -234,8 +234,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -278,8 +278,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -322,8 +322,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -366,8 +366,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -410,8 +410,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -454,8 +454,8 @@ defmodule MobileTestingPolls do
         Events.create_event_participant(%{
           event_id: event.id,
           user_id: organizer.id,
-          status: "confirmed",
-          role: "organizer"
+          status: "accepted",
+          role: "poll_voter"
         })
 
         participants = add_participants(event, users, 12)
@@ -2056,8 +2056,8 @@ defmodule MobileTestingPolls do
       Events.create_event_participant(%{
         event_id: event.id,
         user_id: user.id,
-        status: "confirmed",
-        role: "participant"
+        status: "accepted",
+        role: "poll_voter"
       })
     end)
 

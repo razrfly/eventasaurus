@@ -35,10 +35,17 @@ defmodule ActivitySeed do
       exit(:no_events)
     end
 
-    # Seed activities for events
-    Enum.each(events, fn event ->
-      seed_activities_for_event(event, users)
-    end)
+    # Seed activities for events in parallel
+    Logger.info("Seeding activities for #{length(events)} events in parallel (max concurrency: 10)...")
+
+    events
+    |> Task.async_stream(
+      fn event -> seed_activities_for_event(event, users) end,
+      max_concurrency: 10,
+      timeout: :infinity,
+      on_timeout: :kill_task
+    )
+    |> Stream.run()
 
     Logger.info("Activity seeding complete!")
   end
