@@ -79,15 +79,28 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
 
     # Build Alpine.js initialization data as a safe string
     alpine_data =
-      if Enum.empty?(paginated_cities) do
+      if Enum.empty?(paginated_cities) and Enum.empty?(all_countries) do
         "{ expandedCity: null }"
       else
-        category_inits =
+        # Initialize category state for cities
+        city_category_inits =
           Enum.map_join(paginated_cities, ", ", fn city ->
             "activeCategory_#{city.id}: '#{city.active_tab_category || "general"}'"
           end)
 
-        "{ expandedCity: null, #{category_inits} }"
+        # Initialize category state for countries
+        country_category_inits =
+          Enum.map_join(all_countries, ", ", fn country ->
+            "activeCategory_country_#{country.id}: '#{country.active_tab_category || "general"}'"
+          end)
+
+        # Combine both
+        all_inits =
+          [city_category_inits, country_category_inits]
+          |> Enum.filter(&(&1 != ""))
+          |> Enum.join(", ")
+
+        "{ expandedCity: null, #{all_inits} }"
       end
 
     render(conn, :index,
