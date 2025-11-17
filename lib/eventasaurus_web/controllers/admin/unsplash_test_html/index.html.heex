@@ -295,33 +295,99 @@
       </div>
     <% end %>
 
-    <!-- Countries Section (Simplified) -->
+    <!-- Countries Section (Same Format as Cities) -->
     <%= if length(@countries) > 0 do %>
       <div class="mt-12">
         <h2 class="text-2xl font-bold text-gray-900 mb-6">Country Galleries</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="space-y-3">
           <%= for country <- @countries do %>
-            <div class="bg-white rounded-lg shadow p-6">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900"><%= country.name %></h3>
-                <span class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">
-                  <%= country.image_count %> images
-                </span>
+            <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+              <!-- Compact Card Header -->
+              <div
+                class="px-6 py-4 cursor-pointer"
+                data-country-id={country.id}
+                x-on:click={"expandedCity = expandedCity === 'country_#{country.id}' ? null : 'country_#{country.id}'"}
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3">
+                      <h3 class="text-lg font-semibold text-gray-900"><%= country.name %></h3>
+                      <span class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">
+                        <%= country.image_count %> images
+                      </span>
+                      <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                        <%= country.category_count %> categories
+                      </span>
+                    </div>
+                    <div class="text-sm text-gray-500 mt-1">
+                      Last refreshed: <%= if length(country.tab_categories) > 0 do %>
+                        <% {_, first_cat} = List.first(country.tab_categories) %>
+                        <%= first_cat.last_refreshed |> String.slice(0..18) %> UTC
+                      <% else %>
+                        Never
+                      <% end %>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <svg
+                      class="w-5 h-5 text-gray-400 transition-transform"
+                      x-bind:class={"expandedCity === 'country_#{country.id}' && 'rotate-180'"}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </div>
+                </div>
               </div>
-              <div class="text-sm text-gray-600 mb-3">
-                <%= country.category_count %> categories
+
+              <!-- Expanded Content -->
+              <div x-show={"expandedCity === 'country_#{country.id}'"} x-collapse>
+                <div class="px-6 pb-6 border-t border-gray-200">
+                  <!-- Category Tabs -->
+                  <div class="mt-4">
+                    <div class="flex gap-2 mb-4">
+                      <%= for {category_name, _} <- country.tab_categories do %>
+                        <button
+                          x-on:click={"activeCategory_country_#{country.id} = '#{category_name}'"}
+                          x-bind:class={"activeCategory_country_#{country.id} === '#{category_name}' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'"}
+                          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <%= category_name |> String.replace("_", " ") |> String.capitalize() %>
+                        </button>
+                      <% end %>
+                    </div>
+
+                    <%= for {category_name, category_data} <- country.tab_categories do %>
+                      <div x-show={"activeCategory_country_#{country.id} === '#{category_name}'"} class="space-y-3">
+                        <div class="text-sm text-gray-600">
+                          <strong>Search Terms:</strong> <%= Enum.join(category_data.search_terms, ", ") %>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                          <%= for {image, index} <- Enum.with_index(category_data.images) do %>
+                            <div class="relative group">
+                              <img
+                                src={image["thumb_url"]}
+                                alt={"#{country.name} - #{category_name} - Image #{index}"}
+                                class="w-full h-40 object-cover rounded-lg"
+                              />
+                              <%= if index == category_data.current_index do %>
+                                <div class="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded font-medium">
+                                  TODAY
+                                </div>
+                              <% end %>
+                              <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                by <%= image["attribution"]["photographer_name"] %>
+                              </div>
+                            </div>
+                          <% end %>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
               </div>
-              <%= if length(country.tab_categories) > 0 do %>
-                <% {_, first_cat} = List.first(country.tab_categories) %>
-                <%= if length(first_cat.images) > 0 do %>
-                  <% first_image = List.first(first_cat.images) %>
-                  <img
-                    src={first_image["thumb_url"]}
-                    alt={"#{country.name} preview"}
-                    class="w-full h-40 object-cover rounded-lg mb-3"
-                  />
-                <% end %>
-              <% end %>
             </div>
           <% end %>
         </div>

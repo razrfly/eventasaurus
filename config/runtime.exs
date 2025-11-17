@@ -360,14 +360,18 @@ if config_env() == :prod do
   # Path to Supabase CA certificate
   cert_path = Path.join(:code.priv_dir(:eventasaurus), "prod-ca-2021.crt")
 
-  # Transaction mode pooler SSL: Use basic SSL without hostname verification
+  # Transaction mode pooler SSL: Accept any hostname but validate CA chain
   # Pooler hostname (aws-0-eu-central-1.pooler.supabase.com) doesn't match certificate
+  # (cert is for db.vnhxedeynrtvakglinnr.supabase.co)
+  # This skips hostname verification while still validating certificate chain
   pooler_ssl_opts = [
     verify: :verify_peer,
     cacertfile: cert_path,
     depth: 3,
-    # Skip hostname verification for pooler since it uses a different hostname
-    verify_fun: {fn _, _, state -> {:valid, state} end, nil}
+    # Accept any hostname but validate certificate chain
+    customize_hostname_check: [
+      match_fun: fn(_Hostname, _Extension) -> true end
+    ]
   ]
 
   # Direct connection SSL: Full certificate verification with hostname check
