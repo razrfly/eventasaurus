@@ -13,6 +13,18 @@ config :eventasaurus, EventasaurusApp.Repo,
   # Usage: SEED_POOL_SIZE=30 mix seed.dev
   pool_size: String.to_integer(System.get_env("SEED_POOL_SIZE") || "10")
 
+# Configure SessionRepo for development (Oban, migrations, advisory locks)
+# In development, both repos point to the same local database
+config :eventasaurus, EventasaurusApp.SessionRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "127.0.0.1",
+  port: 54322,
+  database: "postgres",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
 # Stripe configuration has been moved to config/runtime.exs
 # This ensures it's loaded after .env files are processed
 

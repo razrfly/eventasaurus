@@ -229,6 +229,14 @@ defmodule EventasaurusWeb.Router do
       post "/unsplash/refresh-category/:city_id/:category",
            EventasaurusWeb.Admin.UnsplashTestController,
            :refresh_category
+
+      post "/unsplash/refresh-all-cities",
+           EventasaurusWeb.Admin.UnsplashTestController,
+           :refresh_all_cities
+
+      post "/unsplash/refresh-all-countries",
+           EventasaurusWeb.Admin.UnsplashTestController,
+           :refresh_all_countries
     end
   end
 

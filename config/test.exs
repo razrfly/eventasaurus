@@ -31,6 +31,20 @@ config :eventasaurus, EventasaurusApp.Repo,
   # Longer for complex tests
   ownership_timeout: 60_000
 
+# Configure SessionRepo for testing (Oban, migrations, advisory locks)
+# In test, both repos point to the same test database
+config :eventasaurus, EventasaurusApp.SessionRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "127.0.0.1",
+  port: 54322,
+  database: "postgres_test",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: pool_size,
+  timeout: 15_000,
+  pool_timeout: 5_000,
+  ownership_timeout: 60_000
+
 # In test we don't send emails
 config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Test
 

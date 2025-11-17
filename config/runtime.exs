@@ -357,20 +357,30 @@ if config_env() == :prod do
 
   # Configure the database for production with proper SSL certificate verification
   # Extract DB host from connection URL for Server Name Indication (SNI)
-  db_url = System.get_env("SUPABASE_DATABASE_URL")
-  db_host = if db_url, do: URI.parse(db_url).host, else: "localhost"
-
   # Path to Supabase CA certificate
   cert_path = Path.join(:code.priv_dir(:eventasaurus), "prod-ca-2021.crt")
 
-  # Configure SSL options with full certificate verification
-  ssl_opts =
+  # Transaction mode pooler SSL: Use basic SSL without hostname verification
+  # Pooler hostname (aws-0-eu-central-1.pooler.supabase.com) doesn't match certificate
+  pooler_ssl_opts = [
+    verify: :verify_peer,
+    cacertfile: cert_path,
+    depth: 3,
+    # Skip hostname verification for pooler since it uses a different hostname
+    verify_fun: {fn _, _, state -> {:valid, state} end, nil}
+  ]
+
+  # Direct connection SSL: Full certificate verification with hostname check
+  session_db_url = System.get_env("SUPABASE_SESSION_DATABASE_URL")
+  session_db_host = if session_db_url, do: URI.parse(session_db_url).host, else: "db.vnhxedeynrtvakglinnr.supabase.co"
+
+  session_ssl_opts =
     if File.exists?(cert_path) do
       [
         verify: :verify_peer,
         cacertfile: cert_path,
         depth: 3,
-        server_name_indication: String.to_charlist(db_host),
+        server_name_indication: String.to_charlist(session_db_host),
         customize_hostname_check: [
           match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
         ]
@@ -392,23 +402,23 @@ if config_env() == :prod do
     connect_timeout: 30_000,
     handshake_timeout: 30_000,
     ssl: true,
-    ssl_opts: ssl_opts,
+    ssl_opts: pooler_ssl_opts,
     # Disable prepared statements for Transaction mode (pgbouncer) compatibility
     prepare: :unnamed
 
   # Configure SessionRepo for Session mode operations (Oban, migrations, advisory locks)
   # Uses direct database connection with full PostgreSQL feature support
+  # Prepared statements enabled (default) for Session mode performance
   config :eventasaurus, EventasaurusApp.SessionRepo,
     url: System.get_env("SUPABASE_SESSION_DATABASE_URL"),
     database: "postgres",
-    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "15"),
+    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
     queue_target: 5000,
     queue_interval: 30000,
     connect_timeout: 30_000,
     handshake_timeout: 30_000,
     ssl: true,
-    ssl_opts: ssl_opts
-    # Prepared statements enabled (default) for Session mode performance
+    ssl_opts: session_ssl_opts
 
   # Configure Supabase settings for production
   config :eventasaurus, :supabase,
