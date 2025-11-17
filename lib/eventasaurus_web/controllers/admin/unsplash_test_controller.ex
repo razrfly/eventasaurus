@@ -21,7 +21,12 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
 
   def index(conn, params) do
     # Pagination and search params
-    page = String.to_integer(params["page"] || "1")
+    page_param = params["page"] || "1"
+    page =
+      case Integer.parse(page_param) do
+        {p, _} when p >= 1 -> p
+        _ -> 1
+      end
     per_page = 20
     search_query = params["search"] || ""
 
@@ -43,7 +48,7 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     # Paginate cities
     total_cities = length(filtered_cities)
     total_pages = max(1, ceil(total_cities / per_page))
-    page = min(page, total_pages) # Ensure page doesn't exceed total
+    page = max(1, min(page, total_pages))  # Clamp to valid range [1, total_pages]
     offset = (page - 1) * per_page
 
     paginated_cities =
