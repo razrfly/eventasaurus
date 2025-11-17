@@ -355,19 +355,31 @@ if config_env() == :prod do
   # Configure Swoosh API client
   config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
-  # Configure the database for production
-  # Note: Supabase typically requires verify_none in containerized environments
-  # Set SSL_VERIFY_PEER=true to enable certificate verification (may cause connection issues with Supabase)
-  ssl_verify =
-    if System.get_env("SSL_VERIFY_PEER") == "true", do: :verify_peer, else: :verify_none
+  # Configure the database for production with proper SSL certificate verification
+  # Extract DB host from connection URL for Server Name Indication (SNI)
+  db_url = System.get_env("SUPABASE_DATABASE_URL")
+  db_host = if db_url, do: URI.parse(db_url).host, else: "localhost"
 
-  if ssl_verify == :verify_none do
-    require Logger
+  # Path to Supabase CA certificate
+  cert_path = Path.join(:code.priv_dir(:eventasaurus), "prod-ca-2021.crt")
 
-    Logger.warning(
-      "Database SSL verification disabled for Supabase compatibility. Set SSL_VERIFY_PEER=true to enable certificate verification."
-    )
-  end
+  # Configure SSL options with full certificate verification
+  ssl_opts =
+    if File.exists?(cert_path) do
+      [
+        verify: :verify_peer,
+        cacertfile: cert_path,
+        depth: 3,
+        server_name_indication: String.to_charlist(db_host),
+        customize_hostname_check: [
+          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
+      ]
+    else
+      require Logger
+      Logger.warning("Supabase CA certificate not found at #{cert_path}, falling back to insecure SSL")
+      [verify: :verify_none]
+    end
 
   config :eventasaurus, EventasaurusApp.Repo,
     url: System.get_env("SUPABASE_DATABASE_URL"),
@@ -375,8 +387,10 @@ if config_env() == :prod do
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
     queue_target: 5000,
     queue_interval: 30000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
     ssl: true,
-    ssl_opts: [verify: ssl_verify]
+    ssl_opts: ssl_opts
 
   # Configure Supabase settings for production
   config :eventasaurus, :supabase,
