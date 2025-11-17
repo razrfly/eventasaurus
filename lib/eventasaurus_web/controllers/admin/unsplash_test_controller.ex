@@ -36,6 +36,7 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     countries_for_refresh_count = count_countries_for_refresh()
 
     # Get total stats
+    total_active_cities = count_active_cities()
     cities_with_galleries_count = length(cities_with_galleries)
     countries_with_galleries_count = length(countries_with_galleries)
 
@@ -57,6 +58,7 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
       api_key_configured: api_key_configured,
       cities_for_refresh_count: cities_for_refresh_count,
       countries_for_refresh_count: countries_for_refresh_count,
+      total_active_cities: total_active_cities,
       cities_with_galleries_count: cities_with_galleries_count,
       countries_with_galleries_count: countries_with_galleries_count,
       total_city_images: total_city_images,
@@ -86,6 +88,17 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
       from(co in Country,
         join: ci in assoc(co, :cities),
         select: count(co.id, :distinct)
+      )
+
+    Repo.one(query) || 0
+  end
+
+  defp count_active_cities do
+    # Count cities with discovery_enabled = true
+    query =
+      from(c in City,
+        where: c.discovery_enabled == true,
+        select: count(c.id)
       )
 
     Repo.one(query) || 0
