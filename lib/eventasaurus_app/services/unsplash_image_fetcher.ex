@@ -7,6 +7,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   """
 
   require Logger
+  import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Locations.Country
@@ -15,7 +16,10 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   @max_images 10
 
   @doc """
-  Fetch and store images for a city.
+  Fetch and store images for a city by name.
+
+  NOTE: This is a legacy function. Prefer using fetch_and_store_all_categories/1 with a city struct.
+  This function will fail if there are multiple cities with the same name.
 
   Returns {:ok, gallery} or {:error, reason}.
   """
@@ -23,15 +27,20 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
   def fetch_and_store_city_images(city_name) do
     Logger.info("Fetching images for city: #{city_name}")
 
-    # Verify city exists
-    city = Repo.get_by(City, name: city_name)
+    # Verify city exists - use all/1 to handle potential duplicates
+    cities = Repo.all(from c in City, where: c.name == ^city_name)
 
     cond do
-      is_nil(city) ->
+      Enum.empty?(cities) ->
         Logger.warning("City not found: #{city_name}")
         {:error, :not_found}
 
+      length(cities) > 1 ->
+        Logger.error("Multiple cities found with name '#{city_name}'. Use fetch_and_store_all_categories/1 with a specific city struct instead.")
+        {:error, :duplicate_city_name}
+
       true ->
+        city = List.first(cities)
         # Fetch images from Unsplash
         case fetch_city_images(city_name) do
           {:ok, images} -> create_gallery(city, images)
@@ -63,21 +72,13 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       when is_binary(city_name) and is_binary(category_name) and is_list(search_terms) do
     Logger.info("Fetching category '#{category_name}' images for city: #{city_name}")
 
-    # Verify city exists
-    city = Repo.get_by(City, name: city_name)
-
-    cond do
-      is_nil(city) ->
-        Logger.warning("City not found: #{city_name}")
-        {:error, :not_found}
-
-      Enum.empty?(search_terms) ->
-        Logger.warning("No search terms provided for category '#{category_name}'")
-        {:error, :no_search_terms}
-
-      true ->
-        # Try each search term in order until one returns results
-        try_search_terms(search_terms)
+    # Check search terms (city existence already verified by caller)
+    if Enum.empty?(search_terms) do
+      Logger.warning("No search terms provided for category '#{category_name}'")
+      {:error, :no_search_terms}
+    else
+      # Try each search term in order until one returns results
+      try_search_terms(search_terms)
     end
   end
 
