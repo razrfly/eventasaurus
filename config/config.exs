@@ -93,8 +93,6 @@ config :hammer,
 config :eventasaurus, Oban,
   # Use SessionRepo for Oban to support advisory locks and persistent connections
   repo: EventasaurusApp.SessionRepo,
-  # Use dynamic repo to ensure transactions work correctly
-  get_dynamic_repo: fn -> EventasaurusApp.SessionRepo end,
   # How often to poll for scheduled jobs (in milliseconds)
   # Default is 1000ms, setting explicitly to ensure staging works
   stage_interval: 1_000,

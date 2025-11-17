@@ -268,7 +268,7 @@ end
 
 if config_env() == :prod do
   # Validate required Supabase environment variables are set
-  for var <- ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL) do
+  for var <- ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL SUPABASE_SESSION_DATABASE_URL) do
     System.fetch_env!(var)
   end
 
@@ -376,9 +376,11 @@ if config_env() == :prod do
         ]
       ]
     else
-      require Logger
-      Logger.warning("Supabase CA certificate not found at #{cert_path}, falling back to insecure SSL")
-      [verify: :verify_none]
+      raise """
+      Supabase CA certificate not found at #{cert_path}.
+      This certificate is required for secure database connections in production.
+      Please ensure the certificate file exists before deploying.
+      """
     end
 
   config :eventasaurus, EventasaurusApp.Repo,
