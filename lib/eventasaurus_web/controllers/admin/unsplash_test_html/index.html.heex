@@ -1,12 +1,12 @@
-<div class="min-h-screen bg-gray-50 py-8">
+<div class="min-h-screen bg-gray-50 py-8" x-data={@alpine_data}>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- Header -->
     <div class="mb-8">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">Unsplash Image Management</h1>
           <p class="mt-2 text-gray-600">
-            Visual verification of cached Unsplash images with daily rotation for cities and countries
+            Visual verification of cached Unsplash images with daily rotation
           </p>
         </div>
         <div class="flex gap-4">
@@ -36,473 +36,296 @@
           </.form>
         </div>
       </div>
-    </div>
 
-    <!-- Category Keywords Reference -->
-    <div class="mb-8 p-6 bg-white rounded-lg shadow">
-      <h2 class="text-xl font-semibold mb-4">📋 Category Search Terms</h2>
-      <p class="text-sm text-gray-600 mb-4">
-        Keywords used to search Unsplash for each category. These are combined with the city name.
-      </p>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="font-semibold text-gray-900 mb-2">🌆 General</div>
-          <div class="text-sm text-gray-600">cityscape, skyline</div>
+      <!-- Stats Summary -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div class="bg-white p-4 rounded-lg shadow">
+          <div class="text-sm text-gray-600">Cities with Galleries</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @cities_with_galleries_count %></div>
         </div>
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="font-semibold text-gray-900 mb-2">🏛️ Architecture</div>
-          <div class="text-sm text-gray-600">architecture, modern buildings, buildings</div>
+        <div class="bg-white p-4 rounded-lg shadow">
+          <div class="text-sm text-gray-600">Countries with Galleries</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @countries_with_galleries_count %></div>
         </div>
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="font-semibold text-gray-900 mb-2">🏰 Historic</div>
-          <div class="text-sm text-gray-600">historic buildings, monuments, old architecture</div>
+        <div class="bg-white p-4 rounded-lg shadow">
+          <div class="text-sm text-gray-600">City Images</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @total_city_images %></div>
         </div>
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="font-semibold text-gray-900 mb-2">🏘️ Old Town</div>
-          <div class="text-sm text-gray-600">old town, medieval, historic center</div>
+        <div class="bg-white p-4 rounded-lg shadow">
+          <div class="text-sm text-gray-600">Country Images</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @total_country_images %></div>
         </div>
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="font-semibold text-gray-900 mb-2">🗼 City Landmarks</div>
-          <div class="text-sm text-gray-600">landmarks, famous places, attractions</div>
+        <div class="bg-white p-4 rounded-lg shadow">
+          <div class="text-sm text-gray-600">Day of Year</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @day_of_year %></div>
+        </div>
+      </div>
+
+      <!-- Search Box -->
+      <div class="mb-6">
+        <form method="get" action={~p"/admin/unsplash"} class="flex gap-3">
+          <input
+            type="text"
+            name="search"
+            value={@search_query}
+            placeholder="Search cities by name..."
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <button
+            type="submit"
+            class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Search
+          </button>
+          <%= if @search_query != "" do %>
+            <a
+              href={~p"/admin/unsplash"}
+              class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Clear
+            </a>
+          <% end %>
+        </form>
+      </div>
+
+      <!-- Pagination Info -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-sm text-gray-600">
+          Showing <%= length(@cities) %> of <%= @total_filtered_cities %> cities
+          <%= if @search_query != "" do %>
+            matching "<%= @search_query %>"
+          <% end %>
+          (Page <%= @current_page %> of <%= @total_pages %>)
         </div>
       </div>
     </div>
 
-    <!-- Configuration Status -->
-    <div class="mb-8 p-6 bg-white rounded-lg shadow">
-      <h2 class="text-xl font-semibold mb-4">Configuration Status</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div>
-          <span class="font-medium">API Key:</span>
-          <span class={"ml-2 px-3 py-1 rounded-full text-sm font-medium #{if @api_key_configured, do: "bg-green-100 text-green-800", else: "bg-red-100 text-red-800"}"}>
-            <%= if @api_key_configured, do: "Configured", else: "Missing" %>
-          </span>
-        </div>
-        <div>
-          <span class="font-medium">Cities with Galleries:</span>
-          <span class="ml-2 text-gray-700"><%= @cities_with_galleries_count %></span>
-        </div>
-        <div>
-          <span class="font-medium">Countries with Galleries:</span>
-          <span class="ml-2 text-gray-700"><%= @countries_with_galleries_count %></span>
-        </div>
-        <div>
-          <span class="font-medium">City Images:</span>
-          <span class="ml-2 text-gray-700"><%= @total_city_images %></span>
-        </div>
-        <div>
-          <span class="font-medium">Country Images:</span>
-          <span class="ml-2 text-gray-700"><%= @total_country_images %></span>
-        </div>
-        <div>
-          <span class="font-medium">Day of Year:</span>
-          <span class="ml-2 text-gray-700"><%= @day_of_year %></span>
-        </div>
-      </div>
-
-      <%= if not @api_key_configured do %>
-        <div class="mt-4 p-4 bg-red-50 border-l-4 border-red-400">
-          <div class="flex">
-            <div class="ml-3">
-              <p class="text-sm text-red-700">
-                <strong>UNSPLASH_ACCESS_KEY is not configured.</strong> Set it in your .env file to enable image fetching.
-              </p>
-              <code class="block mt-2 p-2 bg-red-100 rounded text-xs">
-                UNSPLASH_ACCESS_KEY=your_key_here
-              </code>
-            </div>
-          </div>
-        </div>
-      <% end %>
-
-      <div class="mt-4 p-4 bg-blue-50 border-l-4 border-blue-400">
-        <p class="text-sm text-blue-700">
-          <strong>Daily Rotation:</strong> Images rotate based on day of year (day <%= @day_of_year %>).
-          The same image is shown all day, cycling through the 10 cached images per city.
+    <!-- City Cards (Compact) -->
+    <%= if @cities == [] do %>
+      <div class="p-8 bg-yellow-50 border border-yellow-200 rounded-lg text-center mb-8">
+        <h3 class="text-lg font-semibold text-yellow-900 mb-2">No Cities Found</h3>
+        <p class="text-sm text-yellow-700">
+          <%= if @search_query != "" do %>
+            No cities match your search "<%= @search_query %>". Try a different search term.
+          <% else %>
+            No cached image galleries yet. Click "Refresh All Cities" to populate galleries.
+          <% end %>
         </p>
-      </div>
-    </div>
-
-    <%= if @cities_with_galleries_count == 0 do %>
-      <!-- No Cities Message -->
-      <div class="p-8 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
-        <h3 class="text-lg font-semibold text-yellow-900 mb-2">No Cached Image Galleries Yet</h3>
-        <p class="text-sm text-yellow-700 mb-4">
-          <%= @total_active_cities %> <%= if @total_active_cities == 1, do: "city has", else: "cities have" %> discovery_enabled = true, but no Unsplash galleries have been cached yet.
-        </p>
-        <div class="text-left max-w-2xl mx-auto">
-          <p class="text-sm text-yellow-800 font-medium mb-2">To populate galleries:</p>
-          <ol class="list-decimal list-inside space-y-1 text-sm text-yellow-700">
-            <li>Ensure UNSPLASH_ACCESS_KEY is set in .env</li>
-            <li>Run: <code class="px-1 bg-yellow-100 rounded">mix unsplash.test</code> to fetch for all active cities</li>
-            <li>Or: <code class="px-1 bg-yellow-100 rounded">mix unsplash.test London</code> to test a specific city</li>
-            <li>Or wait for the daily cron job at 3 AM UTC</li>
-          </ol>
-        </div>
       </div>
     <% else %>
-      <!-- City Galleries -->
-      <%= for city <- @cities do %>
-        <div class="mb-8 bg-white rounded-lg shadow overflow-hidden">
-          <!-- City Header -->
-          <div class="px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <h3 class="text-xl font-bold"><%= city.name %></h3>
-                <p class="text-sm text-indigo-100 mt-1">
-                  <%= if city.categories && map_size(city.categories) > 0 do %>
-                    <%= city.category_count %> categories · <%= city.image_count %> total images
-                  <% else %>
-                    No images yet · Click "Fetch Images" to load all categories
-                  <% end %>
-                </p>
-              </div>
-              <div class="text-right flex items-center gap-4">
-                <%= if city.categories && map_size(city.categories) > 0 do %>
-                  <div>
-                    <div class="text-sm text-indigo-100">Categories</div>
-                    <div class="text-lg font-bold"><%= map_size(city.categories) %> / 5</div>
-                    <div class="text-xs text-indigo-200">Active Tab: <%= city.active_tab_category || "none" %></div>
-                  </div>
-                <% else %>
-                  <div>
-                    <div class="text-sm text-indigo-100">Status</div>
-                    <div class="text-lg font-bold">No Images</div>
-                    <div class="text-xs text-indigo-200">Click to fetch</div>
-                  </div>
-                <% end %>
-                <.form :let={_f} for={%{}} action={~p"/admin/unsplash/fetch/#{city.id}"} method="post">
-                  <button
-                    type="submit"
-                    class="px-4 py-2 bg-white text-indigo-700 rounded-lg font-medium hover:bg-indigo-50 transition-colors shadow-sm"
-                  >
-                    <%= if city.categories && map_size(city.categories) > 0 do %>
-                      🔄 Refresh Images
-                    <% else %>
-                      📥 Fetch Images
-                    <% end %>
-                  </button>
-                </.form>
-              </div>
-            </div>
-          </div>
-
-
-          <!-- Gallery Display -->
-          <%= if city.tab_categories && length(city.tab_categories) > 0 do %>
-            <!-- Categorized Gallery with Tabs (All Categories) -->
-            <div class="p-6">
-              <h4 class="text-lg font-semibold text-gray-900 mb-4">Image Categories</h4>
-
-              <!-- Category Tabs -->
-              <div class="mb-6 border-b border-gray-200">
-                <nav class="-mb-px flex flex-wrap gap-4" aria-label="Categories">
-                  <%= for {category_name, category_data} <- city.tab_categories do %>
-                    <button
-                      type="button"
-                      class={"#{if category_name == city.active_tab_category, do: "border-indigo-500 text-indigo-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
-                      onclick={"toggleCategory('#{city.slug}', '#{category_name}')"}
-                    >
-                      <%= format_category_name(category_name) %>
-                      <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium bg-gray-100 text-gray-900">
-                        <%= category_data.image_count %>
-                      </span>
-                    </button>
-                  <% end %>
-                </nav>
-              </div>
-
-              <!-- Category Content -->
-              <%= for {category_name, category_data} <- city.tab_categories do %>
-                <div
-                  id={"category-#{city.slug}-#{category_name}"}
-                  class={"category-content #{if category_name == city.active_tab_category, do: "", else: "hidden"}"}
-                >
-                  <!-- Category Info -->
-                  <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
-                    <h5 class="font-semibold text-blue-900">Search Terms:</h5>
-                    <p class="text-sm text-blue-800 mt-1">
-                      <%= Enum.join(category_data.search_terms, ", ") %>
-                    </p>
-                    <%= if category_data.last_refreshed do %>
-                      <div class="text-xs text-blue-700 mt-2">
-                        Last refreshed: <%= format_date(category_data.last_refreshed) %>
-                      </div>
-                    <% end %>
-                  </div>
-
-                  <!-- Category Images -->
-                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <%= for {image, index} <- Enum.with_index(category_data.images) do %>
-                      <div class={"border rounded-lg overflow-hidden #{if index == category_data.current_index, do: "ring-4 ring-indigo-500", else: ""}"}>
-                        <div class="aspect-video bg-gray-100 relative">
-                          <img
-                            src={image["thumb_url"]}
-                            alt={"#{city.name} - #{category_name} - Image #{index}"}
-                            class="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                          <%= if index == category_data.current_index do %>
-                            <div class="absolute top-2 right-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">
-                              TODAY
-                            </div>
-                          <% end %>
-                        </div>
-                        <div class="px-2 py-2 bg-gray-50 border-t">
-                          <div class="text-xs text-gray-600">
-                            <div class="font-medium">Index: <%= index %></div>
-                            <div class="truncate">
-                              by <%= image["attribution"]["photographer_name"] %>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    <% end %>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-          <% else %>
-            <!-- No Images Yet -->
-            <div class="p-6">
-              <div class="text-center py-12">
-                <div class="text-gray-400 text-5xl mb-4">📷</div>
-                <h4 class="text-lg font-semibold text-gray-700 mb-2">No Images Yet</h4>
-                <p class="text-gray-600 mb-4">Click "Fetch Images" above to fetch all 5 categories</p>
-                <div class="text-sm text-gray-500">
-                  Categories: General, Architecture, Historic, Old Town, City Landmarks
-                </div>
-              </div>
-            </div>
-          <% end %>
-
-          <!-- Gallery Metadata -->
-          <%= if city.categories && map_size(city.categories) > 0 do %>
-            <div class="px-6 py-4 bg-gray-50 border-t">
-              <details>
-                <summary class="cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                  View Gallery Metadata
-                </summary>
-                <div class="mt-4 p-4 bg-white rounded border text-xs">
-                  <pre class="overflow-x-auto"><code><%= Jason.encode!(city.categories, pretty: true) %></code></pre>
-                </div>
-              </details>
-            </div>
-          <% end %>
-        </div>
-      <% end %>
-    <% end %>
-
-    <!-- Testing Instructions -->
-    <div class="mt-8 p-6 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
-      <h3 class="text-lg font-semibold text-blue-900 mb-2">Testing & Usage Instructions</h3>
-      <div class="space-y-4 text-sm text-blue-800">
-        <div>
-          <h4 class="font-semibold mb-1">Manual Image Refresh:</h4>
-          <code class="block p-2 bg-blue-100 rounded">mix unsplash.test</code>
-          <p class="mt-1 text-xs">Refreshes images for all active cities</p>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-1">Test Specific City:</h4>
-          <code class="block p-2 bg-blue-100 rounded">mix unsplash.test London</code>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-1">Usage in Templates:</h4>
-          <pre class="block p-2 bg-blue-100 rounded font-mono text-xs">alias EventasaurusApp.Services.UnsplashService
-
-# Get today's image
-case UnsplashService.get_city_image("London") do
-  <%= "{:ok, image}" %> -> image.url
-  <%= "{:error, _}" %> -> nil
-end</pre>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-1">Batch Loading (Prevent N+1):</h4>
-          <pre class="block p-2 bg-blue-100 rounded font-mono text-xs">images = UnsplashService.get_city_images_batch(["London", "Paris"])
-# Returns: %<%= "{\"London\" => %{url: \"...\", ...}, \"Paris\" => %{...}}" %></pre>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-1">Automatic Refresh:</h4>
-          <p>Images are automatically refreshed daily at 3 AM UTC via Oban worker</p>
-          <p class="mt-1 text-xs">Worker: <code class="px-1 bg-blue-100 rounded">EventasaurusApp.Workers.UnsplashRefreshWorker</code></p>
-        </div>
-
-        <div>
-          <h4 class="font-semibold mb-1">Daily Rotation:</h4>
-          <p>
-            Images rotate based on day of year (<%= @day_of_year %>).
-            The rotation index is calculated as: <code class="px-1 bg-blue-100 rounded">rem(day_of_year, image_count)</code>
-          </p>
-          <p class="mt-1 text-xs">This ensures the same image displays all day, cycling through the 10 cached images over time.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Countries Section -->
-    <%= if @countries_with_galleries_count > 0 do %>
-      <div class="mt-12 mb-8">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">🌍 Country Galleries</h2>
-
-        <%= for country <- @countries do %>
-          <div class="mb-8 bg-white rounded-lg shadow overflow-hidden">
-            <!-- Country Header -->
-            <div class="px-6 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white">
+      <div class="space-y-3 mb-8">
+        <%= for city <- @cities do %>
+          <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+            <!-- Compact Card Header -->
+            <div
+              class="px-6 py-4 cursor-pointer"
+              data-city-id={city.id}
+              x-on:click="expandedCity = expandedCity === $el.dataset.cityId ? null : $el.dataset.cityId"
+            >
               <div class="flex items-center justify-between">
                 <div class="flex-1">
-                  <h3 class="text-xl font-bold"><%= country.name %> (<%= country.code %>)</h3>
-                  <p class="text-sm text-purple-100 mt-1">
-                    <%= country.category_count %> categories · <%= country.image_count %> total images
-                  </p>
+                  <div class="flex items-center gap-3">
+                    <h3 class="text-lg font-semibold text-gray-900"><%= city.name %></h3>
+                    <span class="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded">
+                      <%= city.image_count %> images
+                    </span>
+                    <%= if city.format == :categorized do %>
+                      <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                        <%= city.category_count %> categories
+                      </span>
+                    <% end %>
+                  </div>
+                  <div class="text-sm text-gray-500 mt-1">
+                    Last refreshed: <%= if city.format == :legacy and not is_nil(city.last_refreshed) do %>
+                      <%= city.last_refreshed |> String.slice(0..18) %> UTC
+                    <% else %>
+                      <%= if city.format == :categorized and length(city.tab_categories) > 0 do %>
+                        <%= {_, first_cat} = List.first(city.tab_categories); first_cat.last_refreshed |> String.slice(0..18) %> UTC
+                      <% else %>
+                        Never
+                      <% end %>
+                    <% end %>
+                  </div>
                 </div>
-                <div class="text-right">
-                  <div class="text-sm text-purple-100">Categories</div>
-                  <div class="text-lg font-bold"><%= map_size(country.categories) %> / 5</div>
-                  <div class="text-xs text-purple-200">Active Tab: <%= country.active_tab_category || "none" %></div>
+                <div class="flex items-center gap-4">
+                  <.form :let={_f} for={%{}} action={~p"/admin/unsplash/fetch/#{city.id}"} method="post">
+                    <button
+                      type="submit"
+                      class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      x-on:click.stop
+                    >
+                      🔄 Refresh
+                    </button>
+                  </.form>
+                  <svg
+                    class="w-5 h-5 text-gray-400 transition-transform"
+                    x-bind:class={"expandedCity === '#{city.id}' && 'rotate-180'"}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
                 </div>
               </div>
             </div>
 
-            <!-- Gallery Display -->
-            <%= if country.tab_categories && length(country.tab_categories) > 0 do %>
-              <div class="p-6">
-                <h4 class="text-lg font-semibold text-gray-900 mb-4">Image Categories</h4>
-
-                <!-- Category Tabs -->
-                <div class="mb-6 border-b border-gray-200">
-                  <nav class="-mb-px flex flex-wrap gap-4" aria-label="Categories">
-                    <%= for {category_name, category_data} <- country.tab_categories do %>
-                      <button
-                        type="button"
-                        class={"#{if category_name == country.active_tab_category, do: "border-purple-500 text-purple-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
-                        onclick={"toggleCategory('country-#{country.slug}', '#{category_name}')"}
-                      >
-                        <%= format_category_name(category_name) %>
-                        <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium bg-gray-100 text-gray-900">
-                          <%= category_data.image_count %>
-                        </span>
-                      </button>
-                    <% end %>
-                  </nav>
-                </div>
-
-                <!-- Category Content -->
-                <%= for {category_name, category_data} <- country.tab_categories do %>
-                  <div
-                    id={"category-country-#{country.slug}-#{category_name}"}
-                    class={"category-content #{if category_name == country.active_tab_category, do: "", else: "hidden"}"}
-                  >
-                    <!-- Category Info -->
-                    <div class="mb-4 p-4 bg-purple-50 border-l-4 border-purple-400 rounded">
-                      <h5 class="font-semibold text-purple-900">Search Terms:</h5>
-                      <p class="text-sm text-purple-800 mt-1">
-                        <%= Enum.join(category_data.search_terms, ", ") %>
-                      </p>
-                      <%= if category_data.last_refreshed do %>
-                        <div class="text-xs text-purple-700 mt-2">
-                          Last refreshed: <%= format_date(category_data.last_refreshed) %>
-                        </div>
+            <!-- Expanded Content -->
+            <div x-show={"expandedCity === '#{city.id}'"} x-collapse>
+              <div class="px-6 pb-6 border-t border-gray-200">
+                <%= if city.format == :categorized do %>
+                  <!-- Categorized Format -->
+                  <div class="mt-4">
+                    <div class="flex gap-2 mb-4">
+                      <%= for {category_name, _} <- city.tab_categories do %>
+                        <button
+                          x-on:click={"activeCategory_#{city.id} = '#{category_name}'"}
+                          x-bind:class={"activeCategory_#{city.id} === '#{category_name}' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"}
+                          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <%= category_name |> String.replace("_", " ") |> String.capitalize() %>
+                        </button>
                       <% end %>
                     </div>
 
-                    <!-- Images Grid -->
-                    <%= if length(category_data.images) > 0 do %>
-                      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        <%= for {image, index} <- Enum.with_index(category_data.images) do %>
-                          <div class={"border rounded-lg overflow-hidden #{if index == category_data.current_index, do: "ring-4 ring-purple-500", else: ""}"}>
-                            <div class="aspect-video bg-gray-100 relative">
+                    <%= for {category_name, category_data} <- city.tab_categories do %>
+                      <div x-show={"activeCategory_#{city.id} === '#{category_name}'"} class="space-y-3">
+                        <div class="text-sm text-gray-600">
+                          <strong>Search Terms:</strong> <%= Enum.join(category_data.search_terms, ", ") %>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                          <%= for {image, index} <- Enum.with_index(category_data.images) do %>
+                            <div class="relative group">
                               <img
                                 src={image["thumb_url"]}
-                                alt={"#{country.name} - #{category_name} - Image #{index}"}
-                                class="w-full h-full object-cover"
-                                loading="lazy"
+                                alt={"#{city.name} - #{category_name} - Image #{index}"}
+                                class="w-full h-40 object-cover rounded-lg"
                               />
                               <%= if index == category_data.current_index do %>
-                                <div class="absolute top-2 right-2 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded">
+                                <div class="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded font-medium">
                                   TODAY
                                 </div>
                               <% end %>
-                            </div>
-                            <div class="px-2 py-2 bg-gray-50 border-t">
-                              <div class="text-xs text-gray-600">
-                                <div class="font-medium">Index: <%= index %></div>
-                                <div class="truncate">
-                                  by <%= image["attribution"]["photographer_name"] %>
-                                </div>
+                              <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                by <%= image["attribution"]["photographer_name"] %>
                               </div>
                             </div>
-                          </div>
-                        <% end %>
+                          <% end %>
+                        </div>
                       </div>
-                    <% else %>
-                      <p class="text-gray-500 italic">No images in this category</p>
                     <% end %>
+                  </div>
+                <% else %>
+                  <!-- Legacy Format -->
+                  <div class="mt-4">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <%= for {image, index} <- Enum.with_index(city.images) do %>
+                        <div class="relative group">
+                          <img
+                            src={image["thumb_url"]}
+                            alt={"#{city.name} - Image #{index}"}
+                            class="w-full h-40 object-cover rounded-lg"
+                          />
+                          <%= if index == city.current_index do %>
+                            <div class="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded font-medium">
+                              TODAY
+                            </div>
+                          <% end %>
+                          <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                            by <%= image["attribution"]["photographer_name"] %>
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
                   </div>
                 <% end %>
               </div>
-            <% end %>
+            </div>
           </div>
         <% end %>
       </div>
     <% end %>
 
-    <!-- API Reference -->
-    <div class="mt-8 p-6 bg-white rounded-lg shadow">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">API Reference</h3>
-      <div class="space-y-3 text-sm">
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">UnsplashService.get_city_image/1</code>
-          <p class="text-gray-600 mt-1">Get today's image for a specific city</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">UnsplashService.get_city_images_batch/1</code>
-          <p class="text-gray-600 mt-1">Get today's images for multiple cities (prevents N+1)</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">UnsplashService.refresh_city_images/1</code>
-          <p class="text-gray-600 mt-1">Manually refresh images for a city</p>
-        </div>
-        <div class="p-3 bg-gray-50 rounded">
-          <code class="font-medium text-indigo-600">UnsplashService.cities_with_galleries/0</code>
-          <p class="text-gray-600 mt-1">List all active cities with cached galleries</p>
+    <!-- Pagination Controls -->
+    <%= if @total_pages > 1 do %>
+      <div class="flex items-center justify-center gap-2 mb-8">
+        <!-- Previous Button -->
+        <%= if @current_page > 1 do %>
+          <a
+            href={~p"/admin/unsplash?page=#{@current_page - 1}&search=#{@search_query}"}
+            class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Previous
+          </a>
+        <% else %>
+          <span class="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-400 cursor-not-allowed">
+            Previous
+          </span>
+        <% end %>
+
+        <!-- Page Numbers -->
+        <%= for page_num <- max(1, @current_page - 2)..min(@total_pages, @current_page + 2) do %>
+          <%= if page_num == @current_page do %>
+            <span class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium">
+              <%= page_num %>
+            </span>
+          <% else %>
+            <a
+              href={~p"/admin/unsplash?page=#{page_num}&search=#{@search_query}"}
+              class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <%= page_num %>
+            </a>
+          <% end %>
+        <% end %>
+
+        <!-- Next Button -->
+        <%= if @current_page < @total_pages do %>
+          <a
+            href={~p"/admin/unsplash?page=#{@current_page + 1}&search=#{@search_query}"}
+            class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Next
+          </a>
+        <% else %>
+          <span class="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-400 cursor-not-allowed">
+            Next
+          </span>
+        <% end %>
+      </div>
+    <% end %>
+
+    <!-- Countries Section (Simplified) -->
+    <%= if length(@countries) > 0 do %>
+      <div class="mt-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Country Galleries</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <%= for country <- @countries do %>
+            <div class="bg-white rounded-lg shadow p-6">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900"><%= country.name %></h3>
+                <span class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">
+                  <%= country.image_count %> images
+                </span>
+              </div>
+              <div class="text-sm text-gray-600 mb-3">
+                <%= country.category_count %> categories
+              </div>
+              <%= if length(country.tab_categories) > 0 do %>
+                <% {_, first_cat} = List.first(country.tab_categories) %>
+                <%= if length(first_cat.images) > 0 do %>
+                  <% first_image = List.first(first_cat.images) %>
+                  <img
+                    src={first_image["thumb_url"]}
+                    alt={"#{country.name} preview"}
+                    class="w-full h-40 object-cover rounded-lg mb-3"
+                  />
+                <% end %>
+              <% end %>
+            </div>
+          <% end %>
         </div>
       </div>
-    </div>
+    <% end %>
   </div>
 </div>
-
-<script>
-  function toggleCategory(locationSlug, categoryName) {
-    // Determine if this is a city or country based on slug prefix
-    const isCountry = locationSlug.startsWith('country-');
-    const borderColor = isCountry ? 'border-purple-500 text-purple-600' : 'border-indigo-500 text-indigo-600';
-
-    // Hide all category content for this location
-    const allCategories = document.querySelectorAll(`[id^="category-${locationSlug}-"]`);
-    allCategories.forEach(cat => cat.classList.add('hidden'));
-
-    // Show selected category
-    const selectedCategory = document.getElementById(`category-${locationSlug}-${categoryName}`);
-    if (selectedCategory) {
-      selectedCategory.classList.remove('hidden');
-    }
-
-    // Update tab styles
-    const locationElement = document.querySelector(`button[onclick*="${locationSlug}"]`)?.closest('.mb-8');
-    if (locationElement) {
-      const tabs = locationElement.querySelectorAll('nav button');
-      tabs.forEach(tab => {
-        if (tab.onclick && tab.onclick.toString().includes(categoryName)) {
-          // Active tab
-          tab.className = `${borderColor} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`;
-        } else {
-          // Inactive tab
-          tab.className = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm';
-        }
-      });
-    }
-  }
-</script>

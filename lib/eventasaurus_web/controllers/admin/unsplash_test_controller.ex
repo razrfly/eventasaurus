@@ -19,10 +19,37 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
   alias EventasaurusDiscovery.Locations.{City, Country}
   import Ecto.Query
 
-  def index(conn, _params) do
+  def index(conn, params) do
+    # Pagination and search params
+    page = String.to_integer(params["page"] || "1")
+    per_page = 20
+    search_query = params["search"] || ""
+
     # Get all cities and countries with their galleries
-    cities_with_galleries = get_cities_with_galleries()
-    countries_with_galleries = get_countries_with_galleries()
+    all_cities = get_cities_with_galleries()
+    all_countries = get_countries_with_galleries()
+
+    # Filter cities by search query
+    filtered_cities =
+      if search_query != "" do
+        search_lower = String.downcase(search_query)
+        Enum.filter(all_cities, fn city ->
+          String.contains?(String.downcase(city.name), search_lower)
+        end)
+      else
+        all_cities
+      end
+
+    # Paginate cities
+    total_cities = length(filtered_cities)
+    total_pages = max(1, ceil(total_cities / per_page))
+    page = min(page, total_pages) # Ensure page doesn't exceed total
+    offset = (page - 1) * per_page
+
+    paginated_cities =
+      filtered_cities
+      |> Enum.drop(offset)
+      |> Enum.take(per_page)
 
     # Calculate daily rotation info
     day_of_year = Date.utc_today() |> Date.day_of_year()
@@ -37,22 +64,35 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
 
     # Get total stats
     total_active_cities = count_active_cities()
-    cities_with_galleries_count = length(cities_with_galleries)
-    countries_with_galleries_count = length(countries_with_galleries)
+    cities_with_galleries_count = length(all_cities)
+    countries_with_galleries_count = length(all_countries)
 
     total_city_images =
-      Enum.reduce(cities_with_galleries, 0, fn city, acc ->
+      Enum.reduce(all_cities, 0, fn city, acc ->
         acc + (city.image_count || 0)
       end)
 
     total_country_images =
-      Enum.reduce(countries_with_galleries, 0, fn country, acc ->
+      Enum.reduce(all_countries, 0, fn country, acc ->
         acc + (country.image_count || 0)
       end)
 
+    # Build Alpine.js initialization data as a safe string
+    alpine_data =
+      if Enum.empty?(paginated_cities) do
+        "{ expandedCity: null }"
+      else
+        category_inits =
+          Enum.map_join(paginated_cities, ", ", fn city ->
+            "activeCategory_#{city.id}: '#{city.active_tab_category || "general"}'"
+          end)
+
+        "{ expandedCity: null, #{category_inits} }"
+      end
+
     render(conn, :index,
-      cities: cities_with_galleries,
-      countries: countries_with_galleries,
+      cities: paginated_cities,
+      countries: all_countries,
       day_of_year: day_of_year,
       today: today,
       api_key_configured: api_key_configured,
@@ -62,7 +102,14 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
       cities_with_galleries_count: cities_with_galleries_count,
       countries_with_galleries_count: countries_with_galleries_count,
       total_city_images: total_city_images,
-      total_country_images: total_country_images
+      total_country_images: total_country_images,
+      alpine_data: alpine_data,
+      # Pagination metadata
+      current_page: page,
+      total_pages: total_pages,
+      per_page: per_page,
+      total_filtered_cities: total_cities,
+      search_query: search_query
     )
   end
 
