@@ -8,9 +8,11 @@ defmodule Eventasaurus.Release do
   def migrate do
     load_app()
 
-    for repo <- repos() do
-      {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
-    end
+    # Only run migrations on SessionRepo which uses direct database connection
+    # Both Repo and SessionRepo point to the same database, so we only need to migrate once
+    # SessionRepo supports long-running transactions required for complex migrations
+    repo = EventasaurusApp.SessionRepo
+    {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
   end
 
   def rollback(repo, version) do

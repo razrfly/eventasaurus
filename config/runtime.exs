@@ -390,7 +390,23 @@ if config_env() == :prod do
     connect_timeout: 30_000,
     handshake_timeout: 30_000,
     ssl: true,
+    ssl_opts: ssl_opts,
+    # Disable prepared statements for Transaction mode (pgbouncer) compatibility
+    prepare: :unnamed
+
+  # Configure SessionRepo for Session mode operations (Oban, migrations, advisory locks)
+  # Uses direct database connection with full PostgreSQL feature support
+  config :eventasaurus, EventasaurusApp.SessionRepo,
+    url: System.get_env("SUPABASE_SESSION_DATABASE_URL"),
+    database: "postgres",
+    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "15"),
+    queue_target: 5000,
+    queue_interval: 30000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
+    ssl: true,
     ssl_opts: ssl_opts
+    # Prepared statements enabled (default) for Session mode performance
 
   # Configure Supabase settings for production
   config :eventasaurus, :supabase,

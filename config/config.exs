@@ -13,7 +13,7 @@ import_config "supabase.exs"
 # Configure Eventasaurus main app to use Supabase (not Ecto)
 config :eventasaurus,
   use_supabase: true,
-  ecto_repos: [EventasaurusApp.Repo]
+  ecto_repos: [EventasaurusApp.Repo, EventasaurusApp.SessionRepo]
 
 # Configure EventasaurusApp Repo with PostGIS types
 config :eventasaurus, EventasaurusApp.Repo, types: EventasaurusApp.PostgresTypes
@@ -91,7 +91,10 @@ config :hammer,
 
 # Configure Oban for background job processing
 config :eventasaurus, Oban,
-  repo: EventasaurusApp.Repo,
+  # Use SessionRepo for Oban to support advisory locks and persistent connections
+  repo: EventasaurusApp.SessionRepo,
+  # Use dynamic repo to ensure transactions work correctly
+  get_dynamic_repo: fn -> EventasaurusApp.SessionRepo end,
   # How often to poll for scheduled jobs (in milliseconds)
   # Default is 1000ms, setting explicitly to ensure staging works
   stage_interval: 1_000,
