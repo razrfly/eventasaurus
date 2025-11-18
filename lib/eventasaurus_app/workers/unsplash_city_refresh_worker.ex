@@ -61,18 +61,25 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
         case should_refresh?(city, refresh_days) do
           {true, reason} ->
             Logger.info("🔄 Refreshing #{city.name} - #{reason}")
-            refresh_city_images(city)
+            refresh_city_images(city, city_id)
 
           {false, age_days} ->
             Logger.info("⏭️  Skipping #{city.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)")
-            :ok
+            {:ok, %{
+              city_id: city_id,
+              city_name: city.name,
+              skipped: true,
+              reason: "images_fresh",
+              age_days: age_days,
+              job_role: "worker"
+            }}
         end
     end
   end
 
   # Private functions
 
-  defp refresh_city_images(city) do
+  defp refresh_city_images(city, city_id) do
     Logger.info("Refreshing all categories for #{city.name} (id=#{city.id})")
 
     case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
@@ -82,7 +89,16 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
           acc + length(Map.get(data, "images", []))
         end)
         Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{city.name}")
-        :ok
+
+        # Return results map for tracking
+        {:ok, %{
+          city_id: city_id,
+          city_name: city.name,
+          categories_refreshed: map_size(categories),
+          images_fetched: total_images,
+          skipped: false,
+          job_role: "worker"
+        }}
 
       {:error, :all_categories_failed} ->
         Logger.error("  ❌ Failed to fetch any categories for #{city.name}")

@@ -62,8 +62,8 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
-    Logger.info("🖼️  Unsplash Refresh Coordinator: Starting scheduled refresh")
+  def perform(%Oban.Job{id: job_id}) do
+    Logger.info("🖼️  Unsplash Refresh Coordinator: Starting scheduled refresh [job #{job_id}]")
 
     # Get all cities with venues
     cities = get_active_cities()
@@ -74,14 +74,20 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
     countries = get_countries()
     Logger.info("Found #{length(countries)} countries")
 
-    # Queue individual city refresh jobs
+    # Queue individual city refresh jobs with parent tracking
     city_jobs = Enum.map(cities, fn city ->
-      UnsplashCityRefreshWorker.new(%{city_id: city.id})
+      UnsplashCityRefreshWorker.new(
+        %{city_id: city.id},
+        meta: %{"parent_job_id" => job_id, "job_role" => "worker", "entity_type" => "city"}
+      )
     end)
 
-    # Queue individual country refresh jobs
+    # Queue individual country refresh jobs with parent tracking
     country_jobs = Enum.map(countries, fn country ->
-      UnsplashCountryRefreshWorker.new(%{country_id: country.id})
+      UnsplashCountryRefreshWorker.new(
+        %{country_id: country.id},
+        meta: %{"parent_job_id" => job_id, "job_role" => "worker", "entity_type" => "country"}
+      )
     end)
 
     # Combine all jobs
@@ -89,7 +95,7 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
 
     if Enum.empty?(all_jobs) do
       Logger.info("No cities or countries found, skipping refresh")
-      :ok
+      {:ok, %{cities_queued: 0, countries_queued: 0, total_queued: 0}}
     else
       # Insert all jobs in a single transaction
       case Oban.insert_all(all_jobs) do
@@ -102,7 +108,14 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
           city_count = length(city_jobs)
           country_count = length(country_jobs)
           Logger.info("✅ Unsplash Refresh Coordinator: Queued #{count} refresh jobs (#{city_count} cities, #{country_count} countries)")
-          :ok
+
+          # Return results map for tracking
+          {:ok, %{
+            cities_queued: city_count,
+            countries_queued: country_count,
+            total_queued: count,
+            job_role: "coordinator"
+          }}
       end
     end
   end

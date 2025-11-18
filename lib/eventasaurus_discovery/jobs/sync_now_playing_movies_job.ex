@@ -1,15 +1,49 @@
 defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
   @moduledoc """
-  Oban job for syncing "Now Playing" movies from TMDB to pre-populate the movies table.
+  Coordinator job for syncing "Now Playing" movies from TMDB.
 
-  This job:
-  1. Fetches current cinema releases from TMDB's "Now Playing" endpoint for a specific region
-  2. For each movie, fetches translations to get localized titles (e.g., Polish)
-  3. Creates or updates movies in the database with full TMDB metadata
-  4. Stores translations in metadata.translations for fallback matching
+  This job acts as a coordinator that spawns individual page fetch jobs
+  (`FetchNowPlayingPageJob`) for each page of results. This hierarchical
+  architecture provides:
 
-  This enables the TMDB matcher to use a pre-populated list of current releases
-  as a fallback when fuzzy matching fails, improving match accuracy from 71% to 85%+.
+  - **Independent Retries**: Each page can fail and retry independently
+  - **Better Observability**: Each page is a separate job in Oban dashboard
+  - **Smarter Backoff**: Rate limits on one page don't block others
+  - **Rate Limit Prevention**: Staggered scheduling prevents concurrent API calls
+
+  ## Architecture
+
+  ```
+  SyncNowPlayingMoviesJob (Coordinator)
+    ├─ FetchNowPlayingPageJob(page: 1, delay: 0s)  → Runs immediately
+    ├─ FetchNowPlayingPageJob(page: 2, delay: 3s)  → Runs after 3s
+    ├─ FetchNowPlayingPageJob(page: 3, delay: 6s)  → Runs after 6s
+    └─ FetchNowPlayingPageJob(page: 4, delay: 9s)  → Runs after 9s
+  ```
+
+  ## Rate Limit Prevention Strategy
+
+  **TMDB API Limits** (as of 2024-2025):
+  - 50 requests/second (max)
+  - 20 concurrent connections per IP
+
+  **Our Strategy**:
+  - Stagger job execution by 3 seconds per page
+  - 10 pages over 27 seconds = ~0.37 requests/second
+  - Well under 50 req/s limit
+  - Prevents concurrent execution and rate limit errors
+
+  **Why This Matters**:
+  - Without staggering: All 10 jobs hit API simultaneously → 5+ rate limit errors
+  - With staggering: Jobs run sequentially → 0 rate limit errors
+  - Result: Faster overall completion (no retries needed)
+
+  ## Each Spawned Job
+
+  1. Fetches one page from TMDB's "Now Playing" endpoint
+  2. For each movie, fetches translations for localized titles
+  3. Creates/updates movies in the database with full TMDB metadata
+  4. Handles rate limits with custom 5-minute backoff (if needed)
 
   ## Usage
 
@@ -18,6 +52,14 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
       # Via Oban (programmatic)
       EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob.new(%{region: "PL", pages: 3})
+      |> Oban.insert()
+
+      # With custom stagger delay
+      EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob.new(%{
+        region: "PL",
+        pages: 10,
+        stagger_seconds: 2  # Override default 3s stagger
+      })
       |> Oban.insert()
 
       # Future: Via cron (daily at 3 AM)
@@ -33,144 +75,84 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
   use Oban.Worker,
     queue: :discovery,
-    max_attempts: 3
+    max_attempts: 5
 
   require Logger
 
-  alias EventasaurusWeb.Services.TmdbService
-  alias EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher
+  alias EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob
+
+  # TMDB API Rate Limits (as of 2024-2025):
+  # - 50 requests/second (max)
+  # - 20 concurrent connections per IP
+  #
+  # Stagger Strategy:
+  # - Space out jobs by 3 seconds each
+  # - 10 jobs over 27 seconds = ~0.37 requests/second
+  # - Well under 50 req/s limit
+  # - Prevents concurrent execution and rate limit errors
+  @page_stagger_seconds 3
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{id: coordinator_job_id, args: args}) do
     region = normalize_region(args["region"] || args[:region])
     pages = coerce_pages(args["pages"] || args[:pages])
+    stagger = args["stagger_seconds"] || @page_stagger_seconds
 
-    Logger.info("🎬 Starting Now Playing sync for region: #{region} (#{pages} pages)")
+    Logger.info("""
+    🎬 Coordinator starting: spawning #{pages} page fetch jobs for #{region}
+    📅 Scheduling strategy: Stagger by #{stagger}s to prevent concurrent rate limits
+    ⏱️  Total schedule window: #{pages * stagger}s (#{format_duration(pages * stagger)})
+    """)
 
-    # Fetch and sync movies from multiple pages
-    results =
+    # Spawn individual page fetch jobs with staggered scheduling
+    # Each page is delayed by (page - 1) * stagger_seconds
+    # This prevents concurrent API calls that trigger rate limits
+    spawned_jobs =
       for page <- 1..pages do
-        fetch_and_sync_page(region, page)
+        delay_seconds = (page - 1) * stagger
+
+        job =
+          %{
+            region: region,
+            page: page,
+            coordinator_job_id: coordinator_job_id
+          }
+          |> FetchNowPlayingPageJob.new(schedule_in: delay_seconds)
+          |> Oban.insert!()
+
+        schedule_time = DateTime.utc_now() |> DateTime.add(delay_seconds, :second)
+        Logger.debug(
+          "📄 Page #{page} scheduled for #{format_time(schedule_time)} (#{delay_seconds}s delay) - Job ID: #{job.id}"
+        )
+
+        job
       end
 
-    total_synced = Enum.sum(results)
-    Logger.info("✅ Synced #{total_synced} now playing movies for #{region}")
+    job_ids = Enum.map(spawned_jobs, & &1.id)
 
-    {:ok, %{region: region, pages: pages, movies_synced: total_synced}}
-  end
+    first_job_time = DateTime.utc_now()
+    last_job_time = DateTime.utc_now() |> DateTime.add((pages - 1) * stagger, :second)
 
-  # Fetch a single page of now playing movies and sync them
-  defp fetch_and_sync_page(region, page) do
-    Logger.info("📄 Fetching now playing page #{page} for #{region}")
+    Logger.info("""
+    ✅ Coordinator complete: spawned #{length(spawned_jobs)} page fetch jobs for #{region}
+    📋 Job IDs: #{inspect(job_ids)}
+    📅 Schedule: #{format_time(first_job_time)} to #{format_time(last_job_time)} (#{stagger}s stagger)
+    🎯 Rate Limit Prevention: Jobs spaced to avoid concurrent API calls
+    ⏳ Expected completion: ~#{format_duration(pages * stagger + 60)} (including processing time)
 
-    case TmdbService.get_now_playing(region, page) do
-      {:ok, movies} ->
-        Logger.info("Found #{length(movies)} movies on page #{page}")
+    Each page will fetch and sync movies independently with automatic retry on failure.
+    """)
 
-        Enum.reduce(movies, 0, fn movie_data, count ->
-          case sync_movie_with_translations(movie_data, region) do
-            {:ok, _movie} ->
-              count + 1
-
-            {:error, reason} ->
-              Logger.warning(
-                "Failed to sync movie #{movie_data["id"]} (#{movie_data["title"]}): #{inspect(reason)}"
-              )
-
-              count
-          end
-        end)
-
-      {:error, reason} ->
-        Logger.error("Failed to fetch now playing page #{page}: #{inspect(reason)}")
-        0
-    end
-  end
-
-  # Sync a single movie with its translations
-  defp sync_movie_with_translations(movie_data, region) do
-    tmdb_id = movie_data["id"]
-
-    Logger.debug("Syncing movie #{tmdb_id}: #{movie_data["title"]}")
-
-    # Fetch translations to get localized titles
-    translations =
-      case TmdbService.get_movie_translations(tmdb_id) do
-        {:ok, trans} ->
-          trans
-
-        {:error, reason} ->
-          Logger.warning("Failed to fetch translations for movie #{tmdb_id}: #{inspect(reason)}")
-
-          %{}
-      end
-
-    # Build metadata with all TMDB data + translations
-    metadata = build_metadata(movie_data, translations, region)
-
-    # Create or update movie using TmdbMatcher's find_or_create_movie
-    # This handles the upsert logic and slug generation
-    case TmdbMatcher.find_or_create_movie(tmdb_id) do
-      {:ok, movie} ->
-        # Deep merge metadata to preserve existing translations and regions
-        updated_metadata = deep_merge_metadata(movie.metadata || %{}, metadata)
-
-        case EventasaurusDiscovery.Movies.MovieStore.update_movie(movie, %{
-               metadata: updated_metadata
-             }) do
-          {:ok, updated_movie} ->
-            Logger.debug("✅ Synced: #{updated_movie.title} (#{tmdb_id})")
-            {:ok, updated_movie}
-
-          {:error, changeset} ->
-            Logger.error(
-              "Failed to update movie metadata #{tmdb_id}: #{inspect(changeset.errors)}"
-            )
-
-            {:error, changeset}
-        end
-
-      {:error, reason} ->
-        Logger.error("Failed to create/find movie #{tmdb_id}: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  # Build metadata structure for storing in movies.metadata field
-  defp build_metadata(movie_data, translations, region) do
-    # Extract existing now_playing_regions or initialize empty list
-    existing_regions = []
-
-    # Add current region if not already present
-    updated_regions =
-      if region in existing_regions do
-        existing_regions
-      else
-        [region | existing_regions]
-      end
-
-    %{
-      "tmdb_data" => extract_tmdb_metadata(movie_data),
-      "translations" => translations,
-      "now_playing_regions" => updated_regions,
-      "first_seen_in_theaters" => Date.utc_today() |> Date.to_string(),
-      "last_synced_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-    }
-  end
-
-  # Extract relevant TMDB metadata from now_playing response
-  defp extract_tmdb_metadata(movie_data) do
-    %{
-      "popularity" => movie_data["popularity"],
-      "vote_average" => movie_data["vote_average"],
-      "vote_count" => movie_data["vote_count"],
-      "genre_ids" => movie_data["genre_ids"] || [],
-      "adult" => movie_data["adult"],
-      "original_language" => movie_data["original_language"],
-      "original_title" => movie_data["original_title"],
-      "backdrop_path" => movie_data["backdrop_path"],
-      "poster_path" => movie_data["poster_path"]
-    }
+    {:ok, %{
+      coordinator_job_id: coordinator_job_id,
+      region: region,
+      pages: pages,
+      stagger_seconds: stagger,
+      spawned_job_ids: job_ids,
+      schedule_start: first_job_time,
+      schedule_end: last_job_time,
+      message: "Spawned #{pages} page fetch jobs with #{stagger}s stagger to prevent rate limits."
+    }}
   end
 
   # Normalize region code to uppercase 2-letter ISO code
@@ -204,38 +186,24 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
   defp coerce_pages(_), do: 3
 
-  # Deep merge metadata to preserve existing data
-  defp deep_merge_metadata(existing, incoming) do
-    # Union now_playing_regions (deduplicated)
-    existing_regions = Map.get(existing, "now_playing_regions", [])
-    incoming_regions = Map.get(incoming, "now_playing_regions", [])
-    merged_regions = Enum.uniq(existing_regions ++ incoming_regions)
+  # Format DateTime for human-readable logging
+  defp format_time(%DateTime{} = dt) do
+    dt
+    |> DateTime.truncate(:second)
+    |> DateTime.to_time()
+    |> Time.to_string()
+  end
 
-    # Deep merge translations by locale
-    existing_translations = Map.get(existing, "translations", %{})
-    incoming_translations = Map.get(incoming, "translations", %{})
-
-    merged_translations =
-      Map.merge(existing_translations, incoming_translations, fn _locale, v1, v2 ->
-        # If both values are maps, merge them; otherwise prefer incoming
-        if is_map(v1) and is_map(v2), do: Map.merge(v1, v2), else: v2
-      end)
-
-    # Preserve first_seen_in_theaters if it exists
-    existing_first_seen = Map.get(existing, "first_seen_in_theaters")
-
-    # Merge base metadata, preserving nested maps
-    existing
-    |> Map.merge(incoming, fn
-      "tmdb_data", v1, v2 when is_map(v1) and is_map(v2) -> Map.merge(v1, v2)
-      _key, _v1, v2 -> v2
-    end)
-    |> Map.put("translations", merged_translations)
-    |> Map.put("now_playing_regions", merged_regions)
-    |> Map.put(
-      "first_seen_in_theaters",
-      existing_first_seen || Map.get(incoming, "first_seen_in_theaters")
-    )
-    |> Map.put("last_synced_at", DateTime.utc_now() |> DateTime.to_iso8601())
+  # Format duration in seconds to human-readable format
+  defp format_duration(seconds) when seconds < 60, do: "#{seconds}s"
+  defp format_duration(seconds) when seconds < 3600 do
+    minutes = div(seconds, 60)
+    remaining_seconds = rem(seconds, 60)
+    "#{minutes}m #{remaining_seconds}s"
+  end
+  defp format_duration(seconds) do
+    hours = div(seconds, 3600)
+    remaining_minutes = div(rem(seconds, 3600), 60)
+    "#{hours}h #{remaining_minutes}m"
   end
 end

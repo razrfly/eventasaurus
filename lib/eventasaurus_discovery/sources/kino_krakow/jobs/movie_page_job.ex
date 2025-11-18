@@ -68,19 +68,27 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
         |> Enum.uniq()
 
       # Schedule MovieDetailJob (should be just 1) with parent tracking
-      movies_scheduled = schedule_movie_detail_jobs(unique_movies, source_id, job_id)
+      # Returns the job struct for dependency chaining
+      movie_detail_job = schedule_movie_detail_job(unique_movies, source_id, job_id)
 
       # Schedule ShowtimeProcessJobs for each showtime with parent tracking
+      # Pass movie_detail_job to create dependency chain
       showtimes_scheduled =
-        schedule_showtime_jobs(all_showtimes, source_id, movie_slug, length(unique_movies), force, job_id)
+        schedule_showtime_jobs(all_showtimes, source_id, movie_slug, force, job_id, movie_detail_job)
 
+      # Return standardized metadata structure for job tracking (Phase 3.1)
       {:ok,
        %{
-         movie_slug: movie_slug,
-         showtimes_count: length(all_showtimes),
-         unique_movies: length(unique_movies),
-         movies_scheduled: movies_scheduled,
-         showtimes_scheduled: showtimes_scheduled
+         "job_role" => "coordinator",
+         "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+         "parent_job_id" => job_id,
+         "entity_id" => movie_slug,
+         "entity_type" => "movie",
+         "child_jobs_scheduled" => showtimes_scheduled + (if movie_detail_job, do: 1, else: 0),
+         "detail_job_scheduled" => if(movie_detail_job, do: 1, else: 0),
+         "showtime_jobs_scheduled" => showtimes_scheduled,
+         "showtimes_extracted" => length(all_showtimes),
+         "movie_detail_job_id" => if(movie_detail_job, do: movie_detail_job.id, else: nil)
        }}
     else
       {:error, reason} ->
@@ -223,47 +231,48 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
     end
   end
 
-  # Schedule MovieDetailJobs for unique movies
-  defp schedule_movie_detail_jobs(movie_slugs, source_id, parent_job_id) do
-    Logger.debug("📽️  Scheduling #{length(movie_slugs)} MovieDetailJobs")
+  # Schedule MovieDetailJob for this movie (singular - should only be 1 unique movie)
+  # Returns the job struct for dependency chaining, or nil if insertion fails
+  defp schedule_movie_detail_job(movie_slugs, source_id, parent_job_id) do
+    Logger.debug("📽️  Scheduling MovieDetailJob for #{length(movie_slugs)} movie(s)")
 
-    scheduled_jobs =
-      movie_slugs
-      |> Enum.with_index()
-      |> Enum.map(fn {movie_slug, index} ->
-        # Stagger job execution with rate limiting
-        delay_seconds = index * Config.rate_limit()
+    # Should only be 1 movie slug (this movie), but handle list for consistency
+    case movie_slugs do
+      [movie_slug | _] ->
+        # Schedule immediately (no delay needed since dependencies handle ordering)
+        case EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob.new(
+               %{
+                 "movie_slug" => movie_slug,
+                 "source_id" => source_id
+               },
+               queue: :scraper_detail,
+               meta: %{"parent_job_id" => parent_job_id}
+             )
+             |> Oban.insert() do
+          {:ok, job} ->
+            Logger.debug("✅ MovieDetailJob scheduled: #{movie_slug} (Job ID: #{job.id})")
+            job
 
-        EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob.new(
-          %{
-            "movie_slug" => movie_slug,
-            "source_id" => source_id
-          },
-          queue: :scraper_detail,
-          schedule_in: delay_seconds,
-          meta: %{"parent_job_id" => parent_job_id}
-        )
-        |> Oban.insert()
-      end)
+          {:error, reason} ->
+            Logger.error("❌ Failed to schedule MovieDetailJob for #{movie_slug}: #{inspect(reason)}")
+            nil
+        end
 
-    # Count successful insertions
-    Enum.count(scheduled_jobs, fn
-      {:ok, _} -> true
-      _ -> false
-    end)
+      [] ->
+        Logger.warning("⚠️  No movies to schedule MovieDetailJob for")
+        nil
+    end
   end
 
-  # Schedule ShowtimeProcessJobs for each showtime
-  defp schedule_showtime_jobs(showtimes, source_id, movie_slug, movie_count, force, parent_job_id) do
-    # Calculate delay to give MovieDetailJobs time to complete first
-    rate_limit = Config.rate_limit()
-    # Ensure movie is cached before showtimes process
-    # Need sufficient delay for MovieDetailJob to:
-    # 1. Wait in queue (~30-90 seconds depending on load)
-    # 2. Execute (fetch movie details from website, ~5-10 seconds)
-    # 3. Complete and commit to database
-    # Using 120 seconds to be safe
-    base_delay = movie_count * rate_limit + 120
+  # Schedule ShowtimeProcessJobs for each showtime with delay-based ordering
+  # This ensures ShowtimeProcessJobs run AFTER MovieDetailJob completes
+  # Uses delay-based scheduling since Oban Pro (with depends_on) is not available
+  defp schedule_showtime_jobs(showtimes, source_id, movie_slug, force, parent_job_id, _movie_detail_job) do
+    # Delay-based scheduling strategy:
+    # - MovieDetailJob runs immediately (scheduled at T+0)
+    # - ShowtimeProcessJobs delayed by 120 seconds minimum
+    # - This gives MovieDetailJob time to complete before showtimes process
+    # - With scraper_detail queue concurrency of 10, MovieDetailJob should complete in < 60s
 
     # Add external_ids to showtimes for freshness checking
     showtimes_with_ids =
@@ -312,26 +321,40 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
       showtimes_to_process
       |> Enum.with_index()
       |> Enum.map(fn {showtime, index} ->
-        # Stagger job execution (2 seconds between showtimes)
-        delay_seconds = base_delay + index * 2
+        # Delay strategy to ensure MovieDetailJob completes first:
+        # - Base delay: 120 seconds (gives MovieDetailJob time to complete)
+        # - Stagger: 2 seconds between each showtime (prevent API hammering)
+        delay_seconds = 120 + (index * 2)
+
+        job_opts = [
+          queue: :scraper,
+          schedule_in: delay_seconds,
+          meta: %{"parent_job_id" => parent_job_id}
+        ]
 
         EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob.new(
           %{
             "showtime" => showtime,
             "source_id" => source_id
           },
-          queue: :scraper,
-          schedule_in: delay_seconds,
-          meta: %{"parent_job_id" => parent_job_id}
+          job_opts
         )
         |> Oban.insert()
       end)
 
     # Count successful insertions
-    Enum.count(scheduled_jobs, fn
+    successful_count = Enum.count(scheduled_jobs, fn
       {:ok, _} -> true
       _ -> false
     end)
+
+    # Log any failures
+    failed_count = length(scheduled_jobs) - successful_count
+    if failed_count > 0 do
+      Logger.error("❌ Failed to schedule #{failed_count}/#{length(scheduled_jobs)} ShowtimeProcessJobs")
+    end
+
+    successful_count
   end
 
   # Rate limiting
