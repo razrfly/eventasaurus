@@ -2,17 +2,22 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
   @moduledoc """
   Coordinator Oban job for syncing Kino Krakow movie showtimes.
 
-  This job orchestrates the distributed scraping architecture:
-  1. Establishes session cookies via initial HTTP request
-  2. Schedules 7 DayPageJobs (one per day 0-6)
-  3. Each DayPageJob schedules MovieDetailJobs for unique movies
-  4. Each MovieDetailJob schedules ShowtimeProcessJobs for showtimes
+  This job orchestrates the movie-based scraping architecture:
+  1. Fetches cinema program page to get list of all movies
+  2. Schedules one MoviePageJob per movie
+  3. Each MoviePageJob:
+     - Establishes its own session (no race conditions)
+     - Loops through days 0-6 to fetch all showtimes
+     - Schedules MovieDetailJob and ShowtimeProcessJobs
 
-  This distributed approach provides:
-  - Granular visibility into TMDB matching failures
-  - Individual retry logic per movie
+  This architecture eliminates race conditions by giving each job
+  its own isolated session with independent day-selection state.
+
+  Benefits:
+  - No race conditions (each job has isolated session)
+  - All data for one movie collected together
+  - Natural unit of work (movie = one entity)
   - Parallel processing via Oban queues
-  - Better failure isolation
 
   Uses the standardized BaseJob behaviour for consistent processing.
   """
@@ -28,12 +33,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
 
   alias EventasaurusDiscovery.Sources.KinoKrakow.{
     Config,
-    Jobs.DayPageJob
+    Extractors.MovieListExtractor,
+    Jobs.MoviePageJob
   }
 
-  # Override perform to use distributed architecture
+  # Override perform to use movie-based architecture
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{id: job_id, args: args}) do
     source_id = args["source_id"] || get_or_create_source_id()
     force = args["force"] || false
 
@@ -42,30 +48,32 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     end
 
     Logger.info("""
-    🎬 Starting Kino Krakow distributed sync
-    Scheduling DayPageJob for current day (day 0)
+    🎬 Starting Kino Krakow movie-based sync
+    Fetching list of movies...
     """)
 
-    # Initial request to get session cookies and CSRF token
-    case establish_session() do
-      {:ok, {cookies, csrf_token}} ->
-        # Schedule DayPageJobs for days 0-6
-        scheduled_count = schedule_day_jobs(cookies, csrf_token, source_id, force)
+    # Fetch list of movies from cinema program page
+    case fetch_movie_list() do
+      {:ok, movies} ->
+        # Schedule one MoviePageJob per movie with parent tracking
+        scheduled_count = schedule_movie_page_jobs(movies, source_id, force, job_id)
 
         Logger.info("""
-        ✅ Kino Krakow sync job completed (distributed mode)
-        Day jobs scheduled: #{scheduled_count}
-        Events will be processed asynchronously
+        ✅ Kino Krakow sync job completed (movie-based mode)
+        Movies found: #{length(movies)}
+        Movie jobs scheduled: #{scheduled_count}
+        Each job will fetch all 7 days for its movie
         """)
 
         {:ok,
          %{
-           mode: "distributed",
-           day_jobs_scheduled: scheduled_count
+           mode: "movie-based",
+           movies_found: length(movies),
+           movie_jobs_scheduled: scheduled_count
          }}
 
       {:error, reason} ->
-        Logger.error("❌ Failed to establish session: #{inspect(reason)}")
+        Logger.error("❌ Failed to fetch movie list: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -105,67 +113,54 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
 
   # Private functions
 
-  # Establish session by fetching initial page to get cookies and CSRF token
-  defp establish_session do
+  # Fetch list of movies from cinema program page
+  defp fetch_movie_list do
     showtimes_url = Config.showtimes_url()
     headers = [{"User-Agent", Config.user_agent()}]
 
-    Logger.info("📡 Establishing session with Kino Krakow")
+    Logger.info("📡 Fetching movie list from cinema program")
 
     case HTTPoison.get(showtimes_url, headers, timeout: Config.timeout()) do
-      {:ok, %{status_code: 200, headers: response_headers, body: html}} ->
-        cookies = extract_cookies(response_headers)
-        csrf_token = extract_csrf_token(html)
+      {:ok, %{status_code: 200, body: html}} ->
+        case MovieListExtractor.extract(html) do
+          {:ok, movies} ->
+            Logger.info("✅ Found #{length(movies)} movies")
+            {:ok, movies}
 
-        Logger.info("✅ Session established (CSRF token: #{String.slice(csrf_token || "none", 0..9)}...)")
-        {:ok, {cookies, csrf_token}}
+          {:error, reason} ->
+            {:error, reason}
+        end
 
       {:ok, %{status_code: status}} ->
-        {:error, "HTTP #{status} on initial request"}
+        {:error, "HTTP #{status} fetching movie list"}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  # Extract cookies from response headers
-  defp extract_cookies(headers) do
-    headers
-    |> Enum.filter(fn {name, _} -> String.downcase(name) == "set-cookie" end)
-    |> Enum.map(fn {_, value} ->
-      # Extract cookie name=value, ignore attributes after semicolon
-      value |> String.split(";") |> hd()
-    end)
-    |> Enum.join("; ")
-  end
+  # Schedule MoviePageJobs for all movies
+  defp schedule_movie_page_jobs(movies, source_id, force, parent_job_id) do
+    Logger.info("📽️  Scheduling MoviePageJobs for #{length(movies)} movies")
 
-  # Extract CSRF token from HTML meta tag
-  defp extract_csrf_token(html) do
-    case Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, html) do
-      [_, token] -> token
-      _ -> nil
-    end
-  end
-
-  # Schedule DayPageJobs for days 0-6
-  defp schedule_day_jobs(cookies, csrf_token, source_id, force) do
-    # Now scheduling all 7 days with CSRF token support
     scheduled_jobs =
-      0..6
-      |> Enum.map(fn day_offset ->
-        # Stagger jobs slightly to avoid thundering herd
-        delay_seconds = day_offset * Config.rate_limit()
+      movies
+      |> Enum.with_index()
+      |> Enum.map(fn {movie, index} ->
+        # Stagger jobs to avoid thundering herd and respect rate limits
+        # Each job will take ~15 seconds (7 days × 2 requests/day)
+        delay_seconds = index * Config.rate_limit()
 
-        DayPageJob.new(
+        MoviePageJob.new(
           %{
-            "day_offset" => day_offset,
-            "cookies" => cookies,
-            "csrf_token" => csrf_token,
+            "movie_slug" => movie.movie_slug,
+            "movie_title" => movie.movie_title,
             "source_id" => source_id,
             "force" => force
           },
-          queue: :scraper_index,
-          schedule_in: delay_seconds
+          queue: :scraper_detail,
+          schedule_in: delay_seconds,
+          meta: %{"parent_job_id" => parent_job_id}
         )
         |> Oban.insert()
       end)
