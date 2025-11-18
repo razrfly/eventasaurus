@@ -161,6 +161,15 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     end
   end
 
+  # Convert map keys to strings for consistent JSONB storage
+  defp stringify_keys(map) when is_map(map) do
+    map
+    |> Enum.into(%{}, fn {k, v} ->
+      key = if is_atom(k), do: Atom.to_string(k), else: k
+      {key, v}
+    end)
+  end
+
   # Record job execution summary for historical tracking
   defp record_job_summary(job, state, duration_ms, error_message, metadata) do
     # Convert Oban state atoms to string states for database
@@ -176,7 +185,8 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     # Merge results from multiple sources:
     # 1. job.meta - metadata set when job was created (e.g., parent_job_id)
     # 2. metadata.result - return value from perform/1 (e.g., movies_scheduled, showtimes_count)
-    job_meta = Map.get(job, :meta, %{})
+    # Normalize all keys to strings for consistent JSONB storage
+    job_meta = job |> Map.get(:meta, %{}) |> stringify_keys()
     return_value = Map.get(metadata, :result, %{})
 
     # Merge both sources, with return_value taking precedence for overlapping keys
@@ -185,7 +195,7 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
       case return_value do
         # If return value is a map (e.g., {:ok, %{movies_scheduled: 10}}), merge it
         {:ok, result_map} when is_map(result_map) ->
-          Map.merge(job_meta, result_map)
+          Map.merge(job_meta, stringify_keys(result_map))
 
         # If return value is just :ok, use only job.meta
         :ok ->
@@ -197,7 +207,7 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
 
         # If return value is a plain map, merge it
         result_map when is_map(result_map) ->
-          Map.merge(job_meta, result_map)
+          Map.merge(job_meta, stringify_keys(result_map))
 
         # For any other return value, just use job.meta
         _other ->

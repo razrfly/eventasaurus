@@ -72,16 +72,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
       movie_detail_job = schedule_movie_detail_job(unique_movies, source_id, job_id)
 
       # Schedule ShowtimeProcessJobs for each showtime with parent tracking
-      # Pass movie_detail_job to create dependency chain
       showtimes_scheduled =
-        schedule_showtime_jobs(all_showtimes, source_id, movie_slug, force, job_id, movie_detail_job)
+        schedule_showtime_jobs(all_showtimes, source_id, movie_slug, force, job_id)
 
       # Return standardized metadata structure for job tracking (Phase 3.1)
       {:ok,
        %{
          "job_role" => "coordinator",
          "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
-         "parent_job_id" => job_id,
+         "parent_job_id" => nil,  # Root coordinator job has no parent
          "entity_id" => movie_slug,
          "entity_type" => "movie",
          "child_jobs_scheduled" => showtimes_scheduled + (if movie_detail_job, do: 1, else: 0),
@@ -267,7 +266,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
   # Schedule ShowtimeProcessJobs for each showtime with delay-based ordering
   # This ensures ShowtimeProcessJobs run AFTER MovieDetailJob completes
   # Uses delay-based scheduling since Oban Pro (with depends_on) is not available
-  defp schedule_showtime_jobs(showtimes, source_id, movie_slug, force, parent_job_id, _movie_detail_job) do
+  defp schedule_showtime_jobs(showtimes, source_id, movie_slug, force, parent_job_id) do
     # Delay-based scheduling strategy:
     # - MovieDetailJob runs immediately (scheduled at T+0)
     # - ShowtimeProcessJobs delayed by 120 seconds minimum

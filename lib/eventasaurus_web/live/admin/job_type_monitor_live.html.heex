@@ -1,0 +1,326 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Header -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <.link navigate={~p"/admin/job-executions"} class="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block">
+          ← Back to Job Execution Monitor
+        </.link>
+        <h1 class="text-3xl font-bold text-gray-900">{@worker_display_name}</h1>
+        <p class="mt-2 text-gray-600">
+          <%= if @last_execution do %>
+            Last executed: {Calendar.strftime(@last_execution.attempted_at, "%B %d, %Y at %I:%M %p")}
+          <% else %>
+            No executions recorded
+          <% end %>
+        </p>
+      </div>
+      <div class="flex items-center space-x-4">
+        <!-- Time Range Selector -->
+        <form phx-change="change_time_range" class="flex items-center space-x-2">
+          <label for="time_range" class="text-sm font-medium text-gray-700">Time Range:</label>
+          <select
+            id="time_range"
+            name="time_range"
+            class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          >
+            <option value="7" selected={@time_range == 7}>Last 7 days</option>
+            <option value="30" selected={@time_range == 30}>Last 30 days</option>
+            <option value="90" selected={@time_range == 90}>Last 90 days</option>
+          </select>
+        </form>
+
+        <!-- Refresh Button -->
+        <button
+          phx-click="refresh"
+          class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Indicator -->
+  <%= if @loading do %>
+    <div class="flex justify-center items-center py-12">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  <% else %>
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <!-- 24-Hour Card -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Last 24 Hours</h3>
+        <div class="space-y-3">
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Total Runs</span>
+            <span class="text-sm font-semibold">{@metrics_24h.total}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Success Rate</span>
+            <span class="text-sm font-semibold text-green-600">{@metrics_24h.success_rate}%</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Avg Duration</span>
+            <span class="text-sm font-semibold">{format_duration(@metrics_24h.avg_duration_ms)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Failures</span>
+            <span class="text-sm font-semibold text-red-600">{@metrics_24h.failed}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7-Day Card -->
+      <div class="bg-white shadow rounded-lg p-6 border-2 border-blue-500">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Last 7 Days</h3>
+        <div class="space-y-3">
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Total Runs</span>
+            <span class="text-sm font-semibold">{@metrics_7d.total}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Success Rate</span>
+            <span class="text-sm font-semibold text-green-600">{@metrics_7d.success_rate}%</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Avg Duration</span>
+            <span class="text-sm font-semibold">{format_duration(@metrics_7d.avg_duration_ms)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Failures</span>
+            <span class="text-sm font-semibold text-red-600">{@metrics_7d.failed}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 30-Day Card -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Last 30 Days</h3>
+        <div class="space-y-3">
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Total Runs</span>
+            <span class="text-sm font-semibold">{@metrics_30d.total}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Success Rate</span>
+            <span class="text-sm font-semibold text-green-600">{@metrics_30d.success_rate}%</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Avg Duration</span>
+            <span class="text-sm font-semibold">{format_duration(@metrics_30d.avg_duration_ms)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-sm text-gray-600">Failures</span>
+            <span class="text-sm font-semibold text-red-600">{@metrics_30d.failed}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline Chart -->
+    <div class="bg-white shadow rounded-lg p-6 mb-8">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Execution Timeline</h3>
+      <%= if length(@timeline_data) > 0 do %>
+        <div class="space-y-2">
+          <%= for day <- @timeline_data do %>
+            <div class="flex items-center space-x-4">
+              <div class="w-24 text-sm text-gray-600">{day.date}</div>
+              <div class="flex-1 flex items-center space-x-1">
+                <!-- Success bar -->
+                <%= if day.completed > 0 do %>
+                  <div
+                    class="bg-green-500 h-8 rounded-l flex items-center justify-center text-white text-xs font-medium"
+                    style={"width: #{calculate_bar_width(day.completed, day.total)}%"}
+                    title={"#{day.completed} completed"}
+                  >
+                    <%= if day.completed > 0, do: day.completed %>
+                  </div>
+                <% end %>
+                <!-- Failure bar -->
+                <%= if day.failed > 0 do %>
+                  <div
+                    class="bg-red-500 h-8 rounded-r flex items-center justify-center text-white text-xs font-medium"
+                    style={"width: #{calculate_bar_width(day.failed, day.total)}%"}
+                    title={"#{day.failed} failed"}
+                  >
+                    <%= if day.failed > 0, do: day.failed %>
+                  </div>
+                <% end %>
+              </div>
+              <div class="w-16 text-sm text-gray-600 text-right">{day.total} total</div>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-gray-500 text-center py-8">No execution data available for this time range</p>
+      <% end %>
+    </div>
+
+    <!-- Recent Executions Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">Recent Executions</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Timestamp
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Results
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Duration
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= if length(@recent_executions) > 0 do %>
+              <%= for job <- @recent_executions do %>
+                <tr class="hover:bg-gray-50">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {Calendar.strftime(job.attempted_at, "%Y-%m-%d %H:%M:%S")}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{status_badge_class(job.state)}"}>
+                      {job.state}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-900">
+                    {format_job_results(job.results)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {format_duration(job.duration_ms)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                    <button
+                      phx-click="show_lineage"
+                      phx-value-job-id={job.job_id}
+                      class="text-blue-600 hover:text-blue-900"
+                    >
+                      View Tree
+                    </button>
+                    <%= if job.error do %>
+                      <span class="text-red-600" title={job.error}>
+                        Error
+                      </span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            <% else %>
+              <tr>
+                <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                  No executions found for this worker
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<!-- Lineage Modal (reused from Phase 3) -->
+<%= if @show_lineage_modal && @selected_job do %>
+  <div class="fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="close_lineage"
+        aria-hidden="true"
+      ></div>
+
+      <!-- Modal panel -->
+      <div class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full sm:p-6">
+        <div class="absolute top-0 right-0 pt-4 pr-4">
+          <button
+            type="button"
+            phx-click="close_lineage"
+            class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+          >
+            <span class="sr-only">Close</span>
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="sm:flex sm:items-start">
+          <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="modal-title">
+              Job Lineage Tree
+            </h3>
+
+            <!-- Current Job -->
+            <div class="mb-6">
+              <h4 class="text-sm font-semibold text-gray-700 mb-2">Current Job</h4>
+              <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <p class="text-sm font-medium text-gray-900">{@selected_job.job.worker}</p>
+                <p class="text-xs text-gray-600 mt-1">
+                  Job ID: {@selected_job.job.job_id} | State: {@selected_job.job.state}
+                </p>
+                <p class="text-xs text-gray-600">
+                  Attempted: {Calendar.strftime(@selected_job.job.attempted_at, "%Y-%m-%d %H:%M:%S")}
+                </p>
+              </div>
+            </div>
+
+            <!-- Ancestors -->
+            <%= if length(@selected_job.ancestors) > 0 do %>
+              <div class="mb-6">
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">
+                  Parent Jobs ({length(@selected_job.ancestors)})
+                </h4>
+                <div class="space-y-2">
+                  <%= for {ancestor, idx} <- Enum.with_index(@selected_job.ancestors) do %>
+                    <div class="bg-gray-50 border-l-4 border-gray-300 p-3 ml-4" style={"margin-left: #{idx * 20}px"}>
+                      <p class="text-sm font-medium text-gray-900">{ancestor.worker}</p>
+                      <p class="text-xs text-gray-600">
+                        Job ID: {ancestor.job_id} | State: {ancestor.state}
+                      </p>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+
+            <!-- Descendants -->
+            <%= if length(@selected_job.descendants) > 0 do %>
+              <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">
+                  Child Jobs ({length(@selected_job.descendants)})
+                </h4>
+                <div class="space-y-2 max-h-96 overflow-y-auto">
+                  <%= for descendant <- @selected_job.descendants do %>
+                    <div class="bg-green-50 border-l-4 border-green-300 p-3 ml-4">
+                      <p class="text-sm font-medium text-gray-900">{descendant.worker}</p>
+                      <p class="text-xs text-gray-600">
+                        Job ID: {descendant.job_id} | State: {descendant.state}
+                      </p>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>
