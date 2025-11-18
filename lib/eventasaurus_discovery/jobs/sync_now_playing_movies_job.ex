@@ -121,8 +121,8 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
       end
 
     # Insert all jobs atomically to prevent duplicates on retry
-    {count, spawned_jobs} = Oban.insert_all(job_changesets)
-    Logger.info("📦 Inserted #{count} jobs atomically")
+    spawned_jobs = Oban.insert_all(job_changesets)
+    Logger.info("📦 Inserted #{length(spawned_jobs)} jobs atomically")
 
     # Log schedule for each job
     Enum.with_index(spawned_jobs, 1)
