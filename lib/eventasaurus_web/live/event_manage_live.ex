@@ -1216,11 +1216,26 @@ defmodule EventasaurusWeb.EventManageLive do
 
     # Debug: Log first option to see what data we're receiving
     first_option = List.first(poll_data.options)
+
     if first_option do
       IO.puts("\n=== DEBUG: First option in create_poll_from_template ===")
-      IO.puts("Title: #{inspect(first_option["title"] || first_option[:title])}")
-      IO.puts("Image URL: #{inspect(first_option["image_url"] || first_option[:image_url])}")
-      IO.puts("Description: #{inspect(first_option["description"] || first_option[:description])}")
+
+      cond do
+        is_map(first_option) ->
+          IO.puts("Title: #{inspect(first_option["title"] || first_option[:title])}")
+          IO.puts("Image URL: #{inspect(first_option["image_url"] || first_option[:image_url])}")
+
+          IO.puts(
+            "Description: #{inspect(first_option["description"] || first_option[:description])}"
+          )
+
+        is_binary(first_option) ->
+          IO.puts("Title (string option): #{inspect(first_option)}")
+
+        true ->
+          IO.puts("First option (unexpected type): #{inspect(first_option, pretty: true)}")
+      end
+
       IO.puts("Full option: #{inspect(first_option, pretty: true)}")
     end
 

@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
+  import EventasaurusWeb.PollOptionHelpers, only: [get_import_info: 1, format_import_attribution: 1]
 
   @impl true
   def mount(socket) do
@@ -624,35 +625,4 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
     end
   end
 
-  # Helper function to extract import info from poll option metadata
-  defp get_import_info(option) do
-    with %{metadata: metadata} when is_map(metadata) <- option,
-         import_info when is_map(import_info) <- metadata["import_info"] || metadata[:import_info] do
-      import_info
-    else
-      _ -> nil
-    end
-  end
-
-  # Helper function to format import attribution display
-  defp format_import_attribution(import_info) when is_map(import_info) do
-    event_title = import_info["source_event_title"] || import_info[:source_event_title]
-    recommender_name = import_info["original_recommender_name"] || import_info[:original_recommender_name]
-
-    cond do
-      event_title && recommender_name ->
-        "Imported from \"#{event_title}\" (originally by #{recommender_name})"
-
-      event_title ->
-        "Imported from \"#{event_title}\""
-
-      recommender_name ->
-        "Originally suggested by #{recommender_name}"
-
-      true ->
-        "Imported from previous event"
-    end
-  end
-
-  defp format_import_attribution(_), do: nil
 end
