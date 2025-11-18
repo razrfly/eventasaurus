@@ -12,16 +12,17 @@ import Config
 config :eventasaurus, :environment, config_env()
 
 # Configure Oban for background job processing
-# Must be in runtime.exs because it uses functions that cannot be serialized in releases
+# Must be in runtime.exs to conditionally select repo based on environment
 # Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
 # Development/Test use regular Repo (same database, simpler)
+oban_repo = if config_env() == :prod do
+  EventasaurusApp.SessionRepo
+else
+  EventasaurusApp.Repo
+end
+
 config :eventasaurus, Oban,
-  get_dynamic_repo: fn ->
-    case Application.get_env(:eventasaurus, :environment, :prod) do
-      :prod -> EventasaurusApp.SessionRepo
-      _ -> EventasaurusApp.Repo
-    end
-  end,
+  repo: oban_repo,
   stage_interval: 1_000,
   queues: [
     # Email queue with limited concurrency for Resend API rate limiting

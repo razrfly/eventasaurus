@@ -1703,16 +1703,36 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     event = socket.assigns.event
     user = socket.assigns.current_user
 
-    # Create poll options from the template data
+    # Create poll options from the template data with full metadata preservation
     poll_options_attrs =
       poll_data.options
       |> Enum.with_index()
-      |> Enum.map(fn {option_title, index} ->
-        %{
-          title: option_title,
-          order_index: index,
-          suggested_by_id: user.id
-        }
+      |> Enum.map(fn {option_data, index} ->
+        # Handle both old string format and new map format
+        if is_binary(option_data) do
+          # Old format - just a string title (backward compatibility)
+          %{
+            title: option_data,
+            order_index: index,
+            suggested_by_id: user.id
+          }
+        else
+          # New format - full metadata map
+          # Preserve all metadata fields while setting current user as suggester
+          base_attrs = %{
+            title: option_data.title,
+            order_index: index,
+            suggested_by_id: user.id
+          }
+
+          # Add optional fields if present
+          base_attrs
+          |> maybe_add_field(:description, option_data[:description] || option_data["description"])
+          |> maybe_add_field(:image_url, option_data[:image_url] || option_data["image_url"])
+          |> maybe_add_field(:external_id, option_data[:external_id] || option_data["external_id"])
+          |> maybe_add_field(:external_data, option_data[:external_data] || option_data["external_data"])
+          |> maybe_add_field(:metadata, option_data[:metadata] || option_data["metadata"])
+        end
       end)
 
     # Create the poll with the template data
@@ -1751,6 +1771,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         {:noreply, assign(socket, :error_message, "Failed to create poll: #{errors}")}
     end
   end
+
+  # Helper to conditionally add fields to a map
+  defp maybe_add_field(map, _key, nil), do: map
+  defp maybe_add_field(map, _key, ""), do: map
+  defp maybe_add_field(map, key, value), do: Map.put(map, key, value)
 
   def handle_info(%{type: :polls_reordered, event_id: event_id} = _message, socket) do
     # Reload polls when they are reordered

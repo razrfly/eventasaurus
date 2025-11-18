@@ -31,7 +31,7 @@ defmodule EventasaurusApp.Polls.PollSuggestions do
   - `poll_type`: The type of poll (e.g., "movie", "places", "custom")
   - `voting_system`: The voting system used (e.g., "binary", "approval")
   - `suggested_title`: A common title used for this type of poll
-  - `common_options`: A list of frequently used option titles for this poll type
+  - `common_options`: A list of enriched option maps with metadata
   - `usage_count`: Number of times this pattern was used
   - `confidence`: A 0-1 score indicating how confident we are in this suggestion
 
@@ -43,7 +43,14 @@ defmodule EventasaurusApp.Polls.PollSuggestions do
           poll_type: "places",
           voting_system: "approval",
           suggested_title: "Where should we go?",
-          common_options: ["Coffee Shop", "Restaurant", "Bar"],
+          common_options: [
+            %{
+              title: "Coffee Shop",
+              image_url: "https://...",
+              metadata: %{...},
+              original_recommender: %{id: 1, name: "John Doe"}
+            }
+          ],
           usage_count: 5,
           confidence: 0.85
         }
@@ -101,7 +108,7 @@ defmodule EventasaurusApp.Polls.PollSuggestions do
     else
       from(p in Poll,
         where: p.event_id in ^event_ids and is_nil(p.deleted_at),
-        preload: [:poll_options]
+        preload: [poll_options: :suggested_by, event: []]
       )
       |> Repo.all()
       |> Enum.map(fn poll ->
@@ -138,18 +145,75 @@ defmodule EventasaurusApp.Polls.PollSuggestions do
           format_default_title(poll_type)
         end
 
-      # Aggregate all options and find most common
-      all_options =
+      # Aggregate all options with full metadata and find most common
+      # Group by title to find the most recent/best version of each option
+      all_options_with_metadata =
         polls
-        |> Enum.flat_map(& &1.poll_options)
-        |> Enum.map(& &1.title)
+        |> Enum.flat_map(fn poll ->
+          Enum.map(poll.poll_options, fn option ->
+            %{
+              option: option,
+              poll: poll
+            }
+          end)
+        end)
+        |> Enum.group_by(fn %{option: option} -> option.title end)
+        |> Enum.map(fn {title, option_instances} ->
+          # Count frequency
+          count = length(option_instances)
 
-      common_options =
-        all_options
-        |> Enum.frequencies()
-        |> Enum.sort_by(fn {_option, count} -> count end, :desc)
+          # Get the most recent instance (based on poll creation)
+          best_instance =
+            option_instances
+            |> Enum.sort_by(fn %{poll: poll} -> poll.inserted_at end, {:desc, DateTime})
+            |> List.first()
+
+          {title, count, best_instance}
+        end)
+        |> Enum.sort_by(fn {_title, count, _instance} -> count end, :desc)
         |> Enum.take(6)
-        |> Enum.map(fn {option, _count} -> option end)
+
+      # Build enriched option data
+      common_options =
+        Enum.map(all_options_with_metadata, fn {_title, _count, %{option: option, poll: source_poll}} ->
+          # Build recommender info
+          recommender_info =
+            case option.suggested_by do
+              %{id: id, full_name: name} when not is_nil(name) ->
+                %{id: id, name: name}
+
+              %{id: id, username: username} when not is_nil(username) ->
+                %{id: id, name: username}
+
+              %{id: id} ->
+                %{id: id, name: "User ##{id}"}
+
+              _ ->
+                nil
+            end
+
+          # Build source event info
+          source_event_info =
+            case source_poll.event do
+              %{id: event_id, title: event_title} ->
+                %{id: event_id, title: event_title}
+
+              _ ->
+                %{id: source_poll.event_id, title: nil}
+            end
+
+          %{
+            title: option.title,
+            description: option.description,
+            image_url: option.image_url,
+            external_id: option.external_id,
+            external_data: option.external_data,
+            metadata: option.metadata,
+            original_recommender: recommender_info,
+            source_event: source_event_info,
+            source_poll_id: source_poll.id
+          }
+        end)
 
       # Calculate confidence based on usage count and consistency
       total_polls = Enum.sum(Enum.map(grouped_polls, fn {_k, v} -> length(v) end))
