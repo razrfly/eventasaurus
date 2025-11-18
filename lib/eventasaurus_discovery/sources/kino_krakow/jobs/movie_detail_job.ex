@@ -27,7 +27,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
   }
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     movie_slug = args["movie_slug"]
     source_id = args["source_id"]
 
@@ -39,7 +39,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
 
     case HTTPoison.get(url, headers, timeout: Config.timeout()) do
       {:ok, %{status_code: 200, body: html}} ->
-        process_movie_html(html, movie_slug, source_id)
+        process_movie_html(html, movie_slug, source_id, job)
 
       {:ok, %{status_code: 404}} ->
         Logger.warning("⚠️ Movie page not found: #{movie_slug}")
@@ -56,7 +56,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
   end
 
   # Process movie HTML and match to TMDB
-  defp process_movie_html(html, movie_slug, _source_id) do
+  defp process_movie_html(html, movie_slug, _source_id, job) do
     # Extract movie metadata
     movie_data = MovieExtractor.extract(html)
 
@@ -79,14 +79,20 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
             # Store Kino Krakow slug in movie metadata for later lookups
             store_kino_krakow_slug(movie, movie_slug)
 
+            # Return standardized metadata structure for job tracking (Phase 3.1)
             {:ok,
              %{
-               status: :matched,
-               confidence: confidence,
-               movie_id: movie.id,
-               movie_slug: movie_slug,
-               tmdb_id: tmdb_id,
-               match_type: match_type
+               "job_role" => "detail_fetcher",
+               "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+               "parent_job_id" => Map.get(job.meta, "parent_job_id"),
+               "entity_id" => movie_slug,
+               "entity_type" => "movie",
+               "items_processed" => 1,
+               "status" => "matched",
+               "confidence" => confidence,
+               "movie_id" => movie.id,
+               "tmdb_id" => tmdb_id,
+               "match_type" => match_type
              }}
 
           {:error, reason} ->

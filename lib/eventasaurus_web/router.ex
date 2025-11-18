@@ -63,6 +63,9 @@ defmodule EventasaurusWeb.Router do
       # Scraper Processing Logs (dev - no auth)
       live "/scraper-logs", Admin.ScraperLogsLive
 
+      # Job Execution Monitor (dev - no auth)
+      live "/job-executions", Admin.JobExecutionMonitorLive
+
       # Category Analysis (dev - no auth)
       live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
 
@@ -157,6 +160,12 @@ defmodule EventasaurusWeb.Router do
 
       # Jobs Monitor Dashboard with admin authentication
       live "/jobs-monitor", EventasaurusWeb.Admin.JobMonitorLive
+
+      # Scraper Processing Logs with admin authentication
+      live "/scraper-logs", EventasaurusWeb.Admin.ScraperLogsLive
+
+      # Job Execution Monitor with admin authentication
+      live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
 
       # Sitemap Statistics with admin authentication
       live "/sitemap", EventasaurusWeb.Admin.SitemapLive

@@ -94,9 +94,13 @@ defmodule Mix.Tasks.Tmdb.SyncNowPlaying do
 
       Logger.info("""
 
-      ✅ Successfully synced Now Playing movies
+      ✅ Coordinator job completed - spawned page fetch jobs
       Region: #{result.region}
-      Movies Synced: #{result.movies_synced}
+      Pages: #{result.pages}
+      Spawned Jobs: #{length(result.spawned_job_ids)}
+      Job IDs: #{inspect(result.spawned_job_ids)}
+
+      Note: Each page is now processed independently. Check individual job results for sync status.
       """)
     else
       # Default: Run asynchronously via Oban

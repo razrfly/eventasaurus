@@ -61,18 +61,25 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
         case should_refresh?(country, refresh_days) do
           {true, reason} ->
             Logger.info("🔄 Refreshing #{country.name} - #{reason}")
-            refresh_country_images(country)
+            refresh_country_images(country, country_id)
 
           {false, age_days} ->
             Logger.info("⏭️  Skipping #{country.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)")
-            :ok
+            {:ok, %{
+              country_id: country_id,
+              country_name: country.name,
+              skipped: true,
+              reason: "images_fresh",
+              age_days: age_days,
+              job_role: "worker"
+            }}
         end
     end
   end
 
   # Private functions
 
-  defp refresh_country_images(country) do
+  defp refresh_country_images(country, country_id) do
     Logger.info("Refreshing all categories for #{country.name} (id=#{country.id})")
 
     case UnsplashImageFetcher.fetch_and_store_all_categories_for_country(country) do
@@ -82,7 +89,16 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
           acc + length(Map.get(data, "images", []))
         end)
         Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{country.name}")
-        :ok
+
+        # Return results map for tracking
+        {:ok, %{
+          country_id: country_id,
+          country_name: country.name,
+          categories_refreshed: map_size(categories),
+          images_fetched: total_images,
+          skipped: false,
+          job_role: "worker"
+        }}
 
       {:error, :all_categories_failed} ->
         Logger.error("  ❌ Failed to fetch any categories for #{country.name}")

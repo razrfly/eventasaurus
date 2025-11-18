@@ -135,8 +135,12 @@ defmodule Eventasaurus.Application do
     :ok
   end
 
-  # Attach Oban telemetry handler for comprehensive job-level failure tracking
+  # Attach Oban telemetry handlers for comprehensive job-level failure tracking
   defp attach_oban_telemetry do
+    # Attach comprehensive telemetry for all job events (start, stop, exception)
+    EventasaurusApp.Monitoring.ObanTelemetry.attach()
+
+    # Also attach scraper-specific telemetry for backward compatibility
     :telemetry.attach(
       "oban-job-exception-logger",
       [:oban, :job, :exception],

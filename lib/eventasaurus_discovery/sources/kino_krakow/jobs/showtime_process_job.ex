@@ -93,7 +93,17 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
             # MovieDetailJob completed but didn't create movie (TMDB match failed)
             # Skip this showtime (not an error)
             Logger.info("⏭️ Skipping showtime for unmatched movie: #{showtime["movie_slug"]}")
-            {:ok, :skipped}
+            # Return standardized metadata for skipped items (Phase 3.1)
+            {:ok, %{
+              "job_role" => "processor",
+              "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+              "entity_id" => showtime["external_id"] || "unknown",
+              "entity_type" => "showtime",
+              "items_processed" => 0,
+              "status" => "skipped",
+              "reason" => "movie_unmatched",
+              "movie_slug" => showtime["movie_slug"]
+            }}
 
           :not_found_or_pending ->
             # MovieDetailJob hasn't completed yet - retry
@@ -307,7 +317,18 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     case Processor.process_single_event(transformed, source) do
       {:ok, event} ->
         Logger.debug("✅ Created event: #{event.title}")
-        {:ok, event}
+
+        # Return standardized metadata structure for job tracking (Phase 3.1)
+        {:ok, %{
+          "job_role" => "processor",
+          "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+          "entity_id" => transformed[:external_id],
+          "entity_type" => "showtime",
+          "items_processed" => 1,
+          "event_id" => event.id,
+          "event_title" => event.title,
+          "status" => "created"
+        }}
 
       {:error, reason} ->
         Logger.error("❌ Failed to process event: #{inspect(reason)}")
