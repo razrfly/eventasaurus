@@ -65,6 +65,7 @@ defmodule EventasaurusWeb.Router do
 
       # Job Execution Monitor (dev - no auth)
       live "/job-executions", Admin.JobExecutionMonitorLive
+      live "/job-executions/:worker", Admin.JobTypeMonitorLive
 
       # Category Analysis (dev - no auth)
       live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
@@ -166,6 +167,7 @@ defmodule EventasaurusWeb.Router do
 
       # Job Execution Monitor with admin authentication
       live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
+      live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
 
       # Sitemap Statistics with admin authentication
       live "/sitemap", EventasaurusWeb.Admin.SitemapLive

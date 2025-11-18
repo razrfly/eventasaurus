@@ -107,26 +107,32 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
     # Spawn individual page fetch jobs with staggered scheduling
     # Each page is delayed by (page - 1) * stagger_seconds
     # This prevents concurrent API calls that trigger rate limits
-    spawned_jobs =
+    # Use insert_all for atomic insertion to prevent duplicate jobs on retry
+    job_changesets =
       for page <- 1..pages do
         delay_seconds = (page - 1) * stagger
 
-        job =
-          %{
-            region: region,
-            page: page,
-            coordinator_job_id: coordinator_job_id
-          }
-          |> FetchNowPlayingPageJob.new(schedule_in: delay_seconds)
-          |> Oban.insert!()
-
-        schedule_time = DateTime.utc_now() |> DateTime.add(delay_seconds, :second)
-        Logger.debug(
-          "📄 Page #{page} scheduled for #{format_time(schedule_time)} (#{delay_seconds}s delay) - Job ID: #{job.id}"
-        )
-
-        job
+        %{
+          region: region,
+          page: page,
+          coordinator_job_id: coordinator_job_id
+        }
+        |> FetchNowPlayingPageJob.new(schedule_in: delay_seconds)
       end
+
+    # Insert all jobs atomically to prevent duplicates on retry
+    {count, spawned_jobs} = Oban.insert_all(job_changesets)
+    Logger.info("📦 Inserted #{count} jobs atomically")
+
+    # Log schedule for each job
+    Enum.with_index(spawned_jobs, 1)
+    |> Enum.each(fn {job, page} ->
+      delay_seconds = (page - 1) * stagger
+      schedule_time = DateTime.utc_now() |> DateTime.add(delay_seconds, :second)
+      Logger.debug(
+        "📄 Page #{page} scheduled for #{format_time(schedule_time)} (#{delay_seconds}s delay) - Job ID: #{job.id}"
+      )
+    end)
 
     job_ids = Enum.map(spawned_jobs, & &1.id)
 

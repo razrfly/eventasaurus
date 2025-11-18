@@ -85,42 +85,28 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       ]
   """
   def get_ancestors(job_id) do
-    # Recursive CTE to walk up the parent chain
-    initial_query =
-      from(s in JobExecutionSummary,
-        where: s.id == ^job_id,
-        select: %{
-          id: s.id,
-          parent_id: fragment("(? ->> 'parent_job_id')::bigint", s.results),
-          depth: 0
-        }
-      )
+    # Use raw SQL for recursive CTE - Ecto doesn't support recursive_ctes in from()
+    query = """
+    WITH RECURSIVE ancestors_cte AS (
+      SELECT id, (results->>'parent_job_id')::bigint as parent_id, 0 as depth
+      FROM job_execution_summaries
+      WHERE id = $1
 
-    recursive_query =
-      from(s in JobExecutionSummary,
-        join: a in "ancestors_cte",
-        on: s.id == fragment("?::bigint", a.parent_id),
-        where: not is_nil(a.parent_id),
-        select: %{
-          id: s.id,
-          parent_id: fragment("(? ->> 'parent_job_id')::bigint", s.results),
-          depth: a.depth + 1
-        }
-      )
+      UNION ALL
 
-    # Execute recursive CTE
-    cte_query =
-      initial_query
-      |> union_all(^recursive_query)
-
-    from(s in JobExecutionSummary,
-      join: a in subquery({"ancestors_cte", cte_query}),
-      on: s.id == a.id,
-      where: a.depth > 0,
-      order_by: [asc: a.depth],
-      select: s
+      SELECT s.id, (s.results->>'parent_job_id')::bigint as parent_id, a.depth + 1
+      FROM job_execution_summaries s
+      INNER JOIN ancestors_cte a ON s.id = a.parent_id
+      WHERE a.parent_id IS NOT NULL
     )
-    |> Repo.all()
+    SELECT id FROM ancestors_cte WHERE depth > 0 ORDER BY depth
+    """
+
+    result = Ecto.Adapters.SQL.query!(Repo, query, [job_id])
+    ancestor_ids = Enum.map(result.rows, fn [id] -> id end)
+
+    # Fetch full job records for ancestor IDs
+    Repo.all(from s in JobExecutionSummary, where: s.id in ^ancestor_ids)
   end
 
   @doc """
@@ -139,39 +125,27 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       ]
   """
   def get_descendants(job_id) do
-    # Recursive CTE to walk down the child chain
-    initial_query =
-      from(s in JobExecutionSummary,
-        where: s.id == ^job_id,
-        select: %{
-          id: s.id,
-          depth: 0
-        }
-      )
+    # Use raw SQL for recursive CTE - Ecto doesn't support recursive_ctes in from()
+    query = """
+    WITH RECURSIVE descendants_cte AS (
+      SELECT id, 0 as depth
+      FROM job_execution_summaries
+      WHERE id = $1
 
-    recursive_query =
-      from(s in JobExecutionSummary,
-        join: d in "descendants_cte",
-        on: fragment("(? ->> 'parent_job_id')::bigint", s.results) == d.id,
-        select: %{
-          id: s.id,
-          depth: d.depth + 1
-        }
-      )
+      UNION ALL
 
-    # Execute recursive CTE
-    cte_query =
-      initial_query
-      |> union_all(^recursive_query)
-
-    from(s in JobExecutionSummary,
-      join: d in subquery({"descendants_cte", cte_query}),
-      on: s.id == d.id,
-      where: d.depth > 0,
-      order_by: [asc: d.depth, desc: s.attempted_at],
-      select: s
+      SELECT s.id, d.depth + 1
+      FROM job_execution_summaries s
+      INNER JOIN descendants_cte d ON (s.results->>'parent_job_id')::bigint = d.id
     )
-    |> Repo.all()
+    SELECT id FROM descendants_cte WHERE depth > 0 ORDER BY depth
+    """
+
+    result = Ecto.Adapters.SQL.query!(Repo, query, [job_id])
+    descendant_ids = Enum.map(result.rows, fn [id] -> id end)
+
+    # Fetch full job records for descendant IDs, ordered by attempted_at
+    Repo.all(from s in JobExecutionSummary, where: s.id in ^descendant_ids, order_by: [desc: s.attempted_at])
   end
 
   @doc """
@@ -195,8 +169,11 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       parent_id = get_in(job.results, ["parent_job_id"])
 
       if parent_id do
+        # Use text comparison instead of bigint cast to allow JSONB index usage
+        parent_id_str = to_string(parent_id)
+
         from(s in JobExecutionSummary,
-          where: fragment("(? ->> 'parent_job_id')::bigint", s.results) == ^parent_id,
+          where: fragment("? ->> 'parent_job_id'", s.results) == ^parent_id_str,
           where: s.id != ^job_id,
           order_by: [desc: s.attempted_at]
         )
@@ -244,9 +221,13 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       ]
   """
   def find_pipeline_failures(root_job_id) do
+    root_job = Repo.get(JobExecutionSummary, root_job_id)
     descendants = get_descendants(root_job_id)
 
-    descendants
+    # Check both root job and descendants for failures
+    all_jobs = if root_job, do: [root_job | descendants], else: descendants
+
+    all_jobs
     |> Enum.filter(&(&1.state in ["discarded", "cancelled"]))
     |> Enum.map(fn job ->
       %{
@@ -284,31 +265,37 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
   """
   def get_pipeline_health(root_job_id) do
     root_job = Repo.get(JobExecutionSummary, root_job_id)
-    descendants = get_descendants(root_job_id)
-    all_jobs = [root_job | descendants]
 
-    total = length(all_jobs)
-    completed = Enum.count(all_jobs, &(&1.state == "completed"))
-    failed = Enum.count(all_jobs, &(&1.state in ["discarded", "cancelled"]))
-    retryable = Enum.count(all_jobs, &(&1.state == "retryable"))
+    # Return nil if root job doesn't exist
+    if is_nil(root_job) do
+      nil
+    else
+      descendants = get_descendants(root_job_id)
+      all_jobs = [root_job | descendants]
 
-    durations = Enum.map(all_jobs, & &1.duration_ms) |> Enum.reject(&is_nil/1)
-    avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
+      total = length(all_jobs)
+      completed = Enum.count(all_jobs, &(&1.state == "completed"))
+      failed = Enum.count(all_jobs, &(&1.state in ["discarded", "cancelled"]))
+      retryable = Enum.count(all_jobs, &(&1.state == "retryable"))
 
-    success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
+      durations = Enum.map(all_jobs, & &1.duration_ms) |> Enum.reject(&is_nil/1)
+      avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
 
-    # Calculate max depth
-    max_depth = calculate_max_depth(root_job_id)
+      success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
 
-    %{
-      total_jobs: total,
-      completed: completed,
-      failed: failed,
-      retryable: retryable,
-      success_rate: success_rate,
-      avg_duration_ms: Float.round(avg_duration, 2),
-      max_depth: max_depth
-    }
+      # Calculate max depth
+      max_depth = calculate_max_depth(root_job_id)
+
+      %{
+        total_jobs: total,
+        completed: completed,
+        failed: failed,
+        retryable: retryable,
+        success_rate: success_rate,
+        avg_duration_ms: Float.round(avg_duration, 2),
+        max_depth: max_depth
+      }
+    end
   end
 
   @doc """

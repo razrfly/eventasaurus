@@ -78,7 +78,12 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
 
   @impl true
   def handle_event("change_time_range", %{"time_range" => time_range}, socket) do
-    time_range_hours = String.to_integer(time_range)
+    # Defensive parsing to prevent crashes on invalid input
+    time_range_hours =
+      case Integer.parse(time_range) do
+        {hours, _} when hours > 0 -> hours
+        _ -> socket.assigns.time_range  # Keep current value if invalid
+      end
 
     socket =
       socket
@@ -625,27 +630,36 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
 
             <!-- Individual Workers -->
             <%= for worker <- @workers do %>
-              <button
-                type="button"
-                phx-click="select_worker"
-                phx-value-worker={worker.worker}
-                class={"w-full text-left px-4 py-3 rounded-lg border transition-colors " <> if(@selected_worker == worker.worker, do: "border-blue-500 bg-blue-50", else: "border-gray-200 hover:bg-gray-50")}
-              >
-                <div class="flex items-center justify-between">
-                  <span class="font-medium text-gray-900"><%= worker_name(worker.worker) %></span>
-                  <div class="flex items-center gap-3">
-                    <span class="text-sm text-gray-500">
-                      <%= worker.total_executions %> runs
-                    </span>
-                    <span class="text-xs text-gray-400">
-                      <%= format_relative_time(worker.last_execution) %>
-                    </span>
+              <div class="relative">
+                <button
+                  type="button"
+                  phx-click="select_worker"
+                  phx-value-worker={worker.worker}
+                  class={"w-full text-left px-4 py-3 rounded-lg border transition-colors " <> if(@selected_worker == worker.worker, do: "border-blue-500 bg-blue-50", else: "border-gray-200 hover:bg-gray-50")}
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="font-medium text-gray-900"><%= worker_name(worker.worker) %></span>
+                    <div class="flex items-center gap-3">
+                      <span class="text-sm text-gray-500">
+                        <%= worker.total_executions %> runs
+                      </span>
+                      <span class="text-xs text-gray-400">
+                        <%= format_relative_time(worker.last_execution) %>
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div class="mt-1 text-xs text-gray-500">
-                  <%= worker.worker %>
-                </div>
-              </button>
+                  <div class="mt-1 text-xs text-gray-500 flex items-center justify-between">
+                    <span><%= worker.worker %></span>
+                    <.link
+                      navigate={~p"/admin/job-executions/#{URI.encode_www_form(worker.worker)}"}
+                      class="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center gap-1"
+                      onclick="event.stopPropagation()"
+                    >
+                      View Dashboard →
+                    </.link>
+                  </div>
+                </button>
+              </div>
             <% end %>
           </div>
         </div>

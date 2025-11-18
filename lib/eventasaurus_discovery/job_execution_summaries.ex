@@ -80,7 +80,17 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
     if result.total_jobs > 0 do
       success_rate = Float.round(result.completed / result.total_jobs * 100, 2)
-      Map.put(result, :success_rate, success_rate)
+
+      # Convert Decimal to float for avg_duration_ms
+      avg_duration = if result.avg_duration_ms do
+        result.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
+      else
+        nil
+      end
+
+      result
+      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:avg_duration_ms, avg_duration)
     else
       result
     end
@@ -388,7 +398,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   @doc """
   Gets count of silent failures by scraper.
 
-  Returns a map of scraper names to silent failure counts.
+  Returns a list of maps, each containing scraper name, failure count, and example job ID.
   """
   def get_silent_failure_counts(hours_back \\ 24) do
     silent_failures = detect_silent_failures(hours_back)
