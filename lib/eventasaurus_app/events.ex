@@ -4148,7 +4148,7 @@ defmodule EventasaurusApp.Events do
 
     query =
       from(p in Poll,
-        where: p.event_id == ^event.id,
+        where: p.event_id == ^event.id and is_nil(p.deleted_at),
         order_by: [asc: p.order_index, asc: p.inserted_at],
         preload: [:created_by, poll_options: ^ordered_options]
       )
@@ -4695,8 +4695,16 @@ defmodule EventasaurusApp.Events do
   def create_poll_option(attrs \\ %{}, opts \\ []) do
     # Normalize attrs to handle both string and atom keys
     poll_id = attrs["poll_id"] || attrs[:poll_id]
-    title = attrs["title"] || attrs[:title]
+    raw_title = attrs["title"] || attrs[:title]
     suggested_by_id = attrs["suggested_by_id"] || attrs[:suggested_by_id]
+
+    # Extract title string - handle case where attrs might be improperly nested
+    title = cond do
+      is_binary(raw_title) -> raw_title
+      is_map(raw_title) and (raw_title["title"] || raw_title[:title]) ->
+        raw_title["title"] || raw_title[:title]
+      true -> nil
+    end
 
     # Extract place_id from external_data if it's a place
     place_id =

@@ -1703,6 +1703,17 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     event = socket.assigns.event
     user = socket.assigns.current_user
 
+    # Debug: Log what data we're receiving
+    first_option = List.first(poll_data.options)
+    if first_option do
+      IO.puts("\n=== DEBUG: First option in create_poll_from_template (integration_component) ===")
+      IO.puts("Title: #{inspect(first_option["title"] || first_option[:title])}")
+      IO.puts("Image URL (string key): #{inspect(first_option["image_url"])}")
+      IO.puts("Image URL (atom key): #{inspect(first_option[:image_url])}")
+      IO.puts("Description: #{inspect(first_option["description"] || first_option[:description])}")
+      IO.puts("Full option: #{inspect(first_option, pretty: true)}")
+    end
+
     # Create poll options from the template data with full metadata preservation
     poll_options_attrs =
       poll_data.options
@@ -1720,34 +1731,56 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           # New format - full metadata map
           # Preserve all metadata fields while setting current user as suggester
           base_attrs = %{
-            title: option_data.title,
+            title: option_data["title"] || option_data[:title],
             order_index: index,
             suggested_by_id: user.id
           }
 
+          # Debug: Log the image_url value before adding it
+          image_url_value = option_data[:image_url] || option_data["image_url"]
+          if index == 0 do
+            IO.puts("\n=== DEBUG: Before maybe_add_field ===")
+            IO.puts("image_url_value: #{inspect(image_url_value)}")
+            IO.puts("is nil? #{is_nil(image_url_value)}")
+            IO.puts("is empty string? #{image_url_value == ""}")
+          end
+
           # Add optional fields if present
           base_attrs
           |> maybe_add_field(:description, option_data[:description] || option_data["description"])
-          |> maybe_add_field(:image_url, option_data[:image_url] || option_data["image_url"])
+          |> maybe_add_field(:image_url, image_url_value)
           |> maybe_add_field(:external_id, option_data[:external_id] || option_data["external_id"])
           |> maybe_add_field(:external_data, option_data[:external_data] || option_data["external_data"])
           |> maybe_add_field(:metadata, option_data[:metadata] || option_data["metadata"])
         end
       end)
 
-    # Create the poll with the template data
+    # Create the poll with the template data (without nested options)
     poll_attrs = %{
       title: poll_data.title,
       poll_type: poll_data.poll_type,
       voting_system: poll_data.voting_system,
-      phase: :setup,
+      phase: :list_building,
       event_id: event.id,
-      created_by_id: user.id,
-      poll_options: poll_options_attrs
+      created_by_id: user.id
     }
 
     case Events.create_poll(poll_attrs) do
-      {:ok, _poll} ->
+      {:ok, poll} ->
+        # Debug: Log the final attrs that will be saved
+        first_attrs = List.first(poll_options_attrs)
+        if first_attrs do
+          IO.puts("\n=== DEBUG: Final attrs before create_poll_option ===")
+          IO.puts("#{inspect(first_attrs, pretty: true)}")
+        end
+
+        # Create poll options separately with full metadata preservation
+        _option_results =
+          poll_options_attrs
+          |> Enum.map(fn option_attrs ->
+            Events.create_poll_option(Map.put(option_attrs, :poll_id, poll.id))
+          end)
+
         # Reload polls list
         polls = Events.list_polls(event)
 

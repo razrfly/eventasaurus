@@ -119,10 +119,7 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
             image_url: original["image_url"] || original[:image_url],
             external_id: original["external_id"] || original[:external_id],
             external_data: original["external_data"] || original[:external_data],
-            metadata: build_import_metadata(original),
-            original_recommender: original["original_recommender"] || original[:original_recommender],
-            source_event: original["source_event"] || original[:source_event],
-            source_poll_id: original["source_poll_id"] || original[:source_poll_id]
+            metadata: build_import_metadata(original)
           }
         end
       end)
