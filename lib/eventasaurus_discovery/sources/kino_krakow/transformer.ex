@@ -34,7 +34,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
         transformed = %{
           # Required fields
           title: build_title(raw_event),
-          external_id: build_external_id(raw_event),
+          external_id: get_value.(raw_event, :external_id),
           starts_at: get_value.(raw_event, :datetime),
           ends_at: calculate_end_time(raw_event),
 
@@ -111,16 +111,6 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
     cinema_name = event.cinema_data[:name] || "Unknown Cinema"
 
     "#{movie_title} at #{cinema_name}"
-  end
-
-  # Build unique external ID
-  defp build_external_id(event) do
-    # Combine movie slug, cinema slug, and datetime for uniqueness
-    # Handle both atom and string keys for backward compatibility
-    movie_slug = event[:movie_slug] || event["movie_slug"]
-    cinema_slug = event[:cinema_slug] || event["cinema_slug"]
-    datetime_str = DateTime.to_iso8601(event[:datetime] || event["datetime"])
-    "#{movie_slug}-#{cinema_slug}-#{datetime_str}"
   end
 
   # Calculate end time based on movie runtime

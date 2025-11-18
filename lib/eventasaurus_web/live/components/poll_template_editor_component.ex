@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
      socket
      |> assign(assigns)
      |> assign(:poll_title, suggestion["suggested_title"])
+     |> assign(:selected_voting_system, suggestion["voting_system"])
      |> assign(:selected_options, MapSet.new())
      |> assign(:edited_options, %{})
      |> assign(:custom_options, [])
@@ -51,6 +52,11 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
   @impl true
   def handle_event("update_title", %{"value" => title}, socket) do
     {:noreply, assign(socket, :poll_title, title)}
+  end
+
+  @impl true
+  def handle_event("update_voting_system", %{"voting_system" => voting_system}, socket) do
+    {:noreply, assign(socket, :selected_voting_system, voting_system)}
   end
 
   @impl true
@@ -91,25 +97,50 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
 
   @impl true
   def handle_event("create_poll", _params, socket) do
-    # Collect all selected and edited options
-    selected_options =
+    # Collect all selected and edited options with full metadata
+    selected_options_with_metadata =
       socket.assigns.selected_options
       |> Enum.sort()
       |> Enum.map(fn index ->
         original = Enum.at(socket.assigns.suggestion["common_options"], index)
-        Map.get(socket.assigns.edited_options, index, original)
+
+        # Handle both old string format and new map format
+        if is_binary(original) do
+          # Old format - just a string title
+          edited_title = Map.get(socket.assigns.edited_options, index, original)
+          %{title: edited_title}
+        else
+          # New format - full metadata map
+          edited_title = Map.get(socket.assigns.edited_options, index, original["title"] || original[:title])
+
+          %{
+            title: edited_title,
+            description: original["description"] || original[:description],
+            image_url: original["image_url"] || original[:image_url],
+            external_id: original["external_id"] || original[:external_id],
+            external_data: original["external_data"] || original[:external_data],
+            metadata: build_import_metadata(original),
+            original_recommender: original["original_recommender"] || original[:original_recommender],
+            source_event: original["source_event"] || original[:source_event],
+            source_poll_id: original["source_poll_id"] || original[:source_poll_id]
+          }
+        end
       end)
 
-    # Add custom options (filter out empty ones)
+    # Add custom options (filter out empty ones) - these have no metadata
     custom_options =
       socket.assigns.custom_options
       |> Enum.map(&String.trim/1)
       |> Enum.reject(&(&1 == ""))
+      |> Enum.map(fn title -> %{title: title} end)
 
-    all_options = selected_options ++ custom_options
+    all_options = selected_options_with_metadata ++ custom_options
+
+    # Extract titles for validation
+    option_titles = Enum.map(all_options, & &1.title)
 
     # Validate
-    errors = validate_poll(socket.assigns.poll_title, all_options)
+    errors = validate_poll(socket.assigns.poll_title, option_titles)
 
     if Enum.empty?(errors) do
       # Send message to parent component to create poll
@@ -118,7 +149,7 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
         {:create_poll_from_template,
          %{
            poll_type: socket.assigns.suggestion["poll_type"],
-           voting_system: socket.assigns.suggestion["voting_system"],
+           voting_system: socket.assigns.selected_voting_system,
            title: socket.assigns.poll_title,
            options: all_options
          }}
@@ -129,6 +160,28 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
       {:noreply, assign(socket, :errors, errors)}
     end
   end
+
+  # Helper to build import metadata from original option data
+  defp build_import_metadata(original) when is_map(original) do
+    base_metadata = original["metadata"] || original[:metadata] || %{}
+
+    # Only add import info if we have source information
+    if original["source_event"] || original[:source_event] ||
+       original["source_poll_id"] || original[:source_poll_id] do
+      Map.put(base_metadata, "import_info", %{
+        "source_event_id" => get_in(original, ["source_event", "id"]) || get_in(original, [:source_event, :id]),
+        "source_event_title" => get_in(original, ["source_event", "title"]) || get_in(original, [:source_event, :title]),
+        "source_poll_id" => original["source_poll_id"] || original[:source_poll_id],
+        "original_recommender_id" => get_in(original, ["original_recommender", "id"]) || get_in(original, [:original_recommender, :id]),
+        "original_recommender_name" => get_in(original, ["original_recommender", "name"]) || get_in(original, [:original_recommender, :name]),
+        "imported_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      })
+    else
+      base_metadata
+    end
+  end
+
+  defp build_import_metadata(_), do: %{}
 
   @impl true
   def handle_event("cancel", _params, socket) do
@@ -235,6 +288,37 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
                 />
               </div>
 
+              <!-- Voting System Selector -->
+              <div>
+                <label for="voting-system" class="block text-sm font-semibold text-gray-900 mb-2">
+                  Voting System
+                  <span class="ml-2 text-xs font-normal text-gray-500">
+                    <%= if @selected_voting_system != @suggestion["voting_system"] do %>
+                      (Changed from <%= format_voting_system(@suggestion["voting_system"]) %>)
+                    <% else %>
+                      (Original from template)
+                    <% end %>
+                  </span>
+                </label>
+                <select
+                  id="voting-system"
+                  name="voting_system"
+                  value={@selected_voting_system}
+                  phx-change="update_voting_system"
+                  phx-target={@myself}
+                  class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <%= for voting_system <- available_voting_systems() do %>
+                    <option value={voting_system} selected={@selected_voting_system == voting_system}>
+                      <%= format_voting_system(voting_system) %> <%= if voting_system == @suggestion["voting_system"], do: "(Original)", else: "" %>
+                    </option>
+                  <% end %>
+                </select>
+                <p class="mt-1 text-xs text-gray-500">
+                  <%= voting_system_description(@selected_voting_system) %>
+                </p>
+              </div>
+
               <!-- Options Selection -->
               <div>
                 <div class="flex items-center justify-between mb-3">
@@ -260,9 +344,16 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
                   </div>
                 </div>
 
-                <div class="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                <div class="space-y-2 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
                   <%= for {option, index} <- Enum.with_index(@suggestion["common_options"]) do %>
-                    <div class="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-indigo-300 transition-colors">
+                    <%
+                      # Handle both old string format and new map format for backward compatibility
+                      option_title = if is_binary(option), do: option, else: option["title"] || option[:title]
+                      option_image = if is_map(option), do: option["image_url"] || option[:image_url], else: nil
+                      option_recommender = if is_map(option), do: option["original_recommender"] || option[:original_recommender], else: nil
+                      option_source_event = if is_map(option), do: option["source_event"] || option[:source_event], else: nil
+                    %>
+                    <div class="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-indigo-300 transition-colors">
                       <input
                         type="checkbox"
                         id={"option-#{index}"}
@@ -270,20 +361,51 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
                         phx-click="toggle_option"
                         phx-value-index={index}
                         phx-target={@myself}
-                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        class="h-4 w-4 mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
                       />
-                      <input
-                        type="text"
-                        value={Map.get(@edited_options, index, option)}
-                        phx-blur="edit_option"
-                        phx-value-index={index}
-                        phx-target={@myself}
-                        disabled={!MapSet.member?(@selected_options, index)}
-                        class="flex-1 text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
-                      />
-                      <span class="text-xs text-gray-400 whitespace-nowrap">
-                        Used <%= @suggestion["usage_count"] %>x
-                      </span>
+
+                      <%= if option_image do %>
+                        <img
+                          src={option_image}
+                          alt={option_title}
+                          class="w-12 h-12 rounded object-cover flex-shrink-0"
+                          onerror="this.style.display='none'"
+                        />
+                      <% end %>
+
+                      <div class="flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={Map.get(@edited_options, index, option_title)}
+                          phx-blur="edit_option"
+                          phx-value-index={index}
+                          phx-target={@myself}
+                          disabled={!MapSet.member?(@selected_options, index)}
+                          class="block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
+                        />
+
+                        <%= if option_recommender || option_source_event do %>
+                          <div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                            <%= if option_recommender do %>
+                              <span class="inline-flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <%= option_recommender["name"] || option_recommender[:name] %>
+                              </span>
+                            <% end %>
+                            <%= if option_source_event && (option_source_event["title"] || option_source_event[:title]) do %>
+                              <span class="text-gray-300">•</span>
+                              <span class="inline-flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <%= option_source_event["title"] || option_source_event[:title] %>
+                              </span>
+                            <% end %>
+                          </div>
+                        <% end %>
+                      </div>
                     </div>
                   <% end %>
                 </div>
@@ -425,4 +547,22 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
   defp format_voting_system("ranked"), do: "Ranked Choice"
   defp format_voting_system("star"), do: "Star Rating"
   defp format_voting_system(system), do: String.capitalize(system)
+
+  defp available_voting_systems do
+    ["binary", "approval", "ranked", "star"]
+  end
+
+  defp voting_system_description("binary"),
+    do: "Voters can choose Yes, No, or Maybe for each option"
+
+  defp voting_system_description("approval"),
+    do: "Voters can select multiple options they approve of"
+
+  defp voting_system_description("ranked"),
+    do: "Voters rank options in order of preference"
+
+  defp voting_system_description("star"),
+    do: "Voters rate each option with 1-5 stars"
+
+  defp voting_system_description(_), do: ""
 end

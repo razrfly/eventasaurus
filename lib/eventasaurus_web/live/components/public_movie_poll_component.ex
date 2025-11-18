@@ -393,12 +393,26 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                           <p class="text-sm text-gray-600 mb-2"><%= truncate(option.description, length: 80, separator: " ") %></p>
                         <% end %>
 
-                        <!-- Show who suggested this movie -->
-                        <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@movie_poll) and option.suggested_by do %>
+                        <!-- Show who suggested this movie and import attribution -->
+                        <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@movie_poll) do %>
                           <div class="flex items-center justify-between">
-                            <p class="text-xs text-gray-500">
-                              Suggested by <%= display_suggester_name(option.suggested_by) %>
-                            </p>
+                            <div class="text-xs text-gray-500 space-y-1">
+                              <%= if option.suggested_by do %>
+                                <p>
+                                  Suggested by <%= display_suggester_name(option.suggested_by) %>
+                                </p>
+                              <% end %>
+
+                              <%= if import_info = get_import_info(option) do %>
+                                <p class="flex items-center gap-1 text-blue-600">
+                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                  </svg>
+                                  <%= format_import_attribution(import_info) %>
+                                </p>
+                              <% end %>
+                            </div>
+
                             <!-- Delete button for user's own suggestions -->
                             <%= if @current_user && Events.can_delete_option_based_on_poll_settings?(option, @current_user) do %>
                               <div class="flex items-center space-x-2">
@@ -585,4 +599,36 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       true -> "Anonymous"
     end
   end
+
+  # Helper function to extract import info from poll option metadata
+  defp get_import_info(option) do
+    with %{metadata: metadata} when is_map(metadata) <- option,
+         import_info when is_map(import_info) <- metadata["import_info"] || metadata[:import_info] do
+      import_info
+    else
+      _ -> nil
+    end
+  end
+
+  # Helper function to format import attribution display
+  defp format_import_attribution(import_info) when is_map(import_info) do
+    event_title = import_info["source_event_title"] || import_info[:source_event_title]
+    recommender_name = import_info["original_recommender_name"] || import_info[:original_recommender_name]
+
+    cond do
+      event_title && recommender_name ->
+        "Imported from \"#{event_title}\" (originally by #{recommender_name})"
+
+      event_title ->
+        "Imported from \"#{event_title}\""
+
+      recommender_name ->
+        "Originally suggested by #{recommender_name}"
+
+      true ->
+        "Imported from previous event"
+    end
+  end
+
+  defp format_import_attribution(_), do: nil
 end
