@@ -1214,6 +1214,16 @@ defmodule EventasaurusWeb.EventManageLive do
     event = socket.assigns.event
     user = socket.assigns.user
 
+    # Debug: Log first option to see what data we're receiving
+    first_option = List.first(poll_data.options)
+    if first_option do
+      IO.puts("\n=== DEBUG: First option in create_poll_from_template ===")
+      IO.puts("Title: #{inspect(first_option["title"] || first_option[:title])}")
+      IO.puts("Image URL: #{inspect(first_option["image_url"] || first_option[:image_url])}")
+      IO.puts("Description: #{inspect(first_option["description"] || first_option[:description])}")
+      IO.puts("Full option: #{inspect(first_option, pretty: true)}")
+    end
+
     poll_attrs = %{
       title: poll_data.title,
       poll_type: poll_data.poll_type,
@@ -1225,17 +1235,39 @@ defmodule EventasaurusWeb.EventManageLive do
 
     case Events.create_poll(poll_attrs) do
       {:ok, poll} ->
-        # Create poll options separately
+        # Create poll options separately with full metadata preservation
         option_results =
           poll_data.options
           |> Enum.with_index()
-          |> Enum.map(fn {option_title, index} ->
-            Events.create_poll_option(%{
-              title: option_title,
-              poll_id: poll.id,
-              suggested_by_id: user.id,
-              order_index: index
-            })
+          |> Enum.map(fn {option_data, index} ->
+            # Handle both old string format and new map format
+            option_attrs =
+              if is_binary(option_data) do
+                %{
+                  title: option_data,
+                  poll_id: poll.id,
+                  suggested_by_id: user.id,
+                  order_index: index
+                }
+              else
+                # New format - full metadata map
+                %{
+                  title: option_data["title"] || option_data[:title],
+                  poll_id: poll.id,
+                  suggested_by_id: user.id,
+                  order_index: index,
+                  description: option_data["description"] || option_data[:description],
+                  image_url: option_data["image_url"] || option_data[:image_url],
+                  external_id: option_data["external_id"] || option_data[:external_id],
+                  external_data: option_data["external_data"] || option_data[:external_data],
+                  metadata: option_data["metadata"] || option_data[:metadata]
+                }
+                # Remove nil values
+                |> Enum.reject(fn {_k, v} -> is_nil(v) || v == "" end)
+                |> Enum.into(%{})
+              end
+
+            Events.create_poll_option(option_attrs)
           end)
 
         # Check if all options were created successfully

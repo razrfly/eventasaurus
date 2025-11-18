@@ -118,7 +118,7 @@ defmodule EventasaurusWeb.PollListComponent do
                                 <svg class="h-4 w-4 text-indigo-400 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                 </svg>
-                                <span class="line-clamp-1"><%= option %></span>
+                                <span class="line-clamp-1"><%= Map.get(option, :title) || Map.get(option, "title") %></span>
                               </li>
                             <% end %>
                             <%= if length(suggestion.common_options) > 3 do %>

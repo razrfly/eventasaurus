@@ -165,7 +165,7 @@ defmodule EventasaurusApp.Polls.PollSuggestions do
           # Get the most recent instance (based on poll creation)
           best_instance =
             option_instances
-            |> Enum.sort_by(fn %{poll: poll} -> poll.inserted_at end, {:desc, DateTime})
+            |> Enum.sort_by(fn %{poll: poll} -> poll.inserted_at end, :desc)
             |> List.first()
 
           {title, count, best_instance}
