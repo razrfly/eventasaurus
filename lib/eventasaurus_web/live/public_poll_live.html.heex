@@ -76,25 +76,38 @@
       <div class="space-y-4">
         <%= if is_poll_active?(@poll) do %>
           <!-- Active poll - show voting interface -->
-          <%= if @poll.poll_type == "cocktail" do %>
-            <.live_component
-              module={PublicCocktailPollComponent}
-              id={"cocktail-poll-#{@poll.id}"}
-              poll={@poll}
-              event={@event}
-              current_user={@auth_user}
-              temp_votes={@temp_votes}
-            />
-          <% else %>
-            <.live_component
-              module={PublicGenericPollComponent}
-              id={"poll-#{@poll.id}"}
-              poll={@poll}
-              event={@event}
-              current_user={@auth_user}
-              temp_votes={@temp_votes}
-              mode={:content}
-            />
+          <%= cond do %>
+            <% @poll.poll_type == "movie" -> %>
+              <!-- Special handling for movie polls with search functionality -->
+              <.live_component
+                module={EventasaurusWeb.PublicMoviePollComponent}
+                id={"movie-poll-#{@poll.id}"}
+                poll={@poll}
+                event={@event}
+                current_user={@auth_user}
+                temp_votes={@temp_votes}
+              />
+
+            <% @poll.poll_type == "cocktail" -> %>
+              <.live_component
+                module={PublicCocktailPollComponent}
+                id={"cocktail-poll-#{@poll.id}"}
+                poll={@poll}
+                event={@event}
+                current_user={@auth_user}
+                temp_votes={@temp_votes}
+              />
+
+            <% true -> %>
+              <.live_component
+                module={PublicGenericPollComponent}
+                id={"poll-#{@poll.id}"}
+                poll={@poll}
+                event={@event}
+                current_user={@auth_user}
+                temp_votes={@temp_votes}
+                mode={:content}
+              />
           <% end %>
 
           <%= if is_nil(@auth_user) do %>
@@ -115,27 +128,40 @@
           <% end %>
         <% else %>
           <!-- Historical poll - show results only -->
-          <%= if @poll.poll_type == "cocktail" do %>
-            <.live_component
-              module={PublicCocktailPollComponent}
-              id={"cocktail-poll-results-#{@poll.id}"}
-              poll={@poll}
-              event={@event}
-              current_user={@auth_user}
-              temp_votes={%{}}
-              results_only={true}
-            />
-          <% else %>
-            <.live_component
-              module={PublicGenericPollComponent}
-              id={"poll-results-#{@poll.id}"}
-              poll={@poll}
-              event={@event}
-              current_user={@auth_user}
-              temp_votes={%{}}
-              results_only={true}
-              mode={:content}
-            />
+          <%= cond do %>
+            <% @poll.poll_type == "movie" -> %>
+              <!-- Special handling for movie polls with search functionality -->
+              <.live_component
+                module={EventasaurusWeb.PublicMoviePollComponent}
+                id={"movie-poll-results-#{@poll.id}"}
+                poll={@poll}
+                event={@event}
+                current_user={@auth_user}
+                temp_votes={%{}}
+              />
+
+            <% @poll.poll_type == "cocktail" -> %>
+              <.live_component
+                module={PublicCocktailPollComponent}
+                id={"cocktail-poll-results-#{@poll.id}"}
+                poll={@poll}
+                event={@event}
+                current_user={@auth_user}
+                temp_votes={%{}}
+                results_only={true}
+              />
+
+            <% true -> %>
+              <.live_component
+                module={PublicGenericPollComponent}
+                id={"poll-results-#{@poll.id}"}
+                poll={@poll}
+                event={@event}
+                current_user={@auth_user}
+                temp_votes={%{}}
+                results_only={true}
+                mode={:content}
+              />
           <% end %>
           
           <%= if @poll.finalized_date do %>

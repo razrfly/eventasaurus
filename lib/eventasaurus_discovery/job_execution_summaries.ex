@@ -266,6 +266,101 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   end
 
   @doc """
+  Gets aggregated metrics for a specific worker within a time range.
+
+  Returns a map with:
+  - total: Total number of executions
+  - completed: Number of completed jobs
+  - failed: Number of failed/discarded jobs
+  - success_rate: Percentage of successful jobs
+  - avg_duration_ms: Average execution time
+
+  ## Examples
+
+      # Get metrics for last 7 days
+      get_worker_metrics_for_period("MyWorker", 168)
+  """
+  def get_worker_metrics_for_period(worker, hours_back) do
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    query =
+      from s in JobExecutionSummary,
+        where: s.worker == ^worker and s.attempted_at >= ^cutoff,
+        select: %{
+          total: count(s.id),
+          completed: count(s.id) |> filter(s.state == "completed"),
+          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+          avg_duration_ms: avg(s.duration_ms)
+        }
+
+    result = Repo.one(query)
+
+    # Calculate success rate and format duration
+    if result.total > 0 do
+      success_rate = Float.round(result.completed / result.total * 100, 2)
+
+      # Convert Decimal to float for avg_duration_ms
+      avg_duration = if result.avg_duration_ms do
+        result.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
+      else
+        0.0
+      end
+
+      result
+      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:avg_duration_ms, avg_duration)
+    else
+      %{
+        total: 0,
+        completed: 0,
+        failed: 0,
+        success_rate: 0.0,
+        avg_duration_ms: 0.0
+      }
+    end
+  end
+
+  @doc """
+  Gets timeline data for a specific worker, grouped by day.
+
+  Returns a list of maps, each containing:
+  - date: ISO8601 date string
+  - total: Total executions for that day
+  - completed: Completed executions
+  - failed: Failed/discarded executions
+
+  ## Examples
+
+      # Get daily timeline for last 7 days
+      get_worker_timeline_data("MyWorker", 168)
+  """
+  def get_worker_timeline_data(worker, hours_back) do
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    query =
+      from s in JobExecutionSummary,
+        where: s.worker == ^worker and s.attempted_at >= ^cutoff,
+        group_by: fragment("date_trunc('day', ?)", s.attempted_at),
+        select: %{
+          date_bucket: fragment("date_trunc('day', ?)", s.attempted_at),
+          total: count(s.id),
+          completed: count(s.id) |> filter(s.state == "completed"),
+          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
+        },
+        order_by: fragment("date_trunc('day', ?)", s.attempted_at)
+
+    Repo.all(query)
+    |> Enum.map(fn bucket ->
+      %{
+        date: Date.to_iso8601(NaiveDateTime.to_date(bucket.date_bucket)),
+        total: bucket.total,
+        completed: bucket.completed,
+        failed: bucket.failed
+      }
+    end)
+  end
+
+  @doc """
   Extracts scraper name from worker module path.
 
   ## Examples
