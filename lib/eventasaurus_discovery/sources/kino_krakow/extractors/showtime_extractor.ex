@@ -43,38 +43,38 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
   end
 
   # Process all rows in the table, tracking current film and date
-  defp extract_all_showtimes(tbody_elements, _base_date) do
+  defp extract_all_showtimes(tbody_elements, base_date) do
     tbody_elements
     |> Enum.flat_map(fn tbody ->
       tbody
       |> Floki.find("tr")
-      |> process_rows(nil, nil, [])
+      |> process_rows(nil, nil, [], base_date)
     end)
   end
 
   # Recursively process table rows, accumulating showtimes
-  defp process_rows([], _current_film, _current_date, acc), do: Enum.reverse(acc)
+  defp process_rows([], _current_film, _current_date, acc, _base_date), do: Enum.reverse(acc)
 
-  defp process_rows([row | rest], current_film, current_date, acc) do
+  defp process_rows([row | rest], current_film, current_date, acc, base_date) do
     cond do
       # Date header row
       is_date_row?(row) ->
         date = extract_date_from_row(row)
-        process_rows(rest, current_film, date, acc)
+        process_rows(rest, current_film, date, acc, base_date)
 
       # Film header row
       is_film_row?(row) ->
         film = extract_film_from_row(row)
-        process_rows(rest, film, current_date, acc)
+        process_rows(rest, film, current_date, acc, base_date)
 
       # Cinema/showtime row
       is_showtime_row?(row) ->
-        showtimes = extract_showtimes_from_row(row, current_film, current_date)
-        process_rows(rest, current_film, current_date, showtimes ++ acc)
+        showtimes = extract_showtimes_from_row(row, current_film, current_date, base_date)
+        process_rows(rest, current_film, current_date, showtimes ++ acc, base_date)
 
       # Skip other rows
       true ->
-        process_rows(rest, current_film, current_date, acc)
+        process_rows(rest, current_film, current_date, acc, base_date)
     end
   end
 
@@ -130,7 +130,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
   end
 
   # Extract all showtimes from a cinema row
-  defp extract_showtimes_from_row(row, film, date_str)
+  defp extract_showtimes_from_row(row, film, date_str, base_date)
        when not is_nil(film) and not is_nil(date_str) do
     # Get cinema info
     cinema_link =
@@ -144,15 +144,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
     row
     |> Floki.find("span.hour")
     |> Enum.map(fn hour_span ->
-      extract_single_showtime(hour_span, film, cinema_info, date_str)
+      extract_single_showtime(hour_span, film, cinema_info, date_str, base_date)
     end)
     |> Enum.reject(&is_nil/1)
   end
 
-  defp extract_showtimes_from_row(_row, _film, _date), do: []
+  defp extract_showtimes_from_row(_row, _film, _date, _base_date), do: []
 
   # Extract a single showtime from a <span class="hour"> element
-  defp extract_single_showtime(hour_span, film, cinema_info, date_str) do
+  defp extract_single_showtime(hour_span, film, cinema_info, date_str, base_date) do
     # Extract time from link text
     time_str =
       hour_span
@@ -178,7 +178,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
       |> List.first()
 
     # Build datetime using MultilingualDateParser
-    case parse_datetime(date_str, time_str) do
+    case parse_datetime(date_str, time_str, base_date) do
       %DateTime{} = datetime ->
         %{
           movie_slug: film.slug,
@@ -196,11 +196,12 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
   end
 
   # Parse datetime using MultilingualDateParser (replaces old KinoKrakow.DateParser)
-  # Combines Polish date string and time string, delegates to shared parser
-  defp parse_datetime(date_str, time_str) when is_binary(date_str) and is_binary(time_str) do
-    # Combine date and time into a single string for MultilingualDateParser
-    # E.g., "czwartek, 2 października" + "15:30" -> "czwartek, 2 października 15:30"
-    combined_text = "#{date_str} #{time_str}"
+  # Combines Polish date string, year from base_date, and time string, delegates to shared parser
+  defp parse_datetime(date_str, time_str, base_date)
+       when is_binary(date_str) and is_binary(time_str) and is_struct(base_date, Date) do
+    # Combine date, year from base_date, and time into a single string for MultilingualDateParser
+    # E.g., "czwartek, 2 października" + "2025" + "15:30" -> "czwartek, 2 października 2025 15:30"
+    combined_text = "#{date_str} #{base_date.year} #{time_str}"
 
     case MultilingualDateParser.extract_and_parse(combined_text,
            languages: [:polish],
@@ -215,7 +216,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
     end
   end
 
-  defp parse_datetime(_date_str, _time_str), do: nil
+  defp parse_datetime(_date_str, _time_str, _base_date), do: nil
 
   # Extract cinema info from link element
   defp extract_cinema_info({_, attrs, [name]}) do

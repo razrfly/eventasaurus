@@ -90,11 +90,16 @@ config :hammer,
   }
 
 # Configure Oban for background job processing
+# Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
+# Development/Test use regular Repo (same database, simpler)
 config :eventasaurus, Oban,
-  # Use SessionRepo for Oban to support advisory locks and persistent connections
   repo: EventasaurusApp.SessionRepo,
-  # How often to poll for scheduled jobs (in milliseconds)
-  # Default is 1000ms, setting explicitly to ensure staging works
+  get_dynamic_repo: fn ->
+    case Application.get_env(:eventasaurus, :environment, :prod) do
+      :prod -> EventasaurusApp.SessionRepo
+      _ -> EventasaurusApp.Repo
+    end
+  end,
   stage_interval: 1_000,
   queues: [
     # Email queue with limited concurrency for Resend API rate limiting
