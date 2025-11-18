@@ -37,16 +37,18 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
   def perform(%Oban.Job{args: args}) do
     day_offset = args["day_offset"]
     cookies = args["cookies"]
+    csrf_token = args["csrf_token"]
     source_id = args["source_id"]
     force = args["force"] || false
 
     Logger.info("""
     📅 Processing Kino Krakow day #{day_offset}
     Source ID: #{source_id}
+    CSRF Token: #{String.slice(csrf_token || "none", 0..9)}...
     """)
 
     # Set the day and fetch showtimes
-    with {:ok, html} <- fetch_day_showtimes(day_offset, cookies),
+    with {:ok, html} <- fetch_day_showtimes(day_offset, cookies, csrf_token),
          showtimes <- extract_showtimes(html, day_offset) do
       # Find unique movies from this day's showtimes
       unique_movies =
@@ -85,22 +87,36 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
   end
 
   # Fetch showtimes for a specific day
-  defp fetch_day_showtimes(day_offset, cookies) do
+  defp fetch_day_showtimes(day_offset, cookies, csrf_token) do
     base_url = Config.base_url()
     showtimes_url = Config.showtimes_url()
-    headers = [{"User-Agent", Config.user_agent()}]
-    headers_with_cookies = [{"Cookie", cookies} | headers]
+
+    # Headers for POST request with Rails UJS and CSRF token
+    post_headers = [
+      {"User-Agent", Config.user_agent()},
+      {"Accept", "*/*"},
+      {"X-Requested-With", "XMLHttpRequest"},
+      {"Referer", showtimes_url},
+      {"X-CSRF-Token", csrf_token},
+      {"Cookie", cookies}
+    ]
+
+    # Headers for GET request
+    get_headers = [
+      {"User-Agent", Config.user_agent()},
+      {"Cookie", cookies}
+    ]
 
     # 1. Set the day via POST
     set_day_url = "#{base_url}/settings/set_day/#{day_offset}"
     rate_limit_delay()
 
-    case HTTPoison.post(set_day_url, "", headers_with_cookies, timeout: Config.timeout()) do
+    case HTTPoison.post(set_day_url, "", post_headers, timeout: Config.timeout()) do
       {:ok, %{status_code: status}} when status in [200, 302] ->
         # 2. Fetch showtimes for this day
         rate_limit_delay()
 
-        case HTTPoison.get(showtimes_url, headers_with_cookies, timeout: Config.timeout()) do
+        case HTTPoison.get(showtimes_url, get_headers, timeout: Config.timeout()) do
           {:ok, %{status_code: 200, body: html}} ->
             {:ok, html}
 

@@ -46,11 +46,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     Scheduling DayPageJob for current day (day 0)
     """)
 
-    # Initial request to get session cookies
+    # Initial request to get session cookies and CSRF token
     case establish_session() do
-      {:ok, cookies} ->
+      {:ok, {cookies, csrf_token}} ->
         # Schedule DayPageJobs for days 0-6
-        scheduled_count = schedule_day_jobs(cookies, source_id, force)
+        scheduled_count = schedule_day_jobs(cookies, csrf_token, source_id, force)
 
         Logger.info("""
         ✅ Kino Krakow sync job completed (distributed mode)
@@ -105,7 +105,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
 
   # Private functions
 
-  # Establish session by fetching initial page to get cookies
+  # Establish session by fetching initial page to get cookies and CSRF token
   defp establish_session do
     showtimes_url = Config.showtimes_url()
     headers = [{"User-Agent", Config.user_agent()}]
@@ -113,10 +113,12 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     Logger.info("📡 Establishing session with Kino Krakow")
 
     case HTTPoison.get(showtimes_url, headers, timeout: Config.timeout()) do
-      {:ok, %{status_code: 200, headers: response_headers}} ->
+      {:ok, %{status_code: 200, headers: response_headers, body: html}} ->
         cookies = extract_cookies(response_headers)
-        Logger.info("✅ Session established")
-        {:ok, cookies}
+        csrf_token = extract_csrf_token(html)
+
+        Logger.info("✅ Session established (CSRF token: #{String.slice(csrf_token || "none", 0..9)}...)")
+        {:ok, {cookies, csrf_token}}
 
       {:ok, %{status_code: status}} ->
         {:error, "HTTP #{status} on initial request"}
@@ -137,13 +139,19 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     |> Enum.join("; ")
   end
 
+  # Extract CSRF token from HTML meta tag
+  defp extract_csrf_token(html) do
+    case Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, html) do
+      [_, token] -> token
+      _ -> nil
+    end
+  end
+
   # Schedule DayPageJobs for days 0-6
-  defp schedule_day_jobs(cookies, source_id, force) do
-    # TEMPORARY: Only schedule day 0 (current day) until multi-day is implemented
-    # Future: Change [0] to 0..6 when ready for multi-day support
-    # Only current day for now
+  defp schedule_day_jobs(cookies, csrf_token, source_id, force) do
+    # Now scheduling all 7 days with CSRF token support
     scheduled_jobs =
-      [0]
+      0..6
       |> Enum.map(fn day_offset ->
         # Stagger jobs slightly to avoid thundering herd
         delay_seconds = day_offset * Config.rate_limit()
@@ -152,6 +160,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
           %{
             "day_offset" => day_offset,
             "cookies" => cookies,
+            "csrf_token" => csrf_token,
             "source_id" => source_id,
             "force" => force
           },
