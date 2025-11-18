@@ -16,7 +16,6 @@ config :eventasaurus, :environment, config_env()
 # Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
 # Development/Test use regular Repo (same database, simpler)
 config :eventasaurus, Oban,
-  repo: EventasaurusApp.SessionRepo,
   get_dynamic_repo: fn ->
     case Application.get_env(:eventasaurus, :environment, :prod) do
       :prod -> EventasaurusApp.SessionRepo
