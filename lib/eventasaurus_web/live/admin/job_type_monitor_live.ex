@@ -111,51 +111,12 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
 
   defp get_worker_metrics_for_period(worker, days) do
     hours = days * 24
-    executions = JobExecutionSummaries.get_worker_executions(worker, hours, 10000)
-
-    total = length(executions)
-    completed = Enum.count(executions, &(&1.state == "completed"))
-    failed = Enum.count(executions, &(&1.state in ["discarded", "cancelled"]))
-
-    durations = Enum.map(executions, & &1.duration_ms) |> Enum.reject(&is_nil/1)
-    avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
-
-    success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
-
-    %{
-      total: total,
-      completed: completed,
-      failed: failed,
-      success_rate: success_rate,
-      avg_duration_ms: Float.round(avg_duration, 2)
-    }
+    JobExecutionSummaries.get_worker_metrics_for_period(worker, hours)
   end
 
   defp get_timeline_data(worker, days) do
     hours = days * 24
-    cutoff = DateTime.add(DateTime.utc_now(), -hours, :hour)
-
-    executions = JobExecutionSummaries.get_worker_executions(worker, hours, 10000)
-
-    # Group by day
-    executions
-    |> Enum.group_by(fn job ->
-      job.attempted_at
-      |> DateTime.to_date()
-      |> Date.to_iso8601()
-    end)
-    |> Enum.map(fn {date, jobs} ->
-      completed = Enum.count(jobs, &(&1.state == "completed"))
-      failed = Enum.count(jobs, &(&1.state in ["discarded", "cancelled"]))
-
-      %{
-        date: date,
-        total: length(jobs),
-        completed: completed,
-        failed: failed
-      }
-    end)
-    |> Enum.sort_by(& &1.date)
+    JobExecutionSummaries.get_worker_timeline_data(worker, hours)
   end
 
   # Format worker module name for display
