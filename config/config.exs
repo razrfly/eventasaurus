@@ -89,82 +89,8 @@ config :hammer,
     ]
   }
 
-# Configure Oban for background job processing
-# Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
-# Development/Test use regular Repo (same database, simpler)
-config :eventasaurus, Oban,
-  repo: EventasaurusApp.SessionRepo,
-  get_dynamic_repo: fn ->
-    case Application.get_env(:eventasaurus, :environment, :prod) do
-      :prod -> EventasaurusApp.SessionRepo
-      _ -> EventasaurusApp.Repo
-    end
-  end,
-  stage_interval: 1_000,
-  queues: [
-    # Email queue with limited concurrency for Resend API rate limiting
-    # Max 2 concurrent jobs to respect Resend's 2/second limit
-    emails: 2,
-    # Scraper queue for event data ingestion
-    # Limited concurrency for rate-limited external APIs
-    scraper: 5,
-    # Scraper detail queue for individual event processing
-    # Increased concurrency to prevent MovieDetailJob queue congestion (was 3)
-    # This prevents ShowtimeProcessJobs from racing ahead of MovieDetailJobs
-    scraper_detail: 10,
-    # Scraper index queue for processing index pages
-    # Low concurrency to prevent timeouts and respect rate limits
-    scraper_index: 2,
-    # Discovery queue for unified sync jobs
-    # Limited concurrency for discovery source sync
-    discovery: 3,
-    # Discovery sync queue for admin dashboard operations
-    # Limited concurrency for admin-triggered syncs
-    discovery_sync: 2,
-    # Google API queue for places lookups
-    # Single concurrency to respect Google's rate limits
-    google_lookup: 1,
-    # Venue enrichment queue for image fetching
-    # Serial processing (concurrency: 1) to prevent parallel jobs from overwhelming Google rate limits
-    # Combined with 500ms delays between uploads = guaranteed 2 req/sec to Google
-    venue_enrichment: 1,
-    # Venue image backfill queue for admin-triggered backfills
-    # Serial processing to prevent multiple backfills from overwhelming the venue_enrichment queue
-    # Backfill jobs spawn many enrichment jobs, so only one backfill should run at a time
-    venue_backfill: 1,
-    # Default queue for other background jobs
-    default: 10,
-    # Maintenance queue for background tasks like coordinate calculation
-    maintenance: 2,
-    # Unsplash queue for city image refresh jobs
-    # Process 3 cities concurrently to stay under Unsplash rate limits (5000 req/hour)
-    unsplash: 3,
-    # Venue maintenance queue for venue data quality jobs (name fixing, deduplication)
-    venue_maintenance: 2,
-    # Reports queue for generating analytics and cost reports
-    reports: 1
-  ],
-  plugins: [
-    # Keep completed jobs for 7 days for debugging
-    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
-    # Reindex daily for performance
-    {Oban.Plugins.Reindexer, schedule: "@daily"},
-    # Recover orphaned jobs after 60 seconds
-    {Oban.Plugins.Lifeline, rescue_after: 60},
-    # Scheduled cron jobs
-    {Oban.Plugins.Cron,
-     crontab: [
-       # Daily sitemap generation at 2 AM UTC
-       {"0 2 * * *", Eventasaurus.Workers.SitemapWorker},
-       # City discovery orchestration runs daily at midnight UTC
-       {"0 0 * * *", EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator},
-       # City coordinate recalculation runs daily at 1 AM UTC
-       {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
-       # Unsplash city images refresh daily at 3 AM UTC
-       {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker}
-       # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
-     ]}
-  ]
+# Oban configuration moved to config/runtime.exs
+# (Cannot use functions in compile-time config for releases)
 
 # Avatar configuration
 config :eventasaurus, :avatars,
