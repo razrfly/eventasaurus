@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   """
 
   use EventasaurusWeb, :live_view
+  require Logger
 
   import Ecto.Query, only: [from: 2]
 
@@ -22,6 +23,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.JsonLd.CitySchema
   alias Eventasaurus.SocialCards.UrlBuilder
+  alias EventasaurusWeb.Cache.CityPageCache
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.Components.EventCards
@@ -75,7 +77,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:loading, false)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
-           |> assign(:categories, Categories.list_categories())
+           |> assign(:categories, CityPageCache.get_categories(&Categories.list_categories/0))
            |> assign(:events, [])
            |> SEOHelpers.assign_meta_tags(
              title: page_title(city),
@@ -89,7 +91,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:pagination, %Pagination{
              entries: [],
              page_number: 1,
-             page_size: 60,
+             page_size: 30,
              total_entries: 0,
              total_pages: 0
            })
@@ -178,7 +180,7 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_by: :starts_at,
       sort_order: :asc,
       page: 1,
-      page_size: 60,
+      page_size: 30,
       show_past: false
     }
 
@@ -623,6 +625,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   # Private functions
 
   defp fetch_events(socket) do
+    start_time = System.monotonic_time(:millisecond)
     city = socket.assigns.city
     filters = socket.assigns.filters
     language = socket.assigns.language
@@ -636,8 +639,8 @@ defmodule EventasaurusWeb.CityLive.Index do
       Map.merge(filters, %{
         language: language,
         sort_order: filters[:sort_order] || :asc,
-        # Use filter's page_size, default to 60 (divisible by 3)
-        page_size: filters[:page_size] || 60,
+        # Use filter's page_size, default to 30 (divisible by 3 for grid layout)
+        page_size: filters[:page_size] || 30,
         page: filters[:page] || 1,
         # Add geographic filtering parameters
         center_lat: lat,
@@ -668,7 +671,12 @@ defmodule EventasaurusWeb.CityLive.Index do
         # Get date range counts with geographic filtering, but without existing date filters
         # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
         date_range_count_filters = EventFilters.build_date_range_count_filters(count_filters)
-        date_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+
+        # Use cached date range counts (5 min TTL) - cache key includes city slug and radius
+        date_counts =
+          CityPageCache.get_date_range_counts(city.slug, filters[:radius_km] || @default_radius_km, fn ->
+            PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+          end)
 
         # Get the count of ALL events (no date filters) for the "All Events" button
         # Use direct count (not aggregation-aware) to avoid 500-event limit issue
@@ -683,7 +691,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
     # Use actual counts for pagination
     page = filters[:page] || 1
-    page_size = filters[:page_size] || 60
+    page_size = filters[:page_size] || 30
     total_entries = total_count
     total_pages = ceil(total_entries / page_size)
 
@@ -694,6 +702,15 @@ defmodule EventasaurusWeb.CityLive.Index do
       total_entries: total_entries,
       total_pages: total_pages
     }
+
+    # Log performance metrics
+    duration = System.monotonic_time(:millisecond) - start_time
+
+    Logger.info(
+      "[CityPage] fetch_events for #{city.slug} completed in #{duration}ms " <>
+        "(events: #{length(geographic_events)}, total: #{total_entries}, " <>
+        "radius: #{filters[:radius_km] || @default_radius_km}km)"
+    )
 
     socket
     |> assign(:events, geographic_events)
@@ -790,8 +807,8 @@ defmodule EventasaurusWeb.CityLive.Index do
       sort_by: :starts_at,
       sort_order: :asc,
       page: 1,
-      # Divisible by 3 for grid layout
-      page_size: 60,
+      # Divisible by 3 for grid layout (3 columns on large screens)
+      page_size: 30,
       show_past: true
     }
   end

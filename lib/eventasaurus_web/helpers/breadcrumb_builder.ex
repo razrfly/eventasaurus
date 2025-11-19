@@ -10,16 +10,16 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Breadcrumb Patterns
 
   ### Activity in a Container
-  `Home / Kraków / Festivals / Unsound Kraków 2025 / Event Name`
+  `Home / All Activities / Kraków / Film / Festivals / Unsound Kraków 2025 / Event Name`
 
   ### Activity with City (no container)
-  `Home / Kraków / Event Name`
+  `Home / All Activities / Kraków / Film / Event Name`
 
   ### Activity with Metro Area
-  `Home / Paris / Paris 6 / Event Name`
+  `Home / All Activities / Paris / Paris 6 / Film / Event Name`
 
   ### Activity without City (online/TBD venue)
-  `Home / All Activities / Event Name`
+  `Home / All Activities / Film / Event Name`
 
   ### Container Page
   `Home / Kraków / Festivals / Unsound Kraków 2025`
@@ -36,8 +36,10 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   Build breadcrumb items for a public event/activity page.
 
   Returns a list of breadcrumb items with proper hierarchy based on:
+  - All Activities (top-level navigation)
   - City (if event has a venue with city)
   - Metro area (if city is a suburb of a major discovery-enabled city)
+  - Category/Activity Type (primary category of the event)
   - Parent container (if event is part of a festival/conference/etc.)
   - Event title (current page, no link)
 
@@ -47,13 +49,19 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   def build_event_breadcrumbs(%PublicEvent{} = event, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
-    base_items = [%{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"}]
+    base_items = [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"}
+    ]
 
     # Add city if event has venue with city
     items_with_city = add_city_breadcrumb(base_items, event, gettext_backend)
 
+    # Add category/activity type (primary category)
+    items_with_category = add_category_breadcrumb(items_with_city, event)
+
     # Add parent container if event is part of one
-    items_with_container = add_container_breadcrumb(items_with_city, event)
+    items_with_container = add_container_breadcrumb(items_with_category, event)
 
     # Add current event (no link) - use display_title if available for localization
     items_with_container ++ [%{label: event.display_title || event.title, path: nil}]
@@ -106,9 +114,33 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     end
   end
 
-  defp add_city_breadcrumb(items, _event, gettext_backend) do
-    # No city - add "All Activities" instead
-    items ++ [%{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"}]
+  defp add_city_breadcrumb(items, _event, _gettext_backend) do
+    # No city - return items unchanged (All Activities already added in base_items)
+    items
+  end
+
+  defp add_category_breadcrumb(items, %{categories: categories, primary_category_id: primary_id})
+       when is_list(categories) and not is_nil(primary_id) do
+    # Find the primary category in the preloaded categories list
+    case Enum.find(categories, &(&1.id == primary_id)) do
+      nil ->
+        # Primary category not found in preloaded list, skip category breadcrumb
+        items
+
+      category ->
+        # Add category breadcrumb linking to filtered activities
+        items ++ [%{label: category.name, path: ~p"/activities?category=#{category.slug}"}]
+    end
+  end
+
+  defp add_category_breadcrumb(items, %{categories: [category | _]}) when not is_nil(category) do
+    # No primary_category_id but has categories - use the first one
+    items ++ [%{label: category.name, path: ~p"/activities?category=#{category.slug}"}]
+  end
+
+  defp add_category_breadcrumb(items, _event) do
+    # No categories available, skip category breadcrumb
+    items
   end
 
   defp add_container_breadcrumb(items, event) do
