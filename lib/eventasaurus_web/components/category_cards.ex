@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.Components.CategoryCards do
         <div class="absolute inset-0 flex items-center justify-center">
           <%= if @category.icon do %>
             <div class="text-6xl opacity-20">
-              <%= raw(@category.icon) %>
+              <%= @category.icon %>
             </div>
           <% else %>
             <div class="text-6xl opacity-20">
