@@ -39,6 +39,7 @@ defmodule EventasaurusDiscovery.Categories.Category do
     field(:display_order, :integer, default: 0)
     field(:is_active, :boolean, default: true)
     field(:schema_type, :string, default: "Event")
+    field(:event_count, :integer, virtual: true)
 
     belongs_to(:parent, __MODULE__, foreign_key: :parent_id)
     has_many(:children, __MODULE__, foreign_key: :parent_id)

@@ -93,6 +93,7 @@ defmodule EventasaurusDiscovery.Locations.City do
     field(:discovery_config, :map)
     field(:unsplash_gallery, :map)
     field(:alternate_names, {:array, :string}, default: [])
+    field(:event_count, :integer, virtual: true)
 
     belongs_to(:country, EventasaurusDiscovery.Locations.Country)
     has_many(:venues, EventasaurusApp.Venues.Venue)
@@ -298,7 +299,10 @@ defmodule EventasaurusDiscovery.Locations.City do
       Map.has_key?(gallery, "categories") ->
         categories = gallery["categories"]
 
-        case Map.get(categories, category_name) do
+        # Handle both string and atom keys if necessary, but usually string from JSON
+        category_data = Map.get(categories, category_name) || Map.get(categories, to_string(category_name))
+
+        case category_data do
           nil ->
             {:error, :category_not_found}
 
