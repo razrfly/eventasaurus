@@ -158,6 +158,12 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
     end
   end
 
+  @impl true
+  def handle_event("cancel", _params, socket) do
+    send(self(), {:close_template_editor})
+    {:noreply, socket}
+  end
+
   # Helper to build import metadata from original option data
   defp build_import_metadata(original) when is_map(original) do
     base_metadata = original["metadata"] || original[:metadata] || %{}
@@ -179,12 +185,6 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
   end
 
   defp build_import_metadata(_), do: %{}
-
-  @impl true
-  def handle_event("cancel", _params, socket) do
-    send(self(), {:close_template_editor})
-    {:noreply, socket}
-  end
 
   @impl true
   def render(assigns) do

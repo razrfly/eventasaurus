@@ -72,6 +72,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   Returns a list of breadcrumb items:
   - Home
+  - All Activities
   - City name
   - Container type (plural, e.g., "Festivals")
   - Container title (current page, no link)
@@ -81,6 +82,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
     [
       %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"},
       %{label: city.name, path: ~p"/c/#{city.slug}"},
       %{
         label:

@@ -123,6 +123,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Breadcrumbs -->
         <nav class="mb-6 flex items-center space-x-2 text-sm text-gray-600">
+          <.link navigate={~p"/"} class="hover:text-blue-600">
+            <%= gettext("Home") %>
+          </.link>
+          <span>/</span>
           <.link navigate={~p"/activities"} class="hover:text-blue-600">
             <%= gettext("All Activities") %>
           </.link>
