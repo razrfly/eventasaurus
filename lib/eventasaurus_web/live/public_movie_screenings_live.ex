@@ -127,6 +127,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             <%= gettext("All Activities") %>
           </.link>
           <span>/</span>
+          <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-blue-600">
+            <%= @city.name %>
+          </.link>
+          <span>/</span>
           <.link navigate={~p"/activities?category=film"} class="hover:text-blue-600">
             <%= gettext("Film") %>
           </.link>
