@@ -1837,11 +1837,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     end
   end
 
-  # Helper to conditionally add fields to a map
-  defp maybe_add_field(map, _key, nil), do: map
-  defp maybe_add_field(map, _key, ""), do: map
-  defp maybe_add_field(map, key, value), do: Map.put(map, key, value)
-
   def handle_info(%{type: :polls_reordered, event_id: event_id} = _message, socket) do
     # Reload polls when they are reordered
     if socket.assigns.event.id == event_id do
@@ -1864,6 +1859,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
+
+  # Helper to conditionally add fields to a map
+  defp maybe_add_field(map, _key, nil), do: map
+  defp maybe_add_field(map, _key, ""), do: map
+  defp maybe_add_field(map, key, value), do: Map.put(map, key, value)
 
   # Private helper functions
 

@@ -282,7 +282,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   defp build_venue_breadcrumbs(venue) do
-    base_items = [%{label: "Home", path: ~p"/"}]
+    base_items = [
+      %{label: "Home", path: ~p"/"},
+      %{label: "All Activities", path: ~p"/activities"}
+    ]
 
     # Add city breadcrumb with metro area hierarchy if applicable
     items_with_city = add_venue_city_breadcrumb(base_items, venue)

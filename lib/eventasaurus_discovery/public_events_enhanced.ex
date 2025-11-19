@@ -1420,7 +1420,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           {source.id, source.aggregation_type}
         else
           # Global page: group by source + city to differentiate locations
-          {source.id, event.venue.city_id, source.aggregation_type}
+          city_id = if event.venue, do: event.venue.city_id, else: nil
+          {source.id, city_id, source.aggregation_type}
         end
       end)
       |> Enum.map(fn
@@ -1447,7 +1448,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           {movie.id}
         else
           # Global page: group by movie + city to differentiate locations
-          {movie.id, event.venue.city_id}
+          city_id = if event.venue, do: event.venue.city_id, else: nil
+          {movie.id, city_id}
         end
       end)
       |> Enum.reduce({[], []}, fn
@@ -1577,34 +1579,39 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       # Use viewing_city if provided (for city-specific pages), otherwise use first event's city
       canonical_city = viewing_city || first_event.venue.city_ref
 
-      # For multi-venue aggregates (>3), use city images to avoid showing just one venue
-      # For small aggregates (1-3 venues), use first event's image (specific venue is OK)
-      cover_image_url =
-        if unique_venues > 3 do
-          # Many venues: use general city Unsplash image to represent city-wide presence
-          # Use source_id for variation so different sources get different images
-          get_city_general_image(canonical_city, source_id)
-        else
-          # Few venues: use first event's image (may show specific venue, which is appropriate)
-          first_event.cover_image_url
-        end
+      # Only create aggregated group if we have a valid city
+      if canonical_city do
+        # For multi-venue aggregates (>3), use city images to avoid showing just one venue
+        # For small aggregates (1-3 venues), use first event's image (specific venue is OK)
+        cover_image_url =
+          if unique_venues > 3 do
+            # Many venues: use general city Unsplash image to represent city-wide presence
+            # Use source_id for variation so different sources get different images
+            get_city_general_image(canonical_city, source_id)
+          else
+            # Few venues: use first event's image (may show specific venue, which is appropriate)
+            first_event.cover_image_url
+          end
 
-      # Check if any event is recurring
-      is_recurring = Enum.any?(events, &PublicEvent.recurring?/1)
+        # Check if any event is recurring
+        is_recurring = Enum.any?(events, &PublicEvent.recurring?/1)
 
-      %AggregatedEventGroup{
-        source_id: source_id,
-        source_slug: source.slug,
-        source_name: source.name,
-        aggregation_type: aggregation_type || "events",
-        city_id: city_id,
-        city: canonical_city,
-        event_count: length(events),
-        venue_count: unique_venues,
-        categories: all_categories,
-        cover_image_url: cover_image_url,
-        is_recurring: is_recurring
-      }
+        %AggregatedEventGroup{
+          source_id: source_id,
+          source_slug: source.slug,
+          source_name: source.name,
+          aggregation_type: aggregation_type || "events",
+          city_id: city_id,
+          city: canonical_city,
+          event_count: length(events),
+          venue_count: unique_venues,
+          categories: all_categories,
+          cover_image_url: cover_image_url,
+          is_recurring: is_recurring
+        }
+      else
+        nil
+      end
     else
       nil
     end
@@ -1628,19 +1635,24 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       # Use viewing_city if provided (for city-specific pages), otherwise use first event's city
       canonical_city = viewing_city || first_event.venue.city_ref
 
-      %AggregatedMovieGroup{
-        movie_id: movie_id,
-        movie_slug: movie.slug,
-        movie_title: movie.title,
-        movie_backdrop_url: movie.backdrop_url,
-        movie_poster_url: movie.poster_url,
-        movie_release_date: movie.release_date,
-        city_id: city_id,
-        city: canonical_city,
-        screening_count: length(events),
-        venue_count: unique_venues,
-        categories: all_categories
-      }
+      # Only create aggregated group if we have a valid city
+      if canonical_city do
+        %AggregatedMovieGroup{
+          movie_id: movie_id,
+          movie_slug: movie.slug,
+          movie_title: movie.title,
+          movie_backdrop_url: movie.backdrop_url,
+          movie_poster_url: movie.poster_url,
+          movie_release_date: movie.release_date,
+          city_id: city_id,
+          city: canonical_city,
+          screening_count: length(events),
+          venue_count: unique_venues,
+          categories: all_categories
+        }
+      else
+        nil
+      end
     else
       nil
     end
