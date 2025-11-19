@@ -11,10 +11,14 @@ defmodule EventasaurusWeb.PublicEventsHomeLive do
 
   def mount(_params, _session, socket) do
     # Load data in parallel for performance
-    top_cities = CityStats.list_top_cities_by_events(limit: 8)
-    top_categories = CategoryStats.list_top_categories_by_events(limit: 12)
-    featured_events = FeaturedEvents.list_featured_events(limit: 10)
-    
+    tasks = [
+      Task.async(fn -> CityStats.list_top_cities_by_events(limit: 8) end),
+      Task.async(fn -> CategoryStats.list_top_categories_by_events(limit: 12) end),
+      Task.async(fn -> FeaturedEvents.list_featured_events(limit: 10) end)
+    ]
+
+    [top_cities, top_categories, featured_events] = Task.await_many(tasks)
+
     # Get IDs to exclude from upcoming list
     exclude_ids = Enum.map(featured_events, & &1.id)
     upcoming_events = FeaturedEvents.list_diverse_upcoming_events(limit: 24, exclude_ids: exclude_ids)

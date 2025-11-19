@@ -20,12 +20,13 @@ defmodule EventasaurusDiscovery.CategoryStats do
     limit = Keyword.get(opts, :limit, 12)
 
     from(c in Category,
-      left_join: pec in PublicEventCategory, on: pec.category_id == c.id,
-      left_join: pe in PublicEvent, on: pec.event_id == pe.id and pe.starts_at > ^NaiveDateTime.utc_now(),
+      inner_join: pec in PublicEventCategory, on: pec.category_id == c.id,
+      inner_join: pe in PublicEvent, on: pec.event_id == pe.id,
       where: c.is_active == true and c.slug != "other",
+      where: pe.starts_at > ^NaiveDateTime.utc_now(),
       group_by: c.id,
-      having: count(pec.event_id) >= ^min_events,
-      order_by: [desc: count(pec.event_id)],
+      having: count(pe.id) >= ^min_events,
+      order_by: [desc: count(pe.id)],
       limit: ^limit,
       select: %{
         id: c.id,
@@ -34,7 +35,7 @@ defmodule EventasaurusDiscovery.CategoryStats do
         icon: c.icon,
         color: c.color,
         translations: c.translations,
-        event_count: count(pec.event_id)
+        event_count: count(pe.id)
       }
     )
     |> Repo.all()
