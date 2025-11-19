@@ -349,6 +349,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     # Virtual fields for localized display (populated by PublicEventsEnhanced)
     field(:display_title, :string, virtual: true)
     field(:display_description, :string, virtual: true)
+    field(:cover_image_url, :string, virtual: true)
 
     belongs_to(:venue, EventasaurusApp.Venues.Venue)
 

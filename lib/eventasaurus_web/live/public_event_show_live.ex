@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.CDN
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusWeb.Cache.EventPageCache
   import Ecto.Query
 
   @impl true
@@ -87,6 +88,32 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
+  def handle_info(:load_nearby_events, socket) do
+    # Load nearby events asynchronously after initial page render
+    event = socket.assigns.event
+    language = socket.assigns.language
+
+    nearby_events =
+      if event do
+        EventPageCache.get_nearby_events(event.id, 25, language, fn ->
+          EventasaurusDiscovery.PublicEvents.get_nearby_activities_with_fallback(
+            event,
+            initial_radius: 25,
+            max_radius: 50,
+            display_count: 4,
+            language: language
+          )
+          |> PublicEventsEnhanced.preload_for_image_enrichment()
+          |> PublicEventsEnhanced.enrich_event_images(strategy: :own_city)
+        end)
+      else
+        []
+      end
+
+    {:noreply, assign(socket, :nearby_events, nearby_events)}
+  end
+
+  @impl true
   def handle_params(%{"slug" => slug, "date_slug" => date_slug}, _url, socket) do
     # Handle URL with specific date: /activities/slug/oct-10
     socket =
@@ -129,35 +156,24 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp fetch_event(socket, slug) do
     language = socket.assigns.language
 
-    event =
-      from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-        where: pe.slug == ^slug,
-        preload: [
-          :categories,
-          :performers,
-          :movies,
-          venue: [city_ref: :country],
-          sources: :source
-        ]
-      )
-      |> Repo.one()
+    # Use cache for event metadata to speed up initial load
+    event_metadata = EventPageCache.get_event_metadata(slug, language, fn ->
+      event =
+        from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+          where: pe.slug == ^slug,
+          preload: [
+            :categories,
+            :performers,
+            :movies,
+            venue: [city_ref: :country],
+            sources: :source
+          ]
+        )
+        |> Repo.one()
 
-    case event do
-      nil ->
-        socket
-        |> put_flash(:error, gettext("Event not found"))
-        |> push_navigate(to: ~p"/activities")
-
-      event ->
+      if event do
         # Get primary category ID once to avoid multiple queries
         primary_category_id = get_primary_category_id(event.id)
-
-        # Check if user has existing plan
-        existing_plan =
-          case get_current_user_id(socket) do
-            nil -> nil
-            user_id -> EventPlans.get_user_plan_for_event(user_id, event.id)
-          end
 
         # Enrich main event with cover image using unified API
         # Use :own_city strategy so event uses its venue's city Unsplash gallery
@@ -171,28 +187,34 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           |> Map.put(:display_description, get_localized_description(event, language))
           |> Map.put(:occurrence_list, parse_occurrences(event))
 
-        # Get nearby activities (with fallback)
-        nearby_events =
-          EventasaurusDiscovery.PublicEvents.get_nearby_activities_with_fallback(
-            event,
-            initial_radius: 25,
-            max_radius: 50,
-            display_count: 4,
-            language: language
-          )
-          # Enrich nearby events with images using unified API
-          # Each nearby event uses its own venue's city for Unsplash fallback
-          |> PublicEventsEnhanced.preload_for_image_enrichment()
-          |> PublicEventsEnhanced.enrich_event_images(strategy: :own_city)
-          |> tap(fn enriched ->
-            Enum.each(enriched, fn e ->
-              Logger.info("📦 After enrichment - Event #{e.id}, cover_image_url: #{inspect(Map.get(e, :cover_image_url))}")
-            end)
-          end)
+        enriched_event
+      else
+        nil
+      end
+    end)
 
-        movie = get_movie_data(event)
-        is_movie = is_movie_screening?(event)
-        city = if event.venue, do: event.venue.city_ref, else: nil
+    case event_metadata do
+      nil ->
+        socket
+        |> put_flash(:error, gettext("Event not found"))
+        |> push_navigate(to: ~p"/activities")
+
+      enriched_event ->
+        # Check if user has existing plan (not cached as it's user-specific)
+        existing_plan =
+          case get_current_user_id(socket) do
+            nil -> nil
+            user_id -> EventPlans.get_user_plan_for_event(user_id, enriched_event.id)
+          end
+
+        # Defer nearby events loading to after initial render
+        # This allows the page to load quickly with just the main event
+        send(self(), :load_nearby_events)
+        nearby_events = []
+
+        movie = get_movie_data(enriched_event)
+        is_movie = is_movie_screening?(enriched_event)
+        city = if enriched_event.venue, do: enriched_event.venue.city_ref, else: nil
         aggregated_url = get_aggregated_movie_url(movie, city)
 
         # Build breadcrumb items (used for both visual breadcrumbs and JSON-LD)
@@ -252,7 +274,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
         |> assign(:existing_plan, existing_plan)
-        |> assign(:nearby_events, nearby_events)
+        |> assign(:nearby_events, nearby_events)  # Will be populated asynchronously via handle_info
         |> assign(:movie, movie)
         |> assign(:is_movie_screening, is_movie)
         |> assign(:aggregated_movie_url, aggregated_url)

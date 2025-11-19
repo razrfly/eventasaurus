@@ -104,6 +104,8 @@ defmodule Eventasaurus.Application do
       EventasaurusDiscovery.Admin.DiscoveryStatsCache,
       # Start City Page Cache for city page performance optimization
       EventasaurusWeb.Cache.CityPageCache,
+      # Start Event Page Cache for event page performance optimization
+      EventasaurusWeb.Cache.EventPageCache,
       # Start Dashboard Stats Cache for admin dashboard performance
       {Cachex, name: :dashboard_stats},
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)

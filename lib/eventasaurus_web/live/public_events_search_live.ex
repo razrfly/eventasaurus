@@ -1,4 +1,4 @@
-defmodule EventasaurusWeb.PublicEventsIndexLive do
+defmodule EventasaurusWeb.PublicEventsSearchLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusDiscovery.PublicEventsEnhanced
