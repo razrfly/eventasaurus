@@ -5,10 +5,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   """
   use EventasaurusWeb, :live_view
 
-  alias EventasaurusApp.Repo
-  alias EventasaurusApp.Venues
+  alias EventasaurusApp.{Repo, Venues}
+  alias EventasaurusApp.Cache.DashboardStats
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
-  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
 
   alias EventasaurusDiscovery.Admin.{
@@ -18,7 +17,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     DiscoveryStatsCollector
   }
 
-  alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob
   alias EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob
@@ -27,7 +25,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   import Ecto.Query
   require Logger
 
-  @refresh_interval 5000
+  @refresh_interval 30_000
   @city_specific_sources %{
     "karnet" => "krakow",
     "kino-krakow" => "krakow",
@@ -688,25 +686,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   defp load_data(socket) do
-    # Get overall statistics
+    # Get overall statistics from cache (shared with AdminDashboardLive)
     stats = %{
-      total_events: Repo.aggregate(PublicEvent, :count, :id),
-      total_venues: count_unique_venues(),
-      total_performers: count_unique_performers(),
-      total_categories: Repo.aggregate(Category, :count, :id),
-      total_sources: count_unique_sources()
+      total_events: get_cached(:total_events, &DashboardStats.get_total_events/0),
+      total_venues: get_cached(:total_venues, &DashboardStats.get_unique_venues/0),
+      total_performers: get_cached(:total_performers, &DashboardStats.get_unique_performers/0),
+      total_categories: get_cached(:total_categories, &DashboardStats.get_total_categories/0),
+      total_sources: get_cached(:total_sources, &DashboardStats.get_unique_sources/0)
     }
 
-    # Get per-source statistics
-    source_stats = get_source_statistics()
+    # Get per-source statistics (cached)
+    source_stats = get_cached(:source_stats, &DashboardStats.get_source_statistics/0)
 
-    # Get detailed source statistics with success rates (NEW)
+    # Get detailed source statistics with success rates (cached)
     detailed_source_stats =
-      DiscoveryStatsCollector.get_detailed_source_statistics(min_events: 1)
-      |> Enum.map(fn stats ->
-        # Fetch last 10 jobs for each source
-        job_history = DiscoveryStatsCollector.get_complete_run_history(stats.source, 10)
-        Map.put(stats, :recent_jobs, job_history)
+      get_cached(:detailed_source_stats, fn ->
+        DashboardStats.get_detailed_source_statistics(min_events: 1)
       end)
 
     # Get per-city statistics
@@ -726,25 +721,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     # "all" is a special option for syncing from all sources
     sources = SourceRegistry.all_sources() ++ ["all"]
 
-    # Get queue statistics
-    queue_stats = get_queue_statistics()
+    # Get queue statistics (cached)
+    queue_stats = get_cached(:queue_stats, &DashboardStats.get_queue_statistics/0)
 
-    # Get upcoming vs past events
-    today = DateTime.utc_now()
-
-    upcoming_count =
-      Repo.aggregate(
-        from(e in PublicEvent, where: e.starts_at >= ^today),
-        :count,
-        :id
-      )
-
-    past_count =
-      Repo.aggregate(
-        from(e in PublicEvent, where: e.starts_at < ^today),
-        :count,
-        :id
-      )
+    # Get upcoming vs past events (cached)
+    upcoming_count = get_cached(:upcoming_events, &DashboardStats.get_upcoming_events/0)
+    past_count = get_cached(:past_events, &DashboardStats.get_past_events/0)
 
     # Get automated discovery cities with Oban stats
     discovery_cities =
@@ -823,48 +805,27 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     Map.put(city, :oban_stats, oban_stats)
   end
 
-  defp count_unique_venues do
-    Repo.one(
-      from(e in PublicEvent,
-        where: not is_nil(e.venue_id),
-        select: count(e.venue_id, :distinct)
-      )
-    ) || 0
-  end
+  # Helper to get cached value and handle errors gracefully
+  # Cachex.fetch returns:
+  # - {:ok, value} when cache hit
+  # - {:commit, value} when cache miss and fallback executed
+  # - {:error, reason} on error
+  defp get_cached(name, cache_fn) do
+    case cache_fn.() do
+      {:ok, value} ->
+        value
 
-  defp count_unique_performers do
-    # Count distinct performers from the performers association
-    Repo.one(
-      from(pep in EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
-        select: count(pep.performer_id, :distinct)
-      )
-    ) || 0
-  end
+      {:commit, value} ->
+        value
 
-  defp count_unique_sources do
-    Repo.one(
-      from(s in PublicEventSource,
-        select: count(s.source_id, :distinct)
-      )
-    ) || 0
-  end
-
-  defp get_source_statistics do
-    Repo.all(
-      from(pes in PublicEventSource,
-        join: e in PublicEvent,
-        on: e.id == pes.event_id,
-        join: s in EventasaurusDiscovery.Sources.Source,
-        on: s.id == pes.source_id,
-        group_by: [s.id, s.name],
-        select: %{
-          source: s.name,
-          count: count(pes.id),
-          last_sync: max(pes.inserted_at)
-        },
-        order_by: [desc: count(pes.id)]
-      )
-    )
+      {:error, reason} ->
+        Logger.warning("Failed to get cached stat #{name}: #{inspect(reason)}")
+        # Return appropriate default based on type
+        case name do
+          name when name in [:source_stats, :queue_stats, :detailed_source_stats] -> []
+          _ -> 0
+        end
+    end
   end
 
   defp get_city_statistics do
@@ -980,40 +941,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         order_by: [desc: count(e.id)]
       )
     )
-  end
-
-  defp get_queue_statistics do
-    queues = [:discovery_sync, :discovery_import]
-
-    Enum.map(queues, fn queue ->
-      available =
-        Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "available"),
-          :count,
-          :id
-        )
-
-      executing =
-        Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "executing"),
-          :count,
-          :id
-        )
-
-      completed =
-        Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "completed"),
-          :count,
-          :id
-        )
-
-      %{
-        name: queue,
-        available: available,
-        executing: executing,
-        completed: completed
-      }
-    end)
   end
 
   defp schedule_refresh(socket) do
