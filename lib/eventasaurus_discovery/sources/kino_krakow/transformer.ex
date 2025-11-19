@@ -88,6 +88,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
   # Note: GPS coordinates are NOT required here - VenueProcessor handles geocoding automatically
   defp validate_required_fields(event) do
     cond do
+      is_nil(event[:external_id]) and is_nil(event["external_id"]) ->
+        {:error, "Missing external_id"}
+
       is_nil(event[:datetime]) ->
         {:error, "Missing datetime"}
 

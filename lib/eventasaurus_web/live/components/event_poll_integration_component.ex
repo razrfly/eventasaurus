@@ -1705,12 +1705,29 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
     # Debug: Log what data we're receiving
     first_option = List.first(poll_data.options)
+
     if first_option do
-      IO.puts("\n=== DEBUG: First option in create_poll_from_template (integration_component) ===")
-      IO.puts("Title: #{inspect(first_option["title"] || first_option[:title])}")
-      IO.puts("Image URL (string key): #{inspect(first_option["image_url"])}")
-      IO.puts("Image URL (atom key): #{inspect(first_option[:image_url])}")
-      IO.puts("Description: #{inspect(first_option["description"] || first_option[:description])}")
+      IO.puts(
+        "\n=== DEBUG: First option in create_poll_from_template (integration_component) ==="
+      )
+
+      cond do
+        is_map(first_option) ->
+          IO.puts("Title: #{inspect(first_option["title"] || first_option[:title])}")
+          IO.puts("Image URL (string key): #{inspect(first_option["image_url"])}")
+          IO.puts("Image URL (atom key): #{inspect(first_option[:image_url])}")
+
+          IO.puts(
+            "Description: #{inspect(first_option["description"] || first_option[:description])}"
+          )
+
+        is_binary(first_option) ->
+          IO.puts("Title (string option): #{inspect(first_option)}")
+
+        true ->
+          IO.puts("First option (unexpected type): #{inspect(first_option, pretty: true)}")
+      end
+
       IO.puts("Full option: #{inspect(first_option, pretty: true)}")
     end
 
@@ -1775,10 +1792,16 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         end
 
         # Create poll options separately with full metadata preservation
-        _option_results =
-          poll_options_attrs
-          |> Enum.map(fn option_attrs ->
+        option_results =
+          Enum.map(poll_options_attrs, fn option_attrs ->
             Events.create_poll_option(Map.put(option_attrs, :poll_id, poll.id))
+          end)
+
+        # Check for failed options
+        failed_options =
+          Enum.filter(option_results, fn
+            {:error, _} -> true
+            _ -> false
           end)
 
         # Reload polls list
@@ -1787,13 +1810,22 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         # Recalculate stats
         integration_stats = calculate_integration_stats_with_polls(polls, event)
 
+        # Determine flash message based on results
+        {flash_key, flash_message} =
+          if Enum.empty?(failed_options) do
+            {:success_message, "Poll created from template successfully!"}
+          else
+            {:error_message,
+             "Poll created, but some options failed to save. Please review the template and add any missing options manually."}
+          end
+
         {:noreply,
          socket
          |> assign(:polls, polls)
          |> assign(:integration_stats, integration_stats)
          |> assign(:showing_template_editor, false)
          |> assign(:template_suggestion, nil)
-         |> assign(:success_message, "Poll created from template successfully!")}
+         |> assign(flash_key, flash_message)}
 
       {:error, changeset} ->
         errors =

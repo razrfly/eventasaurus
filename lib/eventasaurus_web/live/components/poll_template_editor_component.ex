@@ -297,20 +297,20 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
                     <% end %>
                   </span>
                 </label>
-                <select
-                  id="voting-system"
-                  name="voting_system"
-                  value={@selected_voting_system}
-                  phx-change="update_voting_system"
-                  phx-target={@myself}
-                  class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <%= for voting_system <- available_voting_systems() do %>
-                    <option value={voting_system} selected={@selected_voting_system == voting_system}>
-                      <%= format_voting_system(voting_system) %> <%= if voting_system == @suggestion["voting_system"], do: "(Original)", else: "" %>
-                    </option>
-                  <% end %>
-                </select>
+                <form phx-change="update_voting_system" phx-target={@myself}>
+                  <select
+                    id="voting-system"
+                    name="voting_system"
+                    value={@selected_voting_system}
+                    class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <%= for voting_system <- available_voting_systems() do %>
+                      <option value={voting_system} selected={@selected_voting_system == voting_system}>
+                        <%= format_voting_system(voting_system) %> <%= if voting_system == @suggestion["voting_system"], do: "(Original)", else: "" %>
+                      </option>
+                    <% end %>
+                  </select>
+                </form>
                 <p class="mt-1 text-xs text-gray-500">
                   <%= voting_system_description(@selected_voting_system) %>
                 </p>
