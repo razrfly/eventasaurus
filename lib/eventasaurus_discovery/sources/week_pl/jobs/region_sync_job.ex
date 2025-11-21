@@ -178,17 +178,17 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
 
     if restaurant_id && slug do
       args = %{
-        source_id: source_id,
-        restaurant_id: restaurant_id,
-        restaurant_slug: slug,
-        restaurant_name: restaurant["name"],
-        region_id: region_args["region_id"],
-        region_name: region_args["region_name"],
-        country: region_args["country"],
-        festival_code: region_args["festival_code"],
-        festival_name: region_args["festival_name"],
-        festival_price: region_args["festival_price"],
-        festival_container_id: region_args["festival_container_id"]  # Phase 4: Pass container ID
+        "source_id" => source_id,
+        "restaurant_id" => restaurant_id,
+        "restaurant_slug" => slug,
+        "restaurant_name" => restaurant["name"],
+        "region_id" => region_args["region_id"],
+        "region_name" => region_args["region_name"],
+        "country" => region_args["country"],
+        "festival_code" => region_args["festival_code"],
+        "festival_name" => region_args["festival_name"],
+        "festival_price" => region_args["festival_price"],
+        "festival_container_id" => region_args["festival_container_id"]  # Phase 4: Pass container ID
       }
 
       meta = %{
