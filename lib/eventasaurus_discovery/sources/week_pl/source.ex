@@ -17,7 +17,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Source do
 
   alias EventasaurusDiscovery.Sources.WeekPl.Config
 
-  def name, do: "week.pl"
+  def name, do: "Restaurant Week"
   def key, do: "week_pl"
   def priority, do: 45  # Regional Poland source
 

@@ -1587,7 +1587,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           if unique_venues > 3 do
             # Many venues: use general city Unsplash image to represent city-wide presence
             # Use source_id for variation so different sources get different images
-            get_city_general_image(canonical_city, source_id)
+            # IMPORTANT: Fall back to event image if city has no Unsplash gallery
+            get_city_general_image(canonical_city, source_id) || first_event.cover_image_url
           else
             # Few venues: use first event's image (may show specific venue, which is appropriate)
             first_event.cover_image_url
