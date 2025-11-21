@@ -1,0 +1,122 @@
+# Week.pl Category Mappings
+# Maps week.pl cuisine types to internal category system
+#
+# week.pl focuses on Restaurant Week, Fine Dining Week, and Breakfast Week festivals
+# All events are dining experiences, so primary category is food-drink
+#
+# Cuisine types extracted from week.pl restaurant metadata
+
+mappings:
+  # Polish Cuisine
+  polish: food-drink
+  polska: food-drink
+  traditional polish: food-drink
+
+  # European Cuisines
+  italian: food-drink
+  french: food-drink
+  spanish: food-drink
+  greek: food-drink
+  portuguese: food-drink
+  mediterranean: food-drink
+  european: food-drink
+
+  # Asian Cuisines
+  japanese: food-drink
+  chinese: food-drink
+  thai: food-drink
+  vietnamese: food-drink
+  indian: food-drink
+  korean: food-drink
+  asian: food-drink
+  asian fusion: food-drink
+
+  # American & International
+  american: food-drink
+  mexican: food-drink
+  south american: food-drink
+  international: food-drink
+  fusion: food-drink
+
+  # Dining Styles & Experiences
+  fine dining: food-drink
+  casual dining: food-drink
+  bistro: food-drink
+  brasserie: food-drink
+  gastropub: food-drink
+  steakhouse: food-drink
+  seafood: food-drink
+  sushi: food-drink
+  vegetarian: food-drink
+  vegan: food-drink
+
+  # Specific Food Types
+  pizza: food-drink
+  pasta: food-drink
+  grill: food-drink
+  bbq: food-drink
+  burger: food-drink
+  tapas: food-drink
+
+  # Beverage-focused
+  wine bar: food-drink
+  cocktail bar: food-drink
+  brewery: nightlife
+  craft beer: nightlife
+  bar: nightlife
+
+  # Breakfast & Brunch (Breakfast Week)
+  breakfast: food-drink
+  brunch: food-drink
+  cafe: food-drink
+  coffee: food-drink
+
+  # Festival-specific
+  restaurant week: food-drink
+  fine dining week: food-drink
+  breakfast week: food-drink
+
+  # Generic fallback
+  restaurant: food-drink
+  dining: food-drink
+  cuisine: food-drink
+
+# Pattern-based mappings for flexible matching
+patterns:
+  # All restaurant-related terms map to food-drink
+  - match: "restaurant|dining|cuisine|culinary|gastronom"
+    categories: [food-drink]
+
+  # Specific cuisine types
+  - match: "italian|french|spanish|greek|mediterranean|european"
+    categories: [food-drink]
+
+  - match: "japanese|chinese|thai|vietnamese|indian|korean|asian"
+    categories: [food-drink]
+
+  - match: "polish|polska|tradycyj"
+    categories: [food-drink]
+
+  # Food types
+  - match: "pizza|pasta|sushi|steak|seafood|grill|bbq|burger|tapas"
+    categories: [food-drink]
+
+  # Dining experiences
+  - match: "fine.?dining|bistro|brasserie|gastropub|tasting"
+    categories: [food-drink]
+
+  # Dietary preferences
+  - match: "vegetarian|vegan|organic|bio"
+    categories: [food-drink]
+
+  # Beverage focus
+  - match: "wine|cocktail|coffee|cafe|tea"
+    categories: [food-drink]
+
+  # Bar/nightlife (secondary category)
+  - match: "bar|pub|brewery|craft.?beer"
+    categories: [nightlife, food-drink]
+
+  # Week.pl festival names
+  - match: "restaurant.?week|fine.?dining.?week|breakfast.?week"
+    categories: [food-drink, festivals]

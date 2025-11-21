@@ -44,6 +44,15 @@ config :eventasaurus, Oban,
     # Discovery sync queue for admin dashboard operations
     # Limited concurrency for admin-triggered syncs
     discovery_sync: 2,
+    # week.pl sync queue for festival orchestration
+    # Single concurrency - only one festival sync should run at a time
+    week_pl_sync: 1,
+    # week.pl region sync queue for per-city restaurant lists
+    # Limited concurrency to respect API rate limits (0.5 req/sec)
+    week_pl_region_sync: 2,
+    # week.pl detail queue for individual restaurant processing
+    # Limited concurrency for API rate limits and consolidation
+    week_pl_detail: 3,
     # Google API queue for places lookups
     # Single concurrency to respect Google's rate limits
     google_lookup: 1,
