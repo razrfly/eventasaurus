@@ -1,7 +1,6 @@
 defmodule EventasaurusWeb.Components.CategoryCards do
   use Phoenix.Component
   use EventasaurusWeb, :verified_routes
-  import Phoenix.HTML
 
   attr :category, :map, required: true
   attr :event_count, :integer, required: true

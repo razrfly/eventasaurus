@@ -1,43 +1,46 @@
 defmodule EventasaurusDiscovery.Sources.WeekPl.DeploymentConfig do
   @moduledoc """
-  Deployment configuration for week.pl source rollout.
+  Deployment configuration for week.pl source.
 
-  Supports phased deployment:
-  - Pilot: Kraków only
-  - Expansion: Major cities (Warszawa, Wrocław, Gdańsk)
-  - Full: All 13 supported cities
+  Syncs all 13 cities/regions that week.pl provides data for:
+  Kraków, Warszawa, Wrocław, Poznań, Trójmiasto, Śląsk, Łódź,
+  Białystok, Bydgoszcz, Lubelskie, Rzeszów, Szczecin, Warmia i Mazury
 
   Configuration via environment variables or application config.
   """
 
   alias EventasaurusDiscovery.Sources.WeekPl.Source
 
-  @pilot_cities ["1"]  # Kraków
-  @expansion_cities ["1", "5", "4", "3"]  # Kraków, Warszawa, Wrocław, Gdańsk
-  @full_cities Enum.map(Source.supported_cities(), & &1.id)
+  @all_cities Enum.map(Source.supported_cities(), & &1.id)
 
   @doc """
   Gets the current deployment phase from configuration.
 
   Environment variable: WEEK_PL_DEPLOYMENT_PHASE
-  Application config: config :eventasaurus, week_pl_deployment_phase: :pilot
+  Application config: config :eventasaurus, week_pl_deployment_phase: :enabled
 
   Phases:
-  - :pilot - Kraków only (region_id: "1")
-  - :expansion - Kraków, Warszawa, Wrocław, Gdańsk
-  - :full - All 13 cities
+  - :enabled - Sync all 13 cities (default)
   - :disabled - Source disabled
 
-  Defaults to :disabled for safety.
+  Defaults to :enabled to get all available data.
   """
   def deployment_phase do
-    case System.get_env("WEEK_PL_DEPLOYMENT_PHASE") do
-      phase when phase in ["pilot", "expansion", "full", "disabled"] ->
-        String.to_atom(phase)
+    phase = case System.get_env("WEEK_PL_DEPLOYMENT_PHASE") do
+      "disabled" ->
+        :disabled
+
+      "enabled" ->
+        :enabled
+
+      nil ->
+        Application.get_env(:eventasaurus, :week_pl_deployment_phase, :enabled)
 
       _ ->
-        Application.get_env(:eventasaurus, :week_pl_deployment_phase, :disabled)
+        :enabled
     end
+
+    phase
   end
 
   @doc """
@@ -47,10 +50,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.DeploymentConfig do
   """
   def enabled_cities do
     case deployment_phase() do
-      :pilot -> @pilot_cities
-      :expansion -> @expansion_cities
-      :full -> @full_cities
+      :enabled -> @all_cities
       :disabled -> []
+      # Legacy phase values - treat as enabled for backwards compatibility
+      :pilot -> @all_cities
+      :expansion -> @all_cities
+      :full -> @all_cities
     end
   end
 

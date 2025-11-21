@@ -241,7 +241,7 @@
                   </td>
                 </tr>
 
-                <%# Expandable observability details row (Phase 2: #2332) %>
+                <%!-- Expandable observability details row (Phase 2: #2332) --%>
                 <%= if has_observability_data?(job.results) and @expanded_observability == job.job_id do %>
                   <tr class="bg-blue-50">
                     <td colspan="6" class="px-6 py-4">
@@ -252,7 +252,7 @@
                         </div>
 
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                          <%# Query Parameters %>
+                          <%!-- Query Parameters --%>
                           <%= if Map.has_key?(job.results, "query_params") do %>
                             <div class="bg-white rounded-lg p-4 border border-gray-200">
                               <h4 class="text-xs font-semibold text-gray-700 uppercase mb-2">Query Parameters</h4>
@@ -260,7 +260,7 @@
                             </div>
                           <% end %>
 
-                          <%# API Response %>
+                          <%!-- API Response --%>
                           <%= if Map.has_key?(job.results, "api_response") do %>
                             <div class="bg-white rounded-lg p-4 border border-gray-200">
                               <h4 class="text-xs font-semibold text-gray-700 uppercase mb-2">API Response</h4>
@@ -268,7 +268,7 @@
                             </div>
                           <% end %>
 
-                          <%# Decision Context %>
+                          <%!-- Decision Context --%>
                           <%= if Map.has_key?(job.results, "decision_context") do %>
                             <div class="bg-white rounded-lg p-4 border border-gray-200">
                               <h4 class="text-xs font-semibold text-gray-700 uppercase mb-2">Decision Context</h4>
