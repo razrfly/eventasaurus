@@ -1194,6 +1194,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           Logger.debug("⏭️  Skipping consolidation for #{event_type} event type")
           nil
 
+        # Restaurant events (week.pl): exact restaurant_date_id matching at same venue
+        # This consolidates all 44 time slots for the same restaurant on the same day
+        # Checks metadata.restaurant_date_id pattern
+        String.contains?(external_id || "", "week_pl_") ->
+          find_restaurant_date_parent(external_id, venue, source_id)
+
         # Article events (Sortiraparis): exact article_id matching at same venue
         # This consolidates ONE-TIME events from the same article with different dates
         article_id ->
@@ -1296,6 +1302,51 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         )
 
         event
+    end
+  end
+
+  # Find existing restaurant event for the same restaurant and date (week.pl)
+  # Consolidates all time slots for the same restaurant on the same day
+  # External ID format: week_pl_{restaurant_id}_{date}_{slot}
+  # Consolidation key: {restaurant_id}_{date}
+  defp find_restaurant_date_parent(external_id, venue, source_id) do
+    # Extract restaurant_date_id from external_id
+    # Format: "week_pl_1234_2025-11-20_1140" -> consolidate by "1234_2025-11-20"
+    case Regex.run(~r/week_pl_(\d+)_([\d-]+)_\d+/, external_id) do
+      [_, restaurant_id, date] ->
+        restaurant_date_id = "#{restaurant_id}_#{date}"
+
+        # Find events at same venue with matching restaurant_date_id in metadata
+        query =
+          from(e in PublicEvent,
+            join: pes in PublicEventSource,
+            on: pes.event_id == e.id,
+            where: pes.source_id == ^source_id,
+            where: pes.external_id != ^external_id,
+            where: e.venue_id == ^venue.id,
+            where: fragment("?->>'restaurant_date_id' = ?", pes.metadata, ^restaurant_date_id),
+            order_by: [asc: e.starts_at],
+            limit: 1
+          )
+
+        case Repo.one(query) do
+          nil ->
+            Logger.debug(
+              "No restaurant parent found for restaurant_date_id #{restaurant_date_id} at venue #{venue.id}"
+            )
+            nil
+
+          event ->
+            Logger.info(
+              "🍽️  Found restaurant parent for restaurant_date_id #{restaurant_date_id} at venue #{venue.id}: event ##{event.id}"
+            )
+
+            event
+        end
+
+      _ ->
+        Logger.warning("Could not parse external_id for restaurant consolidation: #{external_id}")
+        nil
     end
   end
 

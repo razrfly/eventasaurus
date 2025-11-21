@@ -212,6 +212,30 @@ sources = [
       "coverage" => "Warsaw, Poland",
       "scope" => "city"
     }
+  },
+  %{
+    name: "week.pl",
+    slug: "week_pl",
+    website_url: "https://week.pl",
+    priority: 45,
+    domains: ["food", "festival"],
+    aggregate_on_index: true,
+    aggregation_type: "restaurant",
+    metadata: %{
+      "rate_limit_seconds" => 2,
+      "max_requests_per_hour" => 1800,
+      "language" => "pl",
+      "supports_pagination" => true,
+      "requires_geocoding" => false,
+      "has_coordinates" => true,
+      "coverage" => "13 Polish cities",
+      "scope" => "regional",
+      "event_types" => ["restaurant_week", "fine_dining_week", "breakfast_week"],
+      "consolidation_type" => "daily",
+      "occurrence_type" => "explicit",
+      "api_type" => "next_js_data",
+      "requires_build_id" => true
+    }
   }
 ]
 

@@ -23,6 +23,7 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
       |> assign(:loading, false)
       |> assign(:show_lineage_modal, false)
       |> assign(:selected_job, nil)
+      |> assign(:expanded_observability, nil)  # Track which job's observability is expanded
 
     {:ok, socket}
   end
@@ -76,6 +77,20 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
       socket
       |> assign(:show_lineage_modal, false)
       |> assign(:selected_job, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_observability", %{"job-id" => job_id_str}, socket) do
+    job_id = String.to_integer(job_id_str)
+
+    # Toggle: if already expanded, collapse it; otherwise expand it
+    expanded_id = if socket.assigns.expanded_observability == job_id, do: nil, else: job_id
+
+    socket =
+      socket
+      |> assign(:expanded_observability, expanded_id)
 
     {:noreply, socket}
   end
@@ -151,14 +166,29 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
 
       # Generic fallback
       true ->
-        # Show first few key metrics
+        # Show first few key metrics (excluding observability fields for summary)
         results
-        |> Enum.reject(fn {k, _v} -> k in ["job_role", "pipeline_id", "parent_job_id", "entity_id", "entity_type"] end)
+        |> Enum.reject(fn {k, _v} -> k in ["job_role", "pipeline_id", "parent_job_id", "entity_id", "entity_type", "query_params", "api_response", "decision_context"] end)
         |> Enum.take(3)
         |> Enum.map(fn {k, v} -> "#{Phoenix.Naming.humanize(k)}: #{v}" end)
         |> Enum.join(", ")
     end
   end
+
+  # Check if job has Phase 2 observability data (#2332)
+  defp has_observability_data?(nil), do: false
+  defp has_observability_data?(results) when is_map(results) do
+    Map.has_key?(results, "query_params") or
+    Map.has_key?(results, "api_response") or
+    Map.has_key?(results, "decision_context")
+  end
+
+  # Format observability data for display
+  defp format_observability_field(nil), do: "N/A"
+  defp format_observability_field(data) when is_map(data) do
+    Jason.encode!(data, pretty: true)
+  end
+  defp format_observability_field(data), do: inspect(data)
 
   # Format duration for display
   defp format_duration(nil), do: "-"
