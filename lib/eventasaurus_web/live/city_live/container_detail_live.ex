@@ -290,18 +290,36 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
               </p>
             </div>
           <% else %>
-            <%= for {date_str, date_events} <- @grouped_events do %>
-              <div class="mb-8">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">
-                  <%= format_date_header(date_str) %>
-                </h2>
+            <%= if @view_mode == "grid" do %>
+              <!-- Grid View -->
+              <%= for {date_str, date_events} <- @grouped_events do %>
+                <div class="mb-8">
+                  <h2 class="text-2xl font-bold text-gray-900 mb-4">
+                    <%= format_date_header(date_str) %>
+                  </h2>
 
-                <div class="space-y-4">
-                  <%= for event <- date_events do %>
-                    <.event_list_item event={event} language={@language} />
-                  <% end %>
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <%= for event <- date_events do %>
+                      <.event_grid_item event={event} language={@language} city={@city} />
+                    <% end %>
+                  </div>
                 </div>
-              </div>
+              <% end %>
+            <% else %>
+              <!-- List View -->
+              <%= for {date_str, date_events} <- @grouped_events do %>
+                <div class="mb-8">
+                  <h2 class="text-2xl font-bold text-gray-900 mb-4">
+                    <%= format_date_header(date_str) %>
+                  </h2>
+
+                  <div class="space-y-4">
+                    <%= for event <- date_events do %>
+                      <.event_list_item event={event} language={@language} />
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
             <% end %>
 
             <!-- Container Sources -->
@@ -431,6 +449,60 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   end
 
   defp get_url_from_source_event(_), do: nil
+
+  # Component for event grid item (card layout for grid view)
+  defp event_grid_item(assigns) do
+    ~H"""
+    <.link navigate={~p"/activities/#{@event.slug}"} class="block group">
+      <div class="bg-white rounded-lg shadow hover:shadow-lg transition-all duration-200 overflow-hidden h-full flex flex-col">
+        <!-- Event Image -->
+        <div class="relative w-full h-48 bg-gray-200 overflow-hidden">
+          <%= if Map.get(@event, :cover_image_url) do %>
+            <img
+              src={CDN.url(Map.get(@event, :cover_image_url), width: 600, height: 384, fit: "cover", quality: 85)}
+              alt={@event.title}
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              loading="lazy"
+            >
+          <% else %>
+            <div class="w-full h-full flex items-center justify-center">
+              <svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Event Content -->
+        <div class="p-4 flex-1 flex flex-col">
+          <h3 class="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
+            <%= Map.get(@event, :display_title) || @event.title %>
+          </h3>
+
+          <div class="mt-auto space-y-2">
+            <div class="flex items-center text-sm text-gray-600">
+              <Heroicons.calendar class="w-4 h-4 mr-2 flex-shrink-0" />
+              <span class="truncate"><%= format_datetime(@event.starts_at) %></span>
+            </div>
+
+            <%= if venue = @event.venue do %>
+              <div class="flex items-center text-sm text-gray-600">
+                <Heroicons.map_pin class="w-4 h-4 mr-2 flex-shrink-0" />
+                <span class="truncate"><%= venue.name %></span>
+              </div>
+            <% end %>
+          </div>
+
+          <%= if Map.get(@event, :display_description) do %>
+            <p class="mt-3 text-sm text-gray-600 line-clamp-2">
+              <%= Map.get(@event, :display_description) %>
+            </p>
+          <% end %>
+        </div>
+      </div>
+    </.link>
+    """
+  end
 
   # Component for event list item (reuse from EventCards or define here)
   defp event_list_item(assigns) do
