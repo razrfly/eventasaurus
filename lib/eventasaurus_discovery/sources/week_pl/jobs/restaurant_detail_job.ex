@@ -38,7 +38,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     priority: 3
 
   require Logger
-  alias EventasaurusDiscovery.Sources.WeekPl.{Client, Config, Transformer}
+  alias EventasaurusDiscovery.Sources.WeekPl.{Client, Config, Transformer, FestivalManager}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
 
   @impl Oban.Worker
@@ -310,6 +310,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         }
       }}
     else
+      # Phase 4: Get festival container ID for linking events (#2334)
+      festival_container_id = args["festival_container_id"]
+
       # Process each date with available slots
       results =
         dates
@@ -317,7 +320,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
           # Transform each slot into an event
           Enum.map(slots, fn slot ->
             event_data = Transformer.transform_restaurant_slot(restaurant, slot, date, festival, args["region_name"])
-            process_event(event_data, source_id)
+            process_event(event_data, source_id, festival_container_id)
           end)
         end)
 
@@ -358,23 +361,37 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   end
 
   # Process individual event through EventProcessor
-  defp process_event(event_data, source_id) do
+  # Phase 4: Link events to festival container (#2334)
+  defp process_event(event_data, source_id, festival_container_id \\ nil) do
     # Convert atom keys to string keys and add occurrence_type
     normalized_data = %{
       external_id: event_data.external_id,
       title: event_data.title,
       description: event_data.description,
       source_url: event_data.url,
+      image_url: event_data.image_url,  # Include image_url from transformer
       starts_at: event_data.starts_at,
       ends_at: event_data.ends_at,
       venue_data: event_data.venue_attributes,
       metadata: event_data.metadata,
+      category_id: event_data.category_id,  # Phase 4: Include category_id
       # Add occurrence_type for proper event initialization
       occurrence_type: :explicit
     }
 
     case EventProcessor.process_event(normalized_data, source_id) do
-      {:ok, _event} ->
+      {:ok, event} ->
+        # Phase 4: Link event to festival container if container_id provided
+        if festival_container_id do
+          case FestivalManager.link_event_to_festival(event, festival_container_id) do
+            {:ok, _membership} ->
+              Logger.debug("[WeekPl.DetailJob] Linked event #{event.id} to festival container #{festival_container_id}")
+
+            {:error, reason} ->
+              Logger.warning("[WeekPl.DetailJob] Failed to link event #{event.id} to container: #{inspect(reason)}")
+          end
+        end
+
         {:ok, event_data.external_id}
 
       {:error, reason} ->
