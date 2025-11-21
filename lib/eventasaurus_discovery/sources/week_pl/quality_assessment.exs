@@ -57,7 +57,7 @@ results = AssessmentHelper.check("Transformer module loaded", Code.ensure_loaded
 results = AssessmentHelper.check("TimeConverter module loaded", Code.ensure_loaded?(TimeConverter), results)
 
 # Check source metadata
-results = AssessmentHelper.check("Source name is 'week.pl'", Source.name() == "week.pl", results)
+results = AssessmentHelper.check("Source name is 'Restaurant Week'", Source.name() == "Restaurant Week", results)
 results = AssessmentHelper.check("Source key is 'week_pl'", Source.key() == "week_pl", results)
 results = AssessmentHelper.check("13 cities configured", length(Source.supported_cities()) == 13, results)
 results = AssessmentHelper.check("3+ festivals configured", length(Source.active_festivals()) >= 3, results)

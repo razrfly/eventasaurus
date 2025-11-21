@@ -214,7 +214,7 @@ sources = [
     }
   },
   %{
-    name: "week.pl",
+    name: "Restaurant Week",
     slug: "week_pl",
     website_url: "https://week.pl",
     priority: 45,
