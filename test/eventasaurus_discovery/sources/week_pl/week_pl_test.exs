@@ -142,7 +142,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
       slot = 1140  # 7:00 PM
       date = "2025-11-20"
 
-      event = Transformer.transform_restaurant_slot(restaurant, slot, date, festival)
+      event = Transformer.transform_restaurant_slot(restaurant, slot, date, festival, "Kraków")
 
       # Verify core event fields
       assert event.title == "La Forchetta"
@@ -180,9 +180,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
     end
 
     test "creates correct consolidation key", %{restaurant: restaurant, festival: festival} do
-      event1 = Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-20", festival)
-      event2 = Transformer.transform_restaurant_slot(restaurant, 1200, "2025-11-20", festival)
-      event3 = Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-21", festival)
+      event1 = Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-20", festival, "Kraków")
+      event2 = Transformer.transform_restaurant_slot(restaurant, 1200, "2025-11-20", festival, "Kraków")
+      event3 = Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-21", festival, "Kraków")
 
       # Same restaurant, same date -> same consolidation key
       assert event1.metadata.restaurant_date_id == event2.metadata.restaurant_date_id

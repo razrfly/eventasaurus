@@ -171,7 +171,7 @@ test_festival = %{
   price: 63.0
 }
 
-event = Transformer.transform_restaurant_slot(test_restaurant, test_slot, "2025-11-20", test_festival)
+event = Transformer.transform_restaurant_slot(test_restaurant, test_slot, "2025-11-20", test_festival, "Kraków")
 
 results = AssessmentHelper.check("Event external_id format correct", String.starts_with?(event.external_id, "week_pl_"), results)
 results = AssessmentHelper.check("Event has consolidation key", Map.has_key?(event.metadata, :restaurant_date_id), results)

@@ -126,8 +126,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
 
   defp get_coordinate(%{"location" => %{"lat" => lat}}, "lat"), do: lat
   defp get_coordinate(%{"location" => %{"lng" => lng}}, "lng"), do: lng
+  defp get_coordinate(%{"location" => %{"latitude" => lat}}, "lat"), do: lat
+  defp get_coordinate(%{"location" => %{"longitude" => lng}}, "lng"), do: lng
   defp get_coordinate(%{"lat" => lat}, "lat"), do: lat
   defp get_coordinate(%{"lng" => lng}, "lng"), do: lng
+  defp get_coordinate(%{"latitude" => lat}, "lat"), do: lat
+  defp get_coordinate(%{"longitude" => lng}, "lng"), do: lng
   defp get_coordinate(_, _), do: nil
 
   defp get_availability(%{"slots" => slots}, slot) when is_list(slots) do

@@ -194,39 +194,6 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     end
   end
 
-  # Extract slots from Apollo GraphQL state
-  # Slots are stored in Daily objects that are referenced by restaurant.reservables
-  defp extract_slots_from_apollo_state(restaurant, apollo_state, args) do
-    # Get reservables array (contains references like {"__ref" => "Daily:5450"})
-    reservables = restaurant["reservables"] || []
-
-    # Extract slot data from each Daily reference
-    slots =
-      reservables
-      |> Enum.flat_map(fn
-        %{"__ref" => daily_ref} ->
-          # Get the Daily object from apollo_state
-          case apollo_state[daily_ref] do
-            nil ->
-              Logger.warning("[WeekPl.DetailJob] Daily reference #{daily_ref} not found in Apollo state")
-              []
-
-            daily ->
-              # Extract possibleSlots from Daily object
-              possible_slots = daily["possibleSlots"] || []
-              Logger.debug("[WeekPl.DetailJob] Found #{length(possible_slots)} slots in #{daily_ref}")
-              possible_slots
-          end
-
-        _other ->
-          []
-      end)
-      |> Enum.uniq()
-
-    Logger.info("[WeekPl.DetailJob] 🎯 Extracted #{length(slots)} unique slots for #{args["restaurant_name"]}")
-    slots
-  end
-
   # Fallback for unexpected response structure
   defp process_restaurant_detail(response, args, _source_id, _dates, meta, query_params) do
     Logger.error("""
@@ -261,6 +228,39 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     }}
   end
 
+  # Extract slots from Apollo GraphQL state
+  # Slots are stored in Daily objects that are referenced by restaurant.reservables
+  defp extract_slots_from_apollo_state(restaurant, apollo_state, args) do
+    # Get reservables array (contains references like {"__ref" => "Daily:5450"})
+    reservables = restaurant["reservables"] || []
+
+    # Extract slot data from each Daily reference
+    slots =
+      reservables
+      |> Enum.flat_map(fn
+        %{"__ref" => daily_ref} ->
+          # Get the Daily object from apollo_state
+          case apollo_state[daily_ref] do
+            nil ->
+              Logger.warning("[WeekPl.DetailJob] Daily reference #{daily_ref} not found in Apollo state")
+              []
+
+            daily ->
+              # Extract possibleSlots from Daily object
+              possible_slots = daily["possibleSlots"] || []
+              Logger.debug("[WeekPl.DetailJob] Found #{length(possible_slots)} slots in #{daily_ref}")
+              possible_slots
+          end
+
+        _other ->
+          []
+      end)
+      |> Enum.uniq()
+
+    Logger.info("[WeekPl.DetailJob] 🎯 Extracted #{length(slots)} unique slots for #{args["restaurant_name"]}")
+    slots
+  end
+
   # Generate standard restaurant booking time slots (Phase 3: #2333)
   # Pattern: 18:00-22:00 in 30-minute intervals (matches observed website pattern)
   defp generate_standard_time_slots do
@@ -271,7 +271,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   end
 
   # Process restaurant slots and create events
-  defp process_restaurant_slots(restaurant, slots, args, source_id, dates, meta, query_params, pattern_based \\ false) do
+  defp process_restaurant_slots(restaurant, slots, args, source_id, dates, meta, query_params, pattern_based) do
     # Build festival data for transformer
     festival = %{
       name: args["festival_name"],
@@ -362,7 +362,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
 
   # Process individual event through EventProcessor
   # Phase 4: Link events to festival container (#2334)
-  defp process_event(event_data, source_id, festival_container_id \\ nil) do
+  defp process_event(event_data, source_id, festival_container_id) do
     # Convert atom keys to string keys and add occurrence_type
     normalized_data = %{
       external_id: event_data.external_id,

@@ -300,7 +300,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
 
                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <%= for event <- date_events do %>
-                      <.event_grid_item event={event} language={@language} city={@city} />
+                      <.event_grid_item event={event} language={@language} />
                     <% end %>
                   </div>
                 </div>

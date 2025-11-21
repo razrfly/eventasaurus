@@ -34,12 +34,20 @@ defmodule EventasaurusWeb.AggregatedContentLive do
           end)
           |> Enum.sort_by(& &1.event.venue.name)
 
+        # Extract hero image from first event with an image
+        hero_image =
+          venue_groups
+          |> Enum.find_value(fn %{event: event} ->
+            Map.get(event, :cover_image_url)
+          end)
+
         {:ok,
          socket
          |> assign(:city, city)
          |> assign(:content_type, content_type)
          |> assign(:identifier, identifier)
          |> assign(:venue_schedules, venue_groups)
+         |> assign(:hero_image, hero_image)
          |> assign(:page_title, format_page_title(content_type, identifier, city))
          |> assign(:source_name, get_source_name(identifier))}
     end
@@ -48,34 +56,73 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <!-- Header Section -->
-      <div class="mb-8">
-        <nav class="text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-gray-700">
-            <%= @city.name %>
-          </.link>
-          <span class="mx-2">→</span>
-          <span class="capitalize text-gray-700"><%= @content_type %></span>
-          <span class="mx-2">→</span>
-          <span class="text-gray-900"><%= @source_name %></span>
-        </nav>
+    <div class="min-h-screen bg-gray-50">
+      <!-- Hero Section with Background Image -->
+      <%= if @hero_image do %>
+        <div class="relative h-64 md:h-80 bg-gray-900">
+          <img
+            src={@hero_image}
+            alt={@source_name}
+            class="absolute inset-0 w-full h-full object-cover opacity-60"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent"></div>
 
-        <h1 class="text-4xl font-bold text-gray-900">
-          <%= @source_name %> in <%= @city.name %>
-        </h1>
+          <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col justify-end pb-8">
+            <!-- Breadcrumbs -->
+            <nav class="text-sm text-gray-200 mb-4">
+              <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-white">
+                <%= @city.name %>
+              </.link>
+              <span class="mx-2">→</span>
+              <span class="capitalize"><%= @content_type %></span>
+              <span class="mx-2">→</span>
+              <span class="text-white font-medium"><%= @source_name %></span>
+            </nav>
 
-        <div class="mt-4 flex items-center text-gray-600">
-          <Heroicons.building_storefront class="w-5 h-5 mr-2" />
-          <span><%= length(@venue_schedules) %> <%= ngettext("location", "locations", length(@venue_schedules)) %> across the city</span>
+            <h1 class="text-4xl md:text-5xl font-bold text-white">
+              <%= @source_name %> in <%= @city.name %>
+            </h1>
+
+            <div class="mt-4 flex items-center text-gray-200">
+              <Heroicons.building_storefront class="w-5 h-5 mr-2" />
+              <span><%= length(@venue_schedules) %> <%= ngettext("location", "locations", length(@venue_schedules)) %> across the city</span>
+            </div>
+          </div>
         </div>
-      </div>
+      <% else %>
+        <!-- Fallback: White header without image -->
+        <div class="bg-white shadow-sm border-b">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Breadcrumbs -->
+            <nav class="text-sm text-gray-500 mb-4">
+              <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-gray-700">
+                <%= @city.name %>
+              </.link>
+              <span class="mx-2">→</span>
+              <span class="capitalize text-gray-700"><%= @content_type %></span>
+              <span class="mx-2">→</span>
+              <span class="text-gray-900"><%= @source_name %></span>
+            </nav>
+
+            <h1 class="text-4xl font-bold text-gray-900">
+              <%= @source_name %> in <%= @city.name %>
+            </h1>
+
+            <div class="mt-4 flex items-center text-gray-600">
+              <Heroicons.building_storefront class="w-5 h-5 mr-2" />
+              <span><%= length(@venue_schedules) %> <%= ngettext("location", "locations", length(@venue_schedules)) %> across the city</span>
+            </div>
+          </div>
+        </div>
+      <% end %>
 
       <!-- Venue Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <%= for schedule <- @venue_schedules do %>
-          <.event_card event={schedule.event} />
-        <% end %>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <%= for schedule <- @venue_schedules do %>
+            <.event_card event={schedule.event} />
+          <% end %>
+        </div>
       </div>
     </div>
     """
@@ -233,6 +280,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   end
 
   defp get_source_name("pubquiz-pl"), do: "PubQuiz Poland"
+  defp get_source_name("week_pl"), do: "Restaurant Week"
   defp get_source_name(slug), do: slug |> String.replace("-", " ") |> String.capitalize()
 
   # Check if event has pricing information (from first source)

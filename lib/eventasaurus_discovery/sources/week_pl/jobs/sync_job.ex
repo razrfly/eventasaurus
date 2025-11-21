@@ -157,15 +157,15 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
     case FestivalManager.get_or_create_festival_container(source_id, festival, city.name, city.country) do
       {:ok, container} ->
         args = %{
-          source_id: source_id,
-          region_id: city.id,
-          region_name: city.name,
-          country: city.country,
-          festival_code: festival.code,
-          festival_name: festival.name,
-          festival_price: festival.price,
-          festival_container_id: container.id,  # Phase 4: Pass container ID to child jobs
-          force: force
+          "source_id" => source_id,
+          "region_id" => city.id,
+          "region_name" => city.name,
+          "country" => city.country,
+          "festival_code" => festival.code,
+          "festival_name" => festival.name,
+          "festival_price" => festival.price,
+          "festival_container_id" => container.id,  # Phase 4: Pass container ID to child jobs
+          "force" => force
         }
 
         meta = %{
@@ -193,8 +193,6 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
 
   # Get or create week.pl source record
   defp get_or_create_week_pl_source do
-    alias EventasaurusDiscovery.Sources.WeekPl.Config
-
     case Repo.get_by(SourceSchema, slug: Source.key()) do
       nil ->
         Logger.info("Creating week.pl source record...")

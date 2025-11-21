@@ -233,8 +233,8 @@ sources = [
       "event_types" => ["restaurant_week", "fine_dining_week", "breakfast_week"],
       "consolidation_type" => "daily",
       "occurrence_type" => "explicit",
-      "api_type" => "next_js_data",
-      "requires_build_id" => true
+      "api_type" => "graphql",
+      "requires_build_id" => false
     }
   }
 ]
