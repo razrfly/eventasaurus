@@ -171,10 +171,19 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
   # Extract primary image URL from restaurant imageFiles array.
   # Uses 'profile' size (900px) for optimal quality/size balance.
   # Returns image URL string or nil if no images available.
-  defp extract_primary_image(%{"imageFiles" => [first_image | _]}) when is_map(first_image) do
+  defp extract_primary_image(%{"imageFiles" => [first_image | _]} = restaurant) when is_map(first_image) do
+    require Logger
+    Logger.debug("[WeekPl.Transformer] ✅ Found imageFiles for #{restaurant["name"]}, count: #{length(restaurant["imageFiles"])}")
     # Priority order: profile (900px) > preview (500px) > original (1600px) > thumbnail (300px)
-    first_image["profile"] || first_image["preview"] || first_image["original"] || first_image["thumbnail"]
+    image_url = first_image["profile"] || first_image["preview"] || first_image["original"] || first_image["thumbnail"]
+    Logger.debug("[WeekPl.Transformer] 📸 Extracted image URL: #{String.slice(image_url || "nil", 0..60)}")
+    image_url
   end
 
-  defp extract_primary_image(_), do: nil
+  defp extract_primary_image(restaurant) do
+    require Logger
+    Logger.warning("[WeekPl.Transformer] ❌ No imageFiles found for restaurant: #{inspect(Map.keys(restaurant)[:name] || "unknown")}")
+    Logger.debug("[WeekPl.Transformer] Restaurant keys: #{inspect(Map.keys(restaurant))}")
+    nil
+  end
 end
