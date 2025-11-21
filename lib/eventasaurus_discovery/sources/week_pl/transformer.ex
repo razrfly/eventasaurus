@@ -51,10 +51,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
       title: restaurant["name"],
       description: build_description(restaurant, festival, city),
       url: build_url(restaurant["slug"]),
+      image_url: extract_primary_image(restaurant),
       external_id: external_id,
       occurrence_type: :explicit,
       starts_at: start_datetime,
       ends_at: end_datetime,
+      category_id: 10,  # Food & Drink category
       venue_attributes: %{
         name: restaurant["name"],
         latitude: get_coordinate(restaurant, "lat"),
@@ -75,7 +77,19 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
         festival_name: festival.name,
         menu_price: festival.price,
         cuisine: restaurant["cuisine"],
-        available_spots: get_availability(restaurant, slot)
+        available_spots: get_availability(restaurant, slot),
+        # Social proof & quality
+        rating: restaurant["rating"],
+        rating_count: restaurant["ratingCount"],
+        # Restaurant details
+        chef: restaurant["chef"],
+        restaurator: restaurant["restaurator"],
+        establishment_year: restaurant["establishmentYear"],
+        # External links
+        website_url: restaurant["webUrl"],
+        facebook_url: restaurant["facebookUrl"],
+        instagram_url: restaurant["instagramUrl"],
+        menu_file_url: restaurant["menuFileUrl"]
       }
     }
   end
@@ -153,4 +167,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
   defp build_url(slug) do
     "https://week.pl/#{slug}"
   end
+
+  # Extract primary image URL from restaurant imageFiles array.
+  # Uses 'profile' size (900px) for optimal quality/size balance.
+  # Returns image URL string or nil if no images available.
+  defp extract_primary_image(%{"imageFiles" => [first_image | _]}) when is_map(first_image) do
+    # Priority order: profile (900px) > preview (500px) > original (1600px) > thumbnail (300px)
+    first_image["profile"] || first_image["preview"] || first_image["original"] || first_image["thumbnail"]
+  end
+
+  defp extract_primary_image(_), do: nil
 end

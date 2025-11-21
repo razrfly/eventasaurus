@@ -135,6 +135,22 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
         description
         latitude
         longitude
+        rating
+        ratingCount
+        chef
+        restaurator
+        establishmentYear
+        webUrl
+        facebookUrl
+        instagramUrl
+        menuFileUrl
+        imageFiles {
+          id
+          original
+          preview
+          profile
+          thumbnail
+        }
         tags {
           name
         }

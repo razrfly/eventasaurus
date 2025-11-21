@@ -26,7 +26,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
-  alias EventasaurusDiscovery.Sources.WeekPl.{Source, DeploymentConfig}
+  alias EventasaurusDiscovery.Sources.WeekPl.{Source, DeploymentConfig, FestivalManager}
   alias EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob
 
   @impl Oban.Worker
@@ -153,31 +153,40 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
 
   # Queue region sync job for a city
   defp queue_region_job(source_id, city, festival, force, parent_job_id, pipeline_id) do
-    args = %{
-      source_id: source_id,
-      region_id: city.id,
-      region_name: city.name,
-      country: city.country,
-      festival_code: festival.code,
-      festival_name: festival.name,
-      festival_price: festival.price,
-      force: force
-    }
+    # Create or get festival container for this city (Phase 4: #2334)
+    case FestivalManager.get_or_create_festival_container(source_id, festival, city.name, city.country) do
+      {:ok, container} ->
+        args = %{
+          source_id: source_id,
+          region_id: city.id,
+          region_name: city.name,
+          country: city.country,
+          festival_code: festival.code,
+          festival_name: festival.name,
+          festival_price: festival.price,
+          festival_container_id: container.id,  # Phase 4: Pass container ID to child jobs
+          force: force
+        }
 
-    meta = %{
-      parent_job_id: parent_job_id,
-      pipeline_id: pipeline_id,
-      entity_id: city.id,
-      entity_type: "region"
-    }
+        meta = %{
+          parent_job_id: parent_job_id,
+          pipeline_id: pipeline_id,
+          entity_id: city.id,
+          entity_type: "region"
+        }
 
-    case Oban.insert(RegionSyncJob.new(args, meta: meta)) do
-      {:ok, _job} ->
-        Logger.debug("✅ Queued RegionSyncJob for #{city.name}")
-        {:ok, city.name}
+        case Oban.insert(RegionSyncJob.new(args, meta: meta)) do
+          {:ok, _job} ->
+            Logger.debug("✅ Queued RegionSyncJob for #{city.name} with festival container #{container.id}")
+            {:ok, city.name}
+
+          {:error, reason} ->
+            Logger.error("❌ Failed to queue RegionSyncJob for #{city.name}: #{inspect(reason)}")
+            {:error, reason}
+        end
 
       {:error, reason} ->
-        Logger.error("❌ Failed to queue RegionSyncJob for #{city.name}: #{inspect(reason)}")
+        Logger.error("❌ Failed to create festival container for #{city.name}: #{inspect(reason)}")
         {:error, reason}
     end
   end
