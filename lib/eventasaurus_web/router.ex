@@ -655,6 +655,11 @@ defmodule EventasaurusWeb.Router do
       live "/activities/:slug", PublicEventShowLive, :show
       live "/activities/:slug/:date_slug", PublicEventShowLive, :show
 
+      # Multi-city aggregated content (trivia, movies, classes, etc. across all cities)
+      # IMPORTANT: Must be before guest checkout and catch-all routes
+      # Pattern: /trivia/pubquiz-pl?scope=all&city=krakow
+      live "/:content_type/:identifier", AggregatedContentLive, :multi_city
+
       # Guest-accessible checkout
       live "/events/:slug/checkout", CheckoutLive
 
