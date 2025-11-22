@@ -146,10 +146,12 @@ defmodule EventasaurusDiscovery.EventRefresh do
     restaurant_id = metadata["restaurant_id"]
 
     # Extract slug from website_url (e.g., "https://week.pl/slay-space" -> "slay-space")
+    # Handle trailing slashes to avoid empty strings
     restaurant_slug =
       case metadata["website_url"] do
         url when is_binary(url) ->
           url
+          |> String.trim_trailing("/")
           |> String.split("/")
           |> List.last()
 

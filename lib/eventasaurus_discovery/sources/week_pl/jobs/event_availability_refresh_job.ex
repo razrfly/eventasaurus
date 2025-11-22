@@ -74,47 +74,57 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
         )
         |> Repo.one()
 
-      # Find the week_pl source
-      week_pl_source =
-        Enum.find(event_with_sources.sources, fn source ->
-          source.source && source.source.slug == "week_pl"
-        end)
+      if is_nil(event_with_sources) do
+        Logger.error(
+          "[WeekPl.RefreshJob] Event #{event.id} not found when loading sources"
+        )
 
-      if week_pl_source do
-        region_name = week_pl_source.metadata["region_name"] || "Unknown"
-
-        # Use today as the base date for fetching availability
-        today = Date.utc_today() |> Date.to_string()
-
-        # Fetch latest restaurant availability from week.pl API
-        case Client.fetch_restaurant_detail(
-               restaurant_id,
-               restaurant_slug,
-               region_name,
-               today,
-               1140,
-               2
-             ) do
-          {:ok, response} ->
-            update_source_with_fresh_availability(week_pl_source, response, args)
-
-          {:error, :not_found} ->
-            Logger.warning(
-              "[WeekPl.RefreshJob] Restaurant #{restaurant_slug} not found in API (may be removed from festival)"
-            )
-
-            {:error, :restaurant_not_found}
-
-          {:error, reason} ->
-            Logger.error(
-              "[WeekPl.RefreshJob] Failed to fetch availability for #{restaurant_slug}: #{inspect(reason)}"
-            )
-
-            {:error, reason}
-        end
+        {:error, :event_not_found}
       else
-        Logger.error("[WeekPl.RefreshJob] week_pl source not found for event #{event.id}")
-        {:error, :source_not_found}
+        # Find the week_pl source
+        week_pl_source =
+          Enum.find(event_with_sources.sources, fn source ->
+            source.source && source.source.slug == "week_pl"
+          end)
+
+        if week_pl_source do
+          # Safely extract region_name from metadata
+          metadata = week_pl_source.metadata || %{}
+          region_name = Map.get(metadata, "region_name", "Unknown")
+
+          # Use today as the base date for fetching availability
+          today = Date.utc_today() |> Date.to_string()
+
+          # Fetch latest restaurant availability from week.pl API
+          case Client.fetch_restaurant_detail(
+                 restaurant_id,
+                 restaurant_slug,
+                 region_name,
+                 today,
+                 1140,
+                 2
+               ) do
+            {:ok, response} ->
+              update_source_with_fresh_availability(week_pl_source, response, args)
+
+            {:error, :not_found} ->
+              Logger.warning(
+                "[WeekPl.RefreshJob] Restaurant #{restaurant_slug} not found in API (may be removed from festival)"
+              )
+
+              {:error, :restaurant_not_found}
+
+            {:error, reason} ->
+              Logger.error(
+                "[WeekPl.RefreshJob] Failed to fetch availability for #{restaurant_slug}: #{inspect(reason)}"
+              )
+
+              {:error, reason}
+          end
+        else
+          Logger.error("[WeekPl.RefreshJob] week_pl source not found for event #{event.id}")
+          {:error, :source_not_found}
+        end
       end
     else
       Logger.error(
