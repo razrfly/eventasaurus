@@ -50,6 +50,28 @@ defmodule EventasaurusDiscovery.Locations do
   end
 
   @doc """
+  Get the first discovery-enabled city to use as a fallback.
+
+  ## Examples
+
+      iex> Locations.get_first_discovery_enabled_city()
+      %City{discovery_enabled: true, ...}
+
+      iex> Locations.get_first_discovery_enabled_city()
+      nil  # when no cities are discovery-enabled
+  """
+  def get_first_discovery_enabled_city do
+    Repo.one(
+      from(c in City,
+        where: c.discovery_enabled == true,
+        order_by: [asc: c.name],
+        limit: 1,
+        preload: [:country]
+      )
+    )
+  end
+
+  @doc """
   Get events for a city using radius-based queries.
   Uses the existing optimized by_location function from PublicEvents.
 
