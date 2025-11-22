@@ -38,18 +38,18 @@ defmodule EventasaurusWeb.Components.Breadcrumbs do
   def breadcrumb(assigns) do
     ~H"""
     <nav class={["mb-4 text-sm", @class]} aria-label="Breadcrumb">
-      <ol class="flex items-center space-x-2 text-gray-500">
+      <ol class="flex items-center space-x-2 text-white/80">
         <%= for {item, index} <- Enum.with_index(@items) do %>
           <%= if index > 0 do %>
             <li aria-hidden="true" class="select-none">/</li>
           <% end %>
           <li>
             <%= if item.path do %>
-              <.link navigate={item.path} class="hover:text-gray-700 transition-colors">
+              <.link navigate={item.path} class="hover:text-white transition-colors">
                 <%= item.label %>
               </.link>
             <% else %>
-              <span class="text-gray-900 font-medium"><%= item.label %></span>
+              <span class="text-white font-medium"><%= item.label %></span>
             <% end %>
           </li>
         <% end %>

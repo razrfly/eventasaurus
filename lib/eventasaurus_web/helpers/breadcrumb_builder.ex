@@ -93,6 +93,59 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     ]
   end
 
+  @doc """
+  Build breadcrumb items for aggregated source pages.
+
+  Returns a list of breadcrumb items:
+  - Home
+  - City name
+  - Content type (capitalized)
+  - Source name with scope indicator (current page, no link)
+
+  Pattern (city scope):
+    Home / Kraków / Trivia / PubQuiz Poland
+
+  Pattern (multi-city scope):
+    Home / Kraków / Trivia / PubQuiz Poland (All Cities)
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  def build_aggregated_source_breadcrumbs(city, content_type, source_name, scope, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    # When viewing all cities, don't include city in breadcrumb path
+    # When city-scoped, include the city
+    base_items =
+      case scope do
+        :all_cities ->
+          [%{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"}]
+
+        _ ->
+          [
+            %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+            %{label: city.name, path: ~p"/c/#{city.slug}"}
+          ]
+      end
+
+    # Add content type (capitalized, no link for now)
+    # TODO: Link to content type index page when available (e.g., /c/krakow/trivia)
+    items_with_type =
+      base_items ++
+        [
+          %{label: String.capitalize(content_type), path: nil}
+        ]
+
+    # Add source name with scope context
+    final_label =
+      case scope do
+        :all_cities -> "#{source_name} (All Cities)"
+        _ -> source_name
+      end
+
+    items_with_type ++ [%{label: final_label, path: nil}]
+  end
+
   # Private helper functions
 
   defp add_city_breadcrumb(
