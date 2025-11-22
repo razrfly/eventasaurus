@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.Admin.GeocodingDashboardLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusDiscovery.Metrics.GeocodingStats
+  alias EventasaurusDiscovery.Sources.Source
 
   @impl true
   def mount(_params, _session, socket) do
@@ -123,11 +124,11 @@ defmodule EventasaurusWeb.Admin.GeocodingDashboardLive do
   defp success_rate_badge_class(rate) when rate >= 85.0, do: "bg-yellow-100 text-yellow-800"
   defp success_rate_badge_class(_), do: "bg-red-100 text-red-800"
 
-  defp format_scraper_name("question_one"), do: "QuestionOne"
-  defp format_scraper_name("kino_krakow"), do: "Kino Krakow"
-  defp format_scraper_name("resident_advisor"), do: "Resident Advisor"
-  defp format_scraper_name("karnet"), do: "Karnet"
-  defp format_scraper_name("cinema_city"), do: "Cinema City"
   defp format_scraper_name(nil), do: "Unknown"
-  defp format_scraper_name(name), do: name |> String.replace("_", " ") |> String.capitalize()
+
+  defp format_scraper_name(name) do
+    # Scrapers use underscores, sources use hyphens - normalize before lookup
+    normalized = String.replace(name, "_", "-")
+    Source.get_display_name(normalized)
+  end
 end

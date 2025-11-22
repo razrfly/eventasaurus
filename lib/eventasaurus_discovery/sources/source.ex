@@ -1,6 +1,9 @@
 defmodule EventasaurusDiscovery.Sources.Source do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query, only: [from: 2]
+
+  alias EventasaurusApp.Repo
 
   @allowed_domains ~w[
     music
@@ -137,4 +140,56 @@ defmodule EventasaurusDiscovery.Sources.Source do
   end
 
   def domains_compatible?(_, _), do: false
+
+  @doc """
+  Get the display name for a source by its slug.
+
+  This function queries the sources table and returns the `name` field for the given slug.
+  If the source is not found in the database, it falls back to generating a display name
+  from the slug by replacing hyphens/underscores with spaces and capitalizing each word.
+
+  ## Parameters
+
+    - `slug` - The source slug (e.g., "week_pl", "bandsintown", "pubquiz-pl")
+
+  ## Returns
+
+  The display name string (e.g., "Restaurant Week", "Bandsintown", "PubQuiz Poland")
+
+  ## Examples
+
+      iex> Source.get_display_name("week_pl")
+      "Restaurant Week"
+
+      iex> Source.get_display_name("bandsintown")
+      "Bandsintown"
+
+      iex> Source.get_display_name("unknown-source")
+      "Unknown Source"
+
+  ## Notes
+
+  - This is the single source of truth for source display names
+  - All hardcoded source name mappings should be replaced with this function
+  - The fallback handles both hyphen-separated and underscore-separated slugs
+  - Database queries are indexed by slug for performance
+
+  """
+  def get_display_name(slug) when is_binary(slug) do
+    case Repo.one(from s in __MODULE__, where: s.slug == ^slug, select: s.name) do
+      name when is_binary(name) -> name
+      nil -> fallback_display_name(slug)
+    end
+  end
+
+  def get_display_name(_), do: ""
+
+  # Generate a display name from a slug when source is not found in database
+  defp fallback_display_name(slug) do
+    slug
+    |> String.replace(~r/[-_]/, " ")
+    |> String.split()
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
 end
