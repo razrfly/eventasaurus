@@ -21,31 +21,131 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
   alias EventasaurusDiscovery.Sources.WeekPl.Config
 
   @doc """
-  Fetch restaurants for a specific region, date, and time slot using GraphQL.
+  Fetch restaurants for a specific region across multiple dates using GraphQL query aliases.
+
+  ## Implementation: Option C - Query Aliases (Issue #2351)
+  Uses GraphQL aliases to query 8 dates (today through +7 days) in a SINGLE API call.
+  This provides comprehensive availability coverage with zero API overhead.
 
   ## Parameters
   - region_id: Region ID (e.g., "1" for Kraków, "5" for Warszawa)
   - region_name: Region name (e.g., "Kraków") - used for logging only
-  - date: ISO date string (e.g., "2025-11-20")
+  - base_date: ISO date string to start from (typically today)
   - slot: Minutes from midnight (e.g., 1140 = 7:00 PM)
   - people_count: Party size (default: 2)
 
   ## Returns
   {:ok, graphql_response} | {:error, reason}
 
-  Response format mimics Next.js Apollo state for backward compatibility with existing jobs:
-  %{
-    "pageProps" => %{
-      "apolloState" => %{
-        "Restaurant:123" => %{"id" => "123", "name" => "...", ...}
-      }
-    }
-  }
+  Response format mimics Next.js Apollo state for backward compatibility.
+  Restaurants are automatically deduplicated (same ID across multiple dates).
   """
-  def fetch_restaurants(region_id, region_name, date, slot, people_count \\ 2) do
+  def fetch_restaurants(region_id, region_name, base_date, slot, people_count \\ 2) do
+    # Build aliased query for 8 dates: today (day_0) through +7 days (day_7)
     query = """
-    query GetRestaurants($regionId: ID!, $filters: ReservationFilter) {
-      restaurants(region_id: $regionId, reservation_filters: $filters, first: 50) {
+    query GetRestaurantsMultipleDates(
+      $regionId: ID!,
+      $filters0: ReservationFilter,
+      $filters1: ReservationFilter,
+      $filters2: ReservationFilter,
+      $filters3: ReservationFilter,
+      $filters4: ReservationFilter,
+      $filters5: ReservationFilter,
+      $filters6: ReservationFilter,
+      $filters7: ReservationFilter
+    ) {
+      day_0: restaurants(region_id: $regionId, reservation_filters: $filters0, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_1: restaurants(region_id: $regionId, reservation_filters: $filters1, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_2: restaurants(region_id: $regionId, reservation_filters: $filters2, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_3: restaurants(region_id: $regionId, reservation_filters: $filters3, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_4: restaurants(region_id: $regionId, reservation_filters: $filters4, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_5: restaurants(region_id: $regionId, reservation_filters: $filters5, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_6: restaurants(region_id: $regionId, reservation_filters: $filters6, first: 50) {
+        nodes {
+          id
+          name
+          slug
+          address
+          latitude
+          longitude
+          tags {
+            name
+          }
+        }
+      }
+      day_7: restaurants(region_id: $regionId, reservation_filters: $filters7, first: 50) {
         nodes {
           id
           name
@@ -61,23 +161,47 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
     }
     """
 
-    variables = %{
-      "regionId" => region_id,
-      "filters" => %{
-        "startsOn" => date,
-        "endsOn" => date,
-        "hours" => [slot],
-        "peopleCount" => people_count
-      }
-    }
+    # Parse base date and create date strings for all 8 days
+    {:ok, start_date} = Date.from_iso8601(base_date)
+    dates = for day_offset <- 0..7, do: Date.add(start_date, day_offset) |> Date.to_string()
 
-    Logger.debug("[WeekPl.Client] GraphQL query for #{region_name} (ID: #{region_id})")
+    # Build variables for each date
+    variables =
+      %{
+        "regionId" => region_id
+      }
+      |> Map.merge(
+        dates
+        |> Enum.with_index()
+        |> Enum.into(%{}, fn {date, index} ->
+          {"filters#{index}", %{
+            "startsOn" => date,
+            "endsOn" => date,
+            "hours" => [slot],
+            "peopleCount" => people_count
+          }}
+        end)
+      )
+
+    Logger.debug("[WeekPl.Client] GraphQL multi-date query for #{region_name} (ID: #{region_id})")
+    Logger.debug("[WeekPl.Client] Querying dates: #{Enum.join(dates, ", ")}")
 
     case execute_graphql_query(query, variables) do
-      {:ok, %{"data" => %{"restaurants" => %{"nodes" => restaurants}}}} ->
+      {:ok, %{"data" => data}} when is_map(data) ->
+        # Extract restaurants from all date aliases and deduplicate by ID
+        all_restaurants =
+          ["day_0", "day_1", "day_2", "day_3", "day_4", "day_5", "day_6", "day_7"]
+          |> Enum.flat_map(fn alias_name ->
+            case Map.get(data, alias_name) do
+              %{"nodes" => restaurants} when is_list(restaurants) -> restaurants
+              _ -> []
+            end
+          end)
+          |> Enum.uniq_by(fn restaurant -> restaurant["id"] end)
+
         # Transform to Apollo state format for backward compatibility
         apollo_state =
-          restaurants
+          all_restaurants
           |> Enum.reduce(%{}, fn restaurant, acc ->
             Map.put(acc, "Restaurant:#{restaurant["id"]}", restaurant)
           end)
@@ -89,7 +213,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
         }
 
         Logger.info(
-          "[WeekPl.Client] ✅ Found #{length(restaurants)} restaurants for #{region_name}"
+          "[WeekPl.Client] ✅ Found #{length(all_restaurants)} unique restaurants across 8 dates for #{region_name}"
         )
 
         {:ok, response}
@@ -173,9 +297,10 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
 
     case execute_graphql_query(query, variables) do
       {:ok, %{"data" => %{"restaurant" => restaurant}}} when not is_nil(restaurant) ->
-        # Filter reservables to only include dates within 2 weeks of requested date
+        # Filter reservables to only include dates within 4 weeks of requested date
+        # Expanded from 2 weeks to provide better availability coverage (Issue #2351)
         start_date = Date.from_iso8601!(date)
-        end_date = Date.add(start_date, 14)
+        end_date = Date.add(start_date, 28)
 
         filtered_reservables =
           (restaurant["reservables"] || [])
