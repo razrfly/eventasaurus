@@ -61,22 +61,22 @@ defmodule EventasaurusDiscovery.EventRefresh do
         {:error, :event_not_found}
 
       event ->
-        # Check rate limiting before proceeding
-        case check_rate_limit(event) do
-          {:ok, _} ->
-            # Find first source that supports refresh
-            refreshable_source = find_refreshable_source(event.sources)
+        # Find first source that supports refresh
+        refreshable_source = find_refreshable_source(event.sources)
 
-            case refreshable_source do
-              nil ->
-                {:error, :no_refreshable_source}
+        case refreshable_source do
+          nil ->
+            {:error, :no_refreshable_source}
 
-              source ->
+          source ->
+            # Check rate limiting before proceeding
+            case check_rate_limit(source) do
+              {:ok, _} ->
                 handle_refresh(source.source.slug, event, source, user_id)
-            end
 
-          {:error, :rate_limited} = error ->
-            error
+              {:error, :rate_limited} = error ->
+                error
+            end
         end
     end
   end
@@ -90,8 +90,8 @@ defmodule EventasaurusDiscovery.EventRefresh do
 
   # Private Functions
 
-  defp check_rate_limit(event) do
-    metadata = event.metadata || %{}
+  defp check_rate_limit(source) do
+    metadata = source.metadata || %{}
     last_refreshed_at = metadata["availability_last_refreshed_at"]
 
     case last_refreshed_at do
@@ -107,7 +107,7 @@ defmodule EventasaurusDiscovery.EventRefresh do
 
             if seconds_since_refresh < @refresh_cooldown_seconds do
               Logger.info(
-                "[EventRefresh] Rate limit hit for event #{event.id}: refreshed #{seconds_since_refresh}s ago (cooldown: #{@refresh_cooldown_seconds}s)"
+                "[EventRefresh] Rate limit hit for source #{source.id}: refreshed #{seconds_since_refresh}s ago (cooldown: #{@refresh_cooldown_seconds}s)"
               )
 
               {:error, :rate_limited}
@@ -118,7 +118,7 @@ defmodule EventasaurusDiscovery.EventRefresh do
           {:error, _} ->
             # Invalid timestamp format, allow refresh
             Logger.warning(
-              "[EventRefresh] Invalid timestamp format for event #{event.id}: #{inspect(timestamp)}"
+              "[EventRefresh] Invalid timestamp format for source #{source.id}: #{inspect(timestamp)}"
             )
 
             {:ok, :allowed}
@@ -144,7 +144,18 @@ defmodule EventasaurusDiscovery.EventRefresh do
   defp handle_refresh("week_pl", event, source, user_id) do
     metadata = source.metadata || %{}
     restaurant_id = metadata["restaurant_id"]
-    restaurant_slug = metadata["restaurant_slug"]
+
+    # Extract slug from website_url (e.g., "https://week.pl/slay-space" -> "slay-space")
+    restaurant_slug =
+      case metadata["website_url"] do
+        url when is_binary(url) ->
+          url
+          |> String.split("/")
+          |> List.last()
+
+        _ ->
+          nil
+      end
 
     if restaurant_id && restaurant_slug do
       args = %{
@@ -159,7 +170,10 @@ defmodule EventasaurusDiscovery.EventRefresh do
         EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob.new(args)
       )
     else
-      Logger.warning("[EventRefresh] week_pl source missing restaurant_id or restaurant_slug for event #{event.id}")
+      Logger.warning(
+        "[EventRefresh] week_pl source missing restaurant_id or website_url for event #{event.id} (metadata: #{inspect(metadata)})"
+      )
+
       {:error, :invalid_source_metadata}
     end
   end

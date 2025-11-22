@@ -378,6 +378,64 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
     end
   end
 
+  @doc """
+  Fetch ongoing festival editions from the Week.pl API.
+
+  Returns the real-time festival data including names, prices, and dates
+  directly from Week.pl's GraphQL API.
+
+  ## Returns
+  {:ok, [festival_editions]} | {:error, reason}
+
+  Each festival edition contains:
+  - id: Festival edition ID
+  - code: Festival code (e.g., "RW26W")
+  - price: Fixed menu price in PLN
+  - startsAt: Start date (ISO 8601)
+  - endsAt: End date (ISO 8601)
+  - festival: %{"id" => ..., "name" => ...}
+  """
+  def fetch_festival_editions do
+    query = """
+    query GetOngoingFestivalEditions {
+      ongoingFestivalEditions {
+        id
+        code
+        price
+        startsAt
+        endsAt
+        state
+        minPeopleCount
+        maxPeopleCount
+        festival {
+          id
+          name
+        }
+      }
+    }
+    """
+
+    Logger.debug("[WeekPl.Client] Fetching ongoing festival editions from API")
+
+    case execute_graphql_query(query, %{}) do
+      {:ok, %{"data" => %{"ongoingFestivalEditions" => editions}}} when is_list(editions) ->
+        Logger.info("[WeekPl.Client] ✅ Found #{length(editions)} ongoing festival editions")
+        {:ok, editions}
+
+      {:ok, %{"data" => %{"ongoingFestivalEditions" => nil}}} ->
+        Logger.info("[WeekPl.Client] No ongoing festivals found")
+        {:ok, []}
+
+      {:ok, %{"errors" => errors}} ->
+        Logger.error("[WeekPl.Client] ❌ GraphQL errors fetching festivals: #{inspect(errors)}")
+        {:error, :graphql_error}
+
+      {:error, reason} ->
+        Logger.error("[WeekPl.Client] ❌ Failed to fetch festivals: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
   # Private Functions
 
   defp execute_graphql_query(query, variables) do

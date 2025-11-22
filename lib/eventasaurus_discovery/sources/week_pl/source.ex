@@ -60,22 +60,16 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Source do
   end
 
   @doc """
-  Festival periods (update annually)
+  Fallback festival definitions.
 
-  For testing/development, includes 2025 test festivals.
-  Production festivals for 2026.
+  These are only used if the Week.pl API is unavailable or returns no festivals.
+  The primary source of festival data is the Week.pl GraphQL API via Client.fetch_festival_editions/0.
+
+  NOTE: Update these annually if needed, but prefer using the API as the source of truth.
   """
-  def active_festivals do
+  def fallback_festivals do
     [
-      # 2025 Test Festivals (for development/testing)
-      %{
-        name: "RestaurantWeek Test Winter",
-        code: "RWT25W",
-        starts_at: ~D[2025-11-15],
-        ends_at: ~D[2025-12-31],
-        price: 63.0
-      },
-      # 2026 Production Festivals
+      # Fallback festivals (only used if API fails)
       %{
         name: "RestaurantWeek Spring",
         code: "RWP26W",
@@ -101,14 +95,29 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Source do
   end
 
   @doc """
-  Check if any festival is currently active
+  Check if any festival is currently active.
+
+  First tries to fetch ongoing festivals from the Week.pl API.
+  If API is unavailable, falls back to checking fallback_festivals().
   """
   def festival_active? do
-    today = Date.utc_today()
+    case EventasaurusDiscovery.Sources.WeekPl.Client.fetch_festival_editions() do
+      {:ok, editions} when editions != [] ->
+        # API returned festivals - at least one is ongoing
+        true
 
-    Enum.any?(active_festivals(), fn festival ->
-      Date.compare(today, festival.starts_at) in [:eq, :gt] and
-        Date.compare(today, festival.ends_at) in [:eq, :lt]
-    end)
+      {:ok, []} ->
+        # API returned empty list - no ongoing festivals
+        false
+
+      {:error, _reason} ->
+        # API failed - fall back to checking hardcoded festivals
+        today = Date.utc_today()
+
+        Enum.any?(fallback_festivals(), fn festival ->
+          Date.compare(today, festival.starts_at) in [:eq, :gt] and
+            Date.compare(today, festival.ends_at) in [:eq, :lt]
+        end)
+    end
   end
 end

@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.CDN
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.EventRefresh
   alias EventasaurusWeb.Cache.EventPageCache
   import Ecto.Query
@@ -61,14 +62,26 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
-  def handle_info({:availability_refreshed, _data}, socket) do
+  def handle_info({:availability_refreshed, data}, socket) do
     # Handle PubSub broadcast from refresh job (source-agnostic)
     Logger.info("[PublicEventShowLive] Received availability refresh for event #{socket.assigns.event.id}")
 
+    # Re-fetch event with sources to show updated last_seen_at timestamp
+    event_with_fresh_sources =
+      from(pe in PublicEvent,
+        where: pe.id == ^socket.assigns.event.id,
+        preload: [sources: :source]
+      )
+      |> Repo.one()
+
     socket =
       socket
+      |> assign(:event, event_with_fresh_sources)
       |> assign(:refreshing_availability, false)
-      |> put_flash(:info, gettext("Availability updated!"))
+      |> put_flash(
+        :info,
+        gettext("Availability updated! %{count} timeslots available.", count: data.total_timeslots)
+      )
 
     {:noreply, socket}
   end
