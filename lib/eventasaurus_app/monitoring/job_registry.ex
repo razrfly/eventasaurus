@@ -7,6 +7,8 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   workers by scanning the codebase.
   """
 
+  alias EventasaurusDiscovery.Sources.Source
+
   @doc """
   Returns a list of all registered job configurations.
 
@@ -221,26 +223,9 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   end
 
   # Convert source slug to display name
-  defp humanize_source_name("bandsintown"), do: "Bandsintown Sync"
-  defp humanize_source_name("resident-advisor"), do: "Resident Advisor Sync"
-  defp humanize_source_name("ticketmaster"), do: "Ticketmaster Sync"
-  defp humanize_source_name("pubquiz-pl"), do: "Pubquiz Sync"
-  defp humanize_source_name("question-one"), do: "Question One Sync"
-  defp humanize_source_name("geeks-who-drink"), do: "Geeks Who Drink Sync"
-  defp humanize_source_name("speed-quizzing"), do: "Speed Quizzing Sync"
-  defp humanize_source_name("quizmeisters"), do: "Quizmeisters Sync"
-  defp humanize_source_name("inquizition"), do: "Inquizition Sync"
-  defp humanize_source_name("cinema-city"), do: "Cinema City Sync"
-  defp humanize_source_name("kino-krakow"), do: "Kino Krakow Sync"
-  defp humanize_source_name("sortiraparis"), do: "SortirAParis Sync"
-  defp humanize_source_name("karnet"), do: "Karnet Sync"
-
+  # Uses Source.get_display_name/1 as single source of truth
   defp humanize_source_name(slug) do
-    slug
-    |> String.split("-")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(" ")
-    |> Kernel.<>(" Sync")
+    Source.get_display_name(slug) <> " Sync"
   end
 
   # No longer needed - queues extracted from worker modules via extract_queue_from_worker/1

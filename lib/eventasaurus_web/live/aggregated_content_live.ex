@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Locations
+  alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Helpers.CurrencyHelpers
 
@@ -279,9 +280,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     "#{source_name} #{String.capitalize(content_type)} in #{city.name}"
   end
 
-  defp get_source_name("pubquiz-pl"), do: "PubQuiz Poland"
-  defp get_source_name("week_pl"), do: "Restaurant Week"
-  defp get_source_name(slug), do: slug |> String.replace("-", " ") |> String.capitalize()
+  defp get_source_name(slug), do: Source.get_display_name(slug)
 
   # Check if event has pricing information (from first source)
   defp has_pricing?(event) do
