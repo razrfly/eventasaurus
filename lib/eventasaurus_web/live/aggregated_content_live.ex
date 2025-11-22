@@ -20,17 +20,28 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       when not is_map_key(params, "city_slug") do
     # Multi-city route - city will come from query params
     # Use a default city temporarily (will be updated in handle_params)
-    default_city = Locations.get_city_by_slug("krakow")
+    # Fallback chain: krakow -> first discovery-enabled city -> error
+    default_city =
+      Locations.get_city_by_slug("krakow") || Locations.get_first_discovery_enabled_city()
 
-    {:ok,
-     socket
-     |> assign(:city, default_city)
-     |> assign(:content_type, content_type)
-     |> assign(:identifier, identifier)
-     |> assign(:scope, :all_cities)
-     |> assign(:page_title, format_page_title(content_type, identifier, default_city))
-     |> assign(:source_name, get_source_name(identifier))
-     |> assign(:is_multi_city_route, true)}
+    case default_city do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "No cities available")
+         |> push_navigate(to: ~p"/activities")}
+
+      city ->
+        {:ok,
+         socket
+         |> assign(:city, city)
+         |> assign(:content_type, content_type)
+         |> assign(:identifier, identifier)
+         |> assign(:scope, :all_cities)
+         |> assign(:page_title, nil)
+         |> assign(:source_name, get_source_name(identifier))
+         |> assign(:is_multi_city_route, true)}
+    end
   end
 
   # City-scoped route: /c/:city_slug/:content_type/:identifier
@@ -127,74 +138,85 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     content_type = socket.assigns.content_type
     identifier = socket.assigns.identifier
 
-    # Fetch all events (no city filter) to count out-of-city events
-    all_events = fetch_all_aggregated_events(content_type, identifier)
+    # Guard against nil city
+    if is_nil(city) do
+      socket
+      |> put_flash(:error, "City not found")
+      |> push_navigate(to: ~p"/activities")
+    else
+      # Fetch all events (no city filter) to count out-of-city events
+      all_events = fetch_all_aggregated_events(content_type, identifier)
 
-    # Fetch city-scoped events
-    city_events = fetch_aggregated_events(content_type, identifier, city)
+      # Fetch city-scoped events
+      city_events = fetch_aggregated_events(content_type, identifier, city)
 
-    # Count events outside current city
-    out_of_city_count = length(all_events) - length(city_events)
+      # Count events outside current city
+      out_of_city_count = length(all_events) - length(city_events)
 
-    # Get unique cities from all events (safely handle missing venue/city data)
-    unique_cities =
-      all_events
-      |> Enum.map(fn event ->
-        event.venue && event.venue.city_id
-      end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-      |> length()
+      # Get unique cities from all events (safely handle missing venue/city data)
+      unique_cities =
+        all_events
+        |> Enum.map(fn event ->
+          event.venue && event.venue.city_id
+        end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+        |> length()
 
-    # TOTAL event count is ALWAYS all events across all cities
-    total_event_count = length(all_events)
+      # TOTAL event count is ALWAYS all events across all cities
+      total_event_count = length(all_events)
 
-    # Group events based on scope
-    {venue_groups, city_groups} =
-      case scope do
-        :all_cities ->
-          # Group by city, then by venue within each city
-          groups = group_events_by_city(all_events, city)
-          {[], groups}
+      # Group events based on scope
+      {venue_groups, city_groups} =
+        case scope do
+          :all_cities ->
+            # Group by city, then by venue within each city
+            groups = group_events_by_city(all_events, city)
+            {[], groups}
 
-        :city_only ->
-          # Group by venue only for current city
-          venue_groups =
-            city_events
-            |> Enum.group_by(& &1.venue_id)
-            |> Enum.map(fn {_venue_id, venue_events} ->
-              %{event: List.first(venue_events)}
-            end)
-            |> Enum.sort_by(& &1.event.venue.name)
+          :city_only ->
+            # Group by venue only for current city
+            venue_groups =
+              city_events
+              |> Enum.group_by(& &1.venue_id)
+              |> Enum.map(fn {_venue_id, venue_events} ->
+                %{event: List.first(venue_events)}
+              end)
+              |> Enum.sort_by(& &1.event.venue.name)
 
-          {venue_groups, []}
-      end
+            {venue_groups, []}
+        end
 
-    # Extract hero image from first event with an image
-    hero_image =
-      (venue_groups ++ Enum.flat_map(city_groups, & &1.venue_groups))
-      |> Enum.find_value(fn %{event: event} ->
-        Map.get(event, :cover_image_url)
-      end)
+      # Extract hero image from first event with an image
+      hero_image =
+        (venue_groups ++ Enum.flat_map(city_groups, & &1.venue_groups))
+        |> Enum.find_value(fn %{event: event} ->
+          Map.get(event, :cover_image_url)
+        end)
 
-    # Build breadcrumb items using standard helper
-    breadcrumb_items =
-      BreadcrumbBuilder.build_aggregated_source_breadcrumbs(
-        city,
-        content_type,
-        socket.assigns.source_name,
-        scope
-      )
+      # Build breadcrumb items using standard helper
+      breadcrumb_items =
+        BreadcrumbBuilder.build_aggregated_source_breadcrumbs(
+          city,
+          content_type,
+          socket.assigns.source_name,
+          scope
+        )
 
-    socket
-    |> assign(:scope, scope)
-    |> assign(:venue_schedules, venue_groups)
-    |> assign(:city_groups, city_groups)
-    |> assign(:out_of_city_count, out_of_city_count)
-    |> assign(:unique_cities, unique_cities)
-    |> assign(:total_event_count, total_event_count)
-    |> assign(:hero_image, hero_image)
-    |> assign(:breadcrumb_items, breadcrumb_items)
+      # Update page title after city is finalized
+      page_title = format_page_title(content_type, identifier, city)
+
+      socket
+      |> assign(:scope, scope)
+      |> assign(:page_title, page_title)
+      |> assign(:venue_schedules, venue_groups)
+      |> assign(:city_groups, city_groups)
+      |> assign(:out_of_city_count, out_of_city_count)
+      |> assign(:unique_cities, unique_cities)
+      |> assign(:total_event_count, total_event_count)
+      |> assign(:hero_image, hero_image)
+      |> assign(:breadcrumb_items, breadcrumb_items)
+    end
   end
 
   @impl true
@@ -213,7 +235,10 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
           <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col justify-end pb-8">
             <!-- Breadcrumbs -->
-            <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-4 text-gray-200" />
+            <Breadcrumbs.breadcrumb
+              items={@breadcrumb_items}
+              text_color="text-white/80 hover:text-white"
+            />
 
             <h1 class="text-4xl md:text-5xl font-bold text-white">
               <%= @source_name %> in <%= @city.name %>
@@ -351,7 +376,12 @@ defmodule EventasaurusWeb.AggregatedContentLive do
               <div class="flex items-center justify-between mb-6 pb-4 border-b-2 border-gray-200">
                 <div class="flex items-center gap-3">
                   <h2 class="text-2xl font-bold text-gray-900">
-                    <%= city_group.city.name %>
+                    <.link
+                      navigate={~p"/#{@content_type}/#{@identifier}?scope=all&city=#{city_group.city.slug}"}
+                      class="hover:text-blue-600 transition-colors"
+                    >
+                      <%= city_group.city.name %>
+                    </.link>
                   </h2>
                   <%= if city_group.is_current do %>
                     <span class="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800">
