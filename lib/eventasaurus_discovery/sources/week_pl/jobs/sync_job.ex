@@ -26,7 +26,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
-  alias EventasaurusDiscovery.Sources.WeekPl.{Source, DeploymentConfig, FestivalManager}
+  alias EventasaurusDiscovery.Sources.WeekPl.{Source, Client, DeploymentConfig, FestivalManager}
   alias EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob
 
   @impl Oban.Worker
@@ -74,7 +74,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
       end
 
       # Get current active festival for metadata (or use first festival if forcing)
-      active_festival = get_active_festival() || List.first(Source.active_festivals())
+      active_festival = get_active_festival() || get_fallback_festival()
 
       # Queue job for each enabled city (respects deployment phase)
       cities = DeploymentConfig.active_cities()
@@ -124,22 +124,68 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
     end
   end
 
-  # Get currently active festival
+  # Get currently active festival from API
   defp get_active_festival do
-    today = Date.utc_today()
+    case Client.fetch_festival_editions() do
+      {:ok, [edition | _]} ->
+        # API returned festivals - transform first one to our format
+        transform_api_festival(edition)
 
-    Source.active_festivals()
-    |> Enum.find(fn festival ->
-      Date.compare(today, festival.starts_at) in [:eq, :gt] and
-        Date.compare(today, festival.ends_at) in [:eq, :lt]
-    end)
+      {:ok, []} ->
+        # No ongoing festivals from API
+        nil
+
+      {:error, reason} ->
+        Logger.warning("[WeekPl.SyncJob] API fetch failed (#{inspect(reason)}), using fallback")
+        # API failed - check fallback festivals
+        today = Date.utc_today()
+
+        Source.fallback_festivals()
+        |> Enum.find(fn festival ->
+          Date.compare(today, festival.starts_at) in [:eq, :gt] and
+            Date.compare(today, festival.ends_at) in [:eq, :lt]
+        end)
+    end
+  end
+
+  # Get fallback festival (used when forcing or API unavailable)
+  defp get_fallback_festival do
+    List.first(Source.fallback_festivals())
   end
 
   # Get next upcoming festival
   defp get_next_festival do
+    case Client.fetch_festival_editions() do
+      {:ok, editions} when editions != [] ->
+        # API returned festivals - find the next upcoming one
+        today = Date.utc_today()
+
+        editions
+        |> Enum.map(&transform_api_festival/1)
+        |> Enum.filter(fn festival ->
+          Date.compare(today, festival.starts_at) == :lt
+        end)
+        |> Enum.sort_by(& &1.starts_at, Date)
+        |> List.first()
+        |> case do
+          nil -> nil
+          festival -> %{code: festival.code, starts_at: festival.starts_at}
+        end
+
+      {:ok, []} ->
+        # No festivals from API - check fallback
+        check_fallback_next_festival()
+
+      {:error, _reason} ->
+        # API failed - check fallback
+        check_fallback_next_festival()
+    end
+  end
+
+  defp check_fallback_next_festival do
     today = Date.utc_today()
 
-    Source.active_festivals()
+    Source.fallback_festivals()
     |> Enum.filter(fn festival ->
       Date.compare(today, festival.starts_at) == :lt
     end)
@@ -149,6 +195,17 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
       nil -> nil
       festival -> %{code: festival.code, starts_at: festival.starts_at}
     end
+  end
+
+  # Transform API festival edition to our internal format
+  defp transform_api_festival(edition) do
+    %{
+      name: edition["festival"]["name"],
+      code: edition["code"],
+      starts_at: Date.from_iso8601!(edition["startsAt"]),
+      ends_at: Date.from_iso8601!(edition["endsAt"]),
+      price: edition["price"]
+    }
   end
 
   # Queue region sync job for a city

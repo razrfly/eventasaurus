@@ -34,6 +34,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     priority: 0  # High priority for user-initiated requests
 
   require Logger
+  import Ecto.Query
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Sources.WeekPl.Client
@@ -61,36 +62,59 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
   end
 
   defp refresh_event_availability(event, args) do
-    # Extract restaurant details from event metadata
-    metadata = event.metadata || %{}
-    restaurant_id = args["restaurant_id"] || metadata["restaurant_id"]
-    restaurant_slug = args["restaurant_slug"] || metadata["restaurant_slug"]
-    region_name = metadata["region_name"] || "Unknown"
+    restaurant_id = args["restaurant_id"]
+    restaurant_slug = args["restaurant_slug"]
 
     if restaurant_id && restaurant_slug do
-      # Use today as the base date for fetching availability
-      today = Date.utc_today() |> Date.to_string()
+      # Load event with sources to find the week_pl source
+      event_with_sources =
+        from(pe in PublicEvent,
+          where: pe.id == ^event.id,
+          preload: [sources: :source]
+        )
+        |> Repo.one()
 
-      # Fetch latest restaurant availability from week.pl API
-      case Client.fetch_restaurant_detail(restaurant_id, restaurant_slug, region_name, today, 1140,
-             2
-           ) do
-        {:ok, response} ->
-          update_event_with_fresh_availability(event, response, args)
+      # Find the week_pl source
+      week_pl_source =
+        Enum.find(event_with_sources.sources, fn source ->
+          source.source && source.source.slug == "week_pl"
+        end)
 
-        {:error, :not_found} ->
-          Logger.warning(
-            "[WeekPl.RefreshJob] Restaurant #{restaurant_slug} not found in API (may be removed from festival)"
-          )
+      if week_pl_source do
+        region_name = week_pl_source.metadata["region_name"] || "Unknown"
 
-          {:error, :restaurant_not_found}
+        # Use today as the base date for fetching availability
+        today = Date.utc_today() |> Date.to_string()
 
-        {:error, reason} ->
-          Logger.error(
-            "[WeekPl.RefreshJob] Failed to fetch availability for #{restaurant_slug}: #{inspect(reason)}"
-          )
+        # Fetch latest restaurant availability from week.pl API
+        case Client.fetch_restaurant_detail(
+               restaurant_id,
+               restaurant_slug,
+               region_name,
+               today,
+               1140,
+               2
+             ) do
+          {:ok, response} ->
+            update_source_with_fresh_availability(week_pl_source, response, args)
 
-          {:error, reason}
+          {:error, :not_found} ->
+            Logger.warning(
+              "[WeekPl.RefreshJob] Restaurant #{restaurant_slug} not found in API (may be removed from festival)"
+            )
+
+            {:error, :restaurant_not_found}
+
+          {:error, reason} ->
+            Logger.error(
+              "[WeekPl.RefreshJob] Failed to fetch availability for #{restaurant_slug}: #{inspect(reason)}"
+            )
+
+            {:error, reason}
+        end
+      else
+        Logger.error("[WeekPl.RefreshJob] week_pl source not found for event #{event.id}")
+        {:error, :source_not_found}
       end
     else
       Logger.error(
@@ -101,7 +125,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     end
   end
 
-  defp update_event_with_fresh_availability(event, api_response, args) do
+  defp update_source_with_fresh_availability(source, api_response, args) do
     # Extract availability data from API response
     apollo_state = get_in(api_response, ["pageProps", "apolloState"]) || %{}
 
@@ -118,9 +142,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
       # Extract availability slots from Daily objects
       availability_summary = extract_availability_summary(apollo_state)
 
-      # Update event metadata with fresh availability
+      # Update source metadata with fresh availability
       updated_metadata =
-        (event.metadata || %{})
+        (source.metadata || %{})
         |> Map.put("availability_last_refreshed_at", DateTime.utc_now() |> DateTime.to_iso8601())
         |> Map.put("availability_last_refreshed_by", args["requested_by_user_id"])
         |> Map.put("availability_summary", availability_summary)
@@ -130,21 +154,24 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
           availability_summary["total_timeslots"] || 0
         )
 
-      # Update event in database
-      case event
-           |> Ecto.Changeset.change(metadata: updated_metadata)
+      # Update source in database with fresh metadata and timestamp
+      case source
+           |> Ecto.Changeset.change(
+             metadata: updated_metadata,
+             last_seen_at: DateTime.utc_now()
+           )
            |> Repo.update() do
-        {:ok, updated_event} ->
+        {:ok, _updated_source} ->
           Logger.info(
-            "[WeekPl.RefreshJob] ✅ Refreshed availability for event #{event.id}: #{availability_summary["available_dates_count"]} dates, #{availability_summary["total_timeslots"]} timeslots"
+            "[WeekPl.RefreshJob] ✅ Refreshed availability for event #{source.event_id}: #{availability_summary["available_dates_count"]} dates, #{availability_summary["total_timeslots"]} timeslots"
           )
 
           # Broadcast update to LiveView clients
-          broadcast_availability_update(updated_event, availability_summary)
+          broadcast_availability_update(source.event_id, availability_summary)
 
           {:ok,
            %{
-             "event_id" => event.id,
+             "event_id" => source.event_id,
              "status" => "success",
              "available_dates" => length(availability_summary["available_dates"] || []),
              "total_timeslots" => availability_summary["total_timeslots"] || 0,
@@ -153,7 +180,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
 
         {:error, changeset} ->
           Logger.error(
-            "[WeekPl.RefreshJob] Failed to update event #{event.id}: #{inspect(changeset.errors)}"
+            "[WeekPl.RefreshJob] Failed to update source #{source.id}: #{inspect(changeset.errors)}"
           )
 
           {:error, :update_failed}
@@ -199,14 +226,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     }
   end
 
-  defp broadcast_availability_update(event, availability_summary) do
+  defp broadcast_availability_update(event_id, availability_summary) do
     # Broadcast to event detail page subscribers
     PubSub.broadcast(
       Eventasaurus.PubSub,
-      "event:#{event.id}",
+      "event:#{event_id}",
       {:availability_refreshed,
        %{
-         event_id: event.id,
+         event_id: event_id,
          available_dates: availability_summary["available_dates"],
          total_timeslots: availability_summary["total_timeslots"],
          refreshed_at: DateTime.utc_now()
