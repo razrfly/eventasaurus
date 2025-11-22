@@ -53,6 +53,9 @@ config :eventasaurus, Oban,
     # week.pl detail queue for individual restaurant processing
     # Limited concurrency for API rate limits and consolidation
     week_pl_detail: 3,
+    # week.pl refresh queue for user-initiated availability refresh
+    # Higher priority (0) for user-triggered jobs, limited concurrency for rate limiting
+    week_pl_refresh: 2,
     # Google API queue for places lookups
     # Single concurrency to respect Google's rate limits
     google_lookup: 1,

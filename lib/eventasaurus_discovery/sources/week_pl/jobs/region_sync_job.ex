@@ -48,28 +48,30 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
       } = job) do
     Logger.info("🍽️  [WeekPl.RegionSync] Fetching restaurants for #{region_name}...")
 
-    # Query tomorrow's date - restaurants typically don't offer same-day reservations
-    # Validated: Tomorrow's date returns available restaurants, today returns 0
-    # See: https://github.com/razrfly/eventasaurus/issues/2332
-    date = Date.utc_today() |> Date.add(1) |> Date.to_string()
+    # Query full week using GraphQL aliases (Option C implementation - Issue #2351)
+    # Single API call fetches 8 dates (today through +7 days) with automatic deduplication
+    # This captures restaurants with availability patterns across the week
+    base_date = Date.utc_today() |> Date.to_string()
 
     # Use popular dinner time slot (7:00 PM = 1140 minutes)
     slot = 1140
     people_count = 2
 
-    # Build query params for observability (Phase 2: #2332)
+    # Build query params for observability (Phase 2: #2332, updated for #2351)
     query_params = %{
-      "date" => date,
+      "base_date" => base_date,
+      "date_range" => "#{base_date} to #{Date.utc_today() |> Date.add(7) |> Date.to_string()}",
       "slot" => slot,
       "people_count" => people_count,
       "region_id" => region_id,
-      "region_name" => region_name
+      "region_name" => region_name,
+      "query_strategy" => "multi_date_aliases"
     }
 
     # Rate limiting: 2 seconds between requests (configured in Config)
     Process.sleep(Config.request_delay_ms())
 
-    case Client.fetch_restaurants(region_id, region_name, date, slot, people_count) do
+    case Client.fetch_restaurants(region_id, region_name, base_date, slot, people_count) do
       {:ok, response} ->
         process_restaurants(response, source_id, args, job.id, meta, query_params)
 
@@ -129,9 +131,13 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
         "restaurant_count" => length(restaurants)
       },
       "decision_context" => %{
-        "date_strategy" => "tomorrow",
+        "date_strategy" => "multi_date_aliases_week",
+        "date_count" => 8,
+        "date_range" => query_params["date_range"],
         "slot_choice" => "7pm_dinner",
-        "rationale" => "Restaurants typically don't offer same-day reservations"
+        "rationale" => "GraphQL aliases query 8 dates (today through +7 days) in single API call for comprehensive availability coverage",
+        "issue" => "#2351",
+        "implementation" => "Option C"
       }
     }}
   end

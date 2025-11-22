@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.CDN
   alias EventasaurusDiscovery.PublicEventsEnhanced
+  alias EventasaurusDiscovery.EventRefresh
   alias EventasaurusWeb.Cache.EventPageCache
   import Ecto.Query
 
@@ -54,8 +55,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:bulk_email_input, "")
       |> assign(:modal_organizer, nil)
       |> assign(:nearby_events, [])
+      |> assign(:refreshing_availability, false)
 
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_info({:availability_refreshed, _data}, socket) do
+    # Handle PubSub broadcast from refresh job (source-agnostic)
+    Logger.info("[PublicEventShowLive] Received availability refresh for event #{socket.assigns.event.id}")
+
+    socket =
+      socket
+      |> assign(:refreshing_availability, false)
+      |> put_flash(:info, gettext("Availability updated!"))
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -200,6 +215,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> push_navigate(to: ~p"/activities")
 
       enriched_event ->
+        # Subscribe to PubSub for real-time availability updates
+        Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "event:#{enriched_event.id}")
+
         # Check if user has existing plan (not cached as it's user-specific)
         existing_plan =
           case get_current_user_id(socket) do
@@ -519,6 +537,35 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def handle_event("clear_all_emails", _params, socket) do
     {:noreply, assign(socket, :selected_emails, [])}
+  end
+
+  @impl true
+  def handle_event("refresh_availability", _params, socket) do
+    event = socket.assigns.event
+    user_id = get_current_user_id(socket)
+
+    case EventRefresh.refresh_event(event.id, user_id: user_id) do
+      {:ok, _job} ->
+        {:noreply,
+         socket
+         |> assign(:refreshing_availability, true)
+         |> put_flash(:info, gettext("Refreshing availability..."))}
+
+      {:error, :no_refreshable_source} ->
+        {:noreply,
+         put_flash(socket, :error, gettext("This event does not support availability refresh"))}
+
+      {:error, :rate_limited} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Please wait a moment before refreshing again")
+         )}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("Failed to refresh availability"))}
+    end
   end
 
   @impl true
@@ -1064,9 +1111,32 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
                 <!-- Sources -->
                 <div class="mt-12 pt-8 border-t border-gray-200">
-                  <h3 class="text-sm font-medium text-gray-500 mb-3">
-                    <%= gettext("Event Sources") %>
-                  </h3>
+                  <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm font-medium text-gray-500">
+                      <%= gettext("Event Sources") %>
+                    </h3>
+
+                    <%!-- Show refresh button if event supports availability refresh --%>
+                    <%= if EventRefresh.refreshable?(@event) do %>
+                      <button
+                        phx-click="refresh_availability"
+                        disabled={@refreshing_availability}
+                        class={"inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition #{if @refreshing_availability, do: "bg-gray-300 text-gray-500 cursor-not-allowed", else: "bg-blue-600 text-white hover:bg-blue-700"}"}
+                      >
+                        <%= if @refreshing_availability do %>
+                          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <%= gettext("Refreshing...") %>
+                        <% else %>
+                          <Heroicons.arrow_path class="w-4 h-4 mr-1.5" />
+                          <%= gettext("Refresh Availability") %>
+                        <% end %>
+                      </button>
+                    <% end %>
+                  </div>
+
                   <div class="flex flex-wrap gap-4">
                     <%= for source <- @event.sources do %>
                       <% source_url = get_source_url(source) %>
