@@ -14,10 +14,12 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
   require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusDiscovery.Sources.Pubquiz.{Client, CityExtractor, Jobs.CityJob}
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "pubquiz_sync_#{Date.utc_today()}"
     Logger.info("🎯 Starting PubQuiz Poland sync...")
 
     source = get_or_create_pubquiz_source()
@@ -38,6 +40,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
       City jobs scheduled: #{scheduled_count}
       """)
 
+      MetricsTracker.record_success(job, external_id)
+
       {:ok,
        %{
          cities_found: length(city_urls),
@@ -47,6 +51,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
     else
       {:error, reason} = error ->
         Logger.error("❌ PubQuiz sync failed: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "PubQuiz sync failed: #{inspect(reason)}", external_id)
         error
     end
   end

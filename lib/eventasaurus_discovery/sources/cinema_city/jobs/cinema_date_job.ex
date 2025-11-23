@@ -32,9 +32,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     cinema_data = args["cinema_data"]
     cinema_city_id = args["cinema_city_id"]
     date = args["date"]
@@ -47,22 +48,45 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
     Cinema ID: #{cinema_city_id}
     """)
 
+    # External ID for tracking (cinema + date)
+    external_id = "cinema_city_#{cinema_city_id}_#{date}"
+
     # Fetch film events from API
-    case Client.fetch_film_events(cinema_city_id, date) do
-      {:ok, %{films: films, events: events}} ->
-        if Enum.empty?(films) || Enum.empty?(events) do
-          Logger.info("📭 No events for #{cinema_data["name"]} on #{date}")
-          {:ok, %{films: 0, events: 0, jobs_scheduled: 0}}
-        else
-          process_film_events(films, events, cinema_data, cinema_city_id, date, source_id, force)
-        end
+    result =
+      case Client.fetch_film_events(cinema_city_id, date) do
+        {:ok, %{films: films, events: events}} ->
+          if Enum.empty?(films) || Enum.empty?(events) do
+            Logger.info("📭 No events for #{cinema_data["name"]} on #{date}")
+            {:ok, %{films: 0, events: 0, jobs_scheduled: 0}}
+          else
+            process_film_events(
+              films,
+              events,
+              cinema_data,
+              cinema_city_id,
+              date,
+              source_id,
+              force
+            )
+          end
+
+        {:error, reason} ->
+          Logger.error(
+            "❌ Failed to fetch film events for #{cinema_data["name"]} on #{date}: #{inspect(reason)}"
+          )
+
+          {:error, reason}
+      end
+
+    # Track metrics
+    case result do
+      {:ok, _stats} ->
+        MetricsTracker.record_success(job, external_id)
+        result
 
       {:error, reason} ->
-        Logger.error(
-          "❌ Failed to fetch film events for #{cinema_data["name"]} on #{date}: #{inspect(reason)}"
-        )
-
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 
@@ -155,7 +179,15 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
   end
 
   # Schedule ShowtimeProcessJobs for each matched film/event
-  defp schedule_showtime_jobs(matched, cinema_data, cinema_city_id, date, source_id, movie_count, force) do
+  defp schedule_showtime_jobs(
+         matched,
+         cinema_data,
+         cinema_city_id,
+         date,
+         source_id,
+         movie_count,
+         force
+       ) do
     # Calculate delay to give MovieDetailJobs time to complete first
     # Each MovieDetailJob is scheduled with delays based on its index: index * Config.rate_limit()
     # Last movie starts at: (movie_count - 1) * rate_limit

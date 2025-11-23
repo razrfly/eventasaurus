@@ -45,7 +45,10 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
       end)
       |> Enum.into(%{})
 
-    {:noreply, assign(socket, bulk_suggestions: Map.put(socket.assigns.bulk_suggestions, city.id, suggestions))}
+    {:noreply,
+     assign(socket,
+       bulk_suggestions: Map.put(socket.assigns.bulk_suggestions, city.id, suggestions)
+     )}
   end
 
   @impl true
@@ -57,7 +60,8 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
   @impl true
   def handle_event("reassign", %{"venue_id" => venue_id, "city_id" => city_id}, socket) do
     venue = Repo.get!(Venue, venue_id)
-    venue_city_id = venue.city_id  # Get the current city_id BEFORE reassigning
+    # Get the current city_id BEFORE reassigning
+    venue_city_id = venue.city_id
     venue_id_int = String.to_integer(venue_id)
 
     case reassign_venue(venue, String.to_integer(city_id)) do
@@ -98,7 +102,8 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
   @impl true
   def handle_event("create_and_assign", %{"venue_id" => venue_id, "city_id" => city_id}, socket) do
     venue = Repo.get!(Venue, venue_id)
-    venue_city_id = venue.city_id  # Get the current city_id BEFORE reassigning
+    # Get the current city_id BEFORE reassigning
+    venue_city_id = venue.city_id
     venue_id_int = String.to_integer(venue_id)
     city_id_int = String.to_integer(city_id)
 
@@ -181,7 +186,11 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
       end
     else
       {:noreply,
-       put_flash(socket, :error, "Cannot delete city with venues (#{length(city.venues)} remaining)")}
+       put_flash(
+         socket,
+         :error,
+         "Cannot delete city with venues (#{length(city.venues)} remaining)"
+       )}
     end
   end
 
@@ -251,7 +260,9 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
           # City doesn't exist in database yet
           # Store venue coordinates and country for creation
           venue_with_city = Repo.preload(venue, :city_ref)
-          country_id = if venue_with_city.city_ref, do: venue_with_city.city_ref.country_id, else: nil
+
+          country_id =
+            if venue_with_city.city_ref, do: venue_with_city.city_ref.country_id, else: nil
 
           %{
             city: nil,
@@ -295,7 +306,9 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
         # Multiple cities with same name - find the closest one
         multiple_cities
         |> Enum.map(fn city ->
-          distance = calculate_distance_coords(venue_lat, venue_lng, city.latitude, city.longitude)
+          distance =
+            calculate_distance_coords(venue_lat, venue_lng, city.latitude, city.longitude)
+
           {city, distance}
         end)
         |> Enum.filter(fn {_city, distance} -> !is_nil(distance) end)
@@ -337,7 +350,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
 
     # First get city IDs with venue counts
     city_ids_query =
-      from c in City,
+      from(c in City,
         left_join: v in assoc(c, :venues),
         where:
           fragment("? ~ '^[0-9]'", c.name) or
@@ -348,6 +361,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
         having: count(v.id) > 0,
         order_by: [desc: count(v.id)],
         select: c.id
+      )
 
     city_ids = Repo.all(city_ids_query)
 

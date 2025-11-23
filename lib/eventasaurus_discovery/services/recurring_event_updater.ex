@@ -118,9 +118,7 @@ defmodule EventasaurusDiscovery.Services.RecurringEventUpdater do
             {:ok, updated_event}
 
           {:error, changeset} ->
-            Logger.error(
-              "❌ Failed to update event ##{event.id}: #{inspect(changeset.errors)}"
-            )
+            Logger.error("❌ Failed to update event ##{event.id}: #{inspect(changeset.errors)}")
 
             {:error, changeset}
         end
@@ -131,9 +129,7 @@ defmodule EventasaurusDiscovery.Services.RecurringEventUpdater do
         {:ok, event}
 
       {:error, reason} ->
-        Logger.error(
-          "❌ Failed to calculate next occurrence for event ##{event.id}: #{reason}"
-        )
+        Logger.error("❌ Failed to calculate next occurrence for event ##{event.id}: #{reason}")
 
         {:error, reason}
     end

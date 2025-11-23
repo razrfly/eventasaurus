@@ -295,7 +295,10 @@ defmodule EventasaurusWeb.Components.NearbyEventsComponent do
     # Check if cover_image_url was added by enrichment (Phase 2)
     # This field is dynamically added by PublicEventsEnhanced.enrich_event_images/2
     cover_url = Map.get(event, :cover_image_url)
-    Logger.info("🖼️  NearbyEventsComponent - Event #{event.id}, cover_image_url: #{inspect(cover_url)}")
+
+    Logger.info(
+      "🖼️  NearbyEventsComponent - Event #{event.id}, cover_image_url: #{inspect(cover_url)}"
+    )
 
     case cover_url do
       nil ->

@@ -38,13 +38,15 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     source_id = args["source_id"]
     bounds = args["bounds"]
     limit = args["limit"]
     force = args["force"] || false
+    external_id = "geeks_who_drink_index_#{Date.utc_today()}"
 
     Logger.info("🔄 Fetching Geeks Who Drink venues from map API")
 
@@ -85,6 +87,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
 
           if Enum.empty?(venues) do
             Logger.info("✅ No venues found in response")
+            MetricsTracker.record_success(job, external_id)
             {:ok, :complete}
           else
             Logger.info("📋 Found #{length(venues)} venues")
@@ -97,20 +100,34 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
             (#{length(venues) - scheduled_count} venues skipped - recently updated)
             """)
 
+            MetricsTracker.record_success(job, external_id)
             {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
           end
 
+        {:error, %HTTPoison.Error{reason: :timeout}} = error ->
+          Logger.error("❌ Network timeout fetching venues from map API")
+          MetricsTracker.record_failure(job, "Network timeout", external_id)
+          error
+
+        {:error, %HTTPoison.Error{reason: reason}} = error ->
+          Logger.error("❌ Network error fetching venues: #{inspect(reason)}")
+          MetricsTracker.record_failure(job, "Network error: #{inspect(reason)}", external_id)
+          error
+
         {:error, reason} = error ->
           Logger.error("❌ Failed to fetch venues from map API: #{inspect(reason)}")
+          MetricsTracker.record_failure(job, "Fetch failed: #{inspect(reason)}", external_id)
           error
 
         {:ok, response} ->
           Logger.error("❌ Unexpected response format from map API: #{inspect(response)}")
+          MetricsTracker.record_failure(job, "Unexpected response format", external_id)
           {:error, :unexpected_response_format}
       end
     else
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch fresh nonce: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Failed to fetch nonce: #{inspect(reason)}", external_id)
         error
     end
   end

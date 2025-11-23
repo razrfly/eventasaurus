@@ -42,7 +42,10 @@ defmodule Mix.Tasks.Unsplash.Test do
         )
 
       active_cities = Repo.all(query)
-      IO.puts("Found #{length(active_cities)} active cities: #{Enum.join(Enum.map(active_cities, & &1.name), ", ")}")
+
+      IO.puts(
+        "Found #{length(active_cities)} active cities: #{Enum.join(Enum.map(active_cities, & &1.name), ", ")}"
+      )
 
       Enum.each(active_cities, fn city ->
         IO.puts("\n📍 Fetching for #{city.name}...")
@@ -50,10 +53,15 @@ defmodule Mix.Tasks.Unsplash.Test do
         case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
           {:ok, updated_city} ->
             categories = get_in(updated_city.unsplash_gallery, ["categories"]) || %{}
-            total_images = Enum.reduce(categories, 0, fn {_name, data}, acc ->
-              acc + length(Map.get(data, "images", []))
-            end)
-            IO.puts("  ✅ Success! Fetched #{map_size(categories)} categories with #{total_images} total images")
+
+            total_images =
+              Enum.reduce(categories, 0, fn {_name, data}, acc ->
+                acc + length(Map.get(data, "images", []))
+              end)
+
+            IO.puts(
+              "  ✅ Success! Fetched #{map_size(categories)} categories with #{total_images} total images"
+            )
 
           {:error, reason} ->
             IO.puts("  ❌ Error: #{inspect(reason)}")
@@ -77,7 +85,10 @@ defmodule Mix.Tasks.Unsplash.Test do
 
     IO.puts("\n🌆 Fetching Unsplash images for: #{city_name}")
     IO.puts(String.duplicate("=", 60))
-    IO.puts("Fetching all 5 categories: general, architecture, historic, old_town, city_landmarks")
+
+    IO.puts(
+      "Fetching all 5 categories: general, architecture, historic, old_town, city_landmarks"
+    )
 
     city = Repo.get_by(City, name: city_name)
 
@@ -92,10 +103,14 @@ defmodule Mix.Tasks.Unsplash.Test do
             IO.puts("✅ Success! Fetched #{map_size(categories)} categories")
 
             IO.puts("\nCategory breakdown:")
+
             Enum.each(categories, fn {category_name, category_data} ->
               images = Map.get(category_data, "images", [])
               search_terms = Map.get(category_data, "search_terms", [])
-              IO.puts("  • #{category_name}: #{length(images)} images (search: #{List.first(search_terms)})")
+
+              IO.puts(
+                "  • #{category_name}: #{length(images)} images (search: #{List.first(search_terms)})"
+              )
             end)
 
           {:error, reason} ->

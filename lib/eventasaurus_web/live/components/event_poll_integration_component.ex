@@ -1755,6 +1755,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
           # Debug: Log the image_url value before adding it
           image_url_value = option_data[:image_url] || option_data["image_url"]
+
           if index == 0 do
             IO.puts("\n=== DEBUG: Before maybe_add_field ===")
             IO.puts("image_url_value: #{inspect(image_url_value)}")
@@ -1764,10 +1765,19 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
           # Add optional fields if present
           base_attrs
-          |> maybe_add_field(:description, option_data[:description] || option_data["description"])
+          |> maybe_add_field(
+            :description,
+            option_data[:description] || option_data["description"]
+          )
           |> maybe_add_field(:image_url, image_url_value)
-          |> maybe_add_field(:external_id, option_data[:external_id] || option_data["external_id"])
-          |> maybe_add_field(:external_data, option_data[:external_data] || option_data["external_data"])
+          |> maybe_add_field(
+            :external_id,
+            option_data[:external_id] || option_data["external_id"]
+          )
+          |> maybe_add_field(
+            :external_data,
+            option_data[:external_data] || option_data["external_data"]
+          )
           |> maybe_add_field(:metadata, option_data[:metadata] || option_data["metadata"])
         end
       end)
@@ -1786,6 +1796,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
       {:ok, poll} ->
         # Debug: Log the final attrs that will be saved
         first_attrs = List.first(poll_options_attrs)
+
         if first_attrs do
           IO.puts("\n=== DEBUG: Final attrs before create_poll_option ===")
           IO.puts("#{inspect(first_attrs, pretty: true)}")

@@ -75,20 +75,22 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
     Logger.info("Found #{length(countries)} countries")
 
     # Queue individual city refresh jobs with parent tracking
-    city_jobs = Enum.map(cities, fn city ->
-      UnsplashCityRefreshWorker.new(
-        %{city_id: city.id},
-        meta: %{"parent_job_id" => job_id, "job_role" => "worker", "entity_type" => "city"}
-      )
-    end)
+    city_jobs =
+      Enum.map(cities, fn city ->
+        UnsplashCityRefreshWorker.new(
+          %{city_id: city.id},
+          meta: %{"parent_job_id" => job_id, "job_role" => "worker", "entity_type" => "city"}
+        )
+      end)
 
     # Queue individual country refresh jobs with parent tracking
-    country_jobs = Enum.map(countries, fn country ->
-      UnsplashCountryRefreshWorker.new(
-        %{country_id: country.id},
-        meta: %{"parent_job_id" => job_id, "job_role" => "worker", "entity_type" => "country"}
-      )
-    end)
+    country_jobs =
+      Enum.map(countries, fn country ->
+        UnsplashCountryRefreshWorker.new(
+          %{country_id: country.id},
+          meta: %{"parent_job_id" => job_id, "job_role" => "worker", "entity_type" => "country"}
+        )
+      end)
 
     # Combine all jobs
     all_jobs = city_jobs ++ country_jobs
@@ -107,15 +109,19 @@ defmodule EventasaurusApp.Workers.UnsplashRefreshWorker do
           count = length(inserted_jobs)
           city_count = length(city_jobs)
           country_count = length(country_jobs)
-          Logger.info("✅ Unsplash Refresh Coordinator: Queued #{count} refresh jobs (#{city_count} cities, #{country_count} countries)")
+
+          Logger.info(
+            "✅ Unsplash Refresh Coordinator: Queued #{count} refresh jobs (#{city_count} cities, #{country_count} countries)"
+          )
 
           # Return results map for tracking
-          {:ok, %{
-            cities_queued: city_count,
-            countries_queued: country_count,
-            total_queued: count,
-            job_role: "coordinator"
-          }}
+          {:ok,
+           %{
+             cities_queued: city_count,
+             countries_queued: country_count,
+             total_queued: count,
+             job_role: "coordinator"
+           }}
       end
     end
   end

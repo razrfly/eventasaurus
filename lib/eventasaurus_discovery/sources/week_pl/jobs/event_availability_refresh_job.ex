@@ -31,7 +31,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
   use Oban.Worker,
     queue: :week_pl_refresh,
     max_attempts: 2,
-    priority: 0  # High priority for user-initiated requests
+    # High priority for user-initiated requests
+    priority: 0
 
   require Logger
   import Ecto.Query
@@ -39,12 +40,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Sources.WeekPl.Client
   alias Phoenix.PubSub
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args} = _job) do
+  def perform(%Oban.Job{args: args} = job) do
     event_id = args["event_id"]
     restaurant_slug = args["restaurant_slug"]
     requested_by = args["requested_by_user_id"]
+    external_id = "week_pl_refresh_#{event_id}"
 
     Logger.info(
       "🔄 [WeekPl.RefreshJob] Refreshing availability for event #{event_id} (#{restaurant_slug}), requested by user #{requested_by || "anonymous"}"
@@ -54,10 +57,46 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     case Repo.get(PublicEvent, event_id) do
       nil ->
         Logger.error("[WeekPl.RefreshJob] Event #{event_id} not found")
+        MetricsTracker.record_failure(job, "Event not found", external_id)
         {:error, :event_not_found}
 
       event ->
-        refresh_event_availability(event, args)
+        result = refresh_event_availability(event, args)
+
+        # Track success/failure based on result
+        case result do
+          {:ok, _} ->
+            MetricsTracker.record_success(job, external_id)
+            result
+
+          {:error, :event_not_found} ->
+            MetricsTracker.record_failure(job, "Event not found", external_id)
+            result
+
+          {:error, :source_not_found} ->
+            MetricsTracker.record_failure(job, "week_pl source not found for event", external_id)
+            result
+
+          {:error, :restaurant_not_found} ->
+            MetricsTracker.record_failure(job, "Restaurant not found in API", external_id)
+            result
+
+          {:error, :missing_restaurant_data} ->
+            MetricsTracker.record_failure(job, "Missing restaurant_id or restaurant_slug", external_id)
+            result
+
+          {:error, :invalid_api_response} ->
+            MetricsTracker.record_failure(job, "Invalid API response structure", external_id)
+            result
+
+          {:error, :update_failed} ->
+            MetricsTracker.record_failure(job, "Failed to update source metadata", external_id)
+            result
+
+          {:error, reason} ->
+            MetricsTracker.record_failure(job, "Refresh failed: #{inspect(reason)}", external_id)
+            result
+        end
     end
   end
 
@@ -75,9 +114,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
         |> Repo.one()
 
       if is_nil(event_with_sources) do
-        Logger.error(
-          "[WeekPl.RefreshJob] Event #{event.id} not found when loading sources"
-        )
+        Logger.error("[WeekPl.RefreshJob] Event #{event.id} not found when loading sources")
 
         {:error, :event_not_found}
       else
@@ -215,7 +252,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
       |> Enum.map(fn {date, dailies} ->
         timeslots =
           dailies
-          |> Enum.flat_map(& &1["possibleSlots"] || [])
+          |> Enum.flat_map(&(&1["possibleSlots"] || []))
           |> Enum.uniq()
           |> Enum.sort()
 
@@ -230,8 +267,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
     %{
       "available_dates" => Enum.map(availability_by_date, & &1["date"]),
       "available_dates_count" => length(availability_by_date),
-      "total_timeslots" =>
-        availability_by_date |> Enum.map(& &1["timeslot_count"]) |> Enum.sum(),
+      "total_timeslots" => availability_by_date |> Enum.map(& &1["timeslot_count"]) |> Enum.sum(),
       "by_date" => availability_by_date
     }
   end

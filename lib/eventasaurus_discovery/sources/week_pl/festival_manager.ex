@@ -47,7 +47,10 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.FestivalManager do
         create_festival_container(source_id, festival, city_name, country, festival_identifier)
 
       container ->
-        Logger.info("♻️  [WeekPl.FestivalManager] Using existing festival container: #{container.title} (ID: #{container.id})")
+        Logger.info(
+          "♻️  [WeekPl.FestivalManager] Using existing festival container: #{container.title} (ID: #{container.id})"
+        )
+
         {:ok, container}
     end
   end
@@ -69,8 +72,10 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.FestivalManager do
       PublicEventContainers.create_membership(
         container,
         event,
-        :explicit,  # Explicit association from source data
-        Decimal.new("1.00")  # Full confidence
+        # Explicit association from source data
+        :explicit,
+        # Full confidence
+        Decimal.new("1.00")
       )
     else
       {:error, :container_not_found}
@@ -115,11 +120,17 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.FestivalManager do
 
     case PublicEventContainers.create_container(attrs) do
       {:ok, container} ->
-        Logger.info("✅ [WeekPl.FestivalManager] Created festival container: #{container.title} (ID: #{container.id})")
+        Logger.info(
+          "✅ [WeekPl.FestivalManager] Created festival container: #{container.title} (ID: #{container.id})"
+        )
+
         {:ok, container}
 
       {:error, changeset} ->
-        Logger.error("❌ [WeekPl.FestivalManager] Failed to create festival container: #{inspect(changeset.errors)}")
+        Logger.error(
+          "❌ [WeekPl.FestivalManager] Failed to create festival container: #{inspect(changeset.errors)}"
+        )
+
         {:error, changeset}
     end
   end
@@ -166,11 +177,13 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.FestivalManager do
           case festival.ends_at do
             %Date{} = date -> DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
             %DateTime{} = datetime -> datetime
-            _ -> DateTime.add(start_date, 14 * 24 * 60 * 60, :second)  # Default 14 days
+            # Default 14 days
+            _ -> DateTime.add(start_date, 14 * 24 * 60 * 60, :second)
           end
 
         true ->
-          DateTime.add(start_date, 14 * 24 * 60 * 60, :second)  # Default 14 days
+          # Default 14 days
+          DateTime.add(start_date, 14 * 24 * 60 * 60, :second)
       end
 
     {start_date, end_date}

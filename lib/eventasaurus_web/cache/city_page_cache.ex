@@ -21,13 +21,13 @@ defmodule EventasaurusWeb.Cache.CityPageCache do
   def init(_opts) do
     # Start Cachex with expiration settings
     {:ok, _pid} =
-      Cachex.start_link(@cache_name, [
+      Cachex.start_link(@cache_name,
         expiration:
           expiration(
             default: :timer.minutes(30),
             interval: :timer.minutes(5)
           )
-      ])
+      )
 
     Logger.info("CityPageCache started successfully")
     {:ok, %{}}

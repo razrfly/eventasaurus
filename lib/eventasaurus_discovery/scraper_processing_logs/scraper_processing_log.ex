@@ -11,24 +11,24 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs.ScraperProcessingLog do
 
   schema "scraper_processing_logs" do
     # Source tracking
-    field :source_id, :integer
-    field :source_name, :string
+    field(:source_id, :integer)
+    field(:source_name, :string)
 
     # Oban job link for debugging
-    field :job_id, :integer
+    field(:job_id, :integer)
 
     # Outcome
-    field :status, :string
+    field(:status, :string)
 
     # Error tracking
-    field :error_type, :string
-    field :error_message, :string
+    field(:error_type, :string)
+    field(:error_message, :string)
 
     # Flexible metadata
-    field :metadata, :map, default: %{}
+    field(:metadata, :map, default: %{})
 
     # Timestamps
-    field :processed_at, :utc_datetime
+    field(:processed_at, :utc_datetime)
 
     timestamps(type: :utc_datetime)
   end

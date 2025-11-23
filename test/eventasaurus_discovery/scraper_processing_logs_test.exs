@@ -301,7 +301,10 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogsTest do
                "venue_creation_failed"
 
       assert ScraperProcessingLogs.categorize_error("Connection timeout") == "api_timeout"
-      assert ScraperProcessingLogs.categorize_error("rate limit exceeded") == "rate_limit_exceeded"
+
+      assert ScraperProcessingLogs.categorize_error("rate limit exceeded") ==
+               "rate_limit_exceeded"
+
       assert ScraperProcessingLogs.categorize_error("SSL certificate error") == "ssl_error"
     end
 

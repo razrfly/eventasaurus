@@ -28,7 +28,7 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
     Logger.info("Fetching images for city: #{city_name}")
 
     # Verify city exists - use all/1 to handle potential duplicates
-    cities = Repo.all(from c in City, where: c.name == ^city_name)
+    cities = Repo.all(from(c in City, where: c.name == ^city_name))
 
     cond do
       Enum.empty?(cities) ->
@@ -36,7 +36,10 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
         {:error, :not_found}
 
       length(cities) > 1 ->
-        Logger.error("Multiple cities found with name '#{city_name}'. Use fetch_and_store_all_categories/1 with a specific city struct instead.")
+        Logger.error(
+          "Multiple cities found with name '#{city_name}'. Use fetch_and_store_all_categories/1 with a specific city struct instead."
+        )
+
         {:error, :duplicate_city_name}
 
       true ->
@@ -144,32 +147,50 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
     # Define all 5 categories with their search terms
     categories_to_fetch = [
       {"general", [city.name, "#{city.name} cityscape", "#{city.name} skyline"]},
-      {"architecture", ["#{city.name} architecture", "#{city.name} modern buildings", "#{city.name} buildings"]},
-      {"historic", ["#{city.name} historic buildings", "#{city.name} monuments", "#{city.name} old architecture"]},
-      {"old_town", ["#{city.name} old town", "#{city.name} medieval", "#{city.name} historic center"]},
-      {"city_landmarks", ["#{city.name} landmarks", "#{city.name} famous places", "#{city.name} attractions"]}
+      {"architecture",
+       ["#{city.name} architecture", "#{city.name} modern buildings", "#{city.name} buildings"]},
+      {"historic",
+       [
+         "#{city.name} historic buildings",
+         "#{city.name} monuments",
+         "#{city.name} old architecture"
+       ]},
+      {"old_town",
+       ["#{city.name} old town", "#{city.name} medieval", "#{city.name} historic center"]},
+      {"city_landmarks",
+       ["#{city.name} landmarks", "#{city.name} famous places", "#{city.name} attractions"]}
     ]
 
     # Fetch and store each category - continue even if some fail
     # IMPORTANT: Use reduce to reload city after each store to prevent overwriting categories
-    {results, _final_city} = Enum.reduce(categories_to_fetch, {[], city}, fn {category_name, search_terms}, {acc_results, current_city} ->
-      case fetch_category_images(city.name, category_name, search_terms) do
-        {:ok, category_data} ->
-          case store_category(current_city, category_name, category_data) do
-            {:ok, _updated_gallery} ->
-              # Reload city from database to get latest data for next category
-              fresh_city = Repo.get!(City, city.id)
-              Logger.info("  ✓ Successfully fetched #{category_name} for #{city.name}")
-              {[{:ok, category_name} | acc_results], fresh_city}
-            {:error, reason} ->
-              Logger.warning("  ✗ Failed to store #{category_name} for #{city.name}: #{inspect(reason)}")
-              {[{:error, category_name, reason} | acc_results], current_city}
-          end
-        {:error, reason} ->
-          Logger.warning("  ✗ Failed to fetch #{category_name} for #{city.name}: #{inspect(reason)}")
-          {[{:error, category_name, reason} | acc_results], current_city}
-      end
-    end)
+    {results, _final_city} =
+      Enum.reduce(categories_to_fetch, {[], city}, fn {category_name, search_terms},
+                                                      {acc_results, current_city} ->
+        case fetch_category_images(city.name, category_name, search_terms) do
+          {:ok, category_data} ->
+            case store_category(current_city, category_name, category_data) do
+              {:ok, _updated_gallery} ->
+                # Reload city from database to get latest data for next category
+                fresh_city = Repo.get!(City, city.id)
+                Logger.info("  ✓ Successfully fetched #{category_name} for #{city.name}")
+                {[{:ok, category_name} | acc_results], fresh_city}
+
+              {:error, reason} ->
+                Logger.warning(
+                  "  ✗ Failed to store #{category_name} for #{city.name}: #{inspect(reason)}"
+                )
+
+                {[{:error, category_name, reason} | acc_results], current_city}
+            end
+
+          {:error, reason} ->
+            Logger.warning(
+              "  ✗ Failed to fetch #{category_name} for #{city.name}: #{inspect(reason)}"
+            )
+
+            {[{:error, category_name, reason} | acc_results], current_city}
+        end
+      end)
 
     # Reverse results to restore original order
     results = Enum.reverse(results)
@@ -188,7 +209,11 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       length(successes) > 0 ->
         # Partial success - some categories fetched
         updated_city = Repo.get!(City, city.id)
-        Logger.info("Fetched #{length(successes)}/5 categories for #{city.name} (#{length(failures)} failed)")
+
+        Logger.info(
+          "Fetched #{length(successes)}/5 categories for #{city.name} (#{length(failures)} failed)"
+        )
+
         {:ok, updated_city}
 
       true ->
@@ -218,39 +243,62 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       iex> UnsplashImageFetcher.fetch_and_store_all_categories_for_country(country)
       {:ok, %Country{unsplash_gallery: %{"active_category" => "general", "categories" => %{...}}}}
   """
-  @spec fetch_and_store_all_categories_for_country(Country.t()) :: {:ok, Country.t()} | {:error, any()}
+  @spec fetch_and_store_all_categories_for_country(Country.t()) ::
+          {:ok, Country.t()} | {:error, any()}
   def fetch_and_store_all_categories_for_country(%Country{} = country) do
     Logger.info("Fetching all categories for country: #{country.name}")
 
     # Define all 5 categories with their search terms for countries
     categories_to_fetch = [
       {"general", [country.name, "#{country.name} landscape", "#{country.name} scenery"]},
-      {"architecture", ["#{country.name} architecture", "#{country.name} modern buildings", "#{country.name} buildings"]},
-      {"historic", ["#{country.name} historic sites", "#{country.name} monuments", "#{country.name} heritage"]},
-      {"landmarks", ["#{country.name} landmarks", "#{country.name} famous places", "#{country.name} attractions"]},
-      {"nature", ["#{country.name} nature", "#{country.name} mountains", "#{country.name} natural beauty"]}
+      {"architecture",
+       [
+         "#{country.name} architecture",
+         "#{country.name} modern buildings",
+         "#{country.name} buildings"
+       ]},
+      {"historic",
+       ["#{country.name} historic sites", "#{country.name} monuments", "#{country.name} heritage"]},
+      {"landmarks",
+       [
+         "#{country.name} landmarks",
+         "#{country.name} famous places",
+         "#{country.name} attractions"
+       ]},
+      {"nature",
+       ["#{country.name} nature", "#{country.name} mountains", "#{country.name} natural beauty"]}
     ]
 
     # Fetch and store each category - continue even if some fail
     # IMPORTANT: Use reduce to reload country after each store to prevent overwriting categories
-    {results, _final_country} = Enum.reduce(categories_to_fetch, {[], country}, fn {category_name, search_terms}, {acc_results, current_country} ->
-      case fetch_category_images_for_country(country.name, category_name, search_terms) do
-        {:ok, category_data} ->
-          case store_category_for_country(current_country, category_name, category_data) do
-            {:ok, _updated_gallery} ->
-              # Reload country from database to get latest data for next category
-              fresh_country = Repo.get!(Country, country.id)
-              Logger.info("  ✓ Successfully fetched #{category_name} for #{country.name}")
-              {[{:ok, category_name} | acc_results], fresh_country}
-            {:error, reason} ->
-              Logger.warning("  ✗ Failed to store #{category_name} for #{country.name}: #{inspect(reason)}")
-              {[{:error, category_name, reason} | acc_results], current_country}
-          end
-        {:error, reason} ->
-          Logger.warning("  ✗ Failed to fetch #{category_name} for #{country.name}: #{inspect(reason)}")
-          {[{:error, category_name, reason} | acc_results], current_country}
-      end
-    end)
+    {results, _final_country} =
+      Enum.reduce(categories_to_fetch, {[], country}, fn {category_name, search_terms},
+                                                         {acc_results, current_country} ->
+        case fetch_category_images_for_country(country.name, category_name, search_terms) do
+          {:ok, category_data} ->
+            case store_category_for_country(current_country, category_name, category_data) do
+              {:ok, _updated_gallery} ->
+                # Reload country from database to get latest data for next category
+                fresh_country = Repo.get!(Country, country.id)
+                Logger.info("  ✓ Successfully fetched #{category_name} for #{country.name}")
+                {[{:ok, category_name} | acc_results], fresh_country}
+
+              {:error, reason} ->
+                Logger.warning(
+                  "  ✗ Failed to store #{category_name} for #{country.name}: #{inspect(reason)}"
+                )
+
+                {[{:error, category_name, reason} | acc_results], current_country}
+            end
+
+          {:error, reason} ->
+            Logger.warning(
+              "  ✗ Failed to fetch #{category_name} for #{country.name}: #{inspect(reason)}"
+            )
+
+            {[{:error, category_name, reason} | acc_results], current_country}
+        end
+      end)
 
     # Reverse results to restore original order
     results = Enum.reverse(results)
@@ -269,7 +317,11 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
       length(successes) > 0 ->
         # Partial success - some categories fetched
         updated_country = Repo.get!(Country, country.id)
-        Logger.info("Fetched #{length(successes)}/5 categories for #{country.name} (#{length(failures)} failed)")
+
+        Logger.info(
+          "Fetched #{length(successes)}/5 categories for #{country.name} (#{length(failures)} failed)"
+        )
+
         {:ok, updated_country}
 
       true ->
@@ -550,7 +602,8 @@ defmodule EventasaurusApp.Services.UnsplashImageFetcher do
 
   Returns {:ok, updated_gallery} or {:error, reason}
   """
-  @spec store_category_for_country(Country.t(), String.t(), map()) :: {:ok, map()} | {:error, atom()}
+  @spec store_category_for_country(Country.t(), String.t(), map()) ::
+          {:ok, map()} | {:error, atom()}
   def store_category_for_country(country, category_name, category_data) do
     Logger.info("Storing category '#{category_name}' for country: #{country.name}")
 

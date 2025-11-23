@@ -106,7 +106,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
     ancestor_ids = Enum.map(result.rows, fn [id] -> id end)
 
     # Fetch full job records for ancestor IDs
-    Repo.all(from s in JobExecutionSummary, where: s.id in ^ancestor_ids)
+    Repo.all(from(s in JobExecutionSummary, where: s.id in ^ancestor_ids))
   end
 
   @doc """
@@ -145,7 +145,12 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
     descendant_ids = Enum.map(result.rows, fn [id] -> id end)
 
     # Fetch full job records for descendant IDs, ordered by attempted_at
-    Repo.all(from s in JobExecutionSummary, where: s.id in ^descendant_ids, order_by: [desc: s.attempted_at])
+    Repo.all(
+      from(s in JobExecutionSummary,
+        where: s.id in ^descendant_ids,
+        order_by: [desc: s.attempted_at]
+      )
+    )
   end
 
   @doc """
@@ -279,7 +284,9 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       retryable = Enum.count(all_jobs, &(&1.state == "retryable"))
 
       durations = Enum.map(all_jobs, & &1.duration_ms) |> Enum.reject(&is_nil/1)
-      avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
+
+      avg_duration =
+        if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
 
       success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
 

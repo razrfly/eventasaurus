@@ -38,9 +38,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{id: job_id, args: args}) do
+  def perform(%Oban.Job{id: job_id, args: args} = job) do
     movie_slug = args["movie_slug"]
     movie_title = args["movie_title"]
     source_id = args["source_id"]
@@ -52,47 +53,63 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
     Source ID: #{source_id}
     """)
 
+    # External ID for tracking
+    external_id = "kino_krakow_movie_page_#{movie_slug}"
+
     # Establish session and fetch showtimes for all 7 days
-    with {:ok, {cookies, csrf_token}} <- establish_session(movie_slug),
-         {:ok, all_showtimes} <- fetch_all_days(movie_slug, movie_title, cookies, csrf_token) do
-      Logger.info("""
-      ✅ Movie #{movie_title} processed
-      Total showtimes across 7 days: #{length(all_showtimes)}
-      """)
+    result =
+      with {:ok, {cookies, csrf_token}} <- establish_session(movie_slug),
+           {:ok, all_showtimes} <- fetch_all_days(movie_slug, movie_title, cookies, csrf_token) do
+        Logger.info("""
+        ✅ Movie #{movie_title} processed
+        Total showtimes across 7 days: #{length(all_showtimes)}
+        """)
 
-      # Find unique movies from showtimes (should just be this one movie)
-      # But keeping pattern for consistency with existing architecture
-      unique_movies =
-        all_showtimes
-        |> Enum.map(& &1.movie_slug)
-        |> Enum.uniq()
+        # Find unique movies from showtimes (should just be this one movie)
+        # But keeping pattern for consistency with existing architecture
+        unique_movies =
+          all_showtimes
+          |> Enum.map(& &1.movie_slug)
+          |> Enum.uniq()
 
-      # Schedule MovieDetailJob (should be just 1) with parent tracking
-      # Returns the job struct for dependency chaining
-      movie_detail_job = schedule_movie_detail_job(unique_movies, source_id, job_id)
+        # Schedule MovieDetailJob (should be just 1) with parent tracking
+        # Returns the job struct for dependency chaining
+        movie_detail_job = schedule_movie_detail_job(unique_movies, source_id, job_id)
 
-      # Schedule ShowtimeProcessJobs for each showtime with parent tracking
-      showtimes_scheduled =
-        schedule_showtime_jobs(all_showtimes, source_id, movie_slug, force, job_id)
+        # Schedule ShowtimeProcessJobs for each showtime with parent tracking
+        showtimes_scheduled =
+          schedule_showtime_jobs(all_showtimes, source_id, movie_slug, force, job_id)
 
-      # Return standardized metadata structure for job tracking (Phase 3.1)
-      {:ok,
-       %{
-         "job_role" => "coordinator",
-         "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
-         "parent_job_id" => nil,  # Root coordinator job has no parent
-         "entity_id" => movie_slug,
-         "entity_type" => "movie",
-         "child_jobs_scheduled" => showtimes_scheduled + (if movie_detail_job, do: 1, else: 0),
-         "detail_job_scheduled" => if(movie_detail_job, do: 1, else: 0),
-         "showtime_jobs_scheduled" => showtimes_scheduled,
-         "showtimes_extracted" => length(all_showtimes),
-         "movie_detail_job_id" => if(movie_detail_job, do: movie_detail_job.id, else: nil)
-       }}
-    else
+        # Return standardized metadata structure for job tracking (Phase 3.1)
+        {:ok,
+         %{
+           "job_role" => "coordinator",
+           "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+           # Root coordinator job has no parent
+           "parent_job_id" => nil,
+           "entity_id" => movie_slug,
+           "entity_type" => "movie",
+           "child_jobs_scheduled" => showtimes_scheduled + if(movie_detail_job, do: 1, else: 0),
+           "detail_job_scheduled" => if(movie_detail_job, do: 1, else: 0),
+           "showtime_jobs_scheduled" => showtimes_scheduled,
+           "showtimes_extracted" => length(all_showtimes),
+           "movie_detail_job_id" => if(movie_detail_job, do: movie_detail_job.id, else: nil)
+         }}
+      else
+        {:error, reason} ->
+          Logger.error("❌ Failed to process movie #{movie_slug}: #{inspect(reason)}")
+          {:error, reason}
+      end
+
+    # Track metrics
+    case result do
+      {:ok, _stats} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
       {:error, reason} ->
-        Logger.error("❌ Failed to process movie #{movie_slug}: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 
@@ -253,7 +270,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
             job
 
           {:error, reason} ->
-            Logger.error("❌ Failed to schedule MovieDetailJob for #{movie_slug}: #{inspect(reason)}")
+            Logger.error(
+              "❌ Failed to schedule MovieDetailJob for #{movie_slug}: #{inspect(reason)}"
+            )
+
             nil
         end
 
@@ -323,7 +343,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
         # Delay strategy to ensure MovieDetailJob completes first:
         # - Base delay: 120 seconds (gives MovieDetailJob time to complete)
         # - Stagger: 2 seconds between each showtime (prevent API hammering)
-        delay_seconds = 120 + (index * 2)
+        delay_seconds = 120 + index * 2
 
         job_opts = [
           queue: :scraper,
@@ -342,15 +362,19 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
       end)
 
     # Count successful insertions
-    successful_count = Enum.count(scheduled_jobs, fn
-      {:ok, _} -> true
-      _ -> false
-    end)
+    successful_count =
+      Enum.count(scheduled_jobs, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
 
     # Log any failures
     failed_count = length(scheduled_jobs) - successful_count
+
     if failed_count > 0 do
-      Logger.error("❌ Failed to schedule #{failed_count}/#{length(scheduled_jobs)} ShowtimeProcessJobs")
+      Logger.error(
+        "❌ Failed to schedule #{failed_count}/#{length(scheduled_jobs)} ShowtimeProcessJobs"
+      )
     end
 
     successful_count

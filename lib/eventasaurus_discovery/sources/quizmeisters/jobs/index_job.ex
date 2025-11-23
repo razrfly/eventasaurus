@@ -30,9 +30,11 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.IndexJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "quizmeisters_index_#{Date.utc_today()}"
     source_id = args["source_id"]
     locations = args["locations"]
     limit = args["limit"]
@@ -44,6 +46,7 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.IndexJob do
 
     if Enum.empty?(venues) do
       Logger.info("✅ No valid venues found in response")
+      MetricsTracker.record_success(job, external_id)
       {:ok, :complete}
     else
       Logger.info("📋 Successfully parsed #{length(venues)} venues")
@@ -52,11 +55,13 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.IndexJob do
       scheduled_count = schedule_detail_jobs(venues, source_id, limit, force)
 
       skipped_count = length(venues) - scheduled_count
+
       Logger.info("""
       📤 Scheduled #{scheduled_count} detail jobs
       #{if force, do: "(Force mode - freshness check bypassed)", else: "(#{skipped_count} venues skipped - recently updated)"}
       """)
 
+      MetricsTracker.record_success(job, external_id)
       {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
     end
   end

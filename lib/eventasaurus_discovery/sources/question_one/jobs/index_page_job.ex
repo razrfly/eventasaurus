@@ -33,19 +33,22 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     page = args["page"] || 1
     source_id = args["source_id"]
     limit = args["limit"]
     force = args["force"] || false
+    external_id = "question_one_index_page_#{page}"
 
     Logger.info("🔄 Processing Question One RSS feed page #{page}")
 
     case Client.fetch_feed_page(page) do
       {:ok, :no_more_pages} ->
         Logger.info("✅ Reached end of feed at page #{page}")
+        MetricsTracker.record_success(job, external_id)
         {:ok, :complete}
 
       {:ok, body} ->
@@ -53,6 +56,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
 
         if Enum.empty?(venues) do
           Logger.info("✅ No more venues found at page #{page}")
+          MetricsTracker.record_success(job, external_id)
           {:ok, :complete}
         else
           Logger.info("📋 Found #{length(venues)} venues on page #{page}")
@@ -73,11 +77,23 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.IndexPageJob do
           should_continue = is_nil(limit) || scheduled_count > 0
           if should_continue, do: enqueue_next_page(page + 1, source_id, limit, force)
 
+          MetricsTracker.record_success(job, external_id)
           {:ok, %{venues_found: length(venues), jobs_scheduled: scheduled_count}}
         end
 
+      {:error, %HTTPoison.Error{reason: :timeout}} = error ->
+        Logger.error("❌ Network timeout fetching feed page #{page}")
+        MetricsTracker.record_failure(job, "Network timeout", external_id)
+        error
+
+      {:error, %HTTPoison.Error{reason: reason}} = error ->
+        Logger.error("❌ Network error fetching feed page #{page}: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Network error: #{inspect(reason)}", external_id)
+        error
+
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch feed page #{page}: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Fetch failed: #{inspect(reason)}", external_id)
         error
     end
   end

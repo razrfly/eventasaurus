@@ -26,9 +26,11 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
 
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, Quizmeisters}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "quizmeisters_sync_#{Date.utc_today()}"
     Logger.info("🔄 Starting Quizmeisters sync job")
 
     limit = args["limit"]
@@ -60,24 +62,29 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
             |> case do
               {:ok, _job} ->
                 Logger.info("✅ Enqueued index job for Quizmeisters")
+                MetricsTracker.record_success(job, external_id)
                 {:ok, %{source_id: source.id, locations_count: length(locations), limit: limit}}
 
               {:error, reason} = error ->
                 Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
+                MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
                 error
             end
 
           {:ok, response} ->
             Logger.error("❌ Invalid API response structure: #{inspect(response)}")
+            MetricsTracker.record_failure(job, "Invalid API response format", external_id)
             {:error, "Invalid API response format - expected {results: {locations: [...]}}"}
 
           {:error, reason} = error ->
             Logger.error("❌ Failed to parse JSON response: #{inspect(reason)}")
+            MetricsTracker.record_failure(job, "Failed to parse JSON: #{inspect(reason)}", external_id)
             error
         end
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch locations from API: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Failed to fetch locations: #{inspect(reason)}", external_id)
         error
     end
   end

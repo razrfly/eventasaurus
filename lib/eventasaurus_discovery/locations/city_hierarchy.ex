@@ -292,7 +292,8 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
 
     # PHASE 2: Inject base city into candidates if it's missing from stats
     city_stats_in_cluster_with_base =
-      if potential_base_city && !Enum.any?(city_stats_in_cluster, &(&1.city_id == potential_base_city.id)) do
+      if potential_base_city &&
+           !Enum.any?(city_stats_in_cluster, &(&1.city_id == potential_base_city.id)) do
         # Base city not in stats (has 0 events), inject it
         [%{city_id: potential_base_city.id, count: 0} | city_stats_in_cluster]
       else
@@ -330,7 +331,8 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
         # Event count: 1 point per event (lowest priority, just a tiebreaker)
         event_bonus = stat.count
 
-        score = discovery_bonus + parent_city_bonus + base_city_bonus + name_length_bonus + event_bonus
+        score =
+          discovery_bonus + parent_city_bonus + base_city_bonus + name_length_bonus + event_bonus
 
         {city, score}
       end)
@@ -356,7 +358,8 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
     # Check if any city in this cluster uses geographic matching (is_geographic: true)
     # If so, use MAX count instead of SUM to avoid double-counting events
     # (Geographic cities already include events from nearby inactive cities)
-    has_geographic = Enum.any?(city_stats_in_cluster_with_base, &Map.get(&1, :is_geographic, false))
+    has_geographic =
+      Enum.any?(city_stats_in_cluster_with_base, &Map.get(&1, :is_geographic, false))
 
     total_count =
       if has_geographic do
@@ -578,7 +581,9 @@ defmodule EventasaurusDiscovery.Locations.CityHierarchy do
         cluster_cities
         |> Enum.split_with(fn city ->
           if not is_nil(city.latitude) and not is_nil(city.longitude) do
-            distance = haversine_distance(centroid_lat, centroid_lon, city.latitude, city.longitude)
+            distance =
+              haversine_distance(centroid_lat, centroid_lon, city.latitude, city.longitude)
+
             distance <= distance_threshold
           else
             false

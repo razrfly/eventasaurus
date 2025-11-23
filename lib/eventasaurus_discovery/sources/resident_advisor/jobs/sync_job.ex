@@ -48,9 +48,10 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
 
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     # Debug: Log the args to see what we receive
     Logger.debug("RA SyncJob received args: #{inspect(args)}")
 
@@ -61,6 +62,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
     # Validate required arguments
     with {:ok, city_id} <- validate_integer(args["city_id"], "city_id"),
          {:ok, area_id} <- validate_integer(area_id_from_args, "area_id") do
+      # Generate external_id for tracking
+      external_id = "resident_advisor_sync_city_#{city_id}_#{Date.utc_today()}"
+
       # Optional arguments with defaults
       start_date = args["start_date"] || default_start_date()
       end_date = args["end_date"] || default_end_date()
@@ -82,18 +86,32 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
       # Get city with country preloaded
       case Repo.get(City, city_id) do
         nil ->
-          Logger.error("City not found: #{city_id}")
+          error_msg = "City not found: #{city_id}"
+          Logger.error(error_msg)
+          MetricsTracker.record_failure(job, error_msg, external_id)
           {:error, :city_not_found}
 
         city ->
           city = Repo.preload(city, :country)
           source = get_or_create_ra_source()
 
-          sync_events(city, area_id, start_date, end_date, page_size, source, force)
+          case sync_events(city, area_id, start_date, end_date, page_size, source, force) do
+            {:ok, result} ->
+              MetricsTracker.record_success(job, external_id)
+              {:ok, result}
+
+            {:error, reason} = error ->
+              MetricsTracker.record_failure(job, "Sync failed: #{inspect(reason)}", external_id)
+              error
+          end
       end
     else
       {:error, field, reason} ->
-        Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
+        error_msg = "Invalid job arguments - #{field}: #{reason}"
+        Logger.error("❌ #{error_msg}")
+        # Generate fallback external_id for error tracking
+        external_id = "resident_advisor_sync_error_#{Date.utc_today()}"
+        MetricsTracker.record_failure(job, error_msg, external_id)
         {:error, "invalid_args_#{field}"}
     end
   end

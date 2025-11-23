@@ -37,7 +37,8 @@ defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
         redirect_if_legacy(conn, city_slug, content_type, identifier, rest)
 
       # Multi-city route: /:content_type/:identifier
-      [content_type, identifier | rest] when content_type in ["restaurant", "movie", "concert", "trivia"] ->
+      [content_type, identifier | rest]
+      when content_type in ["restaurant", "movie", "concert", "trivia"] ->
         redirect_legacy_multi_city(conn, content_type, identifier, rest)
 
       _ ->

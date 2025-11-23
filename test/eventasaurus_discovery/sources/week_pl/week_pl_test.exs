@@ -71,14 +71,16 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
     end
 
     test "provides build ID cache TTL" do
-      assert Config.build_id_cache_ttl_ms() == 3_600_000  # 1 hour
+      # 1 hour
+      assert Config.build_id_cache_ttl_ms() == 3_600_000
     end
   end
 
   describe "TimeConverter module" do
     test "converts minutes to DateTime correctly" do
       date = ~D[2025-11-20]
-      slot = 1140  # 7:00 PM = 19:00
+      # 7:00 PM = 19:00
+      slot = 1140
 
       {:ok, datetime} = TimeConverter.convert_minutes_to_time(slot, date, "Europe/Warsaw")
 
@@ -107,7 +109,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
     end
 
     test "supports Polish timezone" do
-      {:ok, datetime} = TimeConverter.convert_minutes_to_time(1140, ~D[2025-11-20], "Europe/Warsaw")
+      {:ok, datetime} =
+        TimeConverter.convert_minutes_to_time(1140, ~D[2025-11-20], "Europe/Warsaw")
+
       assert datetime.time_zone == "Etc/UTC"
     end
   end
@@ -138,8 +142,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
       {:ok, restaurant: restaurant, festival: festival}
     end
 
-    test "transforms restaurant slot to event structure", %{restaurant: restaurant, festival: festival} do
-      slot = 1140  # 7:00 PM
+    test "transforms restaurant slot to event structure", %{
+      restaurant: restaurant,
+      festival: festival
+    } do
+      # 7:00 PM
+      slot = 1140
       date = "2025-11-20"
 
       event = Transformer.transform_restaurant_slot(restaurant, slot, date, festival, "Kraków")
@@ -176,13 +184,19 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
       assert %DateTime{} = event.ends_at
       # Event should be 2 hours long
       duration = DateTime.diff(event.ends_at, event.starts_at, :second)
-      assert duration == 7200  # 2 hours in seconds
+      # 2 hours in seconds
+      assert duration == 7200
     end
 
     test "creates correct consolidation key", %{restaurant: restaurant, festival: festival} do
-      event1 = Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-20", festival, "Kraków")
-      event2 = Transformer.transform_restaurant_slot(restaurant, 1200, "2025-11-20", festival, "Kraków")
-      event3 = Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-21", festival, "Kraków")
+      event1 =
+        Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-20", festival, "Kraków")
+
+      event2 =
+        Transformer.transform_restaurant_slot(restaurant, 1200, "2025-11-20", festival, "Kraków")
+
+      event3 =
+        Transformer.transform_restaurant_slot(restaurant, 1140, "2025-11-21", festival, "Kraków")
 
       # Same restaurant, same date -> same consolidation key
       assert event1.metadata.restaurant_date_id == event2.metadata.restaurant_date_id
@@ -230,7 +244,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.WeekPlTest do
       # This test requires network access and valid festival period
       # Skip if festival not active
       if Source.festival_active?() do
-        region_id = "1"  # Kraków
+        # Kraków
+        region_id = "1"
         region_name = "Kraków"
         date = Date.utc_today() |> Date.add(15) |> Date.to_string()
         slot = 1140

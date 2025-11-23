@@ -17,13 +17,15 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
       socket
       |> assign(:worker, worker)
       |> assign(:worker_display_name, format_worker_name(worker))
-      |> assign(:time_range, 7)  # Default to 7 days
+      # Default to 7 days
+      |> assign(:time_range, 7)
       |> assign(:loading, true)
       |> load_worker_data()
       |> assign(:loading, false)
       |> assign(:show_lineage_modal, false)
       |> assign(:selected_job, nil)
-      |> assign(:expanded_observability, nil)  # Track which job's observability is expanded
+      # Track which job's observability is expanded
+      |> assign(:expanded_observability, nil)
 
     {:ok, socket}
   end
@@ -146,6 +148,7 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
 
   # Format job results for display based on worker type
   defp format_job_results(nil), do: "No results"
+
   defp format_job_results(results) when is_map(results) do
     cond do
       # Unsplash workers
@@ -168,7 +171,18 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
       true ->
         # Show first few key metrics (excluding observability fields for summary)
         results
-        |> Enum.reject(fn {k, _v} -> k in ["job_role", "pipeline_id", "parent_job_id", "entity_id", "entity_type", "query_params", "api_response", "decision_context"] end)
+        |> Enum.reject(fn {k, _v} ->
+          k in [
+            "job_role",
+            "pipeline_id",
+            "parent_job_id",
+            "entity_id",
+            "entity_type",
+            "query_params",
+            "api_response",
+            "decision_context"
+          ]
+        end)
         |> Enum.take(3)
         |> Enum.map(fn {k, v} -> "#{Phoenix.Naming.humanize(k)}: #{v}" end)
         |> Enum.join(", ")
@@ -177,22 +191,26 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
 
   # Check if job has Phase 2 observability data (#2332)
   defp has_observability_data?(nil), do: false
+
   defp has_observability_data?(results) when is_map(results) do
     Map.has_key?(results, "query_params") or
-    Map.has_key?(results, "api_response") or
-    Map.has_key?(results, "decision_context")
+      Map.has_key?(results, "api_response") or
+      Map.has_key?(results, "decision_context")
   end
 
   # Format observability data for display
   defp format_observability_field(nil), do: "N/A"
+
   defp format_observability_field(data) when is_map(data) do
     Jason.encode!(data, pretty: true)
   end
+
   defp format_observability_field(data), do: inspect(data)
 
   # Format duration for display
   defp format_duration(nil), do: "-"
   defp format_duration(ms) when ms < 1000, do: "#{ms}ms"
+
   defp format_duration(ms) do
     seconds = Float.round(ms / 1000, 1)
     "#{seconds}s"
@@ -207,6 +225,7 @@ defmodule EventasaurusWeb.Admin.JobTypeMonitorLive do
 
   # Calculate bar width percentage for timeline chart
   defp calculate_bar_width(_count, 0), do: 0
+
   defp calculate_bar_width(count, total) do
     Float.round(count / total * 100, 1)
   end

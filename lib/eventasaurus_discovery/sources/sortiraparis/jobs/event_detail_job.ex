@@ -426,6 +426,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
           Cutoff: #{Calendar.strftime(cutoff, "%Y-%m-%d")}
           Grace period: #{grace_period_days} days
           """)
+
           {:error, :expired}
         else
           Logger.debug("✅ Event not expired (ends_at: #{Calendar.strftime(ends_at, "%Y-%m-%d")})")
@@ -453,15 +454,20 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.EventDetailJob do
       is_list(raw_event["dates"]) && length(raw_event["dates"]) > 0 ->
         dates = raw_event["dates"]
         # Dates could be DateTime structs or ISO8601 strings
-        parsed_dates = Enum.flat_map(dates, fn
-          %DateTime{} = dt -> [dt]
-          date_string when is_binary(date_string) ->
-            case DateTime.from_iso8601(date_string) do
-              {:ok, dt, _offset} -> [dt]
-              _ -> []
-            end
-          _ -> []
-        end)
+        parsed_dates =
+          Enum.flat_map(dates, fn
+            %DateTime{} = dt ->
+              [dt]
+
+            date_string when is_binary(date_string) ->
+              case DateTime.from_iso8601(date_string) do
+                {:ok, dt, _offset} -> [dt]
+                _ -> []
+              end
+
+            _ ->
+              []
+          end)
 
         if Enum.empty?(parsed_dates) do
           {:error, :no_end_date}

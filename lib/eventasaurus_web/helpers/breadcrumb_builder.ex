@@ -36,15 +36,24 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   # Mapping from aggregation type URL slugs to category IDs
   # Used for breadcrumb navigation to filter city pages by relevant category
   @aggregation_type_to_category %{
-    "social" => 29,     # trivia
-    "food" => 10,       # food-drink
-    "movies" => 8,      # film
-    "music" => 2,       # concerts
-    "comedy" => 6,      # comedy
-    "theater" => 4,     # theatre
-    "sports" => 5,      # sports
-    "classes" => 13,    # education
-    "festivals" => 3    # festivals
+    # trivia
+    "social" => 29,
+    # food-drink
+    "food" => 10,
+    # film
+    "movies" => 8,
+    # concerts
+    "music" => 2,
+    # comedy
+    "comedy" => 6,
+    # theatre
+    "theater" => 4,
+    # sports
+    "sports" => 5,
+    # education
+    "classes" => 13,
+    # festivals
+    "festivals" => 3
   }
 
   @doc """

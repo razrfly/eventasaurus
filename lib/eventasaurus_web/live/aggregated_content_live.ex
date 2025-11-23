@@ -133,7 +133,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         else
           # Collapsing to city only - use city-scoped route
           push_navigate(socket,
-            to: ~p"/c/#{socket.assigns.city.slug}/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}"
+            to:
+              ~p"/c/#{socket.assigns.city.slug}/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}"
           )
         end
       end)
@@ -542,15 +543,16 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   defp fetch_all_aggregated_events(_content_type, identifier) do
     source_slug = identifier
 
-    events = PublicEventsEnhanced.list_events(%{
-      source_slug: source_slug,
-      include_pattern_events: true,
-      # Get all results (max limit)
-      page_size: 500
-    })
+    events =
+      PublicEventsEnhanced.list_events(%{
+        source_slug: source_slug,
+        include_pattern_events: true,
+        # Get all results (max limit)
+        page_size: 500
+      })
 
     # Preload venue.city_ref association for distance calculations and city grouping
-    EventasaurusApp.Repo.preload(events, [venue: :city_ref])
+    EventasaurusApp.Repo.preload(events, venue: :city_ref)
   end
 
   # Group events by city with distance calculations

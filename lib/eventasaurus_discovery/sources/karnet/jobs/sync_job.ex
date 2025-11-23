@@ -20,6 +20,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   alias EventasaurusDiscovery.Sources.Karnet.{
     Client,
@@ -30,8 +31,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   }
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"limit" => limit} = args})
+  def perform(%Oban.Job{args: %{"limit" => limit} = args} = job)
       when limit > @chunk_size and not is_map_key(args, "chunk") do
+    external_id = "karnet_sync_chunked_#{Date.utc_today()}"
     # Large sync request - break into chunks
     city_id = args["city_id"]
 
@@ -80,6 +82,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
     Logger.info("✅ Scheduled #{successful_count}/#{chunks} chunk jobs for Karnet sync")
 
+    MetricsTracker.record_success(job, external_id)
+
     {:ok,
      %{
        mode: "chunked",
@@ -89,7 +93,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
      }}
   end
 
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "karnet_sync_#{Date.utc_today()}"
     # Regular sync or chunk processing
     city_id = args["city_id"]
     limit = args["limit"] || 200
@@ -121,7 +126,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
     case city do
       nil ->
-        Logger.error("City not found: #{inspect(city_id)} (tried lookup by name: Kraków)")
+        error_msg = "City not found: #{inspect(city_id)} (tried lookup by name: Kraków)"
+        Logger.error(error_msg)
+        MetricsTracker.record_failure(job, error_msg, external_id)
         {:error, :city_not_found}
 
       city ->
@@ -150,13 +157,15 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
         # Schedule coordinate recalculation after successful sync
         case result do
-          {:ok, _} = success ->
+          {:ok, stats} ->
             schedule_coordinate_update(city_id)
             Logger.info("🗺️ Scheduled coordinate update for city #{city_id}")
-            success
+            MetricsTracker.record_success(job, external_id)
+            {:ok, stats}
 
-          other ->
-            other
+          {:error, reason} = error ->
+            MetricsTracker.record_failure(job, "Sync failed: #{inspect(reason)}", external_id)
+            error
         end
     end
   end

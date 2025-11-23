@@ -167,12 +167,18 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
     test "regex pattern matches various bad formats", %{city: city} do
       # Test various bad format patterns
       bad_slugs = [
-        "venue-1-abc123",           # Short numbers with alphanumeric
-        "the-pub-123-def456",       # Numbers in middle
-        "my-restaurant-9999-xyz789", # Non-timestamp numbers
-        "place-1-a1b2c3",           # Old format with city_id
-        "ha9-0hp-wembley-park",     # Postcode
-        "289-upper-richmond-road"   # Street number
+        # Short numbers with alphanumeric
+        "venue-1-abc123",
+        # Numbers in middle
+        "the-pub-123-def456",
+        # Non-timestamp numbers
+        "my-restaurant-9999-xyz789",
+        # Old format with city_id
+        "place-1-a1b2c3",
+        # Postcode
+        "ha9-0hp-wembley-park",
+        # Street number
+        "289-upper-richmond-road"
       ]
 
       for slug <- bad_slugs do
@@ -199,13 +205,20 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetailSlugQualityTest do
     test "regex pattern does not match good formats", %{city: city} do
       # Test various good format patterns that should NOT be detected as bad
       good_slugs = [
-        "simple-venue",              # Name only
-        "the-pub",                   # Name only
-        "my-restaurant-london",      # Name-city
-        "venue-name-test-city",      # Name-city
-        "place-with-many-words",     # Name only
-        "white-horse-1698765432",    # Name-timestamp (10 digits)
-        "the-crown-1234567890"       # Name-timestamp (10 digits)
+        # Name only
+        "simple-venue",
+        # Name only
+        "the-pub",
+        # Name-city
+        "my-restaurant-london",
+        # Name-city
+        "venue-name-test-city",
+        # Name only
+        "place-with-many-words",
+        # Name-timestamp (10 digits)
+        "white-horse-1698765432",
+        # Name-timestamp (10 digits)
+        "the-crown-1234567890"
       ]
 
       for slug <- good_slugs do

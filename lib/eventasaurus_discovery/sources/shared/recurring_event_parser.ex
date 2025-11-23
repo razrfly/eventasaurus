@@ -264,9 +264,12 @@ defmodule EventasaurusDiscovery.Sources.Shared.RecurringEventParser do
     # Convert to 24-hour format
     hour_24 =
       cond do
-        not is_pm and hour_int == 12 -> 0  # 12am = 0
-        is_pm and hour_int != 12 -> hour_int + 12  # 1pm-11pm = 13-23
-        true -> hour_int  # 1am-11am and 12pm stay the same
+        # 12am = 0
+        not is_pm and hour_int == 12 -> 0
+        # 1pm-11pm = 13-23
+        is_pm and hour_int != 12 -> hour_int + 12
+        # 1am-11am and 12pm stay the same
+        true -> hour_int
       end
 
     case Time.new(hour_24, minutes_int, 0) do

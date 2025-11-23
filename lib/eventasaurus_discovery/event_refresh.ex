@@ -168,9 +168,7 @@ defmodule EventasaurusDiscovery.EventRefresh do
         "requested_by_user_id" => user_id
       }
 
-      Oban.insert(
-        EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob.new(args)
-      )
+      Oban.insert(EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob.new(args))
     else
       Logger.warning(
         "[EventRefresh] week_pl source missing restaurant_id or website_url for event #{event.id} (metadata: #{inspect(metadata)})"

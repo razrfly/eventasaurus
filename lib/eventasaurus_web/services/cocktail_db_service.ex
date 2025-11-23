@@ -221,7 +221,9 @@ defmodule EventasaurusWeb.Services.CocktailDbService do
     url = "#{@base_url}/#{api_key}/search.php?s=#{URI.encode(query)}"
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("CocktailDB search URL: #{@base_url}/[REDACTED]/search.php?s=#{URI.encode(query)}")
+    Logger.debug(
+      "CocktailDB search URL: #{@base_url}/[REDACTED]/search.php?s=#{URI.encode(query)}"
+    )
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->

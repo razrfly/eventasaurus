@@ -64,15 +64,19 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
             refresh_country_images(country, country_id)
 
           {false, age_days} ->
-            Logger.info("⏭️  Skipping #{country.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)")
-            {:ok, %{
-              country_id: country_id,
-              country_name: country.name,
-              skipped: true,
-              reason: "images_fresh",
-              age_days: age_days,
-              job_role: "worker"
-            }}
+            Logger.info(
+              "⏭️  Skipping #{country.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)"
+            )
+
+            {:ok,
+             %{
+               country_id: country_id,
+               country_name: country.name,
+               skipped: true,
+               reason: "images_fresh",
+               age_days: age_days,
+               job_role: "worker"
+             }}
         end
     end
   end
@@ -85,20 +89,26 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
     case UnsplashImageFetcher.fetch_and_store_all_categories_for_country(country) do
       {:ok, updated_country} ->
         categories = get_in(updated_country.unsplash_gallery, ["categories"]) || %{}
-        total_images = Enum.reduce(categories, 0, fn {_name, data}, acc ->
-          acc + length(Map.get(data, "images", []))
-        end)
-        Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{country.name}")
+
+        total_images =
+          Enum.reduce(categories, 0, fn {_name, data}, acc ->
+            acc + length(Map.get(data, "images", []))
+          end)
+
+        Logger.info(
+          "  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{country.name}"
+        )
 
         # Return results map for tracking
-        {:ok, %{
-          country_id: country_id,
-          country_name: country.name,
-          categories_refreshed: map_size(categories),
-          images_fetched: total_images,
-          skipped: false,
-          job_role: "worker"
-        }}
+        {:ok,
+         %{
+           country_id: country_id,
+           country_name: country.name,
+           categories_refreshed: map_size(categories),
+           images_fetched: total_images,
+           skipped: false,
+           job_role: "worker"
+         }}
 
       {:error, :all_categories_failed} ->
         Logger.error("  ❌ Failed to fetch any categories for #{country.name}")

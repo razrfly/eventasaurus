@@ -230,16 +230,12 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
 
     # Record asynchronously to avoid blocking job completion
     Task.start(fn ->
-      case EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary.record_execution(
-             attrs
-           ) do
+      case EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary.record_execution(attrs) do
         {:ok, _summary} ->
           Logger.debug("📊 Recorded job execution summary for #{job.worker} [#{job.id}]")
 
         {:error, changeset} ->
-          Logger.error(
-            "❌ Failed to record job execution summary: #{inspect(changeset.errors)}"
-          )
+          Logger.error("❌ Failed to record job execution summary: #{inspect(changeset.errors)}")
       end
     end)
   end
@@ -267,22 +263,24 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
   defp report_to_sentry(error_type, job, metadata) do
     if Code.ensure_loaded?(Sentry) do
       # Build error context
-      context = %{
-        worker: job.worker,
-        job_id: job.id,
-        queue: job.queue,
-        attempt: job.attempt,
-        max_attempts: job.max_attempts,
-        args: job.args
-      }
-      |> Map.merge(metadata)
+      context =
+        %{
+          worker: job.worker,
+          job_id: job.id,
+          queue: job.queue,
+          attempt: job.attempt,
+          max_attempts: job.max_attempts,
+          args: job.args
+        }
+        |> Map.merge(metadata)
 
       # Create error title
-      title = case error_type do
-        :rate_limit_error -> "Rate Limit Error: #{job.worker}"
-        :job_discarded -> "Job Discarded: #{job.worker}"
-        :job_exception -> "Job Exception: #{job.worker}"
-      end
+      title =
+        case error_type do
+          :rate_limit_error -> "Rate Limit Error: #{job.worker}"
+          :job_discarded -> "Job Discarded: #{job.worker}"
+          :job_exception -> "Job Exception: #{job.worker}"
+        end
 
       # Create error tags for better filtering in Sentry
       tags = %{

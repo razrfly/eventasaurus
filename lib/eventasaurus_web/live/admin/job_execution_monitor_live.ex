@@ -32,6 +32,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       |> assign(:page_title, "Job Execution Monitor")
       |> assign(:selected_worker, nil)
       |> assign(:state_filter, nil)
+      |> assign(:error_category_filter, nil)
       |> assign(:time_range, 24)
       |> assign(:limit, 50)
       |> assign(:loading, true)
@@ -40,6 +41,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       |> load_system_metrics()
       |> load_timeline_data()
       |> load_scraper_metrics()
+      |> load_error_category_breakdown()
       |> load_silent_failures()
       |> load_workers()
       |> load_recent_executions()
@@ -77,12 +79,27 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
   end
 
   @impl true
+  def handle_event("filter_error_category", %{"error_category" => error_category}, socket) do
+    error_category_filter = if error_category == "all", do: nil, else: error_category
+
+    socket =
+      socket
+      |> assign(:error_category_filter, error_category_filter)
+      |> assign(:loading, true)
+      |> load_recent_executions()
+      |> assign(:loading, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("change_time_range", %{"time_range" => time_range}, socket) do
     # Defensive parsing to prevent crashes on invalid input
     time_range_hours =
       case Integer.parse(time_range) do
         {hours, _} when hours > 0 -> hours
-        _ -> socket.assigns.time_range  # Keep current value if invalid
+        # Keep current value if invalid
+        _ -> socket.assigns.time_range
       end
 
     socket =
@@ -92,6 +109,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       |> load_system_metrics()
       |> load_timeline_data()
       |> load_scraper_metrics()
+      |> load_error_category_breakdown()
       |> load_silent_failures()
       |> assign(:loading, false)
 
@@ -148,7 +166,8 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
     opts = [
       limit: socket.assigns.limit,
       worker: socket.assigns.selected_worker,
-      state: socket.assigns.state_filter
+      state: socket.assigns.state_filter,
+      error_category: socket.assigns.error_category_filter
     ]
 
     recent_executions = JobExecutionSummaries.list_summaries(opts)
@@ -175,12 +194,27 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
 
   # Load silent failure detection data
   defp load_silent_failures(socket) do
-    silent_failure_counts = JobExecutionSummaries.get_silent_failure_counts(socket.assigns.time_range)
-    total_silent_failures = Enum.reduce(silent_failure_counts, 0, fn sf, acc -> acc + sf.silent_failure_count end)
+    silent_failure_counts =
+      JobExecutionSummaries.get_silent_failure_counts(socket.assigns.time_range)
+
+    total_silent_failures =
+      Enum.reduce(silent_failure_counts, 0, fn sf, acc -> acc + sf.silent_failure_count end)
 
     socket
     |> assign(:silent_failure_counts, silent_failure_counts)
     |> assign(:total_silent_failures, total_silent_failures)
+  end
+
+  # Load error category breakdown data
+  defp load_error_category_breakdown(socket) do
+    error_breakdown =
+      JobExecutionSummaries.get_error_category_breakdown(socket.assigns.time_range)
+
+    total_errors = Enum.reduce(error_breakdown, 0, fn eb, acc -> acc + eb.count end)
+
+    socket
+    |> assign(:error_breakdown, error_breakdown)
+    |> assign(:total_errors, total_errors)
   end
 
   # Get worker display name (short version)
@@ -199,6 +233,42 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       "cancelled" -> "bg-gray-100 text-gray-800"
       _ -> "bg-blue-100 text-blue-800"
     end
+  end
+
+  # Get badge class for error category
+  defp error_category_badge_class(error_category) do
+    case error_category do
+      "validation_error" -> "bg-red-100 text-red-800"
+      "network_error" -> "bg-yellow-100 text-yellow-800"
+      "geocoding_error" -> "bg-blue-100 text-blue-800"
+      "venue_error" -> "bg-purple-100 text-purple-800"
+      "performer_error" -> "bg-pink-100 text-pink-800"
+      "category_error" -> "bg-indigo-100 text-indigo-800"
+      "duplicate_error" -> "bg-orange-100 text-orange-800"
+      "data_quality_error" -> "bg-amber-100 text-amber-800"
+      "unknown_error" -> "bg-gray-100 text-gray-800"
+      _ -> "bg-gray-100 text-gray-800"
+    end
+  end
+
+  # Format error category for display
+  defp format_error_category(error_category) when is_binary(error_category) do
+    error_category
+    |> String.replace("_", " ")
+    |> String.split(" ")
+    |> Enum.map_join(" ", &String.capitalize/1)
+  end
+
+  defp format_error_category(_), do: nil
+
+  # Extract error information from job results
+  defp extract_error_info(job) do
+    results = job.results || %{}
+
+    %{
+      category: get_in(results, ["error_category"]),
+      message: get_in(results, ["error_message"])
+    }
   end
 
   # Format duration in human-readable form
@@ -432,6 +502,47 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
           </div>
         </div>
       </div>
+
+      <!-- Error Category Breakdown -->
+      <%= if @total_errors > 0 do %>
+        <div class="bg-white shadow rounded-lg mb-8">
+          <div class="px-4 py-5 sm:p-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">
+              Error Category Breakdown
+              <span class="text-sm font-normal text-gray-500">
+                (<%= @total_errors %> total errors in <%= time_range_label(@time_range) %>)
+              </span>
+            </h2>
+
+            <%= if Enum.empty?(@error_breakdown) do %>
+              <div class="text-center py-8 text-gray-500">No error data available</div>
+            <% else %>
+              <div class="space-y-3">
+                <%= for error_cat <- @error_breakdown do %>
+                  <% percentage = Float.round(error_cat.count / @total_errors * 100, 1) %>
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full " <> error_category_badge_class(error_cat.error_category)}>
+                        <%= format_error_category(error_cat.error_category) %>
+                      </span>
+                      <span class="text-sm text-gray-600">
+                        <%= format_number(error_cat.count) %> (<%= percentage %>%)
+                      </span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        class={"h-2 rounded-full " <> String.replace(error_category_badge_class(error_cat.error_category), "text-", "bg-") |> String.replace("-100", "-500")}
+                        style={"width: #{percentage}%"}
+                      >
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
 
       <!-- Execution Timeline -->
       <div class="bg-white shadow rounded-lg mb-8">
@@ -670,7 +781,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
         <div class="px-4 py-5 sm:p-6">
           <h2 class="text-lg font-medium text-gray-900 mb-4">Filters</h2>
 
-          <div class="flex gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">State</label>
               <select
@@ -690,6 +801,44 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                 </option>
                 <option value="cancelled" selected={@state_filter == "cancelled"}>
                   Cancelled
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Error Category</label>
+              <select
+                phx-change="filter_error_category"
+                name="error_category"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="all" selected={@error_category_filter == nil}>All Categories</option>
+                <option value="validation_error" selected={@error_category_filter == "validation_error"}>
+                  Validation Error
+                </option>
+                <option value="network_error" selected={@error_category_filter == "network_error"}>
+                  Network Error
+                </option>
+                <option value="geocoding_error" selected={@error_category_filter == "geocoding_error"}>
+                  Geocoding Error
+                </option>
+                <option value="venue_error" selected={@error_category_filter == "venue_error"}>
+                  Venue Error
+                </option>
+                <option value="performer_error" selected={@error_category_filter == "performer_error"}>
+                  Performer Error
+                </option>
+                <option value="category_error" selected={@error_category_filter == "category_error"}>
+                  Category Error
+                </option>
+                <option value="duplicate_error" selected={@error_category_filter == "duplicate_error"}>
+                  Duplicate Error
+                </option>
+                <option value="data_quality_error" selected={@error_category_filter == "data_quality_error"}>
+                  Data Quality Error
+                </option>
+                <option value="unknown_error" selected={@error_category_filter == "unknown_error"}>
+                  Unknown Error
                 </option>
               </select>
             </div>
@@ -726,6 +875,9 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                         State
                       </th>
                       <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Error
+                      </th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Duration
                       </th>
                       <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -741,6 +893,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                   </thead>
                   <tbody class="bg-white divide-y divide-gray-200">
                     <%= for execution <- @recent_executions do %>
+                      <% error_info = extract_error_info(execution) %>
                       <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <%= worker_name(execution.worker) %>
@@ -749,6 +902,28 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                           <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full " <> state_badge_class(execution.state)}>
                             <%= execution.state %>
                           </span>
+                        </td>
+                        <td class="px-6 py-4 text-sm max-w-xs">
+                          <%= if error_info.category do %>
+                            <div class="space-y-1">
+                              <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full " <> error_category_badge_class(error_info.category)}>
+                                <%= format_error_category(error_info.category) %>
+                              </span>
+                              <%= if error_info.message do %>
+                                <div class="text-xs text-gray-500 truncate" title={error_info.message}>
+                                  <%= error_info.message %>
+                                </div>
+                              <% end %>
+                            </div>
+                          <% else %>
+                            <%= if execution.error do %>
+                              <div class="text-xs text-gray-500 truncate" title={execution.error}>
+                                <%= execution.error %>
+                              </div>
+                            <% else %>
+                              <span class="text-gray-400">—</span>
+                            <% end %>
+                          <% end %>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <%= format_duration(execution.duration_ms) %>

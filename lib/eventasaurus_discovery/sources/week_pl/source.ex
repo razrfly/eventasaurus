@@ -19,7 +19,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Source do
 
   def name, do: "Restaurant Week"
   def key, do: "week_pl"
-  def priority, do: 45  # Regional Poland source
+  # Regional Poland source
+  def priority, do: 45
 
   def config do
     %{
@@ -28,9 +29,11 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Source do
       requires_auth: false,
       supports_api: true,
       supports_pagination: true,
-      requires_geocoding: false,  # GPS coordinates included
+      # GPS coordinates included
+      requires_geocoding: false,
       rate_limit: %{
-        requests_per_second: 0.5,  # 2 seconds between requests
+        # 2 seconds between requests
+        requests_per_second: 0.5,
         max_concurrent: 2
       },
       metadata: %{

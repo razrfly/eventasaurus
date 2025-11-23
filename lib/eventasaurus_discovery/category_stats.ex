@@ -20,8 +20,10 @@ defmodule EventasaurusDiscovery.CategoryStats do
     limit = Keyword.get(opts, :limit, 12)
 
     from(c in Category,
-      inner_join: pec in PublicEventCategory, on: pec.category_id == c.id,
-      inner_join: pe in PublicEvent, on: pec.event_id == pe.id,
+      inner_join: pec in PublicEventCategory,
+      on: pec.category_id == c.id,
+      inner_join: pe in PublicEvent,
+      on: pec.event_id == pe.id,
       where: c.is_active == true and c.slug != "other",
       where: pe.starts_at > ^NaiveDateTime.utc_now(),
       group_by: c.id,

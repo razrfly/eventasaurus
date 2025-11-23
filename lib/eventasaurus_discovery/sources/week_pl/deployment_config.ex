@@ -26,19 +26,20 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.DeploymentConfig do
   Defaults to :enabled to get all available data.
   """
   def deployment_phase do
-    phase = case System.get_env("WEEK_PL_DEPLOYMENT_PHASE") do
-      "disabled" ->
-        :disabled
+    phase =
+      case System.get_env("WEEK_PL_DEPLOYMENT_PHASE") do
+        "disabled" ->
+          :disabled
 
-      "enabled" ->
-        :enabled
+        "enabled" ->
+          :enabled
 
-      nil ->
-        Application.get_env(:eventasaurus, :week_pl_deployment_phase, :enabled)
+        nil ->
+          Application.get_env(:eventasaurus, :week_pl_deployment_phase, :enabled)
 
-      _ ->
-        :enabled
-    end
+        _ ->
+          :enabled
+      end
 
     phase
   end

@@ -176,7 +176,7 @@ defmodule EventasaurusDiscovery.Sources.Source do
 
   """
   def get_display_name(slug) when is_binary(slug) do
-    case Repo.one(from s in __MODULE__, where: s.slug == ^slug, select: s.name) do
+    case Repo.one(from(s in __MODULE__, where: s.slug == ^slug, select: s.name)) do
       name when is_binary(name) -> name
       nil -> fallback_display_name(slug)
     end

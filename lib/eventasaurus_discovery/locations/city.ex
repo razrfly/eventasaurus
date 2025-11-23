@@ -300,7 +300,8 @@ defmodule EventasaurusDiscovery.Locations.City do
         categories = gallery["categories"]
 
         # Handle both string and atom keys if necessary, but usually string from JSON
-        category_data = Map.get(categories, category_name) || Map.get(categories, to_string(category_name))
+        category_data =
+          Map.get(categories, category_name) || Map.get(categories, to_string(category_name))
 
         case category_data do
           nil ->

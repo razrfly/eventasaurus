@@ -17,7 +17,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
-  import EventasaurusWeb.PollOptionHelpers, only: [get_import_info: 1, format_import_attribution: 1]
+
+  import EventasaurusWeb.PollOptionHelpers,
+    only: [get_import_info: 1, format_import_attribution: 1]
 
   @impl true
   def update(assigns, socket) do

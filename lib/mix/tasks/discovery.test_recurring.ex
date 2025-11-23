@@ -100,7 +100,11 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
     event_ids = opts[:ids]
     auto_scrape = opts[:auto_scrape] || false
 
-    IO.puts("\n" <> IO.ANSI.cyan() <> "🧪 Testing RecurringEventUpdater: #{scraper_slug}" <> IO.ANSI.reset())
+    IO.puts(
+      "\n" <>
+        IO.ANSI.cyan() <> "🧪 Testing RecurringEventUpdater: #{scraper_slug}" <> IO.ANSI.reset()
+    )
+
     IO.puts(String.duplicate("=", 70))
 
     # Get source
@@ -113,7 +117,8 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
     # Build query
     base_query =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pes.source_id == ^source.id,
         where: fragment("?->>'type' = 'pattern'", pe.occurrences),
         order_by: [asc: pe.id]
@@ -158,7 +163,8 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
     # Age last_seen_at
     {aged_sources, _} =
       from(pes in PublicEventSource,
-        join: pe in PublicEvent, on: pes.event_id == pe.id,
+        join: pe in PublicEvent,
+        on: pes.event_id == pe.id,
         where: pe.id in ^event_ids
       )
       |> Repo.update_all(
@@ -215,7 +221,8 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
 
       IO.puts(
         "   " <>
-          IO.ANSI.cyan() <> "mix discovery.test_recurring #{scraper_slug} --verify-only" <>
+          IO.ANSI.cyan() <>
+          "mix discovery.test_recurring #{scraper_slug} --verify-only" <>
           IO.ANSI.reset()
       )
 
@@ -234,7 +241,12 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
       {:ok, content} ->
         %{"event_ids" => event_ids, "timestamp" => test_timestamp} = Jason.decode!(content)
 
-        IO.puts("\n" <> IO.ANSI.cyan() <> "🔍 Verifying RecurringEventUpdater: #{scraper_slug}" <> IO.ANSI.reset())
+        IO.puts(
+          "\n" <>
+            IO.ANSI.cyan() <>
+            "🔍 Verifying RecurringEventUpdater: #{scraper_slug}" <> IO.ANSI.reset()
+        )
+
         IO.puts(String.duplicate("=", 70))
         IO.puts("📊 Test started: #{test_timestamp}")
         IO.puts("📊 Checking #{length(event_ids)} events...\n")
@@ -242,8 +254,10 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
         # Query events
         results =
           from(pe in PublicEvent,
-            join: pes in PublicEventSource, on: pes.event_id == pe.id,
-            join: s in Source, on: pes.source_id == s.id,
+            join: pes in PublicEventSource,
+            on: pes.event_id == pe.id,
+            join: s in Source,
+            on: pes.source_id == s.id,
             where: pe.id in ^event_ids and s.slug == ^scraper_slug,
             select: %{
               id: pe.id,
@@ -288,8 +302,16 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
               {succ + 1, fail}
             else
               IO.puts("❌ Event ##{event.id}: #{String.slice(event.title, 0, 55)}")
-              IO.puts("   starts_at: #{event.starts_at} " <> if(is_future, do: "(FUTURE)", else: "(EXPIRED)"))
-              IO.puts("   last_seen_at: #{event.last_seen_at} " <> if(was_updated, do: "(UPDATED)", else: "(NOT UPDATED)"))
+
+              IO.puts(
+                "   starts_at: #{event.starts_at} " <>
+                  if(is_future, do: "(FUTURE)", else: "(EXPIRED)")
+              )
+
+              IO.puts(
+                "   last_seen_at: #{event.last_seen_at} " <>
+                  if(was_updated, do: "(UPDATED)", else: "(NOT UPDATED)")
+              )
 
               unless is_future do
                 IO.puts("   ⚠️  dates NOT regenerated")
@@ -309,7 +331,11 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
         total = successes + failures
 
         if failures == 0 do
-          IO.puts(IO.ANSI.green() <> "🎉 SUCCESS: All #{successes}/#{total} events passed!" <> IO.ANSI.reset())
+          IO.puts(
+            IO.ANSI.green() <>
+              "🎉 SUCCESS: All #{successes}/#{total} events passed!" <> IO.ANSI.reset()
+          )
+
           IO.puts("\n✅ RecurringEventUpdater is working correctly!")
           IO.puts("✅ Scraper processed aged events")
           IO.puts("✅ Dates automatically regenerated from patterns")
@@ -318,7 +344,10 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
           # Clean up test file
           File.rm(test_file)
         else
-          IO.puts(IO.ANSI.red() <> "❌ FAILURE: #{failures}/#{total} events failed" <> IO.ANSI.reset())
+          IO.puts(
+            IO.ANSI.red() <> "❌ FAILURE: #{failures}/#{total} events failed" <> IO.ANSI.reset()
+          )
+
           IO.puts("\n⚠️  Some events were not regenerated correctly")
           IO.puts("⚠️  Check EventProcessor integration")
           IO.puts("⚠️  Review logs for errors\n")
@@ -333,8 +362,10 @@ defmodule Mix.Tasks.Discovery.TestRecurring do
 
         query =
           from(pe in PublicEvent,
-            join: pes in PublicEventSource, on: pes.event_id == pe.id,
-            join: s in Source, on: pes.source_id == s.id,
+            join: pes in PublicEventSource,
+            on: pes.event_id == pe.id,
+            join: s in Source,
+            on: pes.source_id == s.id,
             where: s.slug == ^scraper_slug,
             order_by: [asc: pe.id]
           )

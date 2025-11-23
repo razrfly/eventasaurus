@@ -621,7 +621,9 @@ defmodule EventasaurusApp.Venues.Venue do
   defp get_first_venue_image(_), do: nil
 
   # Check if venue has city with categorized gallery
-  defp has_city_with_gallery?(%__MODULE__{city_ref: %EventasaurusDiscovery.Locations.City{} = city}) do
+  defp has_city_with_gallery?(%__MODULE__{
+         city_ref: %EventasaurusDiscovery.Locations.City{} = city
+       }) do
     alias EventasaurusDiscovery.Locations.City
     City.has_categorized_gallery?(city)
   end
@@ -629,7 +631,10 @@ defmodule EventasaurusApp.Venues.Venue do
   defp has_city_with_gallery?(_), do: false
 
   # Get image from city's categorized gallery
-  defp get_city_category_image(%__MODULE__{city_ref: %EventasaurusDiscovery.Locations.City{} = city} = venue, opts) do
+  defp get_city_category_image(
+         %__MODULE__{city_ref: %EventasaurusDiscovery.Locations.City{} = city} = venue,
+         opts
+       ) do
     alias EventasaurusApp.Venues.CategoryMapper
     alias EventasaurusDiscovery.Locations.City
 

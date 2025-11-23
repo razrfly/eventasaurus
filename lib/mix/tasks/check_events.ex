@@ -60,7 +60,8 @@ defmodule Mix.Tasks.CheckEvents do
     # Build query
     base_query =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pes.source_id == ^source.id,
         order_by: [asc: pe.id]
       )
@@ -108,7 +109,11 @@ defmodule Mix.Tasks.CheckEvents do
       status_icon = if is_future, do: "✅", else: "❌"
 
       IO.puts("#{status_icon} Event ##{event.id}: #{String.slice(event.title, 0, 50)}")
-      IO.puts("   starts_at: #{event.starts_at} " <> if(is_future, do: "(FUTURE)", else: "(EXPIRED)"))
+
+      IO.puts(
+        "   starts_at: #{event.starts_at} " <> if(is_future, do: "(FUTURE)", else: "(EXPIRED)")
+      )
+
       IO.puts("   ends_at: #{event.ends_at}")
       IO.puts("   last_seen_at: #{event.last_seen_at}")
 
@@ -136,7 +141,12 @@ defmodule Mix.Tasks.CheckEvents do
       )
 
       IO.puts("\n💡 To regenerate dates:")
-      IO.puts("   1. Run scraper: " <> IO.ANSI.cyan() <> "mix run /tmp/trigger_qo_scraper.exs" <> IO.ANSI.reset())
+
+      IO.puts(
+        "   1. Run scraper: " <>
+          IO.ANSI.cyan() <> "mix run /tmp/trigger_qo_scraper.exs" <> IO.ANSI.reset()
+      )
+
       IO.puts("   2. Wait ~30 seconds")
       IO.puts("   3. Check again: " <> IO.ANSI.cyan() <> "mix check_events" <> IO.ANSI.reset())
     else

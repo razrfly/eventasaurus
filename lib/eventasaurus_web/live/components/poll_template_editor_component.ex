@@ -111,7 +111,8 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
           %{title: edited_title}
         else
           # New format - full metadata map
-          edited_title = Map.get(socket.assigns.edited_options, index, original["title"] || original[:title])
+          edited_title =
+            Map.get(socket.assigns.edited_options, index, original["title"] || original[:title])
 
           %{
             title: edited_title,
@@ -170,13 +171,19 @@ defmodule EventasaurusWeb.PollTemplateEditorComponent do
 
     # Only add import info if we have source information
     if original["source_event"] || original[:source_event] ||
-       original["source_poll_id"] || original[:source_poll_id] do
+         original["source_poll_id"] || original[:source_poll_id] do
       Map.put(base_metadata, "import_info", %{
-        "source_event_id" => get_in(original, ["source_event", "id"]) || get_in(original, [:source_event, :id]),
-        "source_event_title" => get_in(original, ["source_event", "title"]) || get_in(original, [:source_event, :title]),
+        "source_event_id" =>
+          get_in(original, ["source_event", "id"]) || get_in(original, [:source_event, :id]),
+        "source_event_title" =>
+          get_in(original, ["source_event", "title"]) || get_in(original, [:source_event, :title]),
         "source_poll_id" => original["source_poll_id"] || original[:source_poll_id],
-        "original_recommender_id" => get_in(original, ["original_recommender", "id"]) || get_in(original, [:original_recommender, :id]),
-        "original_recommender_name" => get_in(original, ["original_recommender", "name"]) || get_in(original, [:original_recommender, :name]),
+        "original_recommender_id" =>
+          get_in(original, ["original_recommender", "id"]) ||
+            get_in(original, [:original_recommender, :id]),
+        "original_recommender_name" =>
+          get_in(original, ["original_recommender", "name"]) ||
+            get_in(original, [:original_recommender, :name]),
         "imported_at" => DateTime.utc_now() |> DateTime.to_iso8601()
       })
     else

@@ -26,9 +26,11 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
   alias EventasaurusDiscovery.Sources.SpeedQuizzing
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "speed_quizzing_index_#{Date.utc_today()}"
     source_id = args["source_id"]
     events = args["events"] || []
     limit = args["limit"]
@@ -40,13 +42,16 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
     events_to_process = filter_fresh_events(events, source_id, limit, force)
 
     skipped_count = length(events) - length(events_to_process)
+
     Logger.info("""
     📋 Enqueueing #{length(events_to_process)} detail jobs
     #{if force, do: "(Force mode - freshness check bypassed)", else: "(#{skipped_count} events skipped - recently updated)"}
     """)
 
     # Enqueue detail jobs for each event
-    enqueue_detail_jobs(events_to_process, source_id)
+    result = enqueue_detail_jobs(events_to_process, source_id)
+    MetricsTracker.record_success(job, external_id)
+    result
   end
 
   # Filter out events that were recently updated (default: 7 days)

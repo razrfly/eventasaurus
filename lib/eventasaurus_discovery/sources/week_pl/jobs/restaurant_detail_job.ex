@@ -40,21 +40,59 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   require Logger
   alias EventasaurusDiscovery.Sources.WeekPl.{Client, Config, Transformer, FestivalManager}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
   def perform(%Oban.Job{
         args:
           %{
             "source_id" => source_id,
-            "restaurant_slug" => _slug
+            "restaurant_slug" => slug
           } = args,
         meta: meta
-      }) do
+      } = job) do
+    external_id = "week_pl_restaurant_#{slug}"
     Logger.info("🍽️  [WeekPl.DetailJob] Processing restaurant: #{args["restaurant_name"]}")
 
     # Note: EventFreshnessChecker optimization happens at event level in EventProcessor
     # through consolidation logic and last_seen_at tracking
-    fetch_and_process(args, source_id, meta)
+    result = fetch_and_process(args, source_id, meta)
+
+    # Track success/failure based on processing outcome
+    case result do
+      {:ok, %{"status" => "matched", "items_processed" => items}} when items > 0 ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:ok, %{"status" => "no_slots"}} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
+      {:ok, %{"status" => "no_restaurant"}} ->
+        MetricsTracker.record_failure(job, "Restaurant not found in Apollo state", external_id)
+        result
+
+      {:ok, %{"status" => "invalid_response"}} ->
+        MetricsTracker.record_failure(job, "Invalid API response structure", external_id)
+        result
+
+      {:ok, %{"status" => "api_error"}} ->
+        MetricsTracker.record_failure(job, "API error", external_id)
+        result
+
+      {:ok, %{"status" => "matched", "items_processed" => 0}} ->
+        # Silent failure - found restaurant but created 0 events
+        MetricsTracker.record_failure(job, "Silent failure: Found restaurant but created 0 events", external_id)
+        result
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, "Processing failed: #{inspect(reason)}", external_id)
+        result
+
+      _ ->
+        MetricsTracker.record_success(job, external_id)
+        result
+    end
   end
 
   # Fetch restaurant details and process events
@@ -90,7 +128,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     Process.sleep(Config.request_delay_ms())
 
     # Fetch restaurant details by ID (GraphQL API requires ID, not slug)
-    case Client.fetch_restaurant_detail(restaurant_id, slug, region_name, hd(dates), slot, people_count) do
+    case Client.fetch_restaurant_detail(
+           restaurant_id,
+           slug,
+           region_name,
+           hd(dates),
+           slot,
+           people_count
+         ) do
       {:ok, response} ->
         process_restaurant_detail(response, args, source_id, dates, meta, query_params)
 
@@ -105,25 +150,26 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         pipeline_id = Map.get(meta, "pipeline_id") || "week_pl_#{Date.utc_today()}"
         parent_job_id = Map.get(meta, "parent_job_id")
 
-        {:ok, %{
-          "job_role" => "detail_fetcher",
-          "pipeline_id" => pipeline_id,
-          "parent_job_id" => parent_job_id,
-          "entity_id" => slug,
-          "entity_type" => "restaurant",
-          "status" => "api_error",
-          "error_reason" => inspect(reason),
-          "items_processed" => 0,
-          # Phase 2 observability enhancements (#2332)
-          "query_params" => query_params,
-          "api_response" => %{
-            "error" => inspect(reason)
-          },
-          "decision_context" => %{
-            "error_type" => "api_error",
-            "fetch_attempt" => "graphql_detail_query"
-          }
-        }}
+        {:ok,
+         %{
+           "job_role" => "detail_fetcher",
+           "pipeline_id" => pipeline_id,
+           "parent_job_id" => parent_job_id,
+           "entity_id" => slug,
+           "entity_type" => "restaurant",
+           "status" => "api_error",
+           "error_reason" => inspect(reason),
+           "items_processed" => 0,
+           # Phase 2 observability enhancements (#2332)
+           "query_params" => query_params,
+           "api_response" => %{
+             "error" => inspect(reason)
+           },
+           "decision_context" => %{
+             "error_type" => "api_error",
+             "fetch_attempt" => "graphql_detail_query"
+           }
+         }}
     end
   end
 
@@ -155,25 +201,26 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
           "[WeekPl.DetailJob] ❌ No restaurant found in Apollo state for #{args["restaurant_slug"]}"
         )
 
-        {:ok, %{
-          "job_role" => "detail_fetcher",
-          "pipeline_id" => pipeline_id,
-          "parent_job_id" => parent_job_id,
-          "entity_id" => args["restaurant_slug"],
-          "entity_type" => "restaurant",
-          "status" => "no_restaurant",
-          "items_processed" => 0,
-          # Phase 2 observability enhancements (#2332)
-          "query_params" => query_params,
-          "api_response" => %{
-            "has_apollo_state" => true,
-            "restaurant_found" => false
-          },
-          "decision_context" => %{
-            "error_type" => "no_restaurant_in_apollo_state",
-            "apollo_keys_checked" => "Restaurant:*"
-          }
-        }}
+        {:ok,
+         %{
+           "job_role" => "detail_fetcher",
+           "pipeline_id" => pipeline_id,
+           "parent_job_id" => parent_job_id,
+           "entity_id" => args["restaurant_slug"],
+           "entity_type" => "restaurant",
+           "status" => "no_restaurant",
+           "items_processed" => 0,
+           # Phase 2 observability enhancements (#2332)
+           "query_params" => query_params,
+           "api_response" => %{
+             "has_apollo_state" => true,
+             "restaurant_found" => false
+           },
+           "decision_context" => %{
+             "error_type" => "no_restaurant_in_apollo_state",
+             "apollo_keys_checked" => "Restaurant:*"
+           }
+         }}
 
       restaurant_data ->
         # Extract slots from Daily objects referenced by restaurant
@@ -181,16 +228,27 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
 
         # Phase 3: Pattern-based fallback (#2333)
         # If API doesn't return time slots, generate standard restaurant booking times
-        slots = if Enum.empty?(api_slots) do
-          Logger.info(
-            "[WeekPl.DetailJob] 📅 API returned 0 slots for #{args["restaurant_name"]}, using pattern-based generation"
-          )
-          generate_standard_time_slots()
-        else
-          api_slots
-        end
+        slots =
+          if Enum.empty?(api_slots) do
+            Logger.info(
+              "[WeekPl.DetailJob] 📅 API returned 0 slots for #{args["restaurant_name"]}, using pattern-based generation"
+            )
 
-        process_restaurant_slots(restaurant_data, slots, args, source_id, dates, meta, query_params, Enum.empty?(api_slots))
+            generate_standard_time_slots()
+          else
+            api_slots
+          end
+
+        process_restaurant_slots(
+          restaurant_data,
+          slots,
+          args,
+          source_id,
+          dates,
+          meta,
+          query_params,
+          Enum.empty?(api_slots)
+        )
     end
   end
 
@@ -206,26 +264,27 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     pipeline_id = Map.get(meta, "pipeline_id") || "week_pl_#{Date.utc_today()}"
     parent_job_id = Map.get(meta, "parent_job_id")
 
-    {:ok, %{
-      "job_role" => "detail_fetcher",
-      "pipeline_id" => pipeline_id,
-      "parent_job_id" => parent_job_id,
-      "entity_id" => args["restaurant_slug"],
-      "entity_type" => "restaurant",
-      "status" => "invalid_response",
-      "items_processed" => 0,
-      # Phase 2 observability enhancements (#2332)
-      "query_params" => query_params,
-      "api_response" => %{
-        "has_apollo_state" => false,
-        "response_keys" => Map.keys(response)
-      },
-      "decision_context" => %{
-        "error_type" => "invalid_response_structure",
-        "expected" => "pageProps.apolloState",
-        "received" => "unexpected structure"
-      }
-    }}
+    {:ok,
+     %{
+       "job_role" => "detail_fetcher",
+       "pipeline_id" => pipeline_id,
+       "parent_job_id" => parent_job_id,
+       "entity_id" => args["restaurant_slug"],
+       "entity_type" => "restaurant",
+       "status" => "invalid_response",
+       "items_processed" => 0,
+       # Phase 2 observability enhancements (#2332)
+       "query_params" => query_params,
+       "api_response" => %{
+         "has_apollo_state" => false,
+         "response_keys" => Map.keys(response)
+       },
+       "decision_context" => %{
+         "error_type" => "invalid_response_structure",
+         "expected" => "pageProps.apolloState",
+         "received" => "unexpected structure"
+       }
+     }}
   end
 
   # Extract slots from Apollo GraphQL state
@@ -242,13 +301,20 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
           # Get the Daily object from apollo_state
           case apollo_state[daily_ref] do
             nil ->
-              Logger.warning("[WeekPl.DetailJob] Daily reference #{daily_ref} not found in Apollo state")
+              Logger.warning(
+                "[WeekPl.DetailJob] Daily reference #{daily_ref} not found in Apollo state"
+              )
+
               []
 
             daily ->
               # Extract possibleSlots from Daily object
               possible_slots = daily["possibleSlots"] || []
-              Logger.debug("[WeekPl.DetailJob] Found #{length(possible_slots)} slots in #{daily_ref}")
+
+              Logger.debug(
+                "[WeekPl.DetailJob] Found #{length(possible_slots)} slots in #{daily_ref}"
+              )
+
               possible_slots
           end
 
@@ -257,7 +323,10 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
       end)
       |> Enum.uniq()
 
-    Logger.info("[WeekPl.DetailJob] 🎯 Extracted #{length(slots)} unique slots for #{args["restaurant_name"]}")
+    Logger.info(
+      "[WeekPl.DetailJob] 🎯 Extracted #{length(slots)} unique slots for #{args["restaurant_name"]}"
+    )
+
     slots
   end
 
@@ -271,7 +340,16 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   end
 
   # Process restaurant slots and create events
-  defp process_restaurant_slots(restaurant, slots, args, source_id, dates, meta, query_params, pattern_based) do
+  defp process_restaurant_slots(
+         restaurant,
+         slots,
+         args,
+         source_id,
+         dates,
+         meta,
+         query_params,
+         pattern_based
+       ) do
     # Build festival data for transformer
     festival = %{
       name: args["festival_name"],
@@ -287,28 +365,33 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         "[WeekPl.DetailJob] ⚠️  Pattern generation returned 0 slots for #{args["restaurant_name"]} - this should not happen!"
       )
 
-      {:ok, %{
-        "job_role" => "detail_fetcher",
-        "pipeline_id" => pipeline_id,
-        "parent_job_id" => parent_job_id,
-        "entity_id" => args["restaurant_slug"],
-        "entity_type" => "restaurant",
-        "status" => "no_slots",
-        "items_processed" => 0,
-        # Phase 2 observability enhancements (#2332)
-        "query_params" => query_params,
-        "api_response" => %{
-          "restaurant_found" => true,
-          "slots_extracted" => 0,
-          "daily_references_found" => 0,
-          "pattern_based" => pattern_based
-        },
-        "decision_context" => %{
-          "slots_empty" => true,
-          "pattern_generation_failed" => pattern_based,
-          "possible_reasons" => if(pattern_based, do: ["pattern generation bug"], else: ["no availability", "fully booked", "date out of range"])
-        }
-      }}
+      {:ok,
+       %{
+         "job_role" => "detail_fetcher",
+         "pipeline_id" => pipeline_id,
+         "parent_job_id" => parent_job_id,
+         "entity_id" => args["restaurant_slug"],
+         "entity_type" => "restaurant",
+         "status" => "no_slots",
+         "items_processed" => 0,
+         # Phase 2 observability enhancements (#2332)
+         "query_params" => query_params,
+         "api_response" => %{
+           "restaurant_found" => true,
+           "slots_extracted" => 0,
+           "daily_references_found" => 0,
+           "pattern_based" => pattern_based
+         },
+         "decision_context" => %{
+           "slots_empty" => true,
+           "pattern_generation_failed" => pattern_based,
+           "possible_reasons" =>
+             if(pattern_based,
+               do: ["pattern generation bug"],
+               else: ["no availability", "fully booked", "date out of range"]
+             )
+         }
+       }}
     else
       # Phase 4: Get festival container ID for linking events (#2334)
       festival_container_id = args["festival_container_id"]
@@ -319,7 +402,15 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         |> Enum.flat_map(fn date ->
           # Transform each slot into an event
           Enum.map(slots, fn slot ->
-            event_data = Transformer.transform_restaurant_slot(restaurant, slot, date, festival, args["region_name"])
+            event_data =
+              Transformer.transform_restaurant_slot(
+                restaurant,
+                slot,
+                date,
+                festival,
+                args["region_name"]
+              )
+
             process_event(event_data, source_id, festival_container_id)
           end)
         end)
@@ -331,32 +422,34 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         "[WeekPl.DetailJob] ✅ Processed #{succeeded} events, #{failed} failed for #{args["restaurant_name"]}"
       )
 
-      {:ok, %{
-        "job_role" => "detail_fetcher",
-        "pipeline_id" => pipeline_id,
-        "parent_job_id" => parent_job_id,
-        "entity_id" => args["restaurant_slug"],
-        "entity_type" => "restaurant",
-        "status" => "matched",
-        "items_processed" => succeeded,
-        "items_failed" => failed,
-        # Phase 2 observability enhancements (#2332)
-        "query_params" => query_params,
-        "api_response" => %{
-          "restaurant_found" => true,
-          "slots_extracted" => length(slots),
-          "dates_processed" => length(dates),
-          "total_attempts" => length(slots) * length(dates),
-          "pattern_based" => pattern_based  # Phase 3: #2333
-        },
-        "decision_context" => %{
-          "slots_available" => true,
-          "slot_source" => if(pattern_based, do: "pattern_based_generation", else: "api_data"),
-          "consolidation" => "EventProcessor handles daily consolidation",
-          "transformer_used" => "Transformer.transform_restaurant_slot/5",
-          "pattern" => if(pattern_based, do: "18:00-22:00, 30min intervals", else: "from API")
-        }
-      }}
+      {:ok,
+       %{
+         "job_role" => "detail_fetcher",
+         "pipeline_id" => pipeline_id,
+         "parent_job_id" => parent_job_id,
+         "entity_id" => args["restaurant_slug"],
+         "entity_type" => "restaurant",
+         "status" => "matched",
+         "items_processed" => succeeded,
+         "items_failed" => failed,
+         # Phase 2 observability enhancements (#2332)
+         "query_params" => query_params,
+         "api_response" => %{
+           "restaurant_found" => true,
+           "slots_extracted" => length(slots),
+           "dates_processed" => length(dates),
+           "total_attempts" => length(slots) * length(dates),
+           # Phase 3: #2333
+           "pattern_based" => pattern_based
+         },
+         "decision_context" => %{
+           "slots_available" => true,
+           "slot_source" => if(pattern_based, do: "pattern_based_generation", else: "api_data"),
+           "consolidation" => "EventProcessor handles daily consolidation",
+           "transformer_used" => "Transformer.transform_restaurant_slot/5",
+           "pattern" => if(pattern_based, do: "18:00-22:00, 30min intervals", else: "from API")
+         }
+       }}
     end
   end
 
@@ -369,12 +462,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
       title: event_data.title,
       description: event_data.description,
       source_url: event_data.url,
-      image_url: event_data.image_url,  # Include image_url from transformer
+      # Include image_url from transformer
+      image_url: event_data.image_url,
       starts_at: event_data.starts_at,
       ends_at: event_data.ends_at,
       venue_data: event_data.venue_attributes,
       metadata: event_data.metadata,
-      category_id: event_data.category_id,  # Phase 4: Include category_id
+      # Phase 4: Include category_id
+      category_id: event_data.category_id,
       # Add occurrence_type for proper event initialization
       occurrence_type: :explicit
     }
@@ -385,10 +480,14 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         if festival_container_id do
           case FestivalManager.link_event_to_festival(event, festival_container_id) do
             {:ok, _membership} ->
-              Logger.debug("[WeekPl.DetailJob] Linked event #{event.id} to festival container #{festival_container_id}")
+              Logger.debug(
+                "[WeekPl.DetailJob] Linked event #{event.id} to festival container #{festival_container_id}"
+              )
 
             {:error, reason} ->
-              Logger.warning("[WeekPl.DetailJob] Failed to link event #{event.id} to container: #{inspect(reason)}")
+              Logger.warning(
+                "[WeekPl.DetailJob] Failed to link event #{event.id} to container: #{inspect(reason)}"
+              )
           end
         end
 
@@ -415,5 +514,4 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
       |> Date.to_string()
     end)
   end
-
 end

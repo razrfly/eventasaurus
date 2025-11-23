@@ -74,7 +74,10 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
     # Filter venues using freshness checker (skip if force=true)
     venues_to_process =
       if force do
-        Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker for all #{length(venues)} venues")
+        Logger.info(
+          "⚡ Force mode enabled - bypassing EventFreshnessChecker for all #{length(venues)} venues"
+        )
+
         # Apply limit but skip freshness filtering
         if limit, do: Enum.take(venues, limit), else: venues
       else

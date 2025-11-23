@@ -15,9 +15,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.{SourceStore}
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "ticketmaster_sync_#{Date.utc_today()}"
     city_id = args["city_id"]
     limit = args["limit"] || 100
     options = args["options"] || %{}
@@ -58,6 +60,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
       # Schedule coordinate recalculation after successful sync
       schedule_coordinate_update(city_id)
 
+      MetricsTracker.record_success(job, external_id)
+
       {:ok,
        %{
          city: city.name,
@@ -68,10 +72,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     else
       {:discard, reason} ->
         Logger.error("Job discarded: #{reason}")
+        MetricsTracker.record_failure(job, "Job discarded: #{reason}", external_id)
         {:discard, reason}
 
       {:error, reason} = error ->
         Logger.error("Failed to sync Ticketmaster events: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Failed to sync: #{inspect(reason)}", external_id)
         error
     end
   end

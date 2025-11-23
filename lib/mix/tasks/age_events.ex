@@ -52,7 +52,8 @@ defmodule Mix.Tasks.AgeEvents do
     # Build base query
     base_query =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pes.source_id == ^source.id,
         order_by: [asc: pe.id]
       )
@@ -82,6 +83,7 @@ defmodule Mix.Tasks.AgeEvents do
     end
 
     IO.puts("\n📊 Will age #{length(events)} events to #{days_ago} days ago:")
+
     Enum.each(events, fn event ->
       IO.puts("   - Event ##{event.id}: #{String.slice(event.title, 0, 50)}")
     end)
@@ -103,7 +105,8 @@ defmodule Mix.Tasks.AgeEvents do
     # Age last_seen_at
     {aged_sources, _} =
       from(pes in PublicEventSource,
-        join: pe in PublicEvent, on: pes.event_id == pe.id,
+        join: pe in PublicEvent,
+        on: pes.event_id == pe.id,
         where: pe.id in ^event_ids
       )
       |> Repo.update_all(
@@ -131,11 +134,18 @@ defmodule Mix.Tasks.AgeEvents do
 
     # Show results
     IO.puts("\n📊 Current state:")
+
     current =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pe.id in ^event_ids,
-        select: %{id: pe.id, title: pe.title, starts_at: pe.starts_at, last_seen_at: pes.last_seen_at},
+        select: %{
+          id: pe.id,
+          title: pe.title,
+          starts_at: pe.starts_at,
+          last_seen_at: pes.last_seen_at
+        },
         order_by: [asc: pe.id]
       )
       |> Repo.all()
@@ -151,7 +161,12 @@ defmodule Mix.Tasks.AgeEvents do
     IO.puts("\n1. Trigger Question One scraper:")
     IO.puts("   " <> IO.ANSI.cyan() <> "mix run /tmp/trigger_qo_scraper.exs" <> IO.ANSI.reset())
     IO.puts("\n2. Wait ~30 seconds, then check results:")
-    IO.puts("   " <> IO.ANSI.cyan() <> "mix check_events #{Enum.join(event_ids, ",")}" <> IO.ANSI.reset())
+
+    IO.puts(
+      "   " <>
+        IO.ANSI.cyan() <> "mix check_events #{Enum.join(event_ids, ",")}" <> IO.ANSI.reset()
+    )
+
     IO.puts("\n" <> String.duplicate("=", 60))
     IO.puts(IO.ANSI.green() <> "\n✅ Events aged successfully!" <> IO.ANSI.reset())
     IO.puts("")

@@ -4699,12 +4699,17 @@ defmodule EventasaurusApp.Events do
     suggested_by_id = attrs["suggested_by_id"] || attrs[:suggested_by_id]
 
     # Extract title string - handle case where attrs might be improperly nested
-    title = cond do
-      is_binary(raw_title) -> raw_title
-      is_map(raw_title) and (raw_title["title"] || raw_title[:title]) ->
-        raw_title["title"] || raw_title[:title]
-      true -> nil
-    end
+    title =
+      cond do
+        is_binary(raw_title) ->
+          raw_title
+
+        is_map(raw_title) and (raw_title["title"] || raw_title[:title]) ->
+          raw_title["title"] || raw_title[:title]
+
+        true ->
+          nil
+      end
 
     # Extract place_id from external_data if it's a place
     place_id =

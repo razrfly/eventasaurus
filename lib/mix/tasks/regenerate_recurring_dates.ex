@@ -37,18 +37,22 @@ defmodule Mix.Tasks.RegenerateRecurringDates do
 
     # Build query for expired pattern-based events
     query =
-      from pe in PublicEvent,
+      from(pe in PublicEvent,
         where: fragment("?->>'type' = 'pattern'", pe.occurrences),
         where: pe.starts_at < ^DateTime.utc_now()
+      )
 
     # Filter by source if specified
     query =
       if source_slug do
-        from pe in query,
-          join: pes in PublicEventSource, on: pes.event_id == pe.id,
-          join: s in Source, on: pes.source_id == s.id,
+        from(pe in query,
+          join: pes in PublicEventSource,
+          on: pes.event_id == pe.id,
+          join: s in Source,
+          on: pes.source_id == s.id,
           where: s.slug == ^source_slug,
           distinct: true
+        )
       else
         query
       end

@@ -98,7 +98,8 @@ defmodule Mix.Tasks.Venues.CleanGwdNames do
     changeset =
       venue
       |> Ecto.Changeset.change(name: new_name)
-      |> Ecto.Changeset.force_change(:slug, nil)  # Force slug regeneration
+      # Force slug regeneration
+      |> Ecto.Changeset.force_change(:slug, nil)
 
     case Repo.update(changeset) do
       {:ok, updated_venue} ->

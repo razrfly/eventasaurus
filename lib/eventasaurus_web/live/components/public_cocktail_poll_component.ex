@@ -18,7 +18,9 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
-  import EventasaurusWeb.PollOptionHelpers, only: [get_import_info: 1, format_import_attribution: 1]
+
+  import EventasaurusWeb.PollOptionHelpers,
+    only: [get_import_info: 1, format_import_attribution: 1]
 
   @impl true
   def mount(socket) do
@@ -176,14 +178,20 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
       # Check if user is authenticated
       if is_nil(user) do
         Logger.debug("  EARLY EXIT: user is nil")
+
         {:noreply,
          socket
          |> put_flash(:error, "You must be logged in to add cocktails.")
          |> assign(:adding_cocktail, false)}
       else
         # Find the cocktail in search results
-        Logger.debug("  Searching for cocktail_id=#{inspect(cocktail_id)} in #{length(socket.assigns.search_results)} results")
-        Logger.debug("  Search results IDs: #{inspect(Enum.map(socket.assigns.search_results, & &1.id))}")
+        Logger.debug(
+          "  Searching for cocktail_id=#{inspect(cocktail_id)} in #{length(socket.assigns.search_results)} results"
+        )
+
+        Logger.debug(
+          "  Search results IDs: #{inspect(Enum.map(socket.assigns.search_results, & &1.id))}"
+        )
 
         cocktail_data =
           socket.assigns.search_results
@@ -202,8 +210,14 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
           case RichDataManager.get_cached_details(:cocktaildb, cocktail_data.id, :cocktail) do
             {:ok, rich_cocktail_data} ->
               Logger.debug("  rich_cocktail_data keys: #{inspect(Map.keys(rich_cocktail_data))}")
-              Logger.debug("  rich_cocktail_data name field: #{inspect(Map.get(rich_cocktail_data, :name))}")
-              Logger.debug("  rich_cocktail_data instructions type: #{inspect(Map.get(rich_cocktail_data, :instructions))}")
+
+              Logger.debug(
+                "  rich_cocktail_data name field: #{inspect(Map.get(rich_cocktail_data, :name))}"
+              )
+
+              Logger.debug(
+                "  rich_cocktail_data instructions type: #{inspect(Map.get(rich_cocktail_data, :instructions))}"
+              )
 
               # Use the shared CocktailDataService to prepare cocktail data consistently
               option_params =
@@ -256,6 +270,7 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
           end
         else
           Logger.debug("  EARLY EXIT: cocktail_data is nil - not found in search results")
+
           {:noreply,
            socket
            |> put_flash(:error, "Cocktail not found in search results.")
@@ -624,5 +639,4 @@ defmodule EventasaurusWeb.PublicCocktailPollComponent do
       true -> "Anonymous"
     end
   end
-
 end

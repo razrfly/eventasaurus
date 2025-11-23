@@ -46,9 +46,6 @@ defmodule EventasaurusWeb.Router do
       # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
 
-      # Jobs Monitor Dashboard (dev - no auth)
-      live "/jobs-monitor", Admin.JobMonitorLive
-
       # Sitemap Statistics (dev - no auth)
       live "/sitemap", Admin.SitemapLive
 
@@ -66,6 +63,9 @@ defmodule EventasaurusWeb.Router do
       # Job Execution Monitor (dev - no auth)
       live "/job-executions", Admin.JobExecutionMonitorLive
       live "/job-executions/:worker", Admin.JobTypeMonitorLive
+
+      # Error Trends & Analysis (dev - no auth)
+      live "/error-trends", Admin.ErrorTrendsLive
 
       # Category Analysis (dev - no auth)
       live "/discovery/category-analysis/:source_slug", Admin.CategoryAnalysisLive, :show
@@ -114,7 +114,11 @@ defmodule EventasaurusWeb.Router do
       # Unsplash Integration (dev - no auth)
       get "/unsplash", Admin.UnsplashTestController, :index
       post "/unsplash/fetch/:city_id", Admin.UnsplashTestController, :fetch_images
-      post "/unsplash/refresh-category/:city_id/:category", Admin.UnsplashTestController, :refresh_category
+
+      post "/unsplash/refresh-category/:city_id/:category",
+           Admin.UnsplashTestController,
+           :refresh_category
+
       post "/unsplash/refresh-all-cities", Admin.UnsplashTestController, :refresh_all_cities
       post "/unsplash/refresh-all-countries", Admin.UnsplashTestController, :refresh_all_countries
     end
@@ -159,15 +163,15 @@ defmodule EventasaurusWeb.Router do
       # Oban Web UI with admin authentication
       oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
 
-      # Jobs Monitor Dashboard with admin authentication
-      live "/jobs-monitor", EventasaurusWeb.Admin.JobMonitorLive
-
       # Scraper Processing Logs with admin authentication
       live "/scraper-logs", EventasaurusWeb.Admin.ScraperLogsLive
 
       # Job Execution Monitor with admin authentication
       live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
       live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
+
+      # Error Trends & Analysis with admin authentication
+      live "/error-trends", EventasaurusWeb.Admin.ErrorTrendsLive
 
       # Sitemap Statistics with admin authentication
       live "/sitemap", EventasaurusWeb.Admin.SitemapLive

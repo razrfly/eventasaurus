@@ -153,32 +153,32 @@ defmodule EventasaurusApp.Venues.CategoryMapper do
     cond do
       # Old town patterns
       String.contains?(name_lower, "old town") ||
-          String.contains?(name_lower, "medieval") ||
+        String.contains?(name_lower, "medieval") ||
           String.contains?(name_lower, "stare miasto") ->
         "old_town"
 
       # Historic patterns
       String.contains?(name_lower, "historic") ||
-          String.contains?(name_lower, "museum") ||
-          String.contains?(name_lower, "monument") ||
-          String.contains?(name_lower, "castle") ||
-          String.contains?(name_lower, "palace") ||
-          String.contains?(name_lower, "cathedral") ||
+        String.contains?(name_lower, "museum") ||
+        String.contains?(name_lower, "monument") ||
+        String.contains?(name_lower, "castle") ||
+        String.contains?(name_lower, "palace") ||
+        String.contains?(name_lower, "cathedral") ||
           String.contains?(name_lower, "church") ->
         "historic"
 
       # Landmark patterns
       String.contains?(name_lower, "tower") ||
-          String.contains?(name_lower, "square") ||
-          String.contains?(name_lower, "plaza") ||
+        String.contains?(name_lower, "square") ||
+        String.contains?(name_lower, "plaza") ||
           String.contains?(name_lower, "rynek") ->
         "city_landmarks"
 
       # Modern/architecture patterns
       String.contains?(name_lower, "arena") ||
-          String.contains?(name_lower, "stadium") ||
-          String.contains?(name_lower, "center") ||
-          String.contains?(name_lower, "centre") ||
+        String.contains?(name_lower, "stadium") ||
+        String.contains?(name_lower, "center") ||
+        String.contains?(name_lower, "centre") ||
           String.contains?(name_lower, "complex") ->
         "architecture"
 

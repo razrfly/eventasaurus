@@ -26,7 +26,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Config do
   end
 
   # Rate limiting
-  def request_delay_ms, do: 2_000  # 2 seconds between requests
+  # 2 seconds between requests
+  def request_delay_ms, do: 2_000
   def max_retries, do: 3
   def retry_delay_ms, do: 5_000
   def timeout_ms, do: 15_000

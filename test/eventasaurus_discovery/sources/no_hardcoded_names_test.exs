@@ -187,13 +187,14 @@ defmodule EventasaurusDiscovery.Sources.NoHardcodedNamesTest do
 
         # Look for pattern matching that returns known source names
         # Pattern: defp some_name_func("slug"), do: "Source Name"
-        pattern = ~r/defp?\s+\w*\("[\w_-]+"\)\s*,?\s*do:\s*"(#{Enum.join(@known_source_names, "|")})"/
+        pattern =
+          ~r/defp?\s+\w*\("[\w_-]+"\)\s*,?\s*do:\s*"(#{Enum.join(@known_source_names, "|")})"/
 
         matching_lines =
           Enum.with_index(lines, 1)
           |> Enum.filter(fn {line, _idx} ->
             Regex.match?(pattern, line) and
-            not (String.trim(line) |> String.starts_with?("#"))
+              not (String.trim(line) |> String.starts_with?("#"))
           end)
 
         case matching_lines do
@@ -219,6 +220,7 @@ defmodule EventasaurusDiscovery.Sources.NoHardcodedNamesTest do
 
           matches ->
             lines = String.split(content, "\n")
+
             matching_lines =
               Enum.with_index(lines, 1)
               |> Enum.filter(fn {line, _idx} ->
@@ -227,9 +229,9 @@ defmodule EventasaurusDiscovery.Sources.NoHardcodedNamesTest do
               |> Enum.reject(fn {line, _idx} ->
                 # Ignore comments and test files
                 String.trim(line) |> String.starts_with?("#") or
-                String.contains?(file, "test/") or
-                String.contains?(line, "@moduledoc") or
-                String.contains?(line, "@doc")
+                  String.contains?(file, "test/") or
+                  String.contains?(line, "@moduledoc") or
+                  String.contains?(line, "@doc")
               end)
 
             case matching_lines do

@@ -22,11 +22,13 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
   def index(conn, params) do
     # Pagination and search params
     page_param = params["page"] || "1"
+
     page =
       case Integer.parse(page_param) do
         {p, _} when p >= 1 -> p
         _ -> 1
       end
+
     per_page = 20
     search_query = params["search"] || ""
 
@@ -38,6 +40,7 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     filtered_cities =
       if search_query != "" do
         search_lower = String.downcase(search_query)
+
         Enum.filter(all_cities, fn city ->
           String.contains?(String.downcase(city.name), search_lower)
         end)
@@ -48,7 +51,8 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     # Paginate cities
     total_cities = length(filtered_cities)
     total_pages = max(1, ceil(total_cities / per_page))
-    page = max(1, min(page, total_pages))  # Clamp to valid range [1, total_pages]
+    # Clamp to valid range [1, total_pages]
+    page = max(1, min(page, total_pages))
     offset = (page - 1) * per_page
 
     paginated_cities =
@@ -306,7 +310,8 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
       name: city.name,
       slug: city.slug,
       format: :categorized,
-      tab_categories: tab_categories,  # List of tuples preserves order
+      # List of tuples preserves order
+      tab_categories: tab_categories,
       active_tab_category: active_tab_category,
       category_count: map_size(categories),
       image_count: total_images,
@@ -399,7 +404,10 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     case UnsplashCityRefreshWorker.new(%{city_id: city.id}) |> Oban.insert() do
       {:ok, _job} ->
         conn
-        |> put_flash(:info, "✓ Queued refresh job for #{city.name}. Images will update in a few moments.")
+        |> put_flash(
+          :info,
+          "✓ Queued refresh job for #{city.name}. Images will update in a few moments."
+        )
         |> redirect(to: ~p"/admin/unsplash")
 
       {:error, changeset} ->
@@ -436,7 +444,10 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     count = length(inserted_jobs)
 
     conn
-    |> put_flash(:info, "✓ Queued #{count} city refresh jobs. Staleness checks will prevent unnecessary API calls.")
+    |> put_flash(
+      :info,
+      "✓ Queued #{count} city refresh jobs. Staleness checks will prevent unnecessary API calls."
+    )
     |> redirect(to: ~p"/admin/unsplash")
   end
 
@@ -466,7 +477,10 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
     count = length(inserted_jobs)
 
     conn
-    |> put_flash(:info, "✓ Queued #{count} country refresh jobs. Staleness checks will prevent unnecessary API calls.")
+    |> put_flash(
+      :info,
+      "✓ Queued #{count} country refresh jobs. Staleness checks will prevent unnecessary API calls."
+    )
     |> redirect(to: ~p"/admin/unsplash")
   end
 
@@ -504,12 +518,27 @@ defmodule EventasaurusWeb.Admin.UnsplashTestController do
 
   defp get_search_terms_for_category(city_name, category) do
     case category do
-      "general" -> [city_name, "#{city_name} cityscape", "#{city_name} skyline"]
-      "architecture" -> ["#{city_name} architecture", "#{city_name} modern buildings", "#{city_name} buildings"]
-      "historic" -> ["#{city_name} historic buildings", "#{city_name} monuments", "#{city_name} old architecture"]
-      "old_town" -> ["#{city_name} old town", "#{city_name} medieval", "#{city_name} historic center"]
-      "city_landmarks" -> ["#{city_name} landmarks", "#{city_name} famous places", "#{city_name} attractions"]
-      _ -> [city_name]
+      "general" ->
+        [city_name, "#{city_name} cityscape", "#{city_name} skyline"]
+
+      "architecture" ->
+        ["#{city_name} architecture", "#{city_name} modern buildings", "#{city_name} buildings"]
+
+      "historic" ->
+        [
+          "#{city_name} historic buildings",
+          "#{city_name} monuments",
+          "#{city_name} old architecture"
+        ]
+
+      "old_town" ->
+        ["#{city_name} old town", "#{city_name} medieval", "#{city_name} historic center"]
+
+      "city_landmarks" ->
+        ["#{city_name} landmarks", "#{city_name} famous places", "#{city_name} attractions"]
+
+      _ ->
+        [city_name]
     end
   end
 end

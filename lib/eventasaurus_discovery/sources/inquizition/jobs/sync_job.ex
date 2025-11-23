@@ -28,9 +28,11 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
 
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, Inquizition}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "inquizition_sync_#{Date.utc_today()}"
     Logger.info("🔄 Starting Inquizition sync job")
 
     limit = args["limit"]
@@ -62,24 +64,29 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
             |> case do
               {:ok, _job} ->
                 Logger.info("✅ Enqueued index job for Inquizition")
+                MetricsTracker.record_success(job, external_id)
                 {:ok, %{source_id: source.id, venues_count: length(stores), limit: limit}}
 
               {:error, reason} = error ->
                 Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
+                MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
                 error
             end
 
           nil ->
             Logger.error("❌ Invalid CDN response: missing 'stores' key")
+            MetricsTracker.record_failure(job, "Invalid CDN response: missing 'stores' key", external_id)
             {:error, "Invalid CDN response format - expected {stores: [...]}"}
 
           _ ->
             Logger.error("❌ Invalid CDN response: 'stores' is not a list")
+            MetricsTracker.record_failure(job, "Invalid CDN response: 'stores' is not a list", external_id)
             {:error, "Invalid CDN response format - 'stores' must be a list"}
         end
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch venues from CDN: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Failed to fetch venues: #{inspect(reason)}", external_id)
         error
     end
   end

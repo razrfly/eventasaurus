@@ -20,14 +20,20 @@ defmodule EventasaurusDiscovery.FeaturedEvents do
     limit = Keyword.get(opts, :limit, 10)
 
     from(pe in PublicEvent,
-      join: v in Venue, on: pe.venue_id == v.id,
-      join: c in City, on: v.city_id == c.id,
-      left_join: cat in Category, on: pe.category_id == cat.id,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      join: c in City,
+      on: v.city_id == c.id,
+      left_join: cat in Category,
+      on: pe.category_id == cat.id,
       where: pe.starts_at > ^NaiveDateTime.utc_now(),
       where: not is_nil(pe.occurrences),
       where: fragment("jsonb_typeof(?->'dates') = 'array'", pe.occurrences),
       where: fragment("jsonb_array_length(?->'dates') > 1", pe.occurrences),
-      order_by: [desc: fragment("jsonb_array_length(?->'dates')", pe.occurrences), asc: pe.starts_at],
+      order_by: [
+        desc: fragment("jsonb_array_length(?->'dates')", pe.occurrences),
+        asc: pe.starts_at
+      ],
       limit: ^limit,
       select: %{
         id: pe.id,
@@ -39,7 +45,11 @@ defmodule EventasaurusDiscovery.FeaturedEvents do
         category_name: cat.name,
         venue_name: v.name,
         occurrence_count: fragment("jsonb_array_length(?->'dates')", pe.occurrences),
-        cover_image_url: fragment("(SELECT image_url FROM public_event_sources WHERE event_id = ? LIMIT 1)", pe.id)
+        cover_image_url:
+          fragment(
+            "(SELECT image_url FROM public_event_sources WHERE event_id = ? LIMIT 1)",
+            pe.id
+          )
       }
     )
     |> Repo.all()
@@ -60,10 +70,14 @@ defmodule EventasaurusDiscovery.FeaturedEvents do
     # First, get the ranked events with image URLs
     inner_query =
       from(pe in PublicEvent,
-        join: v in Venue, on: pe.venue_id == v.id,
-        join: c in City, on: v.city_id == c.id,
-        left_join: cat in Category, on: pe.category_id == cat.id,
-        left_join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: v in Venue,
+        on: pe.venue_id == v.id,
+        join: c in City,
+        on: v.city_id == c.id,
+        left_join: cat in Category,
+        on: pe.category_id == cat.id,
+        left_join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pe.starts_at > ^NaiveDateTime.utc_now(),
         where: pe.starts_at < fragment("NOW() + INTERVAL '60 days'"),
         where: pe.id not in ^exclude_ids,

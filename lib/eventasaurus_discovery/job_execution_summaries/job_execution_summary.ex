@@ -33,24 +33,24 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary do
 
   schema "job_execution_summaries" do
     # Core Oban job reference
-    field :job_id, :integer
-    field :worker, :string
-    field :queue, :string
-    field :state, :string
+    field(:job_id, :integer)
+    field(:worker, :string)
+    field(:queue, :string)
+    field(:state, :string)
 
     # Job data (snapshot at completion/failure time)
-    field :args, :map, default: %{}
+    field(:args, :map, default: %{})
 
     # Results - generic JSONB for scraper-specific metrics
-    field :results, :map, default: %{}
+    field(:results, :map, default: %{})
 
     # Error tracking
-    field :error, :string
+    field(:error, :string)
 
     # Timing
-    field :attempted_at, :utc_datetime
-    field :completed_at, :utc_datetime
-    field :duration_ms, :integer
+    field(:attempted_at, :utc_datetime)
+    field(:completed_at, :utc_datetime)
+    field(:duration_ms, :integer)
 
     timestamps(type: :utc_datetime)
   end
