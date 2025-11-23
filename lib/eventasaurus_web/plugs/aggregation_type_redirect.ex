@@ -25,8 +25,7 @@ defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
     "restaurant" => "food",
     "movie" => "movies",
     "concert" => "music",
-    "trivia" => "social",
-    "events" => "events"
+    "trivia" => "social"
   }
 
   def init(opts), do: opts
@@ -38,7 +37,7 @@ defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
         redirect_if_legacy(conn, city_slug, content_type, identifier, rest)
 
       # Multi-city route: /:content_type/:identifier
-      [content_type, identifier | rest] when content_type in ["restaurant", "movie", "concert", "events", "trivia"] ->
+      [content_type, identifier | rest] when content_type in ["restaurant", "movie", "concert", "trivia"] ->
         redirect_legacy_multi_city(conn, content_type, identifier, rest)
 
       _ ->
@@ -53,7 +52,7 @@ defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
         conn
 
       new_type ->
-        # Build new path with schema.org type
+        # Build new path with URL-friendly slug
         new_path =
           case rest do
             [] -> "/c/#{city_slug}/#{new_type}/#{identifier}"
