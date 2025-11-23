@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob do
+defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichmentJob do
   @moduledoc """
   Background job to enrich performer records with Resident Advisor artist data.
 
@@ -11,11 +11,11 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
 
       # Enrich a specific performer
       %{performer_id: 123}
-      |> ArtistEnrichmentJob.new()
+      |> PerformerEnrichmentJob.new()
       |> Oban.insert()
 
       # Enrich all RA performers missing data (batch)
-      ArtistEnrichmentJob.enrich_all_pending()
+      PerformerEnrichmentJob.enrich_all_pending()
 
   ## Enrichment Strategy
 

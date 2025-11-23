@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexJob do
+defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexPageJob do
   @moduledoc """
   Fetches venues from Geeks Who Drink map API and schedules detail jobs.
 

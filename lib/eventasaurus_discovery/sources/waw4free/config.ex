@@ -159,7 +159,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
   """
   def extract_external_id(url) do
     case Regex.run(~r/\/wydarzenie-(\d+)-/, url) do
-      [_, id] -> "waw4free_#{id}"
+      [_, id] -> "waw4free_event_#{id}"
       _ -> nil
     end
   end

@@ -50,8 +50,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
     venue_data = string_keys_to_atoms(args["venue_data"])
     source_id = args["source_id"]
 
-    # Use venue_url as external_id for metrics tracking
-    external_id = venue_url
+    # Use venue_id as external_id for metrics tracking
+    external_id = "geeks_who_drink_venue_#{venue_id}"
 
     Logger.info("🔍 Processing Geeks Who Drink venue: #{venue_title} (ID: #{venue_id})")
     Logger.info("📋 PHASE 1 DEBUG: Initial venue_data keys: #{inspect(Map.keys(venue_data))}")

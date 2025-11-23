@@ -14,7 +14,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
   Note: IndexJob fetches its own fresh nonce to avoid stale nonce issues
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :discovery,
     max_attempts: 3,
     priority: 1
@@ -22,6 +22,42 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, GeeksWhoDrink}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for map-based orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Geeks Who Drink uses map-based orchestration instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on map-based source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Geeks Who Drink transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: GeeksWhoDrink.Source.name(),
+      slug: GeeksWhoDrink.Source.key(),
+      website_url: "https://www.geekswhodrink.com",
+      priority: GeeksWhoDrink.Source.priority(),
+      config: %{
+        "rate_limit_seconds" => GeeksWhoDrink.Config.rate_limit(),
+        "max_requests_per_hour" => 1800,
+        "language" => "en",
+        "coverage" => "United States",
+        "api_type" => "wordpress_map",
+        "requires_nonce" => true,
+        "discovery_method" => "map_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
@@ -44,7 +80,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
       "limit" => limit,
       "force" => force
     }
-    |> GeeksWhoDrink.Jobs.IndexJob.new()
+    |> GeeksWhoDrink.Jobs.IndexPageJob.new()
     |> Oban.insert()
     |> case do
       {:ok, _job} ->

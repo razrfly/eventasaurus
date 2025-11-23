@@ -18,7 +18,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   - Grandchildren: RestaurantDetailJob (one per restaurant)
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :week_pl_sync,
     max_attempts: 3,
     priority: 1
@@ -29,6 +29,43 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.WeekPl.{Source, Client, DeploymentConfig, FestivalManager}
   alias EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for festival-based orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Week.pl uses festival-based orchestration instead of direct city-based fetch
+    Logger.warning("⚠️ fetch_events called on festival-based source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Week.pl uses festival-based orchestration, transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: Source.name(),
+      slug: Source.key(),
+      website_url: "https://week.pl",
+      priority: Source.priority(),
+      config: %{
+        "rate_limit_seconds" => 2,
+        "max_requests_per_hour" => 1800,
+        "language" => "pl",
+        "scope" => "regional",
+        "coverage" => "13 Polish cities",
+        "requires_geocoding" => false,
+        "has_coordinates" => true,
+        "discovery_method" => "festival_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do

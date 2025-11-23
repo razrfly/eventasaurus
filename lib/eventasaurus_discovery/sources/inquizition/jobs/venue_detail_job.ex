@@ -38,8 +38,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.VenueDetailJob do
     venue_id = args["venue_id"]
     venue_data_raw = args["venue_data"]
 
-    # Use venue_id as external_id for tracking (matches IndexJob pattern)
-    external_id = "inquizition-#{venue_id}"
+    # Use venue_id as external_id for tracking (matches IndexPageJob pattern)
+    external_id = "inquizition_venue_#{venue_id}"
 
     Logger.info("🔄 Processing Inquizition venue: #{venue_id}")
 

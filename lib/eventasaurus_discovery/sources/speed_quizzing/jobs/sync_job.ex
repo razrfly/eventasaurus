@@ -22,7 +22,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
   - Single request fetches all events (no pagination)
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :scraper_index,
     max_attempts: 3,
     priority: 1
@@ -30,6 +30,41 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, SpeedQuizzing}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for HTML scraper orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Speed Quizzing uses HTML scraper orchestration instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on HTML scraper source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Speed Quizzing transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: SpeedQuizzing.Source.name(),
+      slug: SpeedQuizzing.Source.key(),
+      website_url: "https://www.speedquizzing.com",
+      priority: SpeedQuizzing.Source.priority(),
+      config: %{
+        "rate_limit_seconds" => SpeedQuizzing.Config.rate_limit(),
+        "max_requests_per_hour" => 1800,
+        "language" => "en",
+        "scraper_type" => "embedded_json",
+        "data_source" => "HTML with embedded JSON",
+        "discovery_method" => "html_scraper_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
@@ -60,7 +95,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
         "limit" => limit,
         "force" => force
       }
-      |> SpeedQuizzing.Jobs.IndexJob.new()
+      |> SpeedQuizzing.Jobs.IndexPageJob.new()
       |> Oban.insert()
       |> case do
         {:ok, _job} ->

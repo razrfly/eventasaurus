@@ -40,8 +40,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     venue_title = args["venue_title"]
     source_id = args["source_id"]
 
-    # Use venue_url as external_id for metrics tracking
-    external_id = venue_url
+    # Extract venue ID from URL for external_id (e.g., /venue/abc123 -> question_one_venue_abc123)
+    venue_id = venue_url |> String.split("/") |> List.last() |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
+    external_id = "question_one_venue_#{venue_id}"
 
     Logger.info("🔍 Processing Question One venue: #{venue_title}")
 

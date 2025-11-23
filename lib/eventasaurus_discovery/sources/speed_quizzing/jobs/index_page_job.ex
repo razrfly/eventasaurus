@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexJob do
+defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexPageJob do
   @moduledoc """
   Processes events from Speed Quizzing index page and enqueues detail jobs.
 
