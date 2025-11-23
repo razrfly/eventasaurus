@@ -162,6 +162,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
 
         editions
         |> Enum.map(&transform_api_festival/1)
+        |> Enum.reject(&is_nil/1)
         |> Enum.filter(fn festival ->
           Date.compare(today, festival.starts_at) == :lt
         end)

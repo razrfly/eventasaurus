@@ -18,32 +18,28 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
     # Guard against nil metadata and sanitize URLs
     md = source.metadata || %{}
 
-    url =
-      cond do
-        # PRIORITY 1: source_url (event-specific URLs)
-        # Cinema City stores booking URL here (specific showtime booking page)
-        # BandsInTown and other scrapers also use this for ticket links
-        source.source_url -> source.source_url
-
-        # PRIORITY 2: metadata-based event URLs (scrapers that store in metadata)
-        # Ticketmaster stores URL in ticketmaster_data.url
-        url = get_in(md, ["ticketmaster_data", "url"]) -> url
-        # Bandsintown might have it in event_url or url
-        url = md["event_url"] -> url
-        url = md["url"] -> url
-        # Karnet might have it in a different location
-        url = md["link"] -> url
-        # Kino Krakow stores movie page URL in metadata
-        url = md["movie_url"] -> url
-
-        # PRIORITY 3: Fallback to source website URL (general homepage, not event-specific)
-        # This is the least useful but better than nothing
-        source.source && source.source.website_url -> source.source.website_url
-
-        true -> nil
-      end
-
-    normalize_http_url(url)
+    # Try candidates in priority order, returning first that normalizes successfully
+    # This ensures we fall back to other candidates if earlier ones are blank/invalid
+    [
+      # PRIORITY 1: source_url (event-specific URLs)
+      # Cinema City stores booking URL here (specific showtime booking page)
+      # BandsInTown and other scrapers also use this for ticket links
+      source.source_url,
+      # PRIORITY 2: metadata-based event URLs (scrapers that store in metadata)
+      # Ticketmaster stores URL in ticketmaster_data.url
+      get_in(md, ["ticketmaster_data", "url"]),
+      # Bandsintown might have it in event_url or url
+      md["event_url"],
+      md["url"],
+      # Karnet might have it in a different location
+      md["link"],
+      # Kino Krakow stores movie page URL in metadata
+      md["movie_url"],
+      # PRIORITY 3: Fallback to source website URL (general homepage, not event-specific)
+      # This is the least useful but better than nothing
+      source.source && source.source.website_url
+    ]
+    |> Enum.find_value(fn candidate -> normalize_http_url(candidate) end)
   end
 
   @doc """
@@ -89,26 +85,44 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
   end
 
   @doc """
-  Extract source URL from a container's source_event.
+  Extract source URL from a container.
 
-  Containers may have a reference event (source_event) that contains the original source data.
-  This function checks the source_event's sources for URLs.
+  Priority order:
+  1. Container-specific metadata URLs (event_url, url, link, etc.)
+  2. Source event URLs (if container has an associated source_event)
+  3. Resident Advisor umbrella_event_id URLs
+  4. source.website_url (fallback to general homepage)
   """
   def get_container_source_url(nil), do: nil
 
-  def get_container_source_url(%{source_event: source_event}) when not is_nil(source_event) do
-    get_url_from_source_event(source_event)
-  end
+  def get_container_source_url(container) do
+    md = container.metadata || %{}
 
-  def get_container_source_url(%{metadata: metadata}) when is_map(metadata) do
-    # Try to construct from container metadata (Resident Advisor)
-    case get_in(metadata, ["umbrella_event_id"]) do
-      nil -> nil
-      umbrella_event_id -> "https://ra.co/events/#{umbrella_event_id}"
-    end
-  end
+    url =
+      cond do
+        # PRIORITY 1: Container-specific metadata URLs
+        md["event_url"] -> md["event_url"]
+        md["url"] -> md["url"]
+        md["link"] -> md["link"]
 
-  def get_container_source_url(_), do: nil
+        # PRIORITY 2: Source event URLs
+        container.source_event ->
+          get_url_from_source_event(container.source_event)
+
+        # PRIORITY 3: Resident Advisor umbrella event ID
+        umbrella_event_id = get_in(md, ["umbrella_event_id"]) ->
+          "https://ra.co/events/#{umbrella_event_id}"
+
+        # PRIORITY 4: Fallback to source website URL (general homepage)
+        container.source && container.source.website_url ->
+          container.source.website_url
+
+        true ->
+          nil
+      end
+
+    normalize_http_url(url)
+  end
 
   # Private helper to extract URL from source event's sources
   defp get_url_from_source_event(%{sources: sources}) when is_list(sources) do
