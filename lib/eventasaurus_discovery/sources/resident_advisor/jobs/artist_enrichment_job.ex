@@ -41,6 +41,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
 
   alias EventasaurusDiscovery.Performers.{Performer, PerformerStore}
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   import Ecto.Query
 
@@ -48,16 +49,26 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
   Perform enrichment for a single performer.
   """
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"performer_id" => performer_id}}) do
+  def perform(%Oban.Job{args: %{"performer_id" => performer_id}} = job) do
+    external_id = "ra_enrichment_performer#{performer_id}_#{Date.utc_today()}"
     Logger.info("Starting RA artist enrichment for performer_id=#{performer_id}")
 
     case PerformerStore.get_performer(performer_id) do
       nil ->
         Logger.warning("Performer #{performer_id} not found, skipping enrichment")
+        MetricsTracker.record_failure(job, "Performer not found: #{performer_id}", external_id)
         :ok
 
       performer ->
-        enrich_performer(performer)
+        case enrich_performer(performer) do
+          :ok ->
+            MetricsTracker.record_success(job, external_id)
+            :ok
+
+          {:error, reason} = error ->
+            MetricsTracker.record_failure(job, "Enrichment failed: #{inspect(reason)}", external_id)
+            error
+        end
     end
   end
 
