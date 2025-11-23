@@ -465,13 +465,17 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     # Get geocoded country from result
     geocoded_country = get_geocoded_country(result, metadata)
 
+    # Normalize for comparison (handles "Polska" vs "Poland" vs "PL")
+    expected_norm = normalize_country_for_compare(expected_country)
+    geocoded_norm = normalize_country_for_compare(geocoded_country)
+
     cond do
-      # If we have both countries, they must match
-      expected_country && geocoded_country && expected_country != geocoded_country ->
+      # If we have both normalized countries, they must match
+      expected_norm && geocoded_norm && expected_norm != geocoded_norm ->
         {:error,
          "Country mismatch: Expected #{expected_country} but geocoded to #{geocoded_country}"}
 
-      # If we have expected country, check geographic bounds
+      # If we have an expected country at all, still run geographic bounds checks
       expected_country ->
         validate_geographic_bounds(result, expected_country, data)
 
@@ -480,6 +484,28 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
         :ok
     end
   end
+
+  # Canonicalize country names/codes for equality checks
+  # Handles translations like "Polska" vs "Poland", "PL" vs "Poland"
+  defp normalize_country_for_compare(nil), do: nil
+
+  defp normalize_country_for_compare(country_name) when is_binary(country_name) do
+    case CountryResolver.resolve(country_name) do
+      nil ->
+        # Couldn't resolve, fallback to lowercase comparison
+        country_name
+        |> String.trim()
+        |> String.downcase()
+
+      country ->
+        # Prefer stable ISO alpha2 when available (e.g., "PL", "FR")
+        (country.alpha2 || country.name)
+        |> String.trim()
+        |> String.upcase()
+    end
+  end
+
+  defp normalize_country_for_compare(_), do: nil
 
   # Get expected country from city or data
   defp get_expected_country(city, data) do

@@ -61,11 +61,24 @@ defmodule EventasaurusDiscovery.Monitoring.Compare do
     success_rate_change = after_baseline["success_rate"] - before["success_rate"]
     duration_change = after_baseline["avg_duration"] - before["avg_duration"]
     p95_change = after_baseline["p95"] - before["p95"]
-    error_rate_before = (before["failed"] + before["cancelled"]) / before["sample_size"] * 100
+
+    # Guard against division by zero or nil sample sizes
+    before_sample_size = before["sample_size"] || 0
+    after_sample_size = after_baseline["sample_size"] || 0
+
+    error_rate_before =
+      if before_sample_size > 0 do
+        (before["failed"] + before["cancelled"]) / before_sample_size * 100
+      else
+        0.0
+      end
 
     error_rate_after =
-      (after_baseline["failed"] + after_baseline["cancelled"]) / after_baseline["sample_size"] *
-        100
+      if after_sample_size > 0 do
+        (after_baseline["failed"] + after_baseline["cancelled"]) / after_sample_size * 100
+      else
+        0.0
+      end
 
     error_rate_change = error_rate_after - error_rate_before
 

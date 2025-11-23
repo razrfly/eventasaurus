@@ -54,7 +54,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
 
       {:ok, health} = Health.check("cinema_city", hours: 48)
       {:error, :unknown_source} = Health.check("invalid")
-      {:error, :no_executions} = Health.check("new_source")
+      {:error, :no_executions} = Health.check("cinema_city")  # when no data exists
   """
   def check(source, opts \\ []) do
     hours = Keyword.get(opts, :hours, 24)

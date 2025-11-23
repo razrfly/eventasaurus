@@ -158,7 +158,8 @@ defmodule Mix.Tasks.Monitor.Errors do
 
   defp analyze_errors(failures, total_executions, hours) do
     total_failures = length(failures)
-    error_rate = total_failures / total_executions * 100
+    # Guard against division by zero
+    error_rate = if total_executions > 0, do: total_failures / total_executions * 100, else: 0.0
 
     # Category distribution
     category_distribution =
@@ -191,6 +192,9 @@ defmodule Mix.Tasks.Monitor.Errors do
       |> Enum.sort_by(fn {hour, _} -> hour end)
 
     # Most affected jobs
+    # Use the same from_time as the failures query to avoid time drift
+    from_time = DateTime.add(DateTime.utc_now(), -hours, :hour)
+
     affected_jobs =
       failures
       |> Enum.group_by(& &1.worker)
@@ -198,16 +202,17 @@ defmodule Mix.Tasks.Monitor.Errors do
         worker_name = worker |> String.split(".") |> List.last()
         failure_count = length(job_failures)
 
-        # Get total executions for this worker
+        # Get total executions for this worker using the same from_time
         worker_total =
           from(j in JobExecutionSummary,
             where: j.worker == ^worker,
-            where: j.attempted_at >= ^DateTime.add(DateTime.utc_now(), -hours, :hour),
+            where: j.attempted_at >= ^from_time,
             select: count(j.id)
           )
           |> Repo.one()
 
-        error_rate = failure_count / worker_total * 100
+        # Guard against division by zero
+        error_rate = if worker_total > 0, do: failure_count / worker_total * 100, else: 0.0
         {worker_name, failure_count, error_rate}
       end)
       |> Enum.sort_by(fn {_, count, _} -> -count end)

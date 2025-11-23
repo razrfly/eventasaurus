@@ -175,6 +175,17 @@ defmodule Mix.Tasks.Monitor.Compare do
 
   defp compare_with_current(source, baseline_file) do
     with {:ok, before} <- load_baseline(baseline_file) do
+      # Validate source matches baseline
+      if before["source"] != source do
+        IO.puts(
+          IO.ANSI.red() <>
+            "❌ Error: Source mismatch. Baseline is for '#{before["source"]}' but you specified '#{source}'" <>
+            IO.ANSI.reset()
+        )
+
+        System.halt(1)
+      end
+
       # Generate current baseline
       IO.puts("Generating current baseline for #{source}...")
 
@@ -289,8 +300,18 @@ defmodule Mix.Tasks.Monitor.Compare do
     IO.puts("")
 
     # Error category changes
-    before_errors = Map.new(before["error_categories"] || [], fn {k, v} -> {k, v} end)
-    after_errors = Map.new(after_baseline["error_categories"] || [], fn {k, v} -> {k, v} end)
+    # Handle both tuple format (from in-memory) and list format (from JSON decode)
+    before_errors =
+      Map.new(before["error_categories"] || [], fn
+        {k, v} -> {k, v}
+        [k, v] -> {k, v}
+      end)
+
+    after_errors =
+      Map.new(after_baseline["error_categories"] || [], fn
+        {k, v} -> {k, v}
+        [k, v] -> {k, v}
+      end)
 
     all_error_categories =
       (Map.keys(before_errors) ++ Map.keys(after_errors))
@@ -310,11 +331,25 @@ defmodule Mix.Tasks.Monitor.Compare do
         change_text =
           cond do
             change > 0 ->
-              percent_change = (change / before_count * 100) |> Float.round(1)
+              # Guard against division by zero
+              percent_change =
+                if before_count > 0 do
+                  (change / before_count * 100) |> Float.round(1)
+                else
+                  0.0
+                end
+
               "(↑ #{change}, +#{percent_change}%) ⚠️ "
 
             change < 0 ->
-              percent_change = (abs(change) / before_count * 100) |> Float.round(1)
+              # Guard against division by zero
+              percent_change =
+                if before_count > 0 do
+                  (abs(change) / before_count * 100) |> Float.round(1)
+                else
+                  0.0
+                end
+
               "(↓ #{abs(change)}, -#{percent_change}%) ✅"
 
             true ->
