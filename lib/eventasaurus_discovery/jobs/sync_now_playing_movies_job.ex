@@ -129,6 +129,7 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
     |> Enum.each(fn {job, page} ->
       delay_seconds = (page - 1) * stagger
       schedule_time = DateTime.utc_now() |> DateTime.add(delay_seconds, :second)
+
       Logger.debug(
         "📄 Page #{page} scheduled for #{format_time(schedule_time)} (#{delay_seconds}s delay) - Job ID: #{job.id}"
       )
@@ -149,16 +150,18 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
     Each page will fetch and sync movies independently with automatic retry on failure.
     """)
 
-    {:ok, %{
-      coordinator_job_id: coordinator_job_id,
-      region: region,
-      pages: pages,
-      stagger_seconds: stagger,
-      spawned_job_ids: job_ids,
-      schedule_start: first_job_time,
-      schedule_end: last_job_time,
-      message: "Spawned #{pages} page fetch jobs with #{stagger}s stagger to prevent rate limits."
-    }}
+    {:ok,
+     %{
+       coordinator_job_id: coordinator_job_id,
+       region: region,
+       pages: pages,
+       stagger_seconds: stagger,
+       spawned_job_ids: job_ids,
+       schedule_start: first_job_time,
+       schedule_end: last_job_time,
+       message:
+         "Spawned #{pages} page fetch jobs with #{stagger}s stagger to prevent rate limits."
+     }}
   end
 
   # Normalize region code to uppercase 2-letter ISO code
@@ -202,11 +205,13 @@ defmodule EventasaurusDiscovery.Jobs.SyncNowPlayingMoviesJob do
 
   # Format duration in seconds to human-readable format
   defp format_duration(seconds) when seconds < 60, do: "#{seconds}s"
+
   defp format_duration(seconds) when seconds < 3600 do
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
     "#{minutes}m #{remaining_seconds}s"
   end
+
   defp format_duration(seconds) do
     hours = div(seconds, 3600)
     remaining_minutes = div(rem(seconds, 3600), 60)

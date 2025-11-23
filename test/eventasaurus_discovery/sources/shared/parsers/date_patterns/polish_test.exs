@@ -422,6 +422,7 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.PolishTest d
       assert %DateTime{} = result.starts_at
       assert result.starts_at.year == 2025
       assert result.starts_at.month == 11
+
       # Day can be 2 or 3 depending on timezone conversion (midnight Warsaw -> UTC can be previous day)
       assert result.starts_at.day in [2, 3]
       assert result.ends_at == nil
@@ -617,7 +618,8 @@ defmodule EventasaurusDiscovery.Sources.Shared.Parsers.DatePatterns.PolishTest d
       assert %DateTime{} = result.starts_at
       assert result.starts_at.year == 2025
       assert result.starts_at.month == 9
-      assert result.starts_at.day in [3, 4]  # May vary with timezone
+      # May vary with timezone
+      assert result.starts_at.day in [3, 4]
       assert result.ends_at == nil
     end
 

@@ -230,15 +230,45 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.VenueDetailJob do
   defp fallback_timezone_from_address(venue_data) do
     case get_state_from_address(venue_data[:address]) do
       # West Coast
-      state when state in ["CA", "WA", "OR", "NV"] -> "America/Los_Angeles"
+      state when state in ["CA", "WA", "OR", "NV"] ->
+        "America/Los_Angeles"
+
       # Arizona (no DST)
-      "AZ" -> "America/Phoenix"
+      "AZ" ->
+        "America/Phoenix"
+
       # Mountain Time
-      state when state in ["MT", "CO", "UT", "NM", "WY", "ID"] -> "America/Denver"
+      state when state in ["MT", "CO", "UT", "NM", "WY", "ID"] ->
+        "America/Denver"
+
       # Central Time
-      state when state in ["IL", "TX", "MN", "MO", "WI", "IA", "KS", "OK", "AR", "LA", "MS", "AL", "TN", "KY", "IN", "MI", "ND", "SD", "NE"] -> "America/Chicago"
+      state
+      when state in [
+             "IL",
+             "TX",
+             "MN",
+             "MO",
+             "WI",
+             "IA",
+             "KS",
+             "OK",
+             "AR",
+             "LA",
+             "MS",
+             "AL",
+             "TN",
+             "KY",
+             "IN",
+             "MI",
+             "ND",
+             "SD",
+             "NE"
+           ] ->
+        "America/Chicago"
+
       # Eastern Time (default)
-      _ -> "America/New_York"
+      _ ->
+        "America/New_York"
     end
   end
 

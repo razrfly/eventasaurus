@@ -29,9 +29,11 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
 
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, SpeedQuizzing}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "speed_quizzing_sync_#{Date.utc_today()}"
     IO.puts("=" <> String.duplicate("=", 79))
     IO.puts("🔄 Starting Speed Quizzing sync job")
     IO.puts("=" <> String.duplicate("=", 79))
@@ -63,15 +65,18 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
       |> case do
         {:ok, _job} ->
           Logger.info("✅ Enqueued index job for Speed Quizzing")
+          MetricsTracker.record_success(job, external_id)
           {:ok, %{source_id: source.id, events_count: length(events), limit: limit}}
 
         {:error, reason} = error ->
           Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
+          MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
           error
       end
     else
       {:error, reason} = error ->
         Logger.error("❌ Speed Quizzing sync job failed: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Speed Quizzing sync failed: #{inspect(reason)}", external_id)
         error
     end
   end

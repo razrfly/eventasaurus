@@ -174,12 +174,13 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
         dates
         |> Enum.with_index()
         |> Enum.into(%{}, fn {date, index} ->
-          {"filters#{index}", %{
-            "startsOn" => date,
-            "endsOn" => date,
-            "hours" => [slot],
-            "peopleCount" => people_count
-          }}
+          {"filters#{index}",
+           %{
+             "startsOn" => date,
+             "endsOn" => date,
+             "hours" => [slot],
+             "peopleCount" => people_count
+           }}
         end)
       )
 
@@ -293,7 +294,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Client do
       "id" => restaurant_id
     }
 
-    Logger.debug("[WeekPl.Client] GraphQL detail query for #{slug} (ID: #{restaurant_id}) in #{region_name}")
+    Logger.debug(
+      "[WeekPl.Client] GraphQL detail query for #{slug} (ID: #{restaurant_id}) in #{region_name}"
+    )
 
     case execute_graphql_query(query, variables) do
       {:ok, %{"data" => %{"restaurant" => restaurant}}} when not is_nil(restaurant) ->

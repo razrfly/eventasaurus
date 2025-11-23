@@ -64,15 +64,19 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
             refresh_city_images(city, city_id)
 
           {false, age_days} ->
-            Logger.info("⏭️  Skipping #{city.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)")
-            {:ok, %{
-              city_id: city_id,
-              city_name: city.name,
-              skipped: true,
-              reason: "images_fresh",
-              age_days: age_days,
-              job_role: "worker"
-            }}
+            Logger.info(
+              "⏭️  Skipping #{city.name} - images are fresh (#{age_days} days old, threshold: #{refresh_days} days)"
+            )
+
+            {:ok,
+             %{
+               city_id: city_id,
+               city_name: city.name,
+               skipped: true,
+               reason: "images_fresh",
+               age_days: age_days,
+               job_role: "worker"
+             }}
         end
     end
   end
@@ -85,20 +89,26 @@ defmodule EventasaurusApp.Workers.UnsplashCityRefreshWorker do
     case UnsplashImageFetcher.fetch_and_store_all_categories(city) do
       {:ok, updated_city} ->
         categories = get_in(updated_city.unsplash_gallery, ["categories"]) || %{}
-        total_images = Enum.reduce(categories, 0, fn {_name, data}, acc ->
-          acc + length(Map.get(data, "images", []))
-        end)
-        Logger.info("  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{city.name}")
+
+        total_images =
+          Enum.reduce(categories, 0, fn {_name, data}, acc ->
+            acc + length(Map.get(data, "images", []))
+          end)
+
+        Logger.info(
+          "  ✅ Successfully refreshed #{map_size(categories)} categories with #{total_images} images for #{city.name}"
+        )
 
         # Return results map for tracking
-        {:ok, %{
-          city_id: city_id,
-          city_name: city.name,
-          categories_refreshed: map_size(categories),
-          images_fetched: total_images,
-          skipped: false,
-          job_role: "worker"
-        }}
+        {:ok,
+         %{
+           city_id: city_id,
+           city_name: city.name,
+           categories_refreshed: map_size(categories),
+           images_fetched: total_images,
+           skipped: false,
+           job_role: "worker"
+         }}
 
       {:error, :all_categories_failed} ->
         Logger.error("  ❌ Failed to fetch any categories for #{city.name}")

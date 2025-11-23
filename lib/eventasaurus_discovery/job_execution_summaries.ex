@@ -16,6 +16,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
   - `:worker` - Filter by worker module name
   - `:state` - Filter by job state
+  - `:error_category` - Filter by error category
   - `:limit` - Limit number of results (default: 50)
   - `:offset` - Offset for pagination (default: 0)
   - `:order_by` - Order results (default: [desc: :attempted_at])
@@ -32,21 +33,26 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       JobExecutionSummaries.list_summaries(
         worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob"
       )
+
+      # Get jobs with validation errors
+      JobExecutionSummaries.list_summaries(error_category: "validation_error")
   """
   def list_summaries(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
-    order_by = Keyword.get(opts, :order_by, [desc: :attempted_at])
+    order_by = Keyword.get(opts, :order_by, desc: :attempted_at)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         order_by: ^order_by,
         limit: ^limit,
         offset: ^offset
+      )
 
     query
     |> filter_by_worker(opts[:worker])
     |> filter_by_state(opts[:state])
+    |> filter_by_error_category(opts[:error_category])
     |> Repo.all()
   end
 
@@ -67,7 +73,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   """
   def get_worker_metrics(worker_name) do
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.worker == ^worker_name,
         select: %{
           total_jobs: count(s.id),
@@ -75,6 +81,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
           avg_duration_ms: avg(s.duration_ms)
         }
+      )
 
     result = Repo.one(query)
 
@@ -82,11 +89,12 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       success_rate = Float.round(result.completed / result.total_jobs * 100, 2)
 
       # Convert Decimal to float for avg_duration_ms
-      avg_duration = if result.avg_duration_ms do
-        result.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
-      else
-        nil
-      end
+      avg_duration =
+        if result.avg_duration_ms do
+          result.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
+        else
+          nil
+        end
 
       result
       |> Map.put(:success_rate, success_rate)
@@ -106,7 +114,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   """
   def list_workers do
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         group_by: s.worker,
         select: %{
           worker: s.worker,
@@ -114,6 +122,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           last_execution: max(s.attempted_at)
         },
         order_by: [desc: max(s.attempted_at)]
+      )
 
     Repo.all(query)
   end
@@ -138,9 +147,10 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   """
   def get_executions_in_range(from, to) do
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.attempted_at >= ^from and s.attempted_at <= ^to,
         order_by: [desc: :attempted_at]
+      )
 
     Repo.all(query)
   end
@@ -154,7 +164,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.attempted_at >= ^cutoff,
         select: %{
           total_jobs: count(s.id),
@@ -164,6 +174,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           avg_duration_ms: avg(s.duration_ms),
           unique_workers: fragment("COUNT(DISTINCT ?)", s.worker)
         }
+      )
 
     result = Repo.one(query)
 
@@ -187,7 +198,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     if hours_back <= 48 do
       # Hourly granularity
       query =
-        from s in JobExecutionSummary,
+        from(s in JobExecutionSummary,
           where: s.attempted_at >= ^cutoff,
           group_by: fragment("date_trunc('hour', ?)", s.attempted_at),
           select: %{
@@ -197,12 +208,13 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
             failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
           },
           order_by: fragment("date_trunc('hour', ?)", s.attempted_at)
+        )
 
       Repo.all(query)
     else
       # Daily granularity
       query =
-        from s in JobExecutionSummary,
+        from(s in JobExecutionSummary,
           where: s.attempted_at >= ^cutoff,
           group_by: fragment("date_trunc('day', ?)", s.attempted_at),
           select: %{
@@ -212,6 +224,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
             failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
           },
           order_by: fragment("date_trunc('day', ?)", s.attempted_at)
+        )
 
       Repo.all(query)
     end
@@ -224,7 +237,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.attempted_at >= ^cutoff,
         group_by: s.worker,
         select: %{
@@ -236,6 +249,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         },
         order_by: [desc: count(s.id)],
         limit: ^limit
+      )
 
     Repo.all(query)
     |> Enum.map(fn worker ->
@@ -257,10 +271,11 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.worker == ^worker and s.attempted_at >= ^cutoff,
         order_by: [desc: :attempted_at],
         limit: ^limit
+      )
 
     Repo.all(query)
   end
@@ -284,7 +299,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.worker == ^worker and s.attempted_at >= ^cutoff,
         select: %{
           total: count(s.id),
@@ -292,6 +307,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
           avg_duration_ms: avg(s.duration_ms)
         }
+      )
 
     result = Repo.one(query)
 
@@ -300,11 +316,12 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       success_rate = Float.round(result.completed / result.total * 100, 2)
 
       # Convert Decimal to float for avg_duration_ms
-      avg_duration = if result.avg_duration_ms do
-        result.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
-      else
-        0.0
-      end
+      avg_duration =
+        if result.avg_duration_ms do
+          result.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
+        else
+          0.0
+        end
 
       result
       |> Map.put(:success_rate, success_rate)
@@ -338,7 +355,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.worker == ^worker and s.attempted_at >= ^cutoff,
         group_by: fragment("date_trunc('day', ?)", s.attempted_at),
         select: %{
@@ -348,6 +365,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
         },
         order_by: fragment("date_trunc('day', ?)", s.attempted_at)
+      )
 
     Repo.all(query)
     |> Enum.map(fn bucket ->
@@ -421,7 +439,9 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       failed = Enum.count(executions, &(&1.state in ["discarded", "cancelled"]))
 
       durations = Enum.map(executions, & &1.duration_ms) |> Enum.reject(&is_nil/1)
-      avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
+
+      avg_duration =
+        if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
 
       success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
 
@@ -452,8 +472,9 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     cutoff_date = DateTime.add(DateTime.utc_now(), -days_to_keep, :day)
 
     query =
-      from s in JobExecutionSummary,
+      from(s in JobExecutionSummary,
         where: s.attempted_at < ^cutoff_date
+      )
 
     Repo.delete_all(query)
   end
@@ -514,6 +535,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
   # Determines if a job is a silent failure based on its results metadata
   defp is_silent_failure?(%JobExecutionSummary{results: nil}), do: false
+
   defp is_silent_failure?(%JobExecutionSummary{results: results}) when is_map(results) do
     # Skip if explicitly marked as skipped
     skipped = get_in(results, ["skipped"]) == true
@@ -548,17 +570,183 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     end
   end
 
+  @doc """
+  Gets error category breakdown for failed jobs within a time range.
+
+  Returns a list of maps with error_category and count.
+
+  ## Examples
+
+      # Get error breakdown for last 24 hours
+      JobExecutionSummaries.get_error_category_breakdown(24)
+  """
+  def get_error_category_breakdown(hours_back \\ 24) do
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    from(s in JobExecutionSummary,
+      where: s.attempted_at >= ^cutoff,
+      where: s.state in ["discarded", "cancelled"],
+      where: fragment("? ->> ? IS NOT NULL", s.results, "error_category"),
+      group_by: fragment("? ->> ?", s.results, "error_category"),
+      select: %{
+        error_category: fragment("? ->> ?", s.results, "error_category"),
+        count: count(s.id)
+      },
+      order_by: [desc: count(s.id)]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets error rate trends over time with configurable granularity.
+
+  Returns a list of time buckets with error counts and rates.
+
+  ## Options
+
+  - `:granularity` - Time bucket size (`:hour` or `:day`, default: `:hour`)
+
+  ## Examples
+
+      # Get hourly error trends for last 7 days
+      JobExecutionSummaries.get_error_trends(168, granularity: :hour)
+
+      # Get daily error trends for last 30 days
+      JobExecutionSummaries.get_error_trends(720, granularity: :day)
+  """
+  def get_error_trends(hours_back \\ 168, opts \\ []) do
+    granularity = Keyword.get(opts, :granularity, :hour)
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    # Determine time bucket truncation based on granularity
+    time_trunc = if granularity == :day, do: "day", else: "hour"
+
+    from(s in JobExecutionSummary,
+      where: s.attempted_at >= ^cutoff,
+      select: %{
+        time_bucket: selected_as(fragment("date_trunc(?, ?)", ^time_trunc, s.attempted_at), :time_bucket),
+        total: count(s.id),
+        completed: count(s.id) |> filter(s.state == "completed"),
+        failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
+      },
+      group_by: selected_as(:time_bucket),
+      order_by: selected_as(:time_bucket)
+    )
+    |> Repo.all()
+    |> Enum.map(fn bucket ->
+      error_rate =
+        if bucket.total > 0 do
+          Float.round(bucket.failed / bucket.total * 100, 2)
+        else
+          0.0
+        end
+
+      Map.put(bucket, :error_rate, error_rate)
+    end)
+  end
+
+  @doc """
+  Gets the top N most common error messages within a time range.
+
+  Returns a list of maps with error message and occurrence count.
+
+  ## Options
+
+  - `:limit` - Maximum number of error messages to return (default: 20)
+
+  ## Examples
+
+      # Get top 10 error messages from last 7 days
+      JobExecutionSummaries.get_top_error_messages(168, limit: 10)
+  """
+  def get_top_error_messages(hours_back \\ 168, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    from(s in JobExecutionSummary,
+      where: s.attempted_at >= ^cutoff,
+      where: s.state in ["discarded", "cancelled"],
+      where: fragment("? ->> ? IS NOT NULL", s.results, "error_message"),
+      group_by: [fragment("? ->> ?", s.results, "error_message"), fragment("? ->> ?", s.results, "error_category")],
+      select: %{
+        error_message: fragment("? ->> ?", s.results, "error_message"),
+        error_category: fragment("? ->> ?", s.results, "error_category"),
+        count: count(s.id),
+        first_seen: min(s.attempted_at),
+        last_seen: max(s.attempted_at)
+      },
+      order_by: [desc: count(s.id)],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Compares success rates and performance metrics across all scrapers.
+
+  Returns a list of scraper statistics for side-by-side comparison.
+
+  ## Examples
+
+      # Compare scrapers over last 7 days
+      JobExecutionSummaries.compare_scrapers(168)
+  """
+  def compare_scrapers(hours_back \\ 168) do
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    from(s in JobExecutionSummary,
+      where: s.attempted_at >= ^cutoff,
+      group_by: s.worker,
+      select: %{
+        worker: s.worker,
+        total_jobs: count(s.id),
+        completed: count(s.id) |> filter(s.state == "completed"),
+        failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+        avg_duration_ms: avg(s.duration_ms)
+      },
+      order_by: [desc: count(s.id)]
+    )
+    |> Repo.all()
+    |> Enum.map(fn scraper ->
+      success_rate =
+        if scraper.total_jobs > 0 do
+          Float.round(scraper.completed / scraper.total_jobs * 100, 2)
+        else
+          0.0
+        end
+
+      avg_duration =
+        if scraper.avg_duration_ms do
+          scraper.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
+        else
+          nil
+        end
+
+      scraper
+      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:avg_duration_ms, avg_duration)
+    end)
+  end
+
   # Private query filters
 
   defp filter_by_worker(query, nil), do: query
 
   defp filter_by_worker(query, worker) do
-    from s in query, where: s.worker == ^worker
+    from(s in query, where: s.worker == ^worker)
   end
 
   defp filter_by_state(query, nil), do: query
 
   defp filter_by_state(query, state) do
-    from s in query, where: s.state == ^state
+    from(s in query, where: s.state == ^state)
+  end
+
+  defp filter_by_error_category(query, nil), do: query
+
+  defp filter_by_error_category(query, error_category) do
+    from(s in query,
+      where: fragment("? ->> ? = ?", s.results, "error_category", ^error_category)
+    )
   end
 end

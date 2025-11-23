@@ -21,6 +21,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   alias EventasaurusDiscovery.Sources.Waw4Free.{
     Config,
@@ -32,7 +33,8 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.Waw4Free.Jobs.EventDetailJob
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "waw4free_sync_#{Date.utc_today()}"
     city_id = args["city_id"]
     limit = args["limit"] || 200
     force = args["force"] || false
@@ -55,6 +57,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
     case city do
       nil ->
         Logger.error("City not found: #{inspect(city_id)} (tried lookup by name: Warszawa)")
+        MetricsTracker.record_failure(job, "City not found: #{inspect(city_id)}", external_id)
         {:error, :city_not_found}
 
       city ->
@@ -91,6 +94,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
             schedule_coordinate_update(city_id)
             Logger.info("🗺️ Scheduled coordinate update for city #{city_id}")
 
+            MetricsTracker.record_success(job, external_id)
             {:ok, stats}
         end
     end
@@ -197,7 +201,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
       # In force mode, skip freshness check and return all events
       events
     else
-      fresh_maps = EventFreshnessChecker.filter_events_needing_processing(events_as_maps, source_id)
+      fresh_maps =
+        EventFreshnessChecker.filter_events_needing_processing(events_as_maps, source_id)
+
       fresh_external_ids = MapSet.new(fresh_maps, & &1["external_id"])
 
       # Filter original events to only those in fresh set

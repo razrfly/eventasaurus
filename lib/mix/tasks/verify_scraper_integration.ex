@@ -36,7 +36,8 @@ defmodule Mix.Tasks.VerifyScraperIntegration do
         # Query current state
         results =
           from(pe in PublicEvent,
-            join: pes in PublicEventSource, on: pes.event_id == pe.id,
+            join: pes in PublicEventSource,
+            on: pes.event_id == pe.id,
             where: pe.id in ^event_ids,
             select: %{
               id: pe.id,

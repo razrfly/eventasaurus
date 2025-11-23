@@ -67,7 +67,9 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
     page = args["page"]
     coordinator_job_id = args["coordinator_job_id"]
 
-    Logger.info("📄 Fetching now playing page #{page} for #{region} (coordinator: #{coordinator_job_id})")
+    Logger.info(
+      "📄 Fetching now playing page #{page} for #{region} (coordinator: #{coordinator_job_id})"
+    )
 
     case TmdbService.get_now_playing(region, page) do
       {:ok, movies} ->
@@ -89,7 +91,10 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
             end
           end)
 
-        Logger.info("✅ Synced #{synced_count}/#{length(movies)} movies from page #{page} for #{region}")
+        Logger.info(
+          "✅ Synced #{synced_count}/#{length(movies)} movies from page #{page} for #{region}"
+        )
+
         {:ok, %{page: page, region: region, movies_synced: synced_count}}
 
       {:error, reason} ->
@@ -101,10 +106,16 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
           |> String.contains?("rate limit")
 
         if rate_limited? do
-          Logger.error("❌ Page #{page} failed: Rate limit exceeded (coordinator: #{coordinator_job_id})")
+          Logger.error(
+            "❌ Page #{page} failed: Rate limit exceeded (coordinator: #{coordinator_job_id})"
+          )
+
           {:error, :rate_limited}
         else
-          Logger.error("❌ Page #{page} failed: #{inspect(reason)} (coordinator: #{coordinator_job_id})")
+          Logger.error(
+            "❌ Page #{page} failed: #{inspect(reason)} (coordinator: #{coordinator_job_id})"
+          )
+
           {:error, reason}
         end
     end

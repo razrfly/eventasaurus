@@ -21,7 +21,9 @@ defmodule EventasaurusWeb.PublicEventsHomeLive do
 
     # Get IDs to exclude from upcoming list
     exclude_ids = Enum.map(featured_events, & &1.id)
-    upcoming_events = FeaturedEvents.list_diverse_upcoming_events(limit: 24, exclude_ids: exclude_ids)
+
+    upcoming_events =
+      FeaturedEvents.list_diverse_upcoming_events(limit: 24, exclude_ids: exclude_ids)
 
     socket =
       socket

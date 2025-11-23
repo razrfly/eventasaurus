@@ -586,9 +586,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         if browsing_city do
           Enum.map(events, &enrich_with_browsing_city(&1, browsing_city, force))
         else
-          Logger.warning(
-            "Cannot enrich with browsing city: city #{browsing_city_id} not found"
-          )
+          Logger.warning("Cannot enrich with browsing city: city #{browsing_city_id} not found")
 
           events
         end
@@ -624,13 +622,18 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   defp enrich_with_own_city(event, force) do
     # Check if cover_image_url already exists using Map.get (safe for Ecto structs)
     existing_url = Map.get(event, :cover_image_url)
-    Logger.debug("enrich_with_own_city - Event #{event.id}, existing_url: #{inspect(existing_url)}, force: #{force}")
+
+    Logger.debug(
+      "enrich_with_own_city - Event #{event.id}, existing_url: #{inspect(existing_url)}, force: #{force}"
+    )
 
     if force || is_nil(existing_url) do
       # Get city struct from event's venue (preloaded by preload_for_image_enrichment)
       city = get_in(event, [Access.key(:venue), Access.key(:city_ref)])
 
-      Logger.debug("enrich_with_own_city - Event: #{event.id}, City: #{inspect(city && city.name)}")
+      Logger.debug(
+        "enrich_with_own_city - Event: #{event.id}, City: #{inspect(city && city.name)}"
+      )
 
       if city do
         # Pass nil as browsing_city so it uses the venue's city (from the event itself)
@@ -651,7 +654,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
         # Map.put works on Ecto structs (they are maps)
         enriched = Map.put(event, :cover_image_url, cover_image_url)
-        Logger.info("✨ Returning enriched event #{event.id} with cover_image_url: #{inspect(Map.get(enriched, :cover_image_url))}")
+
+        Logger.info(
+          "✨ Returning enriched event #{event.id} with cover_image_url: #{inspect(Map.get(enriched, :cover_image_url))}"
+        )
+
         enriched
       else
         Logger.info("⚠️  No venue/city found for event #{event.id}")
@@ -681,15 +688,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   """
   def get_cover_image_url(event, browsing_city \\ nil) do
     # For movie events, prioritize movie images from TMDb
-    result = case get_movie_image(event) do
-      nil ->
-        # Fall back to source image if no movie image available
-        from_sources = get_image_from_sources(event, browsing_city)
-        from_sources
+    result =
+      case get_movie_image(event) do
+        nil ->
+          # Fall back to source image if no movie image available
+          from_sources = get_image_from_sources(event, browsing_city)
+          from_sources
 
-      image_url ->
-        image_url
-    end
+        image_url ->
+          image_url
+      end
+
     result
   end
 
@@ -752,12 +761,16 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end)
 
     # If no source image found, fall back to city Unsplash images
-    result = case source_image do
-      nil ->
-        fallback = get_city_fallback_image(event, browsing_city)
-        fallback
-      url -> url
-    end
+    result =
+      case source_image do
+        nil ->
+          fallback = get_city_fallback_image(event, browsing_city)
+          fallback
+
+        url ->
+          url
+      end
+
     result
   end
 
@@ -809,9 +822,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           else
             # Fallback: Find a major city with gallery in the same country
             fallback_city = find_country_fallback_city(venue_city)
+
             if fallback_city do
-              Logger.info("🌍 Using country fallback: #{fallback_city.name} (venue city: #{venue_city && venue_city.name})")
+              Logger.info(
+                "🌍 Using country fallback: #{fallback_city.name} (venue city: #{venue_city && venue_city.name})"
+              )
             end
+
             fallback_city
           end
       end
@@ -832,17 +849,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       fallback_chain = [category, "general"] |> Enum.uniq()
       Logger.info("🔗 Fallback chain: #{inspect(fallback_chain)}")
 
-      result = case try_category_chain(city, fallback_chain, venue_id) do
-        nil ->
-          Logger.info("❌ No fallback image found in chain")
-          nil
+      result =
+        case try_category_chain(city, fallback_chain, venue_id) do
+          nil ->
+            Logger.info("❌ No fallback image found in chain")
+            nil
 
-        image_url ->
-          Logger.info("🎨 Found fallback image: #{String.slice(image_url, 0, 50)}...")
-          transformed = apply_cdn_transformations(image_url)
-          Logger.info("🔄 After CDN transformation: #{inspect(transformed)}")
-          transformed
-      end
+          image_url ->
+            Logger.info("🎨 Found fallback image: #{String.slice(image_url, 0, 50)}...")
+            transformed = apply_cdn_transformations(image_url)
+            Logger.info("🔄 After CDN transformation: #{inspect(transformed)}")
+            transformed
+        end
+
       Logger.info("📤 get_city_fallback_image returning: #{inspect(result)}")
       result
     else
@@ -854,6 +873,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   # Get city from event (handles various preload scenarios)
   defp get_event_city(%{venue: %{city_ref: %City{} = city}}), do: city
+
   defp get_event_city(%{venue: %Venue{} = venue}) do
     # Venue exists but city_ref not preloaded, load it
     case Repo.preload(venue, :city_ref) do
@@ -861,10 +881,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       _ -> nil
     end
   end
+
   defp get_event_city(_), do: nil
 
   # Check if city has unsplash_gallery populated
-  defp has_unsplash_gallery?(%City{unsplash_gallery: %{"categories" => categories}}) when is_map(categories) do
+  defp has_unsplash_gallery?(%City{unsplash_gallery: %{"categories" => categories}})
+       when is_map(categories) do
     # Check if gallery has at least one category with images
     Enum.any?(categories, fn {_category, category_data} ->
       case category_data do
@@ -873,18 +895,21 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       end
     end)
   end
+
   defp has_unsplash_gallery?(_), do: false
 
   # Find a fallback city with Unsplash gallery in the same country
   # Prioritizes geographically closer cities when coordinates available
   defp find_country_fallback_city(nil), do: nil
+
   defp find_country_fallback_city(%City{country_id: country_id} = venue_city) do
     # Query for cities in same country with Unsplash galleries
     query =
-      from c in City,
+      from(c in City,
         where: c.country_id == ^country_id,
         where: not is_nil(c.unsplash_gallery),
         select: c
+      )
 
     # Get all candidate cities
     candidates = Repo.all(query)
@@ -916,6 +941,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   # Try to get image from category chain (primary → fallback → general)
   defp try_category_chain(_city, [], _venue_id), do: nil
+
   defp try_category_chain(city, [category | rest], venue_id) do
     case get_category_image(city, category, venue_id) do
       nil -> try_category_chain(city, rest, venue_id)
@@ -929,7 +955,11 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   # Short-circuit when category is nil to avoid runtime errors
   defp get_category_image(_city, nil, _venue_id), do: nil
 
-  defp get_category_image(%City{unsplash_gallery: %{"categories" => categories}} = _city, category, venue_id)
+  defp get_category_image(
+         %City{unsplash_gallery: %{"categories" => categories}} = _city,
+         category,
+         venue_id
+       )
        when is_map(categories) and is_binary(category) do
     # JSONB keys are always strings, no need for atom conversion
     # This avoids String.to_atom/1 which can crash on nil and leak atoms
@@ -948,6 +978,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   # Get today's image from category images (implements daily rotation with venue variation)
   # Combines day of year + venue_id to ensure different images per venue on same day
   defp get_todays_image(images, venue_id)
+
   defp get_todays_image(images, venue_id) when is_list(images) and length(images) > 0 do
     # Combine day + venue_id for unique but stable selection per venue
     day_of_year = Date.utc_today() |> Date.day_of_year()
@@ -960,6 +991,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       _ -> nil
     end
   end
+
   defp get_todays_image(_, _), do: nil
 
   # Apply CDN transformations to Unsplash images
@@ -967,6 +999,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # Use ImageKit CDN for transformations (returns original if CDN disabled)
     Eventasaurus.ImageKit.url(url, width: 800, quality: 85)
   end
+
   defp apply_cdn_transformations(nil), do: nil
 
   # Get a general city image from Unsplash gallery for aggregate groups
@@ -980,6 +1013,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       nil
     end
   end
+
   defp get_city_general_image(_, _), do: nil
 
   defp parse_datetime(nil), do: nil

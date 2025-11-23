@@ -141,7 +141,8 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       -5
   """
   def calculate_percentage_change(source_slug, city_id_or_ids \\ nil)
-      when is_binary(source_slug) and (is_integer(city_id_or_ids) or is_list(city_id_or_ids) or is_nil(city_id_or_ids)) do
+      when is_binary(source_slug) and
+             (is_integer(city_id_or_ids) or is_list(city_id_or_ids) or is_nil(city_id_or_ids)) do
     case get_source_id(source_slug) do
       nil ->
         0
@@ -243,7 +244,8 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       }
   """
   def get_all_source_changes(source_slugs, city_id_or_ids \\ nil)
-      when is_list(source_slugs) and (is_integer(city_id_or_ids) or is_list(city_id_or_ids) or is_nil(city_id_or_ids)) do
+      when is_list(source_slugs) and
+             (is_integer(city_id_or_ids) or is_list(city_id_or_ids) or is_nil(city_id_or_ids)) do
     if Enum.empty?(source_slugs) do
       %{}
     else
@@ -408,7 +410,9 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
 
     # Current week (last 7 days)
     current_week_start = DateTime.add(now, -7, :day)
-    current_week_counts = batch_get_event_counts(source_ids, city_id_or_ids, current_week_start, now)
+
+    current_week_counts =
+      batch_get_event_counts(source_ids, city_id_or_ids, current_week_start, now)
 
     # Previous week (7-14 days ago)
     previous_week_start = DateTime.add(now, -14, :day)

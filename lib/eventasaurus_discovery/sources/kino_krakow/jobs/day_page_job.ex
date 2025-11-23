@@ -32,9 +32,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     day_offset = args["day_offset"]
     cookies = args["cookies"]
     csrf_token = args["csrf_token"]
@@ -47,42 +48,57 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     CSRF Token: #{String.slice(csrf_token || "none", 0..9)}...
     """)
 
+    # External ID for tracking
+    external_id = "kino_krakow_day_#{day_offset}_#{Date.utc_today()}"
+
     # Set the day and fetch showtimes
-    with {:ok, html} <- fetch_day_showtimes(day_offset, cookies, csrf_token),
-         showtimes <- extract_showtimes(html, day_offset) do
-      # Find unique movies from this day's showtimes
-      unique_movies =
-        showtimes
-        |> Enum.map(& &1.movie_slug)
-        |> Enum.uniq()
+    result =
+      with {:ok, html} <- fetch_day_showtimes(day_offset, cookies, csrf_token),
+           showtimes <- extract_showtimes(html, day_offset) do
+        # Find unique movies from this day's showtimes
+        unique_movies =
+          showtimes
+          |> Enum.map(& &1.movie_slug)
+          |> Enum.uniq()
 
-      Logger.info("""
-      ✅ Day #{day_offset} processed
-      Showtimes: #{length(showtimes)}
-      Unique movies: #{length(unique_movies)}
-      """)
+        Logger.info("""
+        ✅ Day #{day_offset} processed
+        Showtimes: #{length(showtimes)}
+        Unique movies: #{length(unique_movies)}
+        """)
 
-      # Schedule MovieDetailJobs for unique movies (with deduplication)
-      movies_scheduled = schedule_movie_detail_jobs(unique_movies, source_id)
+        # Schedule MovieDetailJobs for unique movies (with deduplication)
+        movies_scheduled = schedule_movie_detail_jobs(unique_movies, source_id)
 
-      # Schedule ShowtimeProcessJobs for each showtime
-      # These will wait for MovieDetailJobs to complete via caching mechanism
-      # Pass unique_movies count to calculate appropriate delay
-      showtimes_scheduled =
-        schedule_showtime_jobs(showtimes, source_id, day_offset, length(unique_movies), force)
+        # Schedule ShowtimeProcessJobs for each showtime
+        # These will wait for MovieDetailJobs to complete via caching mechanism
+        # Pass unique_movies count to calculate appropriate delay
+        showtimes_scheduled =
+          schedule_showtime_jobs(showtimes, source_id, day_offset, length(unique_movies), force)
 
-      {:ok,
-       %{
-         day: day_offset,
-         showtimes_count: length(showtimes),
-         unique_movies: length(unique_movies),
-         movies_scheduled: movies_scheduled,
-         showtimes_scheduled: showtimes_scheduled
-       }}
-    else
+        {:ok,
+         %{
+           day: day_offset,
+           showtimes_count: length(showtimes),
+           unique_movies: length(unique_movies),
+           movies_scheduled: movies_scheduled,
+           showtimes_scheduled: showtimes_scheduled
+         }}
+      else
+        {:error, reason} ->
+          Logger.error("❌ Failed to process day #{day_offset}: #{inspect(reason)}")
+          {:error, reason}
+      end
+
+    # Track metrics
+    case result do
+      {:ok, _stats} ->
+        MetricsTracker.record_success(job, external_id)
+        result
+
       {:error, reason} ->
-        Logger.error("❌ Failed to process day #{day_offset}: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 

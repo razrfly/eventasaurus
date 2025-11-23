@@ -281,6 +281,7 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
   defp health_color(_), do: "text-red-600"
 
   defp format_error_type(nil), do: "unknown"
+
   defp format_error_type(error_type) do
     error_type
     |> String.replace("_", " ")
@@ -288,6 +289,7 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
   end
 
   defp truncate(nil, _), do: ""
+
   defp truncate(string, length) when is_binary(string) do
     if String.length(string) > length do
       String.slice(string, 0, length) <> "..."

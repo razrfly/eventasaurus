@@ -22,13 +22,13 @@ defmodule EventasaurusWeb.Cache.EventPageCache do
   def init(_opts) do
     # Start Cachex with expiration settings
     {:ok, _pid} =
-      Cachex.start_link(@cache_name, [
+      Cachex.start_link(@cache_name,
         expiration:
           expiration(
             default: :timer.minutes(10),
             interval: :timer.minutes(2)
           )
-      ])
+      )
 
     Logger.info("EventPageCache started successfully")
     {:ok, %{}}

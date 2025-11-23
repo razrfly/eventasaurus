@@ -15,11 +15,12 @@ config :eventasaurus, :environment, config_env()
 # Must be in runtime.exs to conditionally select repo based on environment
 # Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
 # Development/Test use regular Repo (same database, simpler)
-oban_repo = if config_env() == :prod do
-  EventasaurusApp.SessionRepo
-else
-  EventasaurusApp.Repo
-end
+oban_repo =
+  if config_env() == :prod do
+    EventasaurusApp.SessionRepo
+  else
+    EventasaurusApp.Repo
+  end
 
 config :eventasaurus, Oban,
   repo: oban_repo,
@@ -252,10 +253,14 @@ config :eventasaurus, :venue_images,
 # Unsplash rate limit: 5000 requests/hour
 unsplash_city_refresh_days =
   case System.get_env("UNSPLASH_CITY_REFRESH_DAYS") do
-    nil -> 7
+    nil ->
+      7
+
     days_str ->
       case Integer.parse(days_str) do
-        {days, _} when days > 0 -> days
+        {days, _} when days > 0 ->
+          days
+
         _ ->
           require Logger
           Logger.warning("Invalid UNSPLASH_CITY_REFRESH_DAYS: #{days_str}, using default: 7")
@@ -265,10 +270,14 @@ unsplash_city_refresh_days =
 
 unsplash_country_refresh_days =
   case System.get_env("UNSPLASH_COUNTRY_REFRESH_DAYS") do
-    nil -> 7
+    nil ->
+      7
+
     days_str ->
       case Integer.parse(days_str) do
-        {days, _} when days > 0 -> days
+        {days, _} when days > 0 ->
+          days
+
         _ ->
           require Logger
           Logger.warning("Invalid UNSPLASH_COUNTRY_REFRESH_DAYS: #{days_str}, using default: 7")
@@ -358,7 +367,8 @@ end
 
 if config_env() == :prod do
   # Validate required Supabase environment variables are set
-  for var <- ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL SUPABASE_SESSION_DATABASE_URL) do
+  for var <-
+        ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL SUPABASE_SESSION_DATABASE_URL) do
     System.fetch_env!(var)
   end
 
@@ -460,13 +470,17 @@ if config_env() == :prod do
     depth: 3,
     # Accept any hostname but validate certificate chain
     customize_hostname_check: [
-      match_fun: fn(_Hostname, _Extension) -> true end
+      match_fun: fn _Hostname, _Extension -> true end
     ]
   ]
 
   # Direct connection SSL: Full certificate verification with hostname check
   session_db_url = System.get_env("SUPABASE_SESSION_DATABASE_URL")
-  session_db_host = if session_db_url, do: URI.parse(session_db_url).host, else: "db.vnhxedeynrtvakglinnr.supabase.co"
+
+  session_db_host =
+    if session_db_url,
+      do: URI.parse(session_db_url).host,
+      else: "db.vnhxedeynrtvakglinnr.supabase.co"
 
   session_ssl_opts =
     if File.exists?(cert_path) do

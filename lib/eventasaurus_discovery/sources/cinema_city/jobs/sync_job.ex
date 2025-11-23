@@ -27,6 +27,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   alias EventasaurusDiscovery.Sources.CinemaCity.{
     Client,
@@ -36,11 +37,12 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
   }
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     source_id = args["source_id"] || get_or_create_source_id()
     days_ahead = args["days_ahead"] || Config.days_ahead()
     target_cities = args["target_cities"] || Config.target_cities()
     force = args["force"] || false
+    external_id = "cinema_city_sync_#{Date.utc_today()}"
 
     if force do
       Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
@@ -67,10 +69,12 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
         if Enum.empty?(filtered_cinemas) do
           Logger.warning("⚠️ No cinemas found in target cities")
+          MetricsTracker.record_success(job, external_id)
           {:ok, %{cinemas: 0, jobs_scheduled: 0}}
         else
           # Schedule CinemaDateJobs for each cinema × date
-          jobs_scheduled = schedule_cinema_date_jobs(filtered_cinemas, source_id, days_ahead, force)
+          jobs_scheduled =
+            schedule_cinema_date_jobs(filtered_cinemas, source_id, days_ahead, force)
 
           Logger.info("""
           ✅ Cinema City sync job completed (distributed mode)
@@ -79,6 +83,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
           CinemaDateJobs scheduled: #{jobs_scheduled}
           Events will be processed asynchronously
           """)
+
+          MetricsTracker.record_success(job, external_id)
 
           {:ok,
            %{
@@ -89,9 +95,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
            }}
         end
 
-      {:error, reason} ->
+      {:error, reason} = error ->
         Logger.error("❌ Failed to fetch cinema list: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, "Failed to fetch cinema list: #{inspect(reason)}", external_id)
+        error
     end
   end
 

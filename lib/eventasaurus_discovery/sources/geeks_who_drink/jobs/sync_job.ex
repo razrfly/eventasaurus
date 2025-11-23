@@ -21,9 +21,11 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
 
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, GeeksWhoDrink}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "geeks_who_drink_sync_#{Date.utc_today()}"
     Logger.info("🔄 Starting Geeks Who Drink sync job")
 
     limit = args["limit"]
@@ -47,10 +49,12 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
     |> case do
       {:ok, _job} ->
         Logger.info("✅ Enqueued index job for Geeks Who Drink")
+        MetricsTracker.record_success(job, external_id)
         {:ok, %{source_id: source.id, limit: limit}}
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
         error
     end
   end

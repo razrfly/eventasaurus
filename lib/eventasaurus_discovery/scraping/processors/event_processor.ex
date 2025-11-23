@@ -1334,6 +1334,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             Logger.debug(
               "No restaurant parent found for restaurant_date_id #{restaurant_date_id} at venue #{venue.id}"
             )
+
             nil
 
           event ->
@@ -1737,7 +1738,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp format_date_only(_), do: nil
 
   # Format time with timezone awareness (2-arity version)
-  defp format_time_only(%DateTime{} = dt, event_data) when is_map(event_data) or is_nil(event_data) do
+  defp format_time_only(%DateTime{} = dt, event_data)
+       when is_map(event_data) or is_nil(event_data) do
     # Extract timezone from event data or use UTC as fallback
     timezone = extract_timezone(event_data) || "Etc/UTC"
 

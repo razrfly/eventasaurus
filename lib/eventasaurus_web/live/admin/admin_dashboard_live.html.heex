@@ -85,14 +85,6 @@
         </.link>
 
         <.link
-          navigate={~p"/admin/jobs-monitor"}
-          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <div class="font-medium text-gray-900">Jobs Monitor</div>
-          <div class="text-sm text-gray-600">Background job status</div>
-        </.link>
-
-        <.link
           navigate={~p"/admin/job-executions"}
           class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-blue-400"
         >
@@ -114,6 +106,14 @@
         >
           <div class="font-medium text-gray-900">Scraper Logs ⭐</div>
           <div class="text-sm text-gray-600">Error tracking & debugging</div>
+        </.link>
+
+        <.link
+          navigate={~p"/admin/error-trends"}
+          class="block p-3 rounded-lg hover:bg-gray-50 transition-colors border-l-4 border-yellow-400"
+        >
+          <div class="font-medium text-gray-900">Error Trends & Analysis ⭐</div>
+          <div class="text-sm text-gray-600">Historical patterns & SLOs</div>
         </.link>
 
         <.link

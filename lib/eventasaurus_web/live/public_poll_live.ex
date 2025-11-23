@@ -9,7 +9,13 @@ defmodule EventasaurusWeb.PublicPollLive do
   require Logger
 
   alias EventasaurusApp.Events
-  alias EventasaurusWeb.{PublicGenericPollComponent, PublicCocktailPollComponent, AnonymousVoterComponent}
+
+  alias EventasaurusWeb.{
+    PublicGenericPollComponent,
+    PublicCocktailPollComponent,
+    AnonymousVoterComponent
+  }
+
   alias EventasaurusWeb.ReservedSlugs
   alias Eventasaurus.SocialCards.HashGenerator
 

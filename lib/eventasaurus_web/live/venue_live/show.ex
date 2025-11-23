@@ -55,7 +55,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   @impl true
-  def handle_params(%{"venue_slug" => venue_slug, "city_slug" => city_slug} = _params, _url, socket) do
+  def handle_params(
+        %{"venue_slug" => venue_slug, "city_slug" => city_slug} = _params,
+        _url,
+        socket
+      ) do
     # City-scoped venue route (e.g., /c/:city_slug/venues/:venue_slug)
     venue = get_venue_by_slug(venue_slug, city_slug)
 
@@ -119,7 +123,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
   # Helper functions
 
   # Check if venue has any images
-  defp has_venue_images?(%Venue{venue_images: images}) when is_list(images) and length(images) > 0, do: true
+  defp has_venue_images?(%Venue{venue_images: images})
+       when is_list(images) and length(images) > 0,
+       do: true
+
   defp has_venue_images?(_), do: false
 
   # Shared logic for loading and assigning venue data to socket

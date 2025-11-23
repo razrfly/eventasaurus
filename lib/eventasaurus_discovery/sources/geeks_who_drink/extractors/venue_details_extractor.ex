@@ -314,16 +314,17 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Extractors.VenueDetailsExt
 
     # Heuristic: If UTC hour is 00:00-05:00, likely evening (6-10 PM) in US
     # Convert assuming UTC-6 (Central) to UTC-7 (Mountain) as most common
-    local_hour = cond do
-      # 00:00-05:00 UTC = likely evening trivia
-      utc_hour >= 0 && utc_hour <= 5 ->
-        # Try UTC-7 (Mountain Time) as Geeks Who Drink HQ is in Denver
-        rem(utc_hour + 24 - 7, 24)
+    local_hour =
+      cond do
+        # 00:00-05:00 UTC = likely evening trivia
+        utc_hour >= 0 && utc_hour <= 5 ->
+          # Try UTC-7 (Mountain Time) as Geeks Who Drink HQ is in Denver
+          rem(utc_hour + 24 - 7, 24)
 
-      # Other times - use UTC-6 (Central) as it's most common US timezone
-      true ->
-        rem(utc_hour + 24 - 6, 24)
-    end
+        # Other times - use UTC-6 (Central) as it's most common US timezone
+        true ->
+          rem(utc_hour + 24 - 6, 24)
+      end
 
     formatted_time = :io_lib.format("~2..0B:~2..0B", [local_hour, utc_minute]) |> to_string()
 

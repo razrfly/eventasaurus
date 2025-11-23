@@ -427,8 +427,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
         group_by: v.city_id,
         select: %{
           city_id: v.city_id,
-          this_week:
-            fragment("COUNT(CASE WHEN ? >= ? THEN 1 END)", e.inserted_at, ^one_week_ago),
+          this_week: fragment("COUNT(CASE WHEN ? >= ? THEN 1 END)", e.inserted_at, ^one_week_ago),
           last_week:
             fragment(
               "COUNT(CASE WHEN ? >= ? AND ? < ? THEN 1 END)",

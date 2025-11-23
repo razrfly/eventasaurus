@@ -21,7 +21,9 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
   import Phoenix.HTML.SimplifiedHelpers.Truncate
-  import EventasaurusWeb.PollOptionHelpers, only: [get_import_info: 1, format_import_attribution: 1]
+
+  import EventasaurusWeb.PollOptionHelpers,
+    only: [get_import_info: 1, format_import_attribution: 1]
 
   @impl true
   def mount(socket) do
@@ -600,5 +602,4 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       true -> "Anonymous"
     end
   end
-
 end

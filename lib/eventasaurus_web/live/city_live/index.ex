@@ -674,9 +674,13 @@ defmodule EventasaurusWeb.CityLive.Index do
 
         # Use cached date range counts (5 min TTL) - cache key includes city slug and radius
         date_counts =
-          CityPageCache.get_date_range_counts(city.slug, filters[:radius_km] || @default_radius_km, fn ->
-            PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
-          end)
+          CityPageCache.get_date_range_counts(
+            city.slug,
+            filters[:radius_km] || @default_radius_km,
+            fn ->
+              PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
+            end
+          )
 
         # Get the count of ALL events (no date filters) for the "All Events" button
         # Use direct count (not aggregation-aware) to avoid 500-event limit issue

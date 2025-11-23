@@ -187,9 +187,16 @@ defmodule Mix.Tasks.Unsplash.FetchCategory do
                   image_count = length(category_data["images"])
 
                   if verbose do
-                    IO.puts("\n✅ Success! Fetched #{image_count} images for category '#{category}'")
+                    IO.puts(
+                      "\n✅ Success! Fetched #{image_count} images for category '#{category}'"
+                    )
+
                     IO.puts("\nFirst image sample:")
-                    IO.inspect(List.first(category_data["images"]), pretty: true, limit: :infinity)
+
+                    IO.inspect(List.first(category_data["images"]),
+                      pretty: true,
+                      limit: :infinity
+                    )
                   end
 
                   :ok

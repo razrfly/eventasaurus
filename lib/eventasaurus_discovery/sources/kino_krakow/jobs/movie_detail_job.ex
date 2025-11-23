@@ -26,6 +26,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
     TmdbMatcher
   }
 
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
     movie_slug = args["movie_slug"]
@@ -33,25 +35,40 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
 
     Logger.info("🎬 Processing movie: #{movie_slug}")
 
+    # External ID for tracking
+    external_id = "kino_krakow_movie_#{movie_slug}"
+
     # Fetch movie detail page
     url = Config.movie_detail_url(movie_slug)
     headers = [{"User-Agent", Config.user_agent()}]
 
-    case HTTPoison.get(url, headers, timeout: Config.timeout()) do
-      {:ok, %{status_code: 200, body: html}} ->
-        process_movie_html(html, movie_slug, source_id, job)
+    result =
+      case HTTPoison.get(url, headers, timeout: Config.timeout()) do
+        {:ok, %{status_code: 200, body: html}} ->
+          process_movie_html(html, movie_slug, source_id, job)
 
-      {:ok, %{status_code: 404}} ->
-        Logger.warning("⚠️ Movie page not found: #{movie_slug}")
-        {:ok, %{status: :not_found, movie_slug: movie_slug}}
+        {:ok, %{status_code: 404}} ->
+          Logger.warning("⚠️ Movie page not found: #{movie_slug}")
+          {:ok, %{status: :not_found, movie_slug: movie_slug}}
 
-      {:ok, %{status_code: status}} ->
-        Logger.error("❌ HTTP #{status} for movie: #{movie_slug}")
-        {:error, "HTTP #{status}"}
+        {:ok, %{status_code: status}} ->
+          Logger.error("❌ HTTP #{status} for movie: #{movie_slug}")
+          {:error, "HTTP #{status}"}
+
+        {:error, reason} ->
+          Logger.error("❌ Failed to fetch movie #{movie_slug}: #{inspect(reason)}")
+          {:error, reason}
+      end
+
+    # Track metrics
+    case result do
+      {:ok, _stats} ->
+        MetricsTracker.record_success(job, external_id)
+        result
 
       {:error, reason} ->
-        Logger.error("❌ Failed to fetch movie #{movie_slug}: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 

@@ -14,19 +14,23 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusDiscovery.Sources.Bandsintown.{Client, Config, Transformer}
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     city_id = args["city_id"]
     limit = args["limit"] || 200
     max_pages = args["max_pages"] || calculate_max_pages(limit)
     force = args["force"] || false
+    external_id = "bandsintown_sync_city_#{city_id}_#{Date.utc_today()}"
 
     # Get city
     case Repo.get(EventasaurusDiscovery.Locations.City, city_id) do
       nil ->
-        Logger.error("City not found: #{inspect(city_id)}")
+        error_msg = "City not found: #{inspect(city_id)}"
+        Logger.error(error_msg)
+        MetricsTracker.record_failure(job, error_msg, external_id)
         {:error, :city_not_found}
 
       city ->
@@ -53,13 +57,15 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
         # Schedule coordinate recalculation after successful sync
         case result do
-          {:ok, _} = success ->
+          {:ok, _stats} = success ->
             schedule_coordinate_update(city_id)
             Logger.info("🗺️ Scheduled coordinate update for city #{city_id}")
+            MetricsTracker.record_success(job, external_id)
             success
 
-          other ->
-            other
+          {:error, reason} = error ->
+            MetricsTracker.record_failure(job, "Sync failed: #{inspect(reason)}", external_id)
+            error
         end
     end
   end

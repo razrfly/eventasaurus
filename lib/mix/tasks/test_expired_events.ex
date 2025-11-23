@@ -33,14 +33,24 @@ defmodule Mix.Tasks.TestExpiredEvents do
   def run(_args) do
     Mix.Task.run("app.start")
 
-    IO.puts("\n" <> IO.ANSI.cyan() <> "🔍 Phase 1: Reproducing Production Bug in Development" <> IO.ANSI.reset())
+    IO.puts(
+      "\n" <>
+        IO.ANSI.cyan() <>
+        "🔍 Phase 1: Reproducing Production Bug in Development" <> IO.ANSI.reset()
+    )
+
     IO.puts(String.duplicate("=", 60))
 
     # Get Question One source
     source = Repo.get_by(Source, slug: "question-one")
 
     if is_nil(source) do
-      IO.puts(IO.ANSI.red() <> "❌ Question One source not found. Make sure you have events in development." <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.red() <>
+          "❌ Question One source not found. Make sure you have events in development." <>
+          IO.ANSI.reset()
+      )
+
       exit(:normal)
     end
 
@@ -51,8 +61,16 @@ defmodule Mix.Tasks.TestExpiredEvents do
       |> Repo.aggregate(:count)
 
     if initial_count == 0 do
-      IO.puts(IO.ANSI.red() <> "❌ No Question One events found. Run the scraper first to create events." <> IO.ANSI.reset())
-      IO.puts("   Run: mix run -e \"EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob.perform(%{})\"")
+      IO.puts(
+        IO.ANSI.red() <>
+          "❌ No Question One events found. Run the scraper first to create events." <>
+          IO.ANSI.reset()
+      )
+
+      IO.puts(
+        "   Run: mix run -e \"EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob.perform(%{})\""
+      )
+
       exit(:normal)
     end
 
@@ -79,7 +97,9 @@ defmodule Mix.Tasks.TestExpiredEvents do
         ]
       )
 
-    IO.puts(IO.ANSI.green() <> "   ✅ Aged #{aged_count} event sources to 8 days old" <> IO.ANSI.reset())
+    IO.puts(
+      IO.ANSI.green() <> "   ✅ Aged #{aged_count} event sources to 8 days old" <> IO.ANSI.reset()
+    )
 
     # Push event dates to the past (for those that are currently in future)
     IO.puts("\n📅 Pushing future event dates to the past...")
@@ -87,7 +107,8 @@ defmodule Mix.Tasks.TestExpiredEvents do
 
     {dated_count, _} =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pes.source_id == ^source.id and pe.starts_at > ^DateTime.utc_now()
       )
       |> Repo.update_all(
@@ -98,7 +119,11 @@ defmodule Mix.Tasks.TestExpiredEvents do
         ]
       )
 
-    IO.puts(IO.ANSI.green() <> "   ✅ Pushed #{dated_count} event dates (starts_at AND ends_at) to the past" <> IO.ANSI.reset())
+    IO.puts(
+      IO.ANSI.green() <>
+        "   ✅ Pushed #{dated_count} event dates (starts_at AND ends_at) to the past" <>
+        IO.ANSI.reset()
+    )
 
     # Show final state
     stats_after = get_event_stats(source.id)
@@ -112,19 +137,29 @@ defmodule Mix.Tasks.TestExpiredEvents do
     IO.puts("\n" <> String.duplicate("=", 60))
     IO.puts(IO.ANSI.cyan() <> "📝 Next Steps:" <> IO.ANSI.reset())
     IO.puts("\n1. Run the scraper:")
-    IO.puts(IO.ANSI.yellow() <> "   mix run -e \"EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob.perform(%{})\"" <> IO.ANSI.reset())
+
+    IO.puts(
+      IO.ANSI.yellow() <>
+        "   mix run -e \"EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob.perform(%{})\"" <>
+        IO.ANSI.reset()
+    )
 
     IO.puts("\n2. Check Oban jobs:")
     IO.puts("   Should see VERY FEW or ZERO VenueDetailJob queued")
     IO.puts("   (Bug: Events are skipped because last_seen_at < 7 days)")
 
     IO.puts("\n3. Expected behavior (THE BUG):")
-    IO.puts("   #{IO.ANSI.red()}❌ All events SKIPPED (seen 8 days ago > 7 day threshold)#{IO.ANSI.reset()}")
+
+    IO.puts(
+      "   #{IO.ANSI.red()}❌ All events SKIPPED (seen 8 days ago > 7 day threshold)#{IO.ANSI.reset()}"
+    )
+
     IO.puts("   #{IO.ANSI.red()}❌ No VenueDetailJob queued#{IO.ANSI.reset()}")
     IO.puts("   #{IO.ANSI.red()}❌ Events remain expired#{IO.ANSI.reset()}")
     IO.puts("   #{IO.ANSI.red()}❌ 0 future events forever#{IO.ANSI.reset()}")
 
     IO.puts("\n4. Verify in console:")
+
     IO.puts("""
        iex> alias EventasaurusDiscovery.Sources.Source
        iex> alias EventasaurusDiscovery.PublicEvents.PublicEventSource
@@ -143,25 +178,34 @@ defmodule Mix.Tasks.TestExpiredEvents do
     """)
 
     IO.puts("\n" <> String.duplicate("=", 60))
-    IO.puts(IO.ANSI.green() <> "✅ Phase 1 complete: Production bug reproduced in development" <> IO.ANSI.reset())
+
+    IO.puts(
+      IO.ANSI.green() <>
+        "✅ Phase 1 complete: Production bug reproduced in development" <> IO.ANSI.reset()
+    )
+
     IO.puts("")
   end
 
   defp get_event_stats(source_id) do
-    query = from pes in PublicEventSource,
-      join: pe in PublicEvent, on: pe.id == pes.event_id,
-      where: pes.source_id == ^source_id,
-      select: %{
-        total: count(),
-        future_count: count() |> filter(pe.starts_at > ^DateTime.utc_now()),
-        past_count: count() |> filter(pe.starts_at <= ^DateTime.utc_now()),
-        max_last_seen: max(pes.last_seen_at)
-      }
+    query =
+      from(pes in PublicEventSource,
+        join: pe in PublicEvent,
+        on: pe.id == pes.event_id,
+        where: pes.source_id == ^source_id,
+        select: %{
+          total: count(),
+          future_count: count() |> filter(pe.starts_at > ^DateTime.utc_now()),
+          past_count: count() |> filter(pe.starts_at <= ^DateTime.utc_now()),
+          max_last_seen: max(pes.last_seen_at)
+        }
+      )
 
     Repo.one(query) || %{total: 0, future_count: 0, past_count: 0, max_last_seen: nil}
   end
 
   defp format_datetime(nil), do: "N/A"
+
   defp format_datetime(%DateTime{} = dt) do
     Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
   end

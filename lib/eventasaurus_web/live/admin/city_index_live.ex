@@ -87,7 +87,10 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
       {:ok, count} ->
         socket =
           socket
-          |> put_flash(:info, "Successfully deleted #{count} orphaned #{if count == 1, do: "city", else: "cities"}")
+          |> put_flash(
+            :info,
+            "Successfully deleted #{count} orphaned #{if count == 1, do: "city", else: "cities"}"
+          )
           |> load_cities()
 
         {:noreply, socket}

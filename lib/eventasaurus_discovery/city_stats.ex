@@ -20,8 +20,10 @@ defmodule EventasaurusDiscovery.CityStats do
     limit = Keyword.get(opts, :limit, 12)
 
     from(c in City,
-      join: v in Venue, on: v.city_id == c.id,
-      join: pe in PublicEvent, on: pe.venue_id == v.id,
+      join: v in Venue,
+      on: v.city_id == c.id,
+      join: pe in PublicEvent,
+      on: pe.venue_id == v.id,
       where: pe.starts_at > ^NaiveDateTime.utc_now(),
       group_by: c.id,
       having: count(pe.id) >= ^min_events,

@@ -177,7 +177,9 @@ defmodule Eventasaurus.Application do
     # Get source struct from database
     case EventasaurusApp.Repo.get(EventasaurusDiscovery.Sources.Source, source_id) do
       nil ->
-        Logger.warning("Cannot log job failure: Source ID #{source_id} not found (Job: #{worker})")
+        Logger.warning(
+          "Cannot log job failure: Source ID #{source_id} not found (Job: #{worker})"
+        )
 
       source ->
         # Extract metadata from job args for context

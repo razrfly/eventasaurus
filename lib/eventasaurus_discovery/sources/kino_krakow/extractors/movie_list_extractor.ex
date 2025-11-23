@@ -80,7 +80,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.MovieListExtractor
       [_, slug] ->
         # Strip UUID suffix: -[8hex]-[4hex]-[4hex]-[4hex]-[12hex]
         # This ensures we can fetch the correct movie detail page
-        String.replace(slug, ~r/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "")
+        String.replace(
+          slug,
+          ~r/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+          ""
+        )
 
       _ ->
         nil

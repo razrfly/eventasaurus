@@ -37,7 +37,8 @@ defmodule Mix.Tasks.TestScraperIntegration do
     # Select 5 sample events to age
     sample_events =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pes.source_id == ^source.id,
         order_by: [asc: pe.id],
         limit: 5,
@@ -46,6 +47,7 @@ defmodule Mix.Tasks.TestScraperIntegration do
       |> Repo.all()
 
     IO.puts("\n📊 Selected #{length(sample_events)} events for testing:")
+
     Enum.each(sample_events, fn event ->
       IO.puts("   - Event ##{event.id}: #{event.title}")
       IO.puts("     Current: #{event.starts_at}")
@@ -60,7 +62,8 @@ defmodule Mix.Tasks.TestScraperIntegration do
     # Age last_seen_at
     {aged_count, _} =
       from(pes in PublicEventSource,
-        join: pe in PublicEvent, on: pes.event_id == pe.id,
+        join: pe in PublicEvent,
+        on: pes.event_id == pe.id,
         where: pe.id in ^event_ids
       )
       |> Repo.update_all(
@@ -88,9 +91,11 @@ defmodule Mix.Tasks.TestScraperIntegration do
 
     # Show current state
     IO.puts("\n📊 Current state of sample events:")
+
     current_state =
       from(pe in PublicEvent,
-        join: pes in PublicEventSource, on: pes.event_id == pe.id,
+        join: pes in PublicEventSource,
+        on: pes.event_id == pe.id,
         where: pe.id in ^event_ids,
         select: %{
           id: pe.id,

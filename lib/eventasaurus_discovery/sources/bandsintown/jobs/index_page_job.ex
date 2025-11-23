@@ -131,7 +131,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       events_to_process = events
 
       # Schedule detail jobs for each event (unless force=true bypasses freshness check)
-      scheduled_count = schedule_detail_jobs(events_to_process, source_id, city_id, page_number, force)
+      scheduled_count =
+        schedule_detail_jobs(events_to_process, source_id, city_id, page_number, force)
 
       Logger.info("""
       ✅ API page #{page_number} processed

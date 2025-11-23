@@ -175,7 +175,8 @@ defmodule EventasaurusApp.Polls.PollSuggestions do
 
       # Build enriched option data
       common_options =
-        Enum.map(all_options_with_metadata, fn {_title, _count, %{option: option, poll: source_poll}} ->
+        Enum.map(all_options_with_metadata, fn {_title, _count,
+                                                %{option: option, poll: source_poll}} ->
           # Build recommender info
           recommender_info =
             case option.suggested_by do

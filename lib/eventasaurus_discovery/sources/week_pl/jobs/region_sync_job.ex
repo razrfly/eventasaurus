@@ -35,17 +35,21 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
   require Logger
   alias EventasaurusDiscovery.Sources.WeekPl.{Client, Config}
   alias EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{
-        args:
-          %{
-            "source_id" => source_id,
-            "region_id" => region_id,
-            "region_name" => region_name
-          } = args,
-        meta: meta
-      } = job) do
+  def perform(
+        %Oban.Job{
+          args:
+            %{
+              "source_id" => source_id,
+              "region_id" => region_id,
+              "region_name" => region_name
+            } = args,
+          meta: meta
+        } = job
+      ) do
+    external_id = "week_pl_region_#{region_id}_#{Date.utc_today()}"
     Logger.info("🍽️  [WeekPl.RegionSync] Fetching restaurants for #{region_name}...")
 
     # Query full week using GraphQL aliases (Option C implementation - Issue #2351)
@@ -73,20 +77,58 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
 
     case Client.fetch_restaurants(region_id, region_name, base_date, slot, people_count) do
       {:ok, response} ->
-        process_restaurants(response, source_id, args, job.id, meta, query_params)
+        result = process_restaurants(response, source_id, args, job.id, meta, query_params)
+
+        # Track success/failure based on processing outcome
+        case result do
+          {:ok, %{"status" => "success"}} ->
+            MetricsTracker.record_success(job, external_id)
+            result
+
+          {:ok, %{"status" => "invalid_response"}} ->
+            MetricsTracker.record_failure(job, "Invalid API response structure", external_id)
+            result
+
+          {:error, reason} ->
+            MetricsTracker.record_failure(job, "Processing failed: #{inspect(reason)}", external_id)
+            result
+
+          _ ->
+            MetricsTracker.record_success(job, external_id)
+            result
+        end
 
       {:error, :rate_limited} ->
         Logger.warning("[WeekPl.RegionSync] Rate limited for #{region_name}, retrying...")
+        MetricsTracker.record_failure(job, "Rate limited", external_id)
         {:error, :rate_limited}
 
-      {:error, reason} ->
+      {:error, %HTTPoison.Error{reason: :timeout}} = error ->
+        Logger.error("[WeekPl.RegionSync] Network timeout for #{region_name}")
+        MetricsTracker.record_failure(job, "Network timeout", external_id)
+        error
+
+      {:error, %HTTPoison.Error{reason: reason}} = error ->
+        Logger.error("[WeekPl.RegionSync] Network error for #{region_name}: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Network error: #{inspect(reason)}", external_id)
+        error
+
+      {:error, reason} = error ->
         Logger.error("[WeekPl.RegionSync] Failed for #{region_name}: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, "Fetch failed: #{inspect(reason)}", external_id)
+        error
     end
   end
 
   # Process restaurant listing response (Apollo GraphQL state format)
-  defp process_restaurants(%{"pageProps" => %{"apolloState" => apollo_state}}, source_id, args, job_id, meta, query_params)
+  defp process_restaurants(
+         %{"pageProps" => %{"apolloState" => apollo_state}},
+         source_id,
+         args,
+         job_id,
+         meta,
+         query_params
+       )
        when is_map(apollo_state) do
     # Extract restaurants from Apollo state (keys like "Restaurant:3525")
     restaurants =
@@ -114,32 +156,34 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
       "[WeekPl.RegionSync] Queued #{succeeded} detail jobs, #{failed} failed for #{args["region_name"]}"
     )
 
-    {:ok, %{
-      "job_role" => "region_fetcher",
-      "pipeline_id" => pipeline_id,
-      "parent_job_id" => parent_job_id,
-      "entity_id" => args["region_id"],
-      "entity_type" => "region",
-      "status" => "success",
-      "restaurants_found" => length(restaurants),
-      "jobs_queued" => succeeded,
-      "jobs_failed" => failed,
-      # Phase 2 observability enhancements (#2332)
-      "query_params" => query_params,
-      "api_response" => %{
-        "has_apollo_state" => true,
-        "restaurant_count" => length(restaurants)
-      },
-      "decision_context" => %{
-        "date_strategy" => "multi_date_aliases_week",
-        "date_count" => 8,
-        "date_range" => query_params["date_range"],
-        "slot_choice" => "7pm_dinner",
-        "rationale" => "GraphQL aliases query 8 dates (today through +7 days) in single API call for comprehensive availability coverage",
-        "issue" => "#2351",
-        "implementation" => "Option C"
-      }
-    }}
+    {:ok,
+     %{
+       "job_role" => "region_fetcher",
+       "pipeline_id" => pipeline_id,
+       "parent_job_id" => parent_job_id,
+       "entity_id" => args["region_id"],
+       "entity_type" => "region",
+       "status" => "success",
+       "restaurants_found" => length(restaurants),
+       "jobs_queued" => succeeded,
+       "jobs_failed" => failed,
+       # Phase 2 observability enhancements (#2332)
+       "query_params" => query_params,
+       "api_response" => %{
+         "has_apollo_state" => true,
+         "restaurant_count" => length(restaurants)
+       },
+       "decision_context" => %{
+         "date_strategy" => "multi_date_aliases_week",
+         "date_count" => 8,
+         "date_range" => query_params["date_range"],
+         "slot_choice" => "7pm_dinner",
+         "rationale" =>
+           "GraphQL aliases query 8 dates (today through +7 days) in single API call for comprehensive availability coverage",
+         "issue" => "#2351",
+         "implementation" => "Option C"
+       }
+     }}
   end
 
   defp process_restaurants(response, _source_id, args, _job_id, meta, query_params) do
@@ -154,27 +198,28 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
     pipeline_id = Map.get(meta, "pipeline_id") || "week_pl_#{Date.utc_today()}"
     parent_job_id = Map.get(meta, "parent_job_id")
 
-    {:ok, %{
-      "job_role" => "region_fetcher",
-      "pipeline_id" => pipeline_id,
-      "parent_job_id" => parent_job_id,
-      "entity_id" => args["region_id"],
-      "entity_type" => "region",
-      "status" => "invalid_response",
-      "restaurants_found" => 0,
-      "jobs_queued" => 0,
-      # Phase 2 observability enhancements (#2332)
-      "query_params" => query_params,
-      "api_response" => %{
-        "has_apollo_state" => false,
-        "response_keys" => Map.keys(response)
-      },
-      "decision_context" => %{
-        "error_type" => "invalid_response_structure",
-        "expected" => "apolloState with Restaurant objects",
-        "received" => "unexpected structure"
-      }
-    }}
+    {:ok,
+     %{
+       "job_role" => "region_fetcher",
+       "pipeline_id" => pipeline_id,
+       "parent_job_id" => parent_job_id,
+       "entity_id" => args["region_id"],
+       "entity_type" => "region",
+       "status" => "invalid_response",
+       "restaurants_found" => 0,
+       "jobs_queued" => 0,
+       # Phase 2 observability enhancements (#2332)
+       "query_params" => query_params,
+       "api_response" => %{
+         "has_apollo_state" => false,
+         "response_keys" => Map.keys(response)
+       },
+       "decision_context" => %{
+         "error_type" => "invalid_response_structure",
+         "expected" => "apolloState with Restaurant objects",
+         "received" => "unexpected structure"
+       }
+     }}
   end
 
   # Queue restaurant detail job
@@ -194,7 +239,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
         "festival_code" => region_args["festival_code"],
         "festival_name" => region_args["festival_name"],
         "festival_price" => region_args["festival_price"],
-        "festival_container_id" => region_args["festival_container_id"]  # Phase 4: Pass container ID
+        # Phase 4: Pass container ID
+        "festival_container_id" => region_args["festival_container_id"]
       }
 
       meta = %{
@@ -216,9 +262,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
           {:error, reason}
       end
     else
-      Logger.warning(
-        "[WeekPl.RegionSync] Missing restaurant_id or slug: #{inspect(restaurant)}"
-      )
+      Logger.warning("[WeekPl.RegionSync] Missing restaurant_id or slug: #{inspect(restaurant)}")
 
       {:error, :missing_required_fields}
     end

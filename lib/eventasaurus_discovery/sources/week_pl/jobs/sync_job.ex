@@ -28,9 +28,11 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
   alias EventasaurusDiscovery.Sources.WeekPl.{Source, Client, DeploymentConfig, FestivalManager}
   alias EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
+    external_id = "week_pl_sync_#{Date.utc_today()}"
     Logger.info("🍽️  [WeekPl.SyncJob] Starting festival check...")
 
     # Get or create source record
@@ -45,25 +47,30 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
     # Check deployment status
     unless DeploymentConfig.enabled?() do
       Logger.info("⏭️  [WeekPl.SyncJob] Source disabled via deployment config")
+      MetricsTracker.record_success(job, external_id)
 
-      {:ok, %{
-        "job_role" => "sync_orchestrator",
-        "pipeline_id" => "week_pl_#{Date.utc_today()}",
-        "status" => "skipped",
-        "reason" => "source_disabled",
-        "source" => "week_pl",
-        "deployment_phase" => to_string(DeploymentConfig.deployment_phase())
-      }}
+      {:ok,
+       %{
+         "job_role" => "sync_orchestrator",
+         "pipeline_id" => "week_pl_#{Date.utc_today()}",
+         "status" => "skipped",
+         "reason" => "source_disabled",
+         "source" => "week_pl",
+         "deployment_phase" => to_string(DeploymentConfig.deployment_phase())
+       }}
     else
-      execute_sync(source.id, limit, force, job.id)
+      execute_sync(source.id, limit, force, job.id, external_id, job)
     end
   end
 
-  defp execute_sync(source_id, limit, force, parent_job_id) do
+  defp execute_sync(source_id, limit, force, parent_job_id, external_id, job) do
     pipeline_id = "week_pl_#{Date.utc_today()}"
 
     deployment_status = DeploymentConfig.status()
-    Logger.info("📊 [WeekPl.SyncJob] Deployment: #{deployment_status.phase}, #{deployment_status.active_cities} cities active")
+
+    Logger.info(
+      "📊 [WeekPl.SyncJob] Deployment: #{deployment_status.phase}, #{deployment_status.active_cities} cities active"
+    )
 
     # Check if any festival is currently active (or force mode)
     if Source.festival_active?() || force do
@@ -94,33 +101,43 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
           "✅ [WeekPl.SyncJob] Queued #{length(results)} region jobs for active festival"
         )
 
-        {:ok, %{
-          "job_role" => "sync_orchestrator",
-          "pipeline_id" => pipeline_id,
-          "status" => "success",
-          "jobs_queued" => length(results),
-          "festival" => active_festival.code,
-          "source" => "week_pl",
-          "cities" => Enum.map(cities_to_process, & &1.name)
-        }}
+        MetricsTracker.record_success(job, external_id)
+
+        {:ok,
+         %{
+           "job_role" => "sync_orchestrator",
+           "pipeline_id" => pipeline_id,
+           "status" => "success",
+           "jobs_queued" => length(results),
+           "festival" => active_festival.code,
+           "source" => "week_pl",
+           "cities" => Enum.map(cities_to_process, & &1.name)
+         }}
       else
         Logger.error("❌ [WeekPl.SyncJob] Failed to queue #{length(failed)} region jobs")
+        MetricsTracker.record_failure(job, "Failed to queue #{length(failed)}/#{length(results)} region jobs", external_id)
         {:error, "Failed to queue some region jobs"}
       end
     else
       Logger.info("⏭️  [WeekPl.SyncJob] No active festival, skipping sync")
+      MetricsTracker.record_success(job, external_id)
 
       next_festival = get_next_festival()
-      next_festival_data = if next_festival, do: %{"code" => next_festival.code, "starts_at" => to_string(next_festival.starts_at)}, else: nil
 
-      {:ok, %{
-        "job_role" => "sync_orchestrator",
-        "pipeline_id" => pipeline_id,
-        "status" => "skipped",
-        "reason" => "no_active_festival",
-        "source" => "week_pl",
-        "next_festival" => next_festival_data
-      }}
+      next_festival_data =
+        if next_festival,
+          do: %{"code" => next_festival.code, "starts_at" => to_string(next_festival.starts_at)},
+          else: nil
+
+      {:ok,
+       %{
+         "job_role" => "sync_orchestrator",
+         "pipeline_id" => pipeline_id,
+         "status" => "skipped",
+         "reason" => "no_active_festival",
+         "source" => "week_pl",
+         "next_festival" => next_festival_data
+       }}
     end
   end
 
@@ -224,7 +241,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   # Queue region sync job for a city
   defp queue_region_job(source_id, city, festival, force, parent_job_id, pipeline_id) do
     # Create or get festival container for this city (Phase 4: #2334)
-    case FestivalManager.get_or_create_festival_container(source_id, festival, city.name, city.country) do
+    case FestivalManager.get_or_create_festival_container(
+           source_id,
+           festival,
+           city.name,
+           city.country
+         ) do
       {:ok, container} ->
         args = %{
           "source_id" => source_id,
@@ -234,7 +256,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
           "festival_code" => festival.code,
           "festival_name" => festival.name,
           "festival_price" => festival.price,
-          "festival_container_id" => container.id,  # Phase 4: Pass container ID to child jobs
+          # Phase 4: Pass container ID to child jobs
+          "festival_container_id" => container.id,
           "force" => force
         }
 
@@ -247,7 +270,10 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
 
         case Oban.insert(RegionSyncJob.new(args, meta: meta)) do
           {:ok, _job} ->
-            Logger.debug("✅ Queued RegionSyncJob for #{city.name} with festival container #{container.id}")
+            Logger.debug(
+              "✅ Queued RegionSyncJob for #{city.name} with festival container #{container.id}"
+            )
+
             {:ok, city.name}
 
           {:error, reason} ->

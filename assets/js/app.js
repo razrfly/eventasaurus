@@ -113,6 +113,29 @@ window.addEventListener("phx:track_event", (e) => {
 // Expose PostHog manager for debugging and external use
 window.posthogManager = posthogManager;
 
+// CSV download handler for admin dashboards
+window.addEventListener("phx:download_csv", (e) => {
+  const { filename, data } = e.detail;
+
+  // Create a Blob from the CSV data
+  const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
+
+  // Create a temporary download link
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // Clean up the URL object
+  URL.revokeObjectURL(url);
+});
+
 // Connect if there are any LiveViews on the page
 liveSocket.connect();
 

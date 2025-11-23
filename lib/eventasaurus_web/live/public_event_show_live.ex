@@ -65,7 +65,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def handle_info({:availability_refreshed, data}, socket) do
     # Handle PubSub broadcast from refresh job (source-agnostic)
-    Logger.info("[PublicEventShowLive] Received availability refresh for event #{socket.assigns.event.id}")
+    Logger.info(
+      "[PublicEventShowLive] Received availability refresh for event #{socket.assigns.event.id}"
+    )
 
     # Re-fetch only the sources to preserve enriched event data (venue, categories, etc.)
     fresh_sources =
@@ -84,7 +86,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:refreshing_availability, false)
       |> put_flash(
         :info,
-        gettext("Availability updated! %{count} timeslots available.", count: data.total_timeslots)
+        gettext("Availability updated! %{count} timeslots available.",
+          count: data.total_timeslots
+        )
       )
 
     {:noreply, socket}
@@ -189,41 +193,42 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     language = socket.assigns.language
 
     # Use cache for event metadata to speed up initial load
-    event_metadata = EventPageCache.get_event_metadata(slug, language, fn ->
-      event =
-        from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
-          where: pe.slug == ^slug,
-          preload: [
-            :categories,
-            :performers,
-            :movies,
-            venue: [city_ref: :country],
-            sources: :source
-          ]
-        )
-        |> Repo.one()
+    event_metadata =
+      EventPageCache.get_event_metadata(slug, language, fn ->
+        event =
+          from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+            where: pe.slug == ^slug,
+            preload: [
+              :categories,
+              :performers,
+              :movies,
+              venue: [city_ref: :country],
+              sources: :source
+            ]
+          )
+          |> Repo.one()
 
-      if event do
-        # Get primary category ID once to avoid multiple queries
-        primary_category_id = get_primary_category_id(event.id)
+        if event do
+          # Get primary category ID once to avoid multiple queries
+          primary_category_id = get_primary_category_id(event.id)
 
-        # Enrich main event with cover image using unified API
-        # Use :own_city strategy so event uses its venue's city Unsplash gallery
-        enriched_event =
-          [event]
-          |> PublicEventsEnhanced.preload_for_image_enrichment()
-          |> PublicEventsEnhanced.enrich_event_images(strategy: :own_city)
-          |> List.first()
-          |> Map.put(:primary_category_id, primary_category_id)
-          |> Map.put(:display_title, get_localized_title(event, language))
-          |> Map.put(:display_description, get_localized_description(event, language))
-          |> Map.put(:occurrence_list, parse_occurrences(event))
+          # Enrich main event with cover image using unified API
+          # Use :own_city strategy so event uses its venue's city Unsplash gallery
+          enriched_event =
+            [event]
+            |> PublicEventsEnhanced.preload_for_image_enrichment()
+            |> PublicEventsEnhanced.enrich_event_images(strategy: :own_city)
+            |> List.first()
+            |> Map.put(:primary_category_id, primary_category_id)
+            |> Map.put(:display_title, get_localized_title(event, language))
+            |> Map.put(:display_description, get_localized_description(event, language))
+            |> Map.put(:occurrence_list, parse_occurrences(event))
 
-        enriched_event
-      else
-        nil
-      end
-    end)
+          enriched_event
+        else
+          nil
+        end
+      end)
 
     case event_metadata do
       nil ->
@@ -290,7 +295,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
 
         # Get image URL for social card
-        image_url = Map.get(enriched_event, :cover_image_url) || get_placeholder_image_url(enriched_event)
+        image_url =
+          Map.get(enriched_event, :cover_image_url) || get_placeholder_image_url(enriched_event)
 
         # Build meta description
         description =
@@ -309,7 +315,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
         |> assign(:existing_plan, existing_plan)
-        |> assign(:nearby_events, nearby_events)  # Will be populated asynchronously via handle_info
+        # Will be populated asynchronously via handle_info
+        |> assign(:nearby_events, nearby_events)
         |> assign(:movie, movie)
         |> assign(:is_movie_screening, is_movie)
         |> assign(:aggregated_movie_url, aggregated_url)

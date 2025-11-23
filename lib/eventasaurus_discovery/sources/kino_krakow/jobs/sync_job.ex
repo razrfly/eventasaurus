@@ -37,9 +37,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     Jobs.MoviePageJob
   }
 
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
+
   # Override perform to use movie-based architecture
   @impl Oban.Worker
-  def perform(%Oban.Job{id: job_id, args: args}) do
+  def perform(%Oban.Job{id: job_id, args: args} = job) do
     source_id = args["source_id"] || get_or_create_source_id()
     force = args["force"] || false
 
@@ -52,29 +54,44 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     Fetching list of movies...
     """)
 
+    # External ID for tracking
+    external_id = "kino_krakow_sync_#{Date.utc_today()}"
+
     # Fetch list of movies from cinema program page
-    case fetch_movie_list() do
-      {:ok, movies} ->
-        # Schedule one MoviePageJob per movie with parent tracking
-        scheduled_count = schedule_movie_page_jobs(movies, source_id, force, job_id)
+    result =
+      case fetch_movie_list() do
+        {:ok, movies} ->
+          # Schedule one MoviePageJob per movie with parent tracking
+          scheduled_count = schedule_movie_page_jobs(movies, source_id, force, job_id)
 
-        Logger.info("""
-        ✅ Kino Krakow sync job completed (movie-based mode)
-        Movies found: #{length(movies)}
-        Movie jobs scheduled: #{scheduled_count}
-        Each job will fetch all 7 days for its movie
-        """)
+          Logger.info("""
+          ✅ Kino Krakow sync job completed (movie-based mode)
+          Movies found: #{length(movies)}
+          Movie jobs scheduled: #{scheduled_count}
+          Each job will fetch all 7 days for its movie
+          """)
 
-        {:ok,
-         %{
-           mode: "movie-based",
-           movies_found: length(movies),
-           movie_jobs_scheduled: scheduled_count
-         }}
+          {:ok,
+           %{
+             mode: "movie-based",
+             movies_found: length(movies),
+             movie_jobs_scheduled: scheduled_count
+           }}
+
+        {:error, reason} ->
+          Logger.error("❌ Failed to fetch movie list: #{inspect(reason)}")
+          {:error, reason}
+      end
+
+    # Track metrics
+    case result do
+      {:ok, _stats} ->
+        MetricsTracker.record_success(job, external_id)
+        result
 
       {:error, reason} ->
-        Logger.error("❌ Failed to fetch movie list: #{inspect(reason)}")
-        {:error, reason}
+        MetricsTracker.record_failure(job, reason, external_id)
+        result
     end
   end
 

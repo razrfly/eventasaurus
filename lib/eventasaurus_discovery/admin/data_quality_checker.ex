@@ -1200,7 +1200,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       events_with_performers =
         Enum.count(performer_data_with_total, fn d -> d.total_performer_count > 0 end)
 
-      events_single = Enum.count(performer_data_with_total, fn d -> d.total_performer_count == 1 end)
+      events_single =
+        Enum.count(performer_data_with_total, fn d -> d.total_performer_count == 1 end)
 
       events_multiple =
         Enum.count(performer_data_with_total, fn d -> d.total_performer_count > 1 end)

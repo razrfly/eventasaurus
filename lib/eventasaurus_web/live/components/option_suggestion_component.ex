@@ -1963,7 +1963,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                        |> assign(:search_results, [])}
 
                     {:error, changeset} ->
-                      Logger.error("Failed to create cocktail option: #{inspect(changeset.errors)}")
+                      Logger.error(
+                        "Failed to create cocktail option: #{inspect(changeset.errors)}"
+                      )
 
                       {:noreply,
                        socket

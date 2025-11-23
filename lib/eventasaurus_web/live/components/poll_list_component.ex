@@ -451,15 +451,32 @@ defmodule EventasaurusWeb.PollListComponent do
   defp format_poll_type_name("custom"), do: "Custom"
   defp format_poll_type_name(type), do: String.capitalize(type)
 
-  defp poll_type_badge_classes("date_selection"), do: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-  defp poll_type_badge_classes("movie"), do: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200"
-  defp poll_type_badge_classes("places"), do: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
-  defp poll_type_badge_classes("venue"), do: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
-  defp poll_type_badge_classes("music_track"), do: "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-200"
-  defp poll_type_badge_classes("time"), do: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-  defp poll_type_badge_classes("general"), do: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
-  defp poll_type_badge_classes("custom"), do: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
-  defp poll_type_badge_classes(_), do: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+  defp poll_type_badge_classes("date_selection"),
+    do: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+
+  defp poll_type_badge_classes("movie"),
+    do: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200"
+
+  defp poll_type_badge_classes("places"),
+    do: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+
+  defp poll_type_badge_classes("venue"),
+    do: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+
+  defp poll_type_badge_classes("music_track"),
+    do: "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-200"
+
+  defp poll_type_badge_classes("time"),
+    do: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+
+  defp poll_type_badge_classes("general"),
+    do: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+
+  defp poll_type_badge_classes("custom"),
+    do: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+
+  defp poll_type_badge_classes(_),
+    do: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
 
   defp format_voting_system("binary"), do: "Yes/No"
   defp format_voting_system("approval"), do: "Select Multiple"

@@ -63,11 +63,13 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
 
   alias EventasaurusDiscovery.Sources.Sortiraparis.Helpers.UrlFilter
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    external_id = "sortiraparis_sync_#{Date.utc_today()}"
     # Get sitemap configs (list of %{url: ..., language: ...})
     sitemap_configs = args["sitemap_urls"] || Config.sitemap_urls()
     limit = args["limit"]
@@ -117,6 +119,8 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
       Detail jobs scheduled: #{scheduled_count}
       """)
 
+      MetricsTracker.record_success(job, external_id)
+
       {:ok,
        %{
          sitemaps_processed: length(filtered_sitemaps),
@@ -129,6 +133,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
     else
       {:error, reason} = error ->
         Logger.error("❌ Failed to sync Sortiraparis: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Sync failed: #{inspect(reason)}", external_id)
         error
     end
   end

@@ -18,13 +18,15 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
   }
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"city_url" => city_url, "source_id" => source_id} = args}) do
+  def perform(%Oban.Job{args: %{"city_url" => city_url, "source_id" => source_id} = args} = job) do
     force = args["force"] || false
 
     # Extract city name from URL (e.g., "katowice" from "/kategoria-produktu/katowice/")
     city_name = extract_city_name_from_url(city_url)
+    external_id = "pubquiz_city_#{String.downcase(city_name)}_#{Date.utc_today()}"
     Logger.info("🏙️ Processing PubQuiz city: #{city_name}")
 
     with {:ok, html} <- Client.fetch_city_page(city_url),
@@ -37,6 +39,8 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
       Venue jobs scheduled: #{scheduled_count}
       """)
 
+      MetricsTracker.record_success(job, external_id)
+
       {:ok,
        %{
          city: city_name,
@@ -46,6 +50,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     else
       {:error, reason} = error ->
         Logger.error("❌ City job failed for #{city_name}: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "City job failed for #{city_name}: #{inspect(reason)}", external_id)
         error
     end
   end
