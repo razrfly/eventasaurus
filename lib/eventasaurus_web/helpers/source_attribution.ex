@@ -98,30 +98,24 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
   def get_container_source_url(container) do
     md = container.metadata || %{}
 
-    url =
-      cond do
-        # PRIORITY 1: Container-specific metadata URLs
-        md["event_url"] -> md["event_url"]
-        md["url"] -> md["url"]
-        md["link"] -> md["link"]
-
-        # PRIORITY 2: Source event URLs
-        container.source_event ->
-          get_url_from_source_event(container.source_event)
-
-        # PRIORITY 3: Resident Advisor umbrella event ID
-        umbrella_event_id = get_in(md, ["umbrella_event_id"]) ->
-          "https://ra.co/events/#{umbrella_event_id}"
-
-        # PRIORITY 4: Fallback to source website URL (general homepage)
-        container.source && container.source.website_url ->
-          container.source.website_url
-
-        true ->
-          nil
-      end
-
-    normalize_http_url(url)
+    # Try candidates in priority order, returning first that normalizes successfully
+    # This ensures we fall back to other candidates if earlier ones are blank/invalid
+    [
+      # PRIORITY 1: Container-specific metadata URLs
+      md["event_url"],
+      md["url"],
+      md["link"],
+      # PRIORITY 2: Source event URLs
+      get_url_from_source_event(container.source_event),
+      # PRIORITY 3: Resident Advisor umbrella event ID
+      case get_in(md, ["umbrella_event_id"]) do
+        nil -> nil
+        umbrella_event_id -> "https://ra.co/events/#{umbrella_event_id}"
+      end,
+      # PRIORITY 4: Fallback to source website URL (general homepage)
+      container.source && container.source.website_url
+    ]
+    |> Enum.find_value(&normalize_http_url/1)
   end
 
   # Private helper to extract URL from source event's sources
