@@ -372,11 +372,13 @@ defmodule Mix.Tasks.Discovery.GenerateSource do
       # Private helper functions
 
       defp build_external_id(raw_event) do
-        # Format: {source}_{type}_{id}_{date}
+        # Format: {source}_{type}_{id}
+        # IMPORTANT: external_id must be STABLE across sync runs for proper deduplication
+        # DO NOT use Date.utc_today() - it breaks deduplication by creating new IDs daily
+        # If you need date-based IDs, use the event's actual date (e.g., normalized start date)
         source_id = raw_event["id"] || raw_event[:id]
-        date = Date.utc_today() |> Date.to_string()
 
-        "\#{Config.source_slug()}_event_\#{source_id}_\#{date}"
+        "\#{Config.source_slug()}_event_\#{source_id}"
       end
 
       defp extract_title(raw_event) do
@@ -672,28 +674,29 @@ defmodule Mix.Tasks.Discovery.GenerateSource do
         event_id = args["event_id"]
         parent_job_id = args["parent_job_id"]
 
-        unless event_id do
-          return {:error, "event_id is required"}
-        end
+        if is_nil(event_id) do
+          {:error, "event_id is required"}
+        else
+          # Build external ID
+          # NOTE: Using stable format without date to ensure proper deduplication
+          # If you need date-based IDs, use the event's actual date from the event data
+          external_id = "\#{Config.source_slug()}_event_\#{event_id}"
 
-        # Build external ID
-        date = Date.utc_today() |> Date.to_string()
-        external_id = "\#{Config.source_slug()}_event_\#{event_id}_\#{date}"
+          Logger.info("🔄 #{module_name} EventDetailJob: Fetching event \#{event_id}")
 
-        Logger.info("🔄 #{module_name} EventDetailJob: Fetching event \#{event_id}")
+          case fetch_and_process_event(event_id, args) do
+            {:ok, result} ->
+              MetricsTracker.record_success(job, external_id, %{
+                event_id: event_id,
+                parent_job_id: parent_job_id
+              })
 
-        case fetch_and_process_event(event_id, args) do
-          {:ok, result} ->
-            MetricsTracker.record_success(job, external_id, %{
-              event_id: event_id,
-              parent_job_id: parent_job_id
-            })
+              {:ok, result}
 
-            {:ok, result}
-
-          {:error, reason} = error ->
-            MetricsTracker.record_failure(job, reason, external_id)
-            error
+            {:error, reason} = error ->
+              MetricsTracker.record_failure(job, reason, external_id)
+              error
+          end
         end
       end
 
