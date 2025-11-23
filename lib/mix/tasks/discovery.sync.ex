@@ -13,6 +13,12 @@ defmodule Mix.Tasks.Discovery.Sync do
       # Sync from Karnet (Kraków only)
       mix discovery.sync karnet --city krakow --limit 500
 
+      # Sync from Cinema City (Kraków only, no city needed)
+      mix discovery.sync cinema-city --limit 100
+
+      # Sync from Kino Krakow (Kraków only, no city needed)
+      mix discovery.sync kino-krakow --limit 100
+
       # Sync from PubQuiz (Poland-wide, no city needed)
       mix discovery.sync pubquiz-pl --limit 5
 
@@ -32,6 +38,8 @@ defmodule Mix.Tasks.Discovery.Sync do
       mix discovery.sync ticketmaster --city warsaw --limit 200
       mix discovery.sync bandsintown --city-id 1 --limit 50
       mix discovery.sync karnet --city krakow --limit 100  # Kraków only
+      mix discovery.sync cinema-city --limit 50  # Kraków movie showtimes
+      mix discovery.sync kino-krakow --limit 50  # Kraków movie showtimes
       mix discovery.sync pubquiz-pl --limit 10  # Poland-wide trivia events
       mix discovery.sync all --city krakow --limit 1000
       mix discovery.sync bandsintown --city krakow --limit 10 --inline  # Debug mode
@@ -50,12 +58,14 @@ defmodule Mix.Tasks.Discovery.Sync do
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
     "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
+    "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
+    "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
     "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob
   }
 
-  # Sources that don't require a city (country-wide)
-  @country_wide_sources ["pubquiz-pl"]
+  # Sources that don't require a city (country-wide or city-hardcoded)
+  @country_wide_sources ["pubquiz-pl", "cinema-city", "kino-krakow"]
 
   def run(args) do
     Application.ensure_all_started(:eventasaurus)
