@@ -72,26 +72,32 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
         MetricsTracker.record_failure(job, "Restaurant not found in Apollo state", external_id)
         result
 
-      {:ok, %{"status" => "invalid_response"}} ->
-        MetricsTracker.record_failure(job, "Invalid API response structure", external_id)
-        result
-
-      {:ok, %{"status" => "api_error"}} ->
-        MetricsTracker.record_failure(job, "API error", external_id)
-        result
-
       {:ok, %{"status" => "matched", "items_processed" => 0}} ->
         # Silent failure - found restaurant but created 0 events
         MetricsTracker.record_failure(job, "Silent failure: Found restaurant but created 0 events", external_id)
         result
 
-      {:error, reason} ->
-        MetricsTracker.record_failure(job, "Processing failed: #{inspect(reason)}", external_id)
-        result
+      # Transient errors - allow Oban to retry (don't track metrics yet)
+      {:error, :api_error} = error ->
+        Logger.warning("[WeekPl.DetailJob] API error, will retry")
+        error
 
-      _ ->
-        MetricsTracker.record_success(job, external_id)
-        result
+      {:error, :invalid_response} = error ->
+        Logger.warning("[WeekPl.DetailJob] Invalid response structure, will retry")
+        error
+
+      {:error, :rate_limited} = error ->
+        Logger.warning("[WeekPl.DetailJob] Rate limited, will retry")
+        error
+
+      {:error, reason} = error ->
+        MetricsTracker.record_failure(job, "Processing failed: #{inspect(reason)}", external_id)
+        error
+
+      unknown ->
+        Logger.warning("[WeekPl.DetailJob] Unknown result status: #{inspect(unknown)}")
+        MetricsTracker.record_failure(job, "Unknown result status", external_id)
+        {:ok, unknown}
     end
   end
 
@@ -145,31 +151,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
 
       {:error, reason} ->
         Logger.error("[WeekPl.DetailJob] Failed to fetch #{slug}: #{inspect(reason)}")
-
-        # Return standardized error metadata
-        pipeline_id = Map.get(meta, "pipeline_id") || "week_pl_#{Date.utc_today()}"
-        parent_job_id = Map.get(meta, "parent_job_id")
-
-        {:ok,
-         %{
-           "job_role" => "detail_fetcher",
-           "pipeline_id" => pipeline_id,
-           "parent_job_id" => parent_job_id,
-           "entity_id" => slug,
-           "entity_type" => "restaurant",
-           "status" => "api_error",
-           "error_reason" => inspect(reason),
-           "items_processed" => 0,
-           # Phase 2 observability enhancements (#2332)
-           "query_params" => query_params,
-           "api_response" => %{
-             "error" => inspect(reason)
-           },
-           "decision_context" => %{
-             "error_type" => "api_error",
-             "fetch_attempt" => "graphql_detail_query"
-           }
-         }}
+        # Return error tuple to allow Oban retry for transient API failures
+        {:error, :api_error}
     end
   end
 
@@ -253,7 +236,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   end
 
   # Fallback for unexpected response structure
-  defp process_restaurant_detail(response, args, _source_id, _dates, meta, query_params) do
+  defp process_restaurant_detail(response, args, _source_id, _dates, _meta, _query_params) do
     Logger.error("""
     [WeekPl.DetailJob] ❌ Unexpected response structure for #{args["restaurant_slug"]}
     Response keys: #{inspect(Map.keys(response))}
@@ -261,30 +244,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
     Full response sample: #{inspect(response, pretty: true, limit: 50)}
     """)
 
-    pipeline_id = Map.get(meta, "pipeline_id") || "week_pl_#{Date.utc_today()}"
-    parent_job_id = Map.get(meta, "parent_job_id")
-
-    {:ok,
-     %{
-       "job_role" => "detail_fetcher",
-       "pipeline_id" => pipeline_id,
-       "parent_job_id" => parent_job_id,
-       "entity_id" => args["restaurant_slug"],
-       "entity_type" => "restaurant",
-       "status" => "invalid_response",
-       "items_processed" => 0,
-       # Phase 2 observability enhancements (#2332)
-       "query_params" => query_params,
-       "api_response" => %{
-         "has_apollo_state" => false,
-         "response_keys" => Map.keys(response)
-       },
-       "decision_context" => %{
-         "error_type" => "invalid_response_structure",
-         "expected" => "pageProps.apolloState",
-         "received" => "unexpected structure"
-       }
-     }}
+    # Return error tuple to allow Oban retry for transient response parsing issues
+    {:error, :invalid_response}
   end
 
   # Extract slots from Apollo GraphQL state

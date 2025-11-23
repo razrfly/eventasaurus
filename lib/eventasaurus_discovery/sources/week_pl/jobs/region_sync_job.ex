@@ -89,10 +89,6 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
             MetricsTracker.record_failure(job, "Invalid API response structure", external_id)
             result
 
-          {:error, reason} ->
-            MetricsTracker.record_failure(job, "Processing failed: #{inspect(reason)}", external_id)
-            result
-
           _ ->
             MetricsTracker.record_success(job, external_id)
             result
@@ -102,16 +98,6 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
         Logger.warning("[WeekPl.RegionSync] Rate limited for #{region_name}, retrying...")
         MetricsTracker.record_failure(job, "Rate limited", external_id)
         {:error, :rate_limited}
-
-      {:error, %HTTPoison.Error{reason: :timeout}} = error ->
-        Logger.error("[WeekPl.RegionSync] Network timeout for #{region_name}")
-        MetricsTracker.record_failure(job, "Network timeout", external_id)
-        error
-
-      {:error, %HTTPoison.Error{reason: reason}} = error ->
-        Logger.error("[WeekPl.RegionSync] Network error for #{region_name}: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Network error: #{inspect(reason)}", external_id)
-        error
 
       {:error, reason} = error ->
         Logger.error("[WeekPl.RegionSync] Failed for #{region_name}: #{inspect(reason)}")
