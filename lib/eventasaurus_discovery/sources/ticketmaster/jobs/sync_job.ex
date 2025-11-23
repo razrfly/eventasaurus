@@ -19,8 +19,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
-    external_id = "ticketmaster_sync_#{Date.utc_today()}"
     city_id = args["city_id"]
+    external_id = "ticketmaster_sync_city_#{city_id}_#{Date.utc_today()}"
     limit = args["limit"] || 100
     options = args["options"] || %{}
     force = args["force"] || false

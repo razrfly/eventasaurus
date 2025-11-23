@@ -200,7 +200,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
     require Logger
 
     Logger.warning(
-      "[WeekPl.Transformer] ❌ No imageFiles found for restaurant: #{inspect(Map.keys(restaurant)[:name] || "unknown")}"
+      "[WeekPl.Transformer] ❌ No imageFiles found for restaurant: #{restaurant["name"] || "unknown"}"
     )
 
     Logger.debug("[WeekPl.Transformer] Restaurant keys: #{inspect(Map.keys(restaurant))}")
