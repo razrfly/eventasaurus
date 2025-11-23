@@ -49,9 +49,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.VenueDetailJob do
     venue_data = string_keys_to_atoms(args["venue_data"])
     source_id = args["source_id"]
 
-    # Use venue_url as external_id for metrics tracking, fallback to job.id
-    # Ensures external_id is always a string
-    external_id = to_string(venue_url || job_id)
+    # Use venue_id as external_id for metrics tracking, fallback to job.id
+    external_id = "quizmeisters_venue_#{venue_id || job_id}"
 
     Logger.info("🔍 Processing Quizmeisters venue: #{venue_name} (ID: #{venue_id})")
 

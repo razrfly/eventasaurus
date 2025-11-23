@@ -324,7 +324,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
 
         # Generate external_id matching ShowtimeProcessJob pattern
         external_id =
-          "kino_krakow_#{movie}_#{cinema}_#{date}_#{time}"
+          "kino_krakow_showtime_#{movie}_#{cinema}_#{date}_#{time}"
           |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
 
         Map.put(showtime_map, :external_id, external_id)

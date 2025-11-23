@@ -28,7 +28,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   - Rate limiting (2 req/s default)
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :discovery,
     max_attempts: 3
 
@@ -49,6 +49,40 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
   alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for GraphQL API pagination
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Resident Advisor uses GraphQL API pagination instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on GraphQL API source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Resident Advisor transformation happens in EventDetailJob
+    Logger.debug("🔄 transform_events called (not used in GraphQL API pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: "Resident Advisor",
+      slug: "resident-advisor",
+      website_url: "https://ra.co",
+      priority: 75,
+      config: %{
+        "rate_limit_seconds" => Config.rate_limit(),
+        "max_requests_per_hour" => 7200,
+        "api_type" => "graphql",
+        "supports_pagination" => true,
+        "discovery_method" => "graphql_pagination"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do

@@ -232,7 +232,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
     # This matches the format stored in public_event_sources table
     events_with_prefixed_ids =
       Enum.map(events, fn event ->
-        Map.update!(event, "external_id", fn id -> "bandsintown_#{id}" end)
+        Map.update!(event, "external_id", fn id -> "bandsintown_event_#{id}" end)
       end)
 
     # Filter to events needing processing based on freshness (unless force=true)

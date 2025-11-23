@@ -7,7 +7,7 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
   2. Schedules CityJob for each city to fetch venues
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :discovery,
     max_attempts: 3
 
@@ -16,6 +16,43 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusDiscovery.Sources.Pubquiz.{Client, CityExtractor, Jobs.CityJob}
+
+  # BaseJob callbacks - not used for country-level orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # PubQuiz uses country-level orchestration instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on country-level source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # PubQuiz transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    alias EventasaurusDiscovery.Sources.Pubquiz.Source, as: PubquizSource
+    alias EventasaurusDiscovery.Sources.Pubquiz.Config
+
+    %{
+      name: PubquizSource.name(),
+      slug: PubquizSource.key(),
+      website_url: "https://pubquiz.pl",
+      priority: PubquizSource.priority(),
+      config: %{
+        "rate_limit_seconds" => Config.rate_limit(),
+        "max_requests_per_hour" => 300,
+        "language" => "pl",
+        "supports_recurring_events" => true,
+        "discovery_method" => "country_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do

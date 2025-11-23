@@ -450,6 +450,117 @@ SELECT * FROM job_execution_summaries ORDER BY attempted_at DESC LIMIT 10;
 SELECT worker, state, COUNT(*) FROM job_execution_summaries GROUP BY worker, state;
 ```
 
+## Source Implementation Standards
+
+**⚠️ REQUIRED READING**: When implementing or modifying scrapers, follow the standards in `docs/source-implementation-guide.md`.
+
+### Job Naming Conventions
+
+All Oban jobs must follow the `{JobType}Job` pattern:
+
+- `SyncJob` - Top-level orchestration job that triggers child jobs
+- `IndexPageJob` - Fetches listing/index pages
+- `EventDetailJob` - Fetches individual event details
+- `ShowtimeProcessJob` - Processes showtime data
+- `MovieDetailJob` - Fetches movie-specific information
+
+**Example**: `EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob`
+
+### External ID Format
+
+All events must have external IDs in this format:
+
+```
+{source}_{type}_{source_id}_{date}
+```
+
+**Examples**:
+- `cinema_city_event_123456_2024-11-15`
+- `kino_krakow_movie_abc789_2024-11-15`
+- `week_pl_activity_xyz123_2024-11-15`
+
+**Rules**:
+- Dates use hyphens (`YYYY-MM-DD`), not underscores
+- All parts lowercase with underscores
+- `{type}` = `event`, `movie`, `activity`, `show`, etc.
+- Must be globally unique and stable across re-scrapes
+
+### BaseJob Usage
+
+Use `EventasaurusDiscovery.Sources.BaseJob` for standard fetch-transform-process pattern:
+
+```elixir
+defmodule EventasaurusDiscovery.Sources.MySource.Jobs.MyJob do
+  use EventasaurusDiscovery.Sources.BaseJob
+
+  @impl true
+  def fetch_events(from_date, to_date, _context) do
+    # Fetch raw data from external source
+    {:ok, raw_events}
+  end
+
+  @impl true
+  def transform_events(raw_events) do
+    # Transform to standardized format
+    events = Enum.map(raw_events, &transform_event/1)
+    {:ok, events}
+  end
+end
+```
+
+**When NOT to use BaseJob**:
+- Complex orchestration with multiple child jobs (use plain `Oban.Worker`)
+- Custom retry/error handling logic
+- Multi-stage processing pipelines
+
+See `docs/source-implementation-guide.md` for detailed examples.
+
+### MetricsTracker Integration
+
+**REQUIRED**: All jobs must integrate MetricsTracker for monitoring:
+
+```elixir
+defmodule MySource.Jobs.MyJob do
+  use Oban.Worker
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{} = job) do
+    external_id = build_external_id()
+
+    case do_work() do
+      {:ok, result} ->
+        MetricsTracker.record_success(job, external_id)
+        {:ok, result}
+
+      {:error, reason} ->
+        MetricsTracker.record_failure(job, reason, external_id)
+        {:error, reason}
+    end
+  end
+end
+```
+
+**Error Categories**: Use standard categories from `EventasaurusDiscovery.Metrics.ErrorCategories`:
+- `validation_error`, `geocoding_error`, `venue_error`
+- `performer_error`, `category_error`, `duplicate_error`
+- `network_error`, `data_quality_error`, `unknown_error`
+
+### Source Module Structure
+
+Required files for each source:
+
+```
+lib/eventasaurus_discovery/sources/my_source/
+├── client.ex              # HTTP client for external API
+├── config.ex             # Source configuration
+├── transformer.ex        # Data transformation logic
+└── jobs/
+    ├── sync_job.ex       # Main orchestration job
+    ├── index_page_job.ex # Optional: list fetching
+    └── detail_job.ex     # Optional: detail fetching
+```
+
 ## Code Style & Conventions
 
 - Use `mix format` before committing
@@ -458,6 +569,9 @@ SELECT worker, state, COUNT(*) FROM job_execution_summaries GROUP BY worker, sta
 - Use `with` for multi-step operations with early returns
 - Prefer pattern matching over conditionals
 - Add `@spec` type specifications for public functions
+- **Jobs must follow naming convention**: `{JobType}Job` pattern
+- **External IDs must follow format**: `{source}_{type}_{id}_{date}`
+- **All jobs must integrate MetricsTracker** for monitoring
 
 ## Graphite Workflow (User)
 
@@ -476,13 +590,16 @@ gt stack submit
 ## Getting Help
 
 **Documentation:**
-- Scraper Monitoring Guide: `docs/scraper-monitoring-guide.md`
-- Error Categories: `lib/eventasaurus_discovery/metrics/error_categories.ex`
-- MetricsTracker: `lib/eventasaurus_discovery/metrics/metrics_tracker.ex`
+- **Source Implementation Guide**: `docs/source-implementation-guide.md` - Job naming, external IDs, BaseJob patterns
+- Scraper Monitoring Guide: `docs/scraper-monitoring-guide.md` - Monitoring integration and best practices
+- Error Categories: `lib/eventasaurus_discovery/metrics/error_categories.ex` - Standard error types
+- MetricsTracker: `lib/eventasaurus_discovery/metrics/metrics_tracker.ex` - Monitoring API
+- BaseJob: `lib/eventasaurus_discovery/sources/base_job.ex` - Base behavior for standard jobs
 
 **Example Implementations:**
-- Cinema City: `lib/eventasaurus_discovery/sources/cinema_city/jobs/`
-- Kino Krakow: `lib/eventasaurus_discovery/sources/kino_krakow/jobs/`
+- Cinema City: `lib/eventasaurus_discovery/sources/cinema_city/jobs/` - Complex multi-stage scraper
+- Kino Krakow: `lib/eventasaurus_discovery/sources/kino_krakow/jobs/` - BaseJob usage example
+- Week.pl: `lib/eventasaurus_discovery/sources/week_pl/jobs/` - Custom orchestration pattern
 
 ---
 

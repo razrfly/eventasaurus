@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
+defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexPageJob do
   @moduledoc """
   Processes venues from StoreLocatorWidgets CDN and enqueues detail jobs.
 

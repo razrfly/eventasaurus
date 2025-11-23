@@ -21,7 +21,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
   - Single request fetches all venues (no pagination)
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :discovery,
     max_attempts: 3,
     priority: 1
@@ -29,6 +29,42 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, Inquizition}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for CDN-based orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Inquizition uses CDN-based orchestration instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on CDN-based source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Inquizition transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: Inquizition.Source.name(),
+      slug: Inquizition.Source.key(),
+      website_url: "https://inquizition.com",
+      priority: Inquizition.Source.priority(),
+      config: %{
+        "rate_limit_seconds" => Inquizition.Config.rate_limit(),
+        "max_requests_per_hour" => 1800,
+        "language" => "en",
+        "coverage" => "United Kingdom",
+        "data_source" => "StoreLocatorWidgets CDN",
+        "cdn_endpoint" => "https://cdn.storelocatorwidgets.com/json/7f3962110f31589bc13cdc3b7b85cfd7",
+        "discovery_method" => "cdn_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
@@ -59,7 +95,7 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
               "limit" => limit,
               "force" => force
             }
-            |> Inquizition.Jobs.IndexJob.new()
+            |> Inquizition.Jobs.IndexPageJob.new()
             |> Oban.insert()
             |> case do
               {:ok, _job} ->

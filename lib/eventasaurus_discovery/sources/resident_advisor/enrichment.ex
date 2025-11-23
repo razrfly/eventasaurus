@@ -10,7 +10,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.ArtistEnrichmentJob
+  alias EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichmentJob
   alias EventasaurusDiscovery.Performers.{Performer, PerformerStore}
   alias EventasaurusApp.Repo
 
@@ -36,7 +36,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
         if has_ra_artist_id?(performer) do
           with {:ok, _job} <-
                  %{performer_id: performer.id}
-                 |> ArtistEnrichmentJob.new()
+                 |> PerformerEnrichmentJob.new()
                  |> Oban.insert() do
             {:ok, :scheduled}
           else
@@ -73,7 +73,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
 
     result =
       Enum.reduce_while(performers, {:ok, 0}, fn performer, {:ok, acc} ->
-        case %{performer_id: performer.id} |> ArtistEnrichmentJob.new() |> Oban.insert() do
+        case %{performer_id: performer.id} |> PerformerEnrichmentJob.new() |> Oban.insert() do
           {:ok, _job} -> {:cont, {:ok, acc + 1}}
           {:error, changeset} -> {:halt, {:error, {performer.id, changeset}}}
         end
@@ -132,7 +132,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
     }
   """
   def get_enrichment_queue do
-    all_pending = ArtistEnrichmentJob.find_performers_needing_enrichment(1000)
+    all_pending = PerformerEnrichmentJob.find_performers_needing_enrichment(1000)
 
     %{
       high_priority: Enum.filter(all_pending, &is_nil(&1.image_url)),
@@ -166,7 +166,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Enrichment do
     result =
       Enum.reduce_while(performers, {:ok, 0}, fn performer, {:ok, acc} ->
         case %{performer_id: performer.id}
-             |> ArtistEnrichmentJob.new(priority: 1)
+             |> PerformerEnrichmentJob.new(priority: 1)
              |> Oban.insert() do
           {:ok, _job} -> {:cont, {:ok, acc + 1}}
           {:error, changeset} -> {:halt, {:error, {performer.id, changeset}}}

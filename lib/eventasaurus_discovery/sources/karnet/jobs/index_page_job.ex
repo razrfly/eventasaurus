@@ -247,7 +247,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
     # Extract the event ID from the URL
     # Format: /60682-krakow-event-name
     case Regex.run(~r/\/(\d+)-/, url) do
-      [_, id] -> "karnet_#{id}"
+      [_, id] -> "karnet_event_#{id}"
       _ -> nil
     end
   end

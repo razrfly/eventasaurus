@@ -378,14 +378,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Extract the event ID from the URL
     # Format: /60682-krakow-event-name
     case Regex.run(~r/\/(\d+)-/, url) do
-      [_, id] -> "karnet_#{id}"
+      [_, id] -> "karnet_event_#{id}"
       _ -> nil
     end
   end
 
   # New bilingual support functions
 
-  defp extract_event_id_from_external_id("karnet_" <> id), do: id
+  defp extract_event_id_from_external_id("karnet_event_" <> id), do: id
   defp extract_event_id_from_external_id(_), do: nil
 
   defp build_bilingual_urls(original_url, _event_id) do

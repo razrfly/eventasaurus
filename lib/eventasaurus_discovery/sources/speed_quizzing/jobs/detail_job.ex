@@ -46,8 +46,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
     event_data = args["event_data"]
 
     # Use event_id as external_id for metrics tracking, fallback to job.id
-    # Ensures external_id is always a string
-    external_id = to_string(event_id || job_id)
+    external_id = "speed_quizzing_event_#{event_id || job_id}"
 
     Logger.info("🔍 Processing Speed Quizzing event: #{event_id}")
 

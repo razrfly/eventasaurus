@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.IndexJob do
+defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.IndexPageJob do
   @moduledoc """
   Processes venues from storerocket.io API and schedules detail jobs.
 

@@ -212,7 +212,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob do
 
         # Include film_id to ensure uniqueness per movie (prevents collision between different movies)
         external_id =
-          "cinema_city_#{cinema_city_id}_#{cinema_city_film_id}_#{cinema_city_event_id}"
+          "cinema_city_showtime_#{cinema_city_id}_#{cinema_city_film_id}_#{cinema_city_event_id}"
 
         Map.put(%{film: film, event: event}, :external_id, external_id)
       end)

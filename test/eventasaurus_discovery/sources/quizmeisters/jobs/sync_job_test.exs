@@ -2,7 +2,7 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJobTest do
   use EventasaurusApp.DataCase, async: false
   use Oban.Testing, repo: EventasaurusApp.Repo
 
-  alias EventasaurusDiscovery.Sources.Quizmeisters.Jobs.{SyncJob, IndexJob}
+  alias EventasaurusDiscovery.Sources.Quizmeisters.Jobs.{SyncJob, IndexPageJob}
   alias EventasaurusDiscovery.Sources.SourceStore
 
   @moduletag :external_api
@@ -31,8 +31,8 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJobTest do
       assert result.locations_count > 0
       assert result.limit == 5
 
-      # Verify IndexJob was enqueued
-      assert_enqueued(worker: IndexJob, args: %{"source_id" => source.id, "limit" => 5})
+      # Verify IndexPageJob was enqueued
+      assert_enqueued(worker: IndexPageJob, args: %{"source_id" => source.id, "limit" => 5})
     end
 
     test "handles missing source gracefully" do

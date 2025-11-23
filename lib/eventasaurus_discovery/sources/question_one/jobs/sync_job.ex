@@ -8,7 +8,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob do
   - Supports limit parameter for testing
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :discovery,
     max_attempts: 3,
     priority: 1
@@ -16,6 +16,40 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob do
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, QuestionOne}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for page-based orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Question One uses page-based orchestration instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on page-based source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Question One transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: QuestionOne.Source.name(),
+      slug: QuestionOne.Source.key(),
+      website_url: "https://questionone.io",
+      priority: QuestionOne.Source.priority(),
+      config: %{
+        "rate_limit_seconds" => QuestionOne.Config.rate_limit(),
+        "max_requests_per_hour" => 1800,
+        "language" => "en",
+        "supports_pagination" => true,
+        "discovery_method" => "page_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do

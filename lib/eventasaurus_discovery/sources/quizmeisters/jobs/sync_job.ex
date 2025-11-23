@@ -19,7 +19,7 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
   - Single request fetches all venues (no pagination)
   """
 
-  use Oban.Worker,
+  use EventasaurusDiscovery.Sources.BaseJob,
     queue: :discovery,
     max_attempts: 3,
     priority: 1
@@ -27,6 +27,41 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
   require Logger
   alias EventasaurusDiscovery.Sources.{SourceStore, Quizmeisters}
   alias EventasaurusDiscovery.Metrics.MetricsTracker
+
+  # BaseJob callbacks - not used for API-based orchestration
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def fetch_events(_city, _limit, _options) do
+    # Quizmeisters uses storerocket.io API orchestration instead of city-based fetch
+    Logger.warning("⚠️ fetch_events called on API-based source - not used")
+    {:ok, []}
+  end
+
+  @impl EventasaurusDiscovery.Sources.BaseJob
+  def transform_events(raw_events) do
+    # Quizmeisters transformation happens in detail jobs
+    Logger.debug("🔄 transform_events called (not used in orchestration pattern)")
+    raw_events
+  end
+
+  @doc """
+  Source configuration for BaseJob.
+  """
+  def source_config do
+    %{
+      name: Quizmeisters.Source.name(),
+      slug: Quizmeisters.Source.key(),
+      website_url: "https://quizmeisters.com",
+      priority: Quizmeisters.Source.priority(),
+      config: %{
+        "rate_limit_seconds" => Quizmeisters.Config.rate_limit(),
+        "max_requests_per_hour" => 1800,
+        "language" => "en",
+        "api_type" => "storerocket",
+        "api_endpoint" => "https://storerocket.io/api/user/kDJ3BbK4mn/locations",
+        "discovery_method" => "api_orchestration"
+      }
+    }
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
@@ -57,7 +92,7 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
               "limit" => limit,
               "force" => force
             }
-            |> Quizmeisters.Jobs.IndexJob.new()
+            |> Quizmeisters.Jobs.IndexPageJob.new()
             |> Oban.insert()
             |> case do
               {:ok, _job} ->
