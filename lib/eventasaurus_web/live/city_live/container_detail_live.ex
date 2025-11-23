@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Components.Breadcrumbs
-  alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, SourceAttribution}
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
 
   @impl true
@@ -330,7 +330,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
                 </h3>
                 <div class="flex flex-wrap gap-4">
                   <%= if @container.source do %>
-                    <% source_url = get_container_source_url(@container) %>
+                    <% source_url = SourceAttribution.get_container_source_url(@container) %>
                     <div class="text-sm">
                       <%= if source_url do %>
                         <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
@@ -343,7 +343,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
                         </span>
                       <% end %>
                       <span class="text-gray-500 ml-2">
-                        Last updated <%= format_relative_time(@container.updated_at) %>
+                        Last updated <%= SourceAttribution.format_relative_time(@container.updated_at) %>
                       </span>
                     </div>
                   <% end %>
@@ -389,66 +389,6 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         date_str
     end
   end
-
-  defp format_relative_time(nil), do: "unknown"
-
-  defp format_relative_time(%NaiveDateTime{} = naive_datetime) do
-    # Convert NaiveDateTime to DateTime (assume UTC)
-    datetime = DateTime.from_naive!(naive_datetime, "Etc/UTC")
-    format_relative_time(datetime)
-  end
-
-  defp format_relative_time(%DateTime{} = datetime) do
-    diff = DateTime.diff(DateTime.utc_now(), datetime, :second)
-
-    cond do
-      diff < 3600 -> "#{div(diff, 60)} minutes ago"
-      diff < 86400 -> "#{div(diff, 3600)} hours ago"
-      diff < 604_800 -> "#{div(diff, 86400)} days ago"
-      diff < 2_592_000 -> "#{div(diff, 604_800)} weeks ago"
-      true -> "#{div(diff, 2_592_000)} months ago"
-    end
-  end
-
-  defp get_container_source_url(container) do
-    cond do
-      # Priority 1: Try source_event sources
-      url = get_url_from_source_event(container.source_event) ->
-        url
-
-      # Priority 2: Construct from container metadata (Resident Advisor)
-      umbrella_event_id = get_in(container.metadata, ["umbrella_event_id"]) ->
-        # Resident Advisor event URL format
-        "https://ra.co/events/#{umbrella_event_id}"
-
-      true ->
-        nil
-    end
-  end
-
-  defp get_url_from_source_event(nil), do: nil
-
-  defp get_url_from_source_event(%{sources: sources}) when is_list(sources) do
-    Enum.find_value(sources, fn source ->
-      cond do
-        # Priority 1: source_url field
-        source.source_url && source.source_url != "" ->
-          source.source_url
-
-        # Priority 2: metadata URLs
-        url = get_in(source.metadata, ["url"]) ->
-          url
-
-        url = get_in(source.metadata, ["event_url"]) ->
-          url
-
-        true ->
-          nil
-      end
-    end)
-  end
-
-  defp get_url_from_source_event(_), do: nil
 
   # Component for event grid item (card layout for grid view)
   defp event_grid_item(assigns) do

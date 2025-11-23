@@ -63,7 +63,7 @@ sources = [
     priority: 35,
     domains: ["trivia"],
     aggregate_on_index: true,
-    aggregation_type: "trivia",
+    aggregation_type: "SocialEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
@@ -78,7 +78,7 @@ sources = [
     priority: 35,
     domains: ["trivia"],
     aggregate_on_index: true,
-    aggregation_type: "trivia",
+    aggregation_type: "SocialEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
@@ -93,7 +93,7 @@ sources = [
     priority: 35,
     domains: ["trivia"],
     aggregate_on_index: true,
-    aggregation_type: "trivia",
+    aggregation_type: "SocialEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
@@ -109,7 +109,7 @@ sources = [
     priority: 25,
     domains: ["trivia"],
     aggregate_on_index: true,
-    aggregation_type: "trivia",
+    aggregation_type: "SocialEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
@@ -124,7 +124,7 @@ sources = [
     priority: 35,
     domains: ["trivia"],
     aggregate_on_index: true,
-    aggregation_type: "trivia",
+    aggregation_type: "SocialEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
@@ -139,7 +139,7 @@ sources = [
     priority: 35,
     domains: ["trivia"],
     aggregate_on_index: true,
-    aggregation_type: "trivia",
+    aggregation_type: "SocialEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 300,
@@ -174,7 +174,7 @@ sources = [
     priority: 15,
     domains: ["screening", "cinema", "movies"],
     aggregate_on_index: true,
-    aggregation_type: "movie",
+    aggregation_type: "ScreeningEvent",
     metadata: %{
       "rate_limit_seconds" => 1,
       "max_requests_per_hour" => 500,
@@ -189,7 +189,7 @@ sources = [
     priority: 15,
     domains: ["screening", "cinema", "movies"],
     aggregate_on_index: true,
-    aggregation_type: "movie",
+    aggregation_type: "ScreeningEvent",
     metadata: %{
       "rate_limit_seconds" => 1,
       "max_requests_per_hour" => 500,
@@ -220,7 +220,7 @@ sources = [
     priority: 45,
     domains: ["food", "festival"],
     aggregate_on_index: true,
-    aggregation_type: "restaurant",
+    aggregation_type: "FoodEvent",
     metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 1800,

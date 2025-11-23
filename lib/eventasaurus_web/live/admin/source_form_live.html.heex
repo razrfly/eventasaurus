@@ -166,13 +166,22 @@
           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
         >
           <option value="">None (show individual events)</option>
-          <option value="trivia" selected={@form[:aggregation_type].value == "trivia"}>Trivia</option>
-          <option value="movie" selected={@form[:aggregation_type].value == "movie"}>Movie</option>
-          <option value="concert" selected={@form[:aggregation_type].value == "concert"}>Concert</option>
-          <option value="events" selected={@form[:aggregation_type].value == "events"}>Events</option>
+
+          <%!-- Schema.org Event Types (alphabetically organized) --%>
+          <option value="ComedyEvent" selected={@form[:aggregation_type].value == "ComedyEvent"}>Comedy Event</option>
+          <option value="DanceEvent" selected={@form[:aggregation_type].value == "DanceEvent"}>Dance Event</option>
+          <option value="EducationEvent" selected={@form[:aggregation_type].value == "EducationEvent"}>Education Event</option>
+          <option value="Event" selected={@form[:aggregation_type].value == "Event"}>Event (Generic)</option>
+          <option value="Festival" selected={@form[:aggregation_type].value == "Festival"}>Festival</option>
+          <option value="FoodEvent" selected={@form[:aggregation_type].value == "FoodEvent"}>Food Event</option>
+          <option value="MusicEvent" selected={@form[:aggregation_type].value == "MusicEvent"}>Music Event</option>
+          <option value="ScreeningEvent" selected={@form[:aggregation_type].value == "ScreeningEvent"}>Screening Event</option>
+          <option value="SocialEvent" selected={@form[:aggregation_type].value == "SocialEvent"}>Social Event</option>
+          <option value="SportsEvent" selected={@form[:aggregation_type].value == "SportsEvent"}>Sports Event</option>
+          <option value="TheaterEvent" selected={@form[:aggregation_type].value == "TheaterEvent"}>Theater Event</option>
         </select>
         <p class="mt-1 text-sm text-gray-500">
-          Select a category to group events by type. Choose "None" to display each event individually.
+          Select a schema.org event type to group events by type. This enables source-based aggregation (e.g., /c/city/<strong>FoodEvent</strong>/week_pl). Choose "None" to display each event individually.
         </p>
 
         <%= if @form[:aggregation_type].value && @form[:aggregation_type].value != "" do %>
