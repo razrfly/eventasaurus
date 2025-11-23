@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.AggregationTypeSlug
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
@@ -18,6 +19,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         socket
       )
       when not is_map_key(params, "city_slug") do
+    # Convert URL slug to schema.org type for internal use
+    schema_type = AggregationTypeSlug.from_slug(content_type)
+
     # Multi-city route - city will come from query params
     # Use a default city temporarily (will be updated in handle_params)
     # Fallback chain: krakow -> first discovery-enabled city -> error
@@ -35,7 +39,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         {:ok,
          socket
          |> assign(:city, city)
-         |> assign(:content_type, content_type)
+         |> assign(:content_type, schema_type)
+         |> assign(:content_type_slug, content_type)
          |> assign(:identifier, identifier)
          |> assign(:scope, :all_cities)
          |> assign(:page_title, nil)
@@ -51,6 +56,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         _session,
         socket
       ) do
+    # Convert URL slug to schema.org type for internal use
+    schema_type = AggregationTypeSlug.from_slug(content_type)
+
     # Look up city
     case Locations.get_city_by_slug(city_slug) do
       nil ->
@@ -63,10 +71,11 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         {:ok,
          socket
          |> assign(:city, city)
-         |> assign(:content_type, content_type)
+         |> assign(:content_type, schema_type)
+         |> assign(:content_type_slug, content_type)
          |> assign(:identifier, identifier)
          |> assign(:scope, :city_only)
-         |> assign(:page_title, format_page_title(content_type, identifier, city))
+         |> assign(:page_title, format_page_title(schema_type, identifier, city))
          |> assign(:source_name, get_source_name(identifier))
          |> assign(:is_multi_city_route, false)}
     end
@@ -119,12 +128,12 @@ defmodule EventasaurusWeb.AggregatedContentLive do
           # Expanding to all cities - use multi-city route
           push_navigate(socket,
             to:
-              ~p"/#{socket.assigns.content_type}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
+              ~p"/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
           )
         else
           # Collapsing to city only - use city-scoped route
           push_navigate(socket,
-            to: ~p"/c/#{socket.assigns.city.slug}/#{socket.assigns.content_type}/#{socket.assigns.identifier}"
+            to: ~p"/c/#{socket.assigns.city.slug}/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}"
           )
         end
       end)
@@ -377,7 +386,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
                 <div class="flex items-center gap-3">
                   <h2 class="text-2xl font-bold text-gray-900">
                     <.link
-                      navigate={~p"/#{@content_type}/#{@identifier}?scope=all&city=#{city_group.city.slug}"}
+                      navigate={~p"/#{@content_type_slug}/#{@identifier}?scope=all&city=#{city_group.city.slug}"}
                       class="hover:text-blue-600 transition-colors"
                     >
                       <%= city_group.city.name %>
