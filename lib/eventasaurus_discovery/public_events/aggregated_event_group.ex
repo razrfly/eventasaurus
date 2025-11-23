@@ -8,6 +8,8 @@ defmodule EventasaurusDiscovery.PublicEvents.AggregatedEventGroup do
   Example: 14 PubQuiz events in Kraków shown as one "PubQuiz Poland" card.
   """
 
+  alias EventasaurusDiscovery.AggregationTypeSlug
+
   @type t :: %__MODULE__{
           source_id: integer(),
           source_slug: String.t(),
@@ -38,9 +40,13 @@ defmodule EventasaurusDiscovery.PublicEvents.AggregatedEventGroup do
 
   @doc """
   Returns the path to the aggregated content view for this group.
+
+  Uses URL-friendly slugs (e.g., "social", "food", "movies") instead of
+  schema.org types (e.g., "SocialEvent", "FoodEvent", "ScreeningEvent").
   """
   def path(%__MODULE__{} = group) do
-    "/c/#{group.city.slug}/#{group.aggregation_type}/#{group.source_slug}"
+    slug = AggregationTypeSlug.to_slug(group.aggregation_type)
+    "/c/#{group.city.slug}/#{slug}/#{group.source_slug}"
   end
 
   @doc """

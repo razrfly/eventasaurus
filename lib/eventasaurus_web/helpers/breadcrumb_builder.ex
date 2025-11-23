@@ -29,8 +29,23 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventContainer}
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusDiscovery.AggregationTypeSlug
   alias EventasaurusApp.Repo
   import Ecto.Query
+
+  # Mapping from aggregation type URL slugs to category IDs
+  # Used for breadcrumb navigation to filter city pages by relevant category
+  @aggregation_type_to_category %{
+    "social" => 29,     # trivia
+    "food" => 10,       # food-drink
+    "movies" => 8,      # film
+    "music" => 2,       # concerts
+    "comedy" => 6,      # comedy
+    "theater" => 4,     # theatre
+    "sports" => 5,      # sports
+    "classes" => 13,    # education
+    "festivals" => 3    # festivals
+  }
 
   @doc """
   Build breadcrumb items for a public event/activity page.
@@ -98,21 +113,31 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   Returns a list of breadcrumb items:
   - Home
-  - City name
-  - Content type (capitalized)
+  - City name (if city-scoped)
+  - Content type (friendly name with link to content type index)
   - Source name with scope indicator (current page, no link)
 
   Pattern (city scope):
-    Home / Kraków / Trivia / PubQuiz Poland
+    Home / Kraków / Social / PubQuiz Poland
 
   Pattern (multi-city scope):
-    Home / Kraków / Trivia / PubQuiz Poland (All Cities)
+    Home / Social / PubQuiz Poland (All Cities)
 
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
   def build_aggregated_source_breadcrumbs(city, content_type, source_name, scope, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    # Convert schema.org type to URL slug
+    content_type_slug = AggregationTypeSlug.to_slug(content_type)
+
+    # Create friendly display name from slug
+    content_type_label = format_content_type_label(content_type_slug)
+
+    # Build content type link to activities page with appropriate filters
+    # Maps aggregation types to categories for logical navigation
+    content_type_path = build_content_type_path(content_type_slug, city, scope)
 
     # When viewing all cities, don't include city in breadcrumb path
     # When city-scoped, include the city
@@ -128,12 +153,11 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
           ]
       end
 
-    # Add content type (capitalized, no link for now)
-    # TODO: Link to content type index page when available (e.g., /c/krakow/trivia)
+    # Add content type with link
     items_with_type =
       base_items ++
         [
-          %{label: String.capitalize(content_type), path: nil}
+          %{label: content_type_label, path: content_type_path}
         ]
 
     # Add source name with scope context
@@ -322,6 +346,36 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
       )
     else
       nil
+    end
+  end
+
+  defp format_content_type_label(slug) when is_binary(slug) do
+    # Convert URL slug to display-friendly label
+    # "social" => "Social", "food" => "Food", "movies" => "Movies"
+    slug
+    |> String.capitalize()
+  end
+
+  defp build_content_type_path(content_type_slug, city, scope) do
+    # Map aggregation type slug to category ID
+    category_id = Map.get(@aggregation_type_to_category, content_type_slug)
+
+    case {scope, category_id} do
+      # Multi-city with category mapping: filter by category globally on search page
+      {:all_cities, category_id} when not is_nil(category_id) ->
+        ~p"/activities/search?categories=#{category_id}"
+
+      # Multi-city without category mapping: show all activities
+      {:all_cities, nil} ->
+        ~p"/activities"
+
+      # City-scoped with category mapping: filter city page by category
+      {_, category_id} when not is_nil(category_id) ->
+        ~p"/c/#{city.slug}?categories=#{category_id}"
+
+      # City-scoped without category mapping: just link to city page
+      _ ->
+        ~p"/c/#{city.slug}"
     end
   end
 end

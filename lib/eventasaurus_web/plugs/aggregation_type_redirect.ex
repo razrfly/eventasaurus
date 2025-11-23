@@ -1,30 +1,32 @@
 defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
   @moduledoc """
-  Plug to redirect legacy aggregation type URLs to schema.org-compliant URLs.
+  Plug to redirect legacy aggregation type URLs to URL-friendly slug URLs.
 
-  This ensures backward compatibility when we migrated from custom aggregation types
-  (restaurant, movie, concert, events) to schema.org event types (FoodEvent, ScreeningEvent,
-  MusicEvent, Event).
+  This ensures backward compatibility for old custom types that may exist in
+  bookmarks, external links, or other references.
 
   ## Examples
 
-      # Old URL: /c/krakow/restaurant/week_pl
-      # New URL: /c/krakow/FoodEvent/week_pl
+      # Old custom type: /c/krakow/restaurant/week_pl
+      # Redirects to:     /c/krakow/food/week_pl
 
-      # Old URL: /c/warsaw/movie/cinema_city
-      # New URL: /c/warsaw/ScreeningEvent/cinema_city
+      # Old trivia type:  /c/austin/trivia/pubquiz-pl
+      # Redirects to:     /c/austin/social/pubquiz-pl
+
+      # Old movie type:   /c/warsaw/movie/cinema-city
+      # Redirects to:     /c/warsaw/movies/cinema-city
   """
 
   import Plug.Conn
   import Phoenix.Controller, only: [redirect: 2]
 
-  # Mapping of legacy aggregation types to schema.org event types
+  # Mapping of legacy custom types to URL-friendly slugs
   @legacy_mappings %{
-    "restaurant" => "FoodEvent",
-    "movie" => "ScreeningEvent",
-    "concert" => "MusicEvent",
-    "events" => "Event",
-    "trivia" => "SocialEvent"
+    "restaurant" => "food",
+    "movie" => "movies",
+    "concert" => "music",
+    "trivia" => "social",
+    "events" => "events"
   }
 
   def init(opts), do: opts
