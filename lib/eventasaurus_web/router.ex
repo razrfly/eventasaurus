@@ -270,6 +270,7 @@ defmodule EventasaurusWeb.Router do
     plug :fetch_auth_user
     plug :assign_user_struct
     plug EventasaurusWeb.Plugs.LanguagePlug
+    plug EventasaurusWeb.Plugs.AggregationTypeRedirect
   end
 
   # City browser pipeline with city validation
@@ -290,6 +291,7 @@ defmodule EventasaurusWeb.Router do
     plug :assign_user_struct
     plug EventasaurusWeb.Plugs.LanguagePlug
     plug EventasaurusWeb.Plugs.ValidateCity
+    plug EventasaurusWeb.Plugs.AggregationTypeRedirect
   end
 
   pipeline :api do

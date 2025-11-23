@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Helpers.LanguageHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
+  alias EventasaurusWeb.Helpers.SourceAttribution
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
@@ -1155,8 +1156,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
                   <div class="flex flex-wrap gap-4">
                     <%= for source <- @event.sources do %>
-                      <% source_url = get_source_url(source) %>
-                      <% source_name = get_source_name(source) %>
+                      <% source_url = SourceAttribution.get_source_url(source) %>
+                      <% source_name = SourceAttribution.get_source_name(source) %>
                       <div class="text-sm">
                         <%= if source_url do %>
                           <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
@@ -1169,7 +1170,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                           </span>
                         <% end %>
                         <span class="text-gray-500 ml-2">
-                          <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
+                          <%= gettext("Last updated") %> <%= SourceAttribution.format_relative_time(source.last_seen_at) %>
                         </span>
                       </div>
                     <% end %>
@@ -1255,67 +1256,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     Phoenix.HTML.Format.text_to_html(description, escape: true)
   end
 
-  defp get_source_url(source) do
-    # Guard against nil metadata and sanitize URLs
-    md = source.metadata || %{}
-
-    url =
-      cond do
-        # PRIORITY 1: source_url (event-specific URLs)
-        # Cinema City stores booking URL here (specific showtime booking page)
-        # BandsInTown and other scrapers also use this for ticket links
-        source.source_url -> source.source_url
-        # PRIORITY 2: metadata-based event URLs (scrapers that store in metadata)
-        # Ticketmaster stores URL in ticketmaster_data.url
-        url = get_in(md, ["ticketmaster_data", "url"]) -> url
-        # Bandsintown might have it in event_url or url
-        url = md["event_url"] -> url
-        url = md["url"] -> url
-        # Karnet might have it in a different location
-        url = md["link"] -> url
-        # Kino Krakow stores movie page URL in metadata
-        url = md["movie_url"] -> url
-        # PRIORITY 3: Fallback to source website URL (general homepage, not event-specific)
-        # This is the least useful but better than nothing
-        source.source && source.source.website_url -> source.source.website_url
-        true -> nil
-      end
-
-    normalize_http_url(url)
-  end
-
-  defp normalize_http_url(nil), do: nil
-
-  defp normalize_http_url(url) when is_binary(url) do
-    case URI.parse(url) do
-      %URI{scheme: scheme} = uri when scheme in ["http", "https"] -> URI.to_string(uri)
-      _ -> nil
-    end
-  end
-
-  defp get_source_name(source) do
-    # Use the associated source name if available
-    if source.source do
-      source.source.name
-    else
-      "Unknown"
-    end
-  end
-
-  defp format_relative_time(datetime) do
-    diff = DateTime.diff(DateTime.utc_now(), datetime, :second)
-
-    cond do
-      diff < 3600 -> gettext("%{count} minutes ago", count: div(diff, 60))
-      diff < 86400 -> gettext("%{count} hours ago", count: div(diff, 3600))
-      diff < 604_800 -> gettext("%{count} days ago", count: div(diff, 86400))
-      true -> Calendar.strftime(datetime, "%b %d, %Y")
-    end
-  end
-
   defp format_plan_date(datetime) do
     case DateTime.from_naive(datetime, "Etc/UTC") do
-      {:ok, dt} -> format_relative_time(dt)
+      {:ok, dt} -> SourceAttribution.format_relative_time(dt)
       {:error, _} -> gettext("recently")
     end
   end

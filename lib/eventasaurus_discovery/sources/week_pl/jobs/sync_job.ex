@@ -200,17 +200,24 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   # Transform API festival edition to our internal format
   defp transform_api_festival(edition) do
     # API returns datetime strings with timezone (e.g., "2026-03-04T00:00:00+01:00")
-    # Parse as DateTime first, then convert to Date
-    {:ok, starts_at_dt, _} = DateTime.from_iso8601(edition["startsAt"])
-    {:ok, ends_at_dt, _} = DateTime.from_iso8601(edition["endsAt"])
+    # Parse as DateTime first, then convert to Date with error handling
+    with {:ok, starts_at_dt, _} <- DateTime.from_iso8601(edition["startsAt"]),
+         {:ok, ends_at_dt, _} <- DateTime.from_iso8601(edition["endsAt"]) do
+      %{
+        name: edition["festival"]["name"],
+        code: edition["code"],
+        starts_at: DateTime.to_date(starts_at_dt),
+        ends_at: DateTime.to_date(ends_at_dt),
+        price: edition["price"]
+      }
+    else
+      {:error, reason} ->
+        Logger.error(
+          "[WeekPl.SyncJob] Invalid date format in festival edition: #{inspect(edition)}, reason: #{inspect(reason)}"
+        )
 
-    %{
-      name: edition["festival"]["name"],
-      code: edition["code"],
-      starts_at: DateTime.to_date(starts_at_dt),
-      ends_at: DateTime.to_date(ends_at_dt),
-      price: edition["price"]
-    }
+        nil
+    end
   end
 
   # Queue region sync job for a city
