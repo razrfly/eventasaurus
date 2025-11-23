@@ -25,7 +25,7 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob do
     limit = args["limit"]
     force = args["force"] || false
 
-    source = SourceStore.get_by_key!(QuestionOne.Source.key())
+    source = SourceStore.get_by_key(QuestionOne.Source.key())
 
     if is_nil(source) do
       MetricsTracker.record_failure(job, "Source not found: question_one", external_id)

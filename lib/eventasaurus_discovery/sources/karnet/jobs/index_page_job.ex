@@ -24,9 +24,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
   require Logger
 
   alias EventasaurusDiscovery.Sources.Karnet.{Client, Config, IndexExtractor}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     # Validate and normalize input arguments
     with {:ok, page_number} <- validate_integer(args["page_number"], "page_number"),
          {:ok, source_id} <- validate_integer(args["source_id"], "source_id"),
@@ -38,6 +39,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       skip_in_first = validate_optional_integer(args["skip_in_first"]) || 0
       force = args["force"] || false
 
+      external_id = "karnet_indexpage_page#{page_number}_#{Date.utc_today()}"
+
       Logger.info("""
       📄 Processing Karnet index page
       Page: #{page_number}/#{total_pages || "unknown"}
@@ -46,10 +49,20 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob do
       Budget: #{chunk_budget || "unlimited"}
       """)
 
-      process_page(page_number, source_id, chunk_budget, total_pages, skip_in_first, force)
+      case process_page(page_number, source_id, chunk_budget, total_pages, skip_in_first, force) do
+        {:ok, _result} = success ->
+          MetricsTracker.record_success(job, external_id)
+          success
+
+        {:error, reason} = error ->
+          MetricsTracker.record_failure(job, "Page processing failed: #{inspect(reason)}", external_id)
+          error
+      end
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
+        external_id = "karnet_indexpage_invalid_#{Date.utc_today()}"
+        MetricsTracker.record_failure(job, "Invalid arguments - #{field}: #{reason}", external_id)
         {:error, "invalid_args_#{field}"}
     end
   end

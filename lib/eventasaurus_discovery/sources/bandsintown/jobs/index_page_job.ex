@@ -24,9 +24,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
   require Logger
 
   alias EventasaurusDiscovery.Sources.Bandsintown.{Client, Config}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     # Validate and normalize input arguments
     with {:ok, page_number} <- validate_integer(args["page_number"], "page_number"),
          {:ok, latitude} <- validate_float(args["latitude"], "latitude"),
@@ -41,6 +42,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       city_name = args["city_name"] || "Unknown"
       force = args["force"] || false
 
+      external_id = "bandsintown_indexpage_city#{city_id}_page#{page_number}_#{Date.utc_today()}"
+
       Logger.info("""
       🎵 Processing Bandsintown API page
       City: #{city_name}
@@ -49,10 +52,20 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
       City ID: #{city_id}
       """)
 
-      process_page(page_number, latitude, longitude, source_id, city_id, total_pages, force)
+      case process_page(page_number, latitude, longitude, source_id, city_id, total_pages, force) do
+        {:ok, _result} = success ->
+          MetricsTracker.record_success(job, external_id)
+          success
+
+        {:error, reason} = error ->
+          MetricsTracker.record_failure(job, "Page processing failed: #{inspect(reason)}", external_id)
+          error
+      end
     else
       {:error, field, reason} ->
         Logger.error("❌ Invalid job arguments - #{field}: #{reason}")
+        external_id = "bandsintown_indexpage_invalid_#{Date.utc_today()}"
+        MetricsTracker.record_failure(job, "Invalid arguments - #{field}: #{reason}", external_id)
         {:discard, "invalid_args_#{field}"}
     end
   end

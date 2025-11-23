@@ -38,13 +38,15 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
 
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
   alias EventasaurusDiscovery.Sources.Inquizition
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     source_id = args["source_id"]
     stores = args["stores"]
     limit = args["limit"]
     force = args["force"] || false
+    external_id = "inquizition_index_src#{source_id}_#{Date.utc_today()}"
 
     Logger.info("🔄 Processing #{length(stores)} Inquizition venues")
 
@@ -54,17 +56,21 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexJob do
     case venues do
       {:error, reason} ->
         Logger.error("❌ Failed to extract venues: #{inspect(reason)}")
+        MetricsTracker.record_failure(job, "Venue extraction failed: #{inspect(reason)}", external_id)
         {:error, reason}
 
       venues when is_list(venues) ->
         if Enum.empty?(venues) do
           Logger.info("✅ No valid venues found in response")
+          MetricsTracker.record_success(job, external_id)
           {:ok, :complete}
         else
           Logger.info("📋 Successfully parsed #{length(venues)} venues")
 
           # Filter and enqueue detail jobs
-          process_venues(venues, source_id, limit, force)
+          {:ok, _result} = success = process_venues(venues, source_id, limit, force)
+          MetricsTracker.record_success(job, external_id)
+          success
         end
     end
   end
