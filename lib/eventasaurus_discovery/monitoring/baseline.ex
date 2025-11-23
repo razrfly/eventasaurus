@@ -47,7 +47,8 @@ defmodule EventasaurusDiscovery.Monitoring.Baseline do
   ## Examples
 
       {:ok, baseline} = Baseline.create("cinema_city", hours: 48, limit: 200)
-      {:error, :no_executions} = Baseline.create("unknown_source")
+      {:error, :unknown_source} = Baseline.create("unknown_source")
+      {:error, :no_executions} = Baseline.create("cinema_city")  # when no data exists
   """
   def create(source, opts \\ []) do
     hours = Keyword.get(opts, :hours, 24)
@@ -151,6 +152,11 @@ defmodule EventasaurusDiscovery.Monitoring.Baseline do
   def calculate(executions, source, from_time, to_time) do
     total = length(executions)
 
+    # Guard against empty executions list
+    if total == 0 do
+      raise ArgumentError, "Cannot calculate baseline from empty executions list"
+    end
+
     # State distribution
     completed = Enum.count(executions, &(&1.state == "completed"))
     failed = Enum.count(executions, &(&1.state == "discarded"))
@@ -197,7 +203,8 @@ defmodule EventasaurusDiscovery.Monitoring.Baseline do
       |> Enum.map(fn {worker, jobs} ->
         worker_total = length(jobs)
         worker_completed = Enum.count(jobs, &(&1.state == "completed"))
-        worker_rate = worker_completed / worker_total * 100
+        # Guard against division by zero (should never happen, but defensive)
+        worker_rate = if worker_total > 0, do: worker_completed / worker_total * 100, else: 0.0
 
         %{
           name: worker |> String.split(".") |> List.last(),

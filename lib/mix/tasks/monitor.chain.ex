@@ -419,7 +419,7 @@ defmodule Mix.Tasks.Monitor.Chain do
   defp extract_source_from_worker(worker) do
     worker
     |> String.split(".")
-    |> Enum.at(3)
+    |> Enum.at(2)
     |> case do
       nil -> "Unknown"
       name -> name
