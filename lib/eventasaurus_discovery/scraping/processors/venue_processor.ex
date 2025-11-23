@@ -438,6 +438,122 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
+  # Validates geocoding result to prevent bad venue creation
+  # Rejects:
+  # - Intersection results (street corners, not businesses)
+  # - Results outside expected geographic bounds (region-specific scrapers)
+  # - Results in wrong country (city in Poland but coords in South Africa)
+  defp validate_geocoding_result(result, data, city) do
+    metadata = result.geocoding_metadata
+
+    # Check 1: Reject intersection results (street corners, not venues)
+    result_type = get_in(metadata, [:raw_response, "resultType"])
+
+    if result_type == "intersection" do
+      {:error,
+       "Geocoding returned street intersection, not a venue. This prevents creating venues at street corners."}
+    else
+      # Check 2: Validate country match (prevent city in Poland but coords in South Africa)
+      validate_country_match(result, data, city, metadata)
+    end
+  end
+
+  # Validate that geocoded country matches expected country
+  defp validate_country_match(result, data, city, metadata) do
+    # Get expected country from city or data
+    expected_country = get_expected_country(city, data)
+    # Get geocoded country from result
+    geocoded_country = get_geocoded_country(result, metadata)
+
+    cond do
+      # If we have both countries, they must match
+      expected_country && geocoded_country && expected_country != geocoded_country ->
+        {:error,
+         "Country mismatch: Expected #{expected_country} but geocoded to #{geocoded_country}"}
+
+      # If we have expected country, check geographic bounds
+      expected_country ->
+        validate_geographic_bounds(result, expected_country, data)
+
+      # No country validation possible
+      true ->
+        :ok
+    end
+  end
+
+  # Get expected country from city or data
+  defp get_expected_country(city, data) do
+    cond do
+      # From city relationship
+      city && Map.get(city, :country) && Map.get(city.country, :name) ->
+        city.country.name
+
+      # From data
+      data.country_name ->
+        data.country_name
+
+      true ->
+        nil
+    end
+  end
+
+  # Get geocoded country from result metadata
+  defp get_geocoded_country(result, metadata) do
+    cond do
+      # From result
+      Map.get(result, :country) ->
+        result.country
+
+      # From HERE Maps raw response
+      get_in(metadata, [:raw_response, "address", "countryName"]) ->
+        get_in(metadata, [:raw_response, "address", "countryName"])
+
+      # From other providers (usually in result.country)
+      true ->
+        nil
+    end
+  end
+
+  # Validate coordinates are within expected geographic bounds for region-specific scrapers
+  # This prevents venues in Poland from being geocoded to South Africa
+  defp validate_geographic_bounds(result, country, data) do
+    lat = result.latitude
+    lng = result.longitude
+
+    # Get bounding box for country/region if scraper is region-specific
+    case get_scraper_bounding_box(country, data) do
+      nil ->
+        # No bounding box configured, skip validation
+        :ok
+
+      {min_lat, max_lat, min_lng, max_lng} ->
+        if lat >= min_lat && lat <= max_lat && lng >= min_lng && lng <= max_lng do
+          :ok
+        else
+          {:error,
+           "Coordinates (#{lat}, #{lng}) outside expected bounds for #{country}. " <>
+             "Expected: lat #{min_lat} to #{max_lat}, lng #{min_lng} to #{max_lng}"}
+        end
+    end
+  end
+
+  # Get bounding box for region-specific scrapers
+  # Returns {min_lat, max_lat, min_lng, max_lng} or nil
+  defp get_scraper_bounding_box("Poland", _data) do
+    # Poland bounding box: approximately 49°N to 55°N, 14°E to 25°E
+    {49.0, 55.0, 14.0, 25.0}
+  end
+
+  defp get_scraper_bounding_box("France", _data) do
+    # France bounding box: approximately 41°N to 51°N, -5°W to 10°E
+    {41.0, 51.0, -5.0, 10.0}
+  end
+
+  defp get_scraper_bounding_box(_country, _data) do
+    # No bounding box configured for this country
+    nil
+  end
+
   # Geocodes venue address using multi-provider system (Mapbox, HERE, Geoapify, etc.)
   # Returns {latitude, longitude, address, geocoding_metadata} tuple
   defp geocode_venue_address(data, city) do
@@ -455,12 +571,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
          longitude: lng,
          address: address,
          geocoding_metadata: metadata
-       }} ->
-        Logger.info(
-          "🗺️ ✅ Successfully geocoded venue '#{data.name}' via #{metadata.provider}: #{lat}, #{lng}, address: #{address}"
-        )
+       } = result} ->
+        # Validate geocoding result quality before accepting
+        case validate_geocoding_result(result, data, city) do
+          :ok ->
+            Logger.info(
+              "🗺️ ✅ Successfully geocoded venue '#{data.name}' via #{metadata.provider}: #{lat}, #{lng}, address: #{address}"
+            )
 
-        {lat, lng, address, metadata}
+            {lat, lng, address, metadata}
+
+          {:error, reason} ->
+            Logger.error(
+              "🗺️ ❌ Rejected geocoding result for '#{data.name}': #{reason}. " <>
+                "Provider: #{metadata.provider}, Result type: #{inspect(get_in(metadata, [:raw_response, "resultType"]))}"
+            )
+
+            {nil, nil, nil, metadata}
+        end
 
       {:error, reason, metadata} ->
         Logger.error(
@@ -946,7 +1074,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       metadata: %{
         geocoding: final_geocoding_metadata,
         # Convert Geocoder.Coords structs to plain maps before database insertion
-        geocoding_metadata: struct_to_map(geocoding_metadata)
+        geocoding_metadata: struct_to_map(geocoding_metadata),
+        # Store original source data for debugging (cinema slug, original name, etc.)
+        source_data: %{
+          original_name: data.name,
+          original_address: data.address,
+          city_name: data.city_name,
+          country_name: data.country_name,
+          source_scraper: valid_source_scraper
+        }
       }
     }
 
