@@ -7,11 +7,33 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
 
   ## Strategy
 
-  Uses distance-based similarity thresholds:
+  Uses distance-based similarity thresholds with token-based name matching:
   - < 50m: 0.0 similarity required (same location = same venue, coordinates authoritative)
-  - 50-100m: 0.3 similarity required (very close = low bar)
-  - 100-200m: 0.6 similarity required (nearby = moderate bar)
-  - > 200m: 0.8 similarity required (distant = high bar)
+  - 50-100m: 0.4 similarity required (very close = low bar)
+  - 100-200m: 0.5 similarity required (nearby = moderate bar)
+  - > 200m: 0.6 similarity required (distant = high bar)
+
+  ## Search Radius
+
+  Searches for potential duplicates within 3000m (3km) radius to handle geocoding
+  variations between different providers. For example, Cinema City venues can be
+  geocoded 2945m apart by different providers (Photon, HERE, Mapbox) but are
+  actually the same physical location.
+
+  ## Name Matching Algorithm
+
+  Uses `VenueNameMatcher` with token-based Jaccard similarity:
+  1. Extracts significant tokens (removes stop words like "kraków", "cinema", "galeria")
+  2. Calculates Jaccard similarity: |A ∩ B| / |A ∪ B|
+  3. Adds +20% bonus for any shared significant location token
+  4. Returns score between 0.0 (no match) and 1.0 (perfect match)
+
+  This algorithm correctly handles venue naming variations like:
+  - "Cinema City Kazimierz" vs "Kraków - Galeria Kazimierz" → 100% match
+  - "Cinema City Bonarka" vs "Kraków - Bonarka" → 100% match
+
+  While correctly rejecting false positives:
+  - "Cinema City Kazimierz" vs "Nalej Se" (bar nearby) → 0% match
 
   ## Rationale
 
@@ -26,12 +48,13 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
   - VENUE_DUPLICATE_DISTANCE_CLOSE (default: 100)
   - VENUE_DUPLICATE_DISTANCE_NEARBY (default: 200)
   - VENUE_DUPLICATE_SIMILARITY_TIGHT (default: 0.0)
-  - VENUE_DUPLICATE_SIMILARITY_CLOSE (default: 0.3)
-  - VENUE_DUPLICATE_SIMILARITY_NEARBY (default: 0.6)
-  - VENUE_DUPLICATE_SIMILARITY_DISTANT (default: 0.8)
+  - VENUE_DUPLICATE_SIMILARITY_CLOSE (default: 0.4)
+  - VENUE_DUPLICATE_SIMILARITY_NEARBY (default: 0.5)
+  - VENUE_DUPLICATE_SIMILARITY_DISTANT (default: 0.6)
   """
 
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Locations.VenueNameMatcher
   require Logger
 
   # Distance thresholds in meters
@@ -40,10 +63,11 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
   @distance_nearby 200
 
   # Name similarity thresholds (0.0 = completely different, 1.0 = identical)
+  # Updated to match VenueNameMatcher's token-based algorithm expectations
   @similarity_tight 0.0
-  @similarity_close 0.3
-  @similarity_nearby 0.6
-  @similarity_distant 0.8
+  @similarity_close 0.4
+  @similarity_nearby 0.5
+  @similarity_distant 0.6
 
   @doc """
   Finds an existing venue that would be considered a duplicate of the given attributes.
@@ -66,7 +90,9 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
   def find_duplicate(%{latitude: lat, longitude: lng, name: name, city_id: city_id} = _attrs)
       when is_number(lat) and is_number(lng) and is_binary(name) and not is_nil(city_id) do
     # Find all venues within maximum search distance using PostGIS
-    nearby_venues = find_nearby_venues_postgis(lat, lng, city_id)
+    # Using 3000m (3km) radius to handle geocoding variations between different providers
+    # (e.g., Cinema City venues geocoded 2945m apart but are the same physical location)
+    nearby_venues = find_nearby_venues_postgis(lat, lng, city_id, 3000)
 
     # Filter by distance-based similarity threshold and return closest match
     nearby_venues
@@ -175,16 +201,16 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
 
   ## Distance Tiers
   - < 50m: 0.0 (same location = same venue, coordinates authoritative)
-  - 50-100m: 0.3 (very close = low similarity OK)
-  - 100-200m: 0.6 (nearby = moderate similarity required)
-  - > 200m: 0.8 (distant = high similarity required)
+  - 50-100m: 0.4 (very close = low similarity OK)
+  - 100-200m: 0.5 (nearby = moderate similarity required)
+  - > 200m: 0.6 (distant = high similarity required)
 
   ## Examples
 
       get_similarity_threshold_for_distance(0)     # => 0.0
-      get_similarity_threshold_for_distance(75)    # => 0.3
-      get_similarity_threshold_for_distance(150)   # => 0.6
-      get_similarity_threshold_for_distance(300)   # => 0.8
+      get_similarity_threshold_for_distance(75)    # => 0.4
+      get_similarity_threshold_for_distance(150)   # => 0.5
+      get_similarity_threshold_for_distance(300)   # => 0.6
   """
   def get_similarity_threshold_for_distance(distance_meters) do
     distance_tight = get_config(:distance_tight, @distance_tight)
@@ -205,23 +231,28 @@ defmodule EventasaurusApp.Venues.DuplicateDetection do
   end
 
   @doc """
-  Calculates name similarity between two venue names using PostgreSQL trigram similarity.
+  Calculates name similarity between two venue names using token-based matching.
 
-  Returns a value between 0.0 (completely different) and 1.0 (identical).
+  Uses `VenueNameMatcher` with Jaccard similarity:
+  1. Extracts significant tokens (removes stop words)
+  2. Calculates token overlap ratio
+  3. Adds +20% bonus for shared location tokens
+  4. Returns value between 0.0 (completely different) and 1.0 (identical)
 
   ## Examples
 
-      calculate_name_similarity("The Red Lion", "Red Lion Pub")
-      # Returns: ~0.65
+      calculate_name_similarity("Cinema City Kazimierz", "Kraków - Galeria Kazimierz")
+      # Returns: 1.0 (100% match - shared "kazimierz" token)
+
+      calculate_name_similarity("Cinema City Bonarka", "Kraków - Bonarka")
+      # Returns: 1.0 (100% match - shared "bonarka" token)
+
+      calculate_name_similarity("Cinema City Kazimierz", "Nalej Se")
+      # Returns: 0.0 (0% match - no shared tokens)
   """
   def calculate_name_similarity(name1, name2)
       when is_binary(name1) and is_binary(name2) do
-    query = "SELECT similarity($1, $2) as score"
-
-    case Repo.query(query, [name1, name2]) do
-      {:ok, %{rows: [[score]]}} -> score
-      {:error, _} -> 0.0
-    end
+    VenueNameMatcher.similarity_score(name1, name2)
   end
 
   # Get configuration value from environment or use default
