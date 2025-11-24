@@ -158,7 +158,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           similarity = VenueNameMatcher.similarity_score(venue.name, clean_name)
           {venue, similarity}
         end)
-        |> Enum.filter(fn {_venue, similarity} -> similarity >= @postgres_similarity_threshold end)
+        |> Enum.filter(fn {_venue, similarity} ->
+          similarity >= @postgres_similarity_threshold
+        end)
         |> Enum.max_by(fn {_venue, similarity} -> similarity end, fn -> nil end)
 
       case best_match do

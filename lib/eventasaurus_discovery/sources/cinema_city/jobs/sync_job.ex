@@ -97,7 +97,13 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch cinema list: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Failed to fetch cinema list: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Failed to fetch cinema list: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

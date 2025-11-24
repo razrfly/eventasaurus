@@ -12,7 +12,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
   use Oban.Worker,
     queue: :scraper,
-    max_attempts: 5  # Increased from 3 to reduce permanent failures due to race conditions (Drop Point 4 fix)
+    # Increased from 3 to reduce permanent failures due to race conditions (Drop Point 4 fix)
+    max_attempts: 5
 
   require Logger
 

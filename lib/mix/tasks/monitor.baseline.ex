@@ -248,7 +248,8 @@ defmodule Mix.Tasks.Monitor.Baseline do
   end
 
   defp display_baseline(baseline, source) do
-    source_display = source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display =
+      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
 
     IO.puts("\n" <> IO.ANSI.cyan() <> "📊 #{source_display} Scraper Baseline" <> IO.ANSI.reset())
     IO.puts(String.duplicate("=", 64))
@@ -270,11 +271,17 @@ defmodule Mix.Tasks.Monitor.Baseline do
         IO.ANSI.reset()
     )
 
-    IO.puts("├─ Completed: #{baseline.completed} (#{format_percent(baseline.completed / baseline.sample_size * 100)})")
+    IO.puts(
+      "├─ Completed: #{baseline.completed} (#{format_percent(baseline.completed / baseline.sample_size * 100)})"
+    )
 
-    IO.puts("├─ Failed: #{baseline.failed} (#{format_percent(baseline.failed / baseline.sample_size * 100)})")
+    IO.puts(
+      "├─ Failed: #{baseline.failed} (#{format_percent(baseline.failed / baseline.sample_size * 100)})"
+    )
 
-    IO.puts("└─ Cancelled: #{baseline.cancelled} (#{format_percent(baseline.cancelled / baseline.sample_size * 100)})")
+    IO.puts(
+      "└─ Cancelled: #{baseline.cancelled} (#{format_percent(baseline.cancelled / baseline.sample_size * 100)})"
+    )
 
     # Error distribution
     if length(baseline.error_categories) > 0 do
@@ -287,9 +294,7 @@ defmodule Mix.Tasks.Monitor.Baseline do
       |> Enum.each(fn {{category, count}, index} ->
         prefix = if index == length(baseline.error_categories) - 1, do: "└─", else: "├─"
 
-        IO.puts(
-          "#{prefix} #{category}: #{count} (#{format_percent(count / total_errors * 100)})"
-        )
+        IO.puts("#{prefix} #{category}: #{count} (#{format_percent(count / total_errors * 100)})")
       end)
     end
 

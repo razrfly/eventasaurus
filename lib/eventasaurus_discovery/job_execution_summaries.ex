@@ -450,7 +450,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       # Calculate distinct job types for this scraper
       job_type_count =
         executions
-        |> Enum.map(&(&1.worker))
+        |> Enum.map(& &1.worker)
         |> Enum.uniq()
         |> length()
 
@@ -925,7 +925,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     from(s in JobExecutionSummary,
       where: s.attempted_at >= ^cutoff,
       select: %{
-        time_bucket: selected_as(fragment("date_trunc(?, ?)", ^time_trunc, s.attempted_at), :time_bucket),
+        time_bucket:
+          selected_as(fragment("date_trunc(?, ?)", ^time_trunc, s.attempted_at), :time_bucket),
         total: count(s.id),
         completed: count(s.id) |> filter(s.state == "completed"),
         failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
@@ -968,7 +969,10 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       where: s.attempted_at >= ^cutoff,
       where: s.state in ["discarded", "cancelled"],
       where: fragment("? ->> ? IS NOT NULL", s.results, "error_message"),
-      group_by: [fragment("? ->> ?", s.results, "error_message"), fragment("? ->> ?", s.results, "error_category")],
+      group_by: [
+        fragment("? ->> ?", s.results, "error_message"),
+        fragment("? ->> ?", s.results, "error_category")
+      ],
       select: %{
         error_message: fragment("? ->> ?", s.results, "error_message"),
         error_category: fragment("? ->> ?", s.results, "error_category"),

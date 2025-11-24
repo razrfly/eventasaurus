@@ -127,7 +127,13 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.IndexPageJob do
     else
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch fresh nonce: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Failed to fetch nonce: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Failed to fetch nonce: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

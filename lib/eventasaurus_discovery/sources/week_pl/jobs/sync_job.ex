@@ -152,7 +152,13 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
          }}
       else
         Logger.error("❌ [WeekPl.SyncJob] Failed to queue #{length(failed)} region jobs")
-        MetricsTracker.record_failure(job, "Failed to queue #{length(failed)}/#{length(results)} region jobs", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Failed to queue #{length(failed)}/#{length(results)} region jobs",
+          external_id
+        )
+
         {:error, "Failed to queue some region jobs"}
       end
     else

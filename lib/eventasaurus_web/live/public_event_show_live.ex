@@ -64,6 +64,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:matching_occurrences, [])
       |> assign(:is_movie_event, false)
       |> assign(:is_venue_event, false)
+      |> assign(:filter_preview_count, nil)
 
     {:ok, socket}
   end
@@ -528,7 +529,67 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         _ -> :selection
       end
 
-    {:noreply, assign(socket, :planning_mode, planning_mode)}
+    {:noreply,
+     socket
+     |> assign(:planning_mode, planning_mode)
+     |> assign(:filter_preview_count, nil)}
+  end
+
+  @impl true
+  def handle_event("preview_filter_results", params, socket) do
+    IO.inspect(params, label: "PREVIEW FILTER PARAMS")
+
+    # Parse selected dates and convert to date range (same as apply_flexible_filters)
+    selected_dates = Map.get(params, "selected_dates", [])
+
+    {date_from, date_to} =
+      if length(selected_dates) > 0 do
+        dates = Enum.map(selected_dates, &Date.from_iso8601!/1) |> Enum.sort(Date)
+        {List.first(dates), List.last(dates)}
+      else
+        # Default to next 7 days if no dates selected
+        {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+      end
+
+    # Parse filter criteria from form
+    # Handle empty limit string to prevent String.to_integer("") crash
+    limit =
+      case params["limit"] do
+        nil -> 10
+        "" -> 10
+        value -> String.to_integer(value)
+      end
+
+    filter_criteria = %{
+      selected_dates: selected_dates,
+      date_from: Date.to_iso8601(date_from),
+      date_to: Date.to_iso8601(date_to),
+      time_preferences: Map.get(params, "time_preferences", []),
+      meal_periods: Map.get(params, "meal_periods", []),
+      limit: limit
+    }
+
+    # Query for matching occurrences count only (not full data)
+    event = socket.assigns.event
+    movie = get_movie_data(event)
+    venue = get_venue_data(event)
+
+    count =
+      cond do
+        movie ->
+          query_movie_occurrences(movie.id, filter_criteria) |> length()
+
+        venue && !movie ->
+          query_venue_occurrences(venue.id, filter_criteria) |> length()
+
+        true ->
+          0
+      end
+
+    {:noreply,
+     socket
+     |> assign(:filter_criteria, filter_criteria)
+     |> assign(:filter_preview_count, count)}
   end
 
   @impl true
@@ -546,13 +607,21 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       end
 
     # Parse filter criteria from form
+    # Handle empty limit string to prevent String.to_integer("") crash
+    limit =
+      case params["limit"] do
+        nil -> 10
+        "" -> 10
+        value -> String.to_integer(value)
+      end
+
     filter_criteria = %{
       selected_dates: selected_dates,
       date_from: Date.to_iso8601(date_from),
       date_to: Date.to_iso8601(date_to),
       time_preferences: Map.get(params, "time_preferences", []),
       meal_periods: Map.get(params, "meal_periods", []),
-      limit: String.to_integer(params["limit"] || "10")
+      limit: limit
     }
 
     # Query for matching occurrences
@@ -747,7 +816,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
        |> assign(:show_plan_with_friends_modal, false)
        |> put_flash(
          :error,
-         gettext("This event is not a movie screening. Flexible planning is only available for movies.")
+         gettext(
+           "This event is not a movie screening. Flexible planning is only available for movies."
+         )
        )}
     else
       # Get friend IDs from selected users
@@ -770,33 +841,33 @@ defmodule EventasaurusWeb.PublicEventShowLive do
              event_title: "#{movie.title} - Group Planning",
              poll_title: "Which showtime works best?"
            ) do
-      {:ok, result} ->
-        # Send email invitations to non-user emails
-        if socket.assigns.selected_emails != [] do
-          # Note: Would need to implement email invitation logic for polls
-          # For now, just log that we would send emails
-          require Logger
+        {:ok, result} ->
+          # Send email invitations to non-user emails
+          if socket.assigns.selected_emails != [] do
+            # Note: Would need to implement email invitation logic for polls
+            # For now, just log that we would send emails
+            require Logger
 
-          Logger.info(
-            "Would send poll invitations to emails: #{inspect(socket.assigns.selected_emails)}"
-          )
-        end
+            Logger.info(
+              "Would send poll invitations to emails: #{inspect(socket.assigns.selected_emails)}"
+            )
+          end
 
-        {:noreply,
-         socket
-         |> put_flash(
-           :info,
-           gettext("Poll created! Your friends can now vote on their preferred showtime.")
-         )
-         |> redirect(to: ~p"/events/#{result.private_event.slug}")}
+          {:noreply,
+           socket
+           |> put_flash(
+             :info,
+             gettext("Poll created! Your friends can now vote on their preferred showtime.")
+           )
+           |> redirect(to: ~p"/events/#{result.private_event.slug}")}
 
-      {:error, :no_occurrences_found} ->
-        {:noreply,
-         socket
-         |> put_flash(
-           :error,
-           gettext("No showtimes found matching your filters. Please try different criteria.")
-         )}
+        {:error, :no_occurrences_found} ->
+          {:noreply,
+           socket
+           |> put_flash(
+             :error,
+             gettext("No showtimes found matching your filters. Please try different criteria.")
+           )}
 
         {:error, reason} ->
           require Logger
@@ -1459,6 +1530,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           planning_mode={@planning_mode}
           filter_criteria={@filter_criteria}
           matching_occurrences={@matching_occurrences}
+          filter_preview_count={@filter_preview_count}
           is_movie_event={@is_movie_event}
           is_venue_event={@is_venue_event}
         />

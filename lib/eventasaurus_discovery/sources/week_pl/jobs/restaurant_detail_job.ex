@@ -43,14 +43,16 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{
-        args:
-          %{
-            "source_id" => source_id,
-            "restaurant_slug" => slug
-          } = args,
-        meta: meta
-      } = job) do
+  def perform(
+        %Oban.Job{
+          args:
+            %{
+              "source_id" => source_id,
+              "restaurant_slug" => slug
+            } = args,
+          meta: meta
+        } = job
+      ) do
     external_id = "week_pl_restaurant_#{slug}"
     Logger.info("🍽️  [WeekPl.DetailJob] Processing restaurant: #{args["restaurant_name"]}")
 
@@ -74,7 +76,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
 
       {:ok, %{"status" => "matched", "items_processed" => 0}} ->
         # Silent failure - found restaurant but created 0 events
-        MetricsTracker.record_failure(job, "Silent failure: Found restaurant but created 0 events", external_id)
+        MetricsTracker.record_failure(
+          job,
+          "Silent failure: Found restaurant but created 0 events",
+          external_id
+        )
+
         result
 
       # Transient errors - allow Oban to retry (don't track metrics yet)

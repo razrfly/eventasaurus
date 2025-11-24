@@ -58,7 +58,12 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.IndexPageJob do
           success
 
         {:error, reason} = error ->
-          MetricsTracker.record_failure(job, "Page processing failed: #{inspect(reason)}", external_id)
+          MetricsTracker.record_failure(
+            job,
+            "Page processing failed: #{inspect(reason)}",
+            external_id
+          )
+
           error
       end
     else

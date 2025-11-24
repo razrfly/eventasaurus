@@ -136,12 +136,23 @@ defmodule Mix.Tasks.Monitor.Jobs do
 
         state_str ->
           case state_str do
-            "success" -> Keyword.put(parsed, :state, :success)
-            "failure" -> Keyword.put(parsed, :state, :failure)
-            "cancelled" -> Keyword.put(parsed, :state, :cancelled)
-            "discarded" -> Keyword.put(parsed, :state, :discarded)
+            "success" ->
+              Keyword.put(parsed, :state, :success)
+
+            "failure" ->
+              Keyword.put(parsed, :state, :failure)
+
+            "cancelled" ->
+              Keyword.put(parsed, :state, :cancelled)
+
+            "discarded" ->
+              Keyword.put(parsed, :state, :discarded)
+
             other ->
-              Mix.shell().error("Invalid state: #{other}. Must be one of: success, failure, cancelled, discarded")
+              Mix.shell().error(
+                "Invalid state: #{other}. Must be one of: success, failure, cancelled, discarded"
+              )
+
               Mix.shell().info("Ignoring --state filter")
               parsed
           end

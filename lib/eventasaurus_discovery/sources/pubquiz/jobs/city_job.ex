@@ -50,7 +50,13 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.CityJob do
     else
       {:error, reason} = error ->
         Logger.error("❌ City job failed for #{city_name}: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "City job failed for #{city_name}: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "City job failed for #{city_name}: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

@@ -81,11 +81,13 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob do
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to enqueue Question One index page job: #{inspect(reason)}")
+
         MetricsTracker.record_failure(
           job,
           "Enqueue failed: #{inspect(reason)}",
           external_id
         )
+
         error
     end
   end

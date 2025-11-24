@@ -188,8 +188,12 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
         on_timeout: :kill_task
       )
       |> Enum.flat_map(fn
-        {:ok, {:ok, showtimes}} -> showtimes
-        {:ok, {:error, _}} -> []
+        {:ok, {:ok, showtimes}} ->
+          showtimes
+
+        {:ok, {:error, _}} ->
+          []
+
         {:exit, reason} ->
           Logger.warning("   ⚠️  Task exited: #{inspect(reason)}")
           []

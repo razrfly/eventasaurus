@@ -102,7 +102,13 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
 
               {:error, reason} = error ->
                 Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
-                MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
+
+                MetricsTracker.record_failure(
+                  job,
+                  "Failed to enqueue index job: #{inspect(reason)}",
+                  external_id
+                )
+
                 error
             end
 
@@ -113,13 +119,25 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
 
           {:error, reason} = error ->
             Logger.error("❌ Failed to parse JSON response: #{inspect(reason)}")
-            MetricsTracker.record_failure(job, "Failed to parse JSON: #{inspect(reason)}", external_id)
+
+            MetricsTracker.record_failure(
+              job,
+              "Failed to parse JSON: #{inspect(reason)}",
+              external_id
+            )
+
             error
         end
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch locations from API: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Failed to fetch locations: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Failed to fetch locations: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

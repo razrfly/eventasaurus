@@ -251,12 +251,13 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.VenueDetailJob do
   defp extract_external_id(url) do
     # Create a stable ID from the URL
     # Format: pubquiz_venue_warszawa_centrum
-    venue_id = url
-    |> String.trim_trailing("/")
-    |> String.split("/")
-    |> Enum.take(-2)
-    |> Enum.join("_")
-    |> String.replace("-", "_")
+    venue_id =
+      url
+      |> String.trim_trailing("/")
+      |> String.split("/")
+      |> Enum.take(-2)
+      |> Enum.join("_")
+      |> String.replace("-", "_")
 
     "pubquiz_venue_#{venue_id}"
   end
