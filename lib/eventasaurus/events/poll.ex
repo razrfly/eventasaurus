@@ -327,7 +327,7 @@ defmodule EventasaurusApp.Events.Poll do
   Get all supported poll types.
   """
   def poll_types,
-    do: ~w(movie places custom time general venue date_selection music_track cocktail)
+    do: ~w(movie places custom time general venue date_selection music_track cocktail occurrence_selection)
 
   @doc """
   Get all supported voting systems.
@@ -358,6 +358,7 @@ defmodule EventasaurusApp.Events.Poll do
   def poll_type_display("date_selection"), do: "Date Selection"
   def poll_type_display("music_track"), do: "Music"
   def poll_type_display("cocktail"), do: "Cocktails"
+  def poll_type_display("occurrence_selection"), do: "Occurrence Selection"
 
   def poll_type_display(type) when is_binary(type),
     do: type |> String.replace("_", " ") |> String.capitalize()

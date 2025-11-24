@@ -58,6 +58,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:modal_organizer, nil)
       |> assign(:nearby_events, [])
       |> assign(:refreshing_availability, false)
+      # Flexible planning assigns
+      |> assign(:planning_mode, :selection)
+      |> assign(:filter_criteria, %{})
+      |> assign(:matching_occurrences, [])
+      |> assign(:is_movie_event, false)
+      |> assign(:is_venue_event, false)
 
     {:ok, socket}
   end
@@ -480,10 +486,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         # Get authenticated user for the modal
         user = get_authenticated_user(socket)
 
+        # Detect event type for flexible planning
+        event = socket.assigns.event
+        is_movie = is_movie_screening?(event)
+        is_venue = !is_nil(event.venue) && is_nil(get_movie_data(event))
+
         {:noreply,
          socket
          |> assign(:show_plan_with_friends_modal, true)
-         |> assign(:modal_organizer, user)}
+         |> assign(:modal_organizer, user)
+         |> assign(:is_movie_event, is_movie)
+         |> assign(:is_venue_event, is_venue)
+         |> assign(:planning_mode, :selection)}
     end
   end
 
@@ -496,7 +510,73 @@ defmodule EventasaurusWeb.PublicEventShowLive do
      |> assign(:selected_users, [])
      |> assign(:selected_emails, [])
      |> assign(:current_email_input, "")
-     |> assign(:bulk_email_input, "")}
+     |> assign(:bulk_email_input, "")
+     # Reset flexible planning state
+     |> assign(:planning_mode, :selection)
+     |> assign(:filter_criteria, %{})
+     |> assign(:matching_occurrences, [])}
+  end
+
+  @impl true
+  def handle_event("select_planning_mode", %{"mode" => mode}, socket) do
+    planning_mode =
+      case mode do
+        "quick" -> :quick
+        "flexible" -> :flexible_filters
+        "selection" -> :selection
+        "flexible_filters" -> :flexible_filters
+        _ -> :selection
+      end
+
+    {:noreply, assign(socket, :planning_mode, planning_mode)}
+  end
+
+  @impl true
+  def handle_event("apply_flexible_filters", params, socket) do
+    # Parse selected dates and convert to date range
+    selected_dates = Map.get(params, "selected_dates", [])
+
+    {date_from, date_to} =
+      if length(selected_dates) > 0 do
+        dates = Enum.map(selected_dates, &Date.from_iso8601!/1) |> Enum.sort(Date)
+        {List.first(dates), List.last(dates)}
+      else
+        # Default to next 7 days if no dates selected
+        {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+      end
+
+    # Parse filter criteria from form
+    filter_criteria = %{
+      selected_dates: selected_dates,
+      date_from: Date.to_iso8601(date_from),
+      date_to: Date.to_iso8601(date_to),
+      time_preferences: Map.get(params, "time_preferences", []),
+      meal_periods: Map.get(params, "meal_periods", []),
+      limit: String.to_integer(params["limit"] || "10")
+    }
+
+    # Query for matching occurrences
+    event = socket.assigns.event
+    movie = get_movie_data(event)
+    venue = get_venue_data(event)
+
+    matching_occurrences =
+      cond do
+        movie ->
+          query_movie_occurrences(movie.id, filter_criteria)
+
+        venue && !movie ->
+          query_venue_occurrences(venue.id, filter_criteria)
+
+        true ->
+          []
+      end
+
+    {:noreply,
+     socket
+     |> assign(:filter_criteria, filter_criteria)
+     |> assign(:matching_occurrences, matching_occurrences)
+     |> assign(:planning_mode, :flexible_review)}
   end
 
   @impl true
@@ -593,7 +673,21 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
+  def handle_event("submit_plan_with_friends", %{"mode" => mode}, socket) do
+    case mode do
+      "quick" -> handle_quick_plan_submit(socket)
+      "flexible" -> handle_flexible_plan_submit(socket)
+      _ -> handle_quick_plan_submit(socket)
+    end
+  end
+
+  @impl true
   def handle_event("submit_plan_with_friends", _params, socket) do
+    # Fallback for old submit events without mode parameter
+    handle_quick_plan_submit(socket)
+  end
+
+  defp handle_quick_plan_submit(socket) do
     case create_plan_from_public_event(socket) do
       {:ok, {:created, private_event}} ->
         # Send invitations to selected users and emails
@@ -636,6 +730,91 @@ defmodule EventasaurusWeb.PublicEventShowLive do
            :error,
            gettext("Sorry, there was an error creating your private event. Please try again.")
          )}
+    end
+  end
+
+  defp handle_flexible_plan_submit(socket) do
+    alias EventasaurusApp.Planning.OccurrencePlanningWorkflow
+
+    user = get_authenticated_user(socket)
+    event = socket.assigns.event
+    movie = get_movie_data(event)
+
+    # Ensure we have movie data
+    if is_nil(movie) do
+      {:noreply,
+       socket
+       |> assign(:show_plan_with_friends_modal, false)
+       |> put_flash(
+         :error,
+         gettext("This event is not a movie screening. Flexible planning is only available for movies.")
+       )}
+    else
+      # Get friend IDs from selected users
+      friend_ids = Enum.map(socket.assigns.selected_users, & &1.id)
+
+      # Convert filter criteria to workflow format
+      filter_criteria = %{
+        date_range: parse_date_range(socket.assigns.filter_criteria),
+        time_preferences: socket.assigns.filter_criteria[:time_preferences] || [],
+        limit: socket.assigns.filter_criteria[:limit] || 10
+      }
+
+      # Create flexible planning with poll
+      case OccurrencePlanningWorkflow.start_flexible_planning(
+             "movie",
+             movie.id,
+             user.id,
+             filter_criteria,
+             friend_ids,
+             event_title: "#{movie.title} - Group Planning",
+             poll_title: "Which showtime works best?"
+           ) do
+      {:ok, result} ->
+        # Send email invitations to non-user emails
+        if socket.assigns.selected_emails != [] do
+          # Note: Would need to implement email invitation logic for polls
+          # For now, just log that we would send emails
+          require Logger
+
+          Logger.info(
+            "Would send poll invitations to emails: #{inspect(socket.assigns.selected_emails)}"
+          )
+        end
+
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           gettext("Poll created! Your friends can now vote on their preferred showtime.")
+         )
+         |> redirect(to: ~p"/events/#{result.private_event.slug}")}
+
+      {:error, :no_occurrences_found} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :error,
+           gettext("No showtimes found matching your filters. Please try different criteria.")
+         )}
+
+        {:error, reason} ->
+          require Logger
+          Logger.error("Flexible planning failed: #{inspect(reason)}")
+
+          # Show detailed error in development
+          error_message =
+            if Mix.env() == :dev do
+              "Error creating poll: #{inspect(reason)}"
+            else
+              gettext("Sorry, there was an error creating your poll. Please try again.")
+            end
+
+          {:noreply,
+           socket
+           |> assign(:show_plan_with_friends_modal, false)
+           |> put_flash(:error, error_message)}
+      end
     end
   end
 
@@ -740,6 +919,71 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       # Use invitation mode for public plan modal
       mode: :invitation
     )
+  end
+
+  # Removed duplicate get_movie_data/1 - see line 1861 for the canonical version
+
+  defp query_movie_occurrences(movie_id, filter_criteria) do
+    alias EventasaurusApp.Planning.OccurrenceQuery
+
+    # Convert filter criteria to format expected by OccurrenceQuery
+    query_criteria = %{
+      date_range: parse_date_range(filter_criteria),
+      time_preferences: Map.get(filter_criteria, :time_preferences, []),
+      limit: Map.get(filter_criteria, :limit, 10)
+    }
+
+    case OccurrenceQuery.find_movie_occurrences(movie_id, query_criteria) do
+      {:ok, occurrences} -> occurrences
+      {:error, _reason} -> []
+    end
+  end
+
+  defp get_venue_data(event) do
+    # Extract venue data from event's venue association
+    case event.venue do
+      %{id: _id} = venue ->
+        venue
+
+      _ ->
+        nil
+    end
+  end
+
+  defp query_venue_occurrences(venue_id, filter_criteria) do
+    alias EventasaurusApp.Planning.OccurrenceQuery
+
+    # Convert filter criteria to format expected by OccurrenceQuery
+    query_criteria = %{
+      date_range: parse_date_range(filter_criteria),
+      meal_periods: Map.get(filter_criteria, :meal_periods, []),
+      limit: Map.get(filter_criteria, :limit, 10)
+    }
+
+    case OccurrenceQuery.find_venue_occurrences(venue_id, query_criteria) do
+      {:ok, occurrences} -> occurrences
+      {:error, _reason} -> []
+    end
+  end
+
+  defp parse_date_range(%{date_from: date_from_str, date_to: date_to_str})
+       when is_binary(date_from_str) and is_binary(date_to_str) do
+    with {:ok, date_from} <- Date.from_iso8601(date_from_str),
+         {:ok, date_to} <- Date.from_iso8601(date_to_str) do
+      # Return map format for JSON compatibility
+      %{start: date_from, end: date_to}
+    else
+      _ ->
+        # Fallback to default date range (today + 7 days)
+        today = Date.utc_today()
+        %{start: today, end: Date.add(today, 7)}
+    end
+  end
+
+  defp parse_date_range(_filter_criteria) do
+    # Fallback for missing or invalid date range
+    today = Date.utc_today()
+    %{start: today, end: Date.add(today, 7)}
   end
 
   @impl true
@@ -1212,6 +1456,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           organizer={@modal_organizer}
           on_close="close_plan_modal"
           on_submit="submit_plan_with_friends"
+          planning_mode={@planning_mode}
+          filter_criteria={@filter_criteria}
+          matching_occurrences={@matching_occurrences}
+          is_movie_event={@is_movie_event}
+          is_venue_event={@is_venue_event}
         />
       <% end %>
     </div>
