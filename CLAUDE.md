@@ -102,7 +102,59 @@ mix compile --warnings-as-errors  # Strict compilation
 
 Eventasaurus includes comprehensive monitoring for all scrapers. This system tracks performance, errors, health, and job chains.
 
-### Mix Tasks (CLI Interface)
+### Job Execution Monitoring (mix monitor.jobs)
+
+Real-time job execution monitoring with formatted CLI output:
+
+```bash
+# List recent executions (default: 50)
+mix monitor.jobs list
+mix monitor.jobs list --limit 100
+
+# Filter by state
+mix monitor.jobs list --state failure
+mix monitor.jobs list --state success
+
+# Filter by source
+mix monitor.jobs list --source week_pl
+mix monitor.jobs list --source bandsintown --limit 20
+
+# Show recent failures with error details
+mix monitor.jobs failures
+mix monitor.jobs failures --limit 50
+mix monitor.jobs failures --source karnet
+
+# Show execution statistics
+mix monitor.jobs stats                    # Last 24 hours
+mix monitor.jobs stats --hours 168        # Last week
+mix monitor.jobs stats --source week_pl   # Source-specific
+
+# Filter by worker type
+mix monitor.jobs worker SyncJob
+mix monitor.jobs worker EventDetailJob --state failure
+```
+
+**Output Format:**
+```
+Recent Job Executions:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Source               Worker               State      Duration   Started At
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+week_pl              SyncJob              success    1.2s       2025-01-23 10:30:00
+resident_advisor     SyncJob              failure    0.5s       2025-01-23 10:29:00
+pubquiz              RegionSyncJob        success    2.3s       2025-01-23 10:28:00
+
+Summary:
+  Total: 50
+  Success: 45
+  Failures: 5
+  Success Rate: 90.0%
+  Avg Duration: 1.45s
+```
+
+### Performance & Error Analysis (mix monitor.*)
+
+Advanced monitoring tools for baseline tracking and error analysis:
 
 ```bash
 # Create performance baseline

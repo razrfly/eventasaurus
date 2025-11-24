@@ -6,14 +6,14 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexPageJob do
   1. Receive events array from SyncJob
   2. Filter using EventFreshnessChecker (skip fresh events within 7 days)
   3. Apply limit if provided (for testing)
-  4. Enqueue DetailJob for each event
-  5. DetailJob will fetch detail page and process venue/event data
+  4. Enqueue EventDetailJob for each event
+  5. EventDetailJob will fetch detail page and process venue/event data
 
   ## Two-Stage Architecture
   Unlike Inquizition, Speed Quizzing requires detail page scraping:
   - Index provides basic event list (id, name, date, time)
   - Detail pages provide venue, performer, and full event data
-  - DetailJob handles venue processing and event transformation
+  - EventDetailJob handles venue processing and event transformation
   - EventFreshnessChecker provides 80-90% API call reduction
   """
 
@@ -83,7 +83,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexPageJob do
     end
   end
 
-  # Enqueue a DetailJob for each event
+  # Enqueue an EventDetailJob for each event
   defp enqueue_detail_jobs(events, source_id) do
     jobs =
       Enum.map(events, fn event ->
@@ -95,7 +95,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexPageJob do
           "event_id" => event_id,
           "event_data" => event
         }
-        |> SpeedQuizzing.Jobs.DetailJob.new()
+        |> SpeedQuizzing.Jobs.EventDetailJob.new()
       end)
 
     # Insert all jobs

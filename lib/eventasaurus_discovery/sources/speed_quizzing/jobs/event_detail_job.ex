@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.DetailJob do
+defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.EventDetailJob do
   @moduledoc """
   Oban job for fetching and processing individual Speed Quizzing event details with host data in metadata.
 

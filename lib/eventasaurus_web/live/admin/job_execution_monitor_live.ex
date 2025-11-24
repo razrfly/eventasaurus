@@ -217,11 +217,22 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
     |> assign(:total_errors, total_errors)
   end
 
-  # Get worker display name (short version)
+  # Get worker display name with source context
+  # Format: "source → JobType" (e.g., "week_pl → SyncJob")
   defp worker_name(worker) do
-    worker
-    |> String.split(".")
-    |> List.last()
+    parts = String.split(worker, ".")
+
+    case parts do
+      # Standard format: EventasaurusDiscovery.Sources.{Source}.Jobs.{JobType}
+      parts when length(parts) >= 5 ->
+        source = parts |> Enum.at(-3) |> Macro.underscore()
+        job = List.last(parts)
+        "#{source} → #{job}"
+
+      # Fallback: just show job name if format doesn't match
+      _ ->
+        List.last(parts)
+    end
   end
 
   # Get badge class for job state
