@@ -6,7 +6,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
-  alias EventasaurusDiscovery.Locations.{City, Country}
+  alias EventasaurusDiscovery.Locations.{City, Country, VenueNameMatcher}
   import Ecto.Query
   require Logger
 
@@ -67,6 +67,17 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
               ^lat_float,
               ^@proximity_threshold_meters
             ),
+          select: %{
+            venue: v,
+            distance:
+              fragment(
+                "ST_Distance(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)",
+                v.longitude,
+                v.latitude,
+                ^lng_float,
+                ^lat_float
+              )
+          },
           order_by:
             fragment(
               "ST_Distance(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)",
@@ -74,22 +85,38 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
               v.latitude,
               ^lng_float,
               ^lat_float
-            ),
-          limit: 1
+            )
         )
 
-      case Repo.one(query) do
+      # Get all venues within proximity threshold
+      candidates = Repo.all(query)
+
+      # Filter candidates using name similarity matching
+      matching_venue =
+        Enum.find(candidates, fn %{venue: venue, distance: distance} ->
+          distance_meters = Decimal.to_float(distance)
+          VenueNameMatcher.should_match?(name, venue.name, distance_meters)
+        end)
+
+      case matching_venue do
         nil ->
-          Logger.debug(
-            "No venue found within #{@proximity_threshold_meters}m of (#{lat}, #{lng})"
-          )
+          if Enum.empty?(candidates) do
+            Logger.debug(
+              "No venue found within #{@proximity_threshold_meters}m of (#{lat}, #{lng})"
+            )
+          else
+            Logger.debug(
+              "Found #{length(candidates)} venue(s) within #{@proximity_threshold_meters}m but none passed name similarity check for '#{name}'"
+            )
+          end
 
           nil
 
-        venue ->
-          # ALWAYS accept coordinate matches! Coordinates are authoritative.
+        %{venue: venue, distance: distance} ->
+          distance_meters = Decimal.to_float(distance)
+
           Logger.info(
-            "📍 Found venue by proximity (#{@proximity_threshold_meters}m): '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at (#{lat}, #{lng})"
+            "📍 Found venue by proximity + name match: '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at #{distance_meters}m"
           )
 
           # Decide if we should update the name based on quality

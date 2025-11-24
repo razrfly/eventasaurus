@@ -62,8 +62,8 @@ defmodule EventasaurusWeb.Router do
 
       # Job Execution Monitor (dev - no auth)
       live "/job-executions", Admin.JobExecutionMonitorLive
-      live "/job-executions/:worker", Admin.JobTypeMonitorLive
       live "/job-executions/sources/:source_slug", Admin.SourcePipelineMonitorLive
+      live "/job-executions/:worker", Admin.JobTypeMonitorLive
 
       # Error Trends & Analysis (dev - no auth)
       live "/error-trends", Admin.ErrorTrendsLive
@@ -169,8 +169,8 @@ defmodule EventasaurusWeb.Router do
 
       # Job Execution Monitor with admin authentication
       live "/job-executions", EventasaurusWeb.Admin.JobExecutionMonitorLive
-      live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
       live "/job-executions/sources/:source_slug", EventasaurusWeb.Admin.SourcePipelineMonitorLive
+      live "/job-executions/:worker", EventasaurusWeb.Admin.JobTypeMonitorLive
 
       # Error Trends & Analysis with admin authentication
       live "/error-trends", EventasaurusWeb.Admin.ErrorTrendsLive
