@@ -135,7 +135,7 @@ mix monitor.jobs worker EventDetailJob --state failure
 ```
 
 **Output Format:**
-```
+```text
 Recent Job Executions:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Source               Worker               State      Duration   Started At

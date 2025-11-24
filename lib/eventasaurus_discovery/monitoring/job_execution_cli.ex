@@ -105,12 +105,8 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
         order_by: [desc: j.inserted_at],
         limit: ^limit
 
-    query =
-      if source do
-        from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{source}%")
-      else
-        query
-      end
+    # Use apply_filters for consistent filtering with proper PascalCase conversion
+    query = apply_filters(query, nil, nil, source)
 
     failures = Repo.all(query)
 
@@ -137,7 +133,9 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp filter_by_worker(query, nil), do: query
 
   defp filter_by_worker(query, worker) do
-    from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{worker}%")
+    # Escape SQL wildcard characters (% and _) to prevent injection
+    pattern = escape_sql_wildcards(worker)
+    from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{pattern}%")
   end
 
   defp filter_by_source(query, nil), do: query
@@ -146,7 +144,14 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     # Source name appears in worker like: EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob
     # Convert snake_case to PascalCase for matching
     pascal_source = Macro.camelize(source)
-    from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{pascal_source}%")
+    # Escape SQL wildcard characters (% and _) to prevent injection
+    pattern = escape_sql_wildcards(pascal_source)
+    from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{pattern}%")
+  end
+
+  # Escape SQL wildcard characters to prevent injection
+  defp escape_sql_wildcards(string) do
+    String.replace(string, ~r/[%_]/, fn char -> "\\" <> char end)
   end
 
   # Formatting Functions
