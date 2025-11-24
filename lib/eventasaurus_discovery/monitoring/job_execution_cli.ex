@@ -135,7 +135,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp filter_by_worker(query, worker) do
     # Escape SQL wildcard characters (% and _) to prevent injection
     pattern = escape_sql_wildcards(worker)
-    from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{pattern}%")
+    from j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%")
   end
 
   defp filter_by_source(query, nil), do: query
@@ -146,7 +146,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     pascal_source = Macro.camelize(source)
     # Escape SQL wildcard characters (% and _) to prevent injection
     pattern = escape_sql_wildcards(pascal_source)
-    from j in query, where: fragment("? LIKE ?", j.worker, ^"%#{pattern}%")
+    from j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%")
   end
 
   # Escape SQL wildcard characters to prevent injection
