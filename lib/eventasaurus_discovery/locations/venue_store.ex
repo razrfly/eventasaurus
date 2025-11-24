@@ -94,8 +94,13 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
       # Filter candidates using name similarity matching
       matching_venue =
         Enum.find(candidates, fn %{venue: venue, distance: distance} ->
-          distance_meters = Decimal.to_float(distance)
-          VenueNameMatcher.should_match?(name, venue.name, distance_meters)
+          case to_float(distance) do
+            nil ->
+              false
+
+            distance_meters ->
+              VenueNameMatcher.should_match?(name, venue.name, distance_meters)
+          end
         end)
 
       case matching_venue do
@@ -113,7 +118,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
           nil
 
         %{venue: venue, distance: distance} ->
-          distance_meters = Decimal.to_float(distance)
+          distance_meters = to_float(distance)
 
           Logger.info(
             "📍 Found venue by proximity + name match: '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at #{distance_meters}m"
