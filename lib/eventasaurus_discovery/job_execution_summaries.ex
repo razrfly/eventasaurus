@@ -419,6 +419,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
   @doc """
   Gets metrics grouped by scraper name.
+
+  Now includes job_type_count to show how many distinct job types each scraper has.
   """
   def get_scraper_metrics(hours_back \\ 24) do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
@@ -445,16 +447,315 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
       success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
 
+      # Calculate distinct job types for this scraper
+      job_type_count =
+        executions
+        |> Enum.map(&(&1.worker))
+        |> Enum.uniq()
+        |> length()
+
+      # Get the most recent execution timestamp
+      last_run =
+        executions
+        |> Enum.map(&(&1.attempted_at))
+        |> Enum.max(DateTime)
+
       %{
         scraper_name: scraper_name,
         total_executions: total,
         completed: completed,
         failed: failed,
         success_rate: success_rate,
-        avg_duration_ms: Float.round(avg_duration, 2)
+        avg_duration_ms: Float.round(avg_duration, 2),
+        job_type_count: job_type_count,
+        last_run: last_run
       }
     end)
     |> Enum.sort_by(& &1.total_executions, :desc)
+  end
+
+  @doc """
+  Gets pipeline metrics for a specific source, grouped by job type.
+
+  Returns a list of maps, each containing metrics for one stage in the pipeline.
+
+  ## Examples
+
+      # Get Cinema City pipeline metrics for last 24 hours
+      JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
+
+  Returns:
+      [
+        %{
+          worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
+          job_type: "SyncJob",
+          total_runs: 48,
+          completed: 48,
+          failed: 0,
+          success_rate: 100.0,
+          avg_duration_ms: 2100.5,
+          last_run: ~U[2025-01-23 10:45:00Z]
+        },
+        %{
+          worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+          job_type: "CinemaDateJob",
+          total_runs: 48,
+          completed: 36,
+          failed: 12,
+          success_rate: 75.0,
+          avg_duration_ms: 8500.2,
+          last_run: ~U[2025-01-23 10:45:00Z]
+        },
+        ...
+      ]
+  """
+  def get_source_pipeline_metrics(source_slug, hours_back \\ 24) do
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    # Get all workers for this source
+    from(s in JobExecutionSummary,
+      where: s.attempted_at >= ^cutoff,
+      group_by: s.worker,
+      select: %{
+        worker: s.worker,
+        total_runs: count(s.id),
+        completed: count(s.id) |> filter(s.state == "completed"),
+        failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+        avg_duration_ms: avg(s.duration_ms),
+        last_run: max(s.attempted_at)
+      }
+    )
+    |> Repo.all()
+    |> Enum.filter(fn worker_stats ->
+      # Only include workers matching the source_slug
+      extract_scraper_name(worker_stats.worker) == source_slug
+    end)
+    |> Enum.map(fn worker_stats ->
+      # Calculate success rate
+      success_rate =
+        if worker_stats.total_runs > 0 do
+          Float.round(worker_stats.completed / worker_stats.total_runs * 100, 2)
+        else
+          0.0
+        end
+
+      # Convert avg_duration_ms from Decimal to float
+      avg_duration =
+        if worker_stats.avg_duration_ms do
+          worker_stats.avg_duration_ms |> Decimal.to_float() |> Float.round(2)
+        else
+          0.0
+        end
+
+      # Extract job type from worker name (last part after .Jobs.)
+      job_type =
+        worker_stats.worker
+        |> String.split(".Jobs.")
+        |> List.last()
+
+      worker_stats
+      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:avg_duration_ms, avg_duration)
+      |> Map.put(:job_type, job_type)
+    end)
+    # Sort by typical pipeline order (SyncJob first, then others alphabetically)
+    |> Enum.sort_by(fn stats ->
+      case stats.job_type do
+        "SyncJob" -> "0_SyncJob"
+        other -> "1_#{other}"
+      end
+    end)
+  end
+
+  @doc """
+  Gets error breakdown by job type for a specific source.
+
+  Returns error categories attributed to specific pipeline stages.
+
+  ## Examples
+
+      # Get Cinema City error breakdown for last 24 hours
+      JobExecutionSummaries.get_source_error_breakdown("cinema_city", 24)
+
+  Returns:
+      [
+        %{
+          worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+          job_type: "CinemaDateJob",
+          error_category: "network_error",
+          count: 8,
+          example_error: "Request timeout after 30000ms",
+          first_seen: ~U[2025-01-23 08:00:00Z],
+          last_seen: ~U[2025-01-23 10:30:00Z]
+        },
+        %{
+          worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+          job_type: "CinemaDateJob",
+          error_category: "validation_error",
+          count: 3,
+          example_error: "Missing required field: title",
+          first_seen: ~U[2025-01-23 09:15:00Z],
+          last_seen: ~U[2025-01-23 10:15:00Z]
+        },
+        ...
+      ]
+  """
+  def get_source_error_breakdown(source_slug, hours_back \\ 24) do
+    cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
+
+    # Get all failed jobs grouped by worker and error_category
+    from(s in JobExecutionSummary,
+      where: s.attempted_at >= ^cutoff,
+      where: s.state in ["discarded", "cancelled"],
+      where: fragment("? ->> ? IS NOT NULL", s.results, "error_category"),
+      group_by: [s.worker, fragment("? ->> ?", s.results, "error_category")],
+      select: %{
+        worker: s.worker,
+        error_category: fragment("? ->> ?", s.results, "error_category"),
+        count: count(s.id),
+        example_error: fragment("(array_agg(? ->> ?))[1]", s.results, "error_message"),
+        first_seen: min(s.attempted_at),
+        last_seen: max(s.attempted_at)
+      },
+      order_by: [desc: count(s.id)]
+    )
+    |> Repo.all()
+    |> Enum.filter(fn error_stats ->
+      # Only include workers matching the source_slug
+      extract_scraper_name(error_stats.worker) == source_slug
+    end)
+    |> Enum.map(fn error_stats ->
+      # Extract job type from worker name
+      job_type =
+        error_stats.worker
+        |> String.split(".Jobs.")
+        |> List.last()
+
+      Map.put(error_stats, :job_type, job_type)
+    end)
+  end
+
+  @doc """
+  Gets recent pipeline executions for a source.
+
+  Returns complete pipeline runs showing all stages grouped by execution time.
+
+  ## Examples
+
+      # Get last 20 pipeline runs for Cinema City
+      JobExecutionSummaries.get_source_recent_pipeline_runs("cinema_city", 20)
+
+  Returns:
+      [
+        %{
+          started_at: ~U[2025-01-23 10:45:00Z],
+          total_duration_ms: 18200,
+          total_jobs: 4,
+          completed_jobs: 4,
+          failed_jobs: 0,
+          status: :success,
+          failed_stage: nil,
+          stages: [
+            %{job_type: "SyncJob", state: "completed", duration_ms: 2100, ...},
+            %{job_type: "CinemaDateJob", state: "completed", duration_ms: 8500, ...},
+            %{job_type: "MovieDetailJob", state: "completed", duration_ms: 5800, ...},
+            %{job_type: "ShowtimeProcessJob", state: "completed", duration_ms: 1800, ...}
+          ]
+        },
+        ...
+      ]
+  """
+  def get_source_recent_pipeline_runs(source_slug, limit \\ 20) do
+    # Get recent SyncJob executions as pipeline identifiers
+    # Each SyncJob run represents one complete pipeline execution
+    sync_job_pattern = "%.Sources." <> Macro.camelize(source_slug) <> ".Jobs.SyncJob"
+
+    sync_jobs =
+      from(s in JobExecutionSummary,
+        where: like(s.worker, ^sync_job_pattern),
+        order_by: [desc: s.attempted_at],
+        limit: ^limit,
+        select: %{
+          id: s.id,
+          job_id: s.job_id,
+          attempted_at: s.attempted_at,
+          state: s.state,
+          duration_ms: s.duration_ms
+        }
+      )
+      |> Repo.all()
+
+    # For each SyncJob, find all related jobs in the pipeline
+    # We'll look for jobs that started around the same time (within 5 minutes)
+    Enum.map(sync_jobs, fn sync_job ->
+      time_window_start = DateTime.add(sync_job.attempted_at, -60, :second)
+      time_window_end = DateTime.add(sync_job.attempted_at, 300, :second)
+
+      # Get all jobs for this source within the time window
+      pipeline_jobs =
+        from(s in JobExecutionSummary,
+          where: s.attempted_at >= ^time_window_start,
+          where: s.attempted_at <= ^time_window_end,
+          order_by: [asc: s.attempted_at],
+          select: s
+        )
+        |> Repo.all()
+        |> Enum.filter(fn job ->
+          extract_scraper_name(job.worker) == source_slug
+        end)
+
+      # Calculate pipeline statistics
+      total_jobs = length(pipeline_jobs)
+      completed_jobs = Enum.count(pipeline_jobs, &(&1.state == "completed"))
+      failed_jobs = Enum.count(pipeline_jobs, &(&1.state in ["discarded", "cancelled"]))
+
+      total_duration =
+        pipeline_jobs
+        |> Enum.map(& &1.duration_ms)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.sum()
+
+      # Determine overall status
+      status =
+        cond do
+          failed_jobs > 0 -> :failed
+          completed_jobs == total_jobs -> :success
+          true -> :partial
+        end
+
+      # Find first failed stage
+      failed_stage =
+        pipeline_jobs
+        |> Enum.find(&(&1.state in ["discarded", "cancelled"]))
+        |> case do
+          nil -> nil
+          job -> job.worker |> String.split(".Jobs.") |> List.last()
+        end
+
+      # Transform jobs into stages
+      stages =
+        Enum.map(pipeline_jobs, fn job ->
+          %{
+            job_type: job.worker |> String.split(".Jobs.") |> List.last(),
+            state: job.state,
+            duration_ms: job.duration_ms,
+            attempted_at: job.attempted_at,
+            error_category: get_in(job.results, ["error_category"]),
+            error_message: get_in(job.results, ["error_message"])
+          }
+        end)
+
+      %{
+        started_at: sync_job.attempted_at,
+        total_duration_ms: total_duration,
+        total_jobs: total_jobs,
+        completed_jobs: completed_jobs,
+        failed_jobs: failed_jobs,
+        status: status,
+        failed_stage: failed_stage,
+        stages: stages
+      }
+    end)
   end
 
   @doc """

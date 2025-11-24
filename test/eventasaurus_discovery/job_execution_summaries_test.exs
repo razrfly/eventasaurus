@@ -263,4 +263,356 @@ defmodule EventasaurusDiscovery.JobExecutionSummariesTest do
       assert hd(summaries).worker == "RecentWorker"
     end
   end
+
+  describe "get_source_pipeline_metrics/2" do
+    setup do
+      now = DateTime.utc_now()
+
+      # Create Cinema City pipeline jobs
+      JobExecutionSummary.record_execution(%{
+        job_id: 1,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 2100
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 2,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 8500
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 3,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 4,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 1800
+      })
+
+      # Create Kino Krakow job (different source)
+      JobExecutionSummary.record_execution(%{
+        job_id: 5,
+        worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 1500
+      })
+
+      :ok
+    end
+
+    test "returns metrics grouped by job type for a specific source" do
+      metrics = JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
+
+      assert length(metrics) == 3
+      assert Enum.all?(metrics, &(&1.worker =~ "CinemaCity"))
+    end
+
+    test "sorts SyncJob first, then others alphabetically" do
+      metrics = JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
+
+      assert hd(metrics).job_type == "SyncJob"
+    end
+
+    test "calculates success rate correctly per job type" do
+      metrics = JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
+
+      cinema_date_metrics = Enum.find(metrics, &(&1.job_type == "CinemaDateJob"))
+      assert cinema_date_metrics.total_runs == 2
+      assert cinema_date_metrics.completed == 1
+      assert cinema_date_metrics.failed == 1
+      assert cinema_date_metrics.success_rate == 50.0
+    end
+
+    test "does not include jobs from other sources" do
+      metrics = JobExecutionSummaries.get_source_pipeline_metrics("cinema_city", 24)
+
+      refute Enum.any?(metrics, &(&1.worker =~ "KinoKrakow"))
+    end
+  end
+
+  describe "get_source_error_breakdown/2" do
+    setup do
+      now = DateTime.utc_now()
+
+      # Create failed jobs with error categories
+      JobExecutionSummary.record_execution(%{
+        job_id: 1,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500,
+        results: %{
+          error_category: "network_error",
+          error_message: "Request timeout after 30000ms"
+        }
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 2,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500,
+        results: %{
+          error_category: "network_error",
+          error_message: "Connection refused"
+        }
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 3,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500,
+        results: %{
+          error_category: "validation_error",
+          error_message: "Missing required field: title"
+        }
+      })
+
+      # Different source
+      JobExecutionSummary.record_execution(%{
+        job_id: 4,
+        worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 500,
+        results: %{
+          error_category: "network_error",
+          error_message: "API failure"
+        }
+      })
+
+      :ok
+    end
+
+    test "returns error breakdown by job type and category" do
+      errors = JobExecutionSummaries.get_source_error_breakdown("cinema_city", 24)
+
+      assert length(errors) == 2
+      assert Enum.all?(errors, &(&1.worker =~ "CinemaCity"))
+    end
+
+    test "groups errors by job type and category" do
+      errors = JobExecutionSummaries.get_source_error_breakdown("cinema_city", 24)
+
+      cinema_date_network = Enum.find(errors, &(&1.job_type == "CinemaDateJob" && &1.error_category == "network_error"))
+      assert cinema_date_network.count == 2
+      assert cinema_date_network.example_error =~ ~r/(timeout|refused)/
+
+      movie_detail_validation = Enum.find(errors, &(&1.job_type == "MovieDetailJob" && &1.error_category == "validation_error"))
+      assert movie_detail_validation.count == 1
+    end
+
+    test "does not include errors from other sources" do
+      errors = JobExecutionSummaries.get_source_error_breakdown("cinema_city", 24)
+
+      refute Enum.any?(errors, &(&1.worker =~ "KinoKrakow"))
+    end
+  end
+
+  describe "get_source_recent_pipeline_runs/2" do
+    setup do
+      now = DateTime.utc_now()
+
+      # Create a successful pipeline run
+      JobExecutionSummary.record_execution(%{
+        job_id: 1,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 2100
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 2,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: DateTime.add(now, 2, :second),
+        completed_at: DateTime.add(now, 2, :second),
+        duration_ms: 8500
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 3,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: DateTime.add(now, 4, :second),
+        completed_at: DateTime.add(now, 4, :second),
+        duration_ms: 1800
+      })
+
+      # Create a failed pipeline run (1 hour ago)
+      one_hour_ago = DateTime.add(now, -3600, :second)
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 4,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: one_hour_ago,
+        completed_at: one_hour_ago,
+        duration_ms: 2100
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 5,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "discarded",
+        attempted_at: DateTime.add(one_hour_ago, 2, :second),
+        completed_at: DateTime.add(one_hour_ago, 2, :second),
+        duration_ms: 500,
+        results: %{
+          error_category: "network_error",
+          error_message: "Request timeout"
+        }
+      })
+
+      :ok
+    end
+
+    test "returns recent pipeline runs grouped by SyncJob execution" do
+      runs = JobExecutionSummaries.get_source_recent_pipeline_runs("cinema_city", 20)
+
+      assert length(runs) == 2
+    end
+
+    test "groups jobs within 5 minute time window" do
+      runs = JobExecutionSummaries.get_source_recent_pipeline_runs("cinema_city", 20)
+
+      successful_run = Enum.find(runs, &(&1.status == :success))
+      assert successful_run.total_jobs == 3
+      assert length(successful_run.stages) == 3
+    end
+
+    test "calculates pipeline statistics correctly" do
+      runs = JobExecutionSummaries.get_source_recent_pipeline_runs("cinema_city", 20)
+
+      successful_run = Enum.find(runs, &(&1.status == :success))
+      assert successful_run.completed_jobs == 3
+      assert successful_run.failed_jobs == 0
+      assert successful_run.total_duration_ms == 12400
+    end
+
+    test "identifies failed stage in failed pipeline" do
+      runs = JobExecutionSummaries.get_source_recent_pipeline_runs("cinema_city", 20)
+
+      failed_run = Enum.find(runs, &(&1.status == :failed))
+      assert failed_run.failed_stage == "CinemaDateJob"
+      assert failed_run.failed_jobs == 1
+    end
+
+    test "includes error details in stages" do
+      runs = JobExecutionSummaries.get_source_recent_pipeline_runs("cinema_city", 20)
+
+      failed_run = Enum.find(runs, &(&1.status == :failed))
+      failed_stage = Enum.find(failed_run.stages, &(&1.state == "discarded"))
+      assert failed_stage.error_category == "network_error"
+      assert failed_stage.error_message == "Request timeout"
+    end
+  end
+
+  describe "get_scraper_metrics/1 with job_type_count" do
+    setup do
+      now = DateTime.utc_now()
+
+      # Cinema City with 3 different job types
+      JobExecutionSummary.record_execution(%{
+        job_id: 1,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 2100
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 2,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 8500
+      })
+
+      JobExecutionSummary.record_execution(%{
+        job_id: 3,
+        worker: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 1800
+      })
+
+      # Kino Krakow with 1 job type
+      JobExecutionSummary.record_execution(%{
+        job_id: 4,
+        worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob",
+        queue: "discovery",
+        state: "completed",
+        attempted_at: now,
+        completed_at: now,
+        duration_ms: 1500
+      })
+
+      :ok
+    end
+
+    test "includes job_type_count in scraper metrics" do
+      metrics = JobExecutionSummaries.get_scraper_metrics(24)
+
+      cinema_city = Enum.find(metrics, &(&1.scraper_name == "cinema_city"))
+      assert cinema_city.job_type_count == 3
+
+      kino_krakow = Enum.find(metrics, &(&1.scraper_name == "kino_krakow"))
+      assert kino_krakow.job_type_count == 1
+    end
+
+    test "includes last_run timestamp" do
+      metrics = JobExecutionSummaries.get_scraper_metrics(24)
+
+      cinema_city = Enum.find(metrics, &(&1.scraper_name == "cinema_city"))
+      assert %DateTime{} = cinema_city.last_run
+    end
+  end
 end
