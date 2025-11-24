@@ -92,6 +92,14 @@ config :hammer,
 # Oban configuration moved to config/runtime.exs
 # (Cannot use functions in compile-time config for releases)
 
+# Venue matching configuration
+config :eventasaurus_discovery, :venue_matching,
+  # Proximity threshold in meters for venue deduplication
+  # Venues within this distance are considered the same location
+  # Increased from 50m to 200m to better handle geocoding variations
+  # between different data sources (e.g., Cinema City vs Kino Krakow)
+  proximity_threshold_meters: 200
+
 # Avatar configuration
 config :eventasaurus, :avatars,
   provider: :dicebear,

@@ -16,6 +16,9 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
   def mount(%{"source_slug" => source_slug}, _session, socket) do
     if connected?(socket), do: schedule_refresh()
 
+    # Normalize kebab-case to snake_case for backend compatibility
+    source_slug = String.replace(source_slug, "-", "_")
+
     pipeline_metrics = JobExecutionSummaries.get_source_pipeline_metrics(source_slug, 24)
     error_breakdown = JobExecutionSummaries.get_source_error_breakdown(source_slug, 24)
     recent_runs = JobExecutionSummaries.get_source_recent_pipeline_runs(source_slug, 20)
@@ -202,7 +205,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
                     <div class="flex-1">
                       <div class="flex items-center justify-between mb-2">
                         <span class="font-medium text-gray-900"><%= error.job_type %></span>
-                        <span class="text-sm text-red-600"><%= error.error_count %> errors</span>
+                        <span class="text-sm text-red-600"><%= error.count %> errors</span>
                       </div>
 
                       <%= if error.error_category do %>
@@ -213,9 +216,9 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
                         </div>
                       <% end %>
 
-                      <%= if error.sample_error do %>
+                      <%= if error.example_error do %>
                         <p class="mt-2 text-sm text-gray-600 font-mono bg-white p-2 rounded border border-gray-200">
-                          <%= String.slice(error.sample_error, 0, 200) %><%= if String.length(error.sample_error) > 200, do: "..." %>
+                          <%= String.slice(error.example_error, 0, 200) %><%= if String.length(error.example_error) > 200, do: "..." %>
                         </p>
                       <% end %>
                     </div>
@@ -336,7 +339,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
   end
 
   defp format_duration(nil), do: "—"
-  defp format_duration(ms) when ms < 1000, do: "#{Float.round(ms, 1)}ms"
+  defp format_duration(ms) when ms < 1000, do: "#{Float.round(ms / 1, 1)}ms"
   defp format_duration(ms), do: "#{Float.round(ms / 1000, 1)}s"
 
   defp format_timestamp(nil), do: "—"

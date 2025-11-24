@@ -10,6 +10,13 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   import Ecto.Query
   require Logger
 
+  # Get venue matching configuration
+  @proximity_threshold_meters Application.compile_env(
+                                :eventasaurus_discovery,
+                                [:venue_matching, :proximity_threshold_meters],
+                                200
+                              )
+
   @doc """
   Find or create venue using progressive matching strategy.
   Uses Ecto upserts for atomic operations.
@@ -34,7 +41,8 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
     end
   end
 
-  # Step 1: Try geo-proximity match (50m radius)
+  # Step 1: Try geo-proximity match
+  # Uses configurable threshold from config :eventasaurus_discovery, :venue_matching
   defp find_by_proximity(%{latitude: lat, longitude: lng, name: name, city_id: city_id})
        when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
     # Convert to float for PostGIS
@@ -57,8 +65,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
               v.latitude,
               ^lng_float,
               ^lat_float,
-              # meters
-              50
+              ^@proximity_threshold_meters
             ),
           order_by:
             fragment(
@@ -73,13 +80,16 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
 
       case Repo.one(query) do
         nil ->
-          Logger.debug("No venue found by proximity at (#{lat}, #{lng})")
+          Logger.debug(
+            "No venue found within #{@proximity_threshold_meters}m of (#{lat}, #{lng})"
+          )
+
           nil
 
         venue ->
           # ALWAYS accept coordinate matches! Coordinates are authoritative.
           Logger.info(
-            "📍 Found venue by proximity: '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at (#{lat}, #{lng})"
+            "📍 Found venue by proximity (#{@proximity_threshold_meters}m): '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at (#{lat}, #{lng})"
           )
 
           # Decide if we should update the name based on quality
