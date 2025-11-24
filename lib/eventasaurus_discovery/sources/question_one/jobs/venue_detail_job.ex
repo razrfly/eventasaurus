@@ -41,7 +41,20 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.VenueDetailJob do
     source_id = args["source_id"]
 
     # Extract venue ID from URL for external_id (e.g., /venue/abc123 -> question_one_venue_abc123)
-    venue_id = venue_url |> String.split("/") |> List.last() |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
+    venue_id =
+      venue_url
+      |> String.split("/")
+      |> Enum.reject(&(&1 == ""))
+      |> List.last()
+      |> case do
+        nil -> raise "Invalid venue_url format: #{venue_url} - no path segments found"
+        id -> String.replace(id, ~r/[^a-zA-Z0-9_-]/, "_")
+      end
+
+    if venue_id == "" do
+      raise "Invalid venue_url format: #{venue_url} - resulted in empty venue_id after sanitization"
+    end
+
     external_id = "question_one_venue_#{venue_id}"
 
     Logger.info("🔍 Processing Question One venue: #{venue_title}")

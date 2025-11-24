@@ -230,15 +230,24 @@ Job types MUST be one of the following (in typical execution order):
 | **PerformerDetailJob** | Performer/artist-specific detail fetcher | Optional | `performer_detail_job.ex` |
 | **EnrichmentJob** | Post-processing enrichment (metadata, images, etc.) | Optional | `enrichment_job.ex` |
 
-### 8.3 Migration from Legacy Names
+### 8.3 Job Naming Patterns by Source Type
+
+Different source types use context-appropriate job names based on their domain:
+
+| Source Type | Job Pattern | Example | Rationale |
+|-------------|-------------|---------|-----------|
+| **Event Sources** | `EventDetailJob` | ResidentAdvisor, Bandsintown | General events (concerts, festivals) |
+| **Cinema Sources** | `MovieDetailJob` | CinemaCity, KinoKrakow | Domain-specific terminology for movie screenings |
+| **Venue Sources** | `VenueDetailJob` | Karnet, QuestionOne | Venue-focused discovery |
+| **Performer Sources** | `PerformerEnrichmentJob` | ResidentAdvisor | Post-processing enrichment (not detail fetching) |
+
+**Legacy Migration:**
 
 | ❌ Legacy Name | ✅ Standard Name | Reason |
 |---------------|-----------------|---------|
 | `index_job.ex` | `index_page_job.ex` | Clarifies pagination support |
-| `artist_detail_job.ex` | `performer_detail_job.ex` | Consistent terminology (performers includes artists, DJs, comedians) |
-| `movie_detail_job.ex` | `event_detail_job.ex` | Align with domain model (movies are events) |
 
-**Note:** Sources with domain-specific terminology (e.g., `MoviePageJob` for Cinema City) MAY keep their names if they provide clear abstraction over the standard pattern.
+**Note:** Sources may use domain-specific terminology (e.g., `MovieDetailJob` for cinema sources) when it provides clearer abstraction. This is preferred over forcing generic names that don't match the source's domain model.
 
 ### 8.4 Examples
 
