@@ -13,7 +13,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Venues.DuplicateDetection
-  alias EventasaurusDiscovery.Locations.{City, Country, CountryResolver}
+  alias EventasaurusDiscovery.Locations.{City, Country, CountryResolver, VenueNameMatcher}
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Helpers.{CityResolver, AddressGeocoder}
   alias EventasaurusDiscovery.Geocoding.MetadataBuilder
@@ -142,29 +142,36 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       )
       |> Repo.one()
 
-    # If no exact match, try fuzzy match using PostgreSQL similarity
+    # If no exact match, try fuzzy match using VenueNameMatcher
     if is_nil(exact_match) do
-      fuzzy_match =
+      # Fetch all venues in the city and calculate similarity using VenueNameMatcher
+      candidates =
         from(v in Venue,
-          where: v.city_id == ^city_id,
-          where:
-            fragment("similarity(?, ?) > ?", v.name, ^clean_name, ^@postgres_similarity_threshold),
-          order_by: [desc: fragment("similarity(?, ?)", v.name, ^clean_name)],
-          limit: 1
+          where: v.city_id == ^city_id
         )
-        |> Repo.one()
+        |> Repo.all()
 
-      if fuzzy_match do
-        similarity = DuplicateDetection.calculate_name_similarity(fuzzy_match.name, clean_name)
+      # Calculate similarity for each candidate and find best match
+      best_match =
+        candidates
+        |> Enum.map(fn venue ->
+          similarity = VenueNameMatcher.similarity_score(venue.name, clean_name)
+          {venue, similarity}
+        end)
+        |> Enum.filter(fn {_venue, similarity} -> similarity >= @postgres_similarity_threshold end)
+        |> Enum.max_by(fn {_venue, similarity} -> similarity end, fn -> nil end)
 
-        Logger.info(
-          "🏛️ Using similar venue (name only): '#{fuzzy_match.name}' for '#{clean_name}' " <>
-            "(#{Float.round(similarity * 100, 1)}% similar, ID: #{fuzzy_match.id})"
-        )
+      case best_match do
+        {venue, similarity} ->
+          Logger.info(
+            "🏛️ Using similar venue (name only): '#{venue.name}' for '#{clean_name}' " <>
+              "(#{Float.round(similarity * 100, 1)}% similar, ID: #{venue.id})"
+          )
 
-        fuzzy_match
-      else
-        nil
+          venue
+
+        nil ->
+          nil
       end
     else
       exact_match
@@ -444,7 +451,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   # - Results outside expected geographic bounds (region-specific scrapers)
   # - Results in wrong country (city in Poland but coords in South Africa)
   defp validate_geocoding_result(result, data, city) do
-    metadata = result.geocoding_metadata
+    # Convert Geocoder.Coords struct to map for Access behavior
+    metadata = struct_to_map(result.geocoding_metadata)
 
     # Check 1: Reject intersection results (street corners, not venues)
     result_type = get_in(metadata, [:raw_response, "resultType"])
