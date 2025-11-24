@@ -457,8 +457,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       # Get the most recent execution timestamp
       last_run =
         executions
-        |> Enum.map(&(&1.attempted_at))
-        |> Enum.max(DateTime)
+        |> Enum.map(& &1.attempted_at)
+        |> Enum.max(DateTime, fn -> nil end)
 
       %{
         scraper_name: scraper_name,
