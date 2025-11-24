@@ -38,6 +38,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       |> assign(:loading, true)
       |> assign(:lineage_modal_open, false)
       |> assign(:selected_job_lineage, nil)
+      |> assign(:expanded_sources, MapSet.new())
       |> load_system_metrics()
       |> load_timeline_data()
       |> load_scraper_metrics()
@@ -155,6 +156,23 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("navigate_to_pipeline", %{"source" => source_slug}, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/admin/job-executions/sources/#{source_slug}")}
+  end
+
+  @impl true
+  def handle_event("toggle_source", %{"source" => source}, socket) do
+    expanded_sources =
+      if MapSet.member?(socket.assigns.expanded_sources, source) do
+        MapSet.delete(socket.assigns.expanded_sources, source)
+      else
+        MapSet.put(socket.assigns.expanded_sources, source)
+      end
+
+    {:noreply, assign(socket, :expanded_sources, expanded_sources)}
+  end
+
   # Load list of workers with metrics
   defp load_workers(socket) do
     workers = JobExecutionSummaries.list_workers()
@@ -233,6 +251,40 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       _ ->
         List.last(parts)
     end
+  end
+
+  # Format scraper name for display
+  # "cinema_city" -> "Cinema City"
+  defp format_scraper_name(scraper_slug) do
+    scraper_slug
+    |> String.split("_")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  # Extract source name from worker module
+  # "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob" -> "cinema_city"
+  defp extract_source_from_worker(worker) do
+    parts = String.split(worker, ".")
+
+    case parts do
+      parts when length(parts) >= 5 ->
+        parts |> Enum.at(-3) |> Macro.underscore()
+
+      _ ->
+        "other"
+    end
+  end
+
+  # Group workers by source
+  defp group_workers_by_source(workers) do
+    workers
+    |> Enum.group_by(&extract_source_from_worker(&1.worker))
+    |> Enum.map(fn {source, workers} ->
+      total_executions = Enum.sum(Enum.map(workers, & &1.total_executions))
+      %{source: source, workers: workers, total_executions: total_executions}
+    end)
+    |> Enum.sort_by(& &1.total_executions, :desc)
   end
 
   # Get badge class for job state
@@ -616,6 +668,9 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                       Scraper
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Job Types
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Total Executions
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -630,13 +685,21 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Failed
                     </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                   <%= for scraper <- @scraper_metrics do %>
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-gray-50 cursor-pointer" phx-click="navigate_to_pipeline" phx-value-source={scraper.scraper_name}>
                       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        <%= scraper.scraper_name %>
+                        <%= format_scraper_name(scraper.scraper_name) %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <%= scraper.job_type_count %> stages
+                        </span>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <%= format_number(scraper.total_executions) %>
@@ -654,6 +717,15 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
                         <%= format_number(scraper.failed) %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <.link
+                          navigate={~p"/admin/job-executions/sources/#{scraper.scraper_name}"}
+                          class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          onclick="event.stopPropagation()"
+                        >
+                          View Pipeline →
+                        </.link>
                       </td>
                     </tr>
                   <% end %>
@@ -732,7 +804,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       <!-- Workers Summary -->
       <div class="bg-white shadow rounded-lg mb-8">
         <div class="px-4 py-5 sm:p-6">
-          <h2 class="text-lg font-medium text-gray-900 mb-4">Workers</h2>
+          <h2 class="text-lg font-medium text-gray-900 mb-4">Workers by Source</h2>
 
           <div class="space-y-3">
             <!-- All Workers Option -->
@@ -750,37 +822,78 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
               </div>
             </button>
 
-            <!-- Individual Workers -->
-            <%= for worker <- @workers do %>
-              <div class="relative">
+            <!-- Workers Grouped by Source -->
+            <%= for source_group <- group_workers_by_source(@workers) do %>
+              <% is_expanded = MapSet.member?(@expanded_sources, source_group.source) %>
+
+              <div class="border border-gray-200 rounded-lg overflow-hidden">
+                <!-- Source Header (Collapsible) -->
                 <button
                   type="button"
-                  phx-click="select_worker"
-                  phx-value-worker={worker.worker}
-                  class={"w-full text-left px-4 py-3 rounded-lg border transition-colors " <> if(@selected_worker == worker.worker, do: "border-blue-500 bg-blue-50", else: "border-gray-200 hover:bg-gray-50")}
+                  phx-click="toggle_source"
+                  phx-value-source={source_group.source}
+                  class="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
                 >
-                  <div class="flex items-center justify-between">
-                    <span class="font-medium text-gray-900"><%= worker_name(worker.worker) %></span>
-                    <div class="flex items-center gap-3">
-                      <span class="text-sm text-gray-500">
-                        <%= worker.total_executions %> runs
-                      </span>
-                      <span class="text-xs text-gray-400">
-                        <%= format_relative_time(worker.last_execution) %>
-                      </span>
-                    </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm"><%= if is_expanded, do: "▼", else: "▶" %></span>
+                    <span class="font-semibold text-gray-900">
+                      <%= format_scraper_name(source_group.source) %>
+                    </span>
+                    <span class="text-xs text-gray-500">
+                      (<%= length(source_group.workers) %> workers)
+                    </span>
                   </div>
-                  <div class="mt-1 text-xs text-gray-500 flex items-center justify-between">
-                    <span><%= worker.worker %></span>
+                  <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-600">
+                      <%= format_number(source_group.total_executions) %> total runs
+                    </span>
                     <.link
-                      navigate={~p"/admin/job-executions/#{URI.encode_www_form(worker.worker)}"}
-                      class="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center gap-1"
+                      navigate={~p"/admin/job-executions/sources/#{source_group.source}"}
+                      class="inline-flex items-center px-2.5 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200"
                       onclick="event.stopPropagation()"
                     >
-                      View Dashboard →
+                      View Pipeline →
                     </.link>
                   </div>
                 </button>
+
+                <!-- Workers in Source (Collapsible Content) -->
+                <%= if is_expanded do %>
+                  <div class="border-t border-gray-200">
+                    <%= for worker <- source_group.workers do %>
+                      <button
+                        type="button"
+                        phx-click="select_worker"
+                        phx-value-worker={worker.worker}
+                        class={"w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors " <> if(@selected_worker == worker.worker, do: "bg-blue-50", else: "hover:bg-gray-50")}
+                      >
+                        <div class="flex items-center justify-between">
+                          <span class="text-sm font-medium text-gray-900">
+                            <%= String.split(worker.worker, ".") |> List.last() %>
+                          </span>
+                          <div class="flex items-center gap-3">
+                            <span class="text-sm text-gray-500">
+                              <%= worker.total_executions %> runs
+                            </span>
+                            <span class="text-xs text-gray-400">
+                              <%= format_relative_time(worker.last_execution) %>
+                            </span>
+                          </div>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500 flex items-center justify-between">
+                          <span class="truncate max-w-md"><%= worker.worker %></span>
+                          <.link
+                            navigate={~p"/admin/job-executions/#{URI.encode_www_form(worker.worker)}"}
+                            class="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center gap-1"
+                            onclick="event.stopPropagation()"
+                          >
+                            View Details →
+                          </.link>
+                        </div>
+                      </button>
+                    <% end %>
+                  </div>
+                <% end %>
               </div>
             <% end %>
           </div>
