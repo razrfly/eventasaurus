@@ -1786,7 +1786,7 @@ defmodule EventasaurusWeb.EventComponents do
 
         <%= if @external_image_data["source"] == "tmdb" && get_in(@external_image_data, ["metadata"]) do %>
           <% metadata = @external_image_data["metadata"] %>
-          <% movie_data = %{tmdb_id: metadata["id"]} %>
+          <% movie_data = %{tmdb_id: parse_tmdb_id(metadata["id"])} %>
           <div class="flex flex-col space-y-1">
             <div>
               "<%= metadata["title"] %>" (<%= format_tmdb_year(metadata["release_date"]) %>) -
@@ -1950,4 +1950,16 @@ defmodule EventasaurusWeb.EventComponents do
     </div>
     """
   end
+
+  # Private helper to parse TMDb ID from various formats
+  defp parse_tmdb_id(value) when is_integer(value), do: value
+
+  defp parse_tmdb_id(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, _} -> int
+      _ -> nil
+    end
+  end
+
+  defp parse_tmdb_id(_), do: nil
 end
