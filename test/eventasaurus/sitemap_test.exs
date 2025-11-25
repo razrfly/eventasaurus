@@ -76,9 +76,9 @@ defmodule Eventasaurus.SitemapTest do
       assert movie_url == nil
     end
 
-    test "generates distinct URLs for movies shown in multiple cities" do
+    test "generates distinct URLs for movies shown in multiple cities", %{city: city1, venue: venue1} do
       # Create second city
-      country = insert(:country, code: "PL", slug: "poland")
+      country = insert(:country, code: "PL", slug: "poland-2")
       city2 = insert(:city, slug: "warsaw", discovery_enabled: true, country: country)
 
       # Create venue in second city
@@ -87,9 +87,7 @@ defmodule Eventasaurus.SitemapTest do
       # Create movie
       movie = insert(:movie, slug: "multi-city-movie")
 
-      # Create screening in first city (from setup)
-      city1 = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
-      venue1 = insert(:venue, slug: "cinema-krakow", city_id: city1.id, city_ref: city1)
+      # Create screening in first city (reuse from setup)
       event1 = insert(:public_event, venue_id: venue1.id, venue: venue1)
 
       Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
@@ -109,7 +107,7 @@ defmodule Eventasaurus.SitemapTest do
 
       # Should have URLs for both cities
       krakow_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/movies/#{movie.slug}"
+        url.loc == "https://wombie.fyi/c/#{city1.slug}/movies/#{movie.slug}"
       end)
 
       warsaw_url = Enum.find(urls, fn url ->
