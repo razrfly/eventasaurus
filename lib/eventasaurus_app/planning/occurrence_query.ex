@@ -249,12 +249,114 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue'"}
   end
 
+  @doc """
+  Gets availability counts per date for a given series.
+
+  Returns a map of date to count: %{~D[2025-11-25] => 3, ~D[2025-11-26] => 0, ...}
+
+  ## Parameters
+
+  - `series_type` - "movie", "venue", or nil for discovery
+  - `series_id` - ID of the series entity, or nil for discovery
+  - `date_list` - List of dates to check availability for
+  - `filter_criteria` - Optional filters (time_preferences, meal_periods, venue_ids, city_ids)
+
+  ## Returns
+
+  - `{:ok, %{Date.t() => non_neg_integer()}}` - Map of date to count
+  - `{:error, reason}` - If query fails
+
+  ## Examples
+
+      iex> get_date_availability_counts("movie", 123, [~D[2025-11-25], ~D[2025-11-26]], %{})
+      {:ok, %{~D[2025-11-25] => 3, ~D[2025-11-26] => 0}}
+  """
+  def get_date_availability_counts(series_type, series_id, date_list, filter_criteria \\ %{})
+
+  def get_date_availability_counts("movie", movie_id, date_list, filter_criteria)
+      when is_integer(movie_id) do
+    try do
+      # Get all occurrences for each date
+      counts =
+        Enum.reduce(date_list, %{}, fn date, acc ->
+          # Query occurrences for this specific date
+          date_filter =
+            Map.put(filter_criteria, :date_range, %{start: date, end: date})
+
+          case find_movie_occurrences(movie_id, date_filter) do
+            {:ok, occurrences} ->
+              Map.put(acc, date, length(occurrences))
+
+            {:error, _} ->
+              Map.put(acc, date, 0)
+          end
+        end)
+
+      {:ok, counts}
+    rescue
+      e ->
+        {:error, "Failed to get date availability counts: #{Exception.message(e)}"}
+    end
+  end
+
+  def get_date_availability_counts("venue", venue_id, date_list, filter_criteria)
+      when is_integer(venue_id) do
+    try do
+      # For venues, we generate time slots, so count based on meal_periods
+      meal_periods = get_meal_periods(filter_criteria)
+
+      counts =
+        Enum.reduce(date_list, %{}, fn date, acc ->
+          # Count how many meal periods apply to this date
+          count =
+            Enum.count(meal_periods, fn meal_period ->
+              should_include_meal_period?(date, meal_period)
+            end)
+
+          Map.put(acc, date, count)
+        end)
+
+      {:ok, counts}
+    rescue
+      e ->
+        {:error, "Failed to get date availability counts: #{Exception.message(e)}"}
+    end
+  end
+
+  def get_date_availability_counts(nil, nil, date_list, filter_criteria) do
+    try do
+      # Discovery mode - count all movie occurrences
+      counts =
+        Enum.reduce(date_list, %{}, fn date, acc ->
+          date_filter =
+            Map.put(filter_criteria, :date_range, %{start: date, end: date})
+
+          case find_discovery_occurrences(date_filter) do
+            {:ok, occurrences} ->
+              Map.put(acc, date, length(occurrences))
+
+            {:error, _} ->
+              Map.put(acc, date, 0)
+          end
+        end)
+
+      {:ok, counts}
+    rescue
+      e ->
+        {:error, "Failed to get date availability counts: #{Exception.message(e)}"}
+    end
+  end
+
+  def get_date_availability_counts(series_type, _series_id, _date_list, _filter_criteria) do
+    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue'"}
+  end
+
   # Private filter application functions
 
   # Handle map format (for persisted filter_criteria from JSONB)
   defp apply_date_range_filter(query, %{date_range: %{start: start_date, end: end_date}}) do
-    start_datetime = DateTime.new!(start_date, ~T[00:00:00])
-    end_datetime = DateTime.new!(end_date, ~T[23:59:59])
+    start_datetime = DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC")
+    end_datetime = DateTime.new!(end_date, ~T[23:59:59], "Etc/UTC")
 
     from(q in query,
       where: q.starts_at >= ^start_datetime and q.starts_at <= ^end_datetime
@@ -263,8 +365,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
   # Handle tuple format (for backward compatibility)
   defp apply_date_range_filter(query, %{date_range: {start_date, end_date}}) do
-    start_datetime = DateTime.new!(start_date, ~T[00:00:00])
-    end_datetime = DateTime.new!(end_date, ~T[23:59:59])
+    start_datetime = DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC")
+    end_datetime = DateTime.new!(end_date, ~T[23:59:59], "Etc/UTC")
 
     from(q in query,
       where: q.starts_at >= ^start_datetime and q.starts_at <= ^end_datetime

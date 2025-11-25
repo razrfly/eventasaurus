@@ -10,9 +10,14 @@ defmodule EventasaurusWeb.Components.MovieDetailsCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias Eventasaurus.Integrations.Cinegraph
 
   attr :movie, :map, required: true, doc: "Movie struct with title, poster_url, metadata, etc."
-  attr :show_see_all_link, :boolean, default: false, doc: "Whether to show 'See All Screenings' link"
+
+  attr :show_see_all_link, :boolean,
+    default: false,
+    doc: "Whether to show 'See All Screenings' link"
+
   attr :aggregated_movie_url, :string, default: nil, doc: "URL to movie aggregation page"
   attr :class, :string, default: "", doc: "Additional CSS classes for the container"
 
@@ -92,6 +97,20 @@ defmodule EventasaurusWeb.Components.MovieDetailsCard do
                 <Heroicons.film class="w-4 h-4 mr-2" />
                 <%= gettext("See All Screenings") %>
               </.link>
+            <% end %>
+
+            <!-- Cinegraph Link -->
+            <%= if Cinegraph.linkable?(@movie) do %>
+              <a
+                href={Cinegraph.movie_url(@movie)}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+                title={gettext("View detailed movie information on Cinegraph")}
+              >
+                <Heroicons.film class="w-4 h-4 mr-2" />
+                <%= gettext("View on Cinegraph") %>
+              </a>
             <% end %>
 
             <!-- TMDB Link -->

@@ -65,6 +65,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:is_movie_event, false)
       |> assign(:is_venue_event, false)
       |> assign(:filter_preview_count, nil)
+      |> assign(:date_availability, %{})
 
     {:ok, socket}
   end
@@ -492,13 +493,17 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         is_movie = is_movie_screening?(event)
         is_venue = !is_nil(event.venue) && is_nil(get_movie_data(event))
 
+        # Fetch date availability counts based on event type
+        date_availability = fetch_date_availability(event, is_movie, is_venue)
+
         {:noreply,
          socket
          |> assign(:show_plan_with_friends_modal, true)
          |> assign(:modal_organizer, user)
          |> assign(:is_movie_event, is_movie)
          |> assign(:is_venue_event, is_venue)
-         |> assign(:planning_mode, :selection)}
+         |> assign(:planning_mode, :selection)
+         |> assign(:date_availability, date_availability)}
     end
   end
 
@@ -1438,6 +1443,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           filter_preview_count={@filter_preview_count}
           is_movie_event={@is_movie_event}
           is_venue_event={@is_venue_event}
+          date_availability={@date_availability}
         />
       <% end %>
     </div>
@@ -1857,22 +1863,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  defp format_movie_runtime(nil), do: nil
-
-  defp format_movie_runtime(runtime) when is_integer(runtime) do
-    hours = div(runtime, 60)
-    minutes = rem(runtime, 60)
-
-    cond do
-      hours > 0 && minutes > 0 -> "#{hours}h #{minutes}m"
-      hours > 0 -> "#{hours}h"
-      minutes > 0 -> "#{minutes}m"
-      true -> nil
-    end
-  end
-
-  defp format_movie_runtime(_), do: nil
-
   # SEO helper functions - moved inline to use SEOHelpers module
 
   # Combine multiple JSON-LD schemas into a single script-ready string
@@ -2037,5 +2027,59 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       "december" -> 12
       _ -> nil
     end
+  end
+
+  # Helper to fetch date availability counts based on event type
+  defp fetch_date_availability(event, is_movie, is_venue) do
+    date_list = generate_date_list(is_venue)
+
+    cond do
+      is_movie ->
+        movie = get_movie_data(event)
+
+        if movie do
+          case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+                 "movie",
+                 movie.id,
+                 date_list,
+                 %{}
+               ) do
+            {:ok, counts} -> counts
+            {:error, _} -> %{}
+          end
+        else
+          %{}
+        end
+
+      is_venue ->
+        venue = event.venue
+
+        if venue do
+          case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+                 "venue",
+                 venue.id,
+                 date_list,
+                 %{}
+               ) do
+            {:ok, counts} -> counts
+            {:error, _} -> %{}
+          end
+        else
+          %{}
+        end
+
+      true ->
+        %{}
+    end
+  end
+
+  # Helper to generate date list matching modal's generate_date_options logic
+  defp generate_date_list(is_venue_event) do
+    days = if is_venue_event, do: 14, else: 7
+    today = Date.utc_today()
+
+    Enum.map(0..(days - 1), fn offset ->
+      Date.add(today, offset)
+    end)
   end
 end

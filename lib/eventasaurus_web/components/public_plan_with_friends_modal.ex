@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
   attr :id, :string, required: true
   attr :show, :boolean, default: false
-  attr :public_event, :map, required: true
+  attr :public_event, :map, default: nil
   attr :selected_occurrence, :map, default: nil
   attr :selected_users, :list, default: []
   attr :selected_emails, :list, default: []
@@ -35,6 +35,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :filter_preview_count, :integer, default: nil
   attr :movie_id, :integer, default: nil
   attr :city_id, :integer, default: nil
+  attr :movie, :map, default: nil
+  attr :city, :map, default: nil
+  attr :date_availability, :map, default: %{}
 
   def modal(assigns) do
     ~H"""
@@ -51,8 +54,9 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         <!-- Modal Content -->
         <div class="relative min-h-screen flex items-center justify-center p-4">
           <div class="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col" phx-click-away={@on_close}>
-            <!-- Event Context Banner -->
+            <!-- Context Banner (Event or Movie) -->
             <%= if @public_event do %>
+              <!-- Event Context Banner -->
               <div class="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-t-lg">
                 <div class="flex items-center gap-4">
                   <%= if get_event_image(@public_event) do %>
@@ -84,6 +88,39 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                   </button>
                 </div>
               </div>
+            <% else %>
+              <%= if @movie && @city do %>
+                <!-- Movie Context Banner -->
+                <div class="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-t-lg">
+                  <div class="flex items-center gap-4">
+                    <%= if @movie.poster_url do %>
+                      <img
+                        src={@movie.poster_url}
+                        alt={"#{@movie.title} poster"}
+                        class="w-12 h-12 rounded object-cover flex-shrink-0"
+                      />
+                    <% end %>
+                    <div class="flex-1 min-w-0">
+                      <h3 class="text-lg font-semibold truncate">
+                        <%= @movie.title %>
+                      </h3>
+                      <p class="text-sm text-indigo-100 truncate">
+                        Find showtimes in <%= @city.name %>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      phx-click={@on_close}
+                      class="text-white hover:text-gray-200 flex-shrink-0"
+                    >
+                      <span class="sr-only">Close</span>
+                      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              <% end %>
             <% end %>
 
             <!-- Header -->
@@ -328,14 +365,16 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
-        <button
-          type="button"
-          phx-click="select_planning_mode"
-          phx-value-mode="selection"
-          class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-        >
-          Back
-        </button>
+        <%= if @public_event do %>
+          <button
+            type="button"
+            phx-click="select_planning_mode"
+            phx-value-mode="selection"
+            class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+          >
+            Back to Mode Selection
+          </button>
+        <% end %>
         <button
           type="submit"
           disabled={!has_participants?(assigns)}
@@ -369,16 +408,37 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         </label>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           <%= for date <- generate_date_options(@is_venue_event) do %>
-            <label class="flex items-center p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+            <%
+              availability_count = Map.get(@date_availability, date, 0)
+              has_availability = availability_count > 0
+              label_class = if has_availability do
+                "flex items-center p-3 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50"
+              else
+                "flex items-center p-3 border border-gray-200 rounded-md cursor-not-allowed bg-gray-50 opacity-60"
+              end
+            %>
+            <label class={label_class}>
               <input
                 type="checkbox"
                 name="selected_dates[]"
                 value={Date.to_iso8601(date)}
                 checked={Date.to_iso8601(date) in Map.get(@filter_criteria, :selected_dates, [])}
-                class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                disabled={!has_availability}
+                class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              <span class="ml-2 text-sm text-gray-700">
-                <div class="font-medium"><%= Calendar.strftime(date, "%a") %></div>
+              <span class="ml-2 flex-1 text-sm text-gray-700">
+                <div class="font-medium flex items-center justify-between">
+                  <span><%= Calendar.strftime(date, "%a") %></span>
+                  <%= if has_availability do %>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                      <%= availability_count %>
+                    </span>
+                  <% else %>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
+                      0
+                    </span>
+                  <% end %>
+                </div>
                 <div class="text-xs text-gray-500"><%= Calendar.strftime(date, "%b %d") %></div>
               </span>
             </label>
@@ -507,14 +567,16 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
-        <button
-          type="button"
-          phx-click="select_planning_mode"
-          phx-value-mode="selection"
-          class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-        >
-          Back
-        </button>
+        <%= if @public_event do %>
+          <button
+            type="button"
+            phx-click="select_planning_mode"
+            phx-value-mode="selection"
+            class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+          >
+            Back to Mode Selection
+          </button>
+        <% end %>
         <button
           type="submit"
           class="px-4 py-2 text-white bg-purple-600 rounded-md hover:bg-purple-700"
@@ -695,12 +757,6 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   defp participant_count(assigns) do
     length(assigns[:selected_users] || []) + length(assigns[:selected_emails] || [])
   end
-
-  defp format_occurrence_datetime(%{datetime: datetime}) do
-    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p")
-  end
-
-  defp format_occurrence_datetime(_), do: "TBD"
 
   # When viewing a specific movie's page, show only venue names (movie title is redundant)
   defp format_occurrence_title(%{movie_title: _movie_title, venue_name: venue_name}, true)
