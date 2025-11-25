@@ -1788,6 +1788,17 @@ defmodule EventasaurusWeb.EventComponents do
           <div class="flex flex-col space-y-1">
             <div>
               "<%= metadata["title"] %>" (<%= format_tmdb_year(metadata["release_date"]) %>) -
+              <%= if metadata["type"] == "movie" && metadata["id"] do %>
+                <a
+                  href={"https://cinegraph.org/movies/tmdb/#{metadata["id"]}"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline hover:text-indigo-700 transition-colors text-indigo-600"
+                >
+                  View on Cinegraph
+                </a>
+                <span class="text-gray-400">|</span>
+              <% end %>
               <a
                 href={"https://www.themoviedb.org/#{metadata["type"]}/#{metadata["id"]}"}
                 target="_blank"

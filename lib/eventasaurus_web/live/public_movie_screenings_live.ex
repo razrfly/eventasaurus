@@ -24,11 +24,12 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> assign(:current_email_input, "")
       |> assign(:bulk_email_input, "")
       |> assign(:invitation_message, "")
-      |> assign(:planning_mode, :quick)
+      |> assign(:planning_mode, :flexible_filters)
       |> assign(:filter_criteria, %{})
       |> assign(:matching_occurrences, [])
       |> assign(:filter_preview_count, 0)
       |> assign(:modal_organizer, nil)
+      |> assign(:date_availability, %{})
 
     {:ok, socket}
   end
@@ -316,8 +317,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           <PublicPlanWithFriendsModal.modal
             id="plan-with-friends-modal"
             show={@show_plan_with_friends_modal}
-            public_event={nil}
-            selected_occurrence={nil}
             selected_users={@selected_users}
             selected_emails={@selected_emails}
             current_email_input={@current_email_input}
@@ -334,6 +333,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             is_venue_event={false}
             movie_id={@movie.id}
             city_id={@city.id}
+            movie={@movie}
+            city={@city}
+            date_availability={@date_availability}
           />
         <% end %>
       </div>
@@ -354,7 +356,29 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   @impl true
   def handle_event("open_plan_modal", _params, socket) do
-    {:noreply, assign(socket, :show_plan_with_friends_modal, true)}
+    # Get authenticated user for the modal
+    user = get_authenticated_user(socket)
+
+    # Fetch date availability counts for the movie
+    movie = socket.assigns.movie
+    date_list = generate_date_list(false)  # false = movie event (7 days)
+
+    date_availability =
+      case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+             "movie",
+             movie.id,
+             date_list,
+             %{}
+           ) do
+        {:ok, counts} -> counts
+        {:error, _} -> %{}
+      end
+
+    {:noreply,
+     socket
+     |> assign(:show_plan_with_friends_modal, true)
+     |> assign(:modal_organizer, user)
+     |> assign(:date_availability, date_availability)}
   end
 
   @impl true
@@ -363,7 +387,49 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   @impl true
-  def handle_event("submit_plan_with_friends", %{"mode" => mode}, socket) do
+  def handle_event("apply_flexible_filters", params, socket) do
+    # Parse selected dates and convert to date range
+    selected_dates = Map.get(params, "selected_dates", [])
+
+    {date_from, date_to} =
+      if length(selected_dates) > 0 do
+        dates = Enum.map(selected_dates, &Date.from_iso8601!/1) |> Enum.sort(Date)
+        {List.first(dates), List.last(dates)}
+      else
+        # Default to next 7 days if no dates selected
+        {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+      end
+
+    # Parse filter criteria from form
+    # Handle empty limit string to prevent String.to_integer("") crash
+    limit =
+      case params["limit"] do
+        nil -> 10
+        "" -> 10
+        value -> String.to_integer(value)
+      end
+
+    filter_criteria = %{
+      selected_dates: selected_dates,
+      date_from: Date.to_iso8601(date_from),
+      date_to: Date.to_iso8601(date_to),
+      time_preferences: Map.get(params, "time_preferences", []),
+      limit: limit
+    }
+
+    # Query for matching movie occurrences
+    movie = socket.assigns.movie
+    matching_occurrences = query_movie_occurrences(movie.id, filter_criteria)
+
+    {:noreply,
+     socket
+     |> assign(:filter_criteria, filter_criteria)
+     |> assign(:matching_occurrences, matching_occurrences)
+     |> assign(:planning_mode, :flexible_review)}
+  end
+
+  @impl true
+  def handle_event("submit_plan_with_friends", %{"mode" => _mode}, socket) do
     # Handle plan submission
     # For now, just close the modal
     # Full implementation would create the plan and redirect
@@ -375,23 +441,121 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
   end
 
+  @impl true
+  def handle_event("preview_filter_results", params, socket) do
+    # Parse selected dates and convert to date range (same as apply_flexible_filters)
+    selected_dates = Map.get(params, "selected_dates", [])
+
+    {date_from, date_to} =
+      if length(selected_dates) > 0 do
+        dates =
+          selected_dates
+          |> Enum.map(&Date.from_iso8601/1)
+          |> Enum.filter(&match?({:ok, _}, &1))
+          |> Enum.map(fn {:ok, d} -> d end)
+          |> Enum.sort(Date)
+
+        if dates == [] do
+          {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+        else
+          {List.first(dates), List.last(dates)}
+        end
+      else
+        # Default to next 7 days if no dates selected
+        {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+      end
+
+    # Parse filter criteria from form
+    # Handle empty limit string to prevent String.to_integer("") crash
+    limit =
+      case params["limit"] do
+        nil -> 10
+        "" -> 10
+        value -> String.to_integer(value)
+      end
+
+    filter_criteria = %{
+      selected_dates: selected_dates,
+      date_from: Date.to_iso8601(date_from),
+      date_to: Date.to_iso8601(date_to),
+      time_preferences: Map.get(params, "time_preferences", []),
+      meal_periods: Map.get(params, "meal_periods", []),
+      limit: limit
+    }
+
+    # Query for matching occurrences count only (not full data)
+    movie = socket.assigns.movie
+
+    count =
+      if movie do
+        query_movie_occurrences(movie.id, filter_criteria) |> length()
+      else
+        0
+      end
+
+    {:noreply,
+     socket
+     |> assign(:filter_criteria, filter_criteria)
+     |> assign(:filter_preview_count, count)}
+  end
+
+  @impl true
+  def handle_info({:user_selected, user}, socket) do
+    selected_users = socket.assigns.selected_users ++ [user]
+    {:noreply, assign(socket, :selected_users, Enum.uniq_by(selected_users, & &1.id))}
+  end
+
+  @impl true
+  def handle_info({:email_added, email}, socket) do
+    selected_emails = socket.assigns.selected_emails ++ [email]
+    {:noreply, assign(socket, :selected_emails, Enum.uniq(selected_emails))}
+  end
+
+  @impl true
+  def handle_info({:remove_user, user_id}, socket) do
+    selected_users = Enum.reject(socket.assigns.selected_users, &(&1.id == user_id))
+    {:noreply, assign(socket, :selected_users, selected_users)}
+  end
+
   # Helper functions
 
-  defp format_movie_runtime(nil), do: nil
+  defp query_movie_occurrences(movie_id, filter_criteria) do
+    alias EventasaurusApp.Planning.OccurrenceQuery
 
-  defp format_movie_runtime(runtime) when is_integer(runtime) do
-    hours = div(runtime, 60)
-    minutes = rem(runtime, 60)
+    # Convert filter criteria to format expected by OccurrenceQuery
+    query_criteria = %{
+      date_range: parse_date_range(filter_criteria),
+      time_preferences: Map.get(filter_criteria, :time_preferences, []),
+      limit: Map.get(filter_criteria, :limit, 10)
+    }
 
-    cond do
-      hours > 0 && minutes > 0 -> "#{hours}h #{minutes}m"
-      hours > 0 -> "#{hours}h"
-      minutes > 0 -> "#{minutes}m"
-      true -> nil
+    case OccurrenceQuery.find_movie_occurrences(movie_id, query_criteria) do
+      {:ok, occurrences} -> occurrences
+      {:error, _reason} -> []
     end
   end
 
-  defp format_movie_runtime(_), do: nil
+  defp parse_date_range(%{date_from: date_from_str, date_to: date_to_str})
+       when is_binary(date_from_str) and is_binary(date_to_str) do
+    with {:ok, date_from} <- Date.from_iso8601(date_from_str),
+         {:ok, date_to} <- Date.from_iso8601(date_to_str) do
+      # Return map format for JSON compatibility
+      %{start: date_from, end: date_to}
+    else
+      _ ->
+        # Fallback to default date range (today + 7 days)
+        today = Date.utc_today()
+        %{start: today, end: Date.add(today, 7)}
+    end
+  end
+
+  defp parse_date_range(_filter_criteria) do
+    # Fallback for missing or invalid date range
+    today = Date.utc_today()
+    %{start: today, end: Date.add(today, 7)}
+  end
+
+  # Helper functions
 
   # Extract ALL occurrences from all events and parse them into structured data
   defp extract_all_occurrences(events) do
@@ -538,4 +702,42 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   end
 
   defp valid_hex_color?(_), do: false
+
+  # Helper to generate date list matching modal's generate_date_options logic
+  defp generate_date_list(is_venue_event) do
+    days = if is_venue_event, do: 14, else: 7
+    today = Date.utc_today()
+
+    Enum.map(0..(days - 1), fn offset ->
+      Date.add(today, offset)
+    end)
+  end
+
+  # Helper to get authenticated user from socket assigns
+  defp get_authenticated_user(socket) do
+    # First try the processed user from the database
+    case socket.assigns[:user] do
+      %{id: id} = user when not is_nil(id) ->
+        user
+
+      _ ->
+        # Fallback to raw auth_user from Supabase/dev mode
+        case socket.assigns[:auth_user] do
+          # Dev mode: User struct directly
+          %{id: id} = user when is_integer(id) ->
+            user
+
+          # Supabase auth: map with string id
+          %{"id" => id} = auth_user when is_binary(id) ->
+            auth_user
+
+          # Handle other possible formats
+          %{id: id} = auth_user when is_binary(id) ->
+            auth_user
+
+          _ ->
+            raise "No authenticated user found"
+        end
+    end
+  end
 end
