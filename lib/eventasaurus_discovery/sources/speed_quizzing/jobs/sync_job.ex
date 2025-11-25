@@ -105,13 +105,25 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
 
         {:error, reason} = error ->
           Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
-          MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
+
+          MetricsTracker.record_failure(
+            job,
+            "Failed to enqueue index job: #{inspect(reason)}",
+            external_id
+          )
+
           error
       end
     else
       {:error, reason} = error ->
         Logger.error("❌ Speed Quizzing sync job failed: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Speed Quizzing sync failed: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Speed Quizzing sync failed: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

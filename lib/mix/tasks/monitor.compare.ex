@@ -128,9 +128,7 @@ defmodule Mix.Tasks.Monitor.Compare do
                   IO.puts("  Source: #{baseline["source"]}")
                   IO.puts("  Sample: #{baseline["sample_size"]} executions")
 
-                  IO.puts(
-                    "  Success Rate: #{format_percent(baseline["success_rate"])}"
-                  )
+                  IO.puts("  Success Rate: #{format_percent(baseline["success_rate"])}")
 
                   IO.puts("  Generated: #{baseline["generated_at"]}")
 
@@ -250,12 +248,18 @@ defmodule Mix.Tasks.Monitor.Compare do
   defp compare_baselines(before, after_baseline) do
     source = before["source"]
 
-    source_display = source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display =
+      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
 
-    IO.puts("\n" <> IO.ANSI.cyan() <> "📊 Baseline Comparison: #{source_display}" <> IO.ANSI.reset())
+    IO.puts(
+      "\n" <> IO.ANSI.cyan() <> "📊 Baseline Comparison: #{source_display}" <> IO.ANSI.reset()
+    )
+
     IO.puts(String.duplicate("=", 64))
 
-    IO.puts("Before: #{format_datetime(before["period_end"])} (#{before["sample_size"]} executions)")
+    IO.puts(
+      "Before: #{format_datetime(before["period_end"])} (#{before["sample_size"]} executions)"
+    )
 
     IO.puts(
       "After:  #{format_datetime(after_baseline["period_end"])} (#{after_baseline["sample_size"]} executions)"
@@ -364,10 +368,13 @@ defmodule Mix.Tasks.Monitor.Compare do
     end
 
     # Job chain improvements
-    before_chain = Map.new(before["chain_health"] || [], fn job -> {job["name"], job["success_rate"]} end)
+    before_chain =
+      Map.new(before["chain_health"] || [], fn job -> {job["name"], job["success_rate"]} end)
 
     after_chain =
-      Map.new(after_baseline["chain_health"] || [], fn job -> {job["name"], job["success_rate"]} end)
+      Map.new(after_baseline["chain_health"] || [], fn job ->
+        {job["name"], job["success_rate"]}
+      end)
 
     all_jobs =
       (Map.keys(before_chain) ++ Map.keys(after_chain))
@@ -427,7 +434,10 @@ defmodule Mix.Tasks.Monitor.Compare do
     IO.puts("├─ Duration: #{duration_sig_text}")
 
     sample_adequate = n1 >= 30 && n2 >= 30
-    sample_text = if sample_adequate, do: "Adequate for comparison ✅", else: "Small sample size ⚠️ "
+
+    sample_text =
+      if sample_adequate, do: "Adequate for comparison ✅", else: "Small sample size ⚠️ "
+
     IO.puts("└─ Sample Size: #{sample_text}")
 
     IO.puts("")
@@ -442,7 +452,9 @@ defmodule Mix.Tasks.Monitor.Compare do
 
       # Identify biggest improvements
       if success_rate_change > 5 do
-        IO.puts("- Significant success rate improvement (+#{Float.round(success_rate_change, 1)}pp)")
+        IO.puts(
+          "- Significant success rate improvement (+#{Float.round(success_rate_change, 1)}pp)"
+        )
       end
 
       if duration_change < -500 do

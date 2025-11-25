@@ -82,7 +82,12 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
             result
 
           {:error, :missing_restaurant_data} ->
-            MetricsTracker.record_failure(job, "Missing restaurant_id or restaurant_slug", external_id)
+            MetricsTracker.record_failure(
+              job,
+              "Missing restaurant_id or restaurant_slug",
+              external_id
+            )
+
             result
 
           {:error, :invalid_api_response} ->

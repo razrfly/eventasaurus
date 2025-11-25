@@ -60,16 +60,35 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
   - `:poll_creation_failed` - Failed to create poll
   - Other errors from underlying modules
   """
-  def start_flexible_planning(series_type, series_id, user_id, filter_criteria, friend_ids \\ [], opts \\ []) do
+  def start_flexible_planning(
+        series_type,
+        series_id,
+        user_id,
+        filter_criteria,
+        friend_ids \\ [],
+        opts \\ []
+      ) do
     Repo.transaction(fn ->
       with {:ok, occurrences} <- find_occurrences(series_type, series_id, filter_criteria),
-           _ <- Logger.debug("Found #{length(occurrences)} occurrences. First occurrence: #{inspect(List.first(occurrences))}"),
+           _ <-
+             Logger.debug(
+               "Found #{length(occurrences)} occurrences. First occurrence: #{inspect(List.first(occurrences))}"
+             ),
            :ok <- validate_occurrences(occurrences),
-           {:ok, private_event} <- create_private_event(series_type, series_id, user_id, occurrences, opts),
+           {:ok, private_event} <-
+             create_private_event(series_type, series_id, user_id, occurrences, opts),
            {:ok, _membership} <- add_user_as_organizer(private_event, user_id),
-           {:ok, poll} <- create_occurrence_poll(private_event, user_id, series_type, series_id, opts),
+           {:ok, poll} <-
+             create_occurrence_poll(private_event, user_id, series_type, series_id, opts),
            {:ok, _poll_options} <- create_poll_options(poll, occurrences, user_id),
-           {:ok, occurrence_planning} <- create_occurrence_planning_record(private_event, poll, series_type, series_id, filter_criteria),
+           {:ok, occurrence_planning} <-
+             create_occurrence_planning_record(
+               private_event,
+               poll,
+               series_type,
+               series_id,
+               filter_criteria
+             ),
            {:ok, invitations} <- invite_friends(private_event, friend_ids) do
         %{
           private_event: private_event,

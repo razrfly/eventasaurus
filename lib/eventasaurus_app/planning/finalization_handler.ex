@@ -115,24 +115,27 @@ defmodule EventasaurusApp.Planning.FinalizationHandler do
     public_event_id = occurrence_metadata.public_event_id
     starts_at_iso = occurrence_metadata.starts_at
 
-    # Parse ISO8601 datetime
-    {:ok, occurrence_datetime, _offset} = DateTime.from_iso8601(starts_at_iso)
+    # Parse ISO8601 datetime with error handling
+    with {:ok, occurrence_datetime, _offset} <- DateTime.from_iso8601(starts_at_iso) do
+      # Create event plan with occurrence datetime
+      attrs = %{
+        occurrence_datetime: occurrence_datetime
+      }
 
-    # Create event plan with occurrence datetime
-    attrs = %{
-      occurrence_datetime: occurrence_datetime
-    }
+      case EventPlans.create_from_public_event(public_event_id, user_id, attrs) do
+        {:ok, {:created, event_plan, private_event}} ->
+          {:ok, %{event_plan: event_plan, private_event: private_event}}
 
-    case EventPlans.create_from_public_event(public_event_id, user_id, attrs) do
-      {:ok, {:created, event_plan, private_event}} ->
-        {:ok, %{event_plan: event_plan, private_event: private_event}}
+        {:ok, {:existing, event_plan, private_event}} ->
+          # User already has a plan for this occurrence
+          {:ok, %{event_plan: event_plan, private_event: private_event}}
 
-      {:ok, {:existing, event_plan, private_event}} ->
-        # User already has a plan for this occurrence
-        {:ok, %{event_plan: event_plan, private_event: private_event}}
-
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
       {:error, reason} ->
-        {:error, reason}
+        {:error, {:invalid_starts_at, reason}}
     end
   end
 
@@ -140,42 +143,46 @@ defmodule EventasaurusApp.Planning.FinalizationHandler do
     # For venue time slots, create a private event directly
     # No public_event exists for synthetic time slots
 
-    {:ok, starts_at, _offset} = DateTime.from_iso8601(occurrence_metadata.starts_at)
-    {:ok, ends_at, _offset} = DateTime.from_iso8601(occurrence_metadata.ends_at)
+    with {:ok, starts_at, _offset} <- DateTime.from_iso8601(occurrence_metadata.starts_at),
+         {:ok, ends_at, _offset} <- DateTime.from_iso8601(occurrence_metadata.ends_at) do
+      # Get venue details
+      venue =
+        EventasaurusApp.Repo.get!(EventasaurusApp.Venues.Venue, occurrence_metadata.venue_id)
 
-    # Get venue details
-    venue = EventasaurusApp.Repo.get!(EventasaurusApp.Venues.Venue, occurrence_metadata.venue_id)
+      # Create private event for the venue time slot
+      event_attrs = %{
+        title: "#{venue.name} - #{String.capitalize(occurrence_metadata.meal_period || "visit")}",
+        start_at: starts_at,
+        end_at: ends_at,
+        timezone: "UTC",
+        visibility: :private,
+        status: :confirmed,
+        venue_id: venue.id
+      }
 
-    # Create private event for the venue time slot
-    event_attrs = %{
-      title: "#{venue.name} - #{String.capitalize(occurrence_metadata.meal_period || "visit")}",
-      start_at: starts_at,
-      end_at: ends_at,
-      timezone: "UTC",
-      visibility: :private,
-      status: :confirmed,
-      venue_id: venue.id
-    }
+      case EventasaurusApp.Events.create_event(event_attrs) do
+        {:ok, private_event} ->
+          # Create event_plan linking to this private event
+          plan_attrs = %{
+            private_event_id: private_event.id,
+            user_id: user_id,
+            occurrence_datetime: starts_at
+          }
 
-    case EventasaurusApp.Events.create_event(event_attrs) do
-      {:ok, private_event} ->
-        # Create event_plan linking to this private event
-        plan_attrs = %{
-          private_event_id: private_event.id,
-          user_id: user_id,
-          occurrence_datetime: starts_at
-        }
+          case EventasaurusApp.Events.EventPlans.create_event_plan(plan_attrs) do
+            {:ok, event_plan} ->
+              {:ok, %{event_plan: event_plan, private_event: private_event}}
 
-        case EventasaurusApp.Events.EventPlans.create_event_plan(plan_attrs) do
-          {:ok, event_plan} ->
-            {:ok, %{event_plan: event_plan, private_event: private_event}}
+            {:error, reason} ->
+              {:error, reason}
+          end
 
-          {:error, reason} ->
-            {:error, reason}
-        end
-
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
       {:error, reason} ->
-        {:error, reason}
+        {:error, {:invalid_occurrence_datetimes, reason}}
     end
   end
 

@@ -66,7 +66,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.PerformerEnrichment
             :ok
 
           {:error, reason} = error ->
-            MetricsTracker.record_failure(job, "Enrichment failed: #{inspect(reason)}", external_id)
+            MetricsTracker.record_failure(
+              job,
+              "Enrichment failed: #{inspect(reason)}",
+              external_id
+            )
+
             error
         end
     end

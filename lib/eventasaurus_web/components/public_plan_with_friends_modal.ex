@@ -33,6 +33,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :matching_occurrences, :list, default: []
   attr :is_movie_event, :boolean, default: false
   attr :is_venue_event, :boolean, default: false
+  attr :filter_preview_count, :integer, default: nil
 
   def modal(assigns) do
     ~H"""
@@ -253,7 +254,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
               <button
                 type="button"
                 phx-click="select_planning_mode"
-                phx-value-mode="filter_selection"
+                phx-value-mode="flexible_filters"
                 class="px-3 py-1.5 text-sm text-purple-700 bg-white border border-purple-300 rounded-md hover:bg-purple-50"
               >
                 Change Time
@@ -323,7 +324,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   # Filter Selection Form (for flexible planning)
   defp render_filter_selection(assigns) do
     ~H"""
-    <form phx-submit="apply_flexible_filters" class="space-y-6">
+    <form phx-submit="apply_flexible_filters" phx-change="preview_filter_results" class="space-y-6">
       <!-- Date Selection -->
       <div>
         <label class="block text-sm font-medium text-gray-900 mb-2">
@@ -428,6 +429,44 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           </p>
         </div>
       </details>
+
+      <!-- Filter Preview Count -->
+      <%= if @filter_preview_count != nil do %>
+        <div class={[
+          "p-4 rounded-lg border",
+          if(@filter_preview_count > 0,
+            do: "bg-green-50 border-green-200",
+            else: "bg-yellow-50 border-yellow-200"
+          )
+        ]}>
+          <%= if @filter_preview_count > 0 do %>
+            <div class="flex items-center gap-2">
+              <svg class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p class="text-sm font-medium text-green-800">
+                <%= @filter_preview_count %>
+                <%= if @is_venue_event, do: "time slots", else: "showtimes" %>
+                available with your selected filters
+              </p>
+            </div>
+          <% else %>
+            <div class="flex items-center gap-2">
+              <svg class="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p class="text-sm font-medium text-yellow-800">
+                  No <%= if @is_venue_event, do: "time slots", else: "showtimes" %> match your selected filters
+                </p>
+                <p class="text-xs text-yellow-700 mt-1">
+                  Try selecting different dates or times to find availability
+                </p>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
@@ -596,16 +635,21 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   end
 
   # When not viewing a specific movie (discovery mode), show full "Movie @ Venue" format
-  defp format_occurrence_title(%{movie_title: movie_title, venue_name: venue_name}, _is_movie_event)
+  defp format_occurrence_title(
+         %{movie_title: movie_title, venue_name: venue_name},
+         _is_movie_event
+       )
        when not is_nil(movie_title) and not is_nil(venue_name) do
     "#{movie_title} @ #{venue_name}"
   end
 
-  defp format_occurrence_title(%{movie_title: movie_title}, _is_movie_event) when not is_nil(movie_title) do
+  defp format_occurrence_title(%{movie_title: movie_title}, _is_movie_event)
+       when not is_nil(movie_title) do
     movie_title
   end
 
-  defp format_occurrence_title(%{venue_name: venue_name}, _is_movie_event) when not is_nil(venue_name) do
+  defp format_occurrence_title(%{venue_name: venue_name}, _is_movie_event)
+       when not is_nil(venue_name) do
     venue_name
   end
 
@@ -615,9 +659,18 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
     # Parse ISO8601 datetime if it's a string
     datetime =
       case starts_at do
-        %DateTime{} -> starts_at
-        str when is_binary(str) -> DateTime.from_iso8601(str) |> elem(1)
-        _ -> DateTime.utc_now()
+        %DateTime{} = dt ->
+          dt
+
+        str when is_binary(str) ->
+          case DateTime.from_iso8601(str) do
+            {:ok, dt, _offset} -> dt
+            {:ok, dt} -> dt
+            _ -> DateTime.utc_now()
+          end
+
+        _ ->
+          DateTime.utc_now()
       end
 
     Calendar.strftime(datetime, "%A, %B %d at %I:%M %p")

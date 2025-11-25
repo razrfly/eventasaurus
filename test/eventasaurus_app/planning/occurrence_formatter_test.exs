@@ -88,7 +88,8 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatterTest do
         }
       ]
 
-      [option] = OccurrenceFormatter.format_movie_options(occurrences, timezone: "America/New_York")
+      [option] =
+        OccurrenceFormatter.format_movie_options(occurrences, timezone: "America/New_York")
 
       # 19:00 UTC = 14:00 EST (or 15:00 EDT depending on DST)
       assert String.contains?(option.description, "02:00 PM") or

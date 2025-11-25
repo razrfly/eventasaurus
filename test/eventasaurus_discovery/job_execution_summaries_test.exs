@@ -428,11 +428,21 @@ defmodule EventasaurusDiscovery.JobExecutionSummariesTest do
     test "groups errors by job type and category" do
       errors = JobExecutionSummaries.get_source_error_breakdown("cinema_city", 24)
 
-      cinema_date_network = Enum.find(errors, &(&1.job_type == "CinemaDateJob" && &1.error_category == "network_error"))
+      cinema_date_network =
+        Enum.find(
+          errors,
+          &(&1.job_type == "CinemaDateJob" && &1.error_category == "network_error")
+        )
+
       assert cinema_date_network.count == 2
       assert cinema_date_network.example_error =~ ~r/(timeout|refused)/
 
-      movie_detail_validation = Enum.find(errors, &(&1.job_type == "MovieDetailJob" && &1.error_category == "validation_error"))
+      movie_detail_validation =
+        Enum.find(
+          errors,
+          &(&1.job_type == "MovieDetailJob" && &1.error_category == "validation_error")
+        )
+
       assert movie_detail_validation.count == 1
     end
 

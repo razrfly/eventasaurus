@@ -94,7 +94,10 @@ defmodule Mix.Tasks.Monitor.Health do
       source = opts[:source]
 
       unless source do
-        IO.puts(IO.ANSI.red() <> "❌ Error: --source is required (or use --all)" <> IO.ANSI.reset())
+        IO.puts(
+          IO.ANSI.red() <> "❌ Error: --source is required (or use --all)" <> IO.ANSI.reset()
+        )
+
         IO.puts("\nAvailable sources:")
         Enum.each(@source_patterns, fn {name, _} -> IO.puts("  - #{name}") end)
         System.halt(1)
@@ -148,7 +151,8 @@ defmodule Mix.Tasks.Monitor.Health do
       System.halt(0)
     end
 
-    source_display = source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display =
+      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
 
     IO.puts("\n" <> IO.ANSI.cyan() <> "🏥 #{source_display} Health Dashboard" <> IO.ANSI.reset())
     IO.puts(String.duplicate("=", 64))
@@ -193,7 +197,9 @@ defmodule Mix.Tasks.Monitor.Health do
 
     # Recent trend
     if length(health.trend) > 0 do
-      IO.puts(IO.ANSI.magenta() <> "Recent Trend (last #{min(hours, 6)} hours):" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.magenta() <> "Recent Trend (last #{min(hours, 6)} hours):" <> IO.ANSI.reset()
+      )
 
       health.trend
       |> Enum.take(6)
@@ -271,7 +277,8 @@ defmodule Mix.Tasks.Monitor.Health do
         |> Enum.map(& &1.duration_ms)
         |> Enum.reject(&is_nil/1)
 
-      avg_duration = if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
+      avg_duration =
+        if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
 
       # Get SLO targets (use first worker's SLO as overall target)
       first_worker = executions |> List.first() |> Map.get(:worker)
@@ -303,7 +310,9 @@ defmodule Mix.Tasks.Monitor.Health do
               else: 0
 
           worker_slo = ScraperSLOs.get_slo(worker)
-          worker_status = ScraperSLOs.check_slo_status(worker_slo, worker_success_rate, worker_avg_duration)
+
+          worker_status =
+            ScraperSLOs.check_slo_status(worker_slo, worker_success_rate, worker_avg_duration)
 
           %{
             name: worker_name,
@@ -321,6 +330,7 @@ defmodule Mix.Tasks.Monitor.Health do
         |> Enum.group_by(fn exec ->
           hour = exec.attempted_at.hour
           window = div(hour, 2) * 2
+
           "#{String.pad_leading(to_string(window), 2, "0")}:00-#{String.pad_leading(to_string(window + 2), 2, "0")}:00"
         end)
         |> Enum.map(fn {range, jobs} ->

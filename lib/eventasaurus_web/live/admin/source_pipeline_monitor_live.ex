@@ -30,14 +30,19 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
 
     overall_success_rate = if total_runs > 0, do: successful_runs / total_runs * 100, else: 0.0
 
-    avg_duration = if total_runs > 0 do
-      total_duration = Enum.sum(Enum.map(pipeline_metrics, fn m ->
-        (m.avg_duration_ms || 0) * m.total_runs
-      end))
-      total_duration / total_runs
-    else
-      0.0
-    end
+    avg_duration =
+      if total_runs > 0 do
+        total_duration =
+          Enum.sum(
+            Enum.map(pipeline_metrics, fn m ->
+              (m.avg_duration_ms || 0) * m.total_runs
+            end)
+          )
+
+        total_duration / total_runs
+      else
+        0.0
+      end
 
     {:ok,
      assign(socket,
@@ -69,14 +74,19 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
     overall_success_rate = if total_runs > 0, do: successful_runs / total_runs * 100, else: 0.0
 
-    avg_duration = if total_runs > 0 do
-      total_duration = Enum.sum(Enum.map(pipeline_metrics, fn m ->
-        (m.avg_duration_ms || 0) * m.total_runs
-      end))
-      total_duration / total_runs
-    else
-      0.0
-    end
+    avg_duration =
+      if total_runs > 0 do
+        total_duration =
+          Enum.sum(
+            Enum.map(pipeline_metrics, fn m ->
+              (m.avg_duration_ms || 0) * m.total_runs
+            end)
+          )
+
+        total_duration / total_runs
+      else
+        0.0
+      end
 
     {:noreply,
      assign(socket,
@@ -343,11 +353,13 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
   defp format_duration(ms), do: "#{Float.round(ms / 1000, 1)}s"
 
   defp format_timestamp(nil), do: "—"
+
   defp format_timestamp(datetime) do
     Timex.from_now(datetime)
   end
 
   defp format_error_category(nil), do: "Unknown"
+
   defp format_error_category(category) do
     category
     |> String.split("_")

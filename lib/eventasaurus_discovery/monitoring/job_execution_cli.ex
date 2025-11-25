@@ -35,9 +35,10 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     source = Keyword.get(opts, :source)
 
     query =
-      from j in JobExecutionSummary,
+      from(j in JobExecutionSummary,
         order_by: [desc: j.inserted_at],
         limit: ^limit
+      )
 
     query = apply_filters(query, state, worker, source)
 
@@ -71,8 +72,9 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -hours * 3600)
 
     query =
-      from j in JobExecutionSummary,
+      from(j in JobExecutionSummary,
         where: j.inserted_at >= ^cutoff
+      )
 
     query = apply_filters(query, nil, worker, source)
 
@@ -100,10 +102,11 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     source = Keyword.get(opts, :source)
 
     query =
-      from j in JobExecutionSummary,
+      from(j in JobExecutionSummary,
         where: j.state == :failure,
         order_by: [desc: j.inserted_at],
         limit: ^limit
+      )
 
     # Use apply_filters for consistent filtering with proper PascalCase conversion
     query = apply_filters(query, nil, nil, source)
@@ -127,7 +130,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp filter_by_state(query, nil), do: query
 
   defp filter_by_state(query, state) when state in [:success, :failure, :cancelled, :discarded] do
-    from j in query, where: j.state == ^state
+    from(j in query, where: j.state == ^state)
   end
 
   defp filter_by_worker(query, nil), do: query
@@ -135,7 +138,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp filter_by_worker(query, worker) do
     # Escape SQL wildcard characters (% and _) to prevent injection
     pattern = escape_sql_wildcards(worker)
-    from j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%")
+    from(j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%"))
   end
 
   defp filter_by_source(query, nil), do: query
@@ -146,7 +149,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     pascal_source = Macro.camelize(source)
     # Escape SQL wildcard characters (% and _) to prevent injection
     pattern = escape_sql_wildcards(pascal_source)
-    from j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%")
+    from(j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%"))
   end
 
   # Escape SQL wildcard characters to prevent injection
@@ -159,6 +162,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp print_executions_table(executions) do
     IO.puts("\n" <> IO.ANSI.bright() <> "Recent Job Executions:" <> IO.ANSI.reset())
     IO.puts(String.duplicate("━", 120))
+
     IO.puts(
       format_row([
         pad("Source", 20),
@@ -168,6 +172,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
         pad("Started At", 20)
       ])
     )
+
     IO.puts(String.duplicate("━", 120))
 
     Enum.each(executions, fn exec ->
@@ -203,7 +208,11 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
       IO.puts("\n#{IO.ANSI.yellow()}┌ #{source} → #{job_name}#{IO.ANSI.reset()}")
       IO.puts("├ #{IO.ANSI.cyan()}Started:#{IO.ANSI.reset()} #{started}")
-      IO.puts("├ #{IO.ANSI.cyan()}Duration:#{IO.ANSI.reset()} #{format_duration(failure.duration_ms)}")
+
+      IO.puts(
+        "├ #{IO.ANSI.cyan()}Duration:#{IO.ANSI.reset()} #{format_duration(failure.duration_ms)}"
+      )
+
       IO.puts("└ #{IO.ANSI.red()}Error:#{IO.ANSI.reset()} #{error}")
     end)
 
@@ -256,13 +265,21 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
       |> Enum.map(fn {source, execs} ->
         source_successes = Enum.count(execs, &(&1.state == :success))
         source_total = length(execs)
-        source_rate = if source_total > 0, do: Float.round(source_successes / source_total * 100, 1), else: 0.0
+
+        source_rate =
+          if source_total > 0,
+            do: Float.round(source_successes / source_total * 100, 1),
+            else: 0.0
 
         {source, source_total, source_successes, source_rate}
       end)
       |> Enum.sort_by(fn {_, total, _, _} -> total end, :desc)
 
-    IO.puts("\n" <> IO.ANSI.bright() <> "Job Execution Statistics (Last #{hours} hours):" <> IO.ANSI.reset())
+    IO.puts(
+      "\n" <>
+        IO.ANSI.bright() <> "Job Execution Statistics (Last #{hours} hours):" <> IO.ANSI.reset()
+    )
+
     IO.puts(String.duplicate("━", 80))
     IO.puts("\n#{IO.ANSI.cyan()}Overall:#{IO.ANSI.reset()}")
     IO.puts("  Total Executions: #{total}")
@@ -273,6 +290,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
     IO.puts("\n#{IO.ANSI.cyan()}By Source:#{IO.ANSI.reset()}")
     IO.puts(String.duplicate("─", 80))
+
     IO.puts(
       format_row([
         pad("Source", 25),
@@ -281,6 +299,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
         pad("Rate", 10)
       ])
     )
+
     IO.puts(String.duplicate("─", 80))
 
     Enum.each(by_source, fn {source, total, successes, rate} ->
@@ -312,8 +331,8 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp extract_job_name(worker) do
     worker
     |> String.split(".")
-    |> List.last()
-    || "Unknown"
+    |> List.last() ||
+      "Unknown"
   end
 
   defp format_duration(nil), do: "N/A"

@@ -168,9 +168,13 @@ defmodule Mix.Tasks.Monitor.Chain do
       System.halt(0)
     end
 
-    source_display = source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display =
+      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
 
-    IO.puts("\n" <> IO.ANSI.cyan() <> "🔗 #{source_display} Job Execution Chains" <> IO.ANSI.reset())
+    IO.puts(
+      "\n" <> IO.ANSI.cyan() <> "🔗 #{source_display} Job Execution Chains" <> IO.ANSI.reset()
+    )
+
     IO.puts(String.duplicate("=", 64))
     IO.puts("Showing #{length(sync_jobs)} most recent sync jobs")
     IO.puts("")
@@ -333,7 +337,11 @@ defmodule Mix.Tasks.Monitor.Chain do
   defp display_chain_stats(stats) do
     IO.puts(IO.ANSI.green() <> "Chain Statistics:" <> IO.ANSI.reset())
     IO.puts("├─ Total Jobs: #{stats.total}")
-    IO.puts("├─ Completed: #{stats.completed} (#{format_percent(stats.completed / stats.total * 100)})")
+
+    IO.puts(
+      "├─ Completed: #{stats.completed} (#{format_percent(stats.completed / stats.total * 100)})"
+    )
+
     IO.puts("├─ Failed: #{stats.failed} (#{format_percent(stats.failed / stats.total * 100)})")
 
     cascade_count = length(stats.cascade_failures)
@@ -373,7 +381,9 @@ defmodule Mix.Tasks.Monitor.Chain do
         |> Enum.map(& &1.prevented_count)
         |> Enum.sum()
 
-      IO.puts("- #{cascade_count} cascade failures prevented #{total_prevented} downstream jobs from executing")
+      IO.puts(
+        "- #{cascade_count} cascade failures prevented #{total_prevented} downstream jobs from executing"
+      )
 
       # Group by error category for root cause
       error_categories =

@@ -90,7 +90,13 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Failed to enqueue index job: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

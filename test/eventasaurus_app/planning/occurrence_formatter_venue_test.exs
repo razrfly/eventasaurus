@@ -146,7 +146,8 @@ defmodule EventasaurusApp.Planning.OccurrenceFormatterVenueTest do
         # 3 AM UTC next day
       }
 
-      [option] = OccurrenceFormatter.format_venue_options([occurrence], timezone: "America/New_York")
+      [option] =
+        OccurrenceFormatter.format_venue_options([occurrence], timezone: "America/New_York")
 
       # 11 PM UTC = 6 PM EST (UTC-5)
       assert option.description =~ "6:00 PM to 10:00 PM"

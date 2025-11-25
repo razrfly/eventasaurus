@@ -141,7 +141,11 @@ defmodule Mix.Tasks.Discovery.GenerateSource do
       slug
     else
       Logger.error("❌ Error: Invalid source slug '#{slug}'")
-      Logger.error("   Slug must start with a letter and contain only lowercase letters, numbers, and underscores")
+
+      Logger.error(
+        "   Slug must start with a letter and contain only lowercase letters, numbers, and underscores"
+      )
+
       System.halt(1)
     end
   end

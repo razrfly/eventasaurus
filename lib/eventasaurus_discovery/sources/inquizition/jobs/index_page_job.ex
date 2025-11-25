@@ -56,7 +56,13 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.IndexPageJob do
     case venues do
       {:error, reason} ->
         Logger.error("❌ Failed to extract venues: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Venue extraction failed: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Venue extraction failed: #{inspect(reason)}",
+          external_id
+        )
+
         {:error, reason}
 
       venues when is_list(venues) ->

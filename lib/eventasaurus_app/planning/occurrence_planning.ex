@@ -27,25 +27,26 @@ defmodule EventasaurusApp.Planning.OccurrencePlanning do
 
   schema "occurrence_planning" do
     # The private event being planned
-    belongs_to :event, EventasaurusApp.Events.Event
+    belongs_to(:event, EventasaurusApp.Events.Event)
 
     # The poll used to decide on the occurrence
-    belongs_to :poll, EventasaurusApp.Events.Poll
+    belongs_to(:poll, EventasaurusApp.Events.Poll)
 
     # Polymorphic reference to the series entity (movie, venue, activity, etc.)
-    field :series_type, :string
-    field :series_id, :integer
+    field(:series_type, :string)
+    field(:series_id, :integer)
 
     # The result - NULL until poll finalizes, then links to created event_plan
-    belongs_to :event_plan, EventasaurusApp.Events.EventPlan,
+    belongs_to(:event_plan, EventasaurusApp.Events.EventPlan,
       foreign_key: :event_plan_id,
       define_field: false
+    )
 
-    field :event_plan_id, :id
+    field(:event_plan_id, :id)
 
     # Optional: filters used to generate poll options
     # Stores date ranges, time preferences, venue filters, etc.
-    field :filter_criteria, :map, default: %{}
+    field(:filter_criteria, :map, default: %{})
 
     timestamps()
   end

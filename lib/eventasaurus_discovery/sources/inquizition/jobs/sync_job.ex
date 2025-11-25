@@ -60,7 +60,8 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
         "language" => "en",
         "coverage" => "United Kingdom",
         "data_source" => "StoreLocatorWidgets CDN",
-        "cdn_endpoint" => "https://cdn.storelocatorwidgets.com/json/7f3962110f31589bc13cdc3b7b85cfd7",
+        "cdn_endpoint" =>
+          "https://cdn.storelocatorwidgets.com/json/7f3962110f31589bc13cdc3b7b85cfd7",
         "discovery_method" => "cdn_orchestration"
       }
     }
@@ -105,24 +106,48 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
 
               {:error, reason} = error ->
                 Logger.error("❌ Failed to enqueue index job: #{inspect(reason)}")
-                MetricsTracker.record_failure(job, "Failed to enqueue index job: #{inspect(reason)}", external_id)
+
+                MetricsTracker.record_failure(
+                  job,
+                  "Failed to enqueue index job: #{inspect(reason)}",
+                  external_id
+                )
+
                 error
             end
 
           nil ->
             Logger.error("❌ Invalid CDN response: missing 'stores' key")
-            MetricsTracker.record_failure(job, "Invalid CDN response: missing 'stores' key", external_id)
+
+            MetricsTracker.record_failure(
+              job,
+              "Invalid CDN response: missing 'stores' key",
+              external_id
+            )
+
             {:error, "Invalid CDN response format - expected {stores: [...]}"}
 
           _ ->
             Logger.error("❌ Invalid CDN response: 'stores' is not a list")
-            MetricsTracker.record_failure(job, "Invalid CDN response: 'stores' is not a list", external_id)
+
+            MetricsTracker.record_failure(
+              job,
+              "Invalid CDN response: 'stores' is not a list",
+              external_id
+            )
+
             {:error, "Invalid CDN response format - 'stores' must be a list"}
         end
 
       {:error, reason} = error ->
         Logger.error("❌ Failed to fetch venues from CDN: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, "Failed to fetch venues: #{inspect(reason)}", external_id)
+
+        MetricsTracker.record_failure(
+          job,
+          "Failed to fetch venues: #{inspect(reason)}",
+          external_id
+        )
+
         error
     end
   end

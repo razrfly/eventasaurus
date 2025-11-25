@@ -230,7 +230,8 @@ defmodule Mix.Tasks.Monitor.Errors do
   end
 
   defp display_errors(analysis, source, category_filter, limit) do
-    source_display = source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+    source_display =
+      source |> String.split("_") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
 
     header =
       if category_filter do

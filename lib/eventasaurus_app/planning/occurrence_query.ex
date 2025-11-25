@@ -279,6 +279,16 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     conditions =
       Enum.map(preferences, fn pref ->
         case time_range_for_preference(pref) do
+          # Special case for late_night which wraps around midnight (22:00-06:00)
+          {:wrap, start_hour, end_hour} ->
+            dynamic(
+              [q],
+              fragment("EXTRACT(HOUR FROM ? AT TIME ZONE 'UTC')::integer", q.starts_at) >=
+                ^start_hour or
+                fragment("EXTRACT(HOUR FROM ? AT TIME ZONE 'UTC')::integer", q.starts_at) <
+                  ^end_hour
+            )
+
           {start_hour, end_hour} ->
             dynamic(
               [q],
@@ -296,9 +306,10 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
     # Combine with OR logic
     if length(conditions) > 0 do
-      combined_condition = Enum.reduce(conditions, fn condition, acc ->
-        dynamic([], ^acc or ^condition)
-      end)
+      combined_condition =
+        Enum.reduce(conditions, fn condition, acc ->
+          dynamic([], ^acc or ^condition)
+        end)
 
       from(q in query, where: ^combined_condition)
     else
@@ -334,8 +345,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp time_range_for_preference("morning"), do: {6, 12}
   defp time_range_for_preference("afternoon"), do: {12, 17}
   defp time_range_for_preference("evening"), do: {17, 22}
-  defp time_range_for_preference("late_night"), do: {22, 30}
-  # 22:00-06:00 handled as 22-30 (wraps to next day)
+  # late_night wraps around midnight: 22:00-06:00 (22-23 or 0-5)
+  defp time_range_for_preference("late_night"), do: {:wrap, 22, 6}
   defp time_range_for_preference(_), do: nil
 
   # Venue time slot generation
@@ -367,8 +378,10 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
 
   defp get_date_range(_), do: []
 
-  defp get_meal_periods(%{meal_periods: periods}) when is_list(periods), do: periods
-  # Default to all meal periods if none specified
+  defp get_meal_periods(%{meal_periods: periods}) when is_list(periods) and length(periods) > 0,
+    do: periods
+
+  # Default to all meal periods if none specified or empty list
   defp get_meal_periods(_), do: ["breakfast", "lunch", "dinner"]
 
   defp should_include_meal_period?(date, "brunch") do
@@ -381,8 +394,13 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp create_venue_time_slot(venue, date, meal_period) do
     {start_hour, start_minute, end_hour, end_minute} = meal_period_to_time_range(meal_period)
 
-    starts_at = DateTime.new!(date, Time.new!(start_hour, start_minute, 0))
-    ends_at = DateTime.new!(date, Time.new!(end_hour, end_minute, 0))
+    # Create starts_at datetime with explicit UTC timezone
+    starts_at = DateTime.new!(date, Time.new!(start_hour, start_minute, 0), "Etc/UTC")
+
+    # Handle cross-midnight slots (e.g., late_night 22:00-01:00)
+    # If end_hour < start_hour, the slot spans midnight, so add 1 day to end date
+    end_date = if end_hour < start_hour, do: Date.add(date, 1), else: date
+    ends_at = DateTime.new!(end_date, Time.new!(end_hour, end_minute, 0), "Etc/UTC")
 
     %{
       venue_id: venue.id,
