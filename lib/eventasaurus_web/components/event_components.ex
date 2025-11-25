@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.EventComponents do
   import EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.TimezoneHelpers
   alias EventasaurusApp.DateTimeHelper
+  alias Eventasaurus.Integrations.Cinegraph
   import Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
 
@@ -1785,12 +1786,13 @@ defmodule EventasaurusWeb.EventComponents do
 
         <%= if @external_image_data["source"] == "tmdb" && get_in(@external_image_data, ["metadata"]) do %>
           <% metadata = @external_image_data["metadata"] %>
+          <% movie_data = %{tmdb_id: metadata["id"]} %>
           <div class="flex flex-col space-y-1">
             <div>
               "<%= metadata["title"] %>" (<%= format_tmdb_year(metadata["release_date"]) %>) -
-              <%= if metadata["type"] == "movie" && metadata["id"] do %>
+              <%= if metadata["type"] == "movie" && Cinegraph.linkable?(movie_data) do %>
                 <a
-                  href={"https://cinegraph.org/movies/tmdb/#{metadata["id"]}"}
+                  href={Cinegraph.movie_url(movie_data)}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="underline hover:text-indigo-700 transition-colors text-indigo-600"
