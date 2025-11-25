@@ -357,7 +357,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   @impl true
   def handle_event("open_plan_modal", _params, socket) do
     # Check authentication first to prevent crashes
-    if !socket.assigns[:auth_user] do
+    if is_nil(socket.assigns[:auth_user]) do
       {:noreply,
        socket
        |> put_flash(:info, "Please log in to create private events")
