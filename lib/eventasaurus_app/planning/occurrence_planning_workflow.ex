@@ -30,7 +30,6 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
 
   alias EventasaurusApp.{Repo, Events, Accounts}
   alias EventasaurusApp.Planning.{OccurrenceQuery, OccurrenceFormatter, OccurrencePlannings}
-  alias EventasaurusApp.Events.{Event, Poll, PollOption}
 
   @doc """
   Starts the flexible planning workflow.
@@ -133,7 +132,7 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
   defp validate_occurrences([]), do: {:error, :no_occurrences_found}
   defp validate_occurrences(_occurrences), do: :ok
 
-  defp create_private_event(series_type, series_id, user_id, occurrences, opts) do
+  defp create_private_event(series_type, series_id, _user_id, occurrences, opts) do
     title = Keyword.get(opts, :event_title) || build_default_event_title(series_type, series_id)
 
     # Extract venue_id from first occurrence
@@ -253,7 +252,7 @@ defmodule EventasaurusApp.Planning.OccurrencePlanningWorkflow do
     end
   end
 
-  defp build_default_event_title("movie", movie_id) do
+  defp build_default_event_title("movie", _movie_id) do
     # In a real implementation, fetch movie title from database
     "Movie Night - Group Planning"
   end

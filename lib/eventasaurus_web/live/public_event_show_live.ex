@@ -537,15 +537,23 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   @impl true
   def handle_event("preview_filter_results", params, socket) do
-    IO.inspect(params, label: "PREVIEW FILTER PARAMS")
-
     # Parse selected dates and convert to date range (same as apply_flexible_filters)
     selected_dates = Map.get(params, "selected_dates", [])
 
     {date_from, date_to} =
       if length(selected_dates) > 0 do
-        dates = Enum.map(selected_dates, &Date.from_iso8601!/1) |> Enum.sort(Date)
-        {List.first(dates), List.last(dates)}
+        dates =
+          selected_dates
+          |> Enum.map(&Date.from_iso8601/1)
+          |> Enum.filter(&match?({:ok, _}, &1))
+          |> Enum.map(fn {:ok, d} -> d end)
+          |> Enum.sort(Date)
+
+        if dates == [] do
+          {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+        else
+          {List.first(dates), List.last(dates)}
+        end
       else
         # Default to next 7 days if no dates selected
         {Date.utc_today(), Date.utc_today() |> Date.add(7)}
