@@ -707,4 +707,95 @@ defmodule EventasaurusApp.Factory do
       occurrences: %{}
     }
   end
+
+  @doc """
+  Factory for Movie schema (movies from TMDb/OMDb)
+  """
+  def movie_factory do
+    alias EventasaurusDiscovery.Movies.Movie
+
+    tmdb_data = %{
+      "popularity" => 125.5,
+      "vote_average" => 7.8,
+      "vote_count" => 1234,
+      "genre_ids" => [28, 12, 878],
+      "adult" => false,
+      "original_language" => "en",
+      "poster_path" => "/poster.jpg",
+      "backdrop_path" => "/backdrop.jpg"
+    }
+
+    %Movie{
+      tmdb_id: sequence(:tmdb_id, & &1),
+      title: sequence(:movie_title, &"Movie #{&1}"),
+      original_title: sequence(:movie_original_title, &"Original Movie #{&1}"),
+      overview: "An exciting movie with great action and drama.",
+      poster_url: "https://image.tmdb.org/t/p/w500/poster.jpg",
+      backdrop_url: "https://image.tmdb.org/t/p/w1280/backdrop.jpg",
+      release_date: ~D[2024-03-15],
+      runtime: 148,
+      metadata: %{
+        "tmdb_data" => tmdb_data
+      },
+      # Set virtual field for MovieSchema.ex compatibility
+      tmdb_metadata: tmdb_data
+    }
+  end
+
+  @doc """
+  Factory for Movie with full TMDb metadata (genres, cast, crew)
+  """
+  def movie_with_full_metadata_factory do
+    tmdb_data = %{
+      "popularity" => 125.5,
+      "vote_average" => 7.8,
+      "vote_count" => 1234,
+      "genre_ids" => [28, 12, 878],
+      "adult" => false,
+      "original_language" => "en",
+      "poster_path" => "/poster.jpg",
+      "backdrop_path" => "/backdrop.jpg",
+      "genres" => [
+        %{"id" => 28, "name" => "Action"},
+        %{"id" => 12, "name" => "Adventure"},
+        %{"id" => 878, "name" => "Science Fiction"}
+      ],
+      "credits" => %{
+        "cast" => [
+          %{"name" => "Actor One", "character" => "Hero"},
+          %{"name" => "Actor Two", "character" => "Villain"}
+        ],
+        "crew" => [
+          %{"name" => "Director Name", "job" => "Director"}
+        ]
+      },
+      "release_date" => "2024-03-15",
+      "runtime" => 148
+    }
+
+    build(:movie, %{
+      metadata: %{
+        "tmdb_data" => tmdb_data
+      },
+      tmdb_metadata: tmdb_data
+    })
+  end
+
+  @doc """
+  Factory for Movie with OMDb metadata
+  """
+  def movie_with_omdb_metadata_factory do
+    build(:movie, %{
+      metadata: %{
+        "Released" => "15 Mar 2024",
+        "Genre" => "Action, Adventure, Sci-Fi",
+        "Director" => "Director Name",
+        "Actors" => "Actor One, Actor Two, Actor Three",
+        "Runtime" => "148 min",
+        "imdbRating" => "7.8",
+        "imdbVotes" => "12,345",
+        "Poster" => "https://example.com/poster.jpg"
+      }
+    })
+  end
 end

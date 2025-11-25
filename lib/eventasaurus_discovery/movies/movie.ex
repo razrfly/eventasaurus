@@ -31,6 +31,9 @@ defmodule EventasaurusDiscovery.Movies.Movie do
     field(:runtime, :integer)
     field(:metadata, :map, default: %{})
 
+    # Virtual field for convenient access to TMDb metadata nested in metadata map
+    field(:tmdb_metadata, :map, virtual: true)
+
     many_to_many(:public_events, EventasaurusDiscovery.PublicEvents.PublicEvent,
       join_through: EventasaurusDiscovery.PublicEvents.EventMovie,
       on_replace: :delete

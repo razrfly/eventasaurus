@@ -4,7 +4,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
-  alias EventasaurusWeb.Components.{PublicPlanWithFriendsModal, Breadcrumbs, MovieDetailsCard}
+  alias EventasaurusWeb.Components.{PublicPlanWithFriendsModal, Breadcrumbs, MovieDetailsCard, OpenGraphComponent}
   alias EventasaurusWeb.Components.Events.OccurrenceDisplay
   alias EventasaurusWeb.Components.Events.EventScheduleDisplay
   alias EventasaurusWeb.StaticMapComponent
@@ -319,6 +319,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             ["en"]
           end
 
+        # Generate Open Graph meta tags
+        og_tags = build_event_open_graph(enriched_event, description, image_url, canonical_url_for_schemas)
+
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
@@ -330,6 +333,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:aggregated_movie_url, aggregated_url)
         |> assign(:breadcrumb_items, breadcrumb_items)
         |> assign(:available_languages, available_languages)
+        |> assign(:open_graph, og_tags)
         |> SEOHelpers.assign_meta_tags(
           title: enriched_event.display_title,
           description: description,
@@ -2081,5 +2085,31 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     Enum.map(0..(days - 1), fn offset ->
       Date.add(today, offset)
     end)
+  end
+
+  # Build Open Graph meta tags for event pages
+  defp build_event_open_graph(event, description, image_url, canonical_url) do
+    # Wrap image with CDN
+    cdn_image_url = CDN.url(image_url)
+
+    # Determine Open Graph type
+    og_type = if is_movie_screening?(event), do: "video.movie", else: "event"
+
+    # Generate Open Graph tags
+    Phoenix.HTML.Safe.to_iodata(
+      OpenGraphComponent.open_graph_tags(%{
+        type: og_type,
+        title: event.display_title,
+        description: description,
+        image_url: cdn_image_url,
+        image_width: 1200,
+        image_height: 630,
+        url: canonical_url,
+        site_name: "Wombie",
+        locale: "en_US",
+        twitter_card: "summary_large_image"
+      })
+    )
+    |> IO.iodata_to_binary()
   end
 end

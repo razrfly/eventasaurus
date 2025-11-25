@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.Components.{MovieDetailsCard, Breadcrumbs, PublicPlanWithFriendsModal}
   alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
+  alias EventasaurusWeb.JsonLd.MovieSchema
+  alias Eventasaurus.CDN
   import Ecto.Query
 
   @impl true
@@ -152,6 +154,12 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             _ -> nil
           end
 
+        # Generate JSON-LD structured data for movie page
+        json_ld = MovieSchema.generate(movie, city, venues_with_info)
+
+        # Generate Open Graph meta tags
+        og_tags = build_movie_open_graph(movie, city, total_showtimes)
+
         {:noreply,
          socket
          |> assign(:page_title, "#{movie.title} - #{city.name}")
@@ -161,7 +169,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
          |> assign(:total_showtimes, total_showtimes)
          |> assign(:breadcrumb_items, breadcrumb_items)
          |> assign(:available_languages, available_languages)
-         |> assign(:primary_category, primary_category)}
+         |> assign(:primary_category, primary_category)
+         |> assign(:json_ld, json_ld)
+         |> assign(:open_graph, og_tags)}
     end
   end
 
@@ -760,4 +770,49 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         end
     end
   end
+
+  # Build Open Graph meta tags for movie page
+  defp build_movie_open_graph(movie, city, total_showtimes) do
+    base_url = EventasaurusWeb.Layouts.get_base_url()
+
+    # Get movie poster image
+    image_url =
+      cond do
+        movie.tmdb_metadata && movie.tmdb_metadata["poster_path"] ->
+          "https://image.tmdb.org/t/p/w500#{movie.tmdb_metadata["poster_path"]}"
+
+        movie.metadata && movie.metadata["poster"] ->
+          movie.metadata["poster"]
+
+        true ->
+          movie_name_encoded = URI.encode(movie.title)
+          "https://placehold.co/500x750/4ECDC4/FFFFFF?text=#{movie_name_encoded}"
+      end
+
+    # Wrap with CDN
+    cdn_image_url = CDN.url(image_url)
+
+    # Build description
+    description = "Watch #{movie.title} in #{city.name}. #{total_showtimes} #{pluralize_showtime(total_showtimes)} available at multiple cinemas."
+
+    # Render Open Graph component
+    Phoenix.HTML.Safe.to_iodata(
+      EventasaurusWeb.Components.OpenGraphComponent.open_graph_tags(%{
+        type: "video.movie",
+        title: "#{movie.title} - #{city.name}",
+        description: description,
+        image_url: cdn_image_url,
+        image_width: 500,
+        image_height: 750,
+        url: "#{base_url}/c/#{city.slug}/movies/#{movie.slug}",
+        site_name: "Wombie",
+        locale: "en_US",
+        twitter_card: "summary_large_image"
+      })
+    )
+    |> IO.iodata_to_binary()
+  end
+
+  defp pluralize_showtime(1), do: "showtime"
+  defp pluralize_showtime(_), do: "showtimes"
 end

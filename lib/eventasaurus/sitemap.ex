@@ -1,7 +1,7 @@
 defmodule Eventasaurus.Sitemap do
   @moduledoc """
   Generates XML sitemaps for the Wombie website.
-  Uses Sitemapper to generate sitemaps for activities, cities, venues, containers, and static pages.
+  Uses Sitemapper to generate sitemaps for activities, cities, venues, containers, movies, and aggregations.
 
   ## Completed Phases
   - Phase 1: Static pages (/, /activities, /about, etc.)
@@ -9,6 +9,8 @@ defmodule Eventasaurus.Sitemap do
   - Phase 3: Cities (/c/:city_slug and subpages)
   - Phase 4: Venues (/c/:city_slug/venues/:venue_slug)
   - Phase 5: Containers (festivals, conferences, tours, etc.)
+  - Phase 6: Movie aggregation pages (/c/:city_slug/movies/:movie_slug)
+  - Phase 7: Content aggregation pages (/:content_type/:identifier)
   """
 
   alias EventasaurusApp.Repo
@@ -70,7 +72,7 @@ defmodule Eventasaurus.Sitemap do
 
   @doc """
   Creates a stream of URLs for the sitemap.
-  Includes: Static pages, activities, cities, venues, and containers.
+  Includes: Static pages, activities, cities, venues, containers, movies, and aggregations.
 
   ## Options
   * `:host` - Override host for URL generation
@@ -82,7 +84,9 @@ defmodule Eventasaurus.Sitemap do
       activity_urls(opts),
       city_urls(opts),
       venue_urls(opts),
-      container_urls(opts)
+      container_urls(opts),
+      movie_urls(opts),
+      aggregation_urls(opts)
     ]
     |> Enum.reduce(Stream.concat([]), fn stream, acc ->
       Stream.concat(acc, stream)
@@ -340,6 +344,84 @@ defmodule Eventasaurus.Sitemap do
         loc: "#{base_url}/c/#{container.city_slug}/#{type_plural}/#{container.slug}",
         changefreq: :weekly,
         priority: 0.8,
+        lastmod: lastmod
+      }
+    end)
+  end
+
+  # Returns a stream of all movie aggregation pages in active cities
+  defp movie_urls(opts) do
+    base_url = get_base_url(opts)
+
+    # Query movies that have screenings in active cities
+    # Get distinct movie + city combinations
+    from(m in EventasaurusDiscovery.Movies.Movie,
+      join: em in "event_movies",
+      on: em.movie_id == m.id,
+      join: pe in PublicEvent,
+      on: pe.id == em.event_id,
+      join: v in EventasaurusApp.Venues.Venue,
+      on: v.id == pe.venue_id,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: c.id == v.city_id,
+      select: %{
+        movie_slug: m.slug,
+        city_slug: c.slug,
+        updated_at: m.updated_at
+      },
+      where: c.discovery_enabled == true and not is_nil(m.slug) and m.slug != "",
+      distinct: [m.id, c.id]
+    )
+    |> Repo.stream()
+    |> Stream.map(fn movie ->
+      lastmod =
+        if movie.updated_at do
+          NaiveDateTime.to_date(movie.updated_at)
+        else
+          Date.utc_today()
+        end
+
+      %Sitemapper.URL{
+        loc: "#{base_url}/c/#{movie.city_slug}/movies/#{movie.movie_slug}",
+        changefreq: :weekly,
+        priority: 0.8,
+        lastmod: lastmod
+      }
+    end)
+  end
+
+  # Returns a stream of all content aggregation pages
+  defp aggregation_urls(opts) do
+    base_url = get_base_url(opts)
+
+    # Query aggregated event groups (social, food, music, comedy, etc.)
+    from(aeg in EventasaurusDiscovery.PublicEvents.AggregatedEventGroup,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: aeg.city_id == c.id,
+      select: %{
+        content_type: aeg.aggregation_type,
+        identifier: aeg.identifier,
+        city_slug: c.slug,
+        updated_at: aeg.updated_at
+      },
+      where: c.discovery_enabled == true and not is_nil(aeg.identifier) and aeg.identifier != ""
+    )
+    |> Repo.stream()
+    |> Stream.map(fn agg ->
+      lastmod =
+        if agg.updated_at do
+          NaiveDateTime.to_date(agg.updated_at)
+        else
+          Date.utc_today()
+        end
+
+      # Convert schema.org type to URL slug
+      content_type_slug = EventasaurusDiscovery.AggregationTypeSlug.to_slug(agg.content_type)
+
+      %Sitemapper.URL{
+        loc: "#{base_url}/c/#{agg.city_slug}/#{content_type_slug}/#{agg.identifier}",
+        changefreq: :weekly,
+        priority: 0.7,
         lastmod: lastmod
       }
     end)

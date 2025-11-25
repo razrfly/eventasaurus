@@ -1,0 +1,429 @@
+defmodule Eventasaurus.SitemapTest do
+  use EventasaurusApp.DataCase, async: true
+
+  alias Eventasaurus.Sitemap
+  alias EventasaurusDiscovery.Movies.Movie
+  alias EventasaurusDiscovery.PublicEvents.{PublicEvent, AggregatedEventGroup}
+  alias EventasaurusApp.Venues.Venue
+  alias EventasaurusDiscovery.Locations.{City, Country}
+
+  describe "movie_urls/1" do
+    setup do
+      # Create country and city
+      country = insert(:country, code: "PL", slug: "poland")
+      city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
+
+      # Create venue in the city
+      venue = insert(:venue, slug: "cinema-city", city_id: city.id, city_ref: city)
+
+      # Create movie
+      movie = insert(:movie, slug: "dune-part-two", updated_at: ~N[2024-12-15 10:00:00])
+
+      # Create screening event
+      event = insert(:public_event,
+        slug: "dune-screening",
+        venue_id: venue.id,
+        venue: venue,
+        starts_at: ~U[2024-12-20 19:00:00Z]
+      )
+
+      # Associate movie with event
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event.id,
+        movie_id: movie.id
+      })
+
+      {:ok, movie: movie, city: city, venue: venue, event: event}
+    end
+
+    test "generates URLs for movies with screenings in active cities", %{movie: movie, city: city} do
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      movie_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/#{city.slug}/movies/#{movie.slug}"
+      end)
+
+      assert movie_url != nil
+      assert movie_url.changefreq == :weekly
+      assert movie_url.priority == 0.8
+      assert movie_url.lastmod == NaiveDateTime.to_date(movie.updated_at)
+    end
+
+    test "does not generate URLs for movies in cities with discovery disabled" do
+      # Create city with discovery disabled
+      country = insert(:country, code: "US", slug: "usa")
+      disabled_city = insert(:city, slug: "inactive-city", discovery_enabled: false, country: country)
+
+      # Create venue in disabled city
+      venue = insert(:venue, slug: "inactive-venue", city_id: disabled_city.id, city_ref: disabled_city)
+
+      # Create movie and screening
+      movie = insert(:movie, slug: "test-movie")
+      event = insert(:public_event, venue_id: venue.id, venue: venue)
+
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event.id,
+        movie_id: movie.id
+      })
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should not include URL for movie in disabled city
+      movie_url = Enum.find(urls, fn url ->
+        String.contains?(url.loc, "/c/#{disabled_city.slug}/movies/#{movie.slug}")
+      end)
+
+      assert movie_url == nil
+    end
+
+    test "generates distinct URLs for movies shown in multiple cities" do
+      # Create second city
+      country = insert(:country, code: "PL", slug: "poland")
+      city2 = insert(:city, slug: "warsaw", discovery_enabled: true, country: country)
+
+      # Create venue in second city
+      venue2 = insert(:venue, slug: "cinema-warsaw", city_id: city2.id, city_ref: city2)
+
+      # Create movie
+      movie = insert(:movie, slug: "multi-city-movie")
+
+      # Create screening in first city (from setup)
+      city1 = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
+      venue1 = insert(:venue, slug: "cinema-krakow", city_id: city1.id, city_ref: city1)
+      event1 = insert(:public_event, venue_id: venue1.id, venue: venue1)
+
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event1.id,
+        movie_id: movie.id
+      })
+
+      # Create screening in second city
+      event2 = insert(:public_event, venue_id: venue2.id, venue: venue2)
+
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event2.id,
+        movie_id: movie.id
+      })
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should have URLs for both cities
+      krakow_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/movies/#{movie.slug}"
+      end)
+
+      warsaw_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/warsaw/movies/#{movie.slug}"
+      end)
+
+      assert krakow_url != nil
+      assert warsaw_url != nil
+    end
+
+    test "does not generate URLs for movies with nil or empty slugs" do
+      country = insert(:country, code: "PL", slug: "poland")
+      city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
+      venue = insert(:venue, city_id: city.id, city_ref: city)
+
+      # Movie with nil slug
+      movie_nil = insert(:movie, slug: nil)
+      event1 = insert(:public_event, venue_id: venue.id, venue: venue)
+
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event1.id,
+        movie_id: movie_nil.id
+      })
+
+      # Movie with empty slug
+      movie_empty = insert(:movie, slug: "")
+      event2 = insert(:public_event, venue_id: venue.id, venue: venue)
+
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event2.id,
+        movie_id: movie_empty.id
+      })
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should not have any URLs with nil or empty slugs
+      invalid_urls = Enum.filter(urls, fn url ->
+        String.contains?(url.loc, "/movies/") and
+          (String.ends_with?(url.loc, "/movies/") or String.contains?(url.loc, "/movies/nil"))
+      end)
+
+      assert invalid_urls == []
+    end
+
+    test "uses current date for lastmod when updated_at is nil" do
+      country = insert(:country, code: "PL", slug: "poland")
+      city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
+      venue = insert(:venue, city_id: city.id, city_ref: city)
+
+      # Movie with nil updated_at
+      movie = insert(:movie, slug: "no-update-date", updated_at: nil)
+      event = insert(:public_event, venue_id: venue.id, venue: venue)
+
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: event.id,
+        movie_id: movie.id
+      })
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      movie_url = Enum.find(urls, fn url ->
+        String.contains?(url.loc, "/movies/#{movie.slug}")
+      end)
+
+      assert movie_url != nil
+      assert movie_url.lastmod == Date.utc_today()
+    end
+  end
+
+  describe "aggregation_urls/1" do
+    setup do
+      # Create country and city
+      country = insert(:country, code: "PL", slug: "poland")
+      city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
+
+      {:ok, city: city, country: country}
+    end
+
+    test "generates URLs for aggregated event groups", %{city: city} do
+      # Create aggregated event group
+      aeg = insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "SocialEvent",
+        identifier: "trivia-nights",
+        updated_at: ~N[2024-12-15 10:00:00]
+      )
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should generate URL with schema type converted to slug (SocialEvent -> social)
+      agg_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/social/trivia-nights"
+      end)
+
+      assert agg_url != nil
+      assert agg_url.changefreq == :weekly
+      assert agg_url.priority == 0.7
+      assert agg_url.lastmod == NaiveDateTime.to_date(aeg.updated_at)
+    end
+
+    test "converts different schema types to correct URL slugs", %{city: city} do
+      # Create aggregations for different schema types
+      # Uses EventasaurusDiscovery.AggregationTypeSlug mappings
+      aggregations = [
+        {"SocialEvent", "trivia", "social"},
+        {"FoodEvent", "tastings", "food"},
+        {"MusicEvent", "concerts", "music"},
+        {"ComedyEvent", "standup", "comedy"},
+        {"TheaterEvent", "plays", "theater"},
+        {"ScreeningEvent", "films", "movies"}
+      ]
+
+      for {schema_type, identifier, expected_slug} <- aggregations do
+        insert(:aggregated_event_group,
+          city_id: city.id,
+          aggregation_type: schema_type,
+          identifier: identifier
+        )
+      end
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      for {_schema_type, identifier, expected_slug} <- aggregations do
+        agg_url = Enum.find(urls, fn url ->
+          url.loc == "https://wombie.fyi/c/krakow/#{expected_slug}/#{identifier}"
+        end)
+
+        assert agg_url != nil, "Expected URL for #{expected_slug}/#{identifier}"
+      end
+    end
+
+    test "does not generate URLs for aggregations in cities with discovery disabled", %{country: country} do
+      # Create city with discovery disabled
+      disabled_city = insert(:city, slug: "inactive-city", discovery_enabled: false, country: country)
+
+      # Create aggregation in disabled city
+      insert(:aggregated_event_group,
+        city_id: disabled_city.id,
+        aggregation_type: "SocialEvent",
+        identifier: "events"
+      )
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should not include URL for aggregation in disabled city
+      agg_url = Enum.find(urls, fn url ->
+        String.contains?(url.loc, "/c/#{disabled_city.slug}/")
+      end)
+
+      assert agg_url == nil
+    end
+
+    test "does not generate URLs for aggregations with nil or empty identifiers", %{city: city} do
+      # Aggregation with nil identifier
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "SocialEvent",
+        identifier: nil
+      )
+
+      # Aggregation with empty identifier
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "MusicEvent",
+        identifier: ""
+      )
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should not have any URLs with nil or empty identifiers
+      invalid_urls = Enum.filter(urls, fn url ->
+        String.contains?(url.loc, "/c/#{city.slug}/") and
+          String.ends_with?(url.loc, "/")
+      end)
+
+      # Only city-level URLs should end with city slug
+      city_level_urls = Enum.filter(invalid_urls, fn url ->
+        url.loc == "https://wombie.fyi/c/#{city.slug}" or
+          String.ends_with?(url.loc, "/venues") or
+          String.ends_with?(url.loc, "/events") or
+          String.ends_with?(url.loc, "/search") or
+          String.ends_with?(url.loc, "/festivals") or
+          String.ends_with?(url.loc, "/conferences") or
+          String.ends_with?(url.loc, "/tours") or
+          String.ends_with?(url.loc, "/series") or
+          String.ends_with?(url.loc, "/exhibitions") or
+          String.ends_with?(url.loc, "/tournaments")
+      end)
+
+      # All invalid URLs should be city-level URLs
+      assert length(invalid_urls) == length(city_level_urls)
+    end
+
+    test "uses current date for lastmod when updated_at is nil", %{city: city} do
+      # Aggregation with nil updated_at
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "SocialEvent",
+        identifier: "no-update-date",
+        updated_at: nil
+      )
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      agg_url = Enum.find(urls, fn url ->
+        String.contains?(url.loc, "/social/no-update-date")
+      end)
+
+      assert agg_url != nil
+      assert agg_url.lastmod == Date.utc_today()
+    end
+
+    test "generates URLs for multiple aggregations in same city", %{city: city} do
+      # Create multiple aggregations
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "SocialEvent",
+        identifier: "trivia"
+      )
+
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "SocialEvent",
+        identifier: "karaoke"
+      )
+
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "FoodEvent",
+        identifier: "wine-tasting"
+      )
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      trivia_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/social/trivia"
+      end)
+
+      karaoke_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/social/karaoke"
+      end)
+
+      wine_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/food/wine-tasting"
+      end)
+
+      assert trivia_url != nil
+      assert karaoke_url != nil
+      assert wine_url != nil
+    end
+  end
+
+  describe "stream_urls/1 integration" do
+    test "includes all URL types in stream" do
+      country = insert(:country, code: "PL", slug: "poland")
+      city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
+      venue = insert(:venue, slug: "test-venue", city_id: city.id, city_ref: city)
+
+      # Create an activity
+      activity = insert(:public_event,
+        slug: "test-activity",
+        venue_id: venue.id,
+        venue: venue,
+        starts_at: ~U[2024-12-20 19:00:00Z],
+        updated_at: ~N[2024-12-15 10:00:00]
+      )
+
+      # Create a movie with screening
+      movie = insert(:movie, slug: "test-movie")
+      Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
+        event_id: activity.id,
+        movie_id: movie.id
+      })
+
+      # Create an aggregation
+      insert(:aggregated_event_group,
+        city_id: city.id,
+        aggregation_type: "SocialEvent",
+        identifier: "test-agg"
+      )
+
+      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
+
+      # Should include static URLs
+      homepage = Enum.find(urls, fn url -> url.loc == "https://wombie.fyi" end)
+      assert homepage != nil
+
+      # Should include activity URLs
+      activity_url = Enum.find(urls, fn url ->
+        String.contains?(url.loc, "/activities/#{activity.slug}")
+      end)
+      assert activity_url != nil
+
+      # Should include city URLs
+      city_url = Enum.find(urls, fn url -> url.loc == "https://wombie.fyi/c/krakow" end)
+      assert city_url != nil
+
+      # Should include venue URLs
+      venue_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/venues/#{venue.slug}"
+      end)
+      assert venue_url != nil
+
+      # Should include movie URLs
+      movie_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/movies/#{movie.slug}"
+      end)
+      assert movie_url != nil
+
+      # Should include aggregation URLs
+      agg_url = Enum.find(urls, fn url ->
+        url.loc == "https://wombie.fyi/c/krakow/social/test-agg"
+      end)
+      assert agg_url != nil
+    end
+  end
+end
