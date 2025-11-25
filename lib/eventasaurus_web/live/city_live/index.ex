@@ -11,12 +11,14 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Eventasaurus.CDN
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
+  alias EventasaurusWeb.Components.OpenGraphComponent
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Helpers.LanguageHelpers
@@ -65,6 +67,9 @@ defmodule EventasaurusWeb.CityLive.Index do
           city_with_stats = Map.put(city, :stats, city_stats)
           social_card_path = UrlBuilder.build_path(:city, city_with_stats)
 
+          # Generate Open Graph meta tags
+          og_tags = build_city_open_graph(city, city_stats, social_card_path, request_uri)
+
           {:ok,
            socket
            |> assign(:city, city)
@@ -79,6 +84,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:all_events_count, 0)
            |> assign(:categories, CityPageCache.get_categories(&Categories.list_categories/0))
            |> assign(:events, [])
+           |> assign(:open_graph, og_tags)
            |> SEOHelpers.assign_meta_tags(
              title: page_title(city),
              description: meta_description(city),
@@ -962,5 +968,38 @@ defmodule EventasaurusWeb.CityLive.Index do
         categories_count: 0
       }
     end
+  end
+
+  # Build Open Graph meta tags for city pages
+  defp build_city_open_graph(city, stats, social_card_path, request_uri) do
+    # Build absolute social card URL
+    base_url = EventasaurusWeb.UrlHelper.build_url("", request_uri)
+    image_url = "#{base_url}#{social_card_path}"
+
+    # Wrap with CDN
+    cdn_image_url = CDN.url(image_url)
+
+    # Build canonical URL
+    canonical_url = "#{base_url}/c/#{city.slug}"
+
+    # Build description with stats
+    description = meta_description(city)
+
+    # Generate Open Graph tags
+    Phoenix.HTML.Safe.to_iodata(
+      OpenGraphComponent.open_graph_tags(%{
+        type: "website",
+        title: page_title(city),
+        description: description,
+        image_url: cdn_image_url,
+        image_width: 800,
+        image_height: 419,
+        url: canonical_url,
+        site_name: "Wombie",
+        locale: "en_US",
+        twitter_card: "summary_large_image"
+      })
+    )
+    |> IO.iodata_to_binary()
   end
 end

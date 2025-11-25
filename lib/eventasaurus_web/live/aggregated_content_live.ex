@@ -9,6 +9,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.JsonLd.ItemListSchema
+  alias Eventasaurus.CDN
 
   # Multi-city route: /:content_type/:identifier?city=krakow&scope=all
   # City will be determined from query params in handle_params
@@ -216,6 +218,15 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       # Update page title after city is finalized
       page_title = format_page_title(content_type, identifier, city)
 
+      # Get all events for the current scope for JSON-LD
+      events_for_schema = if scope == :all_cities, do: all_events, else: city_events
+
+      # Generate JSON-LD structured data
+      json_ld = ItemListSchema.generate(events_for_schema, content_type, identifier, city, max_items: 20)
+
+      # Generate Open Graph meta tags
+      og_tags = build_aggregation_open_graph(content_type, identifier, city, total_event_count, hero_image)
+
       socket
       |> assign(:scope, scope)
       |> assign(:page_title, page_title)
@@ -226,6 +237,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       |> assign(:total_event_count, total_event_count)
       |> assign(:hero_image, hero_image)
       |> assign(:breadcrumb_items, breadcrumb_items)
+      |> assign(:json_ld, json_ld)
+      |> assign(:open_graph, og_tags)
     end
   end
 
@@ -716,4 +729,78 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       "Price not available"
     end
   end
+
+  # Build Open Graph meta tags for aggregation pages
+  defp build_aggregation_open_graph(content_type, identifier, city, total_event_count, hero_image) do
+    base_url = EventasaurusWeb.Layouts.get_base_url()
+
+    # Convert identifier to title case
+    identifier_name =
+      identifier
+      |> String.replace("-", " ")
+      |> String.split()
+      |> Enum.map(&String.capitalize/1)
+      |> Enum.join(" ")
+
+    # Convert schema type to friendly name
+    type_name = schema_type_to_friendly_name(content_type)
+
+    # Build title and description
+    title = "#{identifier_name} - #{type_name} in #{city.name}"
+    description = "Discover #{String.replace(identifier, "-", " ")} and other #{type_name} in #{city.name}. #{total_event_count} #{pluralize("event", total_event_count)} available."
+
+    # Use hero image or generate placeholder
+    image_url =
+      if hero_image do
+        hero_image
+      else
+        identifier_encoded = URI.encode(identifier_name)
+        "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{identifier_encoded}"
+      end
+
+    # Wrap with CDN
+    cdn_image_url = CDN.url(image_url)
+
+    # Build canonical URL
+    content_type_slug = EventasaurusDiscovery.AggregationTypeSlug.to_slug(content_type)
+    canonical_url = "#{base_url}/c/#{city.slug}/#{content_type_slug}/#{identifier}"
+
+    # Generate Open Graph tags
+    Phoenix.HTML.Safe.to_iodata(
+      EventasaurusWeb.Components.OpenGraphComponent.open_graph_tags(%{
+        type: "website",
+        title: title,
+        description: description,
+        image_url: cdn_image_url,
+        image_width: 1200,
+        image_height: 630,
+        url: canonical_url,
+        site_name: "Wombie",
+        locale: "en_US",
+        twitter_card: "summary_large_image"
+      })
+    )
+    |> IO.iodata_to_binary()
+  end
+
+  # Convert schema.org type to friendly name
+  defp schema_type_to_friendly_name(schema_type) do
+    case schema_type do
+      "SocialEvent" -> "social events"
+      "FoodEvent" -> "food events"
+      "MusicEvent" -> "music events"
+      "ComedyEvent" -> "comedy shows"
+      "DanceEvent" -> "dance performances"
+      "EducationEvent" -> "classes and workshops"
+      "SportsEvent" -> "sports events"
+      "TheaterEvent" -> "theater performances"
+      "Festival" -> "festivals"
+      "ScreeningEvent" -> "movie screenings"
+      _ -> "events"
+    end
+  end
+
+  # Helper for pluralization
+  defp pluralize(word, 1), do: word
+  defp pluralize(word, _), do: word <> "s"
 end

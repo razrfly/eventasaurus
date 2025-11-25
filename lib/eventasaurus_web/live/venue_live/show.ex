@@ -1,11 +1,13 @@
 defmodule EventasaurusWeb.VenueLive.Show do
   use EventasaurusWeb, :live_view
 
+  alias Eventasaurus.CDN
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusWeb.Components.OpenGraphComponent
   alias EventasaurusWeb.VenueLive.Components.ImageGallery
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Components.Breadcrumbs
@@ -163,6 +165,9 @@ defmodule EventasaurusWeb.VenueLive.Show do
         "/venues/#{venue.slug}"
       end
 
+    # Generate Open Graph meta tags
+    og_tags = build_venue_open_graph(venue, description, canonical_path, socket.assigns.request_uri)
+
     socket =
       socket
       |> assign(:venue, venue)
@@ -172,6 +177,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:nearby_events, nearby_events)
       |> assign(:breadcrumb_items, breadcrumb_items)
       |> assign(:loading, false)
+      |> assign(:open_graph, og_tags)
       |> SEOHelpers.assign_meta_tags(
         title: "#{venue.name} - Wombie",
         description: description,
@@ -474,6 +480,42 @@ defmodule EventasaurusWeb.VenueLive.Show do
       end
 
     "#{base_url}#{path}"
+  end
+
+  # Build Open Graph meta tags for venue pages
+  defp build_venue_open_graph(venue, description, canonical_path, request_uri) do
+    # Build absolute canonical URL
+    base_url = UrlHelper.build_url("", request_uri)
+    canonical_url = "#{base_url}#{canonical_path}"
+
+    # Use venue cover image if available, otherwise placeholder
+    image_url =
+      if venue.cover_image_url do
+        venue.cover_image_url
+      else
+        venue_name_encoded = URI.encode(venue.name)
+        "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{venue_name_encoded}"
+      end
+
+    # Wrap with CDN
+    cdn_image_url = CDN.url(image_url)
+
+    # Generate Open Graph tags
+    Phoenix.HTML.Safe.to_iodata(
+      OpenGraphComponent.open_graph_tags(%{
+        type: "place",
+        title: "#{venue.name} - Wombie",
+        description: description,
+        image_url: cdn_image_url,
+        image_width: 1200,
+        image_height: 630,
+        url: canonical_url,
+        site_name: "Wombie",
+        locale: "en_US",
+        twitter_card: "summary_large_image"
+      })
+    )
+    |> IO.iodata_to_binary()
   end
 
   # Get base URL from request_uri or fallback to config
