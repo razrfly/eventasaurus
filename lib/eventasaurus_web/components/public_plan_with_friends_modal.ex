@@ -5,7 +5,6 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   Does NOT include direct add functionality (invitation only).
   """
   use Phoenix.Component
-  import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
 
   alias EventasaurusWeb.Components.Invitations.{
     HistoricalParticipantsComponent,
@@ -663,7 +662,6 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         str when is_binary(str) ->
           case DateTime.from_iso8601(str) do
             {:ok, dt, _offset} -> dt
-            {:ok, dt} -> dt
             _ -> DateTime.utc_now()
           end
 

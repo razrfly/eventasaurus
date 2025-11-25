@@ -279,7 +279,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
     conditions =
       Enum.map(preferences, fn pref ->
         case time_range_for_preference(pref) do
-          # Special case for late_night which wraps around midnight (22:00-06:00)
+          # Special case for late_night which wraps around midnight (22:00-02:00)
           {:wrap, start_hour, end_hour} ->
             dynamic(
               [q],
@@ -345,8 +345,8 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp time_range_for_preference("morning"), do: {6, 12}
   defp time_range_for_preference("afternoon"), do: {12, 17}
   defp time_range_for_preference("evening"), do: {17, 22}
-  # late_night wraps around midnight: 22:00-06:00 (22-23 or 0-5)
-  defp time_range_for_preference("late_night"), do: {:wrap, 22, 6}
+  # late_night wraps around midnight: 22:00-02:00
+  defp time_range_for_preference("late_night"), do: {:wrap, 22, 2}
   defp time_range_for_preference(_), do: nil
 
   # Venue time slot generation
@@ -418,7 +418,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   defp meal_period_to_time_range("brunch"), do: {10, 0, 14, 0}
   defp meal_period_to_time_range("lunch"), do: {12, 0, 15, 0}
   defp meal_period_to_time_range("dinner"), do: {18, 0, 22, 0}
-  defp meal_period_to_time_range("late_night"), do: {22, 0, 1, 0}
+  defp meal_period_to_time_range("late_night"), do: {22, 0, 2, 0}
   # Default to lunch hours if unknown
   defp meal_period_to_time_range(_), do: {12, 0, 15, 0}
 end
