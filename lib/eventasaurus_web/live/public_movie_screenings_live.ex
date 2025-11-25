@@ -356,29 +356,37 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   @impl true
   def handle_event("open_plan_modal", _params, socket) do
-    # Get authenticated user for the modal
-    user = get_authenticated_user(socket)
+    # Check authentication first to prevent crashes
+    if !socket.assigns[:auth_user] do
+      {:noreply,
+       socket
+       |> put_flash(:info, "Please log in to create private events")
+       |> redirect(to: ~p"/auth/login")}
+    else
+      # Get authenticated user for the modal
+      user = get_authenticated_user(socket)
 
-    # Fetch date availability counts for the movie
-    movie = socket.assigns.movie
-    date_list = generate_date_list(false)  # false = movie event (7 days)
+      # Fetch date availability counts for the movie
+      movie = socket.assigns.movie
+      date_list = generate_date_list(false)  # false = movie event (7 days)
 
-    date_availability =
-      case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
-             "movie",
-             movie.id,
-             date_list,
-             %{}
-           ) do
-        {:ok, counts} -> counts
-        {:error, _} -> %{}
-      end
+      date_availability =
+        case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
+               "movie",
+               movie.id,
+               date_list,
+               %{}
+             ) do
+          {:ok, counts} -> counts
+          {:error, _} -> %{}
+        end
 
-    {:noreply,
-     socket
-     |> assign(:show_plan_with_friends_modal, true)
-     |> assign(:modal_organizer, user)
-     |> assign(:date_availability, date_availability)}
+      {:noreply,
+       socket
+       |> assign(:show_plan_with_friends_modal, true)
+       |> assign(:modal_organizer, user)
+       |> assign(:date_availability, date_availability)}
+    end
   end
 
   @impl true
@@ -393,8 +401,20 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
     {date_from, date_to} =
       if length(selected_dates) > 0 do
-        dates = Enum.map(selected_dates, &Date.from_iso8601!/1) |> Enum.sort(Date)
-        {List.first(dates), List.last(dates)}
+        # Use safe date parsing to prevent crashes on invalid input
+        dates =
+          selected_dates
+          |> Enum.map(&Date.from_iso8601/1)
+          |> Enum.filter(&match?({:ok, _}, &1))
+          |> Enum.map(fn {:ok, d} -> d end)
+          |> Enum.sort(Date)
+
+        if dates == [] do
+          # All dates were invalid, use default
+          {Date.utc_today(), Date.utc_today() |> Date.add(7)}
+        else
+          {List.first(dates), List.last(dates)}
+        end
       else
         # Default to next 7 days if no dates selected
         {Date.utc_today(), Date.utc_today() |> Date.add(7)}
