@@ -5,10 +5,31 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.City
+  alias EventasaurusWeb.Components.{MovieDetailsCard, Breadcrumbs, PublicPlanWithFriendsModal}
+  alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
   import Ecto.Query
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
+    # Get language from session (set by LanguagePlug), then connect params, then default to English
+    params = get_connect_params(socket) || %{}
+    language = session["language"] || params["locale"] || "en"
+
+    socket =
+      socket
+      |> assign(:language, language)
+      |> assign(:show_plan_with_friends_modal, false)
+      |> assign(:selected_users, [])
+      |> assign(:selected_emails, [])
+      |> assign(:current_email_input, "")
+      |> assign(:bulk_email_input, "")
+      |> assign(:invitation_message, "")
+      |> assign(:planning_mode, :quick)
+      |> assign(:filter_criteria, %{})
+      |> assign(:matching_occurrences, [])
+      |> assign(:filter_preview_count, 0)
+      |> assign(:modal_organizer, nil)
+
     {:ok, socket}
   end
 
@@ -106,13 +127,40 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           |> Enum.map(fn {_venue, info} -> info.count end)
           |> Enum.sum()
 
+        # Build breadcrumb navigation
+        breadcrumb_items = [
+          %{label: gettext("Home"), path: ~p"/"},
+          %{label: gettext("All Activities"), path: ~p"/activities"},
+          %{label: city.name, path: ~p"/c/#{city.slug}"},
+          %{label: gettext("Film"), path: ~p"/activities?category=film"},
+          %{label: movie.title, path: nil}
+        ]
+
+        # Get available languages for this city (dynamic based on country + DB translations)
+        available_languages =
+          if city && city.slug do
+            LanguageDiscovery.get_available_languages_for_city(city.slug)
+          else
+            ["en"]
+          end
+
+        # Extract primary category from first screening (all movie screenings should have same category)
+        primary_category =
+          case screenings do
+            [first_screening | _] -> get_primary_category(first_screening)
+            _ -> nil
+          end
+
         {:noreply,
          socket
          |> assign(:page_title, "#{movie.title} - #{city.name}")
          |> assign(:city, city)
          |> assign(:movie, movie)
          |> assign(:venues_with_info, venues_with_info)
-         |> assign(:total_showtimes, total_showtimes)}
+         |> assign(:total_showtimes, total_showtimes)
+         |> assign(:breadcrumb_items, breadcrumb_items)
+         |> assign(:available_languages, available_languages)
+         |> assign(:primary_category, primary_category)}
     end
   end
 
@@ -121,117 +169,64 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     ~H"""
     <div class="min-h-screen bg-gray-50">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Breadcrumbs -->
-        <nav class="mb-6 flex items-center space-x-2 text-sm text-gray-600">
-          <.link navigate={~p"/"} class="hover:text-blue-600">
-            <%= gettext("Home") %>
-          </.link>
-          <span>/</span>
-          <.link navigate={~p"/activities"} class="hover:text-blue-600">
-            <%= gettext("All Activities") %>
-          </.link>
-          <span>/</span>
-          <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-blue-600">
-            <%= @city.name %>
-          </.link>
-          <span>/</span>
-          <.link navigate={~p"/activities?category=film"} class="hover:text-blue-600">
-            <%= gettext("Film") %>
-          </.link>
-          <span>/</span>
-          <span class="text-gray-900 font-medium"><%= @movie.title %></span>
-        </nav>
-
-        <!-- Movie Header -->
-        <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-          <%= if @movie.backdrop_url do %>
-            <div class="h-96 relative">
-              <img
-                src={@movie.backdrop_url}
-                alt={@movie.title}
-                class="w-full h-full object-cover"
-              />
-              <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-              <div class="absolute bottom-0 left-0 right-0 p-8 text-white">
-                <h1 class="text-4xl font-bold mb-2">
-                  <%= @movie.title %>
-                  <%= if @movie.release_date do %>
-                    <span class="text-2xl font-normal opacity-90">
-                      (<%= Calendar.strftime(@movie.release_date, "%Y") %>)
-                    </span>
-                  <% end %>
-                </h1>
-                <%= if @movie.original_title && @movie.original_title != @movie.title do %>
-                  <p class="text-lg opacity-90 italic">
-                    <%= @movie.original_title %>
-                  </p>
-                <% end %>
-              </div>
-            </div>
-          <% end %>
-
-          <div class="p-8">
-            <!-- Movie Metadata -->
-            <div class="flex flex-wrap items-center gap-6 mb-6">
-              <%= if @movie.runtime do %>
-                <div class="flex items-center text-gray-700">
-                  <Heroicons.clock class="w-5 h-5 mr-2" />
-                  <span><%= format_movie_runtime(@movie.runtime) %></span>
-                </div>
-              <% end %>
-
-              <%= if genres = get_in(@movie.metadata, ["genres"]) do %>
-                <%= if is_list(genres) && length(genres) > 0 do %>
-                  <div class="flex flex-wrap gap-2">
-                    <%= for genre <- genres do %>
-                      <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                        <%= genre %>
-                      </span>
-                    <% end %>
-                  </div>
-                <% end %>
-              <% end %>
-            </div>
-
-            <!-- Movie Overview -->
-            <%= if @movie.overview do %>
-              <div class="mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-3">
-                  <%= gettext("Overview") %>
-                </h2>
-                <p class="text-gray-700 leading-relaxed">
-                  <%= @movie.overview %>
-                </p>
-              </div>
+        <!-- Language Switcher - Dynamic based on city -->
+        <div class="flex justify-end mb-4">
+          <div class="flex bg-gray-100 rounded-lg p-1">
+            <%= for lang <- @available_languages do %>
+              <button
+                phx-click="change_language"
+                phx-value-language={lang}
+                class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                title={LanguageHelpers.language_name(lang)}
+              >
+                <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
+              </button>
             <% end %>
+          </div>
+        </div>
 
-            <!-- External Links -->
-            <div :if={@movie.tmdb_id} class="flex gap-4">
-              <a
-                href={"https://www.themoviedb.org/movie/#{@movie.tmdb_id}"}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+        <!-- Breadcrumbs -->
+        <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-6" />
+
+        <!-- Category Display -->
+        <%= if @primary_category do %>
+          <div class="mb-6">
+            <div class="flex items-center">
+              <.link
+                navigate={~p"/activities?#{[category: @primary_category.slug]}"}
+                class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition"
+                style={safe_background_style(@primary_category.color)}
               >
-                <Heroicons.globe_alt class="w-5 h-5 mr-2" />
-                <%= gettext("View on TMDB") %>
-              </a>
+                <%= if @primary_category.icon do %>
+                  <span class="mr-1"><%= @primary_category.icon %></span>
+                <% end %>
+                <%= @primary_category.name %>
+              </.link>
             </div>
-
-            <!-- TMDB Attribution -->
-            <p class="text-xs text-gray-500 mt-4">
-              <%= gettext("Movie data provided by") %>
-              <a
-                href="https://www.themoviedb.org/"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-blue-600 hover:text-blue-800 underline"
-              >
-                The Movie Database (TMDB)
-              </a>.
-              <%= gettext("This product uses the TMDB API but is not endorsed or certified by TMDB.") %>
+            <p class="mt-2 text-xs text-gray-500">
+              <%= gettext("Click category to see related events") %>
             </p>
           </div>
+        <% end %>
+
+        <!-- Movie Header -->
+        <MovieDetailsCard.movie_details_card
+          movie={@movie}
+          show_see_all_link={false}
+        />
+
+        <!-- Plan with Friends Button -->
+        <div class="mb-8">
+          <button
+            phx-click="open_plan_modal"
+            class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
+          >
+            <Heroicons.user_group class="w-5 h-5 mr-2" />
+            <%= gettext("Plan with Friends") %>
+          </button>
+          <p class="mt-2 text-sm text-gray-600">
+            <%= gettext("Coordinate with friends to pick a screening time") %>
+          </p>
         </div>
 
         <!-- Screenings Section -->
@@ -315,9 +310,69 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             </div>
           <% end %>
         </div>
+
+        <!-- Plan with Friends Modal -->
+        <%= if @show_plan_with_friends_modal do %>
+          <PublicPlanWithFriendsModal.modal
+            id="plan-with-friends-modal"
+            show={@show_plan_with_friends_modal}
+            public_event={nil}
+            selected_occurrence={nil}
+            selected_users={@selected_users}
+            selected_emails={@selected_emails}
+            current_email_input={@current_email_input}
+            bulk_email_input={@bulk_email_input}
+            invitation_message={@invitation_message}
+            organizer={@modal_organizer}
+            on_close="close_plan_modal"
+            on_submit="submit_plan_with_friends"
+            planning_mode={@planning_mode}
+            filter_criteria={@filter_criteria}
+            matching_occurrences={@matching_occurrences}
+            filter_preview_count={@filter_preview_count}
+            is_movie_event={true}
+            is_venue_event={false}
+            movie_id={@movie.id}
+            city_id={@city.id}
+          />
+        <% end %>
       </div>
     </div>
     """
+  end
+
+  @impl true
+  def handle_event("change_language", %{"language" => language}, socket) do
+    # Set cookie to persist language preference
+    socket =
+      socket
+      |> assign(:language, language)
+      |> Phoenix.LiveView.push_event("set_language_cookie", %{language: language})
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("open_plan_modal", _params, socket) do
+    {:noreply, assign(socket, :show_plan_with_friends_modal, true)}
+  end
+
+  @impl true
+  def handle_event("close_plan_modal", _params, socket) do
+    {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
+  end
+
+  @impl true
+  def handle_event("submit_plan_with_friends", %{"mode" => mode}, socket) do
+    # Handle plan submission
+    # For now, just close the modal
+    # Full implementation would create the plan and redirect
+    {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
+  end
+
+  @impl true
+  def handle_event("submit_plan_with_friends", _params, socket) do
+    {:noreply, assign(socket, :show_plan_with_friends_modal, false)}
   end
 
   # Helper functions
@@ -452,4 +507,35 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       _ -> format_date_short(date)
     end
   end
+
+  # Category helper functions
+  defp get_primary_category(event) do
+    case event.primary_category_id do
+      nil -> nil
+      cat_id -> Enum.find(event.categories, &(&1.id == cat_id))
+    end
+  end
+
+  defp safe_background_style(color) do
+    color =
+      if valid_hex_color?(color) do
+        color
+      else
+        "#6B7280"
+      end
+
+    "background-color: #{color}"
+  end
+
+  defp valid_hex_color?(color) when is_binary(color) do
+    case color do
+      <<?#, _::binary>> = hex when byte_size(hex) in [4, 7] ->
+        String.match?(hex, ~r/^#(?:[0-9a-fA-F]{3}){1,2}$/)
+
+      _ ->
+        false
+    end
+  end
+
+  defp valid_hex_color?(_), do: false
 end
