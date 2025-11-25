@@ -648,6 +648,29 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
+  # Public social card generation (no auth required)
+  # IMPORTANT: These routes MUST come before the :public live_session to avoid conflicts
+  # with the catch-all aggregated content route (/:content_type/:identifier)
+  # Otherwise URLs like /event-slug/social-card-hash.png will be incorrectly matched
+  # as aggregated content instead of social cards.
+  scope "/", EventasaurusWeb do
+    pipe_through :image
+
+    # City social card generation (matches city route at /c/:slug)
+    get "/social-cards/city/:slug/:hash/*rest", CitySocialCardController, :generate_card_by_slug,
+      as: :city_social_card_cached
+
+    # Event social card generation (matches public event route at /:slug)
+    get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
+      as: :social_card_cached
+
+    # Poll social card generation (matches public poll route at /:slug/polls/:number)
+    get "/:slug/polls/:number/social-card-:hash/*rest",
+        PollSocialCardController,
+        :generate_card_by_number,
+        as: :poll_social_card_cached
+  end
+
   # Public event routes (with theme support)
   live_session :public,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
@@ -690,26 +713,6 @@ defmodule EventasaurusWeb.Router do
 
     # Calendar export endpoint
     get "/:slug/calendar/:format", CalendarController, :export
-  end
-
-  # Public social card generation (no auth required)
-  # These routes mirror the public event/poll page structure at root scope
-  scope "/", EventasaurusWeb do
-    pipe_through :image
-
-    # City social card generation (matches city route at /c/:slug)
-    get "/social-cards/city/:slug/:hash/*rest", CitySocialCardController, :generate_card_by_slug,
-      as: :city_social_card_cached
-
-    # Event social card generation (matches public event route at /:slug)
-    get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
-      as: :social_card_cached
-
-    # Poll social card generation (matches public poll route at /:slug/polls/:number)
-    get "/:slug/polls/:number/social-card-:hash/*rest",
-        PollSocialCardController,
-        :generate_card_by_number,
-        as: :poll_social_card_cached
   end
 
   # Other scopes may use custom stacks.

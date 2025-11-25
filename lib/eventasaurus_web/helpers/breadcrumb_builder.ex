@@ -9,6 +9,9 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   ## Breadcrumb Patterns
 
+  ### Movie Screening (activity page)
+  `Home / All Activities / Kraków / Film / Bugonia / Bugonia at Agrafka`
+
   ### Activity in a Container
   `Home / All Activities / Kraków / Film / Festivals / Unsound Kraków 2025 / Event Name`
 
@@ -64,6 +67,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   - City (if event has a venue with city)
   - Metro area (if city is a suburb of a major discovery-enabled city)
   - Category/Activity Type (primary category of the event)
+  - Movie (if event is a movie screening, links to movie aggregation page)
   - Parent container (if event is part of a festival/conference/etc.)
   - Event title (current page, no link)
 
@@ -84,8 +88,11 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     # Add category/activity type (primary category)
     items_with_category = add_category_breadcrumb(items_with_city, event)
 
+    # Add movie breadcrumb if this is a movie screening
+    items_with_movie = add_movie_breadcrumb(items_with_category, event)
+
     # Add parent container if event is part of one
-    items_with_container = add_container_breadcrumb(items_with_category, event)
+    items_with_container = add_container_breadcrumb(items_with_movie, event)
 
     # Add current event (no link) - use display_title if available for localization
     items_with_container ++ [%{label: event.display_title || event.title, path: nil}]
@@ -228,6 +235,17 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   defp add_category_breadcrumb(items, _event) do
     # No categories available, skip category breadcrumb
+    items
+  end
+
+  defp add_movie_breadcrumb(items, %{movies: [movie | _], venue: %{city_ref: city}})
+       when not is_nil(movie) and not is_nil(city) do
+    # Add movie breadcrumb linking to movie aggregation page
+    items ++ [%{label: movie.title, path: ~p"/c/#{city.slug}/movies/#{movie.slug}"}]
+  end
+
+  defp add_movie_breadcrumb(items, _event) do
+    # Not a movie screening or missing city/movie data, skip movie breadcrumb
     items
   end
 

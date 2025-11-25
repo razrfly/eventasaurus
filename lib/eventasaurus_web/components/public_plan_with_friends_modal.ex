@@ -33,6 +33,8 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   attr :is_movie_event, :boolean, default: false
   attr :is_venue_event, :boolean, default: false
   attr :filter_preview_count, :integer, default: nil
+  attr :movie_id, :integer, default: nil
+  attr :city_id, :integer, default: nil
 
   def modal(assigns) do
     ~H"""
@@ -50,37 +52,39 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         <div class="relative min-h-screen flex items-center justify-center p-4">
           <div class="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col" phx-click-away={@on_close}>
             <!-- Event Context Banner -->
-            <div class="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-t-lg">
-              <div class="flex items-center gap-4">
-                <%= if get_event_image(@public_event) do %>
-                  <img
-                    src={get_event_image(@public_event)}
-                    alt={@public_event.title}
-                    class="w-12 h-12 rounded object-cover flex-shrink-0"
-                  />
-                <% end %>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold truncate">
-                    <%= @public_event.title %>
-                  </h3>
-                  <%= if @public_event.venue do %>
-                    <p class="text-sm text-blue-100 truncate">
-                      <%= @public_event.venue.name %>
-                    </p>
+            <%= if @public_event do %>
+              <div class="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-t-lg">
+                <div class="flex items-center gap-4">
+                  <%= if get_event_image(@public_event) do %>
+                    <img
+                      src={get_event_image(@public_event)}
+                      alt={@public_event.title}
+                      class="w-12 h-12 rounded object-cover flex-shrink-0"
+                    />
                   <% end %>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold truncate">
+                      <%= @public_event.title %>
+                    </h3>
+                    <%= if @public_event.venue do %>
+                      <p class="text-sm text-blue-100 truncate">
+                        <%= @public_event.venue.name %>
+                      </p>
+                    <% end %>
+                  </div>
+                  <button
+                    type="button"
+                    phx-click={@on_close}
+                    class="text-white hover:text-gray-200 flex-shrink-0"
+                  >
+                    <span class="sr-only">Close</span>
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  phx-click={@on_close}
-                  class="text-white hover:text-gray-200 flex-shrink-0"
-                >
-                  <span class="sr-only">Close</span>
-                  <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
-            </div>
+            <% end %>
 
             <!-- Header -->
             <div class="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
@@ -98,7 +102,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                     <%= case @planning_mode do %>
                       <% :selection -> %> Pick a date now or let friends vote on their preferred time
                       <% :quick -> %> Create a private event and invite your friends
-                      <% :flexible_filters -> %> Select date range, times, and venues to find available options
+                      <% :flexible_filters -> %> Find available showtimes<%= if @public_event, do: " for #{@public_event.title}" %> to create a poll
                       <% :flexible_review -> %> Invite friends to vote on their preferred showtime
                     <% end %>
                   </p>
@@ -146,10 +150,17 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           <div class="ml-4 flex-1">
             <h3 class="text-lg font-bold text-gray-900">Quick Plan</h3>
             <p class="mt-1 text-sm text-gray-600">
-              Pick the <%= if @selected_occurrence, do: "selected", else: "default" %> time and create your event right away
+              <%= if @selected_occurrence do %>
+                Create an event for <span class="font-semibold"><%= format_occurrence_datetime_full(@selected_occurrence) %></span>
+                <%= if Map.get(@selected_occurrence, :venue_name) do %>
+                  at <span class="font-semibold"><%= @selected_occurrence.venue_name %></span>
+                <% end %>
+              <% else %>
+                Pick a specific showtime and create your event instantly
+              <% end %>
             </p>
             <p class="mt-2 text-xs text-gray-500">
-              Best for: When you know which showtime works for everyone
+              Best for: When you already know which theater and time works for your group
             </p>
           </div>
         </div>
@@ -171,8 +182,19 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           <div class="ml-4 flex-1">
             <h3 class="text-lg font-bold text-gray-900">Flexible Plan with Poll</h3>
             <p class="mt-1 text-sm text-gray-600">
-              Let your friends vote on their preferred showtime from multiple options
+              Create a poll with multiple showtime options and let your friends vote on which time works best
             </p>
+            <div class="mt-3 p-3 bg-purple-50 rounded-md border border-purple-100">
+              <p class="text-xs text-gray-700">
+                <span class="font-semibold">How it works:</span>
+              </p>
+              <ol class="mt-1 text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                <li>Choose date range and preferred times</li>
+                <li>Invite friends to vote on options</li>
+                <li>Everyone picks their availability</li>
+                <li>Book the time that works for most people</li>
+              </ol>
+            </div>
             <p class="mt-2 text-xs text-gray-500">
               Best for: When your group needs to coordinate schedules
             </p>
@@ -181,13 +203,15 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
       </button>
 
       <!-- Event Preview -->
-      <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h3 class="font-medium text-gray-900 mb-2">Event</h3>
-        <p class="text-sm text-gray-700"><%= @public_event.title %></p>
-        <%= if @public_event.venue do %>
-          <p class="text-sm text-gray-600 mt-1"><%= @public_event.venue.name %></p>
-        <% end %>
-      </div>
+      <%= if @public_event do %>
+        <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 class="font-medium text-gray-900 mb-2">Event</h3>
+          <p class="text-sm text-gray-700"><%= @public_event.title %></p>
+          <%= if @public_event.venue do %>
+            <p class="text-sm text-gray-600 mt-1"><%= @public_event.venue.name %></p>
+          <% end %>
+        </div>
+      <% end %>
     </div>
     """
   end
@@ -202,7 +226,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
         id={@id <> "_historical"}
         organizer={@organizer}
         selected_users={@selected_users}
-        exclude_event_ids={[@public_event.id]}
+        exclude_event_ids={if @public_event, do: [@public_event.id], else: []}
         display_mode="list"
       />
 
@@ -250,7 +274,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1">
-                <h3 class="font-medium text-gray-900 mb-1 flex items-center gap-2">
+                <h3 class="font-medium text-gray-900 mb-2 flex items-center gap-2">
                   <svg
                     class="w-5 h-5 text-purple-600"
                     fill="none"
@@ -264,22 +288,38 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                       d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  Selected Time
+                  Selected Showtime
                 </h3>
-                <p class="text-sm text-gray-700 font-medium">
-                  <%= format_occurrence_datetime(@selected_occurrence) %>
-                </p>
-                <p class="text-xs text-gray-500 mt-1">
-                  You selected this time for the event
+
+                <!-- Theater/Venue -->
+                <%= if Map.get(@selected_occurrence, :venue_name) do %>
+                  <div class="mb-2">
+                    <p class="text-xs text-gray-600 uppercase tracking-wide mb-0.5">Theater</p>
+                    <p class="text-sm text-gray-900 font-semibold">
+                      <%= @selected_occurrence.venue_name %>
+                    </p>
+                  </div>
+                <% end %>
+
+                <!-- Date & Time -->
+                <div>
+                  <p class="text-xs text-gray-600 uppercase tracking-wide mb-0.5">Date & Time</p>
+                  <p class="text-sm text-gray-900 font-semibold">
+                    <%= format_occurrence_datetime_full(@selected_occurrence) %>
+                  </p>
+                </div>
+
+                <p class="text-xs text-gray-500 mt-2 italic">
+                  Your friends will be invited to this specific showtime
                 </p>
               </div>
               <button
                 type="button"
                 phx-click="select_planning_mode"
                 phx-value-mode="flexible_filters"
-                class="px-3 py-1.5 text-sm text-purple-700 bg-white border border-purple-300 rounded-md hover:bg-purple-50"
+                class="px-3 py-1.5 text-sm text-purple-700 bg-white border border-purple-300 rounded-md hover:bg-purple-50 flex-shrink-0"
               >
-                Change Time
+                Change
               </button>
             </div>
           </div>
@@ -490,10 +530,47 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   defp render_flexible_review_form(assigns) do
     ~H"""
     <form phx-submit={@on_submit} phx-value-mode="flexible" class="space-y-6">
+      <!-- Movie/Event Context -->
+      <%= if @is_movie_event && @public_event do %>
+        <div class="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+              <svg class="w-8 h-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-semibold text-gray-900 mb-1">Creating Poll For</h3>
+              <p class="text-sm text-gray-700 font-medium"><%= @public_event.title %></p>
+              <p class="text-xs text-gray-600 mt-2">
+                Your friends will vote on which showtime works best for their schedule
+              </p>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- How Polling Works -->
+      <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-start gap-3">
+          <div class="flex-shrink-0">
+            <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="flex-1">
+            <p class="text-sm font-medium text-blue-900 mb-1">How This Works</p>
+            <p class="text-xs text-blue-800">
+              After sending invites, each friend will see all <%= length(@matching_occurrences) %> showtime options below and mark which times work for them. You'll then see everyone's availability to pick the best time.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- Matching Occurrences -->
       <div>
         <h3 class="text-lg font-medium text-gray-900 mb-3">
-          Available Showtimes (<%= length(@matching_occurrences) %>)
+          Showtime Options for Poll (<%= length(@matching_occurrences) %>)
         </h3>
         <%= if length(@matching_occurrences) > 0 do %>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -504,7 +581,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                     <p class="font-medium text-gray-900 text-sm">
                       <%= format_occurrence_title(occurrence, @is_movie_event) %>
                     </p>
-                    <span class="text-xs text-gray-500 flex-shrink-0 ml-2">#<%= index + 1 %></span>
+                    <span class="text-xs text-purple-600 font-semibold flex-shrink-0 ml-2">Option <%= index + 1 %></span>
                   </div>
                   <p class="text-sm text-gray-600">
                     <%= format_occurrence_datetime_full(occurrence) %>
@@ -513,8 +590,8 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
               </div>
             <% end %>
           </div>
-          <p class="mt-2 text-xs text-gray-500">
-            Your friends will vote on which showtime works best for them
+          <p class="mt-3 text-xs text-gray-500 italic">
+            These options will be shown to your friends who can then vote on their availability
           </p>
         <% else %>
           <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -532,7 +609,7 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           id={@id <> "_historical"}
           organizer={@organizer}
           selected_users={@selected_users}
-          exclude_event_ids={[@public_event.id]}
+          exclude_event_ids={if @public_event, do: [@public_event.id], else: []}
           display_mode="list"
         />
       </div>
