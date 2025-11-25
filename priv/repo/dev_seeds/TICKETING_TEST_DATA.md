@@ -34,7 +34,9 @@ All test accounts use password: `testpass123`
 ### Test Buyers
 - **Admin**: `admin@example.com` / `testpass123`
 - **Demo User**: `demo@example.com` / `testpass123`
-- **Your Account**: `holden@gmail.com` / `sawyer1234`
+- **Dev Account**: `dev@example.com` / `testpass123`
+
+> ⚠️ **Note**: These are test-only accounts for development. Never use real email/password combinations in seed data.
 
 ---
 

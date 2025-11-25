@@ -49,9 +49,42 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
 
         <!-- Modal Content -->
         <div class="relative min-h-screen flex items-center justify-center p-4">
-          <div class="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden" phx-click-away={@on_close}>
+          <div class="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col" phx-click-away={@on_close}>
+            <!-- Event Context Banner -->
+            <div class="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-t-lg">
+              <div class="flex items-center gap-4">
+                <%= if get_event_image(@public_event) do %>
+                  <img
+                    src={get_event_image(@public_event)}
+                    alt={@public_event.title}
+                    class="w-12 h-12 rounded object-cover flex-shrink-0"
+                  />
+                <% end %>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold truncate">
+                    <%= @public_event.title %>
+                  </h3>
+                  <%= if @public_event.venue do %>
+                    <p class="text-sm text-blue-100 truncate">
+                      <%= @public_event.venue.name %>
+                    </p>
+                  <% end %>
+                </div>
+                <button
+                  type="button"
+                  phx-click={@on_close}
+                  class="text-white hover:text-gray-200 flex-shrink-0"
+                >
+                  <span class="sr-only">Close</span>
+                  <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
             <!-- Header -->
-            <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
+            <div class="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
               <div class="flex items-center justify-between">
                 <div>
                   <h2 class="text-2xl font-bold text-gray-900">
@@ -65,27 +98,17 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
                   <p class="mt-1 text-sm text-gray-600">
                     <%= case @planning_mode do %>
                       <% :selection -> %> Pick a date now or let friends vote on their preferred time
-                      <% :quick -> %> Create a private event for '<%= @public_event.title %>' and invite your friends
+                      <% :quick -> %> Create a private event and invite your friends
                       <% :flexible_filters -> %> Select date range, times, and venues to find available options
                       <% :flexible_review -> %> Invite friends to vote on their preferred showtime
                     <% end %>
                   </p>
                 </div>
-                <button
-                  type="button"
-                  phx-click={@on_close}
-                  class="text-gray-400 hover:text-gray-500"
-                >
-                  <span class="sr-only">Close</span>
-                  <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
             </div>
 
             <!-- Form Content (Scrollable) -->
-            <div class="overflow-y-auto max-h-[calc(90vh-140px)] px-6 py-4">
+            <div class="flex-1 overflow-y-auto px-6 py-4">
               <%= case @planning_mode do %>
                 <% :selection -> %>
                   <%= render_mode_selection(assigns) %>
@@ -263,31 +286,6 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           </div>
         </div>
       <% end %>
-
-      <!-- Event Details Preview -->
-      <div class="border-t pt-6">
-        <div class="p-4 bg-gray-50 rounded-lg">
-          <h3 class="font-medium text-gray-900 mb-2">
-            Event Details
-          </h3>
-          <p class="text-sm text-gray-600">
-            <strong>Event:</strong> <%= @public_event.title %>
-          </p>
-          <p class="text-sm text-gray-600">
-            <strong>Date:</strong>
-            <%= if @selected_occurrence do %>
-              <%= format_occurrence_datetime(@selected_occurrence) %>
-            <% else %>
-              <%= format_local_datetime(@public_event.starts_at, @public_event.venue, :full) %>
-            <% end %>
-          </p>
-          <%= if @public_event.venue do %>
-            <p class="text-sm text-gray-600">
-              <strong>Location:</strong> <%= @public_event.venue.name %>
-            </p>
-          <% end %>
-        </div>
-      </div>
 
       <!-- Actions -->
       <div class="flex justify-end gap-4 pt-4 border-t">
@@ -499,19 +497,19 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
           Available Showtimes (<%= length(@matching_occurrences) %>)
         </h3>
         <%= if length(@matching_occurrences) > 0 do %>
-          <div class="space-y-2 max-h-64 overflow-y-auto">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <%= for {occurrence, index} <- Enum.with_index(@matching_occurrences) do %>
-              <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div class="flex items-start justify-between">
-                  <div>
-                    <p class="font-medium text-gray-900">
+              <div class="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition">
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-start justify-between">
+                    <p class="font-medium text-gray-900 text-sm">
                       <%= format_occurrence_title(occurrence, @is_movie_event) %>
                     </p>
-                    <p class="text-sm text-gray-600 mt-1">
-                      <%= format_occurrence_datetime_full(occurrence) %>
-                    </p>
+                    <span class="text-xs text-gray-500 flex-shrink-0 ml-2">#<%= index + 1 %></span>
                   </div>
-                  <span class="text-xs text-gray-500">Option <%= index + 1 %></span>
+                  <p class="text-sm text-gray-600">
+                    <%= format_occurrence_datetime_full(occurrence) %>
+                  </p>
                 </div>
               </div>
             <% end %>
@@ -686,5 +684,19 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
     Enum.map(0..(days - 1), fn offset ->
       Date.add(today, offset)
     end)
+  end
+
+  # Get event image URL (cover_image_url or thumbnail_url)
+  defp get_event_image(event) do
+    cond do
+      Map.has_key?(event, :cover_image_url) and event.cover_image_url ->
+        event.cover_image_url
+
+      Map.has_key?(event, :thumbnail_url) and event.thumbnail_url ->
+        event.thumbnail_url
+
+      true ->
+        nil
+    end
   end
 end

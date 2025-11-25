@@ -19,9 +19,8 @@ defmodule EventasaurusApp.Repo.Migrations.CreateOccurrencePlanning do
       timestamps()
     end
 
-    create index(:occurrence_planning, [:event_id])
-    create index(:occurrence_planning, [:poll_id])
-    create unique_index(:occurrence_planning, [:event_id, :poll_id])
+    create unique_index(:occurrence_planning, [:event_id])
+    create unique_index(:occurrence_planning, [:poll_id])
     create index(:occurrence_planning, [:series_type, :series_id])
   end
 end

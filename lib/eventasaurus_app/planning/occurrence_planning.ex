@@ -69,9 +69,13 @@ defmodule EventasaurusApp.Planning.OccurrencePlanning do
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:poll_id)
     |> foreign_key_constraint(:event_plan_id)
-    |> unique_constraint([:event_id, :poll_id],
-      name: :occurrence_planning_event_id_poll_id_index,
-      message: "event already has an occurrence planning poll"
+    |> unique_constraint(:event_id,
+      name: :occurrence_planning_event_id_index,
+      message: "event already has an occurrence planning"
+    )
+    |> unique_constraint(:poll_id,
+      name: :occurrence_planning_poll_id_index,
+      message: "poll already associated with an occurrence planning"
     )
   end
 
