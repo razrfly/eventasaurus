@@ -1,0 +1,406 @@
+defmodule EventasaurusApp.Planning.OccurrenceQuery do
+  @moduledoc """
+  Service for querying occurrences (showtimes, event instances, venue time slots) for poll-based planning.
+
+  Supports:
+  - Movie showtimes from Cinema City and Kino Krakow sources
+  - Venue time slots (restaurants, venues) with meal period generation
+
+  ## Filter Criteria
+
+  Filter criteria is a map that can include:
+
+  - `date_range`: `{start_date, end_date}` or `%{start: date, end: date}` - Date range for occurrences
+  - `time_preferences`: List of time slots like `["evening", "afternoon", "late_night"]`
+  - `meal_periods`: List of meal periods like `["dinner", "lunch", "brunch"]` (for venues)
+  - `venue_ids`: List of specific venue IDs to filter by
+  - `city_ids`: List of city IDs to filter by
+  - `limit`: Maximum number of occurrences to return (default: 50)
+
+  ## Time Preference Mapping (Movies)
+
+  - `"morning"`: 06:00-12:00
+  - `"afternoon"`: 12:00-17:00
+  - `"evening"`: 17:00-22:00
+  - `"late_night"`: 22:00-06:00
+
+  ## Meal Period Mapping (Venues)
+
+  - `"breakfast"`: 08:00-11:00
+  - `"brunch"`: 10:00-14:00 (weekends only)
+  - `"lunch"`: 12:00-15:00
+  - `"dinner"`: 18:00-22:00
+  - `"late_night"`: 22:00-01:00
+
+  ## Examples
+
+      # Movie showtimes
+      iex> filter_criteria = %{
+      ...>   date_range: %{start: ~D[2024-11-25], end: ~D[2024-11-30]},
+      ...>   time_preferences: ["evening"],
+      ...>   city_ids: [1]
+      ...> }
+      iex> OccurrenceQuery.find_movie_occurrences(123, filter_criteria)
+      {:ok, [%{
+        public_event_id: 456,
+        movie_id: 123,
+        venue_id: 789,
+        starts_at: ~U[2024-11-25 19:00:00Z],
+        title: "Dune: Part Two",
+        venue_name: "Cinema City Arkadia"
+      }]}
+
+      # Venue time slots
+      iex> filter_criteria = %{
+      ...>   date_range: %{start: ~D[2024-11-25], end: ~D[2024-11-27]},
+      ...>   meal_periods: ["dinner", "lunch"]
+      ...> }
+      iex> OccurrenceQuery.find_venue_occurrences(789, filter_criteria)
+      {:ok, [%{
+        venue_id: 789,
+        venue_name: "La Forchetta",
+        date: ~D[2024-11-25],
+        meal_period: "dinner",
+        starts_at: ~U[2024-11-25 18:00:00Z],
+        ends_at: ~U[2024-11-25 22:00:00Z]
+      }]}
+  """
+
+  import Ecto.Query, warn: false
+  alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  alias EventasaurusDiscovery.PublicEvents.EventMovie
+  alias EventasaurusDiscovery.Movies.Movie
+  alias EventasaurusApp.Venues.Venue
+
+  @default_limit 50
+
+  @doc """
+  Finds movie occurrences (showtimes) for a specific movie.
+
+  Returns a list of occurrence maps with public_event details, venue, and timing.
+
+  ## Parameters
+
+  - `movie_id` - The movie ID to find showtimes for
+  - `filter_criteria` - Map of filters (date_range, time_preferences, venue_ids, city_ids, limit)
+
+  ## Returns
+
+  - `{:ok, occurrences}` - List of occurrence maps
+  - `{:error, reason}` - If query fails
+  """
+  def find_movie_occurrences(movie_id, filter_criteria \\ %{}) do
+    try do
+      query =
+        from(pe in PublicEvent,
+          join: em in EventMovie,
+          on: em.event_id == pe.id,
+          join: m in Movie,
+          on: em.movie_id == m.id,
+          left_join: v in Venue,
+          on: pe.venue_id == v.id,
+          where: em.movie_id == ^movie_id,
+          select: %{
+            public_event_id: pe.id,
+            movie_id: m.id,
+            venue_id: pe.venue_id,
+            starts_at: pe.starts_at,
+            ends_at: pe.ends_at,
+            title: pe.title,
+            movie_title: m.title,
+            venue_name: v.name,
+            venue_city_id: v.city_id
+          },
+          order_by: [asc: pe.starts_at]
+        )
+
+      query
+      |> apply_date_range_filter(filter_criteria)
+      |> apply_time_preferences_filter(filter_criteria)
+      |> apply_venue_filter(filter_criteria)
+      |> apply_city_filter(filter_criteria)
+      |> apply_limit(filter_criteria)
+      |> Repo.all()
+      |> then(&{:ok, &1})
+    rescue
+      e ->
+        {:error, "Failed to query movie occurrences: #{Exception.message(e)}"}
+    end
+  end
+
+  @doc """
+  Finds occurrences for discovery mode (no specific series).
+
+  Returns movie showtimes across all movies matching the filter criteria.
+  Useful for "What movie should we watch?" type polls.
+
+  ## Parameters
+
+  - `filter_criteria` - Map of filters (date_range, time_preferences, venue_ids, city_ids, limit)
+
+  ## Returns
+
+  - `{:ok, occurrences}` - List of occurrence maps
+  - `{:error, reason}` - If query fails
+  """
+  def find_discovery_occurrences(filter_criteria \\ %{}) do
+    try do
+      query =
+        from(pe in PublicEvent,
+          join: em in EventMovie,
+          on: em.event_id == pe.id,
+          join: m in Movie,
+          on: em.movie_id == m.id,
+          left_join: v in Venue,
+          on: pe.venue_id == v.id,
+          select: %{
+            public_event_id: pe.id,
+            movie_id: m.id,
+            venue_id: pe.venue_id,
+            starts_at: pe.starts_at,
+            ends_at: pe.ends_at,
+            title: pe.title,
+            movie_title: m.title,
+            venue_name: v.name,
+            venue_city_id: v.city_id
+          },
+          order_by: [asc: pe.starts_at]
+        )
+
+      query
+      |> apply_date_range_filter(filter_criteria)
+      |> apply_time_preferences_filter(filter_criteria)
+      |> apply_venue_filter(filter_criteria)
+      |> apply_city_filter(filter_criteria)
+      |> apply_limit(filter_criteria)
+      |> Repo.all()
+      |> then(&{:ok, &1})
+    rescue
+      e ->
+        {:error, "Failed to query discovery occurrences: #{Exception.message(e)}"}
+    end
+  end
+
+  @doc """
+  Finds venue occurrences (time slots) for a specific venue.
+
+  Returns a list of time slot occurrences based on meal periods.
+  Generates synthetic time slots since venues have continuous availability.
+
+  ## Parameters
+
+  - `venue_id` - The venue ID to find time slots for
+  - `filter_criteria` - Map of filters (date_range, meal_periods, limit)
+
+  ## Returns
+
+  - `{:ok, occurrences}` - List of occurrence maps
+  - `{:error, reason}` - If query fails
+  """
+  def find_venue_occurrences(venue_id, filter_criteria \\ %{}) do
+    try do
+      venue = Repo.get!(Venue, venue_id) |> Repo.preload(:city_ref)
+
+      # Generate time slots based on date_range and meal_periods
+      time_slots = generate_venue_time_slots(venue, filter_criteria)
+
+      {:ok, time_slots}
+    rescue
+      Ecto.NoResultsError ->
+        {:error, "Venue not found: #{venue_id}"}
+
+      e ->
+        {:error, "Failed to query venue occurrences: #{Exception.message(e)}"}
+    end
+  end
+
+  @doc """
+  Universal occurrence finder that handles both specific series and discovery mode.
+
+  Delegates to the appropriate function based on series_type and series_id.
+
+  ## Parameters
+
+  - `series_type` - "movie", "venue", "activity_series", etc. or nil for discovery
+  - `series_id` - ID of the series entity, or nil for discovery
+  - `filter_criteria` - Map of filters
+
+  ## Returns
+
+  - `{:ok, occurrences}` - List of occurrence maps
+  - `{:error, reason}` - If query fails or unsupported series type
+  """
+  def find_occurrences(series_type, series_id, filter_criteria \\ %{})
+
+  def find_occurrences("movie", movie_id, filter_criteria) when is_integer(movie_id) do
+    find_movie_occurrences(movie_id, filter_criteria)
+  end
+
+  def find_occurrences("venue", venue_id, filter_criteria) when is_integer(venue_id) do
+    find_venue_occurrences(venue_id, filter_criteria)
+  end
+
+  def find_occurrences(nil, nil, filter_criteria) do
+    find_discovery_occurrences(filter_criteria)
+  end
+
+  def find_occurrences(series_type, _series_id, _filter_criteria) do
+    {:error, "Unsupported series type: #{series_type}. Supported types: 'movie', 'venue'"}
+  end
+
+  # Private filter application functions
+
+  # Handle map format (for persisted filter_criteria from JSONB)
+  defp apply_date_range_filter(query, %{date_range: %{start: start_date, end: end_date}}) do
+    start_datetime = DateTime.new!(start_date, ~T[00:00:00])
+    end_datetime = DateTime.new!(end_date, ~T[23:59:59])
+
+    from(q in query,
+      where: q.starts_at >= ^start_datetime and q.starts_at <= ^end_datetime
+    )
+  end
+
+  # Handle tuple format (for backward compatibility)
+  defp apply_date_range_filter(query, %{date_range: {start_date, end_date}}) do
+    start_datetime = DateTime.new!(start_date, ~T[00:00:00])
+    end_datetime = DateTime.new!(end_date, ~T[23:59:59])
+
+    from(q in query,
+      where: q.starts_at >= ^start_datetime and q.starts_at <= ^end_datetime
+    )
+  end
+
+  defp apply_date_range_filter(query, _), do: query
+
+  defp apply_time_preferences_filter(query, %{time_preferences: preferences})
+       when is_list(preferences) and length(preferences) > 0 do
+    # Build time range conditions for each preference
+    conditions =
+      Enum.map(preferences, fn pref ->
+        case time_range_for_preference(pref) do
+          {start_hour, end_hour} ->
+            dynamic(
+              [q],
+              fragment("EXTRACT(HOUR FROM ? AT TIME ZONE 'UTC')::integer", q.starts_at) >=
+                ^start_hour and
+                fragment("EXTRACT(HOUR FROM ? AT TIME ZONE 'UTC')::integer", q.starts_at) <
+                  ^end_hour
+            )
+
+          nil ->
+            false
+        end
+      end)
+      |> Enum.filter(&(&1 != false))
+
+    # Combine with OR logic
+    if length(conditions) > 0 do
+      combined_condition = Enum.reduce(conditions, fn condition, acc ->
+        dynamic([], ^acc or ^condition)
+      end)
+
+      from(q in query, where: ^combined_condition)
+    else
+      query
+    end
+  end
+
+  defp apply_time_preferences_filter(query, _), do: query
+
+  defp apply_venue_filter(query, %{venue_ids: venue_ids})
+       when is_list(venue_ids) and length(venue_ids) > 0 do
+    from(q in query, where: q.venue_id in ^venue_ids)
+  end
+
+  defp apply_venue_filter(query, _), do: query
+
+  defp apply_city_filter(query, %{city_ids: city_ids})
+       when is_list(city_ids) and length(city_ids) > 0 do
+    from([_pe, _em, _m, v] in query, where: v.city_id in ^city_ids)
+  end
+
+  defp apply_city_filter(query, _), do: query
+
+  defp apply_limit(query, %{limit: limit}) when is_integer(limit) and limit > 0 do
+    from(q in query, limit: ^limit)
+  end
+
+  defp apply_limit(query, _) do
+    from(q in query, limit: ^@default_limit)
+  end
+
+  # Time preference to hour range mapping
+  defp time_range_for_preference("morning"), do: {6, 12}
+  defp time_range_for_preference("afternoon"), do: {12, 17}
+  defp time_range_for_preference("evening"), do: {17, 22}
+  defp time_range_for_preference("late_night"), do: {22, 30}
+  # 22:00-06:00 handled as 22-30 (wraps to next day)
+  defp time_range_for_preference(_), do: nil
+
+  # Venue time slot generation
+
+  defp generate_venue_time_slots(venue, filter_criteria) do
+    date_range = get_date_range(filter_criteria)
+    meal_periods = get_meal_periods(filter_criteria)
+    limit = Map.get(filter_criteria, :limit, @default_limit)
+
+    # Generate time slots for each date × meal period combination
+    time_slots =
+      for date <- date_range,
+          meal_period <- meal_periods,
+          should_include_meal_period?(date, meal_period) do
+        create_venue_time_slot(venue, date, meal_period)
+      end
+      |> Enum.take(limit)
+
+    time_slots
+  end
+
+  defp get_date_range(%{date_range: %{start: start_date, end: end_date}}) do
+    Date.range(start_date, end_date) |> Enum.to_list()
+  end
+
+  defp get_date_range(%{date_range: {start_date, end_date}}) do
+    Date.range(start_date, end_date) |> Enum.to_list()
+  end
+
+  defp get_date_range(_), do: []
+
+  defp get_meal_periods(%{meal_periods: periods}) when is_list(periods), do: periods
+  # Default to all meal periods if none specified
+  defp get_meal_periods(_), do: ["breakfast", "lunch", "dinner"]
+
+  defp should_include_meal_period?(date, "brunch") do
+    # Brunch only on weekends
+    Date.day_of_week(date) in [6, 7]
+  end
+
+  defp should_include_meal_period?(_date, _meal_period), do: true
+
+  defp create_venue_time_slot(venue, date, meal_period) do
+    {start_hour, start_minute, end_hour, end_minute} = meal_period_to_time_range(meal_period)
+
+    starts_at = DateTime.new!(date, Time.new!(start_hour, start_minute, 0))
+    ends_at = DateTime.new!(date, Time.new!(end_hour, end_minute, 0))
+
+    %{
+      venue_id: venue.id,
+      venue_name: venue.name,
+      venue_city_id: venue.city_id,
+      date: date,
+      meal_period: meal_period,
+      starts_at: starts_at,
+      ends_at: ends_at
+    }
+  end
+
+  # Meal period to time range mapping (start_hour, start_min, end_hour, end_min)
+  defp meal_period_to_time_range("breakfast"), do: {8, 0, 11, 0}
+  defp meal_period_to_time_range("brunch"), do: {10, 0, 14, 0}
+  defp meal_period_to_time_range("lunch"), do: {12, 0, 15, 0}
+  defp meal_period_to_time_range("dinner"), do: {18, 0, 22, 0}
+  defp meal_period_to_time_range("late_night"), do: {22, 0, 1, 0}
+  # Default to lunch hours if unknown
+  defp meal_period_to_time_range(_), do: {12, 0, 15, 0}
+end
