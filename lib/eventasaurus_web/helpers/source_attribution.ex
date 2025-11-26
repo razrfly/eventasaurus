@@ -148,9 +148,12 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
     end)
     |> Enum.map(fn {_source_id, grouped_sources} ->
       # For each group, keep the most recently seen record
-      Enum.max_by(grouped_sources, & &1.last_seen_at, DateTime)
+      # Use epoch timestamp as fallback for nil values to avoid crashes
+      Enum.max_by(grouped_sources, fn s ->
+        s.last_seen_at || ~U[1970-01-01 00:00:00Z]
+      end, DateTime)
     end)
-    |> Enum.sort_by(& &1.last_seen_at, {:desc, DateTime})
+    |> Enum.sort_by(fn s -> s.last_seen_at || ~U[1970-01-01 00:00:00Z] end, {:desc, DateTime})
   end
 
   def deduplicate_sources(_), do: []
