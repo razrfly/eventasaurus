@@ -395,11 +395,13 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
 
   # Build PostalAddress schema
   defp build_postal_address(venue, city) do
+    country_code = get_in(city, [:country, :code]) || city[:country_code] || "US"
+
     %{
       "@type" => "PostalAddress",
       "streetAddress" => venue.address || "",
       "addressLocality" => city.name,
-      "addressCountry" => city.country.code || "US"
+      "addressCountry" => country_code
     }
   end
 
