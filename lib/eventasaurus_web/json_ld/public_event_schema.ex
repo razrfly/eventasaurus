@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   require Logger
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Helpers.SourceAttribution
 
   @doc """
   Generates JSON-LD structured data for a public event.
@@ -407,8 +408,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   defp add_event_images(images, event) do
     if event.sources && event.sources != [] do
       # Get images from all sources, prioritizing by source priority and recency
+      # Deduplicate sources first to avoid duplicate images from multiple showtimes
       source_images =
         event.sources
+        |> SourceAttribution.deduplicate_sources()
         |> Enum.sort_by(fn source ->
           priority = get_in(source.metadata, ["priority"]) || 10
           # Newer timestamps first (negative for descending sort)

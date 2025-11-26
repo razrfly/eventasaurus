@@ -1391,7 +1391,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   </div>
 
                   <div class="flex flex-wrap gap-4">
-                    <%= for source <- @event.sources do %>
+                    <%= for source <- SourceAttribution.deduplicate_sources(@event.sources) do %>
                       <% source_url = SourceAttribution.get_source_url(source) %>
                       <% source_name = SourceAttribution.get_source_name(source) %>
                       <div class="text-sm">

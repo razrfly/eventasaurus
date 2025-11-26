@@ -41,7 +41,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     # Fetch city
     city =
       from(c in City,
-        where: c.slug == ^city_slug
+        where: c.slug == ^city_slug,
+        preload: [:country]
       )
       |> Repo.one()
 
@@ -76,7 +77,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             join: v in assoc(pe, :venue),
             on: v.city_id == ^city.id,
             where: em.movie_id == ^movie.id,
-            where: pe.starts_at >= ^now,
             order_by: [asc: pe.starts_at],
             preload: [:categories, :performers, venue: :city_ref, sources: :source]
           )
@@ -378,7 +378,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
       # Fetch date availability counts for the movie
       movie = socket.assigns.movie
-      date_list = generate_date_list(false)  # false = movie event (7 days)
+      # false = movie event (7 days)
+      date_list = generate_date_list(false)
 
       date_availability =
         case EventasaurusApp.Planning.OccurrenceQuery.get_date_availability_counts(
@@ -793,7 +794,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     cdn_image_url = CDN.url(image_url)
 
     # Build description
-    description = "Watch #{movie.title} in #{city.name}. #{total_showtimes} #{pluralize_showtime(total_showtimes)} available at multiple cinemas."
+    description =
+      "Watch #{movie.title} in #{city.name}. #{total_showtimes} #{pluralize_showtime(total_showtimes)} available at multiple cinemas."
 
     # Render Open Graph component
     Phoenix.HTML.Safe.to_iodata(
