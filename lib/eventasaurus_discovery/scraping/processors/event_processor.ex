@@ -746,7 +746,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         # CRITICAL: For showtimes, we need MULTIPLE PublicEventSource records per event
         # Each showtime (different time/date) should be a separate record with unique external_id
         # DO NOT use fallback check by (event_id, source_id) for showtimes
-        is_showtime = String.contains?(ext_id, "showtime")
+        is_showtime = ext_id && (String.starts_with?(ext_id, "cinema_city_showtime_") ||
+                                 String.starts_with?(ext_id, "kino_krakow_showtime_"))
 
         if is_showtime do
           # Showtime scenario: Always create new record for unique external_id
@@ -1839,7 +1840,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     |> PublicEventSource.changeset(source_attrs)
     |> Repo.insert(
       on_conflict:
-        {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url, :event_id]},
+        {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url]},
       conflict_target: [:external_id, :source_id]
     )
   end
