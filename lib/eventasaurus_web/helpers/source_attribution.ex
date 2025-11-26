@@ -128,6 +128,33 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
 
   defp get_url_from_source_event(_), do: nil
 
+  @doc """
+  Deduplicate sources by source_id, keeping only the most recent record for each unique source.
+
+  This is needed because with Cinema City showtimes, we now have multiple PublicEventSource
+  records per event (one per showtime), but we only want to display each unique source once
+  in the UI (e.g., show "Cinema City" once, not 5 times).
+
+  ## Examples
+
+      iex> deduplicate_sources([source1, source2, source1_duplicate])
+      [source1, source2]  # Only unique sources, keeping most recent
+  """
+  def deduplicate_sources(sources) when is_list(sources) do
+    sources
+    |> Enum.group_by(fn source ->
+      # Group by source.id (the unique source identifier)
+      if source.source, do: source.source.id, else: nil
+    end)
+    |> Enum.map(fn {_source_id, grouped_sources} ->
+      # For each group, keep the most recently seen record
+      Enum.max_by(grouped_sources, & &1.last_seen_at, DateTime)
+    end)
+    |> Enum.sort_by(& &1.last_seen_at, {:desc, DateTime})
+  end
+
+  def deduplicate_sources(_), do: []
+
   # Normalize and validate HTTP/HTTPS URLs
   defp normalize_http_url(nil), do: nil
 

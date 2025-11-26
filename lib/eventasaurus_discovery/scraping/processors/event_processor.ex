@@ -741,35 +741,50 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         })
         |> Repo.update()
 
-      # No existing record by external_id, check by event_id as fallback
+      # No existing record by external_id
       nil ->
-        existing_by_event =
-          Repo.get_by(PublicEventSource,
-            event_id: event.id,
-            source_id: source_id
-          )
+        # CRITICAL: For showtimes, we need MULTIPLE PublicEventSource records per event
+        # Each showtime (different time/date) should be a separate record with unique external_id
+        # DO NOT use fallback check by (event_id, source_id) for showtimes
+        is_showtime = String.contains?(ext_id, "showtime")
 
-        case existing_by_event do
-          # Event already has a link from this source with different external_id
-          %PublicEventSource{} = existing ->
-            Logger.warning("""
-            ⚠️ Event ##{event.id} already linked to source #{source_id} with different external_id
-            Old external_id: #{existing.external_id}
-            New external_id: #{ext_id}
-            Updating to new external_id
-            """)
+        if is_showtime do
+          # Showtime scenario: Always create new record for unique external_id
+          Logger.debug("✨ Creating new showtime source link for event ##{event.id}")
 
-            existing
-            |> PublicEventSource.changeset(attrs)
-            |> Repo.update()
+          %PublicEventSource{}
+          |> PublicEventSource.changeset(attrs)
+          |> Repo.insert()
+        else
+          # Non-showtime scenario: Check by event_id as fallback (legacy behavior)
+          existing_by_event =
+            Repo.get_by(PublicEventSource,
+              event_id: event.id,
+              source_id: source_id
+            )
 
-          # No existing link at all - create new one
-          nil ->
-            Logger.debug("✨ Creating new event source link for event ##{event.id}")
+          case existing_by_event do
+            # Event already has a link from this source with different external_id
+            %PublicEventSource{} = existing ->
+              Logger.warning("""
+              ⚠️ Event ##{event.id} already linked to source #{source_id} with different external_id
+              Old external_id: #{existing.external_id}
+              New external_id: #{ext_id}
+              Updating to new external_id
+              """)
 
-            %PublicEventSource{}
-            |> PublicEventSource.changeset(attrs)
-            |> Repo.insert()
+              existing
+              |> PublicEventSource.changeset(attrs)
+              |> Repo.update()
+
+            # No existing link at all - create new one
+            nil ->
+              Logger.debug("✨ Creating new event source link for event ##{event.id}")
+
+              %PublicEventSource{}
+              |> PublicEventSource.changeset(attrs)
+              |> Repo.insert()
+          end
         end
     end
   end
@@ -1824,8 +1839,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     |> PublicEventSource.changeset(source_attrs)
     |> Repo.insert(
       on_conflict:
-        {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url]},
-      conflict_target: [:event_id, :source_id]
+        {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url, :event_id]},
+      conflict_target: [:external_id, :source_id]
     )
   end
 end
