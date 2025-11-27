@@ -91,35 +91,38 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
     strategies = [
       # Strategy 1: Original title + year (most accurate)
-      {fn -> search_tmdb(primary_title, year) end, "original_title+year"},
+      {fn -> search_tmdb(primary_title, year, nil) end, "original_title+year"},
 
       # Strategy 2: Normalized title (remove 3D/IMAX/etc) + year
-      {fn -> search_tmdb(normalize_title_for_search(primary_title), year) end, "normalized+year"},
+      {fn -> search_tmdb(normalize_title_for_search(primary_title), year, nil) end, "normalized+year"},
 
       # Strategy 3: Main title only (handle subtitles like "Film: Subtitle")
-      {fn -> search_tmdb(extract_main_title(primary_title), year) end, "main_title+year"},
+      {fn -> search_tmdb(extract_main_title(primary_title), year, nil) end, "main_title+year"},
 
       # Strategy 4: Original title without year (broader search)
-      {fn -> search_tmdb(primary_title, nil) end, "original_title"},
+      {fn -> search_tmdb(primary_title, nil, nil) end, "original_title"},
 
-      # Strategy 5: Polish title + year (for Polish-only films)
-      {fn -> polish_title && search_tmdb(polish_title, year) end, "polish_title+year"},
+      # Strategy 5: Polish title + year (for Polish-only films) - USE POLISH LANGUAGE
+      {fn -> polish_title && search_tmdb(polish_title, year, "pl-PL") end, "polish_title+year"},
 
-      # Strategy 6: Normalized Polish title + year (handles collections, prefixes)
-      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), year) end,
+      # Strategy 6: Normalized Polish title + year (handles collections, prefixes) - USE POLISH LANGUAGE
+      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), year, "pl-PL") end,
        "polish_normalized+year"},
 
-      # Strategy 7: Normalized Polish title without year (broader search)
-      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), nil) end,
+      # Strategy 7: Normalized Polish title without year (broader search) - USE POLISH LANGUAGE
+      {fn -> polish_title && search_tmdb(normalize_polish_title(polish_title), nil, "pl-PL") end,
        "polish_normalized"},
 
       # Strategy 8: Normalized without year (last resort)
-      {fn -> search_tmdb(normalize_title_for_search(primary_title), nil) end, "normalized"},
+      {fn -> search_tmdb(normalize_title_for_search(primary_title), nil, nil) end, "normalized"},
 
-      # Strategy 9: Movie-specific search endpoint (better ranking)
-      {fn -> search_movie_only(primary_title, year) end, "movie_endpoint+year"},
+      # Strategy 9: Movie-specific search endpoint (better ranking) - Try with Polish if available
+      {fn -> polish_title && search_movie_only(polish_title, year, "pl-PL") end, "movie_endpoint+polish"},
 
-      # Strategy 10: Discover with metadata filters (runtime, language)
+      # Strategy 10: Movie-specific search endpoint (original title fallback)
+      {fn -> search_movie_only(primary_title, year, nil) end, "movie_endpoint+year"},
+
+      # Strategy 11: Discover with metadata filters (runtime, language)
       {fn -> discover_by_metadata(kino_movie) end, "discover_metadata"}
     ]
 
@@ -140,11 +143,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   end
 
   # Search TMDB for candidates (uses /search/multi endpoint)
-  defp search_tmdb(nil, _year), do: {:ok, []}
+  defp search_tmdb(nil, _year, _language), do: {:ok, []}
 
-  defp search_tmdb(title, year) when is_binary(title) do
-    # Try search with year first for better results
-    case TmdbService.search_multi(title, 1) do
+  defp search_tmdb(title, year, language) when is_binary(title) do
+    # Try search with language parameter for better Polish title matching
+    case TmdbService.search_multi(title, 1, language) do
       {:ok, [_ | _] = results} ->
         # Filter to movies only and relevant years
         movies =
@@ -163,9 +166,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   end
 
   # Search using movie-specific endpoint for better ranking
-  defp search_movie_only(nil, _year), do: {:ok, []}
+  defp search_movie_only(nil, _year, _language), do: {:ok, []}
 
-  defp search_movie_only(title, year) when is_binary(title) do
+  defp search_movie_only(title, year, language) when is_binary(title) do
     api_key = System.get_env("TMDB_API_KEY")
 
     if is_nil(api_key) or api_key == "" do
@@ -181,6 +184,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
 
       # Add year if available
       params = if year, do: Map.put(params, :year, year), else: params
+
+      # Add language if available (for Polish searches)
+      params = if language, do: Map.put(params, :language, language), else: params
 
       # Build URL
       query_string = URI.encode_query(params)
