@@ -85,8 +85,8 @@ defmodule Eventasaurus.Sitemap do
       city_urls(opts),
       venue_urls(opts),
       container_urls(opts),
-      movie_urls(opts),
-      aggregation_urls(opts)
+      movie_urls(opts)
+      # aggregation_urls(opts) - Disabled: AggregatedEventGroup is virtual struct, not queryable
     ]
     |> Enum.reduce(Stream.concat([]), fn stream, acc ->
       Stream.concat(acc, stream)
@@ -390,42 +390,9 @@ defmodule Eventasaurus.Sitemap do
     end)
   end
 
-  # Returns a stream of all content aggregation pages
-  defp aggregation_urls(opts) do
-    base_url = get_base_url(opts)
-
-    # Query aggregated event groups (social, food, music, comedy, etc.)
-    from(aeg in EventasaurusDiscovery.PublicEvents.AggregatedEventGroup,
-      join: c in EventasaurusDiscovery.Locations.City,
-      on: aeg.city_id == c.id,
-      select: %{
-        content_type: aeg.aggregation_type,
-        identifier: aeg.identifier,
-        city_slug: c.slug,
-        updated_at: aeg.updated_at
-      },
-      where: c.discovery_enabled == true and not is_nil(aeg.identifier) and aeg.identifier != ""
-    )
-    |> Repo.stream()
-    |> Stream.map(fn agg ->
-      lastmod =
-        if agg.updated_at do
-          NaiveDateTime.to_date(agg.updated_at)
-        else
-          Date.utc_today()
-        end
-
-      # Convert schema.org type to URL slug
-      content_type_slug = EventasaurusDiscovery.AggregationTypeSlug.to_slug(agg.content_type)
-
-      %Sitemapper.URL{
-        loc: "#{base_url}/c/#{agg.city_slug}/#{content_type_slug}/#{agg.identifier}",
-        changefreq: :weekly,
-        priority: 0.7,
-        lastmod: lastmod
-      }
-    end)
-  end
+  # NOTE: aggregation_urls/1 removed because AggregatedEventGroup is a virtual struct
+  # (not a database table), so it cannot be queried with Ecto. Aggregation URLs are
+  # generated dynamically and don't need to be in the sitemap.
 
   # Convert container type to plural form for URL generation
   defp pluralize_container_type(:festival), do: "festivals"

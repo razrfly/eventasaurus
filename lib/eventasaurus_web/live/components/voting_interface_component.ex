@@ -1032,8 +1032,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
           </div>
 
-          <div class="sm:ml-4 flex items-center justify-between sm:justify-start space-x-1">
-            <div class="flex items-center space-x-1">
+          <div class="sm:ml-4 flex !flex-row items-center justify-between sm:justify-start space-x-1">
+            <div class="flex !flex-row items-center space-x-1">
               <%= for star <- 1..5 do %>
                 <button
                   type="button"

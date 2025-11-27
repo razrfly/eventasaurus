@@ -366,7 +366,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   # Build a list item for a screening venue
-  defp build_screening_list_item(venue, info, movie, city, position) do
+  defp build_screening_list_item(venue, info, _movie, city, position) do
     %{
       "@type" => "ListItem",
       "position" => position,

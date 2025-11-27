@@ -971,7 +971,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   # Build Open Graph meta tags for city pages
-  defp build_city_open_graph(city, stats, social_card_path, request_uri) do
+  defp build_city_open_graph(city, _stats, social_card_path, request_uri) do
     # Build absolute social card URL
     base_url = EventasaurusWeb.UrlHelper.build_url("", request_uri)
     image_url = "#{base_url}#{social_card_path}"

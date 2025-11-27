@@ -68,7 +68,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
       {city, movie} ->
         # Fetch upcoming screenings for this movie in this city
-        now = DateTime.utc_now()
+        _now = DateTime.utc_now()
 
         screenings =
           from(pe in PublicEvent,
