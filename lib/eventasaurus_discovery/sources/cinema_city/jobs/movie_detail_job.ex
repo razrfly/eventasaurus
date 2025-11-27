@@ -10,10 +10,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   - Uses Cinema City film_id for tracking
   - Reuses TmdbMatcher for consistent matching logic
 
-  Confidence levels (matching Kino Krakow):
-  - High confidence (≥70%): Auto-matched, returns {:ok, %{status: :matched}}
-  - Medium confidence (50-69%): Needs review, returns {:error, :tmdb_needs_review}
-  - Low confidence (<50%): No match, returns {:error, :tmdb_low_confidence}
+  Confidence levels (Phase 3: lowered threshold from 60% to 50%):
+  - High confidence (≥70%): Standard match, auto-matched
+  - Medium confidence (60-69%): Now Playing fallback match, auto-matched
+  - Low-medium confidence (50-59%): Accepted with lower confidence, auto-matched
+  - Low confidence (<50%): No reliable match, returns {:error, :tmdb_low_confidence}
   - HTTP/API errors: Returns {:error, reason} which triggers Oban retry
 
   Each movie's matching status is visible in the Oban dashboard.
@@ -43,7 +44,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
     film_data = args["film_data"]
     source_id = args["source_id"]
 
-    Logger.info("🎬 Processing Cinema City movie: #{film_data["polish_title"]}")
+    polish_title = film_data["polish_title"]
+    release_year = film_data["release_year"]
+
+    Logger.info("🎬 Processing Cinema City movie: #{polish_title} (#{release_year})")
 
     # Convert film_data from CinemaDateJob to format expected by TmdbMatcher
     movie_data = normalize_film_data(film_data)
@@ -54,15 +58,28 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
     # Match to TMDB
     result =
       case TmdbMatcher.match_movie(movie_data) do
-        {:ok, tmdb_id, confidence} when confidence >= 0.60 ->
-          # High confidence match (≥70%) or Now Playing fallback match (60-70%) - auto-accept
-          match_type = if confidence >= 0.70, do: "standard", else: "now_playing_fallback"
+        {:ok, tmdb_id, confidence} when confidence >= 0.50 ->
+          # Lowered from 0.60 to 0.50 to capture more valid matches
+          # Match types:
+          # - High confidence (≥70%): Standard match
+          # - Medium confidence (60-69%): Now Playing fallback
+          # - Low-medium confidence (50-59%): Accepted with lower confidence
+          match_type = cond do
+            confidence >= 0.70 -> "standard"
+            confidence >= 0.60 -> "now_playing_fallback"
+            true -> "low_confidence_accepted"
+          end
 
           case TmdbMatcher.find_or_create_movie(tmdb_id) do
             {:ok, movie} ->
-              Logger.info(
-                "✅ Auto-matched (#{match_type}): #{movie.title} (#{trunc(confidence * 100)}% confidence)"
-              )
+              # Enhanced logging with more details for analysis
+              Logger.info("""
+              ✅ Auto-matched (#{match_type}): #{movie.title}
+                 Polish title: #{polish_title}
+                 Confidence: #{trunc(confidence * 100)}%
+                 TMDB ID: #{tmdb_id}
+                 Cinema City ID: #{cinema_city_film_id}
+              """)
 
               # Store Cinema City film_id in movie metadata for later lookups
               store_cinema_city_film_id(movie, cinema_city_film_id, source_id)
@@ -74,7 +91,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
                  movie_id: movie.id,
                  cinema_city_film_id: cinema_city_film_id,
                  tmdb_id: tmdb_id,
-                 match_type: match_type
+                 match_type: match_type,
+                 polish_title: polish_title
                }}
 
             {:error, reason} ->
@@ -82,60 +100,79 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
               {:error, reason}
           end
 
-        {:needs_review, _movie_data, _candidates} ->
-          # Medium confidence (50-69%) - needs manual review
-          # Return ERROR so Oban marks as failed and visible in dashboard
-          Logger.error(
-            "❌ TMDB matching failed - needs review: #{movie_data.polish_title || movie_data.original_title} (50-69% confidence)"
-          )
+        {:needs_review, _movie_data, candidates} ->
+          # This shouldn't happen now since we accept >= 50% confidence
+          # But keep for compatibility with TmdbMatcher behavior
+          Logger.warning("""
+          ⚠️  TMDB matching needs review (unexpected): #{polish_title} (#{release_year})
+             Cinema City ID: #{cinema_city_film_id}
+             Candidates found: #{length(candidates)}
+             Note: This should be rare with 50% threshold
+          """)
 
           {:error,
            %{
              reason: :tmdb_needs_review,
              cinema_city_film_id: cinema_city_film_id,
-             polish_title: movie_data.polish_title,
-             original_title: movie_data.original_title,
-             confidence_range: "50-69%"
+             polish_title: polish_title,
+             release_year: release_year,
+             candidate_count: length(candidates)
            }}
 
         {:error, :low_confidence} ->
           # Low confidence (<50%) - no reliable match
-          # Return ERROR so Oban marks as failed and visible in dashboard
-          Logger.error(
-            "❌ TMDB matching failed - low confidence: #{movie_data.polish_title || movie_data.original_title} (<50%)"
-          )
+          Logger.warning("""
+          ⏭️  TMDB matching low confidence: #{polish_title} (#{release_year})
+             Cinema City ID: #{cinema_city_film_id}
+             Confidence: <50%
+             This movie will be skipped in ShowtimeProcessJob
+          """)
 
           {:error,
            %{
              reason: :tmdb_low_confidence,
              cinema_city_film_id: cinema_city_film_id,
-             polish_title: movie_data.polish_title,
-             original_title: movie_data.original_title,
-             confidence_range: "<50%"
+             polish_title: polish_title,
+             release_year: release_year
            }}
 
         {:error, :missing_title} ->
-          Logger.error("❌ TMDB matching failed - missing title for film: #{cinema_city_film_id}")
+          Logger.error("""
+          ❌ TMDB matching failed - missing title
+             Cinema City ID: #{cinema_city_film_id}
+          """)
 
-          {:error, %{reason: :missing_title, cinema_city_film_id: cinema_city_film_id}}
+          {:error, %{
+            reason: :missing_title,
+            cinema_city_film_id: cinema_city_film_id
+          }}
 
         {:error, :no_results} ->
-          # Return ERROR so Oban marks as failed and visible in dashboard
-          Logger.error(
-            "❌ TMDB matching failed - no results for: #{movie_data.polish_title || movie_data.original_title}"
-          )
+          # No results from TMDB
+          Logger.warning("""
+          ⏭️  TMDB matching - no results: #{polish_title} (#{release_year})
+             Cinema City ID: #{cinema_city_film_id}
+             This might be a local film or not yet in TMDB
+             This movie will be skipped in ShowtimeProcessJob
+          """)
 
           {:error,
            %{
              reason: :tmdb_no_results,
              cinema_city_film_id: cinema_city_film_id,
-             polish_title: movie_data.polish_title,
-             original_title: movie_data.original_title
+             polish_title: polish_title,
+             release_year: release_year
            }}
 
         {:error, reason} ->
           # Transient errors (network, TMDB API) - let Oban retry
-          Logger.error("❌ TMDB matching error for #{cinema_city_film_id}: #{inspect(reason)}")
+          Logger.error("""
+          ❌ TMDB matching error: #{polish_title} (#{release_year})
+             Cinema City ID: #{cinema_city_film_id}
+             Error: #{inspect(reason)}
+             This job will be retried
+          """)
+
           {:error, reason}
       end
 

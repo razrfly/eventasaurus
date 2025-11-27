@@ -67,8 +67,10 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   Returns a map with:
   - total_jobs: Total number of executions
   - completed: Number of completed jobs
-  - failed: Number of failed/discarded jobs
-  - success_rate: Percentage of successful jobs
+  - cancelled: Number of cancelled jobs (intentional skips)
+  - failed: Number of failed/discarded jobs (real errors)
+  - pipeline_health: Percentage of jobs that ran successfully (completed + cancelled)
+  - match_rate: Percentage of completed jobs out of completed + cancelled
   - avg_duration_ms: Average execution time
   """
   def get_worker_metrics(worker_name) do
@@ -78,7 +80,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         select: %{
           total_jobs: count(s.id),
           completed: count(s.id) |> filter(s.state == "completed"),
-          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+          cancelled: count(s.id) |> filter(s.state == "cancelled"),
+          failed: count(s.id) |> filter(s.state == "discarded"),
           avg_duration_ms: avg(s.duration_ms)
         }
       )
@@ -86,7 +89,18 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     result = Repo.one(query)
 
     if result.total_jobs > 0 do
-      success_rate = Float.round(result.completed / result.total_jobs * 100, 2)
+      # Pipeline Health: (completed + cancelled) / total
+      # This shows how many jobs ran without real errors
+      pipeline_health = Float.round((result.completed + result.cancelled) / result.total_jobs * 100, 2)
+
+      # Match Rate: completed / (completed + cancelled)
+      # For jobs that process data, this shows successful processing rate
+      match_rate =
+        if result.completed + result.cancelled > 0 do
+          Float.round(result.completed / (result.completed + result.cancelled) * 100, 2)
+        else
+          0.0
+        end
 
       # Convert Decimal to float for avg_duration_ms
       avg_duration =
@@ -97,7 +111,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         end
 
       result
-      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:match_rate, match_rate)
       |> Map.put(:avg_duration_ms, avg_duration)
     else
       result
@@ -159,6 +174,10 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   Gets overall system metrics for dashboard summary cards.
 
   Returns aggregated metrics across all workers within a time range.
+  Now includes:
+  - pipeline_health: (completed + cancelled) / total - shows jobs without real errors
+  - match_rate: completed / (completed + cancelled) - shows data processing success rate
+  - error_rate: (retryable + failed) / total - shows actual error rate
   """
   def get_system_metrics(hours_back \\ 24) do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
@@ -169,7 +188,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         select: %{
           total_jobs: count(s.id),
           completed: count(s.id) |> filter(s.state == "completed"),
-          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+          cancelled: count(s.id) |> filter(s.state == "cancelled"),
+          failed: count(s.id) |> filter(s.state == "discarded"),
           retryable: count(s.id) |> filter(s.state == "retryable"),
           avg_duration_ms: avg(s.duration_ms),
           unique_workers: fragment("COUNT(DISTINCT ?)", s.worker)
@@ -179,10 +199,29 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     result = Repo.one(query)
 
     if result.total_jobs > 0 do
-      success_rate = Float.round(result.completed / result.total_jobs * 100, 2)
-      Map.put(result, :success_rate, success_rate)
+      # Pipeline Health: (completed + cancelled) / total
+      pipeline_health = Float.round((result.completed + result.cancelled) / result.total_jobs * 100, 2)
+
+      # Match Rate: completed / (completed + cancelled)
+      match_rate =
+        if result.completed + result.cancelled > 0 do
+          Float.round(result.completed / (result.completed + result.cancelled) * 100, 2)
+        else
+          0.0
+        end
+
+      # Error Rate: (retryable + failed) / total
+      error_rate = Float.round((result.retryable + result.failed) / result.total_jobs * 100, 2)
+
+      result
+      |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:match_rate, match_rate)
+      |> Map.put(:error_rate, error_rate)
     else
-      Map.put(result, :success_rate, 0.0)
+      result
+      |> Map.put(:pipeline_health, 0.0)
+      |> Map.put(:match_rate, 0.0)
+      |> Map.put(:error_rate, 0.0)
     end
   end
 
@@ -190,6 +229,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   Gets execution timeline data for charting.
 
   Groups executions by hour or day depending on time range.
+  Now separates cancelled (intentional skips) from failed (real errors).
   """
   def get_execution_timeline(hours_back \\ 24) do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
@@ -205,7 +245,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
             time_bucket: fragment("date_trunc('hour', ?)", s.attempted_at),
             total: count(s.id),
             completed: count(s.id) |> filter(s.state == "completed"),
-            failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
+            cancelled: count(s.id) |> filter(s.state == "cancelled"),
+            failed: count(s.id) |> filter(s.state == "discarded")
           },
           order_by: fragment("date_trunc('hour', ?)", s.attempted_at)
         )
@@ -221,7 +262,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
             time_bucket: fragment("date_trunc('day', ?)", s.attempted_at),
             total: count(s.id),
             completed: count(s.id) |> filter(s.state == "completed"),
-            failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
+            cancelled: count(s.id) |> filter(s.state == "cancelled"),
+            failed: count(s.id) |> filter(s.state == "discarded")
           },
           order_by: fragment("date_trunc('day', ?)", s.attempted_at)
         )
@@ -244,7 +286,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           worker: s.worker,
           total_executions: count(s.id),
           completed: count(s.id) |> filter(s.state == "completed"),
-          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+          cancelled: count(s.id) |> filter(s.state == "cancelled"),
+          failed: count(s.id) |> filter(s.state == "discarded"),
           avg_duration_ms: avg(s.duration_ms)
         },
         order_by: [desc: count(s.id)],
@@ -253,14 +296,25 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
     Repo.all(query)
     |> Enum.map(fn worker ->
-      success_rate =
+      # Pipeline Health: (completed + cancelled) / total
+      pipeline_health =
         if worker.total_executions > 0 do
-          Float.round(worker.completed / worker.total_executions * 100, 2)
+          Float.round((worker.completed + worker.cancelled) / worker.total_executions * 100, 2)
         else
           0.0
         end
 
-      Map.put(worker, :success_rate, success_rate)
+      # Match Rate: completed / (completed + cancelled)
+      match_rate =
+        if worker.completed + worker.cancelled > 0 do
+          Float.round(worker.completed / (worker.completed + worker.cancelled) * 100, 2)
+        else
+          0.0
+        end
+
+      worker
+      |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:match_rate, match_rate)
     end)
   end
 
@@ -304,16 +358,26 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         select: %{
           total: count(s.id),
           completed: count(s.id) |> filter(s.state == "completed"),
-          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+          cancelled: count(s.id) |> filter(s.state == "cancelled"),
+          failed: count(s.id) |> filter(s.state == "discarded"),
           avg_duration_ms: avg(s.duration_ms)
         }
       )
 
     result = Repo.one(query)
 
-    # Calculate success rate and format duration
+    # Calculate metrics and format duration
     if result.total > 0 do
-      success_rate = Float.round(result.completed / result.total * 100, 2)
+      # Pipeline Health: (completed + cancelled) / total
+      pipeline_health = Float.round((result.completed + result.cancelled) / result.total * 100, 2)
+
+      # Match Rate: completed / (completed + cancelled)
+      match_rate =
+        if result.completed + result.cancelled > 0 do
+          Float.round(result.completed / (result.completed + result.cancelled) * 100, 2)
+        else
+          0.0
+        end
 
       # Convert Decimal to float for avg_duration_ms
       avg_duration =
@@ -324,14 +388,17 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         end
 
       result
-      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:match_rate, match_rate)
       |> Map.put(:avg_duration_ms, avg_duration)
     else
       %{
         total: 0,
         completed: 0,
+        cancelled: 0,
         failed: 0,
-        success_rate: 0.0,
+        pipeline_health: 0.0,
+        match_rate: 0.0,
         avg_duration_ms: 0.0
       }
     end
@@ -362,7 +429,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           date_bucket: fragment("date_trunc('day', ?)", s.attempted_at),
           total: count(s.id),
           completed: count(s.id) |> filter(s.state == "completed"),
-          failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
+          cancelled: count(s.id) |> filter(s.state == "cancelled"),
+          failed: count(s.id) |> filter(s.state == "discarded")
         },
         order_by: fragment("date_trunc('day', ?)", s.attempted_at)
       )
@@ -373,6 +441,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         date: Date.to_iso8601(NaiveDateTime.to_date(bucket.date_bucket)),
         total: bucket.total,
         completed: bucket.completed,
+        cancelled: bucket.cancelled,
         failed: bucket.failed
       }
     end)
@@ -421,6 +490,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   Gets metrics grouped by scraper name.
 
   Now includes job_type_count to show how many distinct job types each scraper has.
+  Separates cancelled (intentional skips) from failed (real errors).
   """
   def get_scraper_metrics(hours_back \\ 24) do
     cutoff = DateTime.add(DateTime.utc_now(), -hours_back, :hour)
@@ -438,14 +508,24 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     |> Enum.map(fn {scraper_name, executions} ->
       total = length(executions)
       completed = Enum.count(executions, &(&1.state == "completed"))
-      failed = Enum.count(executions, &(&1.state in ["discarded", "cancelled"]))
+      cancelled = Enum.count(executions, &(&1.state == "cancelled"))
+      failed = Enum.count(executions, &(&1.state == "discarded"))
 
       durations = Enum.map(executions, & &1.duration_ms) |> Enum.reject(&is_nil/1)
 
       avg_duration =
         if length(durations) > 0, do: Enum.sum(durations) / length(durations), else: 0
 
-      success_rate = if total > 0, do: Float.round(completed / total * 100, 2), else: 0.0
+      # Pipeline Health: (completed + cancelled) / total
+      pipeline_health = if total > 0, do: Float.round((completed + cancelled) / total * 100, 2), else: 0.0
+
+      # Match Rate: completed / (completed + cancelled)
+      match_rate =
+        if completed + cancelled > 0 do
+          Float.round(completed / (completed + cancelled) * 100, 2)
+        else
+          0.0
+        end
 
       # Calculate distinct job types for this scraper
       job_type_count =
@@ -464,8 +544,10 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         scraper_name: scraper_name,
         total_executions: total,
         completed: completed,
+        cancelled: cancelled,
         failed: failed,
-        success_rate: success_rate,
+        pipeline_health: pipeline_health,
+        match_rate: match_rate,
         avg_duration_ms: Float.round(avg_duration, 2),
         job_type_count: job_type_count,
         last_run: last_run
@@ -520,7 +602,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         worker: s.worker,
         total_runs: count(s.id),
         completed: count(s.id) |> filter(s.state == "completed"),
-        failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+        cancelled: count(s.id) |> filter(s.state == "cancelled"),
+        failed: count(s.id) |> filter(s.state == "discarded"),
         avg_duration_ms: avg(s.duration_ms),
         last_run: max(s.attempted_at)
       }
@@ -531,10 +614,18 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       extract_scraper_name(worker_stats.worker) == source_slug
     end)
     |> Enum.map(fn worker_stats ->
-      # Calculate success rate
-      success_rate =
+      # Pipeline Health: (completed + cancelled) / total
+      pipeline_health =
         if worker_stats.total_runs > 0 do
-          Float.round(worker_stats.completed / worker_stats.total_runs * 100, 2)
+          Float.round((worker_stats.completed + worker_stats.cancelled) / worker_stats.total_runs * 100, 2)
+        else
+          0.0
+        end
+
+      # Match Rate: completed / (completed + cancelled)
+      match_rate =
+        if worker_stats.completed + worker_stats.cancelled > 0 do
+          Float.round(worker_stats.completed / (worker_stats.completed + worker_stats.cancelled) * 100, 2)
         else
           0.0
         end
@@ -554,7 +645,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         |> List.last()
 
       worker_stats
-      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:match_rate, match_rate)
       |> Map.put(:avg_duration_ms, avg_duration)
       |> Map.put(:job_type, job_type)
     end)
@@ -929,13 +1021,15 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           selected_as(fragment("date_trunc(?, ?)", ^time_trunc, s.attempted_at), :time_bucket),
         total: count(s.id),
         completed: count(s.id) |> filter(s.state == "completed"),
-        failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"])
+        cancelled: count(s.id) |> filter(s.state == "cancelled"),
+        failed: count(s.id) |> filter(s.state == "discarded")
       },
       group_by: selected_as(:time_bucket),
       order_by: selected_as(:time_bucket)
     )
     |> Repo.all()
     |> Enum.map(fn bucket ->
+      # Error Rate: only count real errors (discarded), not cancelled
       error_rate =
         if bucket.total > 0 do
           Float.round(bucket.failed / bucket.total * 100, 2)
@@ -1006,16 +1100,26 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         worker: s.worker,
         total_jobs: count(s.id),
         completed: count(s.id) |> filter(s.state == "completed"),
-        failed: count(s.id) |> filter(s.state in ["discarded", "cancelled"]),
+        cancelled: count(s.id) |> filter(s.state == "cancelled"),
+        failed: count(s.id) |> filter(s.state == "discarded"),
         avg_duration_ms: avg(s.duration_ms)
       },
       order_by: [desc: count(s.id)]
     )
     |> Repo.all()
     |> Enum.map(fn scraper ->
-      success_rate =
+      # Pipeline Health: (completed + cancelled) / total
+      pipeline_health =
         if scraper.total_jobs > 0 do
-          Float.round(scraper.completed / scraper.total_jobs * 100, 2)
+          Float.round((scraper.completed + scraper.cancelled) / scraper.total_jobs * 100, 2)
+        else
+          0.0
+        end
+
+      # Match Rate: completed / (completed + cancelled)
+      match_rate =
+        if scraper.completed + scraper.cancelled > 0 do
+          Float.round(scraper.completed / (scraper.completed + scraper.cancelled) * 100, 2)
         else
           0.0
         end
@@ -1028,7 +1132,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         end
 
       scraper
-      |> Map.put(:success_rate, success_rate)
+      |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:match_rate, match_rate)
       |> Map.put(:avg_duration_ms, avg_duration)
     end)
   end

@@ -26,9 +26,19 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
     # Calculate overall metrics
     total_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.total_runs))
     successful_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.completed))
+    cancelled_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled))
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
 
-    overall_success_rate = if total_runs > 0, do: successful_runs / total_runs * 100, else: 0.0
+    # Pipeline Health: (completed + cancelled) / total
+    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_runs) / total_runs * 100, else: 0.0
+
+    # Match Rate: completed / (completed + cancelled)
+    overall_match_rate =
+      if successful_runs + cancelled_runs > 0 do
+        successful_runs / (successful_runs + cancelled_runs) * 100
+      else
+        0.0
+      end
 
     avg_duration =
       if total_runs > 0 do
@@ -52,8 +62,10 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
        recent_runs: recent_runs,
        total_runs: total_runs,
        successful_runs: successful_runs,
+       cancelled_runs: cancelled_runs,
        failed_runs: failed_runs,
-       overall_success_rate: overall_success_rate,
+       overall_pipeline_health: overall_pipeline_health,
+       overall_match_rate: overall_match_rate,
        avg_duration_ms: avg_duration,
        expanded_runs: MapSet.new(),
        page_title: "#{format_source_name(source_slug)} Pipeline Monitor"
@@ -71,8 +83,19 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
 
     total_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.total_runs))
     successful_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.completed))
+    cancelled_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled))
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
-    overall_success_rate = if total_runs > 0, do: successful_runs / total_runs * 100, else: 0.0
+
+    # Pipeline Health: (completed + cancelled) / total
+    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_runs) / total_runs * 100, else: 0.0
+
+    # Match Rate: completed / (completed + cancelled)
+    overall_match_rate =
+      if successful_runs + cancelled_runs > 0 do
+        successful_runs / (successful_runs + cancelled_runs) * 100
+      else
+        0.0
+      end
 
     avg_duration =
       if total_runs > 0 do
@@ -95,8 +118,10 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
        recent_runs: recent_runs,
        total_runs: total_runs,
        successful_runs: successful_runs,
+       cancelled_runs: cancelled_runs,
        failed_runs: failed_runs,
-       overall_success_rate: overall_success_rate,
+       overall_pipeline_health: overall_pipeline_health,
+       overall_match_rate: overall_match_rate,
        avg_duration_ms: avg_duration
      )}
   end
@@ -128,19 +153,29 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
       </div>
 
       <!-- Overall Metrics -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
         <div class="bg-white rounded-lg shadow p-6">
           <dt class="text-sm font-medium text-gray-500">Total Runs</dt>
           <dd class="mt-1 text-3xl font-semibold text-gray-900"><%= @total_runs %></dd>
         </div>
 
         <div class="bg-white rounded-lg shadow p-6">
-          <dt class="text-sm font-medium text-gray-500">Success Rate</dt>
-          <dd class="mt-1 text-3xl font-semibold text-gray-900">
-            <%= Float.round(@overall_success_rate, 1) %>%
+          <dt class="text-sm font-medium text-gray-500">Pipeline Health</dt>
+          <dd class="mt-1 text-3xl font-semibold text-blue-600">
+            <%= Float.round(@overall_pipeline_health, 1) %>%
           </dd>
           <p class="mt-1 text-xs text-gray-500">
-            <%= @successful_runs %> completed, <%= @failed_runs %> failed
+            <%= @successful_runs %> completed, <%= @cancelled_runs %> skipped
+          </p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <dt class="text-sm font-medium text-gray-500">Match Rate</dt>
+          <dd class="mt-1 text-3xl font-semibold text-green-600">
+            <%= Float.round(@overall_match_rate, 1) %>%
+          </dd>
+          <p class="mt-1 text-xs text-gray-500">
+            Data processing success
           </p>
         </div>
 
@@ -186,11 +221,12 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
                 <div class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 min-w-[200px]">
                   <div class="flex items-center justify-between mb-2">
                     <span class="font-semibold text-gray-900"><%= stage.job_type %></span>
-                    <%= status_badge(stage.success_rate) %>
+                    <%= status_badge(stage.pipeline_health) %>
                   </div>
                   <div class="text-sm text-gray-600 space-y-1">
                     <div><%= stage.total_runs %> runs</div>
                     <div><%= format_duration(stage.avg_duration_ms) %> avg</div>
+                    <div class="text-xs">Match: <%= Float.round(stage.match_rate, 1) %>%</div>
                   </div>
                 </div>
 
@@ -367,32 +403,32 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
     |> Enum.join(" ")
   end
 
-  defp status_badge(success_rate) when success_rate >= 95 do
-    assigns = %{success_rate: success_rate}
+  defp status_badge(health_percentage) when health_percentage >= 95 do
+    assigns = %{percentage: health_percentage}
 
     ~H"""
     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-      <%= Float.round(@success_rate, 1) %>%
+      <%= Float.round(@percentage, 1) %>%
     </span>
     """
   end
 
-  defp status_badge(success_rate) when success_rate >= 75 do
-    assigns = %{success_rate: success_rate}
+  defp status_badge(health_percentage) when health_percentage >= 75 do
+    assigns = %{percentage: health_percentage}
 
     ~H"""
     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-      <%= Float.round(@success_rate, 1) %>%
+      <%= Float.round(@percentage, 1) %>%
     </span>
     """
   end
 
-  defp status_badge(success_rate) do
-    assigns = %{success_rate: success_rate}
+  defp status_badge(health_percentage) do
+    assigns = %{percentage: health_percentage}
 
     ~H"""
     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-      <%= Float.round(@success_rate, 1) %>%
+      <%= Float.round(@percentage, 1) %>%
     </span>
     """
   end

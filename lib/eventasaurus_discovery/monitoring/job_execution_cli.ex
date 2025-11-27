@@ -130,15 +130,15 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
   defp filter_by_state(query, nil), do: query
 
   defp filter_by_state(query, state) when state in [:success, :failure, :cancelled, :discarded] do
-    from(j in query, where: j.state == ^state)
+    state_string = Atom.to_string(state)
+    from(j in query, where: j.state == ^state_string)
   end
 
   defp filter_by_worker(query, nil), do: query
 
   defp filter_by_worker(query, worker) do
-    # Escape SQL wildcard characters (% and _) to prevent injection
-    pattern = escape_sql_wildcards(worker)
-    from(j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%"))
+    # Use simple LIKE without ESCAPE clause since we're controlling the pattern
+    from(j in query, where: like(j.worker, ^"%#{worker}%"))
   end
 
   defp filter_by_source(query, nil), do: query
@@ -147,14 +147,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     # Source name appears in worker like: EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob
     # Convert snake_case to PascalCase for matching
     pascal_source = Macro.camelize(source)
-    # Escape SQL wildcard characters (% and _) to prevent injection
-    pattern = escape_sql_wildcards(pascal_source)
-    from(j in query, where: fragment("? LIKE ? ESCAPE '\\\\'", j.worker, ^"%#{pattern}%"))
-  end
-
-  # Escape SQL wildcard characters to prevent injection
-  defp escape_sql_wildcards(string) do
-    String.replace(string, ~r/[%_]/, fn char -> "\\" <> char end)
+    from(j in query, where: like(j.worker, ^"%#{pascal_source}%"))
   end
 
   # Formatting Functions
@@ -180,7 +173,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
       job_name = extract_job_name(exec.worker)
       state_colored = colorize_state(exec.state)
       duration = format_duration(exec.duration_ms)
-      started = format_datetime(exec.started_at)
+      started = format_datetime(exec.attempted_at)
 
       IO.puts(
         format_row([
