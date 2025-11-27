@@ -26,16 +26,22 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
     # Calculate overall metrics
     total_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.total_runs))
     successful_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.completed))
-    cancelled_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled))
+    cancelled_failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled_failed))
+    cancelled_expected_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled_expected))
+    cancelled_runs = cancelled_failed_runs + cancelled_expected_runs
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
 
-    # Pipeline Health: (completed + cancelled) / total
-    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_runs) / total_runs * 100, else: 0.0
+    # Pipeline Health: (completed + cancelled_expected) / total
+    # Only count intentional cancellations as healthy, not processing failures
+    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_expected_runs) / total_runs * 100, else: 0.0
 
-    # Match Rate: completed / (completed + cancelled)
+    # Processing Failure Rate: (cancelled_failed + failed) / total
+    overall_processing_failure_rate = if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
+
+    # Match Rate: completed / (completed + cancelled_expected)
     overall_match_rate =
-      if successful_runs + cancelled_runs > 0 do
-        successful_runs / (successful_runs + cancelled_runs) * 100
+      if successful_runs + cancelled_expected_runs > 0 do
+        successful_runs / (successful_runs + cancelled_expected_runs) * 100
       else
         0.0
       end
@@ -62,9 +68,12 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
        recent_runs: recent_runs,
        total_runs: total_runs,
        successful_runs: successful_runs,
+       cancelled_failed_runs: cancelled_failed_runs,
+       cancelled_expected_runs: cancelled_expected_runs,
        cancelled_runs: cancelled_runs,
        failed_runs: failed_runs,
        overall_pipeline_health: overall_pipeline_health,
+       overall_processing_failure_rate: overall_processing_failure_rate,
        overall_match_rate: overall_match_rate,
        avg_duration_ms: avg_duration,
        expanded_runs: MapSet.new(),
@@ -83,16 +92,22 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
 
     total_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.total_runs))
     successful_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.completed))
-    cancelled_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled))
+    cancelled_failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled_failed))
+    cancelled_expected_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.cancelled_expected))
+    cancelled_runs = cancelled_failed_runs + cancelled_expected_runs
     failed_runs = Enum.sum(Enum.map(pipeline_metrics, & &1.failed))
 
-    # Pipeline Health: (completed + cancelled) / total
-    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_runs) / total_runs * 100, else: 0.0
+    # Pipeline Health: (completed + cancelled_expected) / total
+    # Only count intentional cancellations as healthy, not processing failures
+    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_expected_runs) / total_runs * 100, else: 0.0
 
-    # Match Rate: completed / (completed + cancelled)
+    # Processing Failure Rate: (cancelled_failed + failed) / total
+    overall_processing_failure_rate = if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
+
+    # Match Rate: completed / (completed + cancelled_expected)
     overall_match_rate =
-      if successful_runs + cancelled_runs > 0 do
-        successful_runs / (successful_runs + cancelled_runs) * 100
+      if successful_runs + cancelled_expected_runs > 0 do
+        successful_runs / (successful_runs + cancelled_expected_runs) * 100
       else
         0.0
       end
@@ -118,9 +133,12 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
        recent_runs: recent_runs,
        total_runs: total_runs,
        successful_runs: successful_runs,
+       cancelled_failed_runs: cancelled_failed_runs,
+       cancelled_expected_runs: cancelled_expected_runs,
        cancelled_runs: cancelled_runs,
        failed_runs: failed_runs,
        overall_pipeline_health: overall_pipeline_health,
+       overall_processing_failure_rate: overall_processing_failure_rate,
        overall_match_rate: overall_match_rate,
        avg_duration_ms: avg_duration
      )}
@@ -165,7 +183,17 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
             <%= Float.round(@overall_pipeline_health, 1) %>%
           </dd>
           <p class="mt-1 text-xs text-gray-500">
-            <%= @successful_runs %> completed, <%= @cancelled_runs %> skipped
+            <%= @successful_runs %> completed, <%= @cancelled_expected_runs %> expected skips
+          </p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <dt class="text-sm font-medium text-gray-500">Processing Failures</dt>
+          <dd class="mt-1 text-3xl font-semibold text-red-600">
+            <%= Float.round(@overall_processing_failure_rate, 1) %>%
+          </dd>
+          <p class="mt-1 text-xs text-gray-500">
+            <%= @cancelled_failed_runs %> failed, <%= @failed_runs %> discarded
           </p>
         </div>
 
@@ -227,6 +255,7 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
                     <div><%= stage.total_runs %> runs</div>
                     <div><%= format_duration(stage.avg_duration_ms) %> avg</div>
                     <div class="text-xs">Match: <%= Float.round(stage.match_rate, 1) %>%</div>
+                    <div class="text-xs text-red-600">Failures: <%= Float.round(stage.processing_failure_rate, 1) %>%</div>
                   </div>
                 </div>
 

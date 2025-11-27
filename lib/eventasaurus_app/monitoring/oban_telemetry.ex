@@ -205,9 +205,23 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
         other -> to_string(other)
       end
 
+    # Extract cancellation reason if state is cancelled
+    # For :stop events, reason is in metadata.result
+    # For :exception events, reason is in metadata.reason
+    cancel_reason = if state == :cancelled do
+      cond do
+        Map.has_key?(metadata, :result) -> extract_cancel_reason(metadata.result)
+        Map.has_key?(metadata, :reason) -> extract_cancel_reason(metadata.reason)
+        true -> nil
+      end
+    else
+      nil
+    end
+
     # Merge results from multiple sources:
     # 1. job.meta - metadata set when job was created (e.g., parent_job_id)
     # 2. metadata.result - return value from perform/1 (e.g., movies_scheduled, showtimes_count)
+    # 3. cancel_reason - extracted from exception reason if job was cancelled
     # Normalize all keys to strings for consistent JSONB storage
     job_meta = job |> Map.get(:meta, %{}) |> stringify_keys()
     return_value = Map.get(metadata, :result, %{})
@@ -236,6 +250,13 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
         _other ->
           job_meta
       end
+
+    # Add cancellation reason to results if present
+    results = if cancel_reason do
+      Map.put(results, "cancel_reason", cancel_reason)
+    else
+      results
+    end
 
     # Build summary attributes
     attrs = %{
