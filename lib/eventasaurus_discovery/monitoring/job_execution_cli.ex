@@ -196,7 +196,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     Enum.each(failures, fn failure ->
       source = extract_source(failure.worker)
       job_name = extract_job_name(failure.worker)
-      started = format_datetime(failure.started_at)
+      started = format_datetime(failure.attempted_at)
       error = String.slice(failure.error || "Unknown error", 0, 80)
 
       IO.puts("\n#{IO.ANSI.yellow()}┌ #{source} → #{job_name}#{IO.ANSI.reset()}")

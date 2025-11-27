@@ -135,7 +135,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
   end
 
   @impl EventasaurusWeb.Services.TmdbServiceBehaviour
-  def search_multi(query, page \\ 1) do
+  def search_multi(query, page \\ 1, language \\ nil) do
     # Handle nil or empty queries
     if is_nil(query) or String.trim(to_string(query)) == "" do
       {:ok, []}
@@ -145,8 +145,10 @@ defmodule EventasaurusWeb.Services.TmdbService do
       if is_nil(api_key) or api_key == "" do
         {:error, "TMDB_API_KEY is not set in environment"}
       else
-        url =
-          "#{@base_url}/search/multi?api_key=#{api_key}&query=#{URI.encode(query)}&page=#{page}"
+        # Build URL with optional language parameter
+        base_params = "api_key=#{api_key}&query=#{URI.encode(query)}&page=#{page}"
+        language_param = if language, do: "&language=#{language}", else: ""
+        url = "#{@base_url}/search/multi?#{base_params}#{language_param}"
 
         headers = [
           {"Accept", "application/json"}
@@ -155,7 +157,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
         require Logger
 
         Logger.debug(
-          "TMDB search URL: #{@base_url}/search/multi?query=#{URI.encode(query)}&page=#{page}"
+          "TMDB search URL: #{@base_url}/search/multi?query=#{URI.encode(query)}&page=#{page}#{language_param}"
         )
 
         case HTTPoison.get(url, headers) do

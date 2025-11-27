@@ -189,11 +189,18 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   end
 
   # Convert Cinema City film_data to TmdbMatcher format
+  # Enhanced: Extract original English titles from mixed-language titles
   defp normalize_film_data(film_data) do
+    polish_title = film_data["polish_title"]
+    language_info = film_data["language_info"] || %{}
+
+    # Extract original title from mixed-language titles when possible
+    # Example: "Eternity. Wybieram ciebie" → "Eternity" (original), "Wybieram ciebie" (Polish)
+    original_title = extract_original_title(polish_title, language_info)
+
     %{
-      polish_title: film_data["polish_title"],
-      original_title: nil,
-      # TmdbMatcher can work with just Polish title
+      polish_title: polish_title,
+      original_title: original_title,
       year: film_data["release_year"],
       runtime: film_data["runtime"],
       director: nil,
@@ -202,6 +209,36 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
       # Cinema City API doesn't provide country directly
     }
   end
+
+  # Extract original English title from mixed-language titles
+  # Cinema City often provides titles like "Original Title. Polski Tytuł"
+  # We can extract the original English title when:
+  # 1. original_language indicates it's an English film
+  # 2. Title contains a separator (period, colon, dash)
+  #
+  # @doc false - Internal function, public for testing only
+  def extract_original_title(polish_title, %{"original_language" => "en"}) when is_binary(polish_title) do
+    # Common separators used in Cinema City titles
+    # Order matters: try period with space first (most common)
+    separators = [". ", ": ", " - ", " – ", " — "]
+
+    # Try each separator
+    Enum.reduce_while(separators, nil, fn separator, _acc ->
+      case String.split(polish_title, separator, parts: 2) do
+        [original_part, _polish_part] ->
+          # Found a separator - return the original English part
+          {:halt, String.trim(original_part)}
+
+        _ ->
+          # No match, try next separator
+          {:cont, nil}
+      end
+    end)
+  end
+
+  # If original_language is not "en" or missing, return nil (Polish-only film)
+  # @doc false - Internal function, public for testing only
+  def extract_original_title(_polish_title, _language_info), do: nil
 
   # Store Cinema City film_id in movie metadata for later database lookups
   defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id) do
