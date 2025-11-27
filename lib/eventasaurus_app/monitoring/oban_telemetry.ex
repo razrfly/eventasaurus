@@ -118,46 +118,69 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = metadata
     duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
-    # Record job exception in summary (state will be retryable or discarded)
-    error_message = Exception.format(kind, reason, stacktrace)
-    state = if job.attempt >= job.max_attempts, do: :discard, else: :failure
-    record_job_summary(job, state, duration_ms, error_message, metadata)
+    # Check if this is a cancellation (intentional skip) or a real exception
+    cancelled? = cancellation_reason?(reason)
 
-    # Check if this is a rate limit error
-    rate_limited? = rate_limit_error?(reason)
-
-    error_type = if rate_limited?, do: "RATE LIMIT", else: "ERROR"
-    emoji = if rate_limited?, do: "⚠️", else: "❌"
-
-    Logger.error("""
-    #{emoji} Job #{error_type}: #{job.worker} [#{job.id}]
-    Attempt: #{job.attempt}/#{job.max_attempts}
-    Duration: #{duration_ms}ms
-    Error: #{Exception.format(kind, reason, stacktrace)}
-    """)
-
-    # Always report rate limit errors to monitoring
-    if rate_limited? do
-      Logger.warning("🚨 RATE LIMIT detected in #{job.worker} - alerting monitoring system")
-
-      report_to_sentry(:rate_limit_error, job, %{
-        duration_ms: duration_ms,
-        attempt: job.attempt,
-        max_attempts: job.max_attempts,
-        error: inspect(reason)
-      })
+    # Determine job state based on exception type
+    state = cond do
+      cancelled? -> :cancelled
+      job.attempt >= job.max_attempts -> :discard
+      true -> :failure
     end
 
-    # Report other critical errors based on attempt count
-    # Only alert after multiple failures to avoid noise
-    if job.attempt >= 3 and not rate_limited? do
-      report_to_sentry(:job_exception, job, %{
-        kind: kind,
-        reason: reason,
-        stacktrace: stacktrace,
-        duration_ms: duration_ms,
-        attempt: job.attempt
-      })
+    # Record job exception in summary
+    error_message = Exception.format(kind, reason, stacktrace)
+    record_job_summary(job, state, duration_ms, error_message, metadata)
+
+    # Handle cancellations differently from errors
+    if cancelled? do
+      # Cancellations are expected behavior (e.g., movie not matched in TMDB)
+      # Log as info, not error, and don't report to Sentry
+      cancel_reason = extract_cancel_reason(reason)
+      Logger.info("""
+      ⏭️  Job cancelled (expected): #{job.worker} [#{job.id}]
+      Reason: #{cancel_reason}
+      Duration: #{duration_ms}ms
+      """)
+    else
+      # This is a real error - handle normally
+
+      # Check if this is a rate limit error
+      rate_limited? = rate_limit_error?(reason)
+
+      error_type = if rate_limited?, do: "RATE LIMIT", else: "ERROR"
+      emoji = if rate_limited?, do: "⚠️", else: "❌"
+
+      Logger.error("""
+      #{emoji} Job #{error_type}: #{job.worker} [#{job.id}]
+      Attempt: #{job.attempt}/#{job.max_attempts}
+      Duration: #{duration_ms}ms
+      Error: #{Exception.format(kind, reason, stacktrace)}
+      """)
+
+      # Always report rate limit errors to monitoring
+      if rate_limited? do
+        Logger.warning("🚨 RATE LIMIT detected in #{job.worker} - alerting monitoring system")
+
+        report_to_sentry(:rate_limit_error, job, %{
+          duration_ms: duration_ms,
+          attempt: job.attempt,
+          max_attempts: job.max_attempts,
+          error: inspect(reason)
+        })
+      end
+
+      # Report other critical errors based on attempt count
+      # Only alert after multiple failures to avoid noise
+      if job.attempt >= 3 and not rate_limited? do
+        report_to_sentry(:job_exception, job, %{
+          kind: kind,
+          reason: reason,
+          stacktrace: stacktrace,
+          duration_ms: duration_ms,
+          attempt: job.attempt
+        })
+      end
     end
   end
 
@@ -258,6 +281,29 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
   end
 
   defp rate_limit_error?(_), do: false
+
+  # Detect if an exception is actually a job cancellation
+  # Jobs return {:cancel, reason} to skip execution intentionally
+  defp cancellation_reason?({:cancel, _reason}), do: true
+
+  defp cancellation_reason?(%Oban.PerformError{reason: {:cancel, _reason}}), do: true
+
+  defp cancellation_reason?(_), do: false
+
+  # Extract the cancellation reason for logging
+  defp extract_cancel_reason({:cancel, reason}) when is_atom(reason) do
+    reason
+    |> Atom.to_string()
+    |> String.replace("_", " ")
+  end
+
+  defp extract_cancel_reason({:cancel, reason}) when is_binary(reason), do: reason
+
+  defp extract_cancel_reason(%Oban.PerformError{reason: {:cancel, reason}}) do
+    extract_cancel_reason({:cancel, reason})
+  end
+
+  defp extract_cancel_reason(_), do: "unknown"
 
   # Report errors to Sentry (if configured)
   defp report_to_sentry(error_type, job, metadata) do

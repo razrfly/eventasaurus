@@ -501,7 +501,7 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
       </div>
 
       <!-- System Metrics Summary Cards -->
-      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5 mb-8">
         <div class="bg-white overflow-hidden shadow rounded-lg">
           <div class="p-5">
             <div class="flex items-center">
@@ -522,15 +522,51 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
             <div class="flex items-center">
               <div class="flex-1">
                 <dt class="text-sm font-medium text-gray-500 truncate">
-                  Success Rate
+                  Pipeline Health
                 </dt>
-                <dd class="mt-1 text-3xl font-semibold text-green-600">
-                  <%= format_percentage(@system_metrics.success_rate) %>
+                <dd class="mt-1 text-3xl font-semibold text-blue-600">
+                  <%= format_percentage(@system_metrics.pipeline_health) %>
                 </dd>
               </div>
             </div>
             <div class="mt-2 text-xs text-gray-500">
-              <%= format_number(@system_metrics.completed) %> completed, <%= format_number(@system_metrics.failed) %> failed
+              <%= format_number(@system_metrics.completed) %> completed, <%= format_number(@system_metrics.cancelled) %> skipped
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-1">
+                <dt class="text-sm font-medium text-gray-500 truncate">
+                  Match Rate
+                </dt>
+                <dd class="mt-1 text-3xl font-semibold text-green-600">
+                  <%= format_percentage(@system_metrics.match_rate) %>
+                </dd>
+              </div>
+            </div>
+            <div class="mt-2 text-xs text-gray-500">
+              Data processing success
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-1">
+                <dt class="text-sm font-medium text-gray-500 truncate">
+                  Error Rate
+                </dt>
+                <dd class="mt-1 text-3xl font-semibold text-red-600">
+                  <%= format_percentage(@system_metrics.error_rate) %>
+                </dd>
+              </div>
+            </div>
+            <div class="mt-2 text-xs text-gray-500">
+              <%= format_number(@system_metrics.failed + @system_metrics.retryable) %> real errors
             </div>
           </div>
         </div>
@@ -547,20 +583,8 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                 </dd>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="p-5">
-            <div class="flex items-center">
-              <div class="flex-1">
-                <dt class="text-sm font-medium text-gray-500 truncate">
-                  Active Workers
-                </dt>
-                <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                  <%= @system_metrics.unique_workers %>
-                </dd>
-              </div>
+            <div class="mt-2 text-xs text-gray-500">
+              <%= @system_metrics.unique_workers %> active workers
             </div>
           </div>
         </div>
@@ -674,13 +698,19 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                       Total Executions
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Success Rate
+                      Pipeline Health
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Match Rate
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Avg Duration
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Completed
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Skipped
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Failed
@@ -705,8 +735,13 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                         <%= format_number(scraper.total_executions) %>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap">
-                        <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full " <> if scraper.success_rate >= 90, do: "bg-green-100 text-green-800", else: if(scraper.success_rate >= 70, do: "bg-yellow-100 text-yellow-800", else: "bg-red-100 text-red-800")}>
-                          <%= format_percentage(scraper.success_rate) %>
+                        <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full " <> if scraper.pipeline_health >= 95, do: "bg-blue-100 text-blue-800", else: if(scraper.pipeline_health >= 85, do: "bg-yellow-100 text-yellow-800", else: "bg-red-100 text-red-800")}>
+                          <%= format_percentage(scraper.pipeline_health) %>
+                        </span>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full " <> if scraper.match_rate >= 70, do: "bg-green-100 text-green-800", else: if(scraper.match_rate >= 50, do: "bg-yellow-100 text-yellow-800", else: "bg-red-100 text-red-800")}>
+                          <%= format_percentage(scraper.match_rate) %>
                         </span>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -714,6 +749,9 @@ defmodule EventasaurusWeb.Admin.JobExecutionMonitorLive do
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">
                         <%= format_number(scraper.completed) %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <%= format_number(scraper.cancelled) %>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
                         <%= format_number(scraper.failed) %>
