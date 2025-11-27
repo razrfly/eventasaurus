@@ -602,7 +602,11 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         worker: s.worker,
         total_runs: count(s.id),
         completed: count(s.id) |> filter(s.state == "completed"),
-        cancelled: count(s.id) |> filter(s.state == "cancelled"),
+        # Split cancelled into two categories:
+        # - cancelled_failed: movie_not_matched (processing failures)
+        # - cancelled_expected: other reasons or null (intentional skips)
+        cancelled_failed: count(s.id) |> filter(s.state == "cancelled" and fragment("?->>'cancel_reason' = ?", s.results, "movie not matched")),
+        cancelled_expected: count(s.id) |> filter(s.state == "cancelled" and fragment("(?->>'cancel_reason' IS NULL OR ?->>'cancel_reason' != ?)", s.results, s.results, "movie not matched")),
         failed: count(s.id) |> filter(s.state == "discarded"),
         avg_duration_ms: avg(s.duration_ms),
         last_run: max(s.attempted_at)
@@ -614,18 +618,32 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       extract_scraper_name(worker_stats.worker) == source_slug
     end)
     |> Enum.map(fn worker_stats ->
-      # Pipeline Health: (completed + cancelled) / total
+      # Total cancelled for backward compatibility
+      total_cancelled = worker_stats.cancelled_failed + worker_stats.cancelled_expected
+
+      # Pipeline Health: (completed + cancelled_expected) / total
+      # Only count intentional cancellations as healthy, not processing failures
       pipeline_health =
         if worker_stats.total_runs > 0 do
-          Float.round((worker_stats.completed + worker_stats.cancelled) / worker_stats.total_runs * 100, 2)
+          Float.round((worker_stats.completed + worker_stats.cancelled_expected) / worker_stats.total_runs * 100, 2)
         else
           0.0
         end
 
-      # Match Rate: completed / (completed + cancelled)
+      # Processing Failure Rate: (cancelled_failed + discarded) / total
+      # Tracks actual failures excluding intentional skips
+      processing_failure_rate =
+        if worker_stats.total_runs > 0 do
+          Float.round((worker_stats.cancelled_failed + worker_stats.failed) / worker_stats.total_runs * 100, 2)
+        else
+          0.0
+        end
+
+      # Match Rate: completed / (completed + cancelled_expected)
+      # For jobs where cancellation is intentional, shows data processing success
       match_rate =
-        if worker_stats.completed + worker_stats.cancelled > 0 do
-          Float.round(worker_stats.completed / (worker_stats.completed + worker_stats.cancelled) * 100, 2)
+        if worker_stats.completed + worker_stats.cancelled_expected > 0 do
+          Float.round(worker_stats.completed / (worker_stats.completed + worker_stats.cancelled_expected) * 100, 2)
         else
           0.0
         end
@@ -645,7 +663,9 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         |> List.last()
 
       worker_stats
+      |> Map.put(:cancelled, total_cancelled)
       |> Map.put(:pipeline_health, pipeline_health)
+      |> Map.put(:processing_failure_rate, processing_failure_rate)
       |> Map.put(:match_rate, match_rate)
       |> Map.put(:avg_duration_ms, avg_duration)
       |> Map.put(:job_type, job_type)

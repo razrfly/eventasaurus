@@ -70,9 +70,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
     # Track metrics in job metadata
     case result do
       {:ok, :skipped} ->
-        # Movie was not matched in TMDB - record as skipped cancellation
-        # Using {:cancel, reason} instead of deprecated {:discard, reason}
-        MetricsTracker.record_success(job, external_id)
+        # Movie was not matched in TMDB - this is a processing failure
+        # Don't call MetricsTracker - let telemetry handler record it as cancelled
+        # Telemetry will correctly capture the cancel_reason for metrics categorization
         {:cancel, :movie_not_matched}
 
       {:ok, _} ->
