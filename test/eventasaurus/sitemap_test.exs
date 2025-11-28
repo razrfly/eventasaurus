@@ -3,7 +3,7 @@ defmodule Eventasaurus.SitemapTest do
 
   alias Eventasaurus.Sitemap
   alias EventasaurusDiscovery.Movies.Movie
-  alias EventasaurusDiscovery.PublicEvents.{PublicEvent, AggregatedEventGroup}
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.{City, Country}
 
@@ -177,188 +177,9 @@ defmodule Eventasaurus.SitemapTest do
     end
   end
 
-  describe "aggregation_urls/1" do
-    setup do
-      # Create country and city
-      country = insert(:country, code: "PL", slug: "poland")
-      city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
-
-      {:ok, city: city, country: country}
-    end
-
-    test "generates URLs for aggregated event groups", %{city: city} do
-      # Create aggregated event group
-      aeg = insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "SocialEvent",
-        identifier: "trivia-nights",
-        updated_at: ~N[2024-12-15 10:00:00]
-      )
-
-      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
-
-      # Should generate URL with schema type converted to slug (SocialEvent -> social)
-      agg_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/social/trivia-nights"
-      end)
-
-      assert agg_url != nil
-      assert agg_url.changefreq == :weekly
-      assert agg_url.priority == 0.7
-      assert agg_url.lastmod == NaiveDateTime.to_date(aeg.updated_at)
-    end
-
-    test "converts different schema types to correct URL slugs", %{city: city} do
-      # Create aggregations for different schema types
-      # Uses EventasaurusDiscovery.AggregationTypeSlug mappings
-      aggregations = [
-        {"SocialEvent", "trivia", "social"},
-        {"FoodEvent", "tastings", "food"},
-        {"MusicEvent", "concerts", "music"},
-        {"ComedyEvent", "standup", "comedy"},
-        {"TheaterEvent", "plays", "theater"},
-        {"ScreeningEvent", "films", "movies"}
-      ]
-
-      for {schema_type, identifier, expected_slug} <- aggregations do
-        insert(:aggregated_event_group,
-          city_id: city.id,
-          aggregation_type: schema_type,
-          identifier: identifier
-        )
-      end
-
-      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
-
-      for {_schema_type, identifier, expected_slug} <- aggregations do
-        agg_url = Enum.find(urls, fn url ->
-          url.loc == "https://wombie.fyi/c/krakow/#{expected_slug}/#{identifier}"
-        end)
-
-        assert agg_url != nil, "Expected URL for #{expected_slug}/#{identifier}"
-      end
-    end
-
-    test "does not generate URLs for aggregations in cities with discovery disabled", %{country: country} do
-      # Create city with discovery disabled
-      disabled_city = insert(:city, slug: "inactive-city", discovery_enabled: false, country: country)
-
-      # Create aggregation in disabled city
-      insert(:aggregated_event_group,
-        city_id: disabled_city.id,
-        aggregation_type: "SocialEvent",
-        identifier: "events"
-      )
-
-      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
-
-      # Should not include URL for aggregation in disabled city
-      agg_url = Enum.find(urls, fn url ->
-        String.contains?(url.loc, "/c/#{disabled_city.slug}/")
-      end)
-
-      assert agg_url == nil
-    end
-
-    test "does not generate URLs for aggregations with nil or empty identifiers", %{city: city} do
-      # Aggregation with nil identifier
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "SocialEvent",
-        identifier: nil
-      )
-
-      # Aggregation with empty identifier
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "MusicEvent",
-        identifier: ""
-      )
-
-      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
-
-      # Should not have any URLs with nil or empty identifiers
-      invalid_urls = Enum.filter(urls, fn url ->
-        String.contains?(url.loc, "/c/#{city.slug}/") and
-          String.ends_with?(url.loc, "/")
-      end)
-
-      # Only city-level URLs should end with city slug
-      city_level_urls = Enum.filter(invalid_urls, fn url ->
-        url.loc == "https://wombie.fyi/c/#{city.slug}" or
-          String.ends_with?(url.loc, "/venues") or
-          String.ends_with?(url.loc, "/events") or
-          String.ends_with?(url.loc, "/search") or
-          String.ends_with?(url.loc, "/festivals") or
-          String.ends_with?(url.loc, "/conferences") or
-          String.ends_with?(url.loc, "/tours") or
-          String.ends_with?(url.loc, "/series") or
-          String.ends_with?(url.loc, "/exhibitions") or
-          String.ends_with?(url.loc, "/tournaments")
-      end)
-
-      # All invalid URLs should be city-level URLs
-      assert length(invalid_urls) == length(city_level_urls)
-    end
-
-    test "uses current date for lastmod when updated_at is nil", %{city: city} do
-      # Aggregation with nil updated_at
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "SocialEvent",
-        identifier: "no-update-date",
-        updated_at: nil
-      )
-
-      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
-
-      agg_url = Enum.find(urls, fn url ->
-        String.contains?(url.loc, "/social/no-update-date")
-      end)
-
-      assert agg_url != nil
-      assert agg_url.lastmod == Date.utc_today()
-    end
-
-    test "generates URLs for multiple aggregations in same city", %{city: city} do
-      # Create multiple aggregations
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "SocialEvent",
-        identifier: "trivia"
-      )
-
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "SocialEvent",
-        identifier: "karaoke"
-      )
-
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "FoodEvent",
-        identifier: "wine-tasting"
-      )
-
-      urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
-
-      trivia_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/social/trivia"
-      end)
-
-      karaoke_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/social/karaoke"
-      end)
-
-      wine_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/food/wine-tasting"
-      end)
-
-      assert trivia_url != nil
-      assert karaoke_url != nil
-      assert wine_url != nil
-    end
-  end
+  # NOTE: aggregation_urls/1 tests removed because AggregatedEventGroup is a virtual struct
+  # (not a database table), so it cannot be queried with Ecto. Aggregation URLs are
+  # generated dynamically and don't need to be in the sitemap.
 
   describe "stream_urls/1 integration" do
     test "includes all URL types in stream" do
@@ -381,13 +202,6 @@ defmodule Eventasaurus.SitemapTest do
         event_id: activity.id,
         movie_id: movie.id
       })
-
-      # Create an aggregation
-      insert(:aggregated_event_group,
-        city_id: city.id,
-        aggregation_type: "SocialEvent",
-        identifier: "test-agg"
-      )
 
       urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
 
@@ -416,12 +230,6 @@ defmodule Eventasaurus.SitemapTest do
         url.loc == "https://wombie.fyi/c/krakow/movies/#{movie.slug}"
       end)
       assert movie_url != nil
-
-      # Should include aggregation URLs
-      agg_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/social/test-agg"
-      end)
-      assert agg_url != nil
     end
   end
 end
