@@ -1502,7 +1502,20 @@ body[class*="theme-"] .theme-card:hover {
     width: 100% !important;
     margin-top: 0.75rem !important;
   }
-  
+
+  /* Override for star rating buttons - keep them horizontal */
+  .public-movie-poll .flex[class*="space-x"] button[phx-click="cast_star_vote"] {
+    width: auto !important;
+    min-height: auto !important;
+  }
+
+  .public-movie-poll .flex[class*="space-x"]:has(button[phx-click="cast_star_vote"]) {
+    flex-direction: row !important;
+    gap: 0.25rem !important;
+    width: auto !important;
+    margin-top: 0 !important;
+  }
+
   .public-movie-poll .flex[class*="space-x"] button {
     width: 100% !important;
     min-height: 2.75rem !important;
