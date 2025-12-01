@@ -1,53 +1,51 @@
 defmodule EventasaurusApp.Services.UploadService do
   @moduledoc """
-  Service for handling file uploads to Supabase Storage.
+  Service for handling file uploads to Cloudflare R2 Storage.
 
   Provides functionality for uploading, validating, and managing image files
   for groups, events, and user profiles.
+
+  Note: This service now uses R2 instead of Supabase Storage. The access_token
+  parameter is kept for backwards compatibility but is no longer used for R2 uploads.
   """
 
   require Logger
 
+  alias EventasaurusApp.Services.R2Client
+
   # 5MB
   @max_file_size 5 * 1024 * 1024
-  @allowed_mime_types ~w[image/jpeg image/png image/gif image/webp]
-
-  # Get bucket name from config with fallback
-  defp get_bucket_name do
-    Application.get_env(:eventasaurus, :supabase)[:bucket] || "images"
-  end
+  @allowed_mime_types ~w[image/jpeg image/png image/gif image/webp image/avif]
 
   @doc """
-  Upload a file to Supabase Storage.
+  Upload a file to R2 Storage.
 
   ## Parameters
 
   * `file_path` - Local path to the temporary uploaded file
   * `filename` - Desired filename in storage (should include extension)
   * `content_type` - MIME type of the file
-  * `folder` - Storage folder (e.g., "groups", "events", "avatars")
-  * `access_token` - User's Supabase access token
+  * `folder` - Storage folder (e.g., "groups", "events", "avatars", "sources")
+  * `access_token` - (deprecated) Kept for backwards compatibility, not used for R2
 
   ## Returns
 
-  * `{:ok, public_url}` - Successfully uploaded, returns public URL
+  * `{:ok, public_url}` - Successfully uploaded, returns CDN URL
   * `{:error, reason}` - Upload failed
 
   ## Examples
 
       iex> upload_file("/tmp/image.jpg", "group_123_cover.jpg", "image/jpeg", "groups", token)
-      {:ok, "https://supabase.com/storage/v1/object/public/images/groups/group_123_cover.jpg"}
-      
+      {:ok, "https://cdn2.wombie.com/groups/group_123_cover.jpg"}
+
       iex> upload_file("/tmp/large.jpg", "large.jpg", "image/jpeg", "groups", token)
       {:error, :file_too_large}
   """
-  def upload_file(file_path, filename, content_type, folder, access_token) do
+  def upload_file(file_path, filename, content_type, folder, _access_token) do
     with :ok <- validate_file(file_path, content_type),
          {:ok, file_data} <- File.read(file_path),
          storage_path <- Path.join(folder, filename),
-         {:ok, _response} <-
-           upload_to_supabase(storage_path, file_data, content_type, access_token) do
-      public_url = build_public_url(storage_path)
+         {:ok, public_url} <- R2Client.upload(storage_path, file_data, content_type: content_type) do
       Logger.info("Successfully uploaded file to #{public_url}")
       {:ok, public_url}
     else
@@ -81,24 +79,43 @@ defmodule EventasaurusApp.Services.UploadService do
   end
 
   @doc """
-  Delete a file from Supabase Storage.
+  Delete a file from R2 Storage.
 
   ## Parameters
 
   * `file_url` - Full public URL of the file to delete
-  * `access_token` - User's Supabase access token
+  * `access_token` - (deprecated) Kept for backwards compatibility, not used for R2
 
   ## Returns
 
   * `:ok` - Successfully deleted
   * `{:error, reason}` - Deletion failed
   """
-  def delete_file(file_url, access_token) when is_binary(file_url) do
-    with {:ok, storage_path} <- extract_storage_path(file_url),
-         {:ok, _response} <- delete_from_supabase(storage_path, access_token) do
+  def delete_file(file_url, _access_token) when is_binary(file_url) do
+    with {:ok, storage_path} <- R2Client.extract_path(file_url),
+         :ok <- R2Client.delete(storage_path) do
       Logger.info("Successfully deleted file: #{storage_path}")
       :ok
     else
+      {:error, :invalid_url} ->
+        # Try legacy Supabase URL extraction for backwards compatibility
+        case extract_legacy_storage_path(file_url) do
+          {:ok, path} ->
+            case R2Client.delete(path) do
+              :ok ->
+                Logger.info("Successfully deleted file (legacy URL): #{path}")
+                :ok
+
+              error ->
+                Logger.error("File deletion failed: #{inspect(error)}")
+                error
+            end
+
+          {:error, _} ->
+            Logger.warning("Could not extract path from URL: #{file_url}")
+            :ok
+        end
+
       error ->
         Logger.error("File deletion failed: #{inspect(error)}")
         error
@@ -146,63 +163,14 @@ defmodule EventasaurusApp.Services.UploadService do
     end
   end
 
-  defp upload_to_supabase(storage_path, file_data, content_type, access_token) do
-    url = "#{get_storage_url()}/object/#{get_bucket_name()}/#{storage_path}"
-
-    headers = [
-      {"Authorization", "Bearer #{access_token}"},
-      {"Content-Type", content_type},
-      # Allow overwriting existing files
-      {"x-upsert", "true"}
-    ]
-
-    case HTTPoison.post(url, file_data, headers) do
-      {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, Jason.decode!(response_body)}
-
-      {:ok, %{status_code: code, body: response_body}} ->
-        error = Jason.decode!(response_body)
-        {:error, %{status: code, message: error["message"] || "Upload failed"}}
-
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
-  defp delete_from_supabase(storage_path, access_token) do
-    url = "#{get_storage_url()}/object/#{get_bucket_name()}/#{storage_path}"
-
-    headers = [
-      {"Authorization", "Bearer #{access_token}"}
-    ]
-
-    case HTTPoison.delete(url, headers) do
-      {:ok, %{status_code: status}} when status in [200, 204] ->
-        {:ok, %{}}
-
-      {:ok, %{status_code: code, body: response_body}} ->
-        error = Jason.decode!(response_body)
-        {:error, %{status: code, message: error["message"] || "Delete failed"}}
-
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
-  defp build_public_url(storage_path) do
-    "#{get_storage_url()}/object/public/#{get_bucket_name()}/#{storage_path}"
-  end
-
-  defp extract_storage_path(public_url) do
-    case String.split(public_url, "/object/public/#{get_bucket_name()}/") do
-      [_base, storage_path] -> {:ok, storage_path}
+  # Extract storage path from legacy Supabase URLs for backwards compatibility
+  # Handles URLs like: https://xxx.supabase.co/storage/v1/object/public/bucket/path/file.jpg
+  defp extract_legacy_storage_path(public_url) do
+    # Try to match Supabase Storage URL pattern
+    case Regex.run(~r{/object/public/[^/]+/(.+)$}, public_url) do
+      [_, storage_path] -> {:ok, storage_path}
       _ -> {:error, :invalid_url}
     end
-  end
-
-  defp get_storage_url do
-    config = Application.get_env(:eventasaurus, :supabase)
-    "#{config[:url]}/storage/v1"
   end
 
   defp consume_uploaded_entries(socket, upload_config, fun) do

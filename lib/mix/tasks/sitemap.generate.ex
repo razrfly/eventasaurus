@@ -13,19 +13,19 @@ defmodule Mix.Tasks.Sitemap.Generate do
 
   The sitemap will be stored based on the environment:
   - In development: stored in the local filesystem (priv/static/sitemaps/)
-  - In production: stored in Supabase Storage (sitemaps bucket)
+  - In production: stored in Cloudflare R2 (served via CDN at cdn2.wombie.com/sitemaps/)
 
   ## Options
 
-  * `--prod` - Force production storage (Supabase) even in development environment
+  * `--prod` - Force production storage (R2) even in development environment
   * `--host` - Override host for URL generation (default: wombie.com)
 
   ## Examples
 
-      # Generate sitemap using default storage (local in dev, Supabase in prod)
+      # Generate sitemap using default storage (local in dev, R2 in prod)
       $ mix sitemap.generate
 
-      # Force Supabase storage even in development
+      # Force R2 storage even in development
       $ mix sitemap.generate --prod --host wombie.com
   """
 
@@ -55,7 +55,7 @@ defmodule Mix.Tasks.Sitemap.Generate do
       |> maybe_add_opt(:host, use_prod && host)
 
     if use_prod do
-      Logger.info("Using Supabase Storage as requested via --prod flag")
+      Logger.info("Using R2 Storage as requested via --prod flag")
       Logger.info("Using host: #{host} for sitemap URLs")
     end
 

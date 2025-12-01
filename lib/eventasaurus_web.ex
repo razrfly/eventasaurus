@@ -18,7 +18,7 @@ defmodule EventasaurusWeb do
   """
 
   def static_paths do
-    # Removed 'sitemaps' from static paths - sitemaps are served from Supabase Storage
+    # Removed 'sitemaps' from static paths - sitemaps are served from Cloudflare R2 CDN
     # and handled by PageController redirect, not Plug.Static
     base_paths = ~w(assets fonts images favicon.ico robots.txt)
 
@@ -107,6 +107,7 @@ defmodule EventasaurusWeb do
       import EventasaurusWeb.Helpers.AvatarHelper
       import EventasaurusWeb.Helpers.LanguageHelpers
       import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
+      import EventasaurusWeb.Helpers.ImageUrlHelper
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS

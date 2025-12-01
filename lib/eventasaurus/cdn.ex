@@ -87,22 +87,26 @@ defmodule Eventasaurus.CDN do
 
   # Main URL transformation
   def url(source_url, opts) when is_binary(source_url) do
+    # PHASE 2 TODO: Remove this resolve step after database migration normalizes URLs
+    # First resolve any legacy Supabase URLs to R2 CDN URLs
+    resolved_url = EventasaurusWeb.Helpers.ImageUrlHelper.resolve(source_url)
+
     cond do
-      # CDN disabled - return original URL
+      # CDN disabled - return resolved URL
       not enabled?() ->
-        source_url
+        resolved_url
 
       # Already a CDN URL - don't double-wrap
-      cdn_url?(source_url) ->
-        source_url
+      cdn_url?(resolved_url) ->
+        resolved_url
 
-      # Invalid URL - return original as fallback
-      not valid_url?(source_url) ->
-        source_url
+      # Invalid URL - return resolved as fallback
+      not valid_url?(resolved_url) ->
+        resolved_url
 
       # Transform URL with CDN
       true ->
-        build_cdn_url(source_url, opts)
+        build_cdn_url(resolved_url, opts)
     end
   end
 

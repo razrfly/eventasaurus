@@ -755,6 +755,14 @@ defmodule EventasaurusWeb.Router do
     get "/search", UserSearchController, :search
   end
 
+  # File upload API routes (require authentication)
+  scope "/api/upload", EventasaurusWeb do
+    pipe_through [:secure_api, :api_authenticated]
+
+    post "/presign", UploadController, :presign
+    delete "/", UploadController, :delete
+  end
+
   # Order management API routes (require authentication)
   scope "/api/orders", EventasaurusWeb do
     pipe_through [:api, :api_authenticated]

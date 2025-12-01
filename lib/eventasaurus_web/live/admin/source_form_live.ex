@@ -84,7 +84,7 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
          socket
          |> put_flash(
            :error,
-           "Storage bucket not configured. Please contact an administrator to set up Supabase Storage."
+           "Storage bucket not configured. Please contact an administrator to set up R2 Storage."
          )
          |> assign(:form, to_form(Source.changeset(socket.assigns.source, params)))}
 

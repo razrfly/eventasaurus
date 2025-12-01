@@ -529,33 +529,31 @@ defmodule Eventasaurus.Sitemap do
     Logger.debug("Environment: #{if is_prod, do: "production", else: "development"}")
 
     # For local development, use FileStore
-    # For production, use SupabaseStore
+    # For production, use R2Store (Cloudflare R2)
     if is_prod do
       # Define path for sitemaps (store in sitemaps/ directory)
       sitemap_path = "sitemaps"
 
-      # Get Supabase configuration
-      supabase_config = Application.get_env(:eventasaurus, :supabase)
-      supabase_url = supabase_config[:url]
-      bucket = System.get_env("SUPABASE_BUCKET") || supabase_config[:bucket] || "eventasaur.us"
+      # Get R2 configuration
+      r2_config = Application.get_env(:eventasaurus, :r2) || %{}
+      cdn_url = r2_config[:cdn_url] || System.get_env("R2_CDN_URL") || "https://cdn2.wombie.com"
 
-      # Build Supabase Storage public URL for sitemap files
+      # Build R2 CDN URL for sitemap files
       # This is where the actual sitemap chunk files will be accessible
-      supabase_sitemap_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{sitemap_path}"
+      r2_sitemap_url = "#{cdn_url}/#{sitemap_path}"
 
       # Log the final configuration details
-      Logger.info("Sitemap config - SupabaseStore, path: #{sitemap_path}")
-      Logger.info("Sitemap public URL: #{supabase_sitemap_url}")
+      Logger.info("Sitemap config - R2Store, path: #{sitemap_path}")
+      Logger.info("Sitemap public URL: #{r2_sitemap_url}")
 
-      # Configure sitemap to store on Supabase Storage using S3-compatible API
-      # This works with NEW Supabase secret keys (sb_secret_...)
+      # Configure sitemap to store on Cloudflare R2 via S3-compatible API
       [
-        store: Eventasaurus.Sitemap.SupabaseS3Store,
+        store: Eventasaurus.Sitemap.R2Store,
         store_config: [
           path: sitemap_path
         ],
-        # Point to Supabase Storage public URL so sitemap index contains correct URLs
-        sitemap_url: supabase_sitemap_url
+        # Point to R2 CDN URL so sitemap index contains correct URLs
+        sitemap_url: r2_sitemap_url
       ]
     else
       # For local development, use file storage

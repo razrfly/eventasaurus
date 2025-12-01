@@ -108,11 +108,10 @@ defmodule EventasaurusWeb.PageController do
   end
 
   def sitemap_redirect(conn, params) do
-    # Redirect all sitemap requests to Supabase Storage
-    # Uses configuration from :eventasaurus, :supabase
-    supabase_config = Application.get_env(:eventasaurus, :supabase)
-    supabase_url = supabase_config[:url]
-    bucket = System.get_env("SUPABASE_BUCKET") || supabase_config[:bucket] || "eventasaur.us"
+    # Redirect all sitemap requests to R2 CDN
+    # Uses configuration from :eventasaurus, :r2
+    r2_config = Application.get_env(:eventasaurus, :r2) || %{}
+    cdn_url = r2_config[:cdn_url] || System.get_env("R2_CDN_URL") || "https://cdn2.wombie.com"
 
     # Determine the sitemap file to serve
     requested_path =
@@ -126,7 +125,7 @@ defmodule EventasaurusWeb.PageController do
           "sitemaps/sitemap.xml.gz"
       end
 
-    storage_url = "#{supabase_url}/storage/v1/object/public/#{bucket}/#{requested_path}"
+    storage_url = "#{cdn_url}/#{requested_path}"
     redirect(conn, external: storage_url)
   end
 end
