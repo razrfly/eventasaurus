@@ -121,8 +121,10 @@ defmodule EventasaurusWeb.GroupLive.Edit do
 
     # Delete old images from R2 if new ones are being uploaded
     # Only delete R2 images (relative paths), not external URLs
-    maybe_delete_old_image(cover_image_url, group.cover_image_url)
-    maybe_delete_old_image(avatar_url, group.avatar_url)
+    # Use the database value to avoid race conditions with image picker updates
+    original_group = Groups.get_group_by_slug(group.slug)
+    maybe_delete_old_image(cover_image_url, original_group.cover_image_url)
+    maybe_delete_old_image(avatar_url, original_group.avatar_url)
 
     # Build updated params with uploaded image URLs
     # Prefer newly uploaded images, then keep existing
@@ -489,11 +491,15 @@ defmodule EventasaurusWeb.GroupLive.Edit do
 
   defp maybe_delete_old_image(_new_url, _old_url), do: :ok
 
-  # Check if a URL is a relative R2 path (not an external URL)
+  # Check if a URL is an R2 path (relative path or full CDN URL)
+  # Handles both relative paths (groups/image.jpg) and CDN URLs (https://cdn2.wombie.com/groups/image.jpg)
   defp is_r2_path?(url) when is_binary(url) do
-    not String.starts_with?(url, "http://") and
-      not String.starts_with?(url, "https://") and
-      not String.starts_with?(url, "/")
+    cdn_url = Application.get_env(:eventasaurus, :r2)[:cdn_url] || "https://cdn2.wombie.com"
+
+    String.starts_with?(url, cdn_url) or
+      (not String.starts_with?(url, "http://") and
+         not String.starts_with?(url, "https://") and
+         not String.starts_with?(url, "/"))
   end
 
   defp is_r2_path?(_), do: false

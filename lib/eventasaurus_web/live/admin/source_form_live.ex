@@ -208,11 +208,15 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
 
   defp maybe_delete_old_image(_new_url, _old_url), do: :ok
 
-  # Check if a URL is a relative R2 path (not an external URL)
+  # Check if a URL is an R2 path (relative path or full CDN URL)
+  # Handles both relative paths (sources/logo.jpg) and CDN URLs (https://cdn2.wombie.com/sources/logo.jpg)
   defp is_r2_path?(url) when is_binary(url) do
-    not String.starts_with?(url, "http://") and
-      not String.starts_with?(url, "https://") and
-      not String.starts_with?(url, "/")
+    cdn_url = Application.get_env(:eventasaurus, :r2)[:cdn_url] || "https://cdn2.wombie.com"
+
+    String.starts_with?(url, cdn_url) or
+      (not String.starts_with?(url, "http://") and
+         not String.starts_with?(url, "https://") and
+         not String.starts_with?(url, "/"))
   end
 
   defp is_r2_path?(_), do: false
