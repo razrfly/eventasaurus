@@ -284,10 +284,11 @@
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Cover Image
         </label>
+        <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
         <div class="mt-1 flex items-center space-x-4">
           <%= if @group.cover_image_url do %>
             <div class="relative cursor-pointer" phx-click="open_cover_image_picker">
-              <img src={@group.cover_image_url} alt="Current cover" class="h-32 w-48 object-cover rounded-lg" />
+              <img src={resolve(@group.cover_image_url)} alt="Current cover" class="h-32 w-48 object-cover rounded-lg" />
               <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg opacity-0 hover:opacity-100 transition-opacity">
                 <span class="text-white text-sm">Click to change</span>
               </div>
@@ -312,9 +313,10 @@
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Group Avatar
         </label>
+        <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
         <div class="mt-1 flex items-center space-x-4">
           <%= if @group.avatar_url do %>
-            <img src={@group.avatar_url} alt="Current avatar" class="h-20 w-20 rounded-full object-cover" />
+            <img src={resolve(@group.avatar_url)} alt="Current avatar" class="h-20 w-20 rounded-full object-cover" />
           <% else %>
             <div class="h-20 w-20 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
               <span class="text-2xl font-semibold text-gray-600 dark:text-gray-300">

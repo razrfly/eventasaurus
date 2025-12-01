@@ -135,12 +135,20 @@ defmodule EventasaurusWeb.UploadController do
     {:error, "Invalid content type. Allowed: #{Enum.join(@allowed_mime_types, ", ")}"}
   end
 
-  defp validate_file_size(nil), do: :ok
-  defp validate_file_size(size) when is_integer(size) and size <= @max_file_size, do: :ok
-  defp validate_file_size(size) when is_binary(size), do: validate_file_size(String.to_integer(size))
+  defp validate_file_size(nil), do: {:error, "file_size is required"}
 
-  defp validate_file_size(_) do
-    max_mb = @max_file_size / 1024 / 1024
+  defp validate_file_size(size) when is_integer(size) and size >= 0 and size <= @max_file_size,
+    do: :ok
+
+  defp validate_file_size(size) when is_binary(size) do
+    case Integer.parse(size) do
+      {int, ""} -> validate_file_size(int)
+      _ -> {:error, "Invalid file_size format"}
+    end
+  end
+
+  defp validate_file_size(_size) do
+    max_mb = div(@max_file_size, 1024 * 1024)
     {:error, "File size exceeds maximum allowed (#{max_mb}MB)"}
   end
 

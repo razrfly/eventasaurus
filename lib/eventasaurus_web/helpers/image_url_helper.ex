@@ -127,11 +127,11 @@ defmodule EventasaurusWeb.Helpers.ImageUrlHelper do
 
   @doc """
   Get the configured R2 CDN URL.
+
+  Mirrors the fallback logic in R2Client to ensure consistent URL generation.
   """
   def r2_cdn_url do
-    case Application.get_env(:eventasaurus, :r2) do
-      nil -> "https://cdn2.wombie.com"
-      config -> config[:cdn_url] || "https://cdn2.wombie.com"
-    end
+    r2_config = Application.get_env(:eventasaurus, :r2) || %{}
+    r2_config[:cdn_url] || System.get_env("R2_CDN_URL") || "https://cdn2.wombie.com"
   end
 end
