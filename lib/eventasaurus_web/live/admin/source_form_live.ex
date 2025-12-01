@@ -5,10 +5,10 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Services.UploadService
   alias EventasaurusDiscovery.Sources.Source
 
-  require Logger
+  # Use the unified Uploads module which respects UPLOADS_STRATEGY env var
+  import EventasaurusWeb.Uploads, only: [image_upload_config: 0, get_uploaded_url: 2]
 
   @impl true
   def mount(params, _session, socket) do
@@ -27,12 +27,10 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
       |> assign(:form, to_form(changeset))
       |> assign(:allowed_domains, Source.allowed_domains())
       |> assign(:logo_url, source.logo_url)
-      # Use standard server-side upload (same as working group uploads)
-      |> allow_upload(:logo,
-        accept: ~w(.jpg .jpeg .png .gif .webp),
-        max_entries: 1,
-        max_file_size: 5_000_000
-      )
+      |> assign(:upload_folder, "sources")
+      # Use unified upload config - respects UPLOADS_STRATEGY env var
+      # Set UPLOADS_STRATEGY=local for local storage, or leave unset for R2 in production
+      |> allow_upload(:logo, image_upload_config())
 
     {:ok, socket}
   end
@@ -51,36 +49,19 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
 
   @impl true
   def handle_event("save", %{"source" => params}, socket) do
-    # Check if there's a new upload
-    {completed, _in_progress} = Phoenix.LiveView.uploaded_entries(socket, :logo)
+    # Get uploaded URL using unified Uploads module
+    # This respects UPLOADS_STRATEGY env var (local vs r2)
+    uploaded_url = get_uploaded_url(socket, :logo)
 
-    # Handle logo upload using same approach as working group uploads
+    # Determine final logo URL
     logo_url =
       cond do
-        # New upload - use UploadService (same as groups)
-        length(completed) > 0 ->
-          source_id = socket.assigns.source.id || "new"
-          # access_token not needed for R2, just pass nil
-          results = UploadService.upload_liveview_files(
-            socket,
-            :logo,
-            "sources",
-            "source_#{source_id}",
-            nil
-          )
-
-          case results do
-            [{:ok, url} | _] -> url
-            _ -> socket.assigns.logo_url
-          end
-
+        # New upload completed
+        uploaded_url != nil -> uploaded_url
         # Logo was removed
-        is_nil(socket.assigns.logo_url) ->
-          nil
-
+        is_nil(socket.assigns.logo_url) -> nil
         # Keep existing logo
-        true ->
-          socket.assigns.logo_url
+        true -> socket.assigns.logo_url
       end
 
     updated_params =
