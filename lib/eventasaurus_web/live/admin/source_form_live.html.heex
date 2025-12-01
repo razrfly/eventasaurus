@@ -54,31 +54,93 @@
 
       <!-- Logo Upload -->
       <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-2">Source Logo</label>
-
-        <%= if @logo_url || @form[:logo_url].value do %>
-          <div class="mb-2 flex items-center gap-4">
-            <img
-              src={@logo_url || @form[:logo_url].value}
-              alt="Source logo"
-              class="h-16 object-contain border border-gray-300 rounded p-2 bg-white"
-            />
-            <button
-              type="button"
-              phx-click="remove_logo"
-              class="text-sm text-red-600 hover:text-red-800"
-            >
-              Remove
-            </button>
+        <!-- Current logo preview -->
+        <%= if @logo_url && length(@uploads.logo.entries) == 0 do %>
+          <div class="mb-3">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Current Logo</label>
+            <div class="flex items-center gap-4">
+              <img
+                src={EventasaurusWeb.Helpers.ImageUrlHelper.resolve(@logo_url)}
+                alt="Source logo"
+                class="h-16 object-contain border border-gray-300 rounded p-2 bg-white"
+              />
+              <button
+                type="button"
+                phx-click="remove_logo"
+                class="text-sm text-red-600 hover:text-red-800"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         <% end %>
 
-        <div class="mt-2">
-          <.live_file_input upload={@uploads.logo} class="block w-full text-sm" />
+        <!-- Upload dropzone -->
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          <%= if @logo_url, do: "Replace Logo", else: "Source Logo" %>
+        </label>
+        <div
+          class="relative border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors"
+          phx-drop-target={@uploads.logo.ref}
+        >
+          <label class="cursor-pointer block">
+            <.live_file_input upload={@uploads.logo} class="sr-only" />
+            <div class="text-center">
+              <svg class="mx-auto h-10 w-10 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <p class="mt-1 text-sm text-gray-600">
+                <span class="font-medium text-indigo-600">Click to upload</span> or drag and drop
+              </p>
+              <p class="text-xs text-gray-500">PNG, JPG, GIF, WebP up to 5MB</p>
+            </div>
+          </label>
         </div>
-        <p class="mt-1 text-sm text-gray-500">
-          Upload a logo for this source (PNG, JPG, GIF, WebP - max 5MB)
-        </p>
+
+        <!-- Upload entries with preview and progress -->
+        <%= for entry <- @uploads.logo.entries do %>
+          <div class="mt-3 p-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center gap-3">
+              <!-- Preview -->
+              <div class="flex-shrink-0">
+                <.live_img_preview entry={entry} class="h-14 w-14 object-cover rounded" />
+              </div>
+
+              <!-- Info and progress -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 truncate"><%= entry.client_name %></p>
+                <!-- Progress bar -->
+                <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
+                  <div class="bg-indigo-600 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1"><%= entry.progress %>%</p>
+              </div>
+
+              <!-- Cancel button -->
+              <button
+                type="button"
+                phx-click="cancel-upload"
+                phx-value-ref={entry.ref}
+                class="flex-shrink-0 p-1 text-gray-400 hover:text-red-500"
+                aria-label="Cancel upload"
+              >
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Entry errors -->
+            <%= for err <- Phoenix.Component.upload_errors(@uploads.logo, entry) do %>
+              <p class="mt-2 text-sm text-red-600"><%= EventasaurusWeb.Uploads.error_to_string(err) %></p>
+            <% end %>
+          </div>
+        <% end %>
+
+        <!-- Upload-level errors -->
+        <%= for err <- Phoenix.Component.upload_errors(@uploads.logo) do %>
+          <p class="mt-2 text-sm text-red-600"><%= EventasaurusWeb.Uploads.error_to_string(err) %></p>
+        <% end %>
       </div>
     </div>
 
