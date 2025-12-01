@@ -1,28 +1,98 @@
-# Image Upload Guide
+# Image Upload System Guide
 
-This guide explains how to add image uploads to any feature in Eventasaurus using the unified upload system.
+This guide documents the unified image upload system in Eventasaurus.
 
 ## Overview
 
-Eventasaurus uses Phoenix LiveView's external upload feature with Cloudflare R2 for efficient, direct browser-to-storage uploads. This system provides:
+Eventasaurus uses a dual-strategy upload system that automatically selects the appropriate storage backend:
 
-- **Direct uploads**: Files go directly from browser to R2 (not through the server)
+| Environment | Strategy | Storage | URL Format |
+|-------------|----------|---------|------------|
+| Development | Local | `priv/static/uploads/` | `/uploads/events/image.jpg` |
+| Production | R2 | Cloudflare R2 | `https://cdn2.wombie.com/events/image.jpg` |
+
+The system provides:
+- **Direct uploads**: In production, files go directly from browser to R2 (not through server)
+- **Local development**: Files stored locally without R2 configuration
 - **Progress tracking**: Real-time progress updates during upload
 - **Drag and drop**: Native drag-and-drop support
 - **Preview**: Live image preview before save
-- **Consistent UI**: Reusable components across all features
+- **URL resolution**: Automatic URL normalization for display
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Upload Flow                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  User selects file                                                   │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌─────────────────┐                                                │
+│  │ LiveView Mount  │  allow_upload(:image, image_upload_config())   │
+│  └────────┬────────┘                                                │
+│           │                                                          │
+│           ▼                                                          │
+│  ┌─────────────────────────────────────────┐                        │
+│  │         Strategy Detection              │                        │
+│  │  (EventasaurusWeb.Uploads.detect_strategy/0)                    │
+│  └────────┬───────────────────┬────────────┘                        │
+│           │                   │                                      │
+│     ┌─────┴─────┐       ┌─────┴─────┐                               │
+│     │  :local   │       │   :r2     │                               │
+│     │  (dev)    │       │  (prod)   │                               │
+│     └─────┬─────┘       └─────┬─────┘                               │
+│           │                   │                                      │
+│           ▼                   ▼                                      │
+│  ┌─────────────────┐  ┌─────────────────┐                           │
+│  │ Server upload   │  │ presign_r2_upload│                          │
+│  │ to priv/static  │  │ → JS uploader    │                          │
+│  │ /uploads/       │  │ → Direct to R2   │                          │
+│  └────────┬────────┘  └────────┬────────┘                           │
+│           │                    │                                     │
+│           └────────┬───────────┘                                     │
+│                    │                                                 │
+│                    ▼                                                 │
+│  ┌─────────────────────────────────────────┐                        │
+│  │    get_uploaded_url(socket, :image)     │                        │
+│  │    Returns: URL or nil                   │                        │
+│  └─────────────────────────────────────────┘                        │
+│                    │                                                 │
+│                    ▼                                                 │
+│  ┌─────────────────────────────────────────┐                        │
+│  │         Database Storage                │                        │
+│  │   Stores: relative path (events/img.jpg)│                        │
+│  └─────────────────────────────────────────┘                        │
+│                    │                                                 │
+│                    ▼                                                 │
+│  ┌─────────────────────────────────────────┐                        │
+│  │    ImageUrlHelper.resolve/1             │                        │
+│  │    Converts path → full CDN URL         │                        │
+│  └─────────────────────────────────────────┘                        │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Modules
+
+| Module | Purpose |
+|--------|---------|
+| `EventasaurusWeb.Uploads` | Unified upload configuration and helpers |
+| `EventasaurusWeb.Components.UploadComponents` | HEEx UI components |
+| `EventasaurusWeb.Helpers.ImageUrlHelper` | URL resolution and normalization |
+| `EventasaurusApp.Services.R2Client` | Cloudflare R2 operations |
+| `assets/js/uploaders.js` | JavaScript uploader for direct R2 uploads |
 
 ## Quick Start
 
 ### Step 1: Import the Uploads Module
 
-In your LiveView module:
-
 ```elixir
 defmodule MyAppWeb.MyFeatureLive do
   use MyAppWeb, :live_view
 
-  import EventasaurusWeb.Uploads
+  import EventasaurusWeb.Uploads, only: [image_upload_config: 0, get_uploaded_url: 2]
 
   # ... rest of module
 end
@@ -34,7 +104,7 @@ end
 def mount(_params, _session, socket) do
   {:ok,
    socket
-   |> assign(:upload_folder, "my_feature")  # Required: folder in R2
+   |> assign(:upload_folder, "my_feature")  # Required: folder in storage
    |> allow_upload(:cover_image, image_upload_config())}
 end
 ```
@@ -48,20 +118,7 @@ end
 />
 ```
 
-Or import the component:
-
-```elixir
-# In your LiveView
-import EventasaurusWeb.Components.UploadComponents
-```
-
-```heex
-<.image_upload upload={@uploads.cover_image} label="Cover Image" />
-```
-
 ### Step 4: Handle Cancel Event
-
-Add a handler for the cancel button:
 
 ```elixir
 def handle_event("cancel-upload", %{"ref" => ref}, socket) do
@@ -73,10 +130,8 @@ end
 
 ```elixir
 def handle_event("save", params, socket) do
-  # Get the uploaded URL (nil if no file uploaded)
   cover_url = get_uploaded_url(socket, :cover_image)
 
-  # Save to database
   case MyContext.create_thing(%{
     cover_image_url: cover_url || existing_url,
     # ... other params
@@ -90,9 +145,39 @@ def handle_event("save", params, socket) do
 end
 ```
 
-## Configuration Options
+## Configuration
 
-### image_upload_config/1
+### Upload Strategy
+
+The upload strategy is automatically selected based on environment:
+
+```elixir
+# In development (MIX_ENV=dev): uses :local strategy
+# In production with R2 configured: uses :r2 strategy
+# In production without R2: falls back to :local
+```
+
+You can override with the `UPLOADS_STRATEGY` environment variable:
+
+```bash
+# Force R2 in development (requires R2 credentials)
+UPLOADS_STRATEGY=r2 mix phx.server
+
+# Force local in production (not recommended)
+UPLOADS_STRATEGY=local mix phx.server
+```
+
+### R2 Environment Variables (Production)
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=your_account_id
+CLOUDFLARE_ACCESS_KEY_ID=your_access_key
+CLOUDFLARE_SECRET_ACCESS_KEY=your_secret_key
+R2_BUCKET=wombie                           # Optional, default: wombie
+R2_CDN_URL=https://cdn2.wombie.com         # Optional, default: https://cdn2.wombie.com
+```
+
+### image_upload_config/1 Options
 
 ```elixir
 # Default configuration
@@ -106,6 +191,9 @@ allow_upload(:gallery, image_upload_config(max_entries: 5))
 
 # Custom accepted types
 allow_upload(:avatar, image_upload_config(accept: ~w(.jpg .jpeg .png)))
+
+# Force specific strategy
+allow_upload(:image, image_upload_config(force_strategy: :local))
 ```
 
 Default values:
@@ -113,6 +201,43 @@ Default values:
 - `max_entries`: 1
 - `max_file_size`: 5MB (5,000,000 bytes)
 - `auto_upload`: true (files upload immediately when selected)
+
+## URL Storage and Resolution
+
+### Database Storage
+
+URLs are stored as **relative paths** in the database:
+
+```
+events/1733069438_a1b2c3d4.jpg
+groups/cover_image.png
+sources/logo.png
+```
+
+This makes the system storage-agnostic and allows easy migration between storage backends.
+
+### URL Resolution
+
+When displaying images, use `ImageUrlHelper.resolve/1`:
+
+```elixir
+alias EventasaurusWeb.Helpers.ImageUrlHelper
+
+# In templates
+<img src={ImageUrlHelper.resolve(@event.cover_image_url)} />
+
+# Resolves:
+# "events/image.jpg" → "https://cdn2.wombie.com/events/image.jpg"
+# "/images/default.png" → "/images/default.png" (static asset)
+# "https://tmdb.org/..." → "https://tmdb.org/..." (external URL)
+# nil → nil
+```
+
+The resolver handles:
+- Relative paths → Prepends R2 CDN URL
+- Static assets (`/images/...`) → Returns as-is
+- External URLs → Returns as-is
+- Legacy Supabase URLs → Converts to R2 CDN URL (backwards compatibility)
 
 ## Available Components
 
@@ -159,11 +284,11 @@ Wide aspect ratio upload for cover/banner images:
 
 ### get_uploaded_url/2
 
-Get the public CDN URL of an uploaded file:
+Get the public URL of an uploaded file:
 
 ```elixir
 url = get_uploaded_url(socket, :cover_image)
-# Returns: "https://cdn2.wombie.com/events/1234_abcd.jpg" or nil
+# Returns: "events/1234_abcd.jpg" (relative path) or nil
 ```
 
 ### get_uploaded_urls/2
@@ -172,7 +297,7 @@ Get all URLs for multi-file uploads:
 
 ```elixir
 urls = get_uploaded_urls(socket, :gallery)
-# Returns: ["https://cdn2.wombie.com/...", "https://cdn2.wombie.com/..."]
+# Returns: ["events/img1.jpg", "events/img2.jpg"]
 ```
 
 ### consume_uploaded_urls/2
@@ -193,15 +318,23 @@ Check if uploads are in progress:
 </button>
 ```
 
-## Complete Example
+### error_to_string/1
 
-Here's a complete example of adding image upload to a feature:
+Convert upload errors to user-friendly messages:
+
+```elixir
+error_to_string(:too_large)      # "File too large (max 5MB)"
+error_to_string(:not_accepted)   # "Invalid file type..."
+error_to_string(:too_many_files) # "Too many files selected"
+```
+
+## Complete Example
 
 ```elixir
 defmodule MyAppWeb.ThingLive.New do
   use MyAppWeb, :live_view
 
-  import EventasaurusWeb.Uploads
+  import EventasaurusWeb.Uploads, only: [image_upload_config: 0, get_uploaded_url: 2]
   import EventasaurusWeb.Components.UploadComponents
 
   alias MyApp.Things
@@ -259,59 +392,75 @@ defmodule MyAppWeb.ThingLive.New do
 end
 ```
 
-## Displaying Uploaded Images
+## Features Using This System
 
-When displaying images that may be stored in R2 or other sources, use the `resolve/1` helper:
+The following features use the unified upload system:
 
-```heex
-<img src={resolve(@thing.cover_image_url)} alt="Cover" />
-```
+| Feature | Upload Field | Folder |
+|---------|--------------|--------|
+| Admin Sources | `logo` | `sources` |
+| Groups (New) | `cover_image`, `avatar` | `groups` |
+| Groups (Edit) | `cover_image`, `avatar` | `groups` |
 
-This ensures URLs are properly resolved regardless of storage backend.
-
-## Architecture
-
-The upload system consists of:
-
-1. **EventasaurusWeb.Uploads** - Elixir module with upload configuration and helpers
-2. **EventasaurusWeb.Components.UploadComponents** - HEEx components for UI
-3. **assets/js/uploaders.js** - JavaScript uploader for direct R2 uploads
-4. **EventasaurusApp.Services.R2Client** - Backend R2 operations
-
-Flow:
-1. User selects file
-2. LiveView calls `presign_r2_upload/2` to get presigned URL
-3. JavaScript uploader sends file directly to R2
-4. On completion, public URL is available via `entry.meta.public_url`
-5. On form save, use `get_uploaded_url/2` to get the URL
+Note: Events use a separate JS-hook based upload system (`R2ImageUpload`) that uploads directly to R2 via `UploadController`.
 
 ## Troubleshooting
 
 ### "Upload failed" error
 
 1. Check browser console for detailed error
-2. Verify R2 credentials are configured
-3. Check file size is under 5MB
-4. Ensure file type is allowed
+2. In dev: Ensure `priv/static/uploads/` directory is writable
+3. In prod: Verify R2 credentials are configured
+4. Check file size is under 5MB
+5. Ensure file type is allowed
 
 ### Progress stuck at 0%
 
 1. Check network tab for the PUT request
-2. Verify CORS is configured on R2 bucket
+2. In prod: Verify CORS is configured on R2 bucket
 3. Check for JavaScript errors in console
 
 ### Image not showing after upload
 
 1. Ensure you're calling `get_uploaded_url/2` and saving the URL
 2. Verify the URL in database is correct
-3. Check CDN is accessible
+3. Use `ImageUrlHelper.resolve/1` when displaying
+4. Check CDN is accessible (prod) or uploads folder exists (dev)
 
-## Migration from Old Upload System
+### Wrong strategy being used
 
-If migrating from the old upload system:
+Check the current strategy:
 
-1. Replace `allow_upload` options with `image_upload_config()`
-2. Add `:upload_folder` assign in mount
-3. Replace custom upload handling with `get_uploaded_url/2`
-4. Use new components instead of custom templates
-5. Remove references to `UploadService.upload_liveview_files/5`
+```elixir
+iex> EventasaurusWeb.Uploads.detect_strategy()
+:local  # or :r2
+```
+
+Override with environment variable:
+
+```bash
+UPLOADS_STRATEGY=r2 iex -S mix
+```
+
+## Migration History
+
+This system consolidates several legacy upload approaches:
+
+1. **Supabase Storage** (deprecated) - Used Supabase JS client
+2. **UploadService** (removed) - Server-side upload handler
+3. **Current System** - Unified module with local/R2 strategies
+
+### Database Migration
+
+Legacy Supabase URLs in the database are automatically converted to relative paths by the migration `20251201164938_normalize_supabase_image_urls`. The `ImageUrlHelper.resolve/1` function also handles legacy URLs at runtime as a safety net.
+
+### Removed Files
+
+The following files were removed as part of the migration:
+- `lib/eventasaurus_app/services/upload_service.ex` - Replaced by `EventasaurusWeb.Uploads`
+
+### Files Still In Use
+
+These files remain for other purposes:
+- `lib/eventasaurus_web/controllers/upload_controller.ex` - Used by Events JS hook
+- `lib/eventasaurus_web/helpers/token_helpers.ex` - Used by image picker modal
