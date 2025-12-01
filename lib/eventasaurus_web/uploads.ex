@@ -107,8 +107,10 @@ defmodule EventasaurusWeb.Uploads do
 
       :local ->
         # Development: Server-side uploads to local storage
+        # auto_upload: true provides immediate progress feedback (better UX)
+        # Files are still stored locally, just transferred to server immediately
         Logger.debug("Using local upload strategy (R2 not configured)")
-        base_config ++ [auto_upload: false]
+        base_config ++ [auto_upload: true]
     end
   end
 
@@ -209,11 +211,15 @@ defmodule EventasaurusWeb.Uploads do
       results =
         Phoenix.LiveView.consume_uploaded_entries(socket, upload_name, fn meta, _entry ->
           # For external uploads, the file is already in R2
-          # The metadata from presign_r2_upload is in the first argument (meta), not entry
+          # The metadata from presign_r2_upload is in the first argument (meta)
           {:ok, meta.public_url}
         end)
 
+      # consume_uploaded_entries unwraps {:ok, value} to just value
+      # So we get plain strings, not {:ok, url} tuples
       case results do
+        [url] when is_binary(url) -> url
+        [url | _] when is_binary(url) -> url
         [{:ok, url}] -> url
         [{:ok, url} | _] -> url
         [] -> nil
@@ -223,16 +229,11 @@ defmodule EventasaurusWeb.Uploads do
       # Local strategy: consume and save to disk
       folder = socket.assigns[:upload_folder] || "uploads"
 
-      Logger.debug("Local upload strategy - consuming entries for #{upload_name}")
-
       results =
         Phoenix.LiveView.consume_uploaded_entries(socket, upload_name, fn meta, entry ->
-          Logger.debug("consume_uploaded_entries callback - meta: #{inspect(meta)}, entry: #{inspect(entry.client_name)}")
           path = meta[:path] || meta.path
           save_local_upload(path, folder, entry)
         end)
-
-      Logger.debug("consume_uploaded_entries results: #{inspect(results)}")
 
       # Extract URLs - handle both {:ok, url} tuples and plain URL strings
       # Phoenix LiveView's consume_uploaded_entries returns the callback results directly
@@ -273,8 +274,10 @@ defmodule EventasaurusWeb.Uploads do
           {:ok, meta.public_url}
         end)
 
+      # consume_uploaded_entries unwraps {:ok, value} to just value
       results
       |> Enum.map(fn
+        url when is_binary(url) -> url
         {:ok, url} -> url
         _ -> nil
       end)
@@ -284,15 +287,16 @@ defmodule EventasaurusWeb.Uploads do
       folder = socket.assigns[:upload_folder] || "uploads"
 
       results =
-        Phoenix.LiveView.consume_uploaded_entries(socket, upload_name, fn %{path: path}, entry ->
+        Phoenix.LiveView.consume_uploaded_entries(socket, upload_name, fn meta, entry ->
+          path = meta[:path] || meta.path
           save_local_upload(path, folder, entry)
         end)
 
       # Extract URLs - handle both {:ok, url} tuples and plain URL strings
       results
       |> Enum.map(fn
-        {:ok, url} -> url
         url when is_binary(url) -> url
+        {:ok, url} -> url
         _ -> nil
       end)
       |> Enum.reject(&is_nil/1)
@@ -325,16 +329,17 @@ defmodule EventasaurusWeb.Uploads do
         # Local strategy: save to disk
         folder = socket.assigns[:upload_folder] || "uploads"
 
-        Phoenix.LiveView.consume_uploaded_entries(socket, upload_name, fn %{path: path}, entry ->
+        Phoenix.LiveView.consume_uploaded_entries(socket, upload_name, fn meta, entry ->
+          path = meta[:path] || meta.path
           save_local_upload(path, folder, entry)
         end)
       end
 
-    # Extract URLs - handle both {:ok, url} tuples and plain URL strings
+    # Extract URLs - consume_uploaded_entries unwraps {:ok, value} to just value
     results
     |> Enum.map(fn
-      {:ok, url} -> url
       url when is_binary(url) -> url
+      {:ok, url} -> url
       _ -> nil
     end)
     |> Enum.reject(&is_nil/1)

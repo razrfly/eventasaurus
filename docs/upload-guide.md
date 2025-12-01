@@ -42,12 +42,6 @@ end
 ### Step 3: Add Component to Template
 
 ```heex
-<.live_component
-  module={EventasaurusWeb.Components.UploadComponents}
-  id="cover-upload"
-/>
-
-<%# Or use the component directly %>
 <EventasaurusWeb.Components.UploadComponents.image_upload
   upload={@uploads.cover_image}
   label="Cover Image"

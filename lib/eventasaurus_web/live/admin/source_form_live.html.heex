@@ -109,11 +109,21 @@
               <!-- Info and progress -->
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900 truncate"><%= entry.client_name %></p>
-                <!-- Progress bar -->
-                <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
-                  <div class="bg-indigo-600 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}></div>
-                </div>
-                <p class="text-xs text-gray-500 mt-1"><%= entry.progress %>%</p>
+                <%= if entry.progress == 100 do %>
+                  <!-- Completed state -->
+                  <div class="mt-1 flex items-center gap-1.5">
+                    <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span class="text-sm text-green-600 font-medium">Uploaded</span>
+                  </div>
+                <% else %>
+                  <!-- Progress bar -->
+                  <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-indigo-600 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}></div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1"><%= entry.progress %>%</p>
+                <% end %>
               </div>
 
               <!-- Cancel button -->
