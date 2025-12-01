@@ -3,11 +3,11 @@ defmodule EventasaurusWeb.GroupLive.Edit do
 
   import EventasaurusWeb.Components.ImagePickerModal
   import EventasaurusWeb.TokenHelpers, only: [get_current_valid_token: 1]
+  import EventasaurusWeb.Uploads, only: [image_upload_config: 0, get_uploaded_url: 2]
 
   alias EventasaurusApp.Groups
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Services.UploadService
   alias EventasaurusWeb.Services.SearchService
 
   @impl true
@@ -91,8 +91,9 @@ defmodule EventasaurusWeb.GroupLive.Edit do
                  EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general")
                )
                |> assign(:supabase_access_token, get_current_valid_token(session))
-               |> allow_upload(:cover_image, accept: ~w(.jpg .jpeg .png .gif), max_entries: 1)
-               |> allow_upload(:avatar, accept: ~w(.jpg .jpeg .png .gif), max_entries: 1)}
+               |> assign(:upload_folder, "groups")
+               |> allow_upload(:cover_image, image_upload_config())
+               |> allow_upload(:avatar, image_upload_config())}
             end
         end
     end
@@ -112,33 +113,27 @@ defmodule EventasaurusWeb.GroupLive.Edit do
   def handle_event("save", %{"group" => group_params}, socket) do
     group = socket.assigns.group
     user = socket.assigns.user
-    access_token = socket.assigns.supabase_access_token
 
-    # Process file uploads first
-    with {:ok, cover_image_url} <- handle_cover_image_upload(socket, access_token, group),
-         {:ok, avatar_url} <- handle_avatar_upload(socket, access_token, group) do
-      # Build updated params with uploaded image URLs
-      updated_params =
-        group_params
-        |> maybe_put_image_url(:cover_image_url, cover_image_url || group.cover_image_url)
-        |> maybe_put_image_url(:avatar_url, avatar_url || group.avatar_url)
+    # Get uploaded URLs using unified Uploads module
+    cover_image_url = get_uploaded_url(socket, :cover_image)
+    avatar_url = get_uploaded_url(socket, :avatar)
 
-      case Groups.update_group(group, updated_params, user.id) do
-        {:ok, updated_group} ->
-          {:noreply,
-           socket
-           |> put_flash(:info, "Group updated successfully")
-           |> redirect(to: "/groups/#{updated_group.slug}")}
+    # Build updated params with uploaded image URLs
+    # Prefer newly uploaded images, then keep existing
+    updated_params =
+      group_params
+      |> maybe_put_image_url(:cover_image_url, cover_image_url || group.cover_image_url)
+      |> maybe_put_image_url(:avatar_url, avatar_url || group.avatar_url)
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          {:noreply, assign(socket, :changeset, changeset)}
-      end
-    else
-      {:error, error} ->
+    case Groups.update_group(group, updated_params, user.id) do
+      {:ok, updated_group} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Failed to upload images: #{inspect(error)}")
-         |> assign(:changeset, Groups.change_group(group, group_params))}
+         |> put_flash(:info, "Group updated successfully")
+         |> redirect(to: "/groups/#{updated_group.slug}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :changeset, changeset)}
     end
   end
 
@@ -453,83 +448,7 @@ defmodule EventasaurusWeb.GroupLive.Edit do
     {:noreply, socket}
   end
 
-  # ========== Helper Functions ==========
-
-  # ========== File Upload Handlers ==========
-
-  defp handle_cover_image_upload(socket, access_token, group) do
-    case uploaded_entries(socket, :cover_image) do
-      {[_ | _] = _entries, []} ->
-        # Delete old cover image first if it exists
-        if group.cover_image_url do
-          UploadService.delete_file(group.cover_image_url, access_token)
-        end
-
-        # Process new uploaded cover image
-        id_prefix = "group_#{group.id}"
-
-        results =
-          UploadService.upload_liveview_files(
-            socket,
-            :cover_image,
-            "groups",
-            id_prefix,
-            access_token
-          )
-
-        case results do
-          {:ok, [url]} -> {:ok, url}
-          {:ok, []} -> {:ok, nil}
-          error -> error
-        end
-
-      {[], []} ->
-        # No file uploaded, keep existing
-        {:ok, nil}
-
-      {[], errors} ->
-        # Upload errors
-        error_msg = Enum.map_join(errors, ", ", & &1.ref)
-        {:error, "Upload errors: #{error_msg}"}
-    end
-  end
-
-  defp handle_avatar_upload(socket, access_token, group) do
-    case uploaded_entries(socket, :avatar) do
-      {[_ | _] = _entries, []} ->
-        # Delete old avatar first if it exists
-        if group.avatar_url do
-          UploadService.delete_file(group.avatar_url, access_token)
-        end
-
-        # Process new uploaded avatar
-        id_prefix = "group_#{group.id}"
-
-        results =
-          UploadService.upload_liveview_files(
-            socket,
-            :avatar,
-            "groups",
-            id_prefix,
-            access_token
-          )
-
-        case results do
-          {:ok, [url]} -> {:ok, url}
-          {:ok, []} -> {:ok, nil}
-          error -> error
-        end
-
-      {[], []} ->
-        # No file uploaded, keep existing
-        {:ok, nil}
-
-      {[], errors} ->
-        # Upload errors
-        error_msg = Enum.map_join(errors, ", ", & &1.ref)
-        {:error, "Upload errors: #{error_msg}"}
-    end
-  end
+  # ========== Private Helpers ==========
 
   defp maybe_put_image_url(params, _key, nil), do: params
 
