@@ -404,6 +404,58 @@ The following features use the unified upload system:
 
 Note: Events use a separate JS-hook based upload system (`R2ImageUpload`) that uploads directly to R2 via `UploadController`.
 
+## Storage Cleanup
+
+When users upload a new image to replace an existing one, the system automatically deletes the old image from R2 storage to prevent storage bloat. This happens:
+
+- **Groups Edit**: When cover image or avatar is replaced
+- **Admin Sources**: When logo is replaced
+
+### How It Works
+
+The `maybe_delete_old_image/2` helper function:
+1. Only triggers when a new image is uploaded (not when keeping existing)
+2. Only deletes R2 images (relative paths like `groups/image.jpg`)
+3. Skips external URLs (TMDB, Unsplash, picsum, etc.)
+4. Runs asynchronously via `Task.start/1` to not block the save operation
+5. Logs success/failure for debugging
+
+### Implementation Pattern
+
+```elixir
+# In your save handler:
+def handle_event("save", params, socket) do
+  new_image_url = get_uploaded_url(socket, :image)
+  old_image_url = socket.assigns.entity.image_url
+
+  # Delete old image if new one is being uploaded
+  maybe_delete_old_image(new_image_url, old_image_url)
+
+  # ... rest of save logic
+end
+
+# Helper function (add to your LiveView):
+defp maybe_delete_old_image(new_url, old_url)
+     when is_binary(new_url) and is_binary(old_url) do
+  if is_r2_path?(old_url) do
+    Task.start(fn ->
+      case R2Client.delete(old_url) do
+        :ok -> Logger.info("Deleted old image: #{old_url}")
+        {:error, reason} -> Logger.warning("Failed to delete: #{inspect(reason)}")
+      end
+    end)
+  end
+end
+
+defp maybe_delete_old_image(_new_url, _old_url), do: :ok
+
+defp is_r2_path?(url) when is_binary(url) do
+  not String.starts_with?(url, "http://") and
+    not String.starts_with?(url, "https://") and
+    not String.starts_with?(url, "/")
+end
+```
+
 ## Troubleshooting
 
 ### "Upload failed" error

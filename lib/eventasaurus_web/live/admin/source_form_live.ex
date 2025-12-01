@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Services.R2Client
   alias EventasaurusDiscovery.Sources.Source
 
   # Use the unified Uploads module which respects UPLOADS_STRATEGY env var
@@ -52,6 +53,10 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
     # Get uploaded URL using unified Uploads module
     # This respects UPLOADS_STRATEGY env var (local vs r2)
     uploaded_url = get_uploaded_url(socket, :logo)
+    old_logo_url = socket.assigns.source.logo_url
+
+    # Delete old image from R2 if new one is uploaded
+    maybe_delete_old_image(uploaded_url, old_logo_url)
 
     # Determine final logo URL
     logo_url =
@@ -175,4 +180,40 @@ defmodule EventasaurusWeb.Admin.SourceFormLive do
   defp maybe_put_url(params, key, url) when is_binary(url) do
     Map.put(params, Atom.to_string(key), url)
   end
+
+  # Delete old image from R2 when a new one is uploaded
+  # Only deletes R2 images (relative paths like "sources/logo.jpg")
+  # Does NOT delete external URLs or nil values
+  defp maybe_delete_old_image(new_url, old_url)
+       when is_binary(new_url) and is_binary(old_url) do
+    # Only delete if it's a relative path (R2 image), not an external URL
+    if is_r2_path?(old_url) do
+      # Fire and forget - don't block on deletion result
+      Task.start(fn ->
+        case R2Client.delete(old_url) do
+          :ok ->
+            require Logger
+            Logger.info("Deleted old image from R2: #{old_url}")
+
+          {:error, reason} ->
+            require Logger
+
+            Logger.warning(
+              "Failed to delete old image from R2: #{old_url}, reason: #{inspect(reason)}"
+            )
+        end
+      end)
+    end
+  end
+
+  defp maybe_delete_old_image(_new_url, _old_url), do: :ok
+
+  # Check if a URL is a relative R2 path (not an external URL)
+  defp is_r2_path?(url) when is_binary(url) do
+    not String.starts_with?(url, "http://") and
+      not String.starts_with?(url, "https://") and
+      not String.starts_with?(url, "/")
+  end
+
+  defp is_r2_path?(_), do: false
 end

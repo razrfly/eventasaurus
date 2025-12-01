@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.GroupLive.Edit do
   alias EventasaurusApp.Groups
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Services.R2Client
   alias EventasaurusWeb.Services.SearchService
 
   @impl true
@@ -117,6 +118,11 @@ defmodule EventasaurusWeb.GroupLive.Edit do
     # Get uploaded URLs using unified Uploads module
     cover_image_url = get_uploaded_url(socket, :cover_image)
     avatar_url = get_uploaded_url(socket, :avatar)
+
+    # Delete old images from R2 if new ones are being uploaded
+    # Only delete R2 images (relative paths), not external URLs
+    maybe_delete_old_image(cover_image_url, group.cover_image_url)
+    maybe_delete_old_image(avatar_url, group.avatar_url)
 
     # Build updated params with uploaded image URLs
     # Prefer newly uploaded images, then keep existing
@@ -455,4 +461,40 @@ defmodule EventasaurusWeb.GroupLive.Edit do
   defp maybe_put_image_url(params, key, url) when is_binary(url) do
     Map.put(params, Atom.to_string(key), url)
   end
+
+  # Delete old image from R2 when a new one is uploaded
+  # Only deletes R2 images (relative paths like "groups/image.jpg")
+  # Does NOT delete external URLs (TMDB, Unsplash, etc.) or nil values
+  defp maybe_delete_old_image(new_url, old_url)
+       when is_binary(new_url) and is_binary(old_url) do
+    # Only delete if it's a relative path (R2 image), not an external URL
+    if is_r2_path?(old_url) do
+      # Fire and forget - don't block on deletion result
+      Task.start(fn ->
+        case R2Client.delete(old_url) do
+          :ok ->
+            require Logger
+            Logger.info("Deleted old image from R2: #{old_url}")
+
+          {:error, reason} ->
+            require Logger
+
+            Logger.warning(
+              "Failed to delete old image from R2: #{old_url}, reason: #{inspect(reason)}"
+            )
+        end
+      end)
+    end
+  end
+
+  defp maybe_delete_old_image(_new_url, _old_url), do: :ok
+
+  # Check if a URL is a relative R2 path (not an external URL)
+  defp is_r2_path?(url) when is_binary(url) do
+    not String.starts_with?(url, "http://") and
+      not String.starts_with?(url, "https://") and
+      not String.starts_with?(url, "/")
+  end
+
+  defp is_r2_path?(_), do: false
 end
