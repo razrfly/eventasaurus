@@ -152,9 +152,10 @@
           <!-- Event Hero Section -->
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
             <!-- Event Image -->
+            <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
             <%= if @event.cover_image_url do %>
               <div class="aspect-w-16 aspect-h-9">
-                <img src={@event.cover_image_url} alt={@event.title} class="w-full h-64 object-cover" />
+                <img src={resolve(@event.cover_image_url)} alt={@event.title} class="w-full h-64 object-cover" />
               </div>
             <% else %>
               <div class="w-full h-64 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">

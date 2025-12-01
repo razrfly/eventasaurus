@@ -373,7 +373,13 @@ if config_env() == :prod do
   end
 
   # Validate required Supabase S3 credentials for sitemap storage
+  # TODO: Remove after sitemap migrated to R2 (Phase 3)
   for var <- ~w(SUPABASE_S3_ACCESS_KEY_ID SUPABASE_S3_SECRET_ACCESS_KEY) do
+    System.fetch_env!(var)
+  end
+
+  # Validate required Cloudflare R2 credentials for file storage
+  for var <- ~w(CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_SECRET_ACCESS_KEY) do
     System.fetch_env!(var)
   end
 

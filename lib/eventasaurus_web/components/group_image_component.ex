@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
 
   use Phoenix.LiveComponent
   import EventasaurusWeb.CoreComponents
+  import EventasaurusWeb.Helpers.ImageUrlHelper
 
   @doc """
   Renders a group avatar image with fallback placeholder.
@@ -26,10 +27,11 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     assigns = assign_defaults(assigns)
 
     ~H"""
+    <%!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs --%>
     <div class={["inline-block relative", @size, @class]}>
       <%= if @group.avatar_url do %>
-        <img 
-          src={@group.avatar_url}
+        <img
+          src={resolve(@group.avatar_url)}
           alt={@alt}
           class={["object-cover rounded-full", @size]}
           loading="lazy"
@@ -53,10 +55,11 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     assigns = assign_defaults(assigns)
 
     ~H"""
+    <%!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs --%>
     <div class={["relative bg-gray-200 dark:bg-gray-700 overflow-hidden", @aspect_ratio, @class]}>
       <%= if @group.cover_image_url do %>
-        <img 
-          src={@group.cover_image_url}
+        <img
+          src={resolve(@group.cover_image_url)}
           alt={@alt}
           class="absolute inset-0 w-full h-full object-cover"
           loading="lazy"

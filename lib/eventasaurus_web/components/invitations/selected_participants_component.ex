@@ -30,9 +30,10 @@ defmodule EventasaurusWeb.Components.Invitations.SelectedParticipantsComponent d
               <p class="text-xs text-gray-500 mb-2">Existing users</p>
               <div class="flex flex-wrap gap-2">
                 <%= for user <- assigns[:selected_users] || [] do %>
+                  <%!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs --%>
                   <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
                     <%= if user.avatar_url do %>
-                      <img src={user.avatar_url} alt={user.name || user.username} class="w-5 h-5 rounded-full" />
+                      <img src={resolve(user.avatar_url)} alt={user.name || user.username} class="w-5 h-5 rounded-full" />
                     <% else %>
                       <div class="w-5 h-5 rounded-full bg-green-300 flex items-center justify-center text-xs font-medium text-white">
                         <%= String.first(user.name || user.username || "?") |> String.upcase() %>

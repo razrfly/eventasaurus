@@ -2,9 +2,10 @@
   <!-- Group Header -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
     <!-- Cover Image -->
+    <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
     <div class="h-48 bg-gradient-to-r from-blue-500 to-purple-600">
       <%= if @group.cover_image_url do %>
-        <img src={@group.cover_image_url} alt="Group cover" class="w-full h-full object-cover" />
+        <img src={resolve(@group.cover_image_url)} alt="Group cover" class="w-full h-full object-cover" />
       <% end %>
     </div>
     

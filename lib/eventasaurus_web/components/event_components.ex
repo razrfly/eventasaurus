@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.EventComponents do
   use Phoenix.Component
   import EventasaurusWeb.CoreComponents
   import EventasaurusWeb.Helpers.CurrencyHelpers
+  import EventasaurusWeb.Helpers.ImageUrlHelper
   alias EventasaurusWeb.TimezoneHelpers
   alias EventasaurusApp.DateTimeHelper
   alias Eventasaurus.Integrations.Cinegraph
@@ -572,8 +573,9 @@ defmodule EventasaurusWeb.EventComponents do
                   <p class="mt-2 text-sm text-gray-600">Click to add a cover image</p>
                 </button>
               <% else %>
+                <%!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs --%>
                 <div class="relative rounded-lg overflow-hidden h-48 bg-gray-100">
-                  <img src={f[:cover_image_url].value} alt="Cover image" class="w-full h-full object-cover" />
+                  <img src={resolve(f[:cover_image_url].value)} alt="Cover image" class="w-full h-full object-cover" />
                   <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-30 transition-all">
                     <button
                       type="button"
