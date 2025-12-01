@@ -285,27 +285,70 @@
           Cover Image
         </label>
         <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
-        <div class="mt-1 flex items-center space-x-4">
+        <div class="mt-2 flex flex-col space-y-4">
+          <!-- Current image preview -->
           <%= if @group.cover_image_url do %>
-            <div class="relative cursor-pointer" phx-click="open_cover_image_picker">
+            <div class="relative cursor-pointer w-fit" phx-click="open_cover_image_picker">
               <img src={resolve(@group.cover_image_url)} alt="Current cover" class="h-32 w-48 object-cover rounded-lg" />
               <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg opacity-0 hover:opacity-100 transition-opacity">
                 <span class="text-white text-sm">Click to change</span>
               </div>
             </div>
-          <% else %>
-            <div class="h-32 w-48 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center cursor-pointer" phx-click="open_cover_image_picker">
-              <svg class="h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
           <% end %>
-          <div>
-            <button type="button" phx-click="open_cover_image_picker" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-              Change Cover Image
-            </button>
-            <p class="mt-1 text-xs text-gray-500">Click to choose from gallery or upload</p>
+
+          <!-- File Upload -->
+          <div class="flex items-center space-x-4">
+            <div class="flex-1">
+              <.live_file_input upload={@uploads.cover_image} class="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-medium
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100
+                dark:file:bg-blue-900 dark:file:text-blue-300
+                dark:hover:file:bg-blue-800" />
+              <p class="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+
+              <!-- Upload Progress -->
+              <%= for entry <- @uploads.cover_image.entries do %>
+                <div class="mt-2">
+                  <div class="flex justify-between text-xs text-gray-600">
+                    <span><%= entry.client_name %></span>
+                  </div>
+                  <%= if entry.progress == 100 do %>
+                    <!-- Completed state -->
+                    <div class="mt-1 flex items-center gap-1.5">
+                      <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                      </svg>
+                      <span class="text-sm text-green-600 font-medium">Uploaded</span>
+                    </div>
+                  <% else %>
+                    <!-- Progress bar -->
+                    <div class="w-full bg-gray-200 rounded-full h-1 mt-1">
+                      <div class="bg-blue-600 h-1 rounded-full transition-all duration-300" style={"width: #{entry.progress}%"}></div>
+                    </div>
+                    <span class="text-xs text-gray-500"><%= entry.progress %>%</span>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
           </div>
+
+          <!-- OR separator -->
+          <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-gray-300 dark:border-gray-600"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+              <span class="px-2 bg-white dark:bg-gray-800 text-gray-500">OR</span>
+            </div>
+          </div>
+
+          <!-- Gallery button -->
+          <button type="button" phx-click="open_cover_image_picker" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 w-fit">
+            Browse Gallery
+          </button>
         </div>
       </div>
 
@@ -314,24 +357,60 @@
           Group Avatar
         </label>
         <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
-        <div class="mt-1 flex items-center space-x-4">
-          <%= if @group.avatar_url do %>
-            <img src={resolve(@group.avatar_url)} alt="Current avatar" class="h-20 w-20 rounded-full object-cover" />
-          <% else %>
-            <div class="h-20 w-20 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-              <span class="text-2xl font-semibold text-gray-600 dark:text-gray-300">
-                <%= case String.first(@group.name || "") do
-                  nil -> "G"
-                  letter -> String.upcase(letter)
-                end %>
-              </span>
+        <div class="mt-2 flex flex-col space-y-4">
+          <!-- Current avatar preview -->
+          <div class="flex items-center space-x-4">
+            <%= if @group.avatar_url do %>
+              <img src={resolve(@group.avatar_url)} alt="Current avatar" class="h-20 w-20 rounded-full object-cover" />
+            <% else %>
+              <div class="h-20 w-20 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                <span class="text-2xl font-semibold text-gray-600 dark:text-gray-300">
+                  <%= case String.first(@group.name || "") do
+                    nil -> "G"
+                    letter -> String.upcase(letter)
+                  end %>
+                </span>
+              </div>
+            <% end %>
+          </div>
+
+          <!-- File Upload -->
+          <div class="flex items-center space-x-4">
+            <div class="flex-1">
+              <.live_file_input upload={@uploads.avatar} class="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-medium
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100
+                dark:file:bg-blue-900 dark:file:text-blue-300
+                dark:hover:file:bg-blue-800" />
+              <p class="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 5MB. Square images work best.</p>
+
+              <!-- Upload Progress -->
+              <%= for entry <- @uploads.avatar.entries do %>
+                <div class="mt-2">
+                  <div class="flex justify-between text-xs text-gray-600">
+                    <span><%= entry.client_name %></span>
+                  </div>
+                  <%= if entry.progress == 100 do %>
+                    <!-- Completed state -->
+                    <div class="mt-1 flex items-center gap-1.5">
+                      <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                      </svg>
+                      <span class="text-sm text-green-600 font-medium">Uploaded</span>
+                    </div>
+                  <% else %>
+                    <!-- Progress bar -->
+                    <div class="w-full bg-gray-200 rounded-full h-1 mt-1">
+                      <div class="bg-blue-600 h-1 rounded-full transition-all duration-300" style={"width: #{entry.progress}%"}></div>
+                    </div>
+                    <span class="text-xs text-gray-500"><%= entry.progress %>%</span>
+                  <% end %>
+                </div>
+              <% end %>
             </div>
-          <% end %>
-          <div>
-            <button type="button" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-              Change Avatar
-            </button>
-            <p class="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
           </div>
         </div>
       </div>
