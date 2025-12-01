@@ -541,6 +541,14 @@ if config_env() == :prod do
       auto_confirm_email: false
     }
 
+  # Configure Cloudflare R2 storage settings
+  config :eventasaurus, :r2,
+    account_id: System.get_env("CLOUDFLARE_ACCOUNT_ID"),
+    access_key_id: System.get_env("CLOUDFLARE_ACCESS_KEY_ID"),
+    secret_access_key: System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY"),
+    bucket: System.get_env("R2_BUCKET") || "wombie",
+    cdn_url: System.get_env("R2_CDN_URL") || "https://cdn2.wombie.com"
+
   # Configure PostHog settings for production
   # PostHog provides analytics and event tracking for your application
   # To enable PostHog, set the following environment variables:

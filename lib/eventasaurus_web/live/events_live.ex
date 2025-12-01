@@ -97,11 +97,12 @@ defmodule EventasaurusWeb.EventsLive do
                 class="group relative bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-200 overflow-hidden"
               >
                 <%!-- Event Image --%>
+                <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
                 <div class="aspect-w-16 aspect-h-9 bg-gray-200">
                   <% image_url = event.cover_image_url || get_external_image_url(event.external_image_data) %>
                   <%= if image_url do %>
                     <img
-                      src={image_url}
+                      src={resolve(image_url)}
                       alt={event.title}
                       class="object-cover w-full h-48"
                     />

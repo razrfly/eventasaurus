@@ -14,12 +14,12 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
   - search_results: map with search results from different sources
   - loading: boolean indicating if search is in progress
   - error: error message if any
-  - supabase_access_token: token for image upload
   - on_close: event to close modal
 
   Optional assigns:
   - title: modal title (defaults to "Choose a Cover Image")
   - context: context for the picker (e.g., "event", "group") for event naming
+  - supabase_access_token: (deprecated) no longer needed, kept for backwards compatibility
   """
   def image_picker_modal(assigns) do
     assigns = assign_new(assigns, :title, fn -> "Choose a Cover Image" end)
@@ -85,11 +85,11 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
                   <p class="text-sm text-gray-500 mb-3">PNG, JPG, or WEBP up to 10MB</p>
                   <input
                     type="file"
-                    accept="image/*"
-                    phx-hook="SupabaseImageUpload"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+                    phx-hook="R2ImageUpload"
                     id={"#{@id}-upload-input"}
                     class="hidden"
-                    data-access-token={@supabase_access_token}
+                    data-folder="events"
                   />
                   <label for={"#{@id}-upload-input"} class="cursor-pointer inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     Choose File

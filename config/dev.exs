@@ -140,5 +140,22 @@ config :eventasaurus, :event_discovery,
     "cinema-city" => 48
   }
 
+# Cloudflare R2 configuration for development
+# Set these environment variables to test R2 uploads locally:
+# - CLOUDFLARE_ACCOUNT_ID
+# - CLOUDFLARE_ACCESS_KEY_ID
+# - CLOUDFLARE_SECRET_ACCESS_KEY
+# - R2_BUCKET (optional, defaults to "wombie")
+# - R2_CDN_URL (optional, defaults to "https://cdn2.wombie.com")
+#
+# If not set, R2 uploads will fail with a configuration error.
+# In development, you can still use the Supabase upload flow as fallback.
+config :eventasaurus, :r2,
+  account_id: System.get_env("CLOUDFLARE_ACCOUNT_ID"),
+  access_key_id: System.get_env("CLOUDFLARE_ACCESS_KEY_ID"),
+  secret_access_key: System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY"),
+  bucket: System.get_env("R2_BUCKET") || "wombie",
+  cdn_url: System.get_env("R2_CDN_URL") || "https://cdn2.wombie.com"
+
 # Import database credentials from dev.secret.exs
 import_config "dev.secret.exs"

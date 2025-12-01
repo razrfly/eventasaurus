@@ -1377,9 +1377,10 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
 
             <!-- Cover image -->
+            <!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs -->
             <%= if @event.cover_image_url && @event.cover_image_url != "" do %>
               <div class="relative w-full aspect-video rounded-xl overflow-hidden mb-8 shadow-lg border border-gray-200">
-                <img src={@event.cover_image_url} alt={@event.title} class="absolute inset-0 w-full h-full object-cover" />
+                <img src={resolve(@event.cover_image_url)} alt={@event.title} class="absolute inset-0 w-full h-full object-cover" />
               </div>
               <!-- Image attribution -->
             <EventasaurusWeb.EventComponents.image_attribution external_image_data={@event.external_image_data} class="text-xs text-gray-500 -mt-6 mb-6 px-1" />

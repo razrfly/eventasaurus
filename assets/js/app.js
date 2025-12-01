@@ -26,6 +26,7 @@ let supabaseClient = null;
 
 // Define LiveView hooks here
 import SupabaseImageUpload from "./supabase_upload";
+import R2ImageUpload from "./r2_upload";
 let Hooks = {};
 
 
@@ -46,8 +47,11 @@ Hooks.LanguageCookie = {
 
 // SupabaseAuthHandler hook is imported from auth/supabase-manager.js
 
-// Supabase image upload hook for file input
+// Supabase image upload hook for file input (legacy)
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
+
+// R2 image upload hook for file input (new - uses Cloudflare R2)
+Hooks.R2ImageUpload = R2ImageUpload;
 
 
 
