@@ -11,7 +11,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Groups
-  alias EventasaurusApp.Venues
   alias EventasaurusWeb.Services.UnsplashService
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Services.DefaultImagesService
@@ -28,15 +27,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
     event = Events.get_event_by_slug(slug)
 
     if event do
-      venues = Venues.list_venues()
-
       # Ensure we have a proper User struct for authorization
       case ensure_user_struct(socket.assigns[:auth_user]) do
         {:ok, user} ->
           # Check if user can edit this event
           if Events.user_can_manage_event?(user, event) do
-            # Load groups that the user is a member of or created
-            user_groups = Groups.list_user_groups(user)
             changeset = Events.change_event(event)
 
             # Convert the event to a changeset
@@ -48,33 +43,25 @@ defmodule EventasaurusWeb.EventLive.Edit do
             # Check if this is a virtual event
             is_virtual = event.venue_id == nil
 
-            # Load venue data if the event has a venue
+            # Load venue data from preloaded venue (already loaded by get_event_by_slug)
             {venue_name, venue_address, venue_city, venue_country, venue_latitude,
              venue_longitude} =
-              if event.venue_id do
-                case Venues.get_venue(event.venue_id) do
-                  nil ->
-                    {nil, nil, nil, nil, nil, nil}
+              case event.venue do
+                nil ->
+                  {nil, nil, nil, nil, nil, nil}
 
-                  venue ->
-                    {
-                      venue.name,
-                      venue.address,
-                      EventasaurusApp.Venues.Venue.city_name(venue),
-                      EventasaurusApp.Venues.Venue.country_name(venue),
-                      venue.latitude,
-                      venue.longitude
-                    }
-                end
-              else
-                {nil, nil, nil, nil, nil, nil}
+                venue ->
+                  {
+                    venue.name,
+                    venue.address,
+                    EventasaurusApp.Venues.Venue.city_name(venue),
+                    EventasaurusApp.Venues.Venue.country_name(venue),
+                    venue.latitude,
+                    venue.longitude
+                  }
               end
 
-            # Legacy date polling data loading removed - using generic polling system
-
-            # Legacy polling deadline extraction removed - using generic polling system
-
-            # Determine setup path based on existing event properties (legacy date polling removed)
+            # Determine setup path based on existing event properties
             setup_path =
               cond do
                 event.is_ticketed && Map.get(event, :requires_threshold, false) -> "threshold"
@@ -82,37 +69,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 true -> "confirmed"
               end
 
-            # Load existing tickets for the event
+            # Load existing tickets for the event (needed for form state)
             existing_tickets = Ticketing.list_tickets_for_event(event.id)
 
             # Fix is_ticketed flag based on actual ticket existence
             actual_is_ticketed = length(existing_tickets) > 0
 
-            # Load recent locations for the user (excluding current event)
-            recent_locations =
-              Events.get_recent_locations_for_user(user.id,
-                limit: 5,
-                exclude_event_ids: [event.id]
-              )
-
-            # Get the Supabase access token from session
-            access_token = get_current_valid_token(session)
-
-            # Log warning if token is missing
-            if is_nil(access_token) do
-              require Logger
-
-              Logger.warning(
-                "Supabase access token is nil for user #{user.id}. Image uploads will not work."
-              )
-            end
-
             # Set up the socket with all required assigns
+            # Use assign_async for independent data that can load in parallel
             socket =
               socket
               |> assign(:event, event)
-              |> assign(:venues, venues)
-              |> assign(:user_groups, user_groups)
               |> assign(:form, to_form(changeset))
               |> assign(:changeset, changeset)
               |> assign(:user, user)
@@ -132,7 +99,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "venue_country" => venue_country,
                 "venue_latitude" => venue_latitude,
                 "venue_longitude" => venue_longitude,
-                # Legacy date polling form data removed
                 "polling_deadline" =>
                   if(event.polling_deadline,
                     do: DateTime.to_iso8601(event.polling_deadline),
@@ -158,7 +124,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:page, 1)
               |> assign(:per_page, 20)
               |> assign_new(:image_tab, fn -> "unsplash" end)
-              # Legacy date polling disabled
               |> assign(:enable_date_polling, false)
               |> assign(:setup_path, setup_path)
               |> assign(:mode, "compact")
@@ -166,20 +131,49 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
-              |> assign(:supabase_access_token, access_token || "")
               # Ticketing assigns
               |> assign(:tickets, existing_tickets)
               |> assign(:show_ticket_modal, false)
               |> assign(:ticket_form_data, %{})
               |> assign(:editing_ticket_id, nil)
               |> assign(:show_additional_options, false)
-              # Recent locations assigns
-              |> assign(:recent_locations, recent_locations)
+              # Recent locations - initialize with empty, will be loaded async
+              |> assign(:recent_locations, [])
               |> assign(:show_recent_locations, false)
-              |> assign(:filtered_recent_locations, recent_locations)
+              |> assign(:filtered_recent_locations, [])
               # Rich data import assigns
               |> assign(:show_rich_data_import, false)
               |> assign(:rich_external_data, event.rich_external_data || %{})
+              # User groups - initialize with empty, will be loaded async
+              |> assign(:user_groups, [])
+              # Supabase token - initialize empty, will be loaded async
+              |> assign(:supabase_access_token, "")
+              # Use assign_async for independent data loads (non-blocking)
+              |> assign_async(:async_user_groups, fn ->
+                {:ok, %{async_user_groups: Groups.list_user_groups(user)}}
+              end)
+              |> assign_async(:async_recent_locations, fn ->
+                locations =
+                  Events.get_recent_locations_for_user(user.id,
+                    limit: 5,
+                    exclude_event_ids: [event.id]
+                  )
+
+                {:ok, %{async_recent_locations: locations}}
+              end)
+              |> assign_async(:async_supabase_token, fn ->
+                token = get_current_valid_token(session)
+
+                if is_nil(token) do
+                  require Logger
+
+                  Logger.warning(
+                    "Supabase access token is nil for user #{user.id}. Image uploads will not work."
+                  )
+                end
+
+                {:ok, %{async_supabase_token: token || ""}}
+              end)
 
             {:ok, socket}
           else
@@ -1448,6 +1442,44 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> assign(:selected_venue_address, url)
     |> assign(:is_virtual, true)
     |> assign(:show_recent_locations, false)
+  end
+
+  # ========== Async Result Handlers ==========
+
+  @impl true
+  def handle_async(:async_user_groups, {:ok, %{async_user_groups: groups}}, socket) do
+    {:noreply, assign(socket, :user_groups, groups)}
+  end
+
+  @impl true
+  def handle_async(:async_user_groups, {:exit, _reason}, socket) do
+    # On failure, keep the empty list
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_async(:async_recent_locations, {:ok, %{async_recent_locations: locations}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:recent_locations, locations)
+     |> assign(:filtered_recent_locations, locations)}
+  end
+
+  @impl true
+  def handle_async(:async_recent_locations, {:exit, _reason}, socket) do
+    # On failure, keep the empty lists
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_async(:async_supabase_token, {:ok, %{async_supabase_token: token}}, socket) do
+    {:noreply, assign(socket, :supabase_access_token, token)}
+  end
+
+  @impl true
+  def handle_async(:async_supabase_token, {:exit, _reason}, socket) do
+    # On failure, keep the empty string - image uploads won't work but page still loads
+    {:noreply, socket}
   end
 
   # ========== Info Handlers ==========

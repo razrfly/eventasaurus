@@ -67,7 +67,7 @@ defmodule EventasaurusDiscovery.Sources.Source do
     |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i,
       message: "must start with http:// or https://"
     )
-    |> validate_format(:logo_url, ~r/^https?:\/\/\S+$/i, message: "must be a valid URL")
+    |> validate_logo_url()
     |> validate_number(:priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> validate_domains()
     |> unique_constraint(:slug)
@@ -98,6 +98,32 @@ defmodule EventasaurusDiscovery.Sources.Source do
                   "Allowed domains: #{Enum.join(@allowed_domains, ", ")}"
             ]
           end
+      end
+    end)
+  end
+
+  # Validates logo_url - accepts either full URLs (http/https) or local paths (/uploads/...)
+  defp validate_logo_url(changeset) do
+    validate_change(changeset, :logo_url, fn :logo_url, url ->
+      cond do
+        # Empty or nil is valid (logo is optional)
+        is_nil(url) or url == "" ->
+          []
+
+        # Full URLs starting with http:// or https://
+        String.match?(url, ~r/^https?:\/\/\S+$/i) ->
+          []
+
+        # Local paths starting with /uploads/
+        String.starts_with?(url, "/uploads/") ->
+          []
+
+        # Local paths starting with just /
+        String.starts_with?(url, "/") ->
+          []
+
+        true ->
+          [logo_url: "must be a valid URL or local path"]
       end
     end)
   end

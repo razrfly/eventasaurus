@@ -27,6 +27,10 @@ let supabaseClient = null;
 // Define LiveView hooks here
 import SupabaseImageUpload from "./supabase_upload";
 import R2ImageUpload from "./r2_upload";
+
+// Import unified uploaders for Phoenix LiveView external uploads
+import Uploaders from "./uploaders";
+
 let Hooks = {};
 
 
@@ -82,7 +86,8 @@ const AllHooks = {
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
-  hooks: AllHooks
+  hooks: AllHooks,
+  uploaders: Uploaders  // Unified R2 uploaders for external uploads
 });
 
 // Show progress bar on live navigation and form submits

@@ -23,10 +23,11 @@ defmodule EventasaurusWeb do
     base_paths = ~w(assets fonts images favicon.ico robots.txt)
 
     if Mix.env() == :dev do
-      # No themes in dev - handled by route
-      base_paths
+      # Include uploads in dev - local file uploads storage
+      ["uploads" | base_paths]
     else
       # Include themes in prod - served from priv/static
+      # Uploads go to R2 in prod, so not needed here
       ["themes" | base_paths]
     end
   end
