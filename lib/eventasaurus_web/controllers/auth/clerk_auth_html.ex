@@ -70,8 +70,8 @@ defmodule EventasaurusWeb.Auth.ClerkAuthHTML do
                 mounted = true;
                 container.innerHTML = ''; // Clear loading state
                 window.Clerk.mountSignIn(container, {
-                  afterSignInUrl: '<%= ~p"/auth/clerk/callback" %>',
-                  afterSignUpUrl: '<%= ~p"/auth/clerk/callback" %>',
+                  afterSignInUrl: '<%= ~p"/auth/callback" %>',
+                  afterSignUpUrl: '<%= ~p"/auth/callback" %>',
                   signUpUrl: '<%= ~p"/auth/register" %>',
                   appearance: {
                     elements: {
@@ -174,8 +174,8 @@ defmodule EventasaurusWeb.Auth.ClerkAuthHTML do
                 mounted = true;
                 container.innerHTML = ''; // Clear loading state
                 window.Clerk.mountSignUp(container, {
-                  afterSignInUrl: '<%= ~p"/auth/clerk/callback" %>',
-                  afterSignUpUrl: '<%= ~p"/auth/clerk/callback" %>',
+                  afterSignInUrl: '<%= ~p"/auth/callback" %>',
+                  afterSignUpUrl: '<%= ~p"/auth/callback" %>',
                   signInUrl: '<%= ~p"/auth/login" %>',
                   appearance: {
                     elements: {

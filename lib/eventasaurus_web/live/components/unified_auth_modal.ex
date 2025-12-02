@@ -29,7 +29,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
 
-  alias EventasaurusApp.Auth
+  alias EventasaurusApp.Services.UserRegistrationService
 
   @impl true
   def mount(socket) do
@@ -569,26 +569,23 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp handle_interest_magic_link(socket, form_data) do
     email = form_data["email"]
+    # Use email prefix as name for interest registration
+    name = email |> String.split("@") |> List.first()
+    event_id = socket.assigns.event.id
 
-    # Include event ID in user metadata for post-auth processing
-    user_metadata = %{
-      "name" => email |> String.split("@") |> List.first(),
-      "pending_interest_event_id" => socket.assigns.event.id
-    }
-
-    case Auth.send_magic_link(email, user_metadata) do
-      {:ok, _} ->
-        send(socket.parent_pid, {:magic_link_sent, email})
+    case UserRegistrationService.register_user(email, name, :interest, event_id: event_id) do
+      {:ok, %{user: _user, participant: _participant}} ->
+        send(socket.parent_pid, {:interest_registered, email})
 
         {:noreply,
          socket
          |> assign(:loading, false)
-         |> assign(:step, :check_email)
+         |> assign(:step, :success)
          |> assign(:email, email)}
 
       {:error, reason} ->
         error_message = format_auth_error(reason)
-        send(socket.parent_pid, {:magic_link_error, error_message})
+        send(socket.parent_pid, {:interest_error, error_message})
 
         {:noreply, assign(socket, :loading, false)}
     end
@@ -684,9 +681,14 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   defp format_auth_error(reason) do
     case reason do
       %{message: msg} -> msg
+      %Ecto.Changeset{} = changeset ->
+        Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+        |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
+        |> Enum.join("; ")
       %{status: 422} -> "Invalid email address. Please check and try again."
       %{status: 429} -> "Too many requests. Please wait a moment and try again."
-      _ -> "Unable to send magic link. Please try again."
+      :already_registered -> "You're already registered for this event."
+      _ -> "Unable to complete registration. Please try again."
     end
   end
 

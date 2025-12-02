@@ -1242,9 +1242,7 @@ defmodule EventasaurusApp.Ticketing do
   """
   def create_guest_multi_ticket_checkout_session(name, email, order_items)
       when is_list(order_items) and length(order_items) > 0 do
-    alias EventasaurusApp.Auth.SupabaseSync
     alias EventasaurusApp.Accounts
-    alias EventasaurusApp.Events
     require Logger
 
     Logger.info("Starting guest multi-ticket checkout session creation", %{
@@ -1263,82 +1261,27 @@ defmodule EventasaurusApp.Ticketing do
            else
              event_id = hd(event_ids)
 
-             # Check if user exists in our local database first
-             existing_user = Accounts.get_user_by_email(email)
-
+             # Check if user exists in our local database first, or create them
              user =
-               case existing_user do
+               case Accounts.get_user_by_email(email) do
                  nil ->
-                   # User doesn't exist locally, check Supabase and create if needed
-                   Logger.info("User not found locally, attempting Supabase user creation/lookup")
+                   # User doesn't exist locally, create them
+                   Logger.info("User not found locally, creating new user")
 
-                   case Events.create_or_find_supabase_user(email, name) do
-                     {:ok, supabase_user} ->
-                       Logger.info("Successfully created/found user in Supabase")
-                       # Sync with local database
-                       case SupabaseSync.sync_user(supabase_user) do
-                         {:ok, user} ->
-                           Logger.info("Successfully synced user to local database", %{
-                             user_id: user.id
-                           })
-
-                           user
-
-                         {:error, reason} ->
-                           Logger.error("Failed to sync user to local database", %{
-                             reason: inspect(reason)
-                           })
-
-                           Repo.rollback(reason)
-                       end
-
-                     {:error, :user_confirmation_required} ->
-                       # User was created via OTP but email confirmation is required
-                       Logger.info(
-                         "User created via OTP but email confirmation required, creating temporary local user record"
-                       )
-
-                       # Create user with temporary supabase_id - will be updated when they confirm email
-                       temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
-
-                       case Accounts.create_user(%{
-                              email: email,
-                              name: name,
-                              # Temporary ID - will be updated when user confirms email
-                              supabase_id: temp_supabase_id
-                            }) do
-                         {:ok, user} ->
-                           Logger.info("Successfully created temporary local user", %{
-                             user_id: user.id,
-                             temp_supabase_id: temp_supabase_id
-                           })
-
-                           user
-
-                         {:error, reason} ->
-                           Logger.error("Failed to create temporary local user", %{
-                             reason: inspect(reason)
-                           })
-
-                           Repo.rollback(reason)
-                       end
-
-                     {:error, :invalid_user_data} ->
-                       Logger.error("Invalid user data from Supabase after OTP creation")
-                       Repo.rollback(:invalid_user_data)
+                   case Accounts.create_user(%{email: email, name: name}) do
+                     {:ok, user} ->
+                       Logger.info("Successfully created local user", %{user_id: user.id})
+                       user
 
                      {:error, reason} ->
-                       Logger.error("Failed to create/find user in Supabase", %{
-                         reason: inspect(reason)
-                       })
-
+                       Logger.error("Failed to create local user", %{reason: inspect(reason)})
                        Repo.rollback(reason)
                    end
 
-                 user ->
+                 existing_user ->
                    # User exists locally
-                   Logger.debug("Using existing local user", %{user_id: user.id})
-                   user
+                   Logger.debug("Using existing local user", %{user_id: existing_user.id})
+                   existing_user
                end
 
              # Now create the multi-ticket checkout session

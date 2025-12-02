@@ -2,8 +2,8 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
   @moduledoc """
   Unified service for all user registration flows across the application.
 
-  This service handles user creation, Supabase synchronization, and context-specific 
-  registration for different entry points (event registration, voting, ticket purchase, interest).
+  This service handles user creation and context-specific registration
+  for different entry points (event registration, voting, ticket purchase, interest).
 
   ## Registration Contexts
 
@@ -16,13 +16,12 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
 
       iex> UserRegistrationService.register_user("john@example.com", "John Doe", :event_registration, event_id: 123)
       {:ok, %{user: %User{}, participant: %EventParticipant{}}}
-      
+
       iex> UserRegistrationService.register_user("jane@example.com", "Jane Doe", :voting, poll_id: 456, votes: %{})
       {:ok, %{user: %User{}, votes_saved: true}}
   """
 
   alias EventasaurusApp.{Repo, Accounts, Events}
-  alias EventasaurusApp.Auth.SupabaseSync
 
   require Logger
 
@@ -90,8 +89,8 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
     # Check if user exists in our local database first
     case Accounts.get_user_by_email(email) do
       nil ->
-        Logger.info("User not found locally, attempting Supabase user creation/lookup")
-        create_user_via_supabase(email, name, opts)
+        Logger.info("User not found locally, creating new user")
+        create_user_locally(email, name, opts)
 
       existing_user ->
         Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
@@ -191,33 +190,15 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
 
   # Private helper functions
 
-  defp create_user_via_supabase(email, name, _opts) do
-    case Events.create_or_find_supabase_user(email, name) do
-      {:ok, supabase_user} ->
-        Logger.info("Successfully created/found user in Supabase")
-        sync_supabase_user(supabase_user)
-
-      {:error, :user_confirmation_required} ->
-        handle_confirmation_required(email, name, nil)
-
-      {:error, :invalid_user_data} ->
-        Logger.error("Invalid user data from Supabase after OTP creation")
-        {:error, :invalid_user_data}
-
-      {:error, reason} ->
-        Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
-        {:error, reason}
-    end
-  end
-
-  defp sync_supabase_user(supabase_user) do
-    case SupabaseSync.sync_user(supabase_user) do
+  defp create_user_locally(email, name, _opts) do
+    # Create user directly in the local database
+    case Accounts.create_user(%{email: email, name: name}) do
       {:ok, user} ->
-        Logger.info("Successfully synced user to local database", %{user_id: user.id})
+        Logger.info("Successfully created local user", %{user_id: user.id})
         {:ok, user}
 
       {:error, reason} ->
-        Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+        Logger.error("Failed to create local user", %{reason: inspect(reason)})
         {:error, reason}
     end
   end

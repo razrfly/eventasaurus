@@ -4,7 +4,7 @@ defmodule DevSeeds.Helpers do
   """
 
   import EventasaurusApp.Factory
-  alias EventasaurusApp.Auth.{Client, ServiceRoleHelper, SeedUserManager}
+  alias EventasaurusApp.Auth.SeedUserManager
   
   @doc """
   Print a colorful status message
@@ -52,87 +52,53 @@ defmodule DevSeeds.Helpers do
   end
   
   @doc """
-  Create a Supabase auth user if service role key is available
+  Prepare user attributes for database insertion.
+
+  Note: With Clerk authentication, we no longer create Supabase auth users.
+  Authentication is handled by Clerk, and users authenticate through Clerk's UI.
   """
   def maybe_create_auth_user(attrs) do
-    if ServiceRoleHelper.service_role_key_available?() && Mix.env() == :dev do
-      email = Map.get(attrs, :email)
-      password = Map.get(attrs, :password, "testpass123")
-      name = Map.get(attrs, :name, "Test User")
-      
-      case Client.admin_create_user(email, password, %{name: name}, true) do
-        {:ok, auth_user} ->
-          # Update attrs with real Supabase ID and remove password
-          attrs
-          |> Map.put(:supabase_id, auth_user["id"])
-          |> Map.delete(:password)
-        
-        {:error, %{message: message}} ->
-          if String.contains?(message, "already been registered") do
-            log("Auth user already exists for #{email}", :yellow)
-          else
-            log("Could not create auth for #{email}: #{message}", :red)
-          end
-          Map.delete(attrs, :password)
-          
-        {:error, error} ->
-          log("Auth creation failed for #{email}: #{inspect(error)}", :red)
-          Map.delete(attrs, :password)
-      end
-    else
-      # No service role key or not in dev, skip auth creation
-      attrs
-      |> Map.put(:supabase_id, Ecto.UUID.generate())  # Use a proper UUID instead of fake prefix
-      |> Map.delete(:password)
-    end
+    # Simply remove password - authentication is handled by Clerk
+    Map.delete(attrs, :password)
   end
 
   @doc """
-  Create multiple users with progress tracking and optional Supabase auth
+  Create multiple users with progress tracking.
+
+  Note: With Clerk authentication, users are created in the local database only.
+  Authentication is handled by Clerk, so users should authenticate through Clerk's UI.
   """
   def create_users(count, attrs_fn \\ fn _ -> %{} end) do
     section("Creating Users")
-    
-    if ServiceRoleHelper.service_role_key_available?() && Mix.env() == :dev do
-      log("🔐 Creating users with Supabase authentication...")
-    else
-      log("⚠️  No service role key found - creating users without auth")
-      ServiceRoleHelper.ensure_available()
-    end
-    
+
+    log("Creating local database users (authentication via Clerk)...")
+
     # Prepare all user attributes
     users_attrs = Enum.map(1..count, fn i ->
-      attrs = attrs_fn.(i)
-      
-      # Ensure password is set for test accounts
-      case Map.get(attrs, :email) do
-        "admin@example.com" -> Map.put_new(attrs, :password, "testpass123")
-        "demo@example.com" -> Map.put_new(attrs, :password, "testpass123")
-        _ -> Map.put_new(attrs, :password, "testpass123")  # Default password for all dev users
-      end
+      attrs_fn.(i)
     end)
-    
+
     # Batch create all users
     {successful_users, failed_users} = SeedUserManager.batch_create_users(users_attrs)
-    
+
     # Log special accounts
     Enum.each(successful_users, fn user ->
       case user.email do
         "admin@example.com" ->
-          log("📧 Test account created: admin@example.com / testpass123", :green)
+          log("📧 Test account created: admin@example.com (auth via Clerk)", :green)
         "demo@example.com" ->
-          log("📧 Test account created: demo@example.com / testpass123", :green)
+          log("📧 Test account created: demo@example.com (auth via Clerk)", :green)
         _ -> nil
       end
     end)
-    
+
     if length(failed_users) > 0 do
       error("Failed to create #{length(failed_users)} users")
       Enum.each(failed_users, fn {attrs, reason} ->
         error("  - #{Map.get(attrs, :email)}: #{inspect(reason)}")
       end)
     end
-    
+
     success("Created #{length(successful_users)} users successfully")
     successful_users
   end

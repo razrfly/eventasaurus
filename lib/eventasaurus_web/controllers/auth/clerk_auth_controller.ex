@@ -74,10 +74,19 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
   Clear server session and Clerk's cookies.
   """
   def logout(conn, _params) do
+    # Cookie deletion requires matching attributes from when they were set
+    # Clerk sets cookies with secure: true in production
+    cookie_opts = [
+      path: "/",
+      http_only: true,
+      secure: Application.get_env(:eventasaurus, :environment) == :prod,
+      same_site: "Lax"
+    ]
+
     conn
     |> configure_session(drop: true)
-    |> delete_resp_cookie("__session", path: "/")
-    |> delete_resp_cookie("__client_uat", path: "/")
+    |> delete_resp_cookie("__session", cookie_opts)
+    |> delete_resp_cookie("__client_uat", cookie_opts)
     |> put_flash(:info, "You have been logged out")
     |> redirect(to: ~p"/")
   end

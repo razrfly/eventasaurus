@@ -189,7 +189,14 @@ clerk_configured =
     clerk_domain != nil
 
 if not clerk_configured do
-  IO.warn("Clerk is not configured. Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables.")
+  if config_env() == :prod do
+    raise """
+    Clerk is not configured but is required in production.
+    Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables.
+    """
+  else
+    IO.warn("Clerk is not configured. Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables.")
+  end
 end
 
 config :eventasaurus, :clerk,
@@ -493,9 +500,10 @@ if config_env() == :prod do
       port: port,
       # Increase max header length for Clerk JWT tokens in cookies
       # Default is 8KB, Clerk tokens can exceed this when combined with Phoenix session
+      # 16KB is sufficient for Clerk JWTs (typically 2-4KB) with session overhead
       # Cowboy protocol_options for HTTP/1.1
       protocol_options: [
-        max_header_value_length: 32_768,
+        max_header_value_length: 16_384,
         max_headers: 100
       ]
     ],
