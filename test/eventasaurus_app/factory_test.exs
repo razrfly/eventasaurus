@@ -14,7 +14,6 @@ defmodule EventasaurusApp.FactoryTest do
       assert user.id
       assert user.name =~ "Test User"
       assert user.email =~ "@example.com"
-      assert user.supabase_id =~ "supabase_user_"
     end
 
     test "creates valid venue" do

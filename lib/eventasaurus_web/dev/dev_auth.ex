@@ -32,7 +32,6 @@ defmodule EventasaurusWeb.Dev.DevAuth do
           from(u in EventasaurusApp.Accounts.User,
             left_join: eu in EventasaurusApp.Events.EventUser,
             on: u.id == eu.user_id and eu.role in ["owner", "organizer"],
-            where: not is_nil(u.supabase_id) and not like(u.supabase_id, "pending%"),
             group_by: u.id,
             select: {u, count(eu.id)},
             order_by: [desc: count(eu.id), asc: u.email]

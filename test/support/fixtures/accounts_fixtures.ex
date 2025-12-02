@@ -15,7 +15,6 @@ defmodule EventasaurusApp.AccountsFixtures do
       |> Enum.into(%{
         email: "test#{System.unique_integer([:positive])}@example.com",
         name: "Test User #{System.unique_integer([:positive])}",
-        supabase_id: "test-supabase-id-#{System.unique_integer([:positive])}",
         profile_public: true,
         default_currency: "USD"
       })

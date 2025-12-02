@@ -8,7 +8,6 @@ defmodule EventasaurusWeb.SettingsLiveTest do
   setup %{conn: conn} do
     # Create a test user
     user_attrs = %{
-      supabase_id: "test_user_id",
       email: "test@example.com",
       name: "Test User"
     }

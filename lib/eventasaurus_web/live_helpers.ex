@@ -22,15 +22,10 @@ defmodule EventasaurusWeb.LiveHelpers do
       iex> ensure_user_struct(%Accounts.User{id: 1})
       {:ok, %Accounts.User{id: 1}}
 
-      iex> ensure_user_struct(%{"id" => "supabase-id", "email" => "test@example.com"})
+      iex> ensure_user_struct(%Accounts.User{id: 1, email: "test@example.com"})
       {:ok, %Accounts.User{...}}
   """
   def ensure_user_struct(nil), do: {:error, :no_user}
   def ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-
-  def ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    Accounts.find_or_create_from_supabase(supabase_user)
-  end
-
   def ensure_user_struct(_), do: {:error, :invalid_user_data}
 end

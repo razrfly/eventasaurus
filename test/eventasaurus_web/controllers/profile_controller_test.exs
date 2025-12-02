@@ -233,8 +233,7 @@ defmodule EventasaurusWeb.ProfileControllerTest do
   defp user_fixture(attrs \\ %{}) do
     default_attrs = %{
       email: "test#{System.unique_integer()}@example.com",
-      name: "Test User",
-      supabase_id: "test_#{System.unique_integer()}"
+      name: "Test User"
     }
 
     attrs = Map.merge(default_attrs, attrs)

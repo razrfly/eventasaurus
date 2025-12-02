@@ -27,7 +27,7 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     assigns =
       assigns
       |> assign_defaults()
-      |> assign(:resolved_avatar_url, resolve(assigns.group.avatar_url))
+      |> assign(:resolved_avatar_url, resolve(assigns[:group] && assigns.group.avatar_url))
 
     ~H"""
     <div class={["inline-block relative", @size, @class]}>
@@ -57,7 +57,7 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
     assigns =
       assigns
       |> assign_defaults()
-      |> assign(:resolved_cover_url, resolve(assigns.group.cover_image_url))
+      |> assign(:resolved_cover_url, resolve(assigns[:group] && assigns.group.cover_image_url))
 
     ~H"""
     <div class={["relative bg-gray-200 dark:bg-gray-700 overflow-hidden", @aspect_ratio, @class]}>

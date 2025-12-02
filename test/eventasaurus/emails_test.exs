@@ -306,7 +306,6 @@ defmodule Eventasaurus.EmailsTest do
   # Simple user fixture using the actual Accounts module
   defp user_fixture(attrs \\ %{}) do
     default_attrs = %{
-      supabase_id: "test-sb-#{System.unique_integer([:positive])}",
       email: "user-#{System.unique_integer([:positive])}@example.com",
       username: "user#{System.unique_integer([:positive])}",
       name: "Test User"

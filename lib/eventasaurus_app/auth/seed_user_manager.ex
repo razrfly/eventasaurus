@@ -15,8 +15,9 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   Returns {:ok, user} or {:error, reason} with detailed logging.
 
   With Clerk authentication, users created here will need to authenticate
-  through Clerk separately. The supabase_id field is no longer required.
+  through Clerk separately.
   """
+  @spec create_user(map()) :: {:ok, Accounts.User.t()} | {:error, Ecto.Changeset.t()}
   def create_user(attrs) do
     email = Map.get(attrs, :email)
     Logger.info("Creating user: #{email}")
@@ -125,10 +126,8 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
 
   @doc """
   Provides a summary of seeded users.
-
-  Note: With Clerk authentication, supabase_id is no longer meaningful.
-  Users authenticate through Clerk regardless of database state.
   """
+  @spec summarize_users() :: %{total: non_neg_integer(), users: [String.t()]}
   def summarize_users do
     users = Repo.all(Accounts.User)
 

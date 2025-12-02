@@ -580,7 +580,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
         {:noreply,
          socket
          |> assign(:loading, false)
-         |> assign(:step, :success)
+         |> assign(:step, :check_email)
          |> assign(:email, email)}
 
       {:error, reason} ->
