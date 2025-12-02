@@ -414,6 +414,15 @@ defmodule EventasaurusWeb.Router do
     post "/logout", Auth.AuthController, :logout
   end
 
+  # Clerk-specific auth routes (only active when Clerk is enabled)
+  scope "/auth/clerk", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/callback", Auth.ClerkAuthController, :callback
+    get "/profile", Auth.ClerkAuthController, :profile
+    get "/logout", Auth.ClerkAuthController, :logout
+  end
+
   # Development-only quick login route
   if Mix.env() == :dev do
     scope "/dev", EventasaurusWeb do
@@ -567,7 +576,8 @@ defmodule EventasaurusWeb.Router do
 
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login
-      get "/register", PageController, :redirect_to_auth_register
+      # /register without event_id goes to invite-only page (registration is invite-only)
+      get "/register", PageController, :redirect_to_invite_only
 
       # Performer profile pages
       live "/performers/:slug", PerformerLive.Show, :show

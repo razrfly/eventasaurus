@@ -5,8 +5,14 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   This module provides plugs for handling user authentication in controllers.
   It manages the dual user assignment pattern:
 
-  - `conn.assigns.auth_user`: Raw authentication data from Supabase (internal use only)
+  - `conn.assigns.auth_user`: Raw authentication data from Supabase or Clerk (internal use only)
   - Controllers should process this into a local User struct for business logic
+
+  ## Authentication Providers
+
+  This plug supports both Supabase and Clerk authentication:
+  - When CLERK_ENABLED=true, uses Clerk JWT tokens from `__session` cookie
+  - Otherwise, uses Supabase session tokens
 
   ## Available Plugs
 
@@ -25,6 +31,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     statics: EventasaurusWeb.static_paths()
 
   alias EventasaurusApp.Auth
+  alias EventasaurusApp.Auth.AuthProvider
   alias EventasaurusApp.Auth.Client
 
   require Logger
@@ -36,9 +43,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   @doc """
   Fetches the authenticated user from the session and assigns to `conn.assigns.auth_user`.
 
-  This plug extracts the access token from the session and fetches the user data
-  from Supabase. Controllers should process this raw data into a local User struct
-  for business logic operations.
+  This plug supports both Supabase and Clerk authentication:
+  - When Clerk is enabled (CLERK_ENABLED=true), extracts JWT from `__session` cookie
+  - Otherwise, uses Supabase session tokens
 
   ## Usage
 
@@ -50,10 +57,56 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       # Dev auth plug already handled everything
       conn
     else
-      # Normal production authentication flow
-      conn = maybe_refresh_token_if_needed(conn)
-      user = Auth.get_current_user(conn)
-      assign(conn, :auth_user, user)
+      # Check which auth provider is active
+      case AuthProvider.active_provider() do
+        :clerk ->
+          fetch_clerk_auth_user(conn)
+
+        :supabase ->
+          # Normal Supabase authentication flow
+          conn = maybe_refresh_token_if_needed(conn)
+          user = Auth.get_current_user(conn)
+          assign(conn, :auth_user, user)
+      end
+    end
+  end
+
+  # Clerk authentication flow
+  defp fetch_clerk_auth_user(conn) do
+    alias EventasaurusApp.Auth.Clerk.JWT
+
+    case get_clerk_token(conn) do
+      nil ->
+        assign(conn, :auth_user, nil)
+
+      token ->
+        case JWT.verify_token(token) do
+          {:ok, claims} ->
+            Logger.debug("Clerk token verified", %{
+              clerk_id: claims["sub"],
+              has_external_id: not is_nil(claims["external_id"])
+            })
+
+            assign(conn, :auth_user, claims)
+
+          {:error, reason} ->
+            Logger.debug("Clerk token verification failed: #{inspect(reason)}")
+            assign(conn, :auth_user, nil)
+        end
+    end
+  end
+
+  # Get Clerk token from cookie or Authorization header
+  defp get_clerk_token(conn) do
+    # Try Authorization header first (for API requests)
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token] ->
+        token
+
+      _ ->
+        # Fall back to __session cookie (for browser requests)
+        conn = fetch_cookies(conn)
+        conn.cookies["__session"]
     end
   end
 
@@ -89,8 +142,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      conn = maybe_proactive_refresh_token(conn)
-      conn
+      # Only refresh Supabase tokens - Clerk tokens are verified each request
+      case AuthProvider.active_provider() do
+        :supabase ->
+          maybe_proactive_refresh_token(conn)
+
+        :clerk ->
+          # Clerk doesn't need proactive token refresh
+          conn
+      end
     else
       conn
       |> maybe_store_return_to()
@@ -120,26 +180,34 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      conn = maybe_proactive_refresh_token_api(conn)
-      # Check if connection was halted by refresh
-      if conn.halted do
-        conn
-      else
-        # Enhanced: Validate JWT token integrity
-        case validate_jwt_token(conn) do
-          {:ok, conn} ->
+      case AuthProvider.active_provider() do
+        :supabase ->
+          conn = maybe_proactive_refresh_token_api(conn)
+          # Check if connection was halted by refresh
+          if conn.halted do
             conn
+          else
+            # Enhanced: Validate JWT token integrity
+            case validate_jwt_token(conn) do
+              {:ok, conn} ->
+                conn
 
-          {:error, _reason} ->
-            conn
-            |> put_status(:unauthorized)
-            |> Phoenix.Controller.json(%{
-              success: false,
-              error: "token_invalid",
-              message: "Authentication failed"
-            })
-            |> halt()
-        end
+              {:error, _reason} ->
+                conn
+                |> put_status(:unauthorized)
+                |> Phoenix.Controller.json(%{
+                  success: false,
+                  error: "token_invalid",
+                  message: "Authentication failed"
+                })
+                |> halt()
+            end
+          end
+
+        :clerk ->
+          # Clerk tokens were already verified in fetch_auth_user
+          # No additional validation needed
+          conn
       end
     else
       conn
@@ -650,8 +718,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
 
+  # Handle Supabase user data (has "id" key)
   defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
     EventasaurusApp.Accounts.find_or_create_from_supabase(supabase_user)
+  end
+
+  # Handle Clerk JWT claims (has "sub" key for Clerk user ID)
+  defp ensure_user_struct(%{"sub" => _clerk_id} = clerk_claims) do
+    alias EventasaurusApp.Auth.Clerk.Sync, as: ClerkSync
+    ClerkSync.sync_user(clerk_claims)
   end
 
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}

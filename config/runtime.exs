@@ -121,6 +121,53 @@ config :stripity_stripe,
   api_key: System.get_env("STRIPE_SECRET_KEY"),
   connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
 
+# Configure Clerk authentication
+# Clerk credentials are set in environment variables:
+#   CLERK_PUBLISHABLE_KEY - Frontend key (pk_test_... or pk_live_...)
+#   CLERK_SECRET_KEY - Backend key (sk_test_... or sk_live_...)
+clerk_publishable_key = System.get_env("CLERK_PUBLISHABLE_KEY")
+clerk_secret_key = System.get_env("CLERK_SECRET_KEY")
+
+# Extract Clerk domain from publishable key
+# Format: pk_test_<base64url-encoded-domain>$ or pk_live_<base64url-encoded-domain>$
+# The trailing $ is part of the base64 encoding, decoded result ends with $
+clerk_domain =
+  case clerk_publishable_key do
+    nil ->
+      nil
+
+    key ->
+      # Extract the base64 part after pk_test_/pk_live_
+      key
+      |> String.replace(~r/^pk_(test|live)_/, "")
+      |> Base.url_decode64(padding: false)
+      |> case do
+        {:ok, domain} -> String.trim_trailing(domain, "$")
+        :error -> nil
+      end
+  end
+
+# Determine if Clerk should be enabled
+# Enabled if both keys are set and we successfully extracted the domain
+clerk_enabled =
+  clerk_publishable_key != nil and
+    clerk_secret_key != nil and
+    clerk_domain != nil and
+    System.get_env("CLERK_ENABLED", "false") == "true"
+
+config :eventasaurus, :clerk,
+  enabled: clerk_enabled,
+  publishable_key: clerk_publishable_key,
+  secret_key: clerk_secret_key,
+  domain: clerk_domain,
+  jwks_url: if(clerk_domain, do: "https://#{clerk_domain}/.well-known/jwks.json"),
+  authorized_parties: [
+    "http://localhost:4000",
+    "https://wombie.com",
+    "https://eventasaur.us"
+  ],
+  jwks_cache_ttl: 3_600_000
+
 # Configure Cloudflare Turnstile for bot protection
 config :eventasaurus, :turnstile,
   site_key: System.get_env("TURNSTILE_SITE_KEY"),
@@ -372,13 +419,7 @@ if config_env() == :prod do
     System.fetch_env!(var)
   end
 
-  # Validate required Supabase S3 credentials for sitemap storage
-  # TODO: Remove after sitemap migrated to R2 (Phase 3)
-  for var <- ~w(SUPABASE_S3_ACCESS_KEY_ID SUPABASE_S3_SECRET_ACCESS_KEY) do
-    System.fetch_env!(var)
-  end
-
-  # Validate required Cloudflare R2 credentials for file storage
+  # Validate required Cloudflare R2 credentials for file storage (uploads + sitemap)
   for var <- ~w(CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_SECRET_ACCESS_KEY) do
     System.fetch_env!(var)
   end

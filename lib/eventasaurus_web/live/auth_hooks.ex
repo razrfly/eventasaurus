@@ -5,8 +5,14 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   This module provides hooks for handling user authentication in LiveViews.
   It manages the dual user assignment pattern:
 
-  - `@auth_user`: Raw authentication data from Supabase (internal use only)
+  - `@auth_user`: Raw authentication data from Supabase or Clerk (internal use only)
   - `@user`: Processed local database User struct (for templates and business logic)
+
+  ## Clerk vs Supabase
+
+  When Clerk is enabled, authentication is handled via JWT tokens in the `__session`
+  cookie, verified and processed by `ClerkAuthPlug`. The session will contain
+  `clerk_user_id` instead of `access_token`.
 
   ## Usage
 
@@ -28,6 +34,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     statics: EventasaurusWeb.static_paths()
 
   alias EventasaurusApp.Auth
+  alias EventasaurusApp.Auth.AuthProvider
   alias EventasaurusApp.Auth.Client
   alias EventasaurusApp.Accounts
 
@@ -125,46 +132,79 @@ defmodule EventasaurusWeb.Live.AuthHooks do
           user -> user
         end
       else
-        # Normal production authentication flow
-        # Get the token from the session
-        token = session["access_token"]
-        refresh_token = session["refresh_token"]
-        token_expires_at = session["token_expires_at"]
-
-        if token do
-          # Check if we need to refresh the token
-          if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
-            case Client.refresh_token(refresh_token) do
-              {:ok, auth_data} ->
-                # Token refreshed successfully, extract and use the new token
-                new_access_token = get_token_value(auth_data, "access_token")
-
-                if new_access_token do
-                  # Use the NEW token to get user data
-                  Logger.debug("Token refreshed successfully in LiveView, using new token")
-                  get_user_with_token(new_access_token)
-                else
-                  # Couldn't extract new token, fall back to old token
-                  Logger.warning("Failed to extract new access token from refresh response")
-                  get_user_with_token(token)
-                end
-
-              {:error, reason} ->
-                # Refresh failed, token is likely expired or invalid
-                Logger.warning("Token refresh failed in LiveView: #{inspect(reason)}")
-                # Return nil to treat user as unauthenticated
-                # The next HTTP request will clear the session properly
-                nil
-            end
-          else
-            # Token not near expiry or no refresh token
-            get_user_with_token(token)
-          end
+        # Route to appropriate auth provider
+        if AuthProvider.clerk_enabled?() do
+          get_clerk_auth_user(session)
         else
-          nil
+          get_supabase_auth_user(session)
         end
       end
     end)
+  end
+
+  # Get auth user from Clerk session
+  # For Clerk, the plug stores the user in the session after sync
+  defp get_clerk_auth_user(session) do
+    # The ClerkAuthPlug syncs the user and stores the user_id in session
+    # We also check for a direct user_id from conn.assigns that might be passed through
+    cond do
+      # If we have a current_user_id from Clerk sync, load the user
+      user_id = session["current_user_id"] ->
+        case Accounts.get_user(user_id) do
+          nil -> nil
+          user -> user
+        end
+
+      # Fallback: check for Clerk claims in session (shouldn't happen in normal flow)
+      _clerk_claims = session["clerk_user_claims"] ->
+        # This would need ClerkSync, but normally the plug handles this
+        nil
+
+      true ->
+        nil
+    end
+  end
+
+  # Get auth user from Supabase session
+  defp get_supabase_auth_user(session) do
+    # Normal production authentication flow
+    # Get the token from the session
+    token = session["access_token"]
+    refresh_token = session["refresh_token"]
+    token_expires_at = session["token_expires_at"]
+
+    if token do
+      # Check if we need to refresh the token
+      if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+        case Client.refresh_token(refresh_token) do
+          {:ok, auth_data} ->
+            # Token refreshed successfully, extract and use the new token
+            new_access_token = get_token_value(auth_data, "access_token")
+
+            if new_access_token do
+              # Use the NEW token to get user data
+              Logger.debug("Token refreshed successfully in LiveView, using new token")
+              get_user_with_token(new_access_token)
+            else
+              # Couldn't extract new token, fall back to old token
+              Logger.warning("Failed to extract new access token from refresh response")
+              get_user_with_token(token)
+            end
+
+          {:error, reason} ->
+            # Refresh failed, token is likely expired or invalid
+            Logger.warning("Token refresh failed in LiveView: #{inspect(reason)}")
+            # Return nil to treat user as unauthenticated
+            # The next HTTP request will clear the session properly
+            nil
+        end
+      else
+        # Token not near expiry or no refresh token
+        get_user_with_token(token)
+      end
+    else
+      nil
+    end
   end
 
   defp get_user_with_token(token) do
@@ -209,9 +249,16 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   end
 
   # Helper function to ensure we have a proper User struct
-  # This handles the conversion from Supabase auth data to local User struct
+  # This handles the conversion from Supabase or Clerk auth data to local User struct
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
 
+  # Handle Clerk JWT claims (has "sub" key for Clerk user ID)
+  defp ensure_user_struct(%{"sub" => _clerk_id} = clerk_claims) do
+    alias EventasaurusApp.Auth.Clerk.Sync, as: ClerkSync
+    ClerkSync.sync_user(clerk_claims)
+  end
+
+  # Handle Supabase auth data (has "id" key for Supabase user ID)
   defp ensure_user_struct(%{"id" => supabase_id, "email" => email} = auth_data) do
     name = Map.get(auth_data, "user_metadata", %{}) |> Map.get("name", "")
 

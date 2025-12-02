@@ -11,6 +11,7 @@ import { SpotifySearch } from "./spotify_search";
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
 import { initSupabaseClient, SupabaseAuthHandler } from "./auth/supabase-manager";
+import { initClerkClient, ClerkAuthHandler } from "./auth/clerk-manager";
 import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
 import PaymentHooks from "./hooks/payment-business-logic";
@@ -49,7 +50,8 @@ Hooks.LanguageCookie = {
   }
 }
 
-// SupabaseAuthHandler hook is imported from auth/supabase-manager.js
+// Auth handlers are imported from auth/*.js
+// SupabaseAuthHandler for Supabase auth, ClerkAuthHandler for Clerk auth
 
 // Supabase image upload hook for file input (legacy)
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
@@ -60,6 +62,11 @@ Hooks.R2ImageUpload = R2ImageUpload;
 
 
 
+// Determine which auth handler to use based on meta tag configuration
+// The AuthHandler hook will be assigned based on which auth provider is active
+const authProvider = document.querySelector('meta[name="auth-provider"]')?.content;
+const AuthHandler = authProvider === 'clerk' ? ClerkAuthHandler : SupabaseAuthHandler;
+
 // Merge modular hooks with existing hooks
 const ModularHooks = {
   ...FormHooks,
@@ -68,7 +75,9 @@ const ModularHooks = {
   ...MediaHooks,
   ...PlacesHooks,
   ...DragDropHooks,
-  SupabaseAuthHandler, // Individual hook import
+  SupabaseAuthHandler, // Keep for backward compatibility
+  ClerkAuthHandler, // Clerk auth handler
+  AuthHandler, // Active auth handler based on provider config
   ChartHook, // Chart.js hook for Phase 6
   VenuesMap, // Interactive Google Maps for venues page
   MapboxVenuesMap // Interactive Mapbox map for venues page
@@ -221,9 +230,16 @@ document.addEventListener("DOMContentLoaded", function() {
   // Initialize PostHog analytics with privacy checks
   posthogManager.showPrivacyBanner();
   posthogManager.init();
-  
-  // Initialize Supabase client
-  initSupabaseClient();
+
+  // Initialize auth client based on provider
+  const authProvider = document.querySelector('meta[name="auth-provider"]')?.content;
+  if (authProvider === 'clerk') {
+    console.log('Initializing Clerk authentication...');
+    initClerkClient();
+  } else {
+    console.log('Initializing Supabase authentication...');
+    initSupabaseClient();
+  }
 });
 
 // Initialize modular components
