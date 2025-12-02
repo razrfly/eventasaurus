@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   require Logger
 
   alias EventasaurusApp.Auth
+  alias EventasaurusApp.Auth.AuthProvider
   alias EventasaurusApp.Services.Turnstile
 
   # Privacy-safe email logging for GDPR/CCPA compliance
@@ -19,6 +20,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   @doc """
   Show the login form.
+  Renders Clerk login page if Clerk is enabled, otherwise Supabase login.
   """
   def login(conn, params) do
     require Logger
@@ -46,94 +48,117 @@ defmodule EventasaurusWeb.Auth.AuthController do
           conn
       end
 
-    render(conn, :login)
+    # Render the appropriate login page based on auth provider
+    if AuthProvider.clerk_enabled?() do
+      render_clerk_login(conn)
+    else
+      render(conn, :login)
+    end
+  end
+
+  defp render_clerk_login(conn) do
+    conn
+    |> put_view(EventasaurusWeb.Auth.ClerkAuthHTML)
+    |> render(:clerk_login)
   end
 
   @doc """
   Process the login form submission.
+  Only available when Supabase is the auth provider (not Clerk).
   """
   def authenticate(conn, %{"user" => %{"email" => email, "password" => password} = user_params}) do
     require Logger
-    Logger.debug("Attempting login for email: #{email}")
 
-    # Extract remember_me preference, defaulting to true for better UX
-    remember_me =
-      case Map.get(user_params, "remember_me") do
-        "false" -> false
-        # Default to true - most users prefer to stay logged in
-        _ -> true
-      end
+    # Guard: This endpoint is Supabase-only
+    if AuthProvider.clerk_enabled?() do
+      Logger.warning("Supabase authenticate endpoint called while Clerk is enabled")
 
-    Logger.debug("Remember me preference: #{remember_me}")
+      conn
+      |> put_flash(:error, "This authentication method is not available.")
+      |> redirect(to: ~p"/auth/login")
+      |> Plug.Conn.halt()
+    else
+      Logger.debug("Attempting login for email: #{email}")
 
-    case Auth.authenticate(email, password) do
-      {:ok, auth_data} ->
-        Logger.debug("Authentication successful for user")
-
-        case Auth.store_session(conn, auth_data, remember_me) do
-          {:ok, conn} ->
-            # Fetch current user for the session
-            user = Auth.get_current_user(conn)
-            Logger.debug("User data fetched successfully")
-
-            # Check for stored return URL using the standard session key
-            return_to = get_session(conn, :user_return_to)
-            Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
-
-            conn
-            |> assign(:auth_user, user)
-            |> put_flash(:info, "You have been logged in successfully.")
-            |> delete_session(:user_return_to)
-            |> redirect(to: return_to || ~p"/dashboard")
-
-          {:error, reason} ->
-            Logger.error("Failed to store session: #{inspect(reason)}")
-
-            conn
-            |> put_flash(:error, "Error storing session data. Please contact support.")
-            |> render(:login)
+      # Extract remember_me preference, defaulting to true for better UX
+      remember_me =
+        case Map.get(user_params, "remember_me") do
+          "false" -> false
+          # Default to true - most users prefer to stay logged in
+          _ -> true
         end
 
-      # Special case for email already exists but with different Supabase ID
-      {:error, %Ecto.Changeset{errors: [email: {"has already been taken", _}]}} ->
-        Logger.error("Authentication failed: Email already exists with a different ID")
-        # Try to get the user by email and log them in directly
-        case EventasaurusApp.Accounts.get_user_by_email(email) do
-          nil ->
-            conn
-            |> put_flash(:error, "Authentication failed. Please try again.")
-            |> render(:login)
+      Logger.debug("Remember me preference: #{remember_me}")
 
-          user ->
-            Logger.info(
-              "Found existing user with email #{mask_email(email)}, logging in directly"
-            )
+      case Auth.authenticate(email, password) do
+        {:ok, auth_data} ->
+          Logger.debug("Authentication successful for user")
 
-            # Check for stored return URL using the standard session key
-            return_to = get_session(conn, :user_return_to)
-            Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
+          case Auth.store_session(conn, auth_data, remember_me) do
+            {:ok, conn} ->
+              # Fetch current user for the session
+              user = Auth.get_current_user(conn)
+              Logger.debug("User data fetched successfully")
 
-            conn
-            |> assign(:auth_user, user)
-            |> put_flash(:info, "You have been logged in successfully.")
-            |> delete_session(:user_return_to)
-            |> redirect(to: return_to || ~p"/dashboard")
-        end
+              # Check for stored return URL using the standard session key
+              return_to = get_session(conn, :user_return_to)
+              Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
 
-      {:error, reason} ->
-        Logger.error("Authentication failed: #{inspect(reason)}")
+              conn
+              |> assign(:auth_user, user)
+              |> put_flash(:info, "You have been logged in successfully.")
+              |> delete_session(:user_return_to)
+              |> redirect(to: return_to || ~p"/dashboard")
 
-        error_message =
-          case reason do
-            %{message: message} when is_binary(message) -> message
-            %{status: 401} -> "Invalid email or password. Please try again."
-            %{status: 404} -> "User not found. Please check your email or create an account."
-            _ -> "An error occurred during login. Please try again."
+            {:error, reason} ->
+              Logger.error("Failed to store session: #{inspect(reason)}")
+
+              conn
+              |> put_flash(:error, "Error storing session data. Please contact support.")
+              |> render(:login)
           end
 
-        conn
-        |> put_flash(:error, error_message)
-        |> render(:login)
+        # Special case for email already exists but with different Supabase ID
+        {:error, %Ecto.Changeset{errors: [email: {"has already been taken", _}]}} ->
+          Logger.error("Authentication failed: Email already exists with a different ID")
+          # Try to get the user by email and log them in directly
+          case EventasaurusApp.Accounts.get_user_by_email(email) do
+            nil ->
+              conn
+              |> put_flash(:error, "Authentication failed. Please try again.")
+              |> render(:login)
+
+            user ->
+              Logger.info(
+                "Found existing user with email #{mask_email(email)}, logging in directly"
+              )
+
+              # Check for stored return URL using the standard session key
+              return_to = get_session(conn, :user_return_to)
+              Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
+
+              conn
+              |> assign(:auth_user, user)
+              |> put_flash(:info, "You have been logged in successfully.")
+              |> delete_session(:user_return_to)
+              |> redirect(to: return_to || ~p"/dashboard")
+          end
+
+        {:error, reason} ->
+          Logger.error("Authentication failed: #{inspect(reason)}")
+
+          error_message =
+            case reason do
+              %{message: message} when is_binary(message) -> message
+              %{status: 401} -> "Invalid email or password. Please try again."
+              %{status: 404} -> "User not found. Please check your email or create an account."
+              _ -> "An error occurred during login. Please try again."
+            end
+
+          conn
+          |> put_flash(:error, error_message)
+          |> render(:login)
+      end
     end
   end
 
@@ -227,121 +252,145 @@ defmodule EventasaurusWeb.Auth.AuthController do
         conn
 
       _ ->
-        conn
-        |> assign(:event, event)
-        |> render(:register)
+        # Render the appropriate register page based on auth provider
+        if AuthProvider.clerk_enabled?() do
+          render_clerk_register(conn, event)
+        else
+          conn
+          |> assign(:event, event)
+          |> render(:register)
+        end
     end
+  end
+
+  defp render_clerk_register(conn, event) do
+    conn
+    |> assign(:event, event)
+    |> put_view(EventasaurusWeb.Auth.ClerkAuthHTML)
+    |> render(:clerk_register)
   end
 
   @doc """
   Process the registration form submission.
+  Only available when Supabase is the auth provider (not Clerk).
   """
   def create_user(
         conn,
         %{"user" => %{"name" => name, "email" => email, "password" => password}} = params
       ) do
     require Logger
-    Logger.info("Registration attempt for email: #{mask_email(email)}")
 
-    # Verify Turnstile token if enabled
-    with :ok <- verify_turnstile(params) do
-      # Enforce invite-only on POST as well
-      referral_event_id = get_session(conn, :signup_event_id)
+    # Guard: This endpoint is Supabase-only
+    if AuthProvider.clerk_enabled?() do
+      Logger.warning("Supabase create_user endpoint called while Clerk is enabled")
 
-      if is_nil(referral_event_id) do
-        Logger.info("Registration attempt without invitation blocked")
-
-        conn
-        |> put_flash(
-          :error,
-          "Registrations are currently invite-only. Please sign up via an event."
-        )
-        |> redirect(to: ~p"/invite-only")
-        |> Plug.Conn.halt()
-      else
-        user_attrs = %{name: name, referral_event_id: referral_event_id}
-
-        case Auth.sign_up_with_email_and_password(email, password, user_attrs) do
-          {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
-            Logger.info("Registration successful with tokens")
-
-            # Check for stored return URL and event referral
-            return_to = get_session(conn, :user_return_to)
-            referral_event_id = get_session(conn, :signup_event_id)
-
-            # Customize success message for event-based signups
-            success_message =
-              if referral_event_id do
-                "Account created successfully! Welcome to the event."
-              else
-                "Account created successfully! Please check your email to verify your account."
-              end
-
-            conn
-            |> put_session(:access_token, access_token)
-            |> put_session(:refresh_token, refresh_token)
-            |> put_flash(:info, success_message)
-            |> delete_session(:user_return_to)
-            |> delete_session(:signup_event_id)
-            |> redirect(to: return_to || ~p"/dashboard")
-
-          {:ok, %{user: _user, access_token: access_token}} ->
-            Logger.info("Registration successful with access token")
-
-            # Check for stored return URL and event referral
-            return_to = get_session(conn, :user_return_to)
-            referral_event_id = get_session(conn, :signup_event_id)
-
-            # Customize success message for event-based signups
-            success_message =
-              if referral_event_id do
-                "Account created successfully! Welcome to the event."
-              else
-                "Account created successfully!"
-              end
-
-            conn
-            |> put_session(:access_token, access_token)
-            |> put_flash(:info, success_message)
-            |> delete_session(:user_return_to)
-            |> delete_session(:signup_event_id)
-            |> redirect(to: return_to || ~p"/dashboard")
-
-          {:ok, %{user: _user, confirmation_required: true}} ->
-            Logger.info("Registration successful, confirmation required")
-
-            # Cleanup event referral session
-            conn = delete_session(conn, :signup_event_id)
-
-            conn
-            |> put_flash(
-              :info,
-              "Account created successfully! Please check your email to verify your account."
-            )
-            |> redirect(to: ~p"/login")
-
-          {:error, %{"message" => message}} ->
-            Logger.error("Registration failed with message: #{message}")
-
-            conn
-            |> put_flash(:error, message)
-            |> render(:register)
-
-          {:error, reason} ->
-            Logger.error("Registration failed with reason: #{inspect(reason)}")
-
-            conn
-            |> put_flash(:error, "Unable to create account")
-            |> render(:register)
-        end
-      end
+      conn
+      |> put_flash(:error, "This registration method is not available.")
+      |> redirect(to: ~p"/auth/register")
+      |> Plug.Conn.halt()
     else
-      {:error, :turnstile_failed} ->
-        Logger.warning("Registration blocked by Turnstile verification")
+      Logger.info("Registration attempt for email: #{mask_email(email)}")
 
-        conn
-        |> put_flash(:error, "Please complete the security verification")
-        |> render(:register)
+      # Verify Turnstile token if enabled
+      with :ok <- verify_turnstile(params) do
+        # Enforce invite-only on POST as well
+        referral_event_id = get_session(conn, :signup_event_id)
+
+        if is_nil(referral_event_id) do
+          Logger.info("Registration attempt without invitation blocked")
+
+          conn
+          |> put_flash(
+            :error,
+            "Registrations are currently invite-only. Please sign up via an event."
+          )
+          |> redirect(to: ~p"/invite-only")
+          |> Plug.Conn.halt()
+        else
+          user_attrs = %{name: name, referral_event_id: referral_event_id}
+
+          case Auth.sign_up_with_email_and_password(email, password, user_attrs) do
+            {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
+              Logger.info("Registration successful with tokens")
+
+              # Check for stored return URL and event referral
+              return_to = get_session(conn, :user_return_to)
+              referral_event_id = get_session(conn, :signup_event_id)
+
+              # Customize success message for event-based signups
+              success_message =
+                if referral_event_id do
+                  "Account created successfully! Welcome to the event."
+                else
+                  "Account created successfully! Please check your email to verify your account."
+                end
+
+              conn
+              |> put_session(:access_token, access_token)
+              |> put_session(:refresh_token, refresh_token)
+              |> put_flash(:info, success_message)
+              |> delete_session(:user_return_to)
+              |> delete_session(:signup_event_id)
+              |> redirect(to: return_to || ~p"/dashboard")
+
+            {:ok, %{user: _user, access_token: access_token}} ->
+              Logger.info("Registration successful with access token")
+
+              # Check for stored return URL and event referral
+              return_to = get_session(conn, :user_return_to)
+              referral_event_id = get_session(conn, :signup_event_id)
+
+              # Customize success message for event-based signups
+              success_message =
+                if referral_event_id do
+                  "Account created successfully! Welcome to the event."
+                else
+                  "Account created successfully!"
+                end
+
+              conn
+              |> put_session(:access_token, access_token)
+              |> put_flash(:info, success_message)
+              |> delete_session(:user_return_to)
+              |> delete_session(:signup_event_id)
+              |> redirect(to: return_to || ~p"/dashboard")
+
+            {:ok, %{user: _user, confirmation_required: true}} ->
+              Logger.info("Registration successful, confirmation required")
+
+              # Cleanup event referral session
+              conn = delete_session(conn, :signup_event_id)
+
+              conn
+              |> put_flash(
+                :info,
+                "Account created successfully! Please check your email to verify your account."
+              )
+              |> redirect(to: ~p"/login")
+
+            {:error, %{"message" => message}} ->
+              Logger.error("Registration failed with message: #{message}")
+
+              conn
+              |> put_flash(:error, message)
+              |> render(:register)
+
+            {:error, reason} ->
+              Logger.error("Registration failed with reason: #{inspect(reason)}")
+
+              conn
+              |> put_flash(:error, "Unable to create account")
+              |> render(:register)
+          end
+        end
+      else
+        {:error, :turnstile_failed} ->
+          Logger.warning("Registration blocked by Turnstile verification")
+
+          conn
+          |> put_flash(:error, "Please complete the security verification")
+          |> render(:register)
+      end
     end
   end
 
@@ -349,51 +398,72 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Logs out the current user.
   """
   def logout(conn, _params) do
+    # For Clerk, the frontend JS handles sign-out, but we still clear server session
     conn
     |> Auth.clear_session()
+    |> configure_session(drop: true)
     |> put_flash(:info, "You have been logged out")
     |> redirect(to: ~p"/")
   end
 
   @doc """
   Show the forgot password form.
+  Only available when Supabase is the auth provider (not Clerk).
+  Clerk handles password reset via its own UI components.
   """
   def forgot_password(conn, _params) do
-    render(conn, :forgot_password)
+    if AuthProvider.clerk_enabled?() do
+      conn
+      |> put_flash(:info, "Please use the sign-in page to manage your password.")
+      |> redirect(to: ~p"/auth/login")
+    else
+      render(conn, :forgot_password)
+    end
   end
 
   @doc """
   Handle password reset requests.
+  Only available when Supabase is the auth provider (not Clerk).
   """
   def request_password_reset(conn, %{"user" => %{"email" => email}}) do
-    case Auth.request_password_reset(email) do
-      {:ok, _} ->
-        conn
-        |> put_flash(
-          :info,
-          "If your email exists in our system, you will receive password reset instructions shortly."
-        )
-        |> redirect(to: ~p"/auth/login")
+    # Guard: This endpoint is Supabase-only
+    if AuthProvider.clerk_enabled?() do
+      require Logger
+      Logger.warning("Supabase request_password_reset endpoint called while Clerk is enabled")
 
-      {:error, reason} ->
-        require Logger
-        Logger.error("Password reset request failed for email: #{inspect(reason)}")
+      conn
+      |> put_flash(:error, "Password reset is handled through the sign-in page.")
+      |> redirect(to: ~p"/auth/login")
+    else
+      case Auth.request_password_reset(email) do
+        {:ok, _} ->
+          conn
+          |> put_flash(
+            :info,
+            "If your email exists in our system, you will receive password reset instructions shortly."
+          )
+          |> redirect(to: ~p"/auth/login")
 
-        error_message =
-          case reason do
-            %{status: 429} ->
-              "Too many password reset requests have been sent recently. Please wait a few minutes before trying again."
+        {:error, reason} ->
+          require Logger
+          Logger.error("Password reset request failed for email: #{inspect(reason)}")
 
-            %{message: msg} when is_binary(msg) ->
-              msg
+          error_message =
+            case reason do
+              %{status: 429} ->
+                "Too many password reset requests have been sent recently. Please wait a few minutes before trying again."
 
-            _ ->
-              "There was an error processing your request. Please try again."
-          end
+              %{message: msg} when is_binary(msg) ->
+                msg
 
-        conn
-        |> put_flash(:error, error_message)
-        |> redirect(to: ~p"/auth/forgot-password")
+              _ ->
+                "There was an error processing your request. Please try again."
+            end
+
+          conn
+          |> put_flash(:error, error_message)
+          |> redirect(to: ~p"/auth/forgot-password")
+      end
     end
   end
 
@@ -611,64 +681,88 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   @doc """
   Redirect user to Facebook OAuth login.
+  Only available when Supabase is the auth provider (not Clerk).
+  Clerk handles OAuth directly via its own UI components.
   """
   def facebook_login(conn, params) do
-    # Store action type and provider (let Supabase handle CSRF state)
-    conn =
+    # Guard: This endpoint is Supabase-only
+    if AuthProvider.clerk_enabled?() do
+      require Logger
+      Logger.warning("Supabase facebook_login endpoint called while Clerk is enabled")
+
       conn
-      |> put_session(:oauth_action, Map.get(params, "action", "login"))
-      |> put_session(:oauth_provider, "facebook")
-
-    # Store any auth context for unified modal flows
-    conn =
-      if context = Map.get(params, "context") do
-        # Decode the JSON context
-        case Jason.decode(URI.decode(context)) do
-          {:ok, decoded_context} ->
-            put_session(conn, :oauth_context, decoded_context)
-
-          {:error, _} ->
-            Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
-            conn
-        end
-      else
+      |> put_flash(:error, "Please use the sign-in page to log in with Facebook.")
+      |> redirect(to: ~p"/auth/login")
+    else
+      # Store action type and provider (let Supabase handle CSRF state)
+      conn =
         conn
-      end
+        |> put_session(:oauth_action, Map.get(params, "action", "login"))
+        |> put_session(:oauth_provider, "facebook")
 
-    # Get Facebook OAuth URL and redirect
-    facebook_url = Auth.get_facebook_oauth_url()
-    redirect(conn, external: facebook_url)
+      # Store any auth context for unified modal flows
+      conn =
+        if context = Map.get(params, "context") do
+          # Decode the JSON context
+          case Jason.decode(URI.decode(context)) do
+            {:ok, decoded_context} ->
+              put_session(conn, :oauth_context, decoded_context)
+
+            {:error, _} ->
+              Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
+              conn
+          end
+        else
+          conn
+        end
+
+      # Get Facebook OAuth URL and redirect
+      facebook_url = Auth.get_facebook_oauth_url()
+      redirect(conn, external: facebook_url)
+    end
   end
 
   @doc """
   Redirect user to Google OAuth login.
+  Only available when Supabase is the auth provider (not Clerk).
+  Clerk handles OAuth directly via its own UI components.
   """
   def google_login(conn, params) do
-    # Store action type and provider (let Supabase handle CSRF state)
-    conn =
+    # Guard: This endpoint is Supabase-only
+    if AuthProvider.clerk_enabled?() do
+      require Logger
+      Logger.warning("Supabase google_login endpoint called while Clerk is enabled")
+
       conn
-      |> put_session(:oauth_action, Map.get(params, "action", "login"))
-      |> put_session(:oauth_provider, "google")
-
-    # Store any auth context for unified modal flows
-    conn =
-      if context = Map.get(params, "context") do
-        # Decode the JSON context
-        case Jason.decode(URI.decode(context)) do
-          {:ok, decoded_context} ->
-            put_session(conn, :oauth_context, decoded_context)
-
-          {:error, _} ->
-            Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
-            conn
-        end
-      else
+      |> put_flash(:error, "Please use the sign-in page to log in with Google.")
+      |> redirect(to: ~p"/auth/login")
+    else
+      # Store action type and provider (let Supabase handle CSRF state)
+      conn =
         conn
-      end
+        |> put_session(:oauth_action, Map.get(params, "action", "login"))
+        |> put_session(:oauth_provider, "google")
 
-    # Get Google OAuth URL and redirect
-    google_url = Auth.get_google_oauth_url()
-    redirect(conn, external: google_url)
+      # Store any auth context for unified modal flows
+      conn =
+        if context = Map.get(params, "context") do
+          # Decode the JSON context
+          case Jason.decode(URI.decode(context)) do
+            {:ok, decoded_context} ->
+              put_session(conn, :oauth_context, decoded_context)
+
+            {:error, _} ->
+              Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
+              conn
+          end
+        else
+          conn
+        end
+
+      # Get Google OAuth URL and redirect
+      google_url = Auth.get_google_oauth_url()
+      redirect(conn, external: google_url)
+    end
   end
 
   @doc """

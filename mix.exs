@@ -159,7 +159,11 @@ defmodule Eventasaurus.MixProject do
       # AWS S3 client for Supabase Storage compatibility
       {:ex_aws, "~> 2.5"},
       {:ex_aws_s3, "~> 2.5"},
-      {:sweet_xml, "~> 0.7"}
+      {:sweet_xml, "~> 0.7"},
+
+      # Clerk authentication (replacing Supabase Auth)
+      # Using JOSE for JWT verification - clerk hex package has dependency conflicts
+      {:jose, "~> 1.11"}
     ]
   end
 

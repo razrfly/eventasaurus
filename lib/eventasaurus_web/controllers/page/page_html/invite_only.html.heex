@@ -92,29 +92,97 @@
       </div>
     </div>
 
-    <%!-- Interest Form Section (Phase II) --%>
+    <%!-- Interest Form Section - Clerk Waitlist --%>
     <div class="py-24 px-4 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-2xl text-center">
-        <.subheading class="mb-4">Coming Soon</.subheading>
+        <.subheading class="mb-4">Get Early Access</.subheading>
         <.heading as="h2" class="mb-6">
-          Join Our Interest List
+          Join Our Waitlist
         </.heading>
         <p class="text-xl text-gray-600 mb-8">
-          Want to be notified when we open up registration? We'll let you know!
+          Want to be notified when we open up registration? Join our waitlist and we'll let you know!
         </p>
-        
-        <%!-- Placeholder for Phase II interest form --%>
-        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-          <div class="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full">
-            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-            </svg>
+
+        <%!-- Clerk Waitlist component container - phx-update="ignore" prevents LiveView from touching this --%>
+        <div id="clerk-waitlist" class="flex justify-center" phx-update="ignore">
+          <%!-- Clerk.js will mount the Waitlist component here --%>
+          <div class="text-center text-gray-500 py-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            Loading waitlist...
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Interest Form Coming Soon</h3>
-          <p class="text-gray-600">
-            We're working on a way for you to express interest. Check back soon or follow us for updates.
-          </p>
         </div>
+
+        <script>
+          // Initialize Clerk Waitlist component
+          // Uses IIFE to work with both full page loads and LiveView navigation
+          (function initClerkWaitlist() {
+            const containerId = 'clerk-waitlist';
+            let mounted = false;
+
+            async function mountWaitlist() {
+              if (mounted) return;
+
+              const container = document.getElementById(containerId);
+              if (!container) return;
+
+              // Wait for Clerk to be available
+              if (!window.Clerk) {
+                // Clerk not loaded yet, wait and retry
+                setTimeout(mountWaitlist, 100);
+                return;
+              }
+
+              try {
+                await window.Clerk.load();
+
+                // Check if already signed in - redirect to dashboard
+                if (window.Clerk.user) {
+                  window.location.href = '/dashboard';
+                  return;
+                }
+
+                // Only mount if not already mounted
+                if (!mounted) {
+                  mounted = true;
+                  container.innerHTML = ''; // Clear loading state
+                  window.Clerk.mountWaitlist(container, {
+                    appearance: {
+                      elements: {
+                        rootBox: 'w-full max-w-md mx-auto',
+                        card: 'shadow-none border border-gray-200 rounded-2xl',
+                        headerTitle: 'text-xl font-semibold text-gray-900',
+                        headerSubtitle: 'text-gray-600',
+                        formButtonPrimary: 'bg-indigo-600 hover:bg-indigo-700',
+                        footerAction: 'text-gray-600'
+                      }
+                    }
+                  });
+                }
+              } catch (error) {
+                console.error('Error mounting Clerk Waitlist:', error);
+                // Show fallback message if Waitlist mode not enabled
+                if (error.message && error.message.includes('waitlist')) {
+                  container.innerHTML = `
+                    <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+                      <h3 class="text-lg font-semibold text-gray-900 mb-2">Waitlist Coming Soon</h3>
+                      <p class="text-gray-600">
+                        We're setting up our waitlist. Check back soon or follow us for updates.
+                      </p>
+                    </div>
+                  `;
+                }
+              }
+            }
+
+            // Initialize based on document state
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', mountWaitlist);
+            } else {
+              // DOM already ready, init immediately
+              mountWaitlist();
+            }
+          })();
+        </script>
       </div>
     </div>
 

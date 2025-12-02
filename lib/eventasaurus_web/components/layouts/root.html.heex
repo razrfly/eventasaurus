@@ -9,10 +9,18 @@
     <meta name="csrf-token" content={get_csrf_token()} />
     
     <%
+      # Auth provider configuration
+      auth_config = EventasaurusApp.Auth.AuthProvider.frontend_config()
+      auth_provider = auth_config.provider
+
+      # Supabase config (still needed for storage even when using Clerk)
       supabase_config = Application.get_env(:eventasaurus, :supabase)
       supabase_url = supabase_config[:url] || raise("Missing Supabase URL configuration")
       supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
       supabase_bucket = supabase_config[:bucket] || "event-images"
+
+      # Clerk config (only used when Clerk is enabled)
+      clerk_publishable_key = auth_config[:publishable_key]
     %>
     
     <.live_title suffix=" · Wombie">
@@ -95,8 +103,25 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
     
-    <!-- Supabase JavaScript library for identity management -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Auth provider meta tag -->
+    <meta name="auth-provider" content={auth_provider} />
+
+    <%= if auth_provider == "clerk" do %>
+      <!-- Clerk JavaScript library for authentication -->
+      <meta name="clerk-publishable-key" content={clerk_publishable_key} />
+      <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key={clerk_publishable_key}
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="text/javascript"
+      ></script>
+    <% else %>
+      <!-- Supabase JavaScript library for identity management -->
+      <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <% end %>
+
+    <!-- Supabase config for storage (always needed) -->
     
     <!-- Stripe JavaScript library -->
     <script src="https://js.stripe.com/v3/"></script>
@@ -110,9 +135,22 @@
       <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <% end %>
     
-    <!-- Supabase configuration meta tags -->
+    <!-- Supabase configuration meta tags (needed for storage even with Clerk auth) -->
     <meta name="supabase-url" content={supabase_url} />
     <meta name="supabase-anon-key" content={supabase_api_key} />
+
+    <!-- Clerk configuration (only when Clerk is enabled) -->
+    <%= if auth_provider == "clerk" do %>
+      <script>
+        // Clerk configuration for frontend
+        window.CLERK_PUBLISHABLE_KEY = "<%= clerk_publishable_key %>";
+        window.AUTH_PROVIDER = "clerk";
+      </script>
+    <% else %>
+      <script>
+        window.AUTH_PROVIDER = "supabase";
+      </script>
+    <% end %>
     
     <!-- PostHog configuration -->
     <%
@@ -280,7 +318,7 @@
     data-supabase-url={supabase_url}
     data-supabase-api-key={supabase_api_key}
     data-supabase-bucket={supabase_bucket}
-    phx-hook="SupabaseAuthHandler"
+    phx-hook="AuthHandler"
   >
     <!-- Gradient Background for pages that need it -->
     <%= unless assigns[:hide_gradient] do %>
@@ -354,7 +392,7 @@
                   Get Started
                 </a>
               <% else %>
-                <a href={"/register?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 dark:bg-white shadow-md text-base font-medium whitespace-nowrap text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
+                <a href="/invite-only" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 dark:bg-white shadow-md text-base font-medium whitespace-nowrap text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
                   Get Started
                 </a>
               <% end %>
@@ -441,7 +479,7 @@
                 Get Started
               </a>
             <% else %>
-              <a href={"/register?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="block w-full text-center px-4 py-2 rounded-md bg-gray-950 dark:bg-white text-base font-medium text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors">
+              <a href="/invite-only" class="block w-full text-center px-4 py-2 rounded-md bg-gray-950 dark:bg-white text-base font-medium text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors">
                 Get Started
               </a>
             <% end %>
@@ -490,7 +528,7 @@
               <li><a href="/about" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">About</a></li>
               <li><a href="/our-story" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Our Story</a></li>
               <li><a href="/whats-new" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">What's New</a></li>
-              <li><a href="/register" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Get Started</a></li>
+              <li><a href="/invite-only" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Get Started</a></li>
               <li><a href="/events" class="text-sm text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white">Browse Events</a></li>
             </ul>
           </div>

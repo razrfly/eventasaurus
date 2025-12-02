@@ -10,6 +10,9 @@ import Config
 # Include Supabase configuration
 import_config "supabase.exs"
 
+# Include Clerk configuration
+import_config "clerk.exs"
+
 # Configure Eventasaurus main app to use Supabase (not Ecto)
 config :eventasaurus,
   use_supabase: true,

@@ -1,0 +1,14 @@
+{
+  "name": "eventasaurus-clerk-migration",
+  "version": "1.0.0",
+  "description": "Migrate Supabase users to Clerk",
+  "main": "import-users.js",
+  "scripts": {
+    "start": "node import-users.js",
+    "dry-run": "DRY_RUN=true node import-users.js"
+  },
+  "dependencies": {
+    "@clerk/backend": "^1.0.0",
+    "dotenv": "^16.3.1"
+  }
+}
