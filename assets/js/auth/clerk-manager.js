@@ -147,15 +147,19 @@ export async function getSessionToken() {
 export async function signOut() {
   if (!clerkInstance) {
     console.error('Clerk not initialized');
+    // Even if Clerk isn't initialized, try to clear server session
+    window.location.href = '/auth/logout';
     return;
   }
 
   try {
     await clerkInstance.signOut();
-    // Redirect to home or login page after sign out
-    window.location.href = '/';
+    // After Clerk signs out, redirect to server logout to clear cookies/session
+    window.location.href = '/auth/logout';
   } catch (error) {
     console.error('Error signing out:', error);
+    // Even on error, try to clear server session
+    window.location.href = '/auth/logout';
   }
 }
 

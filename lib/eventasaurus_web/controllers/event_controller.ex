@@ -759,6 +759,13 @@ defmodule EventasaurusWeb.EventController do
   # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
+
+  # Handle Clerk JWT claims (has "sub" key for Clerk user ID)
+  defp ensure_user_struct(%{"sub" => _clerk_id} = clerk_claims) do
+    alias EventasaurusApp.Auth.Clerk.Sync, as: ClerkSync
+    ClerkSync.sync_user(clerk_claims)
+  end
+
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   ## Generic Participant Status Management API Actions

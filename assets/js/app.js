@@ -11,7 +11,7 @@ import { SpotifySearch } from "./spotify_search";
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
 import { initSupabaseClient, SupabaseAuthHandler } from "./auth/supabase-manager";
-import { initClerkClient, ClerkAuthHandler } from "./auth/clerk-manager";
+import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut } from "./auth/clerk-manager";
 import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
 import PaymentHooks from "./hooks/payment-business-logic";
@@ -159,6 +159,18 @@ liveSocket.connect();
 
 // Expose liveSocket on window for web console debug logs and latency simulation
 window.liveSocket = liveSocket;
+
+// Expose signOut function on window for logout links
+// This handles both Clerk and Supabase auth providers
+window.signOut = async function() {
+  const authProvider = document.querySelector('meta[name="auth-provider"]')?.content;
+  if (authProvider === 'clerk') {
+    await clerkSignOut();
+  } else {
+    // For Supabase, just redirect to server logout
+    window.location.href = '/auth/logout';
+  }
+};
 
 // Initialize components on page load
 document.addEventListener("DOMContentLoaded", function() {

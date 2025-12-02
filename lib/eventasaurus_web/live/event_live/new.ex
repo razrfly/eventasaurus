@@ -3,7 +3,6 @@ defmodule EventasaurusWeb.EventLive.New do
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.CoreComponents
-  import EventasaurusWeb.LiveHelpers
   import EventasaurusWeb.Components.ImagePickerModal
   import EventasaurusWeb.Components.TicketModal
   import EventasaurusWeb.Helpers.CurrencyHelpers
@@ -24,8 +23,11 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def mount(params, session, socket) do
-    case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
+    # Use the user already assigned by the auth hook (require_authenticated_user)
+    # The hook handles Clerk claims -> User struct conversion
+    user = socket.assigns[:user]
+
+    if user do
         changeset = Events.change_event(%Event{})
         default_date = Date.utc_today() |> Date.add(5) |> Date.to_iso8601()
         venues = Venues.list_venues()
@@ -160,9 +162,13 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:show_rich_data_import, false)
 
         {:ok, socket}
-
-      {:error, reason} ->
-        {:ok, put_flash(socket, :error, "Authentication error: #{reason}")}
+    else
+      # User not available - this shouldn't happen as the route requires auth,
+      # but redirect to login as a fallback
+      {:ok,
+       socket
+       |> Phoenix.LiveView.put_flash(:error, "You must log in to access this page.")
+       |> Phoenix.LiveView.redirect(to: ~p"/auth/login")}
     end
   end
 
