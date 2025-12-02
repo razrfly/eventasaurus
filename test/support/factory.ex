@@ -26,8 +26,6 @@ defmodule EventasaurusApp.Factory do
         sequence(:email, fn n ->
           "#{Faker.Internet.user_name()}#{n}@#{Faker.Internet.domain_name()}"
         end),
-      # Use proper UUID instead of fake prefix
-      supabase_id: Ecto.UUID.generate(),
       username: sequence(:username, fn n -> "#{Faker.Internet.user_name()}#{n}" end),
       bio: Faker.Lorem.paragraph(2),
       website_url: if(Enum.random([true, false]), do: Faker.Internet.url(), else: nil),

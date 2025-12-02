@@ -38,10 +38,5 @@ defmodule EventasaurusWeb.DashboardController do
   # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-
-  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    Accounts.find_or_create_from_supabase(supabase_user)
-  end
-
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 end

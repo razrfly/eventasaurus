@@ -133,11 +133,11 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
     end
 
     test "image upload functionality integration", %{conn: conn, user: user} do
-      # Using TestClient for Supabase integration
+      # Using TestClient for authentication integration
       test_token = "test_token_for_upload"
 
       test_user = %{
-        "id" => user.supabase_id,
+        "id" => user.id,
         "email" => user.email,
         "user_metadata" => %{"name" => user.name}
       }

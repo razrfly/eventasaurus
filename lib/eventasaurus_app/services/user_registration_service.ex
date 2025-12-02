@@ -101,32 +101,22 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
   @doc """
   Handle email confirmation requirements consistently across all contexts.
 
-  Creates a temporary user record that will be updated when the user
-  confirms their email address via the magic link.
+  Creates a user record that will be associated with Clerk authentication
+  when the user confirms their email address via the magic link.
   """
   def handle_confirmation_required(email, name, _context) do
-    Logger.info(
-      "User created via OTP but email confirmation required, creating temporary local user record"
-    )
-
-    temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
+    Logger.info("Creating local user record pending email confirmation")
 
     case Accounts.create_user(%{
            email: email,
-           name: name,
-           # Temporary ID - will be updated when user confirms email
-           supabase_id: temp_supabase_id
+           name: name
          }) do
       {:ok, user} ->
-        Logger.info("Successfully created temporary local user", %{
-          user_id: user.id,
-          temp_supabase_id: temp_supabase_id
-        })
-
+        Logger.info("Successfully created local user", %{user_id: user.id})
         {:ok, user}
 
       {:error, reason} ->
-        Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
+        Logger.error("Failed to create local user", %{reason: inspect(reason)})
         {:error, reason}
     end
   end

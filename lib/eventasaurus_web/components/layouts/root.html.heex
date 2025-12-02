@@ -170,7 +170,7 @@
         window.POSTHOG_API_KEY = "<%= posthog_api_key %>";
         window.POSTHOG_HOST = "<%= posthog_host %>";
 <%= if @conn.assigns[:user] do %>        window.currentUser = {
-          id: "<%= @conn.assigns.user.supabase_id %>",
+          id: "<%= @conn.assigns.user.id %>",
           email: "<%= @conn.assigns.user.email %>",
           name: "<%= @conn.assigns.user.name %>"
         };

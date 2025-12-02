@@ -49,13 +49,6 @@ defmodule EventasaurusApp.Accounts do
   def get_user_by_email(_), do: nil
 
   @doc """
-  Gets a user by Supabase ID.
-  """
-  def get_user_by_supabase_id(supabase_id) do
-    Repo.get_by(User, supabase_id: supabase_id)
-  end
-
-  @doc """
   Gets a user by username (case-insensitive).
   """
   def get_user_by_username(username) when is_binary(username) do
@@ -126,54 +119,6 @@ defmodule EventasaurusApp.Accounts do
   end
 
   @doc """
-  Finds or creates a user from Supabase user data.
-  Returns {:ok, user} or {:error, reason}.
-  """
-  def find_or_create_from_supabase(%{
-        "id" => supabase_id,
-        "email" => email,
-        "user_metadata" => user_metadata
-      }) do
-    case get_user_by_supabase_id(supabase_id) do
-      %User{} = user ->
-        {:ok, user}
-
-      nil ->
-        # Normalize email to ensure consistency
-        # Supabase should always provide valid emails, but we validate anyway
-        case EventasaurusApp.Sanitizer.sanitize_email(email) do
-          {:error, reason} ->
-            # This shouldn't happen with Supabase, but handle it gracefully
-            {:error, {:invalid_email, reason}}
-
-          nil ->
-            {:error, {:invalid_email, "Email is nil"}}
-
-          normalized_email when is_binary(normalized_email) ->
-            # Safely extract name from user_metadata
-            name =
-              case user_metadata do
-                m when is_map(m) ->
-                  Map.get(m, "name") || extract_name_from_email(normalized_email)
-
-                _ ->
-                  extract_name_from_email(normalized_email)
-              end
-
-            user_params = %{
-              email: normalized_email,
-              name: name,
-              supabase_id: supabase_id
-            }
-
-            create_user(user_params)
-        end
-    end
-  end
-
-  def find_or_create_from_supabase(_), do: {:error, :invalid_supabase_data}
-
-  @doc """
   Finds or creates a user by email for guest invitations.
   If the user doesn't exist, creates a minimal user record with the email.
   Returns {:ok, user} or {:error, reason}.
@@ -195,13 +140,10 @@ defmodule EventasaurusApp.Accounts do
 
           nil ->
             name = extract_name_from_email(normalized_email)
-            # Generate a temporary supabase_id for guest users
-            temp_supabase_id = "guest_#{:crypto.strong_rand_bytes(8) |> Base.encode64()}"
 
             user_params = %{
               email: normalized_email,
-              name: name,
-              supabase_id: temp_supabase_id
+              name: name
             }
 
             create_user(user_params)

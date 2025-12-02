@@ -5,7 +5,6 @@ defmodule EventasaurusApp.Accounts.User do
   schema "users" do
     field(:email, :string)
     field(:name, :string)
-    field(:supabase_id, :string)
 
     # Profile fields
     field(:username, :string)
@@ -55,7 +54,6 @@ defmodule EventasaurusApp.Accounts.User do
     |> cast(attrs, [
       :email,
       :name,
-      :supabase_id,
       :username,
       :bio,
       :website_url,
@@ -83,7 +81,7 @@ defmodule EventasaurusApp.Accounts.User do
   end
 
   @doc """
-  Changeset specifically for profile updates (excludes email and supabase_id)
+  Changeset specifically for profile updates (excludes email).
   """
   def profile_changeset(user, attrs) do
     user

@@ -2160,19 +2160,12 @@ defmodule EventasaurusWeb.PublicEventLive do
   # ## Parameters
   # - `nil`: No authenticated user
   # - `%User{}`: Already a local User struct
-  # - `%{"id" => supabase_id, ...}`: Raw Supabase user data
   #
   # ## Returns
   # - `{:ok, %User{}}`: Successfully processed user
   # - `{:error, reason}`: Failed to process or no user
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-
-  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    # Use shared function to find or create user
-    Accounts.find_or_create_from_supabase(supabase_user)
-  end
-
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   # Helper function for poll phase CSS classes

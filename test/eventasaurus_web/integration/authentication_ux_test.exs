@@ -9,14 +9,13 @@ defmodule EventasaurusWeb.AuthenticationUXTest do
     token = "test_token_#{user.id}"
 
     # Set up the mock user data that the TestClient will return
-    # Convert the User struct to the format that Supabase would return
-    supabase_user = %{
-      "id" => user.supabase_id,
+    test_user = %{
+      "id" => user.id,
       "email" => user.email,
       "user_metadata" => %{"name" => user.name}
     }
 
-    TestClient.set_test_user(token, supabase_user)
+    TestClient.set_test_user(token, test_user)
 
     # Add the token to the session
     conn = conn |> Plug.Test.init_test_session(%{"access_token" => token})

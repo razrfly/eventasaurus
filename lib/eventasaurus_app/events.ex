@@ -9,7 +9,6 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
   alias EventasaurusApp.EventStateMachine
   alias EventasaurusApp.Accounts.User
-  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Themes
   alias EventasaurusApp.Venues.Venue
 
@@ -1874,41 +1873,8 @@ defmodule EventasaurusApp.Events do
   Returns one of: :not_registered, :registered, :cancelled, :organizer
   """
   def get_user_registration_status(%Event{} = event, user) do
-    # Handle both User structs and Supabase user data
-    local_user =
-      case user do
-        %User{} = u ->
-          u
-
-        %{"id" => _supabase_id} = supabase_user ->
-          # Use shared function to find or create user
-          case Accounts.find_or_create_from_supabase(supabase_user) do
-            {:ok, user} ->
-              user
-
-            {:error, reason} ->
-              require Logger
-
-              Logger.error("Failed to create user for registration status check", %{
-                reason: inspect(reason),
-                supabase_id: supabase_user["id"]
-              })
-
-              :error
-          end
-
-        _ ->
-          nil
-      end
-
-    case local_user do
-      nil ->
-        :not_registered
-
-      :error ->
-        :error
-
-      user ->
+    case user do
+      %User{} = user ->
         # First check if user is an organizer/admin
         if user_is_organizer?(event, user) do
           :organizer
@@ -1920,6 +1886,9 @@ defmodule EventasaurusApp.Events do
             %{status: _} -> :registered
           end
         end
+
+      _ ->
+        :not_registered
     end
   end
 
