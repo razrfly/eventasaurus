@@ -24,15 +24,16 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
                        group={@group} size="w-12 h-12" />
   """
   def render(%{type: "avatar"} = assigns) do
-    assigns = assign_defaults(assigns)
+    assigns =
+      assigns
+      |> assign_defaults()
+      |> assign(:resolved_avatar_url, resolve(assigns.group.avatar_url))
 
     ~H"""
-    <%!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs --%>
-    <% resolved_avatar_url = resolve(@group.avatar_url) %>
     <div class={["inline-block relative", @size, @class]}>
-      <%= if resolved_avatar_url do %>
+      <%= if @resolved_avatar_url do %>
         <img
-          src={resolved_avatar_url}
+          src={@resolved_avatar_url}
           alt={@alt}
           class={["object-cover rounded-full", @size]}
           loading="lazy"
@@ -53,15 +54,16 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
   end
 
   def render(%{type: "cover"} = assigns) do
-    assigns = assign_defaults(assigns)
+    assigns =
+      assigns
+      |> assign_defaults()
+      |> assign(:resolved_cover_url, resolve(assigns.group.cover_image_url))
 
     ~H"""
-    <%!-- PHASE 2 TODO: Remove resolve() wrapper after database migration normalizes URLs --%>
-    <% resolved_cover_url = resolve(@group.cover_image_url) %>
     <div class={["relative bg-gray-200 dark:bg-gray-700 overflow-hidden", @aspect_ratio, @class]}>
-      <%= if resolved_cover_url do %>
+      <%= if @resolved_cover_url do %>
         <img
-          src={resolved_cover_url}
+          src={@resolved_cover_url}
           alt={@alt}
           class="absolute inset-0 w-full h-full object-cover"
           loading="lazy"

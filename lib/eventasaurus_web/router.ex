@@ -388,39 +388,23 @@ defmodule EventasaurusWeb.Router do
     plug :redirect_if_user_is_authenticated_except_recovery
   end
 
-  # Authentication routes - placing these BEFORE the catch-all public routes
+  # Authentication routes (Clerk-only)
+  # Clerk handles all auth UI via its components, these routes just render pages
   scope "/auth", EventasaurusWeb do
     pipe_through [:browser, :redirect_if_authenticated_except_recovery]
 
-    get "/login", Auth.AuthController, :login
-    post "/login", Auth.AuthController, :authenticate
-    get "/register", Auth.AuthController, :register
-    post "/register", Auth.AuthController, :create_user
-    get "/forgot-password", Auth.AuthController, :forgot_password
-    post "/forgot-password", Auth.AuthController, :request_password_reset
-    get "/reset-password", Auth.AuthController, :reset_password
-    post "/reset-password", Auth.AuthController, :update_password
-    get "/facebook", Auth.AuthController, :facebook_login
-    get "/google", Auth.AuthController, :google_login
+    get "/login", Auth.ClerkAuthController, :login
+    get "/register", Auth.ClerkAuthController, :register
   end
 
-  # Auth callback and logout routes (no redirect needed - these need to work for all users)
+  # Auth callback and logout routes
   scope "/auth", EventasaurusWeb do
     pipe_through :browser
 
-    get "/callback", Auth.AuthController, :callback
-    post "/callback", Auth.AuthController, :callback
-    get "/logout", Auth.AuthController, :logout
-    post "/logout", Auth.AuthController, :logout
-  end
-
-  # Clerk-specific auth routes (only active when Clerk is enabled)
-  scope "/auth/clerk", EventasaurusWeb do
-    pipe_through :browser
-
     get "/callback", Auth.ClerkAuthController, :callback
-    get "/profile", Auth.ClerkAuthController, :profile
     get "/logout", Auth.ClerkAuthController, :logout
+    post "/logout", Auth.ClerkAuthController, :logout
+    get "/profile", Auth.ClerkAuthController, :profile
   end
 
   # Development-only quick login route

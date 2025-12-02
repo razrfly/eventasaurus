@@ -38,7 +38,10 @@ defmodule EventasaurusWeb.ConnCase do
   end
 
   @doc """
-  Authenticates a user for testing by setting up the test client and session.
+  Authenticates a user for testing by setting up the session.
+
+  With Clerk authentication, we simply set the user_id in the session,
+  which is what ClerkAuthPlug stores after authenticating a user.
 
   ## Usage
 
@@ -50,23 +53,12 @@ defmodule EventasaurusWeb.ConnCase do
   An updated conn with the user authenticated in the session.
   """
   def log_in_user(conn, user) do
-    alias EventasaurusApp.Auth.TestClient
-
-    # Create a test token
-    token = "test_token_#{user.id}"
-
-    # Set up the mock user data that the TestClient will return
-    # Convert the User struct to the format that Supabase would return
-    supabase_user = %{
-      "id" => user.supabase_id,
-      "email" => user.email,
-      "user_metadata" => %{"name" => user.name}
-    }
-
-    TestClient.set_test_user(token, supabase_user)
-
-    # Add the token to the session and return the conn
-    Plug.Test.init_test_session(conn, %{"access_token" => token})
+    # With Clerk, the session stores the current_user_id
+    # which is the local database user ID
+    conn
+    |> Plug.Test.init_test_session(%{"current_user_id" => user.id})
+    |> Plug.Conn.assign(:current_user, user)
+    |> Plug.Conn.assign(:auth_user, user)
   end
 
   @doc """
@@ -90,6 +82,9 @@ defmodule EventasaurusWeb.ConnCase do
   @doc """
   Clears test authentication data to prevent interference between tests.
 
+  With Clerk authentication, this is no longer needed as we don't use
+  a test client. The sandbox handles cleanup between tests.
+
   ## Usage
 
       setup do
@@ -98,7 +93,9 @@ defmodule EventasaurusWeb.ConnCase do
       end
   """
   def clear_test_auth do
-    EventasaurusApp.Auth.TestClient.clear_test_users()
+    # No-op with Clerk authentication
+    # The Ecto sandbox handles cleanup between tests
+    :ok
   end
 
   @doc """

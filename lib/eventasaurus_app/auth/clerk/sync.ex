@@ -169,14 +169,9 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
   defp create_user_from_clerk(clerk_id, email, claims, opts) do
     name = extract_name_from_claims(claims)
 
-    # For new Clerk-native users, generate a UUID for legacy supabase_id column
-    # TODO: Once supabase_id is nullable, this can be removed
-    supabase_id = Ecto.UUID.generate()
-
     user_params = %{
       email: email,
-      name: name,
-      supabase_id: supabase_id
+      name: name
     }
 
     # Add referral_event_id from metadata if present
@@ -197,7 +192,10 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
     case Accounts.create_user(user_params) do
       {:ok, user} ->
         Logger.info("Successfully created user from Clerk", %{user_id: user.id})
-        # TODO: Update Clerk external_id with new user.id via webhook or API
+
+        # Sync external_id back to Clerk so JWT claims include userId
+        sync_external_id_to_clerk(clerk_id, user.id)
+
         {:ok, user}
 
       {:error, changeset} ->
@@ -269,4 +267,26 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
 
   defp email_domain(nil), do: "unknown"
   defp email_domain(email), do: email |> String.split("@") |> List.last()
+
+  # Sync external_id back to Clerk so subsequent JWT tokens include userId
+  # This is a fire-and-forget operation - we don't block user creation if it fails
+  defp sync_external_id_to_clerk(clerk_id, user_id) when is_binary(clerk_id) do
+    Task.start(fn ->
+      case EventasaurusApp.Auth.Clerk.Client.update_user(clerk_id, %{
+             external_id: Integer.to_string(user_id)
+           }) do
+        {:ok, _} ->
+          Logger.info("Synced external_id to Clerk", %{clerk_id: clerk_id, user_id: user_id})
+
+        {:error, reason} ->
+          Logger.warning("Failed to sync external_id to Clerk", %{
+            clerk_id: clerk_id,
+            user_id: user_id,
+            reason: inspect(reason)
+          })
+      end
+    end)
+  end
+
+  defp sync_external_id_to_clerk(nil, _user_id), do: :ok
 end

@@ -36,10 +36,18 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def fetch_auth_user(conn, _opts) do
     # If dev auth bypass already set the user, skip everything
-    if conn.assigns[:dev_mode_auth] do
-      conn
-    else
-      fetch_clerk_auth_user(conn)
+    # Also check session for dev_mode_login as a fallback (in case DevAuthPlug already set auth_user)
+    cond do
+      conn.assigns[:dev_mode_auth] ->
+        # DevAuthPlug already handled this
+        conn
+
+      get_session(conn, :dev_mode_login) == true && conn.assigns[:auth_user] ->
+        # DevAuthPlug set auth_user but maybe dev_mode_auth wasn't set - keep the existing auth_user
+        conn
+
+      true ->
+        fetch_clerk_auth_user(conn)
     end
   end
 

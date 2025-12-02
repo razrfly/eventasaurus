@@ -69,7 +69,7 @@ defmodule EventasaurusApp.Accounts.User do
       :timezone,
       :referral_event_id
     ])
-    |> validate_required([:email, :name, :supabase_id])
+    |> validate_required([:email, :name])
     |> normalize_email()
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_length(:email, max: 160)
@@ -79,7 +79,6 @@ defmodule EventasaurusApp.Accounts.User do
     |> validate_social_handles()
     |> validate_currency()
     |> unique_constraint(:email)
-    |> unique_constraint(:supabase_id)
     |> unique_constraint(:username, name: :users_username_lower_index)
   end
 
