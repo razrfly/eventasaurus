@@ -11,16 +11,20 @@ defmodule EventasaurusApp.Auth.Clerk.JWT do
   2. This module fetches Clerk's JWKS to get public keys
   3. Token is verified against the public key
   4. Claims are validated (expiration, authorized parties, etc.)
-  5. Returns the verified claims including `sub` (user_id) and `external_id`
+  5. Returns the verified claims including `sub` (Clerk ID) and `userId` (our users.id)
+
+  ## Architecture
+
+  Our `users.id` (integer primary key) is the canonical identifier.
+  Clerk stores this as `external_id`, and JWT claims include it as `userId`.
 
   ## Usage
 
       case JWT.verify_token(token) do
         {:ok, claims} ->
-          # claims.sub is the Clerk user ID
-          # claims.external_id is the original Supabase UUID (if migrated)
-          user_id = claims["sub"]
-          external_id = claims["external_id"] || claims["userId"]
+          # claims["sub"] is the Clerk user ID (e.g., "user_abc123")
+          # claims["userId"] is our users.id (integer, as string)
+          user_id = claims["userId"]  # "19" -> parse to integer
 
         {:error, reason} ->
           # Token is invalid
@@ -67,13 +71,20 @@ defmodule EventasaurusApp.Auth.Clerk.JWT do
   @doc """
   Extract the user ID from verified claims.
 
-  Prioritizes external_id (original Supabase UUID) over Clerk's user_id
-  for backward compatibility during migration.
+  Returns our users.id (integer) from the userId claim.
+  Falls back to nil if not present (new Clerk signup without external_id).
   """
   def extract_user_id(claims) when is_map(claims) do
-    # Check for custom userId claim first (set in Clerk dashboard)
-    # Then external_id, finally fall back to sub (Clerk user ID)
-    claims["userId"] || claims["external_id"] || claims["sub"]
+    case claims["userId"] do
+      nil -> nil
+      id when is_integer(id) -> id
+      id when is_binary(id) ->
+        case Integer.parse(id) do
+          {int_id, ""} -> int_id
+          _ -> nil
+        end
+      _ -> nil
+    end
   end
 
   def extract_user_id(_), do: nil
@@ -163,12 +174,12 @@ defmodule EventasaurusApp.Auth.Clerk.JWT do
   end
 
   defp cache_jwks(jwks) do
-    # Create table if it doesn't exist
-    case :ets.whereis(:clerk_jwks_cache) do
-      :undefined ->
-        :ets.new(:clerk_jwks_cache, [:set, :public, :named_table])
-
-      _ ->
+    # Create table if it doesn't exist - handle race condition with try/rescue
+    try do
+      :ets.new(:clerk_jwks_cache, [:set, :public, :named_table])
+    rescue
+      ArgumentError ->
+        # Table already exists, that's fine
         :ok
     end
 

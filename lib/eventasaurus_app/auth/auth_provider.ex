@@ -1,63 +1,48 @@
 defmodule EventasaurusApp.Auth.AuthProvider do
   @moduledoc """
-  Unified authentication provider that routes to either Supabase or Clerk
-  based on configuration.
+  Authentication provider configuration for Clerk.
 
-  This module enables a gradual migration from Supabase Auth to Clerk by:
-  1. Checking which provider is enabled via config
-  2. Routing auth calls to the appropriate implementation
-  3. Supporting fallback to Supabase during migration
+  This module provides Clerk configuration for the application.
+  Clerk is the sole authentication provider - Supabase auth has been removed.
 
   ## Configuration
 
   Set via environment variables:
-  - CLERK_ENABLED=true - Enable Clerk authentication
   - CLERK_SECRET_KEY=sk_... - Clerk secret key
   - CLERK_PUBLISHABLE_KEY=pk_... - Clerk publishable key
 
   ## Usage
 
-      # Check which provider is active
-      AuthProvider.active_provider() # => :clerk or :supabase
+      # Get the active provider (always :clerk)
+      AuthProvider.active_provider() # => :clerk
 
-      # Check if Clerk is enabled
-      AuthProvider.clerk_enabled?() # => true or false
+      # Check if Clerk is enabled (always true)
+      AuthProvider.clerk_enabled?() # => true
   """
 
   @doc """
   Returns the currently active authentication provider.
 
-  Returns `:clerk` if Clerk is enabled and configured, otherwise `:supabase`.
+  Always returns `:clerk` as it is the sole authentication provider.
   """
-  def active_provider do
-    if clerk_enabled?() do
-      :clerk
-    else
-      :supabase
-    end
-  end
+  def active_provider, do: :clerk
 
   @doc """
   Checks if Clerk authentication is enabled.
 
-  Returns true if CLERK_ENABLED is set and Clerk credentials are configured.
+  Always returns true as Clerk is the sole authentication provider.
   """
-  def clerk_enabled? do
-    config = Application.get_env(:eventasaurus, :clerk, [])
-    config[:enabled] == true
-  end
+  def clerk_enabled?, do: true
 
   @doc """
   Checks if Supabase authentication is enabled.
 
-  Returns true if Clerk is not enabled (default/fallback).
+  Always returns false as Supabase auth has been removed.
   """
-  def supabase_enabled? do
-    not clerk_enabled?()
-  end
+  def supabase_enabled?, do: false
 
   @doc """
-  Returns the Clerk configuration if available.
+  Returns the Clerk configuration.
   """
   def clerk_config do
     Application.get_env(:eventasaurus, :clerk, [])
@@ -78,23 +63,15 @@ defmodule EventasaurusApp.Auth.AuthProvider do
   end
 
   @doc """
-  Returns the frontend auth configuration based on active provider.
+  Returns the frontend auth configuration for Clerk.
 
   This is used to pass auth config to JavaScript/frontend components.
   """
   def frontend_config do
-    if clerk_enabled?() do
-      %{
-        provider: "clerk",
-        publishable_key: clerk_publishable_key(),
-        domain: clerk_domain()
-      }
-    else
-      %{
-        provider: "supabase",
-        url: Application.get_env(:eventasaurus, :supabase)[:url],
-        anon_key: Application.get_env(:eventasaurus, :supabase)[:anon_key]
-      }
-    end
+    %{
+      provider: "clerk",
+      publishable_key: clerk_publishable_key(),
+      domain: clerk_domain()
+    }
   end
 end

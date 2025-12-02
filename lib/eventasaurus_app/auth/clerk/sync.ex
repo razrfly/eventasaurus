@@ -6,12 +6,12 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
 
   ## How It Works
 
-  During the migration period, Clerk users have their original Supabase UUID
-  stored as `external_id` in Clerk. This allows us to:
+  Our `users.id` (integer primary key) is the canonical identifier.
+  Clerk stores this as `external_id`, and JWT claims include it as `userId`.
 
-  1. Look up users by their original Supabase UUID (stored in `supabase_id` column)
-  2. Create new users if they don't exist
-  3. Optionally track the Clerk user ID for future reference
+  1. Look up users by their integer ID from `claims["userId"]`
+  2. Create new users if they don't exist (for new Clerk signups)
+  3. Simple `Repo.get(User, id)` lookup - no UUID complexity
 
   ## Usage
 
@@ -36,7 +36,7 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
 
   ## Claims Structure
     - "sub": Clerk user ID (e.g., "user_abc123")
-    - "external_id" or "userId": Original Supabase UUID
+    - "userId": Our users.id (integer, stored as Clerk's external_id)
     - "email": User's email address
     - "first_name", "last_name": User's name components
 
@@ -48,8 +48,8 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
 
   def sync_user(claims, opts) when is_map(claims) do
     # Extract user identifiers from claims
-    # Priority: external_id (Supabase UUID) > userId (custom claim) > sub (Clerk ID)
-    user_id = claims["external_id"] || claims["userId"] || claims["sub"]
+    # Priority: userId (our integer ID) > email lookup > create new
+    user_id = parse_user_id(claims["userId"])
     clerk_id = claims["sub"]
     email = claims["email"]
 
@@ -59,12 +59,7 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
       has_email: not is_nil(email)
     })
 
-    if is_nil(user_id) do
-      Logger.error("Invalid Clerk claims: missing user identifier")
-      {:error, :missing_user_id}
-    else
-      find_or_create_user(user_id, clerk_id, email, claims, opts)
-    end
+    find_or_create_user(user_id, clerk_id, email, claims, opts)
   end
 
   def sync_user(_, _), do: {:error, :invalid_claims}
@@ -80,21 +75,19 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
     - {:error, :not_found} if no matching user
   """
   def get_user(claims) when is_map(claims) do
-    user_id = claims["external_id"] || claims["userId"] || claims["sub"]
+    user_id = parse_user_id(claims["userId"])
+    email = claims["email"]
 
     cond do
-      is_nil(user_id) ->
-        {:error, :missing_user_id}
-
-      # Check if it looks like a Supabase UUID
-      is_uuid?(user_id) ->
-        case Accounts.get_user_by_supabase_id(user_id) do
+      # If we have a user ID, look up directly by primary key
+      is_integer(user_id) ->
+        case Accounts.get_user(user_id) do
           nil -> {:error, :not_found}
           user -> {:ok, user}
         end
 
-      # Otherwise it's a Clerk ID - try email lookup
-      email = claims["email"] ->
+      # Fall back to email lookup for new Clerk signups
+      not is_nil(email) ->
         case Accounts.get_user_by_email(email) do
           nil -> {:error, :not_found}
           user -> {:ok, user}
@@ -112,30 +105,32 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
   # ============================================================================
 
   defp find_or_create_user(user_id, clerk_id, email, claims, opts) do
-    # Strategy 1: Look up by Supabase UUID (external_id)
-    # This handles migrated users who have their original UUID in external_id
-    if is_uuid?(user_id) do
-      case Accounts.get_user_by_supabase_id(user_id) do
-        nil ->
-          # Not found by UUID, try email
-          find_by_email_or_create(user_id, clerk_id, email, claims, opts)
+    cond do
+      # Strategy 1: Look up by integer ID (migrated users)
+      is_integer(user_id) ->
+        case Accounts.get_user(user_id) do
+          nil ->
+            # ID not found - shouldn't happen for migrated users
+            Logger.warning("User ID from claims not found in database", %{user_id: user_id})
+            find_by_email_or_create(clerk_id, email, claims, opts)
 
-        user ->
-          Logger.debug("Found user by Supabase ID", %{user_id: user.id})
-          maybe_update_user(user, claims, opts)
-      end
-    else
-      # user_id is a Clerk ID, not a UUID - this is a new Clerk-native user
-      find_by_email_or_create(user_id, clerk_id, email, claims, opts)
+          user ->
+            Logger.debug("Found user by ID", %{user_id: user.id})
+            maybe_update_user(user, claims, opts)
+        end
+
+      # Strategy 2: New Clerk signup - no userId claim yet
+      true ->
+        find_by_email_or_create(clerk_id, email, claims, opts)
     end
   end
 
-  defp find_by_email_or_create(user_id, clerk_id, email, claims, opts) do
+  defp find_by_email_or_create(clerk_id, email, claims, opts) do
     if email do
       case Accounts.get_user_by_email(email) do
         nil ->
           # No user exists, create new
-          create_user_from_clerk(user_id, clerk_id, email, claims, opts)
+          create_user_from_clerk(clerk_id, email, claims, opts)
 
         user ->
           # User exists with email, update their info
@@ -144,18 +139,18 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
       end
     else
       # No email in claims - try to fetch from Clerk API
-      fetch_email_and_create(user_id, clerk_id, claims, opts)
+      fetch_email_and_create(clerk_id, claims, opts)
     end
   end
 
-  defp fetch_email_and_create(user_id, clerk_id, claims, opts) do
+  defp fetch_email_and_create(clerk_id, claims, opts) do
     case EventasaurusApp.Auth.Clerk.Client.get_user(clerk_id) do
       {:ok, clerk_user} ->
         email = extract_email_from_clerk_user(clerk_user)
 
         if email do
           # Retry with email
-          find_by_email_or_create(user_id, clerk_id, email, claims, opts)
+          find_by_email_or_create(clerk_id, email, claims, opts)
         else
           Logger.error("Clerk user has no email address", %{clerk_id: clerk_id})
           {:error, :no_email}
@@ -171,19 +166,12 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
     end
   end
 
-  defp create_user_from_clerk(user_id, _clerk_id, email, claims, opts) do
+  defp create_user_from_clerk(clerk_id, email, claims, opts) do
     name = extract_name_from_claims(claims)
 
-    # Use the external_id (Supabase UUID) as supabase_id if available
-    # Otherwise generate a new UUID for new Clerk-native users
-    supabase_id =
-      if is_uuid?(user_id) do
-        user_id
-      else
-        # For new Clerk-native users, we need to generate a UUID
-        # or use the Clerk ID as-is (but our schema expects UUID format)
-        Ecto.UUID.generate()
-      end
+    # For new Clerk-native users, generate a UUID for legacy supabase_id column
+    # TODO: Once supabase_id is nullable, this can be removed
+    supabase_id = Ecto.UUID.generate()
 
     user_params = %{
       email: email,
@@ -201,11 +189,15 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
         user_params
       end
 
-    Logger.info("Creating new user from Clerk", %{email_domain: email_domain(email)})
+    Logger.info("Creating new user from Clerk", %{
+      email_domain: email_domain(email),
+      clerk_id: clerk_id
+    })
 
     case Accounts.create_user(user_params) do
       {:ok, user} ->
         Logger.info("Successfully created user from Clerk", %{user_id: user.id})
+        # TODO: Update Clerk external_id with new user.id via webhook or API
         {:ok, user}
 
       {:error, changeset} ->
@@ -262,12 +254,18 @@ defmodule EventasaurusApp.Auth.Clerk.Sync do
     end
   end
 
-  defp is_uuid?(str) when is_binary(str) do
-    # UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    String.match?(str, ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  # Parse userId from claims - handles string or integer
+  defp parse_user_id(nil), do: nil
+  defp parse_user_id(id) when is_integer(id), do: id
+
+  defp parse_user_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {int_id, ""} -> int_id
+      _ -> nil
+    end
   end
 
-  defp is_uuid?(_), do: false
+  defp parse_user_id(_), do: nil
 
   defp email_domain(nil), do: "unknown"
   defp email_domain(email), do: email |> String.split("@") |> List.last()

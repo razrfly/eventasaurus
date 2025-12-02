@@ -1,8 +1,13 @@
 /**
  * Clerk User Import Script
  *
- * Imports users from Supabase export (users.json) into Clerk.
- * Preserves bcrypt password hashes and maps Supabase UUIDs to external_id.
+ * Imports users from database export (users.json) into Clerk.
+ * Preserves bcrypt password hashes and maps our users.id to Clerk's external_id.
+ *
+ * Architecture:
+ *   - Our users.id (integer) is the canonical identifier
+ *   - Clerk stores this as external_id
+ *   - JWT claims include external_id for user lookup
  *
  * Usage:
  *   npm start           # Run import
@@ -34,10 +39,16 @@ async function createUser(userData) {
     email_address: [userData.email],
     first_name: userData.firstName || undefined,
     last_name: userData.lastName || undefined,
-    password_hasher: userData.passwordHasher || 'bcrypt',
-    password_digest: userData.password,
-    skip_password_requirement: !userData.password,
   };
+
+  // Only include password fields if user has a password
+  // Users without passwords (OAuth) will need to reset their password
+  if (userData.password) {
+    payload.password_hasher = userData.passwordHasher || 'bcrypt';
+    payload.password_digest = userData.password;
+  } else {
+    payload.skip_password_requirement = true;
+  }
 
   // Remove undefined values
   Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
@@ -96,8 +107,8 @@ async function main() {
 
     try {
       const clerkUser = await createUser(user);
-      console.log(`${progress} ✓ Imported: ${user.email} -> ${clerkUser.id}`);
-      results.success.push({ supabase: user, clerk: clerkUser });
+      console.log(`${progress} ✓ Imported: ${user.email} (id: ${user.userId}) -> ${clerkUser.id}`);
+      results.success.push({ user, clerk: clerkUser });
       await sleep(RATE_LIMIT_MS);
     } catch (error) {
       console.error(`${progress} ✗ Failed: ${user.email} - ${error.message}`);
