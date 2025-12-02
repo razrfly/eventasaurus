@@ -2,21 +2,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   @moduledoc """
   Authentication plugs for Phoenix controllers.
 
-  This module provides plugs for handling user authentication in controllers.
-  It manages the dual user assignment pattern:
+  This module provides plugs for handling Clerk authentication in controllers.
+  It manages the user assignment pattern:
 
-  - `conn.assigns.auth_user`: Raw authentication data from Supabase or Clerk (internal use only)
+  - `conn.assigns.auth_user`: Clerk JWT claims (internal use only)
   - Controllers should process this into a local User struct for business logic
-
-  ## Authentication Providers
-
-  This plug supports both Supabase and Clerk authentication:
-  - When CLERK_ENABLED=true, uses Clerk JWT tokens from `__session` cookie
-  - Otherwise, uses Supabase session tokens
 
   ## Available Plugs
 
-  1. `fetch_auth_user` - Loads the authenticated user from the session and assigns it to conn
+  1. `fetch_auth_user` - Loads the authenticated user from Clerk JWT and assigns to conn
   2. `require_authenticated_user` - Ensures a user is authenticated or redirects to login
   3. `redirect_if_user_is_authenticated` - Redirects authenticated users away from auth pages
   """
@@ -24,28 +18,17 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   import Plug.Conn
   import Phoenix.Controller
 
-  # Import verified routes for ~p sigil
   use Phoenix.VerifiedRoutes,
     endpoint: EventasaurusWeb.Endpoint,
     router: EventasaurusWeb.Router,
     statics: EventasaurusWeb.static_paths()
 
-  alias EventasaurusApp.Auth
-  alias EventasaurusApp.Auth.AuthProvider
-  alias EventasaurusApp.Auth.Client
-
   require Logger
 
-  # We'll use this in a future implementation for token expiry checks
-  # For now we can just remove it since it's not being used
-  # @refresh_window 300
-
   @doc """
-  Fetches the authenticated user from the session and assigns to `conn.assigns.auth_user`.
+  Fetches the authenticated user from Clerk JWT and assigns to `conn.assigns.auth_user`.
 
-  This plug supports both Supabase and Clerk authentication:
-  - When Clerk is enabled (CLERK_ENABLED=true), extracts JWT from `__session` cookie
-  - Otherwise, uses Supabase session tokens
+  Extracts JWT from `__session` cookie or Authorization header and verifies it.
 
   ## Usage
 
@@ -54,20 +37,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def fetch_auth_user(conn, _opts) do
     # If dev auth bypass already set the user, skip everything
     if conn.assigns[:dev_mode_auth] do
-      # Dev auth plug already handled everything
       conn
     else
-      # Check which auth provider is active
-      case AuthProvider.active_provider() do
-        :clerk ->
-          fetch_clerk_auth_user(conn)
-
-        :supabase ->
-          # Normal Supabase authentication flow
-          conn = maybe_refresh_token_if_needed(conn)
-          user = Auth.get_current_user(conn)
-          assign(conn, :auth_user, user)
-      end
+      fetch_clerk_auth_user(conn)
     end
   end
 
@@ -84,7 +56,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           {:ok, claims} ->
             Logger.debug("Clerk token verified", %{
               clerk_id: claims["sub"],
-              has_external_id: not is_nil(claims["external_id"])
+              has_user_id: not is_nil(claims["userId"])
             })
 
             assign(conn, :auth_user, claims)
@@ -121,20 +93,21 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       plug :assign_user_struct
   """
   def assign_user_struct(conn, _opts) do
-    user =
-      case ensure_user_struct(conn.assigns[:auth_user]) do
-        {:ok, user} -> user
-        {:error, _} -> nil
-      end
+    case ensure_user_struct(conn.assigns[:auth_user]) do
+      {:ok, user} ->
+        conn
+        |> assign(:user, user)
+        |> put_session(:current_user_id, user.id)
 
-    assign(conn, :user, user)
+      {:error, _} ->
+        assign(conn, :user, nil)
+    end
   end
 
   @doc """
   Requires that a user is authenticated.
 
   If no authenticated user is found in `conn.assigns.auth_user`, redirects to login page.
-  For LiveView routes, skips setting flash message since the LiveView auth hook will handle it.
 
   ## Usage
 
@@ -142,15 +115,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      # Only refresh Supabase tokens - Clerk tokens are verified each request
-      case AuthProvider.active_provider() do
-        :supabase ->
-          maybe_proactive_refresh_token(conn)
-
-        :clerk ->
-          # Clerk doesn't need proactive token refresh
-          conn
-      end
+      # Clerk tokens are verified each request, no proactive refresh needed
+      conn
     else
       conn
       |> maybe_store_return_to()
@@ -172,7 +138,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   @doc """
   Requires that a user is authenticated for API requests.
 
-  If no authenticated user is found in `conn.assigns.auth_user`, returns JSON error.
+  If no authenticated user is found, returns JSON error.
 
   ## Usage
 
@@ -180,35 +146,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      case AuthProvider.active_provider() do
-        :supabase ->
-          conn = maybe_proactive_refresh_token_api(conn)
-          # Check if connection was halted by refresh
-          if conn.halted do
-            conn
-          else
-            # Enhanced: Validate JWT token integrity
-            case validate_jwt_token(conn) do
-              {:ok, conn} ->
-                conn
-
-              {:error, _reason} ->
-                conn
-                |> put_status(:unauthorized)
-                |> Phoenix.Controller.json(%{
-                  success: false,
-                  error: "token_invalid",
-                  message: "Authentication failed"
-                })
-                |> halt()
-            end
-          end
-
-        :clerk ->
-          # Clerk tokens were already verified in fetch_auth_user
-          # No additional validation needed
-          conn
-      end
+      # Clerk tokens were already verified in fetch_auth_user
+      conn
     else
       conn
       |> put_status(:unauthorized)
@@ -242,36 +181,10 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   @doc """
-  Detects password recovery flow and handles appropriate redirects.
-
-  This plug checks if the user is in a password recovery session and redirects
-  them to the password reset form if needed. This handles the case where users
-  click a password reset link from their email.
-
-  ## Usage
-
-      plug :handle_password_recovery
-  """
-  def handle_password_recovery(conn, _opts) do
-    # Check if user is authenticated and in password recovery state
-    if conn.assigns[:auth_user] && is_password_recovery_session?(conn) do
-      # User is logged in temporarily for password recovery
-      # Redirect them to the reset password form
-      conn
-      |> put_flash(:info, "Please set your new password below.")
-      |> redirect(to: ~p"/auth/reset-password")
-      |> halt()
-    else
-      conn
-    end
-  end
-
-  @doc """
   Validates user permissions for specific actions.
 
   This plug checks if the authenticated user has the required permissions
-  for the requested action. Permissions are checked against user roles
-  and specific resource access rights.
+  for the requested action.
 
   ## Usage
 
@@ -303,7 +216,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   This plug sanitizes and validates all input parameters according to
   security best practices, preventing injection attacks and ensuring
-  data integrity. Logs security events for monitoring.
+  data integrity.
 
   ## Usage
 
@@ -312,7 +225,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def sanitize_and_validate_input(conn, _opts) do
     case sanitize_request_params(conn.params) do
       {:ok, sanitized_params} ->
-        # Log potential security concerns if significant sanitization occurred
         if params_were_modified?(conn.params, sanitized_params) do
           log_security_event(conn, "input_sanitized", %{
             original_params: sanitize_params_for_logging(conn.params),
@@ -323,7 +235,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         %{conn | params: sanitized_params}
 
       {:error, errors} ->
-        # Log security violation attempt
         log_security_event(conn, "input_validation_failed", %{
           errors: errors,
           params: sanitize_params_for_logging(conn.params)
@@ -344,10 +255,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   @doc """
   Redirects authenticated users away from auth pages, but allows password recovery.
 
-  This plug redirects authenticated users who try to access authentication pages
-  (like login, register) back to the dashboard, except when they are in a
-  password recovery session where they need to reset their password.
-
   ## Usage
 
       plug :redirect_if_user_is_authenticated_except_recovery
@@ -355,18 +262,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def redirect_if_user_is_authenticated_except_recovery(conn, _opts) do
     if conn.assigns[:auth_user] do
       if is_password_recovery_session?(conn) do
-        # User is in password recovery - allow access to reset password page only
         if conn.request_path == "/auth/reset-password" do
           conn
         else
-          # Redirect to reset password if they're trying to go elsewhere during recovery
           conn
           |> put_flash(:info, "Please complete your password reset first.")
           |> redirect(to: ~p"/auth/reset-password")
           |> halt()
         end
       else
-        # Normal authenticated user - redirect away from auth pages
         conn
         |> redirect(to: ~p"/dashboard")
         |> halt()
@@ -376,352 +280,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     end
   end
 
-  @doc """
-  Proactively refreshes the access token if it's near expiration.
-
-  Refreshes the token if it expires within the next 10 minutes.
-  Returns the updated connection with new tokens if refreshed.
-  """
-  def maybe_proactive_refresh_token(conn) do
-    # Check if we have a token expiry time stored
-    token_expires_at = get_session(conn, :token_expires_at)
-    refresh_token = get_session(conn, :refresh_token)
-
-    if token_expires_at && refresh_token && should_refresh_token?(token_expires_at) do
-      maybe_refresh_token(conn)
-    else
-      conn
-    end
-  end
-
-  # Helper function for fetch_auth_user to refresh tokens if needed
-  defp maybe_refresh_token_if_needed(conn) do
-    token_expires_at = get_session(conn, :token_expires_at)
-    refresh_token = get_session(conn, :refresh_token)
-
-    cond do
-      # No tokens at all
-      is_nil(get_session(conn, :access_token)) ->
-        conn
-
-      # We have tokens and should check expiry
-      token_expires_at && refresh_token && should_refresh_token?(token_expires_at) ->
-        case Client.refresh_token(refresh_token) do
-          {:ok, auth_data} ->
-            # Extract the tokens from the response
-            access_token = get_token_value(auth_data, "access_token")
-            new_refresh_token = get_token_value(auth_data, "refresh_token")
-            expires_at = get_token_expiry(auth_data)
-
-            if access_token && new_refresh_token do
-              # Update the session with the new tokens
-              conn
-              |> put_session(:access_token, access_token)
-              |> put_session(:refresh_token, new_refresh_token)
-              |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
-              |> configure_session(renew: true)
-            else
-              # Failed to extract tokens from response - clear stale tokens
-              Logger.warning("Failed to extract tokens from refresh response. Clearing session.")
-              Auth.clear_session(conn)
-            end
-
-          {:error, reason} ->
-            # Graceful degradation: Only clear session if token is actually expired
-            # This prevents forced logouts due to transient network issues during deployments
-            if is_token_actually_expired?(token_expires_at) do
-              # Token is truly expired, must clear session
-              Logger.warning(
-                "Token expired and refresh failed: #{inspect(reason)}. Clearing session."
-              )
-
-              # Report to Sentry for monitoring deployment-related refresh failures
-              Sentry.capture_message("Token refresh failed with expired token",
-                extra: %{
-                  reason: inspect(reason),
-                  token_expires_at: token_expires_at,
-                  context: "maybe_refresh_token_if_needed"
-                }
-              )
-
-              Auth.clear_session(conn)
-            else
-              # Token still valid, keep session despite refresh failure
-              # This handles transient network issues during Fly.io deployments
-              Logger.warning(
-                "Token refresh failed but token still valid (expires: #{token_expires_at}): #{inspect(reason)}. " <>
-                  "Keeping session to prevent logout during deployment."
-              )
-
-              # Report to Sentry for monitoring transient failures
-              Sentry.capture_message("Token refresh failed but session preserved",
-                level: :info,
-                extra: %{
-                  reason: inspect(reason),
-                  token_expires_at: token_expires_at,
-                  time_until_expiry: time_until_expiry(token_expires_at),
-                  context: "maybe_refresh_token_if_needed"
-                }
-              )
-
-              conn
-            end
-        end
-
-      # Token not near expiry or no refresh token
-      true ->
-        conn
-    end
-  end
-
-  # Helper to determine if token should be refreshed
-  defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
-    case DateTime.from_iso8601(expires_at_iso) do
-      {:ok, expires_at, _} ->
-        # Refresh if token expires in next 10 minutes
-        refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
-        DateTime.compare(refresh_threshold, expires_at) == :gt
-
-      _ ->
-        # If we can't parse the expiry, assume it needs refresh
-        true
-    end
-  end
-
-  defp should_refresh_token?(_), do: true
-
-  # Helper to check if token is actually expired (not just near expiry)
-  defp is_token_actually_expired?(expires_at_iso) when is_binary(expires_at_iso) do
-    case DateTime.from_iso8601(expires_at_iso) do
-      {:ok, expires_at, _} ->
-        # Token is expired if current time is past expiry time
-        DateTime.compare(DateTime.utc_now(), expires_at) == :gt
-
-      _ ->
-        # If we can't parse the expiry, assume it's expired for safety
-        true
-    end
-  end
-
-  defp is_token_actually_expired?(_), do: true
-
-  # Helper to calculate time until token expiry (for logging)
-  defp time_until_expiry(expires_at_iso) when is_binary(expires_at_iso) do
-    case DateTime.from_iso8601(expires_at_iso) do
-      {:ok, expires_at, _} ->
-        diff = DateTime.diff(expires_at, DateTime.utc_now(), :second)
-        "#{diff} seconds"
-
-      _ ->
-        "unknown"
-    end
-  end
-
-  defp time_until_expiry(_), do: "unknown"
-
-  @doc """
-  Proactively refreshes the access token if it's near expiration for API requests.
-
-  Returns the updated connection with new tokens if refreshed.
-  """
-  def maybe_proactive_refresh_token_api(conn) do
-    # Check if we have a token expiry time stored
-    token_expires_at = get_session(conn, :token_expires_at)
-    refresh_token = get_session(conn, :refresh_token)
-
-    if token_expires_at && refresh_token && should_refresh_token?(token_expires_at) do
-      maybe_refresh_token_api(conn)
-    else
-      conn
-    end
-  end
-
-  @doc """
-  Attempts to refresh the access token if it's near expiration.
-
-  Returns the updated connection with new tokens if refreshed,
-  or redirects to login if refresh fails.
-  """
-  def maybe_refresh_token(conn) do
-    refresh_token = get_session(conn, :refresh_token)
-
-    # Only try to refresh if we have a refresh token
-    if refresh_token do
-      case Client.refresh_token(refresh_token) do
-        {:ok, auth_data} ->
-          # Extract the tokens from the response
-          access_token = get_token_value(auth_data, "access_token")
-          new_refresh_token = get_token_value(auth_data, "refresh_token")
-          expires_at = get_token_expiry(auth_data)
-
-          if access_token && new_refresh_token do
-            # Update the session with the new tokens
-            conn
-            |> put_session(:access_token, access_token)
-            |> put_session(:refresh_token, new_refresh_token)
-            |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
-            |> configure_session(renew: true)
-          else
-            # If tokens couldn't be extracted, clear the session and redirect
-            Auth.clear_session(conn)
-            |> put_flash(:error, "Your session has expired. Please log in again.")
-            |> redirect(to: ~p"/auth/login")
-            |> halt()
-          end
-
-        {:error, _reason} ->
-          # If refresh fails, clear the session and redirect to login
-          Auth.clear_session(conn)
-          |> put_flash(:error, "Your session has expired. Please log in again.")
-          |> redirect(to: ~p"/auth/login")
-          |> halt()
-      end
-    else
-      conn
-    end
-  end
-
-  @doc """
-  Attempts to refresh the access token if it's near expiration for API requests.
-
-  Returns the updated connection with new tokens if refreshed,
-  or returns JSON error if refresh fails.
-  """
-  def maybe_refresh_token_api(conn) do
-    refresh_token = get_session(conn, :refresh_token)
-
-    # Only try to refresh if we have a refresh token
-    if refresh_token do
-      case Client.refresh_token(refresh_token) do
-        {:ok, auth_data} ->
-          # Extract the tokens from the response
-          access_token = get_token_value(auth_data, "access_token")
-          new_refresh_token = get_token_value(auth_data, "refresh_token")
-          expires_at = get_token_expiry(auth_data)
-
-          if access_token && new_refresh_token do
-            # Update the session with the new tokens
-            conn
-            |> put_session(:access_token, access_token)
-            |> put_session(:refresh_token, new_refresh_token)
-            |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
-            |> configure_session(renew: true)
-          else
-            # If tokens couldn't be extracted, clear session and return JSON error
-            Auth.clear_session(conn)
-            |> put_status(:unauthorized)
-            |> Phoenix.Controller.json(%{
-              success: false,
-              error: "session_expired",
-              message: "Your session has expired. Please log in again."
-            })
-            |> halt()
-          end
-
-        {:error, _reason} ->
-          # If refresh fails, clear session and return JSON error
-          Auth.clear_session(conn)
-          |> put_status(:unauthorized)
-          |> Phoenix.Controller.json(%{
-            success: false,
-            error: "session_expired",
-            message: "Your session has expired. Please log in again."
-          })
-          |> halt()
-      end
-    else
-      conn
-    end
-  end
-
-  # Helper to get a token value from various response formats
-  defp get_token_value(auth_data, key) do
-    cond do
-      is_map(auth_data) && Map.has_key?(auth_data, key) ->
-        Map.get(auth_data, key)
-
-      is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
-        Map.get(auth_data, String.to_atom(key))
-
-      is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
-        Map.get(auth_data, "token")
-
-      true ->
-        nil
-    end
-  end
-
-  # Helper to get token expiry from auth response
-  defp get_token_expiry(auth_data) do
-    cond do
-      is_map(auth_data) && Map.has_key?(auth_data, "expires_at") ->
-        auth_data["expires_at"]
-
-      is_map(auth_data) && Map.has_key?(auth_data, :expires_at) ->
-        auth_data.expires_at
-
-      is_map(auth_data) && Map.has_key?(auth_data, "expires_in") ->
-        auth_data["expires_in"]
-
-      is_map(auth_data) && Map.has_key?(auth_data, :expires_in) ->
-        auth_data.expires_in
-
-      true ->
-        nil
-    end
-  end
-
-  # Helper to calculate token expiry as ISO8601 string
-  defp calculate_token_expiry(nil) do
-    # Default to 1 hour if no expiry provided
-    DateTime.utc_now()
-    |> DateTime.add(3600, :second)
-    |> DateTime.to_iso8601()
-  end
-
-  defp calculate_token_expiry(expires_at)
-       when is_integer(expires_at) and expires_at > 1_000_000_000 do
-    # Unix timestamp
-    case DateTime.from_unix(expires_at) do
-      {:ok, datetime} ->
-        DateTime.to_iso8601(datetime)
-
-      {:error, _} ->
-        # Fall back to 1 hour if invalid timestamp
-        DateTime.utc_now()
-        |> DateTime.add(3600, :second)
-        |> DateTime.to_iso8601()
-    end
-  end
-
-  defp calculate_token_expiry(expires_in)
-       when is_integer(expires_in) and expires_in > 0 and expires_in < 100_000 do
-    # Seconds until expiry
-    DateTime.utc_now()
-    |> DateTime.add(expires_in, :second)
-    |> DateTime.to_iso8601()
-  end
-
-  defp calculate_token_expiry(expires_at) when is_binary(expires_at) do
-    # Already ISO8601 string
-    expires_at
-  end
-
-  defp calculate_token_expiry(_) do
-    # Fallback to 1 hour
-    DateTime.utc_now()
-    |> DateTime.add(3600, :second)
-    |> DateTime.to_iso8601()
-  end
-
   # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
-
-  # Handle Supabase user data (has "id" key)
-  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    EventasaurusApp.Accounts.find_or_create_from_supabase(supabase_user)
-  end
 
   # Handle Clerk JWT claims (has "sub" key for Clerk user ID)
   defp ensure_user_struct(%{"sub" => _clerk_id} = clerk_claims) do
@@ -733,43 +294,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   # Helper function to detect password recovery sessions
   defp is_password_recovery_session?(conn) do
-    # Check for recovery state in session (set by callback)
     recovery_state = get_session(conn, :password_recovery)
-
-    # Only allow recovery if explicitly set in session and user is authenticated
     recovery_state == true && conn.assigns[:auth_user] != nil
-  end
-
-  @doc """
-  Validates JWT token integrity and expiration.
-
-  Checks the JWT token stored in the session for validity,
-  ensuring it hasn't been tampered with and hasn't expired.
-  """
-  def validate_jwt_token(conn) do
-    access_token = get_session(conn, :access_token)
-
-    if access_token do
-      case Client.validate_token(access_token) do
-        {:ok, _token_data} ->
-          {:ok, conn}
-
-        {:error, :expired} ->
-          # Token expired, try to refresh
-          refreshed_conn = maybe_refresh_token_api(conn)
-
-          if refreshed_conn.halted do
-            {:error, "token_expired"}
-          else
-            {:ok, refreshed_conn}
-          end
-
-        {:error, reason} ->
-          {:error, "token_invalid: #{reason}"}
-      end
-    else
-      {:error, "no_token"}
-    end
   end
 
   # Enhanced permission validation with role-based access control
@@ -779,8 +305,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   defp validate_user_permission(user, action, resource, params) do
     case {action, resource} do
       {:search_users, _} ->
-        # Basic permission: authenticated users can search
-        # Enhanced: Ensure user has a valid profile
         if user.email && user.name do
           :ok
         else
@@ -788,7 +312,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         end
 
       {:manage_events, _} ->
-        # Check if user can manage the specific event
         event_id = params["event_id"]
 
         if event_id do
@@ -801,7 +324,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         end
 
       {:add_organizers, _} ->
-        # Only event creators and existing organizers can add new organizers
         event_id = params["event_id"]
 
         if event_id do
@@ -818,7 +340,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     end
   end
 
-  # Helper function to validate event management permissions
   defp validate_event_management_permission(user, event_id) do
     case EventasaurusApp.Events.get_event(event_id) do
       %EventasaurusApp.Events.Event{} = event ->
@@ -833,7 +354,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     end
   end
 
-  # Helper function to validate organizer management permissions
   defp validate_organizer_management_permission(user, event_id) do
     case EventasaurusApp.Events.get_event(event_id) do
       %EventasaurusApp.Events.Event{} = event ->
@@ -875,23 +395,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   defp sanitize_value("q", value) when is_binary(value) do
-    # Enhanced search query sanitization - comprehensive XSS and injection prevention
     sanitized =
       value
       |> String.trim()
-      # Remove HTML/script injection chars
       |> String.replace(~r/[<>\"'&%]/, "")
-      # Remove javascript: protocol
       |> String.replace(~r/javascript:/i, "")
-      # Remove data: protocol
       |> String.replace(~r/data:/i, "")
-      # Remove vbscript: protocol
       |> String.replace(~r/vbscript:/i, "")
-      # Remove event handlers (onclick, onload, etc.)
       |> String.replace(~r/on\w+\s*=/i, "")
-      # Normalize whitespace
       |> String.replace(~r/\s+/, " ")
-      # Limit length
       |> String.slice(0, 100)
 
     if String.length(sanitized) >= 2 do
@@ -904,26 +416,22 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   defp sanitize_value(key, value) when key in ["page", "per_page", "event_id"] do
     case safe_parse_positive_integer(value, nil) do
       nil -> {:error, "Must be a positive integer"}
-      # Reasonable upper limit
       int when int > 0 and int <= 10000 -> {:ok, int}
       _ -> {:error, "Must be a positive integer within reasonable limits"}
     end
   end
 
-  # Enhanced validation for string fields that might contain user content
   defp sanitize_value(key, value)
        when key in ["title", "description", "name"] and is_binary(value) do
     sanitized =
       value
       |> String.trim()
       |> sanitize_html_content()
-      # Reasonable length limit for most text fields
       |> String.slice(0, 255)
 
     {:ok, sanitized}
   end
 
-  # Enhanced validation for URL fields
   defp sanitize_value(key, value)
        when key in ["website_url", "callback_url", "redirect_url"] and is_binary(value) do
     if String.match?(value, ~r/^https?:\/\/[\w\-\.]+(:\d+)?(\/.*)?$/i) do
@@ -933,7 +441,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     end
   end
 
-  # Enhanced validation for email fields
   defp sanitize_value(key, value) when key in ["email"] and is_binary(value) do
     if String.match?(value, ~r/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) do
       {:ok, String.downcase(String.trim(value))}
@@ -944,12 +451,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   defp sanitize_value(_key, value), do: {:ok, value}
 
-  # Helper function to sanitize HTML content
   defp sanitize_html_content(content) when is_binary(content) do
     content
-    # Remove script tags
     |> String.replace(~r/<script[^>]*>.*?<\/script>/is, "")
-    # Remove all HTML tags
     |> String.replace(~r/<[^>]+>/, "")
     |> String.replace(~r/javascript:/i, "")
     |> String.replace(~r/data:/i, "")
@@ -958,7 +462,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     |> String.replace(~r/[<>\"'&%]/, "")
   end
 
-  # Helper function for safe integer parsing (reused from existing code)
   defp safe_parse_positive_integer(value, _default) when is_integer(value) and value > 0,
     do: value
 
@@ -991,13 +494,10 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   defp params_were_modified?(original_params, sanitized_params) do
-    # Compare the two parameter maps to detect if sanitization made changes
-    # This helps identify potential security issues in requests
     original_params != sanitized_params
   end
 
   defp sanitize_params_for_logging(params) when is_map(params) do
-    # Sanitize sensitive data before logging to prevent exposing secrets
     params
     |> Enum.map(fn {key, value} -> {key, sanitize_value_for_logging(key, value)} end)
     |> Enum.into(%{})
@@ -1009,7 +509,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   defp sanitize_value_for_logging(key, value) when key in ["email"] and is_binary(value) do
-    # Partially obscure email addresses for privacy
     case String.split(value, "@") do
       [user, domain] when byte_size(user) > 2 ->
         "#{String.slice(user, 0, 2)}***@#{domain}"
@@ -1020,7 +519,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   defp sanitize_value_for_logging(_key, value) when is_binary(value) and byte_size(value) > 100 do
-    # Truncate very long values to prevent log bloat
     "#{String.slice(value, 0, 100)}... [TRUNCATED]"
   end
 

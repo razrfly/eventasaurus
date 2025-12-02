@@ -7,6 +7,40 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# Load .env file in development/test environments
+# This must happen BEFORE any System.get_env calls
+if config_env() in [:dev, :test] do
+  env_file = Path.expand("../.env", __DIR__)
+
+  if File.exists?(env_file) do
+    env_file
+    |> File.read!()
+    |> String.split("\n")
+    |> Enum.each(fn line ->
+      line = String.trim(line)
+
+      # Skip empty lines and comments
+      if line != "" and not String.starts_with?(line, "#") do
+        case String.split(line, "=", parts: 2) do
+          [key, value] ->
+            key = String.trim(key)
+            # Remove surrounding quotes if present
+            value =
+              value
+              |> String.trim()
+              |> String.trim_leading("\"")
+              |> String.trim_trailing("\"")
+
+            System.put_env(key, value)
+
+          _ ->
+            :ok
+        end
+      end
+    end)
+  end
+end
+
 # Configure the current environment for runtime access
 # This replaces Mix.env() which is only available at compile time
 config :eventasaurus, :environment, config_env()
@@ -147,16 +181,18 @@ clerk_domain =
       end
   end
 
-# Determine if Clerk should be enabled
-# Enabled if both keys are set and we successfully extracted the domain
-clerk_enabled =
+# Clerk is the sole authentication provider (no CLERK_ENABLED toggle needed)
+# Just check that keys are configured
+clerk_configured =
   clerk_publishable_key != nil and
     clerk_secret_key != nil and
-    clerk_domain != nil and
-    System.get_env("CLERK_ENABLED", "false") == "true"
+    clerk_domain != nil
+
+if not clerk_configured do
+  IO.warn("Clerk is not configured. Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables.")
+end
 
 config :eventasaurus, :clerk,
-  enabled: clerk_enabled,
   publishable_key: clerk_publishable_key,
   secret_key: clerk_secret_key,
   domain: clerk_domain,
@@ -453,10 +489,15 @@ if config_env() == :prod do
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: port
+      port: port,
+      # Increase max header length for Clerk JWT tokens in cookies
+      # Default is 8KB, Clerk tokens can exceed this when combined with Phoenix session
+      # Cowboy protocol_options for HTTP/1.1
+      protocol_options: [
+        max_header_value_length: 32_768,
+        max_headers: 100
+      ]
     ],
     secret_key_base: secret_key_base
 

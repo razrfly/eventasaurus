@@ -118,6 +118,8 @@
           (function initClerkWaitlist() {
             const containerId = 'clerk-waitlist';
             let mounted = false;
+            let retryCount = 0;
+            const maxRetries = 100; // Max 10 seconds of waiting (100 * 100ms)
 
             async function mountWaitlist() {
               if (mounted) return;
@@ -125,8 +127,21 @@
               const container = document.getElementById(containerId);
               if (!container) return;
 
-              // Wait for Clerk to be available
+              // Wait for Clerk to be available with retry limit
               if (!window.Clerk) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                  console.error('Clerk failed to load after maximum retries');
+                  container.innerHTML = `
+                    <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+                      <h3 class="text-lg font-semibold text-gray-900 mb-2">Unable to Load</h3>
+                      <p class="text-gray-600">
+                        We're having trouble loading the waitlist. Please refresh the page or try again later.
+                      </p>
+                    </div>
+                  `;
+                  return;
+                }
                 // Clerk not loaded yet, wait and retry
                 setTimeout(mountWaitlist, 100);
                 return;

@@ -71,11 +71,13 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
 
   @doc """
   Handle Clerk logout.
-  Clerk's frontend will clear its session, but we also need to clear server-side session.
+  Clear server session and Clerk's cookies.
   """
   def logout(conn, _params) do
     conn
     |> configure_session(drop: true)
+    |> delete_resp_cookie("__session", path: "/")
+    |> delete_resp_cookie("__client_uat", path: "/")
     |> put_flash(:info, "You have been logged out")
     |> redirect(to: ~p"/")
   end

@@ -398,10 +398,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Logs out the current user.
   """
   def logout(conn, _params) do
-    # For Clerk, the frontend JS handles sign-out, but we still clear server session
+    # Clear server session and Clerk's __session cookie
     conn
     |> Auth.clear_session()
     |> configure_session(drop: true)
+    |> delete_resp_cookie("__session", path: "/")
+    |> delete_resp_cookie("__client_uat", path: "/")
     |> put_flash(:info, "You have been logged out")
     |> redirect(to: ~p"/")
   end

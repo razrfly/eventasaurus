@@ -1,47 +1,57 @@
 # Clerk User Migration
 
-This directory contains scripts to migrate users from Supabase Auth to Clerk.
+Migrate confirmed users to Clerk with our `users.id` as the canonical identifier.
+
+## Architecture
+
+- **Our `users.id`** (integer primary key) is the canonical identifier
+- **Clerk `external_id`** stores our user ID
+- **JWT claims** include `external_id` for user lookup
+- **No Supabase UUID references** - clean slate architecture
 
 ## Files
 
-- `users.json` - Exported Supabase users (auto-generated)
+- `users.json` - Exported users (generated from SQL query)
 - `import-users.js` - Node.js script to import users to Clerk
 - `package.json` - Dependencies
 
 ## Prerequisites
 
-1. Clerk credentials in `.env`:
+1. Clerk production credentials in `.env`:
    ```
-   CLERK_PUBLISHABLE_KEY=pk_test_...
-   CLERK_SECRET_KEY=sk_test_...
+   CLERK_PUBLISHABLE_KEY=pk_live_...
+   CLERK_SECRET_KEY=sk_live_...
    ```
 
 2. Node.js 18+
 
 ## Usage
 
-### 1. Export Users from Supabase (already done)
+### 1. Export Confirmed Users from Database
 
-The `users.json` file was generated with:
+Run this SQL query in Supabase SQL Editor (joins public.users with auth.users):
 
 ```sql
 SELECT json_agg(
   json_build_object(
-    'userId', id::text,
-    'email', email,
-    'firstName', split_part(raw_user_meta_data->>'name', ' ', 1),
+    'userId', u.id::text,
+    'email', au.email,
+    'firstName', split_part(u.name, ' ', 1),
     'lastName', CASE
-      WHEN position(' ' in raw_user_meta_data->>'name') > 0
-      THEN substring(raw_user_meta_data->>'name' from position(' ' in raw_user_meta_data->>'name') + 1)
+      WHEN position(' ' in u.name) > 0
+      THEN substring(u.name from position(' ' in u.name) + 1)
       ELSE ''
     END,
-    'password', encrypted_password,
+    'password', au.encrypted_password,
     'passwordHasher', 'bcrypt'
   )
 )
-FROM auth.users
-WHERE email IS NOT NULL;
+FROM public.users u
+JOIN auth.users au ON u.supabase_id = au.id::text
+WHERE au.email_confirmed_at IS NOT NULL;
 ```
+
+Save the JSON array output to `users.json`.
 
 ### 2. Install Dependencies
 
@@ -64,27 +74,27 @@ npm start
 
 ## What Happens
 
-1. Each Supabase user is created in Clerk with:
-   - `external_id` = Supabase UUID (preserves ID mapping)
+1. Each user is created in Clerk with:
+   - `external_id` = our `users.id` (integer, as string)
    - `email_address` = user's email
-   - `first_name`, `last_name` = parsed from name metadata
+   - `first_name`, `last_name` = parsed from name
    - `password_digest` = bcrypt hash (users keep same password)
 
 2. Results are saved to `import-results-{timestamp}.json`
 
 ## Post-Import: Configure Session Claims
 
-After import, configure Clerk to use the external_id in JWT claims:
+After import, configure Clerk to include external_id in JWT claims:
 
 1. Go to Clerk Dashboard → Sessions → Customize session token
 2. Add custom claim:
    ```json
    {
-     "userId": "{{user.external_id || user.id}}"
+     "userId": "{{user.external_id}}"
    }
    ```
 
-This ensures the Elixir backend receives the original Supabase UUID.
+This ensures the Elixir backend receives our user ID for direct database lookup.
 
 ## Troubleshooting
 
@@ -97,5 +107,13 @@ If a user already exists in Clerk, the import will fail for that user.
 Check the results file for details.
 
 ### Password Issues
-All Supabase passwords are bcrypt ($2a$10$...). Clerk supports this natively.
+All passwords are bcrypt ($2a$10$...). Clerk supports this natively.
 Users can sign in with their existing passwords.
+
+## Next Steps
+
+After successful import:
+1. Configure Clerk session claims (see above)
+2. Update application code to use `external_id` for user lookup
+3. Make `supabase_id` column nullable
+4. Eventually drop `supabase_id` column
