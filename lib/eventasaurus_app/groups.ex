@@ -182,18 +182,29 @@ defmodule EventasaurusApp.Groups do
   @doc """
   Returns the list of groups for a specific user.
 
+  ## Options
+  - `:preload` - List of associations to preload (default: [])
+
   ## Examples
 
       iex> list_user_groups(user)
       [%Group{}, ...]
 
+      iex> list_user_groups(user, preload: [:venue, :created_by])
+      [%Group{venue: %Venue{}, created_by: %User{}}, ...]
+
   """
-  def list_user_groups(%User{} = user) do
+  def list_user_groups(%User{} = user, opts \\ []) do
+    preloads = Keyword.get(opts, :preload, [])
+
     user
     |> Ecto.assoc(:groups)
     |> Repo.all()
-    |> Repo.preload([:venue, :created_by])
+    |> maybe_preload(preloads)
   end
+
+  defp maybe_preload(groups, []), do: groups
+  defp maybe_preload(groups, preloads), do: Repo.preload(groups, preloads)
 
   @doc """
   Gets a single group.

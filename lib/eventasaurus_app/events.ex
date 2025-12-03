@@ -3619,82 +3619,55 @@ defmodule EventasaurusApp.Events do
             "exclude_event_ids must contain only positive integers, invalid: #{inspect(invalid_ids)}"
     end
 
-    # Check if user exists (graceful handling for non-existent users)
-    case Repo.get(EventasaurusApp.Accounts.User, user_id) do
-      nil ->
-        # Return empty list for non-existent users rather than raising error
-        # This provides better UX when user accounts are deleted
-        []
+    # Optimized query: do grouping, counting, and limiting in SQL
+    # This avoids fetching all user events and processing in Elixir
+    query =
+      from(eu in EventUser,
+        join: e in Event,
+        on: eu.event_id == e.id,
+        left_join: v in Venue,
+        on: e.venue_id == v.id,
+        left_join: c in assoc(v, :city_ref),
+        left_join: country in assoc(c, :country),
+        where:
+          eu.user_id == ^user_id and
+            e.id not in ^exclude_event_ids and
+            is_nil(e.virtual_venue_url) and
+            not is_nil(e.venue_id),
+        group_by: [e.venue_id, v.name, v.address, c.name, country.name],
+        select: %{
+          venue_id: e.venue_id,
+          venue_name: v.name,
+          venue_address: v.address,
+          venue_city: c.name,
+          venue_state: nil,
+          venue_country: country.name,
+          usage_count: count(e.id),
+          last_used: max(e.inserted_at)
+        },
+        order_by: [desc: count(e.id), desc: max(e.inserted_at)],
+        limit: ^limit
+      )
 
-      _user ->
-        # Optimized query with proper indexing and selective fields
-        query =
-          from(eu in EventUser,
-            join: e in Event,
-            on: eu.event_id == e.id,
-            left_join: v in Venue,
-            on: e.venue_id == v.id,
-            left_join: c in assoc(v, :city_ref),
-            left_join: country in assoc(c, :country),
-            where:
-              eu.user_id == ^user_id and
-                e.id not in ^exclude_event_ids and
-                is_nil(e.virtual_venue_url) and
-                not is_nil(e.venue_id),
-            select: %{
-              venue_id: e.venue_id,
-              venue_name: v.name,
-              venue_address: v.address,
-              venue_city: c.name,
-              venue_state: nil,
-              venue_country: country.name,
-              virtual_venue_url: e.virtual_venue_url,
-              event_created_at: e.inserted_at
-            },
-            order_by: [desc: e.inserted_at]
-          )
+    query
+    |> Repo.all()
+    |> Enum.map(fn row ->
+      # Handle deleted venues gracefully
+      is_deleted = is_nil(row.venue_name)
 
-        query
-        |> Repo.all()
-        |> Enum.group_by(fn row ->
-          # Group by venue_id for physical venues only
-          row.venue_id
-        end)
-        |> Enum.map(fn {venue_id, rows} ->
-          # Calculate usage statistics
-          usage_count = length(rows)
-          last_used = rows |> Enum.map(& &1.event_created_at) |> Enum.max()
-
-          # Build location info for physical venue
-          first_row = List.first(rows)
-
-          # Handle deleted venues gracefully
-          is_deleted = is_nil(first_row.venue_name)
-
-          %{
-            id: venue_id,
-            name: if(is_deleted, do: "Deleted Venue", else: first_row.venue_name),
-            address: if(is_deleted, do: nil, else: first_row.venue_address),
-            city: if(is_deleted, do: nil, else: first_row.venue_city),
-            state: if(is_deleted, do: nil, else: first_row.venue_state),
-            country: if(is_deleted, do: nil, else: first_row.venue_country),
-            virtual_venue_url: first_row.virtual_venue_url,
-            usage_count: usage_count,
-            last_used: last_used,
-            is_deleted: is_deleted
-          }
-        end)
-        |> Enum.filter(fn location -> not is_nil(location.id) end)
-        |> Enum.sort(fn location1, location2 ->
-          # Sort by usage count (descending), then by recency (descending)
-          case {location1.usage_count, location2.usage_count} do
-            {c1, c2} when c1 > c2 -> true
-            {c1, c2} when c1 < c2 -> false
-            _ -> NaiveDateTime.compare(location1.last_used, location2.last_used) == :gt
-          end
-        end)
-        |> Enum.take(limit)
-    end
+      %{
+        id: row.venue_id,
+        name: if(is_deleted, do: "Deleted Venue", else: row.venue_name),
+        address: if(is_deleted, do: nil, else: row.venue_address),
+        city: if(is_deleted, do: nil, else: row.venue_city),
+        state: if(is_deleted, do: nil, else: row.venue_state),
+        country: if(is_deleted, do: nil, else: row.venue_country),
+        virtual_venue_url: nil,
+        usage_count: row.usage_count,
+        last_used: row.last_used,
+        is_deleted: is_deleted
+      }
+    end)
   end
 
   # Generic Participant Status Management Functions
