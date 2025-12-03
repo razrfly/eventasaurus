@@ -13,7 +13,6 @@ defmodule EventasaurusWeb.EventLive.New do
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
-  alias EventasaurusApp.Venues
   alias EventasaurusApp.Groups
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Helpers.ImageHelpers
@@ -30,7 +29,6 @@ defmodule EventasaurusWeb.EventLive.New do
     if user do
         changeset = Events.change_event(%Event{})
         default_date = Date.utc_today() |> Date.add(5) |> Date.to_iso8601()
-        venues = Venues.list_venues()
         # Load groups that the user is a member of or created
         user_groups = Groups.list_user_groups(user)
 
@@ -108,7 +106,6 @@ defmodule EventasaurusWeb.EventLive.New do
         socket =
           socket
           |> assign(:form, to_form(changeset))
-          |> assign(:venues, venues)
           |> assign(:user_groups, user_groups)
           |> assign(:user, user)
           |> assign(:changeset, changeset)
