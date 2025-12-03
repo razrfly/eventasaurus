@@ -23,7 +23,7 @@ defmodule EventasaurusDiscovery.AggregationTypeSlug do
     "FoodEvent" => "food",
     "ScreeningEvent" => "movies",
     "MusicEvent" => "music",
-    "Event" => "events",
+    "Event" => "happenings",
     "ComedyEvent" => "comedy",
     "DanceEvent" => "dance",
     "EducationEvent" => "classes",

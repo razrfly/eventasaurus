@@ -688,7 +688,7 @@ defmodule EventasaurusWeb.Router do
       live "/food/:identifier", AggregatedContentLive, :multi_city
       live "/movies/:identifier", AggregatedContentLive, :multi_city
       live "/music/:identifier", AggregatedContentLive, :multi_city
-      live "/events/:identifier", AggregatedContentLive, :multi_city
+      live "/happenings/:identifier", AggregatedContentLive, :multi_city
       live "/comedy/:identifier", AggregatedContentLive, :multi_city
       live "/dance/:identifier", AggregatedContentLive, :multi_city
       live "/classes/:identifier", AggregatedContentLive, :multi_city
