@@ -93,3 +93,6 @@ erl_crash.dump
 scripts/clerk-migration/users.json
 scripts/clerk-migration/import-results-*.json
 scripts/clerk-migration/node_modules/
+
+# Database schema dumps and SQL files
+*.sql

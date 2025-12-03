@@ -65,7 +65,7 @@ fi
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
-COPY config/config.exs config/${MIX_ENV}.exs config/supabase.exs config/clerk.exs config/
+COPY config/config.exs config/${MIX_ENV}.exs config/clerk.exs config/
 RUN mix deps.compile
 
 COPY priv priv

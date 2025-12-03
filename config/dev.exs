@@ -3,6 +3,29 @@ import Config
 # Set environment
 config :eventasaurus, :environment, :dev
 
+# Configure your database
+# Using local Postgres.app with PostGIS extension
+# To set up: createdb eventasaurus_dev && psql -d eventasaurus_dev -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+config :eventasaurus, EventasaurusApp.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "eventasaurus_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
+# SessionRepo for development (Oban, migrations, advisory locks)
+# In development, both repos point to the same local database
+config :eventasaurus, EventasaurusApp.SessionRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "eventasaurus_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
 # Development-only features
 config :eventasaurus, :dev_quick_login, true
 # Enable fetching production images from ImageKit in dev
@@ -17,22 +40,6 @@ config :eventasaurus, :week_pl_deployment_phase, :full
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
 # Binding to loopback ipv4 address prevents access from other machines.
-
-# Set development-specific Supabase configuration
-# This overrides the main supabase.exs config for development
-config :eventasaurus, :supabase,
-  # Local Supabase URL
-  url: "http://127.0.0.1:54321",
-  # Default anon key for local Supabase
-  api_key:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
-  # Local DB - NOTE: PostgreSQL runs on port 54322
-  database_url: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
-  auth: %{
-    site_url: "http://localhost:4000",
-    additional_redirect_urls: ["http://localhost:4000/auth/callback"],
-    auto_confirm_email: true
-  }
 
 # Configure PostHog settings for development
 # PostHog provides analytics and event tracking for your application
@@ -141,7 +148,7 @@ config :eventasaurus, :event_discovery,
   }
 
 # Cloudflare R2 configuration for development
-# Set these environment variables to test R2 uploads locally:
+# Set these environment variables in .env to test R2 uploads locally:
 # - CLOUDFLARE_ACCOUNT_ID
 # - CLOUDFLARE_ACCESS_KEY_ID
 # - CLOUDFLARE_SECRET_ACCESS_KEY
@@ -149,13 +156,9 @@ config :eventasaurus, :event_discovery,
 # - R2_CDN_URL (optional, defaults to "https://cdn2.wombie.com")
 #
 # If not set, R2 uploads will fail with a configuration error.
-# In development, you can still use the Supabase upload flow as fallback.
 config :eventasaurus, :r2,
   account_id: System.get_env("CLOUDFLARE_ACCOUNT_ID"),
   access_key_id: System.get_env("CLOUDFLARE_ACCESS_KEY_ID"),
   secret_access_key: System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY"),
   bucket: System.get_env("R2_BUCKET") || "wombie",
   cdn_url: System.get_env("R2_CDN_URL") || "https://cdn2.wombie.com"
-
-# Import database credentials from dev.secret.exs
-import_config "dev.secret.exs"

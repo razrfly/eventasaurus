@@ -10,7 +10,6 @@ import { SpotifySearch } from "./spotify_search";
 // Import modular components
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
-import { initSupabaseClient, SupabaseAuthHandler } from "./auth/supabase-manager";
 import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut } from "./auth/clerk-manager";
 import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
@@ -22,11 +21,7 @@ import { ChartHook } from "./hooks/chart_hook";
 import VenuesMap from "./hooks/venues-map";
 import MapboxVenuesMap from "./hooks/mapbox-venues-map";
 
-// Supabase client setup for identity management
-let supabaseClient = null;
-
 // Define LiveView hooks here
-import SupabaseImageUpload from "./supabase_upload";
 import R2ImageUpload from "./r2_upload";
 
 // Import unified uploaders for Phoenix LiveView external uploads
@@ -50,22 +45,11 @@ Hooks.LanguageCookie = {
   }
 }
 
-// Auth handlers are imported from auth/*.js
-// SupabaseAuthHandler for Supabase auth, ClerkAuthHandler for Clerk auth
-
-// Supabase image upload hook for file input (legacy)
-Hooks.SupabaseImageUpload = SupabaseImageUpload;
-
-// R2 image upload hook for file input (new - uses Cloudflare R2)
+// R2 image upload hook for file input (uses Cloudflare R2)
 Hooks.R2ImageUpload = R2ImageUpload;
 
 
 
-
-// Determine which auth handler to use based on meta tag configuration
-// The AuthHandler hook will be assigned based on which auth provider is active
-const authProvider = document.querySelector('meta[name="auth-provider"]')?.content;
-const AuthHandler = authProvider === 'clerk' ? ClerkAuthHandler : SupabaseAuthHandler;
 
 // Merge modular hooks with existing hooks
 const ModularHooks = {
@@ -75,9 +59,8 @@ const ModularHooks = {
   ...MediaHooks,
   ...PlacesHooks,
   ...DragDropHooks,
-  SupabaseAuthHandler, // Keep for backward compatibility
   ClerkAuthHandler, // Clerk auth handler
-  AuthHandler, // Active auth handler based on provider config
+  AuthHandler: ClerkAuthHandler, // Active auth handler (Clerk)
   ChartHook, // Chart.js hook for Phase 6
   VenuesMap, // Interactive Google Maps for venues page
   MapboxVenuesMap // Interactive Mapbox map for venues page
@@ -161,97 +144,19 @@ liveSocket.connect();
 window.liveSocket = liveSocket;
 
 // Expose signOut function on window for logout links
-// This handles both Clerk and Supabase auth providers
 window.signOut = async function() {
-  const authProvider = document.querySelector('meta[name="auth-provider"]')?.content;
-  if (authProvider === 'clerk') {
-    await clerkSignOut();
-  } else {
-    // For Supabase, just redirect to server logout
-    window.location.href = '/auth/logout';
-  }
+  await clerkSignOut();
 };
 
 // Initialize components on page load
 document.addEventListener("DOMContentLoaded", function() {
-  // Handle Supabase Auth Callback FIRST (critical for password reset links)
-  if (window.location.hash && window.location.hash.includes("access_token")) {
-    console.log('Processing Supabase auth tokens from URL hash...');
-    // Parse hash params
-    const hashParams = window.location.hash.substring(1).split("&").reduce((acc, pair) => {
-      const [key, value] = pair.split("=");
-      acc[key] = decodeURIComponent(value);
-      return acc;
-    }, {});
-
-    console.log('Parsed hash params:', Object.keys(hashParams));
-
-    // Check for required tokens
-    if (hashParams.access_token) {
-      console.log('Found access_token, creating form to submit to callback...');
-      
-      // Create a form to post the tokens
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = "/auth/callback";
-      form.style.display = "none";
-
-      // Add CSRF token (Phoenix default meta tag)
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-      if (csrfToken) {
-        const csrfInput = document.createElement("input");
-        csrfInput.type = "hidden";
-        csrfInput.name = "_csrf_token";
-        csrfInput.value = csrfToken;
-        form.appendChild(csrfInput);
-      }
-
-      // Add the tokens
-      const accessTokenInput = document.createElement("input");
-      accessTokenInput.type = "hidden";
-      accessTokenInput.name = "access_token";
-      accessTokenInput.value = hashParams.access_token;
-      form.appendChild(accessTokenInput);
-
-      if (hashParams.refresh_token) {
-        const refreshTokenInput = document.createElement("input");
-        refreshTokenInput.type = "hidden";
-        refreshTokenInput.name = "refresh_token";
-        refreshTokenInput.value = hashParams.refresh_token;
-        form.appendChild(refreshTokenInput);
-      }
-
-      // Add callback type
-      const typeInput = document.createElement("input");
-      typeInput.type = "hidden";
-      typeInput.name = "type";
-      typeInput.value = hashParams.type || "unknown";
-      form.appendChild(typeInput);
-
-      // Submit form to handle tokens server-side
-      document.body.appendChild(form);
-      console.log('Submitting auth callback form...');
-      form.submit();
-
-      // Remove hash from URL (to prevent tokens from staying in browser history)
-      window.history.replaceState(null, null, window.location.pathname);
-      return; // Exit early, form submission will navigate away
-    }
-  }
-
   // Initialize PostHog analytics with privacy checks
   posthogManager.showPrivacyBanner();
   posthogManager.init();
 
-  // Initialize auth client based on provider
-  const authProvider = document.querySelector('meta[name="auth-provider"]')?.content;
-  if (authProvider === 'clerk') {
-    console.log('Initializing Clerk authentication...');
-    initClerkClient();
-  } else {
-    console.log('Initializing Supabase authentication...');
-    initSupabaseClient();
-  }
+  // Initialize Clerk authentication
+  console.log('Initializing Clerk authentication...');
+  initClerkClient();
 });
 
 // Initialize modular components

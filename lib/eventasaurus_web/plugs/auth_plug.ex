@@ -261,7 +261,10 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   @doc """
-  Redirects authenticated users away from auth pages, but allows password recovery.
+  Redirects authenticated users away from auth pages.
+
+  With Clerk authentication, password recovery is handled by Clerk's hosted UI,
+  so we simply redirect all authenticated users to the dashboard.
 
   ## Usage
 
@@ -269,20 +272,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def redirect_if_user_is_authenticated_except_recovery(conn, _opts) do
     if conn.assigns[:auth_user] do
-      if is_password_recovery_session?(conn) do
-        if conn.request_path == "/auth/reset-password" do
-          conn
-        else
-          conn
-          |> put_flash(:info, "Please complete your password reset first.")
-          |> redirect(to: ~p"/auth/reset-password")
-          |> halt()
-        end
-      else
-        conn
-        |> redirect(to: ~p"/dashboard")
-        |> halt()
-      end
+      conn
+      |> redirect(to: ~p"/dashboard")
+      |> halt()
     else
       conn
     end
@@ -299,12 +291,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
-
-  # Helper function to detect password recovery sessions
-  defp is_password_recovery_session?(conn) do
-    recovery_state = get_session(conn, :password_recovery)
-    recovery_state == true && conn.assigns[:auth_user] != nil
-  end
 
   # Enhanced permission validation with role-based access control
   defp validate_user_permission(nil, _action, _resource, _params),

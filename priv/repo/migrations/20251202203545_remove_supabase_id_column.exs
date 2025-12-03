@@ -18,42 +18,56 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveSupabaseIdColumn do
   def up do
     # Drop the Supabase auth cascade trigger and function (if they exist)
     # These were created in 20250608104045_add_auth_users_foreign_key.exs
-    execute "DROP TRIGGER IF EXISTS on_auth_user_deleted ON auth.users"
+    # Note: auth.users schema only exists in Supabase, not in local Postgres or PlanetScale
+    # We use a PL/pgSQL block to safely check if the schema exists before dropping
+    execute """
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'auth') THEN
+        DROP TRIGGER IF EXISTS on_auth_user_deleted ON auth.users;
+      END IF;
+    END $$;
+    """
     execute "DROP FUNCTION IF EXISTS public.delete_user_on_auth_delete()"
 
     # Drop the unique index on supabase_id
     drop_if_exists index(:users, [:supabase_id])
 
-    # Remove the supabase_id column
-    alter table(:users) do
-      remove :supabase_id
-    end
+    # Remove the supabase_id column (only if it exists)
+    # In fresh local databases, this column may not exist
+    execute """
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'supabase_id') THEN
+        ALTER TABLE users DROP COLUMN supabase_id;
+      END IF;
+    END $$;
+    """
   end
 
   def down do
     # Re-add the supabase_id column (nullable for rollback since we can't restore data)
-    alter table(:users) do
-      add :supabase_id, :string, null: true
-    end
-
-    # Re-create the unique index
-    create unique_index(:users, [:supabase_id])
-
-    # Re-create the trigger and function
+    # Only add if it doesn't already exist
     execute """
-    CREATE OR REPLACE FUNCTION public.delete_user_on_auth_delete()
-    RETURNS TRIGGER AS $$
+    DO $$
     BEGIN
-      DELETE FROM public.users WHERE supabase_id = OLD.id::text;
-      RETURN OLD;
-    END;
-    $$ LANGUAGE plpgsql SECURITY DEFINER;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'supabase_id') THEN
+        ALTER TABLE users ADD COLUMN supabase_id VARCHAR NULL;
+      END IF;
+    END $$;
     """
 
+    # Re-create the unique index (if column exists)
     execute """
-    CREATE TRIGGER on_auth_user_deleted
-      AFTER DELETE ON auth.users
-      FOR EACH ROW EXECUTE FUNCTION public.delete_user_on_auth_delete();
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'supabase_id') THEN
+        CREATE UNIQUE INDEX IF NOT EXISTS users_supabase_id_index ON users(supabase_id);
+      END IF;
+    END $$;
     """
+
+    # Skip re-creating the trigger - auth.users schema doesn't exist in local Postgres or PlanetScale
+    # The trigger was only relevant for Supabase environments
   end
 end

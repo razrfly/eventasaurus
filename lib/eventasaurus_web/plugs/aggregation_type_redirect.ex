@@ -16,22 +16,23 @@ defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
       # Old movie type:   /c/warsaw/movie/cinema-city
       # Redirects to:     /c/warsaw/movies/cinema-city
 
-      # Old events type:  /events/some-identifier
-      # Redirects to:     /happenings/some-identifier
-      # (events slug renamed to avoid conflict with /events/:slug routes)
+  Note: The "events" path is NOT redirected because /events/* is reserved
+  for core event management routes. The generic "Event" type uses
+  /happenings/:identifier for aggregated content instead.
   """
 
   import Plug.Conn
   import Phoenix.Controller, only: [redirect: 2]
 
   # Mapping of legacy custom types to URL-friendly slugs
+  # NOTE: "events" is NOT included here because /events/* is reserved for
+  # core event management routes (create, edit, manage). The "Event" type
+  # uses /happenings/* for aggregated content instead.
   @legacy_mappings %{
     "restaurant" => "food",
     "movie" => "movies",
     "concert" => "music",
-    "trivia" => "social",
-    # events slug was renamed to happenings to avoid conflict with /events/:slug routes
-    "events" => "happenings"
+    "trivia" => "social"
   }
 
   def init(opts), do: opts
@@ -44,7 +45,7 @@ defmodule EventasaurusWeb.Plugs.AggregationTypeRedirect do
 
       # Multi-city route: /:content_type/:identifier
       [content_type, identifier | rest]
-      when content_type in ["restaurant", "movie", "concert", "trivia", "events"] ->
+      when content_type in ["restaurant", "movie", "concert", "trivia"] ->
         redirect_legacy_multi_city(conn, content_type, identifier, rest)
 
       _ ->

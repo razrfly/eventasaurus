@@ -14,15 +14,16 @@ config :eventasaurus, EventasaurusWeb.Endpoint,
   server: true
 
 # Configure the database for testing
-# Increase pool size to handle parallel tests efficiently
+# Using local Postgres.app with PostGIS extension
+# The MIX_TEST_PARTITION environment variable can be used
+# to provide built-in test partitioning in CI environment.
 pool_size = max(20, System.schedulers_online() * 4)
 
 config :eventasaurus, EventasaurusApp.Repo,
   username: "postgres",
   password: "postgres",
-  hostname: "127.0.0.1",
-  port: 54322,
-  database: "postgres_test",
+  hostname: "localhost",
+  database: "eventasaurus_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: pool_size,
   # Reduce connection timeouts for faster test execution
@@ -36,9 +37,8 @@ config :eventasaurus, EventasaurusApp.Repo,
 config :eventasaurus, EventasaurusApp.SessionRepo,
   username: "postgres",
   password: "postgres",
-  hostname: "127.0.0.1",
-  port: 54322,
-  database: "postgres_test",
+  hostname: "localhost",
+  database: "eventasaurus_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: pool_size,
   timeout: 15_000,
@@ -70,17 +70,6 @@ config :eventasaurus, :auth_client, EventasaurusApp.Auth.TestClient
 # Configure Stripe mock for testing
 config :eventasaurus, :stripe_module, EventasaurusApp.StripeMock
 
-# Test Supabase configuration with local demo values
-config :eventasaurus, :supabase,
-  url: "http://127.0.0.1:54321",
-  api_key:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
-  database_url: "ecto://postgres:postgres@127.0.0.1:54322/postgres_test",
-  auth: %{
-    site_url: "http://localhost:4002",
-    additional_redirect_urls: ["http://localhost:4002/auth/callback"],
-    auto_confirm_email: true
-  }
 
 # Configure Wallaby for browser automation testing
 config :wallaby,
