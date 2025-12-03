@@ -379,7 +379,7 @@
               <a href="/settings" class="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500 rounded-full" title="Go to Settings">
                 <%= avatar_img_size(@conn.assigns[:user], :sm, class: "hover:scale-105 transition-transform cursor-pointer border-2 border-gray-300 hover:border-gray-500") %>
               </a>
-              <a href="/auth/logout" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+              <a href="#" onclick="window.signOut(); return false;" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
                 Log out
               </a>
             <% else %>
@@ -467,7 +467,7 @@
                 <%= @conn.assigns[:user].email %>
               </p>
             </div>
-            <a href="/auth/logout" class="block w-full text-center px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <a href="#" onclick="window.signOut(); return false;" class="block w-full text-center px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               Log out
             </a>
           <% else %>

@@ -2160,12 +2160,20 @@ defmodule EventasaurusWeb.PublicEventLive do
   # ## Parameters
   # - `nil`: No authenticated user
   # - `%User{}`: Already a local User struct
+  # - Clerk JWT claims map (with "sub" key)
   #
   # ## Returns
   # - `{:ok, %User{}}`: Successfully processed user
   # - `{:error, reason}`: Failed to process or no user
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
+
+  # Handle Clerk JWT claims (has "sub" key for Clerk user ID)
+  defp ensure_user_struct(%{"sub" => _clerk_id} = clerk_claims) do
+    alias EventasaurusApp.Auth.Clerk.Sync, as: ClerkSync
+    ClerkSync.sync_user(clerk_claims)
+  end
+
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   # Helper function for poll phase CSS classes
