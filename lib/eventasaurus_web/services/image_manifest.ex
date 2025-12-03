@@ -84,10 +84,20 @@ defmodule EventasaurusWeb.Services.ImageManifest do
   end
 
   defp ensure_cache_table do
-    if :ets.whereis(@cache_table) == :undefined do
-      # Use named_table and public so it persists and is accessible
-      # read_concurrency optimized for many reads, few writes
-      :ets.new(@cache_table, [:named_table, :public, :set, read_concurrency: true])
+    case :ets.whereis(@cache_table) do
+      :undefined ->
+        try do
+          # Use named_table and public so it persists and is accessible
+          # read_concurrency optimized for many reads, few writes
+          :ets.new(@cache_table, [:named_table, :public, :set, read_concurrency: true])
+        rescue
+          ArgumentError ->
+            # Table was created by a racing process; safe to proceed
+            :ok
+        end
+
+      _ ->
+        :ok
     end
   end
 
