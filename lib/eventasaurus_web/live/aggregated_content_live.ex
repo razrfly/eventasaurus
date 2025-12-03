@@ -12,18 +12,12 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusWeb.JsonLd.ItemListSchema
   alias Eventasaurus.CDN
 
-  # Multi-city route: /:content_type/:identifier?city=krakow&scope=all
+  # Multi-city route: /social/:identifier, /movies/:identifier, etc.
+  # Content type is extracted from the URL path (first segment)
   # City will be determined from query params in handle_params
   @impl true
-  def mount(
-        %{"content_type" => content_type, "identifier" => identifier} = params,
-        _session,
-        socket
-      )
+  def mount(%{"identifier" => identifier} = params, _session, socket)
       when not is_map_key(params, "city_slug") do
-    # Convert URL slug to schema.org type for internal use
-    schema_type = AggregationTypeSlug.from_slug(content_type)
-
     # Multi-city route - city will come from query params
     # Use a default city temporarily (will be updated in handle_params)
     # Fallback chain: krakow -> first discovery-enabled city -> error
@@ -38,11 +32,12 @@ defmodule EventasaurusWeb.AggregatedContentLive do
          |> push_navigate(to: ~p"/activities")}
 
       city ->
+        # Content type will be extracted from URL path in handle_params
         {:ok,
          socket
          |> assign(:city, city)
-         |> assign(:content_type, schema_type)
-         |> assign(:content_type_slug, content_type)
+         |> assign(:content_type, nil)
+         |> assign(:content_type_slug, nil)
          |> assign(:identifier, identifier)
          |> assign(:scope, :all_cities)
          |> assign(:page_title, nil)
@@ -84,7 +79,21 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   end
 
   @impl true
-  def handle_params(params, _url, socket) do
+  def handle_params(params, url, socket) do
+    # Extract content type from URL path for multi-city routes
+    # URL format: /social/:identifier or /movies/:identifier, etc.
+    socket =
+      if socket.assigns[:is_multi_city_route] && is_nil(socket.assigns[:content_type]) do
+        content_type_slug = extract_content_type_from_url(url)
+        schema_type = AggregationTypeSlug.from_slug(content_type_slug)
+
+        socket
+        |> assign(:content_type, schema_type)
+        |> assign(:content_type_slug, content_type_slug)
+      else
+        socket
+      end
+
     # Update city if we're on multi-city route and city param is provided
     socket =
       if socket.assigns[:is_multi_city_route] && params["city"] do
@@ -113,6 +122,16 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     {:noreply, socket}
   end
 
+  # Extract content type slug from URL path
+  # e.g., "/social/pubquiz-pl?city=krakow" -> "social"
+  defp extract_content_type_from_url(url) do
+    url
+    |> URI.parse()
+    |> Map.get(:path, "")
+    |> String.split("/", trim: true)
+    |> List.first()
+  end
+
   @impl true
   def handle_event("toggle_scope", %{"scope" => scope_str}, socket) do
     scope =
@@ -128,9 +147,10 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       |> then(fn socket ->
         if scope == :all_cities do
           # Expanding to all cities - use multi-city route
+          # Using string interpolation since routes are now explicit per content type
           push_navigate(socket,
             to:
-              ~p"/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
+              "/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
           )
         else
           # Collapsing to city only - use city-scoped route
@@ -400,7 +420,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
                 <div class="flex items-center gap-3">
                   <h2 class="text-2xl font-bold text-gray-900">
                     <.link
-                      navigate={~p"/#{@content_type_slug}/#{@identifier}?scope=all&city=#{city_group.city.slug}"}
+                      navigate={"/#{@content_type_slug}/#{@identifier}?scope=all&city=#{city_group.city.slug}"}
                       class="hover:text-blue-600 transition-colors"
                     >
                       <%= city_group.city.name %>
