@@ -3633,7 +3633,8 @@ defmodule EventasaurusApp.Events do
           eu.user_id == ^user_id and
             e.id not in ^exclude_event_ids and
             is_nil(e.virtual_venue_url) and
-            not is_nil(e.venue_id),
+            not is_nil(e.venue_id) and
+            is_nil(e.deleted_at),
         group_by: [e.venue_id, v.name, v.address, c.name, country.name],
         select: %{
           venue_id: e.venue_id,
