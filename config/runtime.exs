@@ -567,19 +567,20 @@ if config_env() == :prod do
 
   if use_planetscale do
     # PlanetScale configuration
-    # Build connection URLs from individual environment variables
+    # Using hostname-based config (not URL-based) to ensure socket_options and ssl_opts
+    # are properly applied. URL-based config may not merge these options correctly.
+    # This matches the proven working configuration from cinegraph project.
     ps_host = System.get_env("PLANETSCALE_DATABASE_HOST")
     ps_db = System.get_env("PLANETSCALE_DATABASE")
     ps_user = System.get_env("PLANETSCALE_DATABASE_USERNAME")
     ps_pass = System.get_env("PLANETSCALE_DATABASE_PASSWORD")
-    ps_direct_port = System.get_env("PLANETSCALE_DATABASE_PORT", "5432")
-    ps_pooler_port = System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")
+    ps_direct_port = String.to_integer(System.get_env("PLANETSCALE_DATABASE_PORT", "5432"))
+    ps_pooler_port = String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432"))
 
-    # Construct connection URLs
-    # Pooled connection (PgBouncer) for web requests - port 6432
-    planetscale_pooled_url = "postgresql://#{ps_user}:#{ps_pass}@#{ps_host}:#{ps_pooler_port}/#{ps_db}"
-    # Direct connection for Oban, migrations, advisory locks - port 5432
-    planetscale_direct_url = "postgresql://#{ps_user}:#{ps_pass}@#{ps_host}:#{ps_direct_port}/#{ps_db}"
+    # Force IPv4 unless IPv6 is explicitly enabled
+    # PlanetScale requires IPv4 for reliable connectivity from Fly.io
+    # This MUST be applied via hostname-based config, not URL-based
+    socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
 
     # PlanetScale SSL: Standard SSL verification using CAStore
     # (proven working configuration from cinegraph project)
@@ -592,12 +593,13 @@ if config_env() == :prod do
       ]
     ]
 
-    # Force IPv4 unless IPv6 is explicitly enabled
-    # PlanetScale requires IPv4 for reliable connectivity from Fly.io
-    socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
-
+    # Repo: Pooled connection via PgBouncer (port 6432) for web requests
+    # Using hostname-based config to guarantee socket_options: [:inet] is applied
     config :eventasaurus, EventasaurusApp.Repo,
-      url: planetscale_pooled_url,
+      username: ps_user,
+      password: ps_pass,
+      hostname: ps_host,
+      port: ps_pooler_port,
       database: ps_db,
       pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
       socket_options: socket_opts,
@@ -610,9 +612,13 @@ if config_env() == :prod do
       # Disable prepared statements for PgBouncer compatibility
       prepare: :unnamed
 
-    # Configure SessionRepo for direct connection (Oban, migrations, advisory locks)
+    # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
+    # Using hostname-based config to guarantee socket_options: [:inet] is applied
     config :eventasaurus, EventasaurusApp.SessionRepo,
-      url: planetscale_direct_url,
+      username: ps_user,
+      password: ps_pass,
+      hostname: ps_host,
+      port: ps_direct_port,
       database: ps_db,
       pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
       socket_options: socket_opts,
