@@ -11,7 +11,6 @@
 # and so on) as they will fail if something goes wrong.
 
 alias EventasaurusApp.Auth.SeedUserManager
-alias EventasaurusApp.Auth.ServiceRoleHelper
 
 # Create Holden's personal login using the comprehensive user manager
 IO.puts("🌱 Setting up essential users...")
@@ -20,29 +19,17 @@ holden_attrs = %{
   email: "holden.thomas@gmail.com",
   name: "Holden",
   username: "holden",
-  profile_public: true,
-  password: "sawyer1234"
+  profile_public: true
 }
 
 case SeedUserManager.get_or_create_user(holden_attrs) do
   {:ok, user} ->
     IO.puts("✅ User ready: #{user.email}")
-    
-    # Validate authentication if we have the service role key
-    if ServiceRoleHelper.service_role_key_available?() do
-      case SeedUserManager.validate_auth("holden.thomas@gmail.com", "sawyer1234") do
-        :ok -> IO.puts("✅ Authentication verified for holden.thomas@gmail.com")
-        {:error, _} -> IO.puts("⚠️  Authentication not working yet for holden.thomas@gmail.com")
-      end
-    end
-    
+    # Note: Authentication is now handled by Clerk, not Supabase
+    # Users authenticate via Clerk OAuth flow, not password-based auth
+
   {:error, reason} ->
     IO.puts("❌ Failed to create user: #{inspect(reason)}")
-    
-    # Show instructions if no service role key
-    unless ServiceRoleHelper.service_role_key_available?() do
-      ServiceRoleHelper.ensure_available()
-    end
 end
 
 # Seed locations (countries and cities)

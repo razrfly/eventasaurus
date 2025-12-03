@@ -48,7 +48,7 @@ config :eventasaurus, :environment, config_env()
 # Configure Oban for background job processing
 # Must be in runtime.exs to conditionally select repo based on environment
 # Production uses SessionRepo for long-running jobs (session pooler, advisory locks)
-# Development/Test use regular Repo (same database, simpler)
+# Development/test use regular Repo (same database, simpler)
 oban_repo =
   if config_env() == :prod do
     EventasaurusApp.SessionRepo
@@ -456,10 +456,21 @@ case System.get_env("SENTRY_DSN") do
 end
 
 if config_env() == :prod do
-  # Validate required Supabase environment variables are set
-  for var <-
-        ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL SUPABASE_SESSION_DATABASE_URL) do
-    System.fetch_env!(var)
+  # Check which database provider is configured
+  # PlanetScale takes precedence if PLANETSCALE_DATABASE_HOST is set
+  use_planetscale = System.get_env("PLANETSCALE_DATABASE_HOST") != nil
+
+  if use_planetscale do
+    # Validate required PlanetScale environment variables
+    for var <- ~w(PLANETSCALE_DATABASE_HOST PLANETSCALE_DATABASE PLANETSCALE_DATABASE_USERNAME PLANETSCALE_DATABASE_PASSWORD) do
+      System.fetch_env!(var)
+    end
+  else
+    # Validate required Supabase environment variables are set (legacy/fallback)
+    for var <-
+          ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL SUPABASE_SESSION_DATABASE_URL) do
+      System.fetch_env!(var)
+    end
   end
 
   # Validate required Cloudflare R2 credentials for file storage (uploads + sitemap)
@@ -551,91 +562,139 @@ if config_env() == :prod do
   # Configure Swoosh API client
   config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
-  # Configure the database for production with proper SSL certificate verification
-  # Extract DB host from connection URL for Server Name Indication (SNI)
-  # Path to Supabase CA certificate
-  cert_path = Path.join(:code.priv_dir(:eventasaurus), "prod-ca-2021.crt")
+  # Configure the database for production
+  # Supports both PlanetScale and Supabase (legacy)
 
-  # Transaction mode pooler SSL: Accept any hostname but validate CA chain
-  # Pooler hostname (aws-0-eu-central-1.pooler.supabase.com) doesn't match certificate
-  # (cert is for db.vnhxedeynrtvakglinnr.supabase.co)
-  # This skips hostname verification while still validating certificate chain
-  pooler_ssl_opts = [
-    verify: :verify_peer,
-    cacertfile: cert_path,
-    depth: 3,
-    # Accept any hostname but validate certificate chain
-    customize_hostname_check: [
-      match_fun: fn _Hostname, _Extension -> true end
-    ]
-  ]
+  if use_planetscale do
+    # PlanetScale configuration
+    # Build connection URLs from individual environment variables
+    ps_host = System.get_env("PLANETSCALE_DATABASE_HOST")
+    ps_db = System.get_env("PLANETSCALE_DATABASE")
+    ps_user = System.get_env("PLANETSCALE_DATABASE_USERNAME")
+    ps_pass = System.get_env("PLANETSCALE_DATABASE_PASSWORD")
+    ps_direct_port = System.get_env("PLANETSCALE_DATABASE_PORT", "5432")
+    ps_pooler_port = System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")
 
-  # Direct connection SSL: Full certificate verification with hostname check
-  session_db_url = System.get_env("SUPABASE_SESSION_DATABASE_URL")
+    # Construct connection URLs
+    # Pooled connection (PgBouncer) for web requests - port 6432
+    planetscale_pooled_url = "postgresql://#{ps_user}:#{ps_pass}@#{ps_host}:#{ps_pooler_port}/#{ps_db}"
+    # Direct connection for Oban, migrations, advisory locks - port 5432
+    planetscale_direct_url = "postgresql://#{ps_user}:#{ps_pass}@#{ps_host}:#{ps_direct_port}/#{ps_db}"
 
-  session_db_host =
-    if session_db_url,
-      do: URI.parse(session_db_url).host,
-      else: "db.vnhxedeynrtvakglinnr.supabase.co"
-
-  session_ssl_opts =
-    if File.exists?(cert_path) do
-      [
-        verify: :verify_peer,
-        cacertfile: cert_path,
-        depth: 3,
-        server_name_indication: String.to_charlist(session_db_host),
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-        ]
+    # PlanetScale SSL: Standard SSL verification using CAStore
+    # (proven working configuration from cinegraph project)
+    planetscale_ssl_opts = [
+      verify: :verify_peer,
+      cacertfile: CAStore.file_path(),
+      server_name_indication: String.to_charlist(ps_host),
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
       ]
-    else
-      raise """
-      Supabase CA certificate not found at #{cert_path}.
-      This certificate is required for secure database connections in production.
-      Please ensure the certificate file exists before deploying.
-      """
-    end
+    ]
 
-  config :eventasaurus, EventasaurusApp.Repo,
-    url: System.get_env("SUPABASE_DATABASE_URL"),
-    database: "postgres",
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
-    queue_target: 5000,
-    queue_interval: 30000,
-    connect_timeout: 30_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: pooler_ssl_opts,
-    # Disable prepared statements for Transaction mode (pgbouncer) compatibility
-    prepare: :unnamed
+    # Force IPv4 unless IPv6 is explicitly enabled
+    # PlanetScale requires IPv4 for reliable connectivity from Fly.io
+    socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
 
-  # Configure SessionRepo for Session mode operations (Oban, migrations, advisory locks)
-  # Uses direct database connection with full PostgreSQL feature support
-  # Prepared statements enabled (default) for Session mode performance
-  config :eventasaurus, EventasaurusApp.SessionRepo,
-    url: System.get_env("SUPABASE_SESSION_DATABASE_URL"),
-    database: "postgres",
-    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
-    queue_target: 5000,
-    queue_interval: 30000,
-    connect_timeout: 30_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: session_ssl_opts
+    config :eventasaurus, EventasaurusApp.Repo,
+      url: planetscale_pooled_url,
+      database: ps_db,
+      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+      socket_options: socket_opts,
+      queue_target: 5000,
+      queue_interval: 30000,
+      connect_timeout: 30_000,
+      handshake_timeout: 30_000,
+      ssl: true,
+      ssl_opts: planetscale_ssl_opts,
+      # Disable prepared statements for PgBouncer compatibility
+      prepare: :unnamed
 
-  # Configure Supabase settings for production
-  config :eventasaurus, :supabase,
-    url: System.get_env("SUPABASE_URL"),
-    api_key: System.get_env("SUPABASE_PUBLISHABLE_KEY"),
-    service_role_key: System.get_env("SUPABASE_SECRET_KEY"),
-    database_url: System.get_env("SUPABASE_DATABASE_URL"),
-    bucket: System.get_env("SUPABASE_BUCKET") || "event-images",
-    auth: %{
-      site_url: "https://wombie.com",
-      additional_redirect_urls: ["https://wombie.com/auth/callback"],
-      auto_confirm_email: false
-    }
+    # Configure SessionRepo for direct connection (Oban, migrations, advisory locks)
+    config :eventasaurus, EventasaurusApp.SessionRepo,
+      url: planetscale_direct_url,
+      database: ps_db,
+      pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
+      socket_options: socket_opts,
+      queue_target: 5000,
+      queue_interval: 30000,
+      connect_timeout: 30_000,
+      handshake_timeout: 30_000,
+      ssl: true,
+      ssl_opts: planetscale_ssl_opts
+  else
+    # Supabase configuration (legacy/fallback)
+    # Path to Supabase CA certificate
+    cert_path = Path.join(:code.priv_dir(:eventasaurus), "prod-ca-2021.crt")
+
+    # Transaction mode pooler SSL: Accept any hostname but validate CA chain
+    # Pooler hostname (aws-0-eu-central-1.pooler.supabase.com) doesn't match certificate
+    # (cert is for db.vnhxedeynrtvakglinnr.supabase.co)
+    # This skips hostname verification while still validating certificate chain
+    pooler_ssl_opts = [
+      verify: :verify_peer,
+      cacertfile: cert_path,
+      depth: 3,
+      # Accept any hostname but validate certificate chain
+      customize_hostname_check: [
+        match_fun: fn _Hostname, _Extension -> true end
+      ]
+    ]
+
+    # Direct connection SSL: Full certificate verification with hostname check
+    session_db_url = System.get_env("SUPABASE_SESSION_DATABASE_URL")
+
+    session_db_host =
+      if session_db_url,
+        do: URI.parse(session_db_url).host,
+        else: "db.vnhxedeynrtvakglinnr.supabase.co"
+
+    session_ssl_opts =
+      if File.exists?(cert_path) do
+        [
+          verify: :verify_peer,
+          cacertfile: cert_path,
+          depth: 3,
+          server_name_indication: String.to_charlist(session_db_host),
+          customize_hostname_check: [
+            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+          ]
+        ]
+      else
+        raise """
+        Supabase CA certificate not found at #{cert_path}.
+        This certificate is required for secure database connections in production.
+        Please ensure the certificate file exists before deploying.
+        """
+      end
+
+    config :eventasaurus, EventasaurusApp.Repo,
+      url: System.get_env("SUPABASE_DATABASE_URL"),
+      database: "postgres",
+      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+      queue_target: 5000,
+      queue_interval: 30000,
+      connect_timeout: 30_000,
+      handshake_timeout: 30_000,
+      ssl: true,
+      ssl_opts: pooler_ssl_opts,
+      # Disable prepared statements for Transaction mode (pgbouncer) compatibility
+      prepare: :unnamed
+
+    # Configure SessionRepo for Session mode operations (Oban, migrations, advisory locks)
+    # Uses direct database connection with full PostgreSQL feature support
+    # Prepared statements enabled (default) for Session mode performance
+    config :eventasaurus, EventasaurusApp.SessionRepo,
+      url: System.get_env("SUPABASE_SESSION_DATABASE_URL"),
+      database: "postgres",
+      pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
+      queue_target: 5000,
+      queue_interval: 30000,
+      connect_timeout: 30_000,
+      handshake_timeout: 30_000,
+      ssl: true,
+      ssl_opts: session_ssl_opts
+  end
 
   # Configure Cloudflare R2 storage settings
   config :eventasaurus, :r2,

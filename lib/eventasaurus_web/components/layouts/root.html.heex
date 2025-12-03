@@ -13,12 +13,6 @@
       auth_config = EventasaurusApp.Auth.AuthProvider.frontend_config()
       auth_provider = auth_config.provider
 
-      # Supabase config (still needed for storage even when using Clerk)
-      supabase_config = Application.get_env(:eventasaurus, :supabase)
-      supabase_url = supabase_config[:url] || raise("Missing Supabase URL configuration")
-      supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
-      supabase_bucket = supabase_config[:bucket] || "event-images"
-
       # Clerk config (only used when Clerk is enabled)
       clerk_publishable_key = auth_config[:publishable_key]
     %>
@@ -135,9 +129,6 @@
       <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <% end %>
     
-    <!-- Supabase configuration meta tags (needed for storage even with Clerk auth) -->
-    <meta name="supabase-url" content={supabase_url} />
-    <meta name="supabase-anon-key" content={supabase_api_key} />
 
     <!-- Clerk configuration (only when Clerk is enabled) -->
     <%= if auth_provider == "clerk" do %>
@@ -315,9 +306,6 @@
       assigns[:theme] && EventasaurusWeb.ThemeHelpers.theme_class(assigns[:theme])
     ]}
     style={assigns[:css_variables] && assigns[:css_variables]}
-    data-supabase-url={supabase_url}
-    data-supabase-api-key={supabase_api_key}
-    data-supabase-bucket={supabase_bucket}
     phx-hook="AuthHandler"
   >
     <!-- Gradient Background for pages that need it -->

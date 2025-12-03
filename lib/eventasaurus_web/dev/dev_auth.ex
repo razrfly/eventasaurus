@@ -136,31 +136,17 @@ defmodule EventasaurusWeb.Dev.DevAuth do
 
   @doc """
   Create a fake auth session for development.
-  This simulates what would happen after a successful Supabase login.
+  This simulates what would happen after a successful Clerk login.
   """
   def create_dev_session(conn, user) do
     require Logger
 
     if enabled?() do
-      # In dev mode, use the Supabase anon key as the access token
-      # This allows uploads to work in development without real authentication
-      # In production, the real user's access token from Supabase auth is used
-      supabase_config = Application.get_env(:eventasaurus, :supabase)
-      dev_access_token = supabase_config[:api_key]
+      # In dev mode, use a fake access token
+      # File uploads now use Cloudflare R2 with service credentials, not user tokens
+      dev_access_token = "dev_mode_token_#{user.id}"
 
       Logger.debug("🔧 DEV AUTH: Creating dev session for user #{user.id}")
-      Logger.debug("🔧 DEV AUTH: Supabase config present: #{!is_nil(supabase_config)}")
-      Logger.debug("🔧 DEV AUTH: Access token present: #{!is_nil(dev_access_token)}")
-
-      if is_nil(dev_access_token) do
-        Logger.error(
-          "🚨 DEV AUTH: No Supabase API key found! Image uploads will NOT work. Check your config/dev.exs or config/dev.secret.exs"
-        )
-      else
-        Logger.debug(
-          "🔧 DEV AUTH: Using Supabase anon key as dev access token (length: #{String.length(dev_access_token)})"
-        )
-      end
 
       # Calculate a fake expiration time (1 day from now)
       expires_at = DateTime.utc_now() |> DateTime.add(86400, :second) |> DateTime.to_iso8601()

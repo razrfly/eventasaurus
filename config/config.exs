@@ -7,15 +7,11 @@
 # General application configuration
 import Config
 
-# Include Supabase configuration
-import_config "supabase.exs"
-
 # Include Clerk configuration
 import_config "clerk.exs"
 
-# Configure Eventasaurus main app to use Supabase (not Ecto)
+# Configure Eventasaurus main app
 config :eventasaurus,
-  use_supabase: true,
   ecto_repos: [EventasaurusApp.Repo, EventasaurusApp.SessionRepo]
 
 # Configure EventasaurusApp Repo with PostGIS types

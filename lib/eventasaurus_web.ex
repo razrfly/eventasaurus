@@ -104,7 +104,6 @@ defmodule EventasaurusWeb do
       import EventasaurusWeb.CoreComponents
 
       # Custom helpers
-      import EventasaurusWeb.Helpers.SupabaseHelper
       import EventasaurusWeb.Helpers.AvatarHelper
       import EventasaurusWeb.Helpers.LanguageHelpers
       import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
