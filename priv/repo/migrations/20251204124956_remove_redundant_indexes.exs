@@ -154,7 +154,7 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveRedundantIndexes do
     # #13: event_users_user_id_event_id_idx - duplicate of unique event_users_event_id_user_id_index
     execute "DROP INDEX CONCURRENTLY IF EXISTS event_users_user_id_event_id_idx"
 
-    # #12: event_users_exclusion_index - likely obsolete constraint-related index
+    # #12: event_users_exclusion_index - duplicate of unique event_users_event_id_user_id_index (same columns)
     execute "DROP INDEX CONCURRENTLY IF EXISTS event_users_exclusion_index"
 
     # #11: event_users_event_user_composite_idx - duplicate of unique event_users_event_id_user_id_index
@@ -223,6 +223,7 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveRedundantIndexes do
     execute "CREATE INDEX IF NOT EXISTS event_users_event_id_index ON event_users (event_id)"
     execute "CREATE INDEX IF NOT EXISTS event_users_user_id_index ON event_users (user_id)"
     execute "CREATE INDEX IF NOT EXISTS event_users_event_user_composite_idx ON event_users (event_id, user_id)"
+    execute "CREATE INDEX IF NOT EXISTS event_users_exclusion_index ON event_users (event_id, user_id)"
     execute "CREATE INDEX IF NOT EXISTS event_users_user_id_event_id_idx ON event_users (user_id, event_id)"
 
     # Events
