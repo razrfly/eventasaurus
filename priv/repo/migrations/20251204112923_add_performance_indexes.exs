@@ -62,19 +62,20 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexes do
     )
 
     # ==========================================================================
-    # MEDIUM: Public Event Sources - Event ID with Metadata for Freshness Queries
+    # MEDIUM: Public Event Sources - Recurring Events with Last Seen Filter
     # ==========================================================================
     # Issue: Queries checking metadata->>'recurring' with last_seen_at filter
     # Query: WHERE (metadata->>'recurring' = 'true') AND (last_seen_at >= $1)
+    # Expression index on the JSONB path for efficient filtering
     # ==========================================================================
     execute(
       """
-      CREATE INDEX CONCURRENTLY IF NOT EXISTS public_event_sources_event_metadata_idx
-      ON public_event_sources (event_id)
-      INCLUDE (metadata, last_seen_at)
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS public_event_sources_recurring_last_seen_idx
+      ON public_event_sources ((metadata->>'recurring'), last_seen_at)
+      WHERE metadata->>'recurring' IS NOT NULL
       """,
       """
-      DROP INDEX CONCURRENTLY IF EXISTS public_event_sources_event_metadata_idx
+      DROP INDEX CONCURRENTLY IF EXISTS public_event_sources_recurring_last_seen_idx
       """
     )
 
@@ -92,6 +93,41 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexes do
       """,
       """
       DROP INDEX CONCURRENTLY IF EXISTS public_events_time_range_idx
+      """
+    )
+
+    # ==========================================================================
+    # MEDIUM: GIN Index for Description Translations JSONB
+    # ==========================================================================
+    # Issue: Queries using jsonb_object_keys/jsonb_each_text on description_translations
+    # Query: SELECT count(*) FROM jsonb_object_keys(description_translations)
+    # Note: title_translations already has GIN index, this covers description_translations
+    # ==========================================================================
+    execute(
+      """
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS public_event_sources_description_translations_gin_idx
+      ON public_event_sources USING GIN (description_translations)
+      """,
+      """
+      DROP INDEX CONCURRENTLY IF EXISTS public_event_sources_description_translations_gin_idx
+      """
+    )
+
+    # ==========================================================================
+    # MEDIUM: Composite Index for Public Event Categories Lookups
+    # ==========================================================================
+    # Issue: LEFT JOIN + IS NULL pattern reading 8,877 rows per returned
+    # Query: LEFT JOIN public_event_categories ON ... WHERE category_id IS NULL
+    # This index helps the anti-join pattern perform better
+    # ==========================================================================
+    execute(
+      """
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS public_event_categories_event_category_lookup_idx
+      ON public_event_categories (event_id)
+      INCLUDE (category_id)
+      """,
+      """
+      DROP INDEX CONCURRENTLY IF EXISTS public_event_categories_event_category_lookup_idx
       """
     )
   end
