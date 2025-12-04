@@ -96,25 +96,17 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
 
   @impl true
   def init(_opts) do
-    Logger.info("Starting DiscoveryStatsCache...")
+    Logger.info("Starting DiscoveryStatsCache with lazy initialization...")
 
-    # Schedule first refresh
+    # Schedule periodic refresh (every 10 minutes)
     schedule_refresh()
 
-    # Compute initial stats (this will block startup for ~5-10 seconds)
-    initial_stats =
-      case compute_stats() do
-        {:ok, stats} ->
-          Logger.info("DiscoveryStatsCache initialized successfully")
-          stats
+    # Trigger immediate async refresh instead of blocking startup
+    # Stats will be available in ~5-10 seconds after startup
+    send(self(), :initial_refresh)
 
-        {:error, reason} ->
-          Logger.error("Failed to initialize DiscoveryStatsCache: #{inspect(reason)}")
-          # Return empty stats as fallback
-          empty_stats()
-      end
-
-    {:ok, %{stats: initial_stats, last_refresh: DateTime.utc_now(), refreshing: false}}
+    # Start with empty stats - will be populated shortly
+    {:ok, %{stats: empty_stats(), last_refresh: nil, refreshing: false}}
   end
 
   @impl true
@@ -156,6 +148,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
   def handle_cast({:stats_computed, new_stats, source}, state) do
     log_message =
       case source do
+        :initial -> "Stats cache initialized successfully (non-blocking)"
         :manual -> "Stats cache manually refreshed"
         :auto -> "Stats cache auto-refreshed successfully"
       end
@@ -168,6 +161,25 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
   def handle_cast(:refresh_failed, state) do
     Logger.warning("Resetting refresh flag after failure")
     {:noreply, Map.put(state, :refreshing, false)}
+  end
+
+  @impl true
+  def handle_info(:initial_refresh, state) do
+    # Initial refresh on startup - compute stats asynchronously
+    Logger.info("Starting initial stats computation (non-blocking)...")
+
+    Task.start(fn ->
+      case compute_stats() do
+        {:ok, new_stats} ->
+          GenServer.cast(__MODULE__, {:stats_computed, new_stats, :initial})
+
+        {:error, reason} ->
+          Logger.error("Failed to compute initial stats: #{inspect(reason)}")
+          GenServer.cast(__MODULE__, :refresh_failed)
+      end
+    end)
+
+    {:noreply, Map.put(state, :refreshing, true)}
   end
 
   @impl true

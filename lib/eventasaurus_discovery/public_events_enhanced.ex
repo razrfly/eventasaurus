@@ -900,38 +900,20 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   # Find a fallback city with Unsplash gallery in the same country
   # Prioritizes geographically closer cities when coordinates available
+  # Uses ETS cache for performance (eliminates ~12,740 database queries)
   defp find_country_fallback_city(nil), do: nil
 
   defp find_country_fallback_city(%City{country_id: country_id} = venue_city) do
-    # Query for cities in same country with Unsplash galleries
-    query =
-      from(c in City,
-        where: c.country_id == ^country_id,
-        where: not is_nil(c.unsplash_gallery),
-        select: c
-      )
+    # Use cached city data instead of database query
+    # The CityGalleryCache loads all cities with galleries on startup
+    # and refreshes hourly, reducing load from 12,740 queries to 1 query/hour
+    alias EventasaurusApp.Cache.CityGalleryCache
 
-    # Get all candidate cities
-    candidates = Repo.all(query)
-
-    # If venue city has coordinates, sort by distance
-    case {venue_city.latitude, venue_city.longitude} do
-      {lat, lng} when not is_nil(lat) and not is_nil(lng) ->
-        # Sort by geographic distance
-        candidates
-        |> Enum.filter(fn c -> not is_nil(c.latitude) and not is_nil(c.longitude) end)
-        |> Enum.sort_by(fn c ->
-          # Simple distance calculation (Euclidean approximation)
-          dlat = Decimal.to_float(c.latitude) - Decimal.to_float(lat)
-          dlng = Decimal.to_float(c.longitude) - Decimal.to_float(lng)
-          :math.sqrt(dlat * dlat + dlng * dlng)
-        end)
-        |> List.first()
-
-      _ ->
-        # No coordinates, just return first city with gallery
-        List.first(candidates)
-    end
+    CityGalleryCache.find_nearest_city(
+      country_id,
+      venue_city.latitude,
+      venue_city.longitude
+    )
   end
 
   # Determine event category using EventCategoryMapper

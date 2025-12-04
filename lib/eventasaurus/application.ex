@@ -108,6 +108,8 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Cache.EventPageCache,
       # Start Dashboard Stats Cache for admin dashboard performance
       {Cachex, name: :dashboard_stats},
+      # Start City Gallery Cache for Unsplash fallback image lookups
+      EventasaurusApp.Cache.CityGalleryCache,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry
