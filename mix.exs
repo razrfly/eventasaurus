@@ -163,7 +163,11 @@ defmodule Eventasaurus.MixProject do
 
       # Clerk authentication (replacing Supabase Auth)
       # Using JOSE for JWT verification - clerk hex package has dependency conflicts
-      {:jose, "~> 1.11"}
+      {:jose, "~> 1.11"},
+
+      # SSL certificate store for PlanetScale and other TLS connections
+      # Must be explicit (not transitive) to ensure availability in releases
+      {:castore, "~> 1.0"}
     ]
   end
 
