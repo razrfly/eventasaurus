@@ -8,16 +8,31 @@ defmodule Eventasaurus.Release do
   def migrate do
     load_app()
 
-    # Only run migrations on SessionRepo which uses direct database connection
-    # Both Repo and SessionRepo point to the same database, so we only need to migrate once
-    # SessionRepo supports long-running transactions required for complex migrations
+    # Use SessionRepo for migrations because it bypasses PgBouncer (direct connection on port 5432)
+    # PgBouncer in transaction mode doesn't support DDL transactions needed for migrations
+    #
+    # IMPORTANT: We explicitly specify priv/repo/migrations as the migrations path
+    # so that all migrations live in ONE canonical location. This prevents the
+    # confusion of having separate priv/session_repo/migrations/ folder.
+    #
+    # Developers should ONLY create migrations in priv/repo/migrations/
     repo = EventasaurusApp.SessionRepo
-    {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
+
+    {:ok, _, _} =
+      Ecto.Migrator.with_repo(repo, fn repo ->
+        migrations_path = Application.app_dir(@app, "priv/repo/migrations")
+        Ecto.Migrator.run(repo, migrations_path, :up, all: true)
+      end)
   end
 
   def rollback(repo, version) do
     load_app()
-    {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
+
+    {:ok, _, _} =
+      Ecto.Migrator.with_repo(repo, fn repo ->
+        migrations_path = Application.app_dir(@app, "priv/repo/migrations")
+        Ecto.Migrator.run(repo, migrations_path, :down, to: version)
+      end)
   end
 
   defp load_app do
