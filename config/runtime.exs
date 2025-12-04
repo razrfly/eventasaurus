@@ -618,13 +618,24 @@ if config_env() == :prod do
 
     # Repo: Pooled connection via PgBouncer (port 6432) for web requests
     # Using hostname-based config to guarantee socket_options: [:inet] is applied
+    #
+    # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 3 due to PlanetScale
+    # connection limits causing "too_many_connections" during deployments.
+    # See: https://github.com/razrfly/eventasaurus/issues/2498
+    #
+    # After completing database performance optimizations (issue #2496), we can:
+    # 1. Increase pool_size back to 5-10 for better throughput
+    # 2. Remove the 'immediate' deploy strategy from fly.toml
+    #
+    # Current: 3 + 2 = 5 total connections per machine (conservative)
+    # Target: 5-10 + 3-5 = 8-15 connections per machine (after #2496 fixes)
     config :eventasaurus, EventasaurusApp.Repo,
       username: ps_user,
       password: ps_pass,
       hostname: ps_host,
       port: ps_pooler_port,
       database: ps_db,
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "3"),
       socket_options: socket_opts,
       queue_target: 5000,
       queue_interval: 30000,
@@ -637,13 +648,24 @@ if config_env() == :prod do
 
     # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
     # Using hostname-based config to guarantee socket_options: [:inet] is applied
+    #
+    # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 2 due to PlanetScale
+    # connection limits causing "too_many_connections" during deployments.
+    # See: https://github.com/razrfly/eventasaurus/issues/2498
+    #
+    # After completing database performance optimizations (issue #2496), we can:
+    # 1. Increase pool_size back to 3-5 for better Oban throughput
+    # 2. Remove the 'immediate' deploy strategy from fly.toml
+    #
+    # Current: Migrations need 1 connection; Oban needs 2-3 for producer/notifier
+    # Target: 3-5 connections after #2496 query optimizations reduce connection hold times
     config :eventasaurus, EventasaurusApp.SessionRepo,
       username: ps_user,
       password: ps_pass,
       hostname: ps_host,
       port: ps_direct_port,
       database: ps_db,
-      pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
+      pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "2"),
       socket_options: socket_opts,
       queue_target: 5000,
       queue_interval: 30000,
