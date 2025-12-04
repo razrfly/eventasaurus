@@ -645,14 +645,18 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
   defp count_missing_categories(source_id) do
     # Count events that have no categories in the join table
+    # Using NOT EXISTS pattern instead of LEFT JOIN + IS NULL for better performance
+    # See: https://github.com/razrfly/eventasaurus/issues/2496
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
-        left_join: pec in "public_event_categories",
-        on: pec.event_id == e.id,
         where: pes.source_id == ^source_id,
-        where: is_nil(pec.category_id),
+        where:
+          fragment(
+            "NOT EXISTS (SELECT 1 FROM public_event_categories pec WHERE pec.event_id = ?)",
+            e.id
+          ),
         select: count(fragment("DISTINCT ?", e.id))
       )
 
