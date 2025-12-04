@@ -24,18 +24,18 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexes do
     )
 
     # ==========================================================================
-    # HIGH: Cities Covering Index for Country + Unsplash Gallery Queries
+    # HIGH: Cities Partial Index for Country + Unsplash Gallery Queries
     # ==========================================================================
     # Issue: 63 minutes cumulative execution time, 396ms P99, 2.4 rows read/returned
     # Query: SELECT * FROM cities WHERE country_id = $1 AND unsplash_gallery IS NOT NULL
-    # Current: Partial index exists but not covering needed columns
-    # Expected improvement: Index-only scans, ~50% latency reduction
+    # Note: Cannot use INCLUDE with unsplash_gallery JSONB - exceeds 8191 byte limit
+    # Using partial index to filter to only rows with unsplash_gallery
     # ==========================================================================
     execute(
       """
       CREATE INDEX CONCURRENTLY IF NOT EXISTS cities_country_unsplash_covering_idx
       ON cities (country_id)
-      INCLUDE (id, name, slug, latitude, longitude, unsplash_gallery)
+      INCLUDE (id, name, slug, latitude, longitude)
       WHERE unsplash_gallery IS NOT NULL
       """,
       """
@@ -44,20 +44,20 @@ defmodule EventasaurusApp.Repo.Migrations.AddPerformanceIndexes do
     )
 
     # ==========================================================================
-    # HIGH: Public Events ID with Occurrences for Source Join Queries
+    # HIGH: Public Events ID with Occurrences - SKIPPED
     # ==========================================================================
     # Issue: 3.5s P99 latency, join only using PK 67% of time
     # Query: SELECT p0.id, p0.occurrences FROM public_events JOIN public_event_sources...
-    # Expected improvement: Index-only scans for occurrences column
+    # SKIPPED: occurrences JSONB column exceeds btree index size limit (2704 bytes)
+    # The primary key index on id already provides good performance for joins
+    # Clean up any partially created invalid index from previous failed attempt
     # ==========================================================================
     execute(
       """
-      CREATE INDEX CONCURRENTLY IF NOT EXISTS public_events_id_occurrences_idx
-      ON public_events (id)
-      INCLUDE (occurrences)
+      DROP INDEX CONCURRENTLY IF EXISTS public_events_id_occurrences_idx
       """,
       """
-      DROP INDEX CONCURRENTLY IF EXISTS public_events_id_occurrences_idx
+      SELECT 1
       """
     )
 
