@@ -94,5 +94,7 @@ scripts/clerk-migration/users.json
 scripts/clerk-migration/import-results-*.json
 scripts/clerk-migration/node_modules/
 
-# Database schema dumps and SQL files
-*.sql
+# Database schema dumps (generated ad-hoc, not the tracked structure.sql)
+# Note: priv/repo/structure.sql is tracked for deployment
+/*.sql
+/scripts/**/*.sql

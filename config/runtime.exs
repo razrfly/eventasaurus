@@ -195,7 +195,9 @@ if not clerk_configured do
     Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables.
     """
   else
-    IO.warn("Clerk is not configured. Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables.")
+    IO.warn(
+      "Clerk is not configured. Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY environment variables."
+    )
   end
 end
 
@@ -462,7 +464,8 @@ if config_env() == :prod do
 
   if use_planetscale do
     # Validate required PlanetScale environment variables
-    for var <- ~w(PLANETSCALE_DATABASE_HOST PLANETSCALE_DATABASE PLANETSCALE_DATABASE_USERNAME PLANETSCALE_DATABASE_PASSWORD) do
+    for var <-
+          ~w(PLANETSCALE_DATABASE_HOST PLANETSCALE_DATABASE PLANETSCALE_DATABASE_USERNAME PLANETSCALE_DATABASE_PASSWORD) do
       System.fetch_env!(var)
     end
   else
@@ -574,8 +577,28 @@ if config_env() == :prod do
     ps_db = System.get_env("PLANETSCALE_DATABASE")
     ps_user = System.get_env("PLANETSCALE_DATABASE_USERNAME")
     ps_pass = System.get_env("PLANETSCALE_DATABASE_PASSWORD")
-    ps_direct_port = String.to_integer(System.get_env("PLANETSCALE_DATABASE_PORT", "5432"))
-    ps_pooler_port = String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432"))
+
+    ps_direct_port =
+      case Integer.parse(System.get_env("PLANETSCALE_DATABASE_PORT", "5432")) do
+        {port, _} when port > 0 and port <= 65535 ->
+          port
+
+        _ ->
+          require Logger
+          Logger.error("Invalid PLANETSCALE_DATABASE_PORT, using default: 5432")
+          5432
+      end
+
+    ps_pooler_port =
+      case Integer.parse(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")) do
+        {port, _} when port > 0 and port <= 65535 ->
+          port
+
+        _ ->
+          require Logger
+          Logger.error("Invalid PLANETSCALE_PG_BOUNCER_PORT, using default: 6432")
+          6432
+      end
 
     # Force IPv4 unless IPv6 is explicitly enabled
     # PlanetScale requires IPv4 for reliable connectivity from Fly.io
