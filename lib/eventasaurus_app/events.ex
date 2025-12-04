@@ -7725,8 +7725,23 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Updates an event activity.
+  If group_id is not set on the activity, tries to inherit it from the event.
   """
   def update_event_activity(%EventActivity{} = activity, attrs) do
+    # If the activity has no group_id, try to get it from the event
+    attrs =
+      if is_nil(activity.group_id) do
+        case get_event(activity.event_id) do
+          %Event{group_id: event_group_id} when not is_nil(event_group_id) ->
+            Map.put(attrs, :group_id, event_group_id)
+
+          _ ->
+            attrs
+        end
+      else
+        attrs
+      end
+
     activity
     |> EventActivity.changeset(attrs)
     |> Repo.update()
@@ -7737,6 +7752,28 @@ defmodule EventasaurusApp.Events do
   """
   def delete_event_activity(%EventActivity{} = activity) do
     Repo.delete(activity)
+  end
+
+  @doc """
+  Backfills group_id for activities that are missing it.
+  This is useful for fixing historical data where group_id wasn't properly set.
+  Returns the count of updated activities.
+  """
+  def backfill_activity_group_ids do
+    # Find all activities with nil group_id where the event has a group_id
+    from(a in EventActivity,
+      join: e in Event,
+      on: a.event_id == e.id,
+      where: is_nil(a.group_id) and not is_nil(e.group_id),
+      select: {a.id, e.group_id}
+    )
+    |> Repo.all()
+    |> Enum.reduce(0, fn {activity_id, group_id}, count ->
+      from(a in EventActivity, where: a.id == ^activity_id)
+      |> Repo.update_all(set: [group_id: group_id])
+
+      count + 1
+    end)
   end
 
   @doc """

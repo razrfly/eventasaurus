@@ -144,14 +144,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
               # Rich data import assigns
               |> assign(:show_rich_data_import, false)
               |> assign(:rich_external_data, event.rich_external_data || %{})
-              # User groups - initialize with empty, will be loaded async
-              |> assign(:user_groups, [])
+              # User groups - load synchronously (fast query, needed for initial render)
+              |> assign(:user_groups, Groups.list_user_groups(user))
               # Supabase token - initialize empty, will be loaded async
               |> assign(:supabase_access_token, "")
-              # Use assign_async for independent data loads (non-blocking)
-              |> assign_async(:async_user_groups, fn ->
-                {:ok, %{async_user_groups: Groups.list_user_groups(user)}}
-              end)
               |> assign_async(:async_recent_locations, fn ->
                 locations =
                   Events.get_recent_locations_for_user(user.id,
@@ -1445,17 +1441,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   # ========== Async Result Handlers ==========
-
-  @impl true
-  def handle_async(:async_user_groups, {:ok, %{async_user_groups: groups}}, socket) do
-    {:noreply, assign(socket, :user_groups, groups)}
-  end
-
-  @impl true
-  def handle_async(:async_user_groups, {:exit, _reason}, socket) do
-    # On failure, keep the empty list
-    {:noreply, socket}
-  end
+  # Note: assign_async does NOT invoke handle_async callbacks - those are for start_async only.
+  # The remaining handlers here are vestigial but kept for documentation purposes.
 
   @impl true
   def handle_async(:async_recent_locations, {:ok, %{async_recent_locations: locations}}, socket) do
