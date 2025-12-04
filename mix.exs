@@ -20,7 +20,7 @@ defmodule Eventasaurus.MixProject do
   def application do
     [
       mod: {Eventasaurus.Application, []},
-      # castore must be started before runtime.exs runs so CAStore.file_path() works
+      # :castore ensures the CA certificate bundle is available in releases for SSL verification
       extra_applications: [:logger, :runtime_tools, :crypto, :castore]
     ]
   end
