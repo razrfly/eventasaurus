@@ -1441,8 +1441,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   # ========== Async Result Handlers ==========
-  # Note: assign_async does NOT invoke handle_async callbacks - those are for start_async only.
-  # The remaining handlers here are vestigial but kept for documentation purposes.
+  # Note: The async_user_groups handlers were removed since user groups are now loaded synchronously.
+  # The remaining handle_async handlers below are still actively used by assign_async calls in mount/3.
 
   @impl true
   def handle_async(:async_recent_locations, {:ok, %{async_recent_locations: locations}}, socket) do
