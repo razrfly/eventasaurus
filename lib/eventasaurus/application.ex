@@ -68,6 +68,9 @@ defmodule Eventasaurus.Application do
       EventasaurusApp.Repo,
       # Start SessionRepo for Oban, migrations, and advisory locks
       EventasaurusApp.SessionRepo,
+      # Start ReplicaRepo for read-heavy queries (connects to PlanetScale replicas)
+      # Only started in production - dev/test use primary via Repo.replica() helper
+      EventasaurusApp.ReplicaRepo,
       {DNSCluster, query: Application.get_env(:eventasaurus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails

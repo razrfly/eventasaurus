@@ -13,6 +13,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventSource do
     field(:max_price, :decimal)
     field(:currency, :string)
     field(:is_free, :boolean, default: false)
+    # Pre-computed translation count (updated by database trigger on insert/update)
+    field(:description_translation_count, :integer, default: 0)
 
     belongs_to(:event, EventasaurusDiscovery.PublicEvents.PublicEvent)
     belongs_to(:source, EventasaurusDiscovery.Sources.Source)

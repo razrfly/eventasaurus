@@ -38,7 +38,17 @@ defmodule EventasaurusApp.DataCase do
   """
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+
+    # Also set up sandbox for ReplicaRepo
+    # In tests, Repo.replica() returns the primary Repo, but we still need
+    # ReplicaRepo configured for the sandbox in case it's used directly
+    replica_pid =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ReplicaRepo, shared: not tags[:async])
+
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.stop_owner(pid)
+      Ecto.Adapters.SQL.Sandbox.stop_owner(replica_pid)
+    end)
   end
 
   @doc """

@@ -26,6 +26,18 @@ config :eventasaurus, EventasaurusApp.SessionRepo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
+# ReplicaRepo for development
+# In development, replica points to the same local database as primary
+# Production uses PlanetScale's |replica username suffix for real replica routing
+config :eventasaurus, EventasaurusApp.ReplicaRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "eventasaurus_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 5
+
 # Development-only features
 config :eventasaurus, :dev_quick_login, true
 # Enable fetching production images from ImageKit in dev

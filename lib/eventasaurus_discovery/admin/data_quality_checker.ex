@@ -1007,20 +1007,16 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         where: pes.source_id == ^source_id,
         select: %{
           total: count(pes.id),
-          # Has any description
+          # Has any description (uses pre-computed translation count column)
           has_description:
             fragment(
               """
               COUNT(CASE
-                WHEN ? IS NOT NULL
-                AND jsonb_typeof(?) = 'object'
-                AND (SELECT COUNT(*) FROM jsonb_object_keys(?)) > 0
+                WHEN ? > 0
                 THEN 1
               END)
               """,
-              pes.description_translations,
-              pes.description_translations,
-              pes.description_translations
+              pes.description_translation_count
             ),
           # Short descriptions (<50 chars)
           short_descriptions:
@@ -1742,25 +1738,14 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
   defp count_multilingual_events(source_id) do
     # Count events that have multiple languages in title_translations OR description_translations
-    # Uses jsonb_object_keys() to count the number of language keys
+    # Uses pre-computed title_translation_count and description_translation_count columns
+    # (maintained by database triggers, much faster than jsonb_object_keys)
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
-        where:
-          (not is_nil(e.title_translations) and
-             fragment("jsonb_typeof(?) = 'object'", e.title_translations) and
-             fragment(
-               "(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 1",
-               e.title_translations
-             )) or
-            (not is_nil(pes.description_translations) and
-               fragment("jsonb_typeof(?) = 'object'", pes.description_translations) and
-               fragment(
-                 "(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 1",
-                 pes.description_translations
-               )),
+        where: e.title_translation_count > 1 or pes.description_translation_count > 1,
         select: count(pes.id)
       )
 
@@ -1772,28 +1757,19 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     # This filters out cases like {"en": "Poluzjanci", "pl": "Poluzjanci"}
     # Uses PostgreSQL to compare that not all values in the JSONB are identical
     # Checks both title_translations AND description_translations
+    # Uses pre-computed translation count columns instead of expensive jsonb_object_keys
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
         where:
-          (not is_nil(e.title_translations) and
-             fragment("jsonb_typeof(?) = 'object'", e.title_translations) and
-             fragment(
-               "(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 1",
-               e.title_translations
-             ) and
+          (e.title_translation_count > 1 and
              fragment(
                "(SELECT COUNT(DISTINCT value) FROM jsonb_each_text(?)) > 1",
                e.title_translations
              )) or
-            (not is_nil(pes.description_translations) and
-               fragment("jsonb_typeof(?) = 'object'", pes.description_translations) and
-               fragment(
-                 "(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 1",
-                 pes.description_translations
-               ) and
+            (pes.description_translation_count > 1 and
                fragment(
                  "(SELECT COUNT(DISTINCT value) FROM jsonb_each_text(?)) > 1",
                  pes.description_translations
@@ -1808,28 +1784,19 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     # Count events that have multiple language keys but identical text
     # E.g., {"en": "Band Name", "pl": "Band Name"}
     # Checks both title_translations AND description_translations
+    # Uses pre-computed translation count columns instead of expensive jsonb_object_keys
     query =
       from(e in PublicEvent,
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
         where:
-          (not is_nil(e.title_translations) and
-             fragment("jsonb_typeof(?) = 'object'", e.title_translations) and
-             fragment(
-               "(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 1",
-               e.title_translations
-             ) and
+          (e.title_translation_count > 1 and
              fragment(
                "(SELECT COUNT(DISTINCT value) FROM jsonb_each_text(?)) = 1",
                e.title_translations
              )) or
-            (not is_nil(pes.description_translations) and
-               fragment("jsonb_typeof(?) = 'object'", pes.description_translations) and
-               fragment(
-                 "(SELECT COUNT(*) FROM jsonb_object_keys(?)) > 1",
-                 pes.description_translations
-               ) and
+            (pes.description_translation_count > 1 and
                fragment(
                  "(SELECT COUNT(DISTINCT value) FROM jsonb_each_text(?)) = 1",
                  pes.description_translations

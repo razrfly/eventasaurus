@@ -12,7 +12,7 @@ import_config "clerk.exs"
 
 # Configure Eventasaurus main app
 config :eventasaurus,
-  ecto_repos: [EventasaurusApp.Repo, EventasaurusApp.SessionRepo]
+  ecto_repos: [EventasaurusApp.Repo, EventasaurusApp.SessionRepo, EventasaurusApp.ReplicaRepo]
 
 # Configure EventasaurusApp Repo with PostGIS types
 config :eventasaurus, EventasaurusApp.Repo, types: EventasaurusApp.PostgresTypes

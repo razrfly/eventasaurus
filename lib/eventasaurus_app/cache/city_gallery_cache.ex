@@ -210,8 +210,15 @@ defmodule EventasaurusApp.Cache.CityGalleryCache do
     |> Repo.all(timeout: 30_000)
   end
 
+  @spec to_float(Decimal.t() | float() | integer() | nil | term()) :: float()
   defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
   defp to_float(f) when is_float(f), do: f
   defp to_float(i) when is_integer(i), do: i * 1.0
-  defp to_float(_), do: 0.0
+
+  defp to_float(other) do
+    # City coordinates are :decimal type in schema, so this should never execute.
+    # If it does, log the anomaly for investigation rather than silently returning 0.0
+    Logger.warning("CityGalleryCache.to_float/1 received unexpected value: #{inspect(other)}")
+    0.0
+  end
 end

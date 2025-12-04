@@ -342,6 +342,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     # min_price, max_price, currency moved to public_event_sources table (source-specific)
     # metadata moved to public_event_sources table
     field(:occurrences, :map)
+    # Pre-computed translation count (updated by database trigger on insert/update)
+    field(:title_translation_count, :integer, default: 0)
 
     # Virtual field for primary category (populated in queries when needed)
     field(:primary_category_id, :id, virtual: true)

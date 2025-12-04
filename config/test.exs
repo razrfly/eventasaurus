@@ -45,6 +45,22 @@ config :eventasaurus, EventasaurusApp.SessionRepo,
   pool_timeout: 5_000,
   ownership_timeout: 60_000
 
+# Configure ReplicaRepo for testing
+# In test, replica points to same test database for sandbox compatibility
+# Note: Repo.replica() returns the primary Repo in test environment,
+# so this config is mainly for completeness and edge case testing
+# Use smaller pool since Repo.replica() bypasses this in tests
+config :eventasaurus, EventasaurusApp.ReplicaRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "eventasaurus_test#{System.get_env("MIX_TEST_PARTITION")}",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 5,
+  timeout: 15_000,
+  pool_timeout: 5_000,
+  ownership_timeout: 60_000
+
 # In test we don't send emails
 config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Test
 
