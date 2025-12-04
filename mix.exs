@@ -20,7 +20,8 @@ defmodule Eventasaurus.MixProject do
   def application do
     [
       mod: {Eventasaurus.Application, []},
-      extra_applications: [:logger, :runtime_tools, :crypto]
+      # castore must be started before runtime.exs runs so CAStore.file_path() works
+      extra_applications: [:logger, :runtime_tools, :crypto, :castore]
     ]
   end
 
