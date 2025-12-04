@@ -5,6 +5,7 @@ defmodule Eventasaurus.Release do
   """
   @app :eventasaurus
 
+  @spec migrate() :: {:ok, term(), term()}
   def migrate do
     load_app()
 
@@ -25,6 +26,7 @@ defmodule Eventasaurus.Release do
       end)
   end
 
+  @spec rollback(module(), integer()) :: {:ok, term(), term()}
   def rollback(repo, version) do
     load_app()
 
