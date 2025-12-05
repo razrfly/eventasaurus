@@ -84,6 +84,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorGlobalBackfillJob do
       TriviaAdvisorGlobalBackfillJob.enqueue(dry_run: true)
 
   """
+  @spec enqueue(keyword()) :: {:ok, Oban.Job.t()} | {:error, Ecto.Changeset.t()}
   def enqueue(args \\ []) when is_list(args) do
     args_map =
       args
@@ -204,11 +205,11 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorGlobalBackfillJob do
       end)
 
     # Separate successes and failures
-    {successes, failures} = Enum.split_with(results, fn r -> r.status == "spawned" end)
+    {successes, failures} = Enum.split_with(results, fn r -> r["status"] == "spawned" end)
 
     spawned_job_ids =
       successes
-      |> Enum.map(& &1.job_id)
+      |> Enum.map(& &1["job_id"])
       |> Enum.reject(&is_nil/1)
 
     %{
