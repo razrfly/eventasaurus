@@ -477,7 +477,7 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
         select: %{id: s.id, name: s.name, slug: s.slug}
       )
 
-    Repo.one(query)
+    Repo.replica().one(query)
   end
 
   defp count_total_events(source_id) do
@@ -488,13 +488,13 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
         select: count(fragment("DISTINCT ?", e.id))
       )
 
-    Repo.one(query) || 0
+    Repo.replica().one(query) || 0
   end
 
   defp get_other_events(source_id) do
     # Get the "Other" category ID
     other_category_id =
-      Repo.one(
+      Repo.replica().one(
         from(c in Category,
           where: c.slug == "other" and c.is_active == true,
           select: c.id,
@@ -525,7 +525,7 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
           limit: 500
         )
 
-      Repo.all(query)
+      Repo.replica().all(query)
     else
       []
     end
@@ -539,7 +539,7 @@ defmodule EventasaurusWeb.Admin.CategoryAnalysisLive do
         order_by: c.name
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   defp confidence_badge_class(:high), do: "bg-green-100 text-green-800"

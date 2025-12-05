@@ -42,7 +42,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
     query = apply_filters(query, state, worker, source)
 
-    executions = Repo.all(query)
+    executions = Repo.replica().all(query)
 
     print_executions_table(executions)
     print_summary(executions)
@@ -78,7 +78,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
 
     query = apply_filters(query, nil, worker, source)
 
-    executions = Repo.all(query)
+    executions = Repo.replica().all(query)
 
     print_statistics(executions, hours)
 
@@ -111,7 +111,7 @@ defmodule EventasaurusDiscovery.Monitoring.JobExecutionCLI do
     # Use apply_filters for consistent filtering with proper PascalCase conversion
     query = apply_filters(query, nil, nil, source)
 
-    failures = Repo.all(query)
+    failures = Repo.replica().all(query)
 
     print_failures_table(failures)
 

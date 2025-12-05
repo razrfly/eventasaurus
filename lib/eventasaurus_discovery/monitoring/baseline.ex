@@ -252,7 +252,7 @@ defmodule EventasaurusDiscovery.Monitoring.Baseline do
       order_by: [desc: j.attempted_at],
       limit: ^limit
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp calculate_std_dev(durations, avg_duration) do

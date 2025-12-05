@@ -461,7 +461,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
 
     # Get freshness health check
     source =
-      Repo.one(
+      Repo.replica().one(
         from(s in EventasaurusDiscovery.Sources.Source,
           where: s.slug == ^source_slug,
           select: s
@@ -538,7 +538,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         select: count(pes.id)
       )
 
-    Repo.one(query) || 0
+    Repo.replica().one(query) || 0
   end
 
   defp get_coverage_description(source_slug, scope) do
@@ -1964,7 +1964,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
       )
 
     query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Map.new()
   end
 
@@ -2003,7 +2003,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
   defp find_cities_with_venue_quality_issues(source_slug) do
     # Get the source
     source =
-      Repo.one(
+      Repo.replica().one(
         from(s in EventasaurusDiscovery.Sources.Source,
           where: s.slug == ^source_slug,
           select: s
@@ -2024,7 +2024,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.SourceDetail do
         select: v.city_id,
         distinct: true
       )
-      |> Repo.all()
+      |> Repo.replica().all()
     else
       []
     end

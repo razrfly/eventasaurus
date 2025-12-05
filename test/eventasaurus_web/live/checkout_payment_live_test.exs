@@ -470,7 +470,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
     } do
       conn = log_in_user(conn, user)
 
-      {:ok, _view, _html} =
+      {:ok, _view, html} =
         live(
           conn,
           ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_accessibility_test&client_secret=pi_test_secret_123"

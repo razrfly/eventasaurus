@@ -49,7 +49,7 @@ defmodule EventasaurusDiscovery.Monitoring.Chain do
       {:error, :not_found} = Chain.analyze_job(99999)
   """
   def analyze_job(job_id) do
-    case Repo.get(JobExecutionSummary, job_id) do
+    case Repo.replica().get(JobExecutionSummary, job_id) do
       nil ->
         {:error, :not_found}
 
@@ -92,7 +92,7 @@ defmodule EventasaurusDiscovery.Monitoring.Chain do
             query
           end
 
-        sync_jobs = Repo.all(query)
+        sync_jobs = Repo.replica().all(query)
 
         chains = Enum.map(sync_jobs, &build_tree_node/1)
         {:ok, chains}

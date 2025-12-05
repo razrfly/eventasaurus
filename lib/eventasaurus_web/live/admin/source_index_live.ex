@@ -70,7 +70,7 @@ defmodule EventasaurusWeb.Admin.SourceIndexLive do
   defp load_sources(socket) do
     query = from(s in Source, order_by: [desc: s.priority, asc: s.name])
 
-    sources = Repo.all(query)
+    sources = Repo.replica().all(query)
 
     # Apply search filter
     sources =

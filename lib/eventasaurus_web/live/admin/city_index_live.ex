@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    countries = Repo.all(from(c in Country, order_by: c.name))
+    countries = Repo.replica().all(from(c in Country, order_by: c.name))
 
     socket =
       socket
@@ -105,7 +105,7 @@ defmodule EventasaurusWeb.Admin.CityIndexLive do
   def handle_event("refresh_images", %{"id" => id}, socket) do
     city_id = String.to_integer(id)
 
-    case Repo.get(City, city_id) do
+    case Repo.replica().get(City, city_id) do
       nil ->
         socket = put_flash(socket, :error, "City not found")
         {:noreply, socket}

@@ -3,6 +3,12 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
   Context module for managing job execution summaries.
 
   Provides query functions for the admin dashboard and analytics.
+
+  All read operations use `Repo.replica()` to route queries to PlanetScale
+  read replicas, reducing load on the primary database. This is safe because:
+  - All queries are read-only analytics/monitoring data
+  - Slight replication lag (typically milliseconds) is acceptable
+  - Data is historical and not time-critical
   """
 
   import Ecto.Query, warn: false
@@ -53,13 +59,13 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
     |> filter_by_worker(opts[:worker])
     |> filter_by_state(opts[:state])
     |> filter_by_error_category(opts[:error_category])
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
   Gets a single job execution summary by ID.
   """
-  def get_summary!(id), do: Repo.get!(JobExecutionSummary, id)
+  def get_summary!(id), do: Repo.replica().get!(JobExecutionSummary, id)
 
   @doc """
   Gets aggregated metrics for a specific worker.
@@ -86,7 +92,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         }
       )
 
-    result = Repo.one(query)
+    result = Repo.replica().one(query)
 
     if result.total_jobs > 0 do
       # Pipeline Health: (completed + cancelled) / total
@@ -139,7 +145,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         order_by: [desc: max(s.attempted_at)]
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -167,7 +173,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         order_by: [desc: :attempted_at]
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -196,7 +202,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         }
       )
 
-    result = Repo.one(query)
+    result = Repo.replica().one(query)
 
     if result.total_jobs > 0 do
       # Pipeline Health: (completed + cancelled) / total
@@ -251,7 +257,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           order_by: fragment("date_trunc('hour', ?)", s.attempted_at)
         )
 
-      Repo.all(query)
+      Repo.replica().all(query)
     else
       # Daily granularity
       query =
@@ -268,7 +274,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           order_by: fragment("date_trunc('day', ?)", s.attempted_at)
         )
 
-      Repo.all(query)
+      Repo.replica().all(query)
     end
   end
 
@@ -294,7 +300,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         limit: ^limit
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
     |> Enum.map(fn worker ->
       # Pipeline Health: (completed + cancelled) / total
       pipeline_health =
@@ -331,7 +337,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         limit: ^limit
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -364,7 +370,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         }
       )
 
-    result = Repo.one(query)
+    result = Repo.replica().one(query)
 
     # Calculate metrics and format duration
     if result.total > 0 do
@@ -435,7 +441,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         order_by: fragment("date_trunc('day', ?)", s.attempted_at)
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
     |> Enum.map(fn bucket ->
       %{
         date: Date.to_iso8601(NaiveDateTime.to_date(bucket.date_bucket)),
@@ -500,7 +506,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         where: s.attempted_at >= ^cutoff,
         select: s
       )
-      |> Repo.all()
+      |> Repo.replica().all()
 
     # Group by scraper name (extracted from worker)
     summaries
@@ -612,7 +618,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
         last_run: max(s.attempted_at)
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.filter(fn worker_stats ->
       # Only include workers matching the source_slug
       extract_scraper_name(worker_stats.worker) == source_slug
@@ -731,7 +737,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       },
       order_by: [desc: count(s.id)]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.filter(fn error_stats ->
       # Only include workers matching the source_slug
       extract_scraper_name(error_stats.worker) == source_slug
@@ -795,7 +801,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           duration_ms: s.duration_ms
         }
       )
-      |> Repo.all()
+      |> Repo.replica().all()
 
     # For each SyncJob, find all related jobs in the pipeline
     # We'll look for jobs that started around the same time (within 5 minutes)
@@ -811,7 +817,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
           order_by: [asc: s.attempted_at],
           select: s
         )
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Enum.filter(fn job ->
           extract_scraper_name(job.worker) == source_slug
         end)
@@ -920,7 +926,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       where: s.attempted_at >= ^cutoff,
       order_by: [desc: s.attempted_at]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.filter(&is_silent_failure?/1)
   end
 
@@ -1007,7 +1013,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       },
       order_by: [desc: count(s.id)]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -1047,7 +1053,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       group_by: selected_as(:time_bucket),
       order_by: selected_as(:time_bucket)
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(fn bucket ->
       # Error Rate: only count real errors (discarded), not cancelled
       error_rate =
@@ -1097,7 +1103,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       order_by: [desc: count(s.id)],
       limit: ^limit
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -1126,7 +1132,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
       },
       order_by: [desc: count(s.id)]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(fn scraper ->
       # Pipeline Health: (completed + cancelled) / total
       pipeline_health =

@@ -48,8 +48,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
   # PHASE 1: PROVIDER ISOLATION TESTS
   # ============================================================================
 
-  @describetag :provider_isolation
   describe "Phase 1: Provider Isolation" do
+    @describetag :provider_isolation
     test "Mapbox geocodes Kraków successfully" do
       result = Mapbox.geocode(@krakow_address)
 
@@ -143,8 +143,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
   # PHASE 2: FALLBACK CHAIN TESTS
   # ============================================================================
 
-  @describetag :fallback_chain
   describe "Phase 2: Fallback Chain" do
+    @describetag :fallback_chain
     test "Orchestrator tries providers in priority order" do
       # Use AddressGeocoder which uses Orchestrator
       {:ok, result} = AddressGeocoder.geocode(@krakow_address)
@@ -197,8 +197,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
   # PHASE 3: SCRAPER INTEGRATION PATTERNS
   # ============================================================================
 
-  @describetag :scraper_integration
   describe "Phase 3: Scraper Integration Patterns" do
+    @describetag :scraper_integration
     test "Pattern 1 (GPS-Provided): Venue data with coordinates skips geocoding" do
       venue_data = %{
         name: "Test Venue",
@@ -275,8 +275,8 @@ defmodule EventasaurusDiscovery.Geocoding.MultiProviderTest do
   # PHASE 4: DASHBOARD VALIDATION
   # ============================================================================
 
-  @describetag :dashboard_validation
   describe "Phase 4: Dashboard Stats Validation" do
+    @describetag :dashboard_validation
     setup do
       # Run some geocoding to generate stats
       AddressGeocoder.geocode(@krakow_address)

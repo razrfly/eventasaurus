@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
   def mount(%{"city_slug" => city_slug}, _session, socket) do
     query = from(c in City, where: c.slug == ^city_slug, select: c)
 
-    case Repo.one(query) do
+    case Repo.replica().one(query) do
       nil ->
         {:ok,
          socket
@@ -203,7 +203,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         }
       )
 
-    sources = Repo.all(query)
+    sources = Repo.replica().all(query)
 
     # Use primary city_id for stats lookups (first in cluster)
     primary_city_id = List.first(clustered_city_ids)
@@ -267,7 +267,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         }
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   defp get_category_distribution(clustered_city_ids) do
@@ -288,7 +288,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         }
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   defp count_city_events(clustered_city_ids) do
@@ -300,7 +300,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         select: count(e.id)
       )
 
-    Repo.one(query) || 0
+    Repo.replica().one(query) || 0
   end
 
   defp count_city_events_this_week(clustered_city_ids) do
@@ -315,7 +315,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         select: count(e.id)
       )
 
-    Repo.one(query) || 0
+    Repo.replica().one(query) || 0
   end
 
   defp get_slug_quality_stats(clustered_city_ids) do
@@ -325,7 +325,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         where: v.city_id in ^clustered_city_ids,
         select: count(v.id)
       )
-      |> Repo.one()
+      |> Repo.replica().one()
 
     # Detect bad slugs that DON'T match current generation pattern
     # Current generation produces:
@@ -344,7 +344,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive.CityDetail do
         where: fragment("NOT (slug ~ ? OR slug ~ ?)", "^[a-z-]+$", "-[0-9]{10}$"),
         select: count(v.id)
       )
-      |> Repo.one()
+      |> Repo.replica().one()
 
     quality_percentage =
       if total_venues > 0 do

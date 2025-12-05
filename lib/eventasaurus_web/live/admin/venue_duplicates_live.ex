@@ -105,12 +105,12 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   # Private functions
 
   defp count_events_for_venue(venue_id) do
-    Repo.aggregate(
+    Repo.replica().aggregate(
       from(e in EventasaurusApp.Events.Event, where: e.venue_id == ^venue_id),
       :count,
       :id
     ) +
-      Repo.aggregate(
+      Repo.replica().aggregate(
         from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
           where: pe.venue_id == ^venue_id
         ),
@@ -120,12 +120,12 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   end
 
   defp count_events_for_venues(venue_ids) do
-    Repo.aggregate(
+    Repo.replica().aggregate(
       from(e in EventasaurusApp.Events.Event, where: e.venue_id in ^venue_ids),
       :count,
       :id
     ) +
-      Repo.aggregate(
+      Repo.replica().aggregate(
         from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
           where: pe.venue_id in ^venue_ids
         ),

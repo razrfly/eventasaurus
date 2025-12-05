@@ -54,7 +54,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         order_by: [desc: count(pe.id)]
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -96,7 +96,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         limit: ^limit
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -147,8 +147,8 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         select: count(pec.category_id, :distinct)
       )
 
-    stats = Repo.one(stats_query)
-    total_categories = Repo.one(categories_query) || 0
+    stats = Repo.replica().one(stats_query)
+    total_categories = Repo.replica().one(categories_query) || 0
 
     coverage_percentage =
       if stats.total_events > 0 do
@@ -217,7 +217,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         select: count(pes.id)
       )
 
-    total_events = Repo.one(total_query) || 0
+    total_events = Repo.replica().one(total_query) || 0
 
     # For now, return basic structure - full implementation would aggregate language keys
     %{
@@ -261,7 +261,7 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         }
       )
 
-    stats = Repo.one(query)
+    stats = Repo.replica().one(query)
 
     coverage_percentage =
       if stats.total_events > 0 do
@@ -349,8 +349,8 @@ defmodule EventasaurusDiscovery.Admin.SourceStatsCollector do
         limit: ^top_limit
       )
 
-    stats = Repo.one(stats_query)
-    top_venues = Repo.all(top_venues_query)
+    stats = Repo.replica().one(stats_query)
+    top_venues = Repo.replica().all(top_venues_query)
 
     venue_coverage =
       if stats.total_events > 0 do
