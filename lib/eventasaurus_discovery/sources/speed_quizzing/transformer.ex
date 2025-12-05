@@ -286,7 +286,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
       country == "Australia" ->
         "Australia/Sydney"
 
-      # Default to UTC for unknown countries
+      # Default to Europe/London for unknown countries (most Speed Quizzing events are UK-based)
       true ->
         Logger.debug("Unknown country #{country}, defaulting to Europe/London")
         "Europe/London"
