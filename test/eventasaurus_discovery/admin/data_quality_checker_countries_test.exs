@@ -75,7 +75,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityCheckerCountriesTest do
       # Verify confidence level determination
       assert source_code =~ "determine_confidence"
       assert source_code =~ ":high"
-      assert source_code =~ ":medium" or source_code =~ ":low"
+      assert source_code =~ ":medium"
+      assert source_code =~ ":low"
     end
 
     test "normalizes country names for comparison" do

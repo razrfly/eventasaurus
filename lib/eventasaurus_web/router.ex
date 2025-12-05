@@ -109,6 +109,9 @@ defmodule EventasaurusWeb.Router do
       live "/cities/duplicates", Admin.CityDuplicatesLive, :index
       live "/cities/cleanup", Admin.CityCleanupLive
 
+      # Venue Country Mismatches (dev - no auth)
+      live "/venues/country-mismatches", Admin.VenueCountryMismatchesLive, :index
+
       # Design tools (dev - no auth)
       live "/design/social-cards", Admin.SocialCardsPreviewLive
 
@@ -235,6 +238,9 @@ defmodule EventasaurusWeb.Router do
       live "/cities/:id/edit", EventasaurusWeb.Admin.CityFormLive, :edit
       live "/cities/duplicates", EventasaurusWeb.Admin.CityDuplicatesLive, :index
       live "/cities/cleanup", EventasaurusWeb.Admin.CityCleanupLive
+
+      # Venue Country Mismatches (with admin authentication)
+      live "/venues/country-mismatches", EventasaurusWeb.Admin.VenueCountryMismatchesLive, :index
 
       # Design tools (with admin authentication)
       live "/design/social-cards", EventasaurusWeb.Admin.SocialCardsPreviewLive
