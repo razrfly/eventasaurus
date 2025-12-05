@@ -202,24 +202,32 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
           # Load venues from both databases
           Logger.info("Loading venues for matching...")
 
-          ta_venues = load_ta_venues_with_images(ta_conn)
-          ea_venues = load_ea_venues_for_city(city_id, force)
+          case load_ta_venues_with_images(ta_conn) do
+            {:ok, ta_venues} ->
+              ea_venues = load_ea_venues_for_city(city_id, force)
 
-          Logger.info("""
-          Loaded venues:
-            - Trivia Advisor: #{length(ta_venues)} venues with images
-            - Eventasaurus: #{length(ea_venues)} venues in city #{city_id}
-          """)
+              Logger.info("""
+              Loaded venues:
+                - Trivia Advisor: #{length(ta_venues)} venues with images
+                - Eventasaurus: #{length(ea_venues)} venues in city #{city_id}
+              """)
 
-          # Match venues
-          Logger.info("Matching venues...")
-          matches = match_venues(ta_venues, ea_venues, limit)
+              # Match venues
+              Logger.info("Matching venues...")
+              matches = match_venues(ta_venues, ea_venues, limit)
 
-          Logger.info("Found #{length(matches)} matches - spawning individual upload jobs")
+              Logger.info("Found #{length(matches)} matches - spawning individual upload jobs")
 
-          # Always spawn individual jobs (following BackfillOrchestratorJob pattern)
-          stats = spawn_upload_jobs(matches, dry_run)
-          {:ok, stats}
+              # Always spawn individual jobs (following BackfillOrchestratorJob pattern)
+              stats = spawn_upload_jobs(matches, dry_run)
+              {:ok, stats}
+
+            {:error, :connection_error} ->
+              {:error, "Trivia Advisor database connection failed - will retry"}
+
+            {:error, reason} ->
+              {:error, "Failed to load Trivia Advisor venues: #{inspect(reason)}"}
+          end
         after
           # Always close connection
           GenServer.stop(ta_conn)
@@ -299,36 +307,51 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
       port: uri.port || 5432,
       database: String.trim_leading(uri.path || "", "/"),
       username: username,
-      password: password
+      password: password,
+      connect_timeout: 30_000,
+      timeout: 60_000,
+      pool_size: 1
     ]
   end
 
   defp load_ta_venues_with_images(conn) do
-    {:ok, result} =
-      Postgrex.query(
-        conn,
-        """
-          SELECT id, slug, name, place_id, latitude, longitude, google_place_images
-          FROM venues
-          WHERE google_place_images IS NOT NULL
-          AND jsonb_typeof(google_place_images) = 'array'
-          AND jsonb_array_length(google_place_images) > 0
-          ORDER BY id
-        """,
-        []
-      )
+    case Postgrex.query(
+           conn,
+           """
+             SELECT id, slug, name, place_id, latitude, longitude, google_place_images
+             FROM venues
+             WHERE google_place_images IS NOT NULL
+             AND jsonb_typeof(google_place_images) = 'array'
+             AND jsonb_array_length(google_place_images) > 0
+             ORDER BY id
+           """,
+           [],
+           timeout: 60_000
+         ) do
+      {:ok, result} ->
+        venues =
+          Enum.map(result.rows, fn [id, slug, name, place_id, lat, lng, images] ->
+            %{
+              id: id,
+              slug: slug,
+              name: name,
+              place_id: place_id,
+              latitude: lat,
+              longitude: lng,
+              google_place_images: images
+            }
+          end)
 
-    Enum.map(result.rows, fn [id, slug, name, place_id, lat, lng, images] ->
-      %{
-        id: id,
-        slug: slug,
-        name: name,
-        place_id: place_id,
-        latitude: lat,
-        longitude: lng,
-        google_place_images: images
-      }
-    end)
+        {:ok, venues}
+
+      {:error, %DBConnection.ConnectionError{} = error} ->
+        Logger.error("❌ Trivia Advisor database connection error: #{inspect(error)}")
+        {:error, :connection_error}
+
+      {:error, reason} ->
+        Logger.error("❌ Failed to load Trivia Advisor venues: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
   defp load_ea_venues_for_city(city_id, force) do
