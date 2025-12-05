@@ -106,14 +106,18 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
     else
       Mix.shell().info(IO.ANSI.yellow() <> "   No mismatches found!" <> IO.ANSI.reset())
 
-      # Show first 3 results to see what's happening
+      # Show mismatches from a fresh query for debugging
       Mix.shell().info("")
-      Mix.shell().info("   First 3 venues checked:")
+      Mix.shell().info("   Mismatches from fresh query (limit: 3):")
       all_results = DataQualityChecker.check_venue_countries(limit: 3, country: "United Kingdom")
 
-      Enum.each(all_results.mismatches, fn r ->
-        Mix.shell().info("   - #{r.venue_name}: current=#{r.current_country}, expected=#{r.expected_country}")
-      end)
+      if Enum.empty?(all_results.mismatches) do
+        Mix.shell().info("   No mismatches in sample - venues may already be correctly assigned")
+      else
+        Enum.each(all_results.mismatches, fn r ->
+          Mix.shell().info("   - #{r.venue_name}: current=#{r.current_country}, expected=#{r.expected_country}")
+        end)
+      end
     end
 
     Mix.shell().info("")
