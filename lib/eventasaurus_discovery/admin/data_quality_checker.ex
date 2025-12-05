@@ -2398,6 +2398,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   - `{:ok, %{venue: updated_venue, old_city: old_city, new_city: new_city}}` on success
   - `{:error, reason}` on failure
   """
+  @spec fix_venue_country(integer(), keyword()) ::
+          {:ok, map()} | {:error, atom() | tuple()}
   def fix_venue_country(venue_id, options \\ []) when is_integer(venue_id) do
     reason = Keyword.get(options, :reason, "GPS coordinates indicate different country")
 
@@ -2485,6 +2487,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   - `{:ok, updated_venue}` on success
   - `{:error, reason}` on failure
   """
+  @spec ignore_venue_country_mismatch(integer(), keyword()) ::
+          {:ok, struct()} | {:error, atom() | tuple()}
   def ignore_venue_country_mismatch(venue_id, options \\ []) when is_integer(venue_id) do
     reason = Keyword.get(options, :reason, "Marked as false positive")
 
@@ -2532,6 +2536,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   ## Returns
   - `{:ok, %{fixed: count, failed: count, results: [...]}}` on success
   """
+  @spec bulk_fix_venue_countries(keyword()) :: {:ok, map()} | {:error, term()}
   def bulk_fix_venue_countries(options \\ []) do
     confidence = Keyword.get(options, :confidence, :high)
     from_country = Keyword.get(options, :from_country)
@@ -2674,6 +2679,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
   Useful for refreshing a single row after an action.
   """
+  @spec get_venue_mismatch(integer()) :: map() | nil
   def get_venue_mismatch(venue_id) when is_integer(venue_id) do
     venue =
       repo().get(VenueSchema, venue_id)
@@ -2688,6 +2694,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   @doc """
   Check if a venue has been marked as ignored for country mismatch.
   """
+  @spec venue_country_ignored?(integer()) :: boolean()
   def venue_country_ignored?(venue_id) when is_integer(venue_id) do
     venue = repo().get(VenueSchema, venue_id)
 

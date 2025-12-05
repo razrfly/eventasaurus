@@ -147,18 +147,27 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       limit: 50
     ]
 
-    {:ok, result} = DataQualityChecker.bulk_fix_venue_countries(options)
+    case DataQualityChecker.bulk_fix_venue_countries(options) do
+      {:ok, result} ->
+        socket =
+          socket
+          |> assign(:bulk_fixing, false)
+          |> put_flash(
+            :info,
+            "Bulk fix complete: #{result.fixed} fixed, #{result.failed} failed"
+          )
+          |> load_mismatches()
 
-    socket =
-      socket
-      |> assign(:bulk_fixing, false)
-      |> put_flash(
-        :info,
-        "Bulk fix complete: #{result.fixed} fixed, #{result.failed} failed"
-      )
-      |> load_mismatches()
+        {:noreply, socket}
 
-    {:noreply, socket}
+      {:error, reason} ->
+        socket =
+          socket
+          |> assign(:bulk_fixing, false)
+          |> put_flash(:error, "Bulk fix failed: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -258,8 +267,16 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
   defp parse_confidence(_), do: nil
 
   defp parse_limit(nil), do: @default_limit
-  defp parse_limit(limit) when is_binary(limit), do: String.to_integer(limit)
-  defp parse_limit(limit) when is_integer(limit), do: limit
+
+  defp parse_limit(limit) when is_binary(limit) do
+    case Integer.parse(limit) do
+      {n, _} when n > 0 -> n
+      _ -> @default_limit
+    end
+  end
+
+  defp parse_limit(limit) when is_integer(limit) and limit > 0, do: limit
+  defp parse_limit(_), do: @default_limit
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
@@ -289,8 +306,16 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   def format_coords(_, _), do: "N/A"
 
-  def truncate(str, max_len) when is_binary(str) and byte_size(str) > max_len do
-    String.slice(str, 0, max_len - 3) <> "..."
+  def truncate(str, max_len) when is_binary(str) and max_len >= 4 do
+    if String.length(str) > max_len do
+      String.slice(str, 0, max_len - 3) <> "..."
+    else
+      str
+    end
+  end
+
+  def truncate(str, max_len) when is_binary(str) and max_len < 4 do
+    String.slice(str, 0, max_len)
   end
 
   def truncate(str, _max_len), do: str
