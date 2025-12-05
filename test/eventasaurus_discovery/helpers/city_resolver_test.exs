@@ -227,6 +227,91 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
     end
   end
 
+  describe "resolve_city_and_country/2" do
+    test "resolves Cork, Ireland from coordinates" do
+      # Cork, Ireland coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(51.8985, -8.4756)
+      assert is_binary(city)
+      assert String.length(city) > 0
+      assert country_code == "IE"
+    end
+
+    test "resolves Dublin, Ireland from coordinates" do
+      # Dublin, Ireland coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(53.3498, -6.2603)
+      assert is_binary(city)
+      assert country_code == "IE"
+    end
+
+    test "resolves London, UK from coordinates" do
+      # London coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(51.5074, -0.1278)
+      assert is_binary(city)
+      assert country_code == "GB"
+    end
+
+    test "resolves New York, US from coordinates" do
+      # New York City coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(40.7128, -74.0060)
+      assert is_binary(city)
+      assert country_code == "US"
+    end
+
+    test "resolves Paris, France from coordinates" do
+      # Paris coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(48.8566, 2.3522)
+      assert is_binary(city)
+      assert country_code == "FR"
+    end
+
+    test "resolves Warsaw, Poland from coordinates" do
+      # Warsaw coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(52.2297, 21.0122)
+      assert is_binary(city)
+      assert country_code == "PL"
+    end
+
+    test "resolves Sydney, Australia from coordinates" do
+      # Sydney coordinates
+      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(-33.8688, 151.2093)
+      assert is_binary(city)
+      assert country_code == "AU"
+    end
+
+    test "handles missing latitude" do
+      assert {:error, :missing_coordinates} = CityResolver.resolve_city_and_country(nil, -74.0060)
+    end
+
+    test "handles missing longitude" do
+      assert {:error, :missing_coordinates} = CityResolver.resolve_city_and_country(40.7128, nil)
+    end
+
+    test "handles both missing coordinates" do
+      assert {:error, :missing_coordinates} = CityResolver.resolve_city_and_country(nil, nil)
+    end
+
+    test "handles invalid latitude type" do
+      assert {:error, :invalid_coordinates} =
+               CityResolver.resolve_city_and_country("40.7128", -74.0060)
+    end
+
+    test "handles invalid longitude type" do
+      assert {:error, :invalid_coordinates} =
+               CityResolver.resolve_city_and_country(40.7128, "-74.0060")
+    end
+
+    test "returns both city and country_code in tuple" do
+      # Verify the return type is correct
+      assert {:ok, result} = CityResolver.resolve_city_and_country(51.5074, -0.1278)
+      assert is_tuple(result)
+      assert tuple_size(result) == 2
+      {city, country_code} = result
+      assert is_binary(city)
+      assert is_binary(country_code)
+      assert String.length(country_code) == 2
+    end
+  end
+
   describe "integration tests" do
     test "end-to-end resolution rejects garbage coordinates" do
       # Test coordinates that historically produced garbage

@@ -174,15 +174,29 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
   @doc """
   Resolves city and country from GPS coordinates using offline geocoding.
 
-  Uses CityResolver for reliable city name extraction from coordinates.
+  Uses CityResolver for reliable city and country extraction from coordinates.
+  The geocoding library returns ISO country codes which are converted to full
+  country names using the Countries library.
+
   Falls back to conservative address parsing if geocoding fails.
   """
   def resolve_location(latitude, longitude, address) do
-    case CityResolver.resolve_city(latitude, longitude) do
-      {:ok, city_name} ->
-        # Successfully resolved city from coordinates
-        country = detect_country_from_address(address)
-        {city_name, country}
+    case CityResolver.resolve_city_and_country(latitude, longitude) do
+      {:ok, {city_name, country_code}} ->
+        # Successfully resolved city and country from coordinates
+        # Convert ISO code to full country name using Countries library
+        country_name = country_name_from_code(country_code)
+
+        if country_name do
+          {city_name, country_name}
+        else
+          # Unknown country code - log and fall back to address detection
+          Logger.warning(
+            "Unknown country code #{inspect(country_code)} for (#{latitude}, #{longitude}). Falling back to address parsing."
+          )
+
+          {city_name, detect_country_from_address(address)}
+        end
 
       {:error, reason} ->
         # Geocoding failed - log and fall back to conservative parsing
@@ -193,6 +207,32 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
         parse_location_from_address_conservative(address)
     end
   end
+
+  # Convert ISO 2-letter country code to full country name using Countries library
+  # Uses common/short names for better readability
+  @common_country_names %{
+    "GB" => "United Kingdom",
+    "US" => "United States"
+  }
+
+  defp country_name_from_code(code) when is_binary(code) do
+    upcase_code = String.upcase(code)
+
+    # First check our common names mapping for better readability
+    case Map.get(@common_country_names, upcase_code) do
+      nil ->
+        # Fall back to Countries library
+        case Countries.get(upcase_code) do
+          nil -> nil
+          country -> country.name
+        end
+
+      common_name ->
+        common_name
+    end
+  end
+
+  defp country_name_from_code(_), do: nil
 
   # Private functions
 
@@ -230,6 +270,10 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
       country == "United Kingdom" ->
         "Europe/London"
 
+      # Ireland - same timezone as UK
+      country == "Ireland" ->
+        "Europe/Dublin"
+
       # US events - check address for state/city clues
       country == "United States" ->
         detect_us_timezone(address)
@@ -242,7 +286,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
       country == "Australia" ->
         "Australia/Sydney"
 
-      # Default to UK (most Speed Quizzing events are UK-based)
+      # Default to UTC for unknown countries
       true ->
         Logger.debug("Unknown country #{country}, defaulting to Europe/London")
         "Europe/London"
@@ -402,6 +446,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
       String.contains?(fee_text, "$") -> "USD"
       String.contains?(fee_text, "€") -> "EUR"
       country == "United Kingdom" -> "GBP"
+      country == "Ireland" -> "EUR"
       country == "United States" -> "USD"
       country == "United Arab Emirates" -> "AED"
       country == "Australia" -> "AUD"
