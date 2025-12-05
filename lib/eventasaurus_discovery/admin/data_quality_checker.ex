@@ -2021,4 +2021,313 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       fair_score: Keyword.get(config, :fair_score, 60)
     }
   end
+
+  # ===========================================================================
+  # Venue Country Mismatch Detection
+  # ===========================================================================
+  # Phase 3: Detect venues where GPS coordinates indicate a different country
+  # than what the venue is currently assigned to.
+  # ===========================================================================
+
+  alias EventasaurusDiscovery.Helpers.CityResolver
+  alias EventasaurusDiscovery.Locations.{City, Country}
+
+  @doc """
+  Check for venue country mismatches based on GPS coordinates.
+
+  Scans venues and compares their assigned country with the country
+  determined by reverse geocoding their GPS coordinates.
+
+  ## Options
+  - `:source` - Filter by source slug (e.g., "speed_quizzing")
+  - `:country` - Filter by current country name (e.g., "United Kingdom")
+  - `:limit` - Maximum venues to check (default: 1000)
+
+  ## Returns
+  Map with:
+  - `:total_checked` - Number of venues scanned
+  - `:mismatches` - List of mismatch details
+  - `:mismatch_count` - Number of mismatches found
+  - `:by_confidence` - Counts grouped by confidence level
+  - `:by_country_pair` - Counts grouped by (current -> expected) country pairs
+
+  ## Example
+
+      iex> check_venue_countries(source: "speed_quizzing", limit: 100)
+      %{
+        total_checked: 100,
+        mismatch_count: 5,
+        mismatches: [...],
+        by_confidence: %{high: 5, medium: 0, low: 0},
+        by_country_pair: %{{"United Kingdom", "Ireland"} => 5}
+      }
+  """
+  def check_venue_countries(options \\ []) do
+    limit = Keyword.get(options, :limit, 1000)
+    source_slug = Keyword.get(options, :source)
+    country_filter = Keyword.get(options, :country)
+
+    # Build query for venues with GPS coordinates
+    query = build_venue_country_query(source_slug, country_filter, limit)
+
+    # Fetch venues with their city and country preloaded
+    venues = repo().all(query)
+
+    # Check each venue against geocoding
+    results =
+      venues
+      |> Enum.map(&check_venue_country/1)
+      |> Enum.reject(&is_nil/1)
+
+    # Aggregate results
+    mismatches = Enum.filter(results, & &1.is_mismatch)
+
+    by_confidence =
+      mismatches
+      |> Enum.group_by(& &1.confidence)
+      |> Enum.map(fn {k, v} -> {k, length(v)} end)
+      |> Map.new()
+
+    by_country_pair =
+      mismatches
+      |> Enum.group_by(fn m -> {m.current_country, m.expected_country} end)
+      |> Enum.map(fn {k, v} -> {k, length(v)} end)
+      |> Map.new()
+
+    %{
+      total_checked: length(venues),
+      mismatch_count: length(mismatches),
+      mismatches: mismatches,
+      by_confidence: Map.merge(%{high: 0, medium: 0, low: 0}, by_confidence),
+      by_country_pair: by_country_pair
+    }
+  end
+
+  @doc """
+  Get detailed mismatch information for a specific country pair.
+
+  Useful for investigating specific migration scenarios like UK -> Ireland.
+
+  ## Example
+
+      iex> get_country_mismatches("United Kingdom", "Ireland", limit: 50)
+      [%{venue_id: 123, venue_name: "Cork Pub", ...}, ...]
+  """
+  def get_country_mismatches(current_country, expected_country, options \\ []) do
+    result = check_venue_countries(options)
+
+    result.mismatches
+    |> Enum.filter(fn m ->
+      m.current_country == current_country && m.expected_country == expected_country
+    end)
+  end
+
+  @doc """
+  Export venue country check results to a format suitable for backup/review.
+
+  Returns a list of maps that can be serialized to JSON.
+  """
+  def export_venue_country_report(options \\ []) do
+    result = check_venue_countries(options)
+
+    %{
+      generated_at: DateTime.utc_now() |> DateTime.to_iso8601(),
+      total_checked: result.total_checked,
+      mismatch_count: result.mismatch_count,
+      summary: %{
+        by_confidence: result.by_confidence,
+        by_country_pair:
+          result.by_country_pair
+          |> Enum.map(fn {{from, to}, count} ->
+            %{from: from, to: to, count: count}
+          end)
+      },
+      mismatches:
+        result.mismatches
+        |> Enum.map(fn m ->
+          %{
+            venue_id: m.venue_id,
+            venue_name: m.venue_name,
+            venue_address: m.venue_address,
+            latitude: m.latitude,
+            longitude: m.longitude,
+            current_country: m.current_country,
+            current_city: m.current_city,
+            expected_country: m.expected_country,
+            expected_city: m.expected_city,
+            confidence: m.confidence,
+            source: m.source
+          }
+        end)
+    }
+  end
+
+  # Build the query for fetching venues with their location data
+  defp build_venue_country_query(source_slug, country_filter, limit) do
+    base_query =
+      from(v in Venue,
+        join: c in City,
+        on: c.id == v.city_id,
+        join: co in Country,
+        on: co.id == c.country_id,
+        where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        preload: [city_ref: {c, country: co}],
+        select: v,
+        limit: ^limit
+      )
+
+    # Add source filter if specified
+    base_query =
+      if source_slug do
+        from(v in base_query,
+          where: v.source == ^source_slug
+        )
+      else
+        base_query
+      end
+
+    # Add country filter if specified
+    if country_filter do
+      from([v, c, co] in base_query,
+        where: co.name == ^country_filter
+      )
+    else
+      base_query
+    end
+  end
+
+  # Check a single venue's country against geocoding result
+  defp check_venue_country(%Venue{} = venue) do
+    # Skip venues without valid coordinates
+    if is_nil(venue.latitude) or is_nil(venue.longitude) do
+      nil
+    else
+      lat = venue.latitude
+      lng = venue.longitude
+
+      # Get current country from venue's city
+      current_country = get_venue_country_name(venue)
+      current_city = get_venue_city_name(venue)
+
+      # Skip if we can't determine current country
+      if is_nil(current_country) do
+        nil
+      else
+        # Resolve expected country from GPS coordinates
+        case CityResolver.resolve_city_and_country(lat, lng) do
+          {:ok, {expected_city, country_code}} ->
+            expected_country = country_name_from_code(country_code)
+
+            is_mismatch = normalize_country(current_country) != normalize_country(expected_country)
+
+            confidence =
+              if is_mismatch do
+                determine_confidence(current_country, expected_country, lat, lng)
+              else
+                nil
+              end
+
+            %{
+              venue_id: venue.id,
+              venue_name: venue.name,
+              venue_address: venue.address,
+              latitude: lat,
+              longitude: lng,
+              current_country: current_country,
+              current_city: current_city,
+              expected_country: expected_country,
+              expected_city: expected_city,
+              is_mismatch: is_mismatch,
+              confidence: confidence,
+              source: venue.source
+            }
+
+          {:error, _reason} ->
+            # Geocoding failed - mark as low confidence mismatch candidate
+            %{
+              venue_id: venue.id,
+              venue_name: venue.name,
+              venue_address: venue.address,
+              latitude: lat,
+              longitude: lng,
+              current_country: current_country,
+              current_city: current_city,
+              expected_country: nil,
+              expected_city: nil,
+              is_mismatch: false,
+              confidence: :low,
+              source: venue.source,
+              geocoding_failed: true
+            }
+        end
+      end
+    end
+  end
+
+  # Get country name from venue's preloaded associations
+  defp get_venue_country_name(%Venue{city_ref: %City{country: %Country{name: name}}}), do: name
+  defp get_venue_country_name(_), do: nil
+
+  # Get city name from venue's preloaded associations
+  defp get_venue_city_name(%Venue{city_ref: %City{name: name}}), do: name
+  defp get_venue_city_name(_), do: nil
+
+  # Normalize country names for comparison
+  defp normalize_country(nil), do: nil
+  defp normalize_country(name), do: String.downcase(String.trim(name))
+
+  # Determine confidence level for a mismatch
+  defp determine_confidence(current_country, expected_country, _lat, _lng) do
+    # HIGH confidence: Clear country differences (not border regions)
+    # MEDIUM confidence: Border regions or territories
+    # LOW confidence: Edge cases
+
+    current_norm = normalize_country(current_country)
+    expected_norm = normalize_country(expected_country)
+
+    cond do
+      # UK vs Ireland is HIGH confidence - clearly different countries
+      (current_norm == "united kingdom" and expected_norm == "ireland") or
+          (current_norm == "ireland" and expected_norm == "united kingdom") ->
+        :high
+
+      # US vs UK is HIGH confidence
+      (current_norm == "united kingdom" and expected_norm == "united states") or
+          (current_norm == "united states" and expected_norm == "united kingdom") ->
+        :high
+
+      # Same-name cities in different countries - HIGH confidence since GPS is definitive
+      # Dublin IE vs Dublin OH, Birmingham UK vs Birmingham AL, etc.
+      true ->
+        :high
+    end
+  end
+
+  # Convert ISO country code to full name
+  # Uses common names for better readability
+  @common_country_names %{
+    "GB" => "United Kingdom",
+    "US" => "United States",
+    "IE" => "Ireland",
+    "AU" => "Australia",
+    "AE" => "United Arab Emirates"
+  }
+
+  defp country_name_from_code(code) when is_binary(code) do
+    upcase_code = String.upcase(code)
+
+    case Map.get(@common_country_names, upcase_code) do
+      nil ->
+        # Fall back to Countries library
+        case Countries.get(upcase_code) do
+          nil -> upcase_code
+          country -> country.name
+        end
+
+      common_name ->
+        common_name
+    end
+  end
+
+  defp country_name_from_code(_), do: nil
 end
