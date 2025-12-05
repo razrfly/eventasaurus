@@ -228,7 +228,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         }
       )
 
-    stats = Repo.one(stats_query) || default_stats()
+    stats = Repo.replica().one(stats_query) || default_stats()
 
     # Fetch error details only when there are discarded jobs
     last_error =
@@ -260,7 +260,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         }
       )
 
-    stats = Repo.one(stats_query) || default_stats()
+    stats = Repo.replica().one(stats_query) || default_stats()
 
     # Fetch error details only when there are discarded jobs
     last_error =
@@ -320,7 +320,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
       stats_by_worker =
         stats_query
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Enum.map(fn stats ->
           {stats.worker, Map.delete(stats, :worker)}
         end)
@@ -405,7 +405,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
 
       stats_by_worker =
         stats_query
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Enum.map(fn stats ->
           {stats.worker, Map.delete(stats, :worker)}
         end)
@@ -468,7 +468,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         select: j.errors
       )
 
-    case Repo.one(error_query) do
+    case Repo.replica().one(error_query) do
       nil -> nil
       [] -> nil
       errors when is_list(errors) -> format_error(List.first(errors))
@@ -494,7 +494,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         select: j.errors
       )
 
-    case Repo.one(error_query) do
+    case Repo.replica().one(error_query) do
       nil -> nil
       [] -> nil
       errors when is_list(errors) -> format_error(List.first(errors))
@@ -535,7 +535,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       )
 
     error_query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(fn {worker, errors} ->
       formatted_error =
         case errors do
@@ -571,7 +571,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       )
 
     error_query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(fn {worker, errors} ->
       formatted_error =
         case errors do
@@ -674,7 +674,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           )
 
         query
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Enum.map(&enrich_job_history/1)
     end
   end
@@ -765,7 +765,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
           )
 
         query
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Enum.map(&enrich_job_history/1)
     end
   end
@@ -867,7 +867,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
               )
           )
 
-        case Repo.one(query) do
+        case Repo.replica().one(query) do
           nil -> nil
           avg when is_float(avg) or is_integer(avg) -> avg
           %Decimal{} = decimal -> Decimal.to_float(decimal)
@@ -907,7 +907,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         select: s.id
       )
 
-    case Repo.one(source_query) do
+    case Repo.replica().one(source_query) do
       nil ->
         []
 
@@ -940,7 +940,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
             }
           )
 
-        Repo.all(query)
+        Repo.replica().all(query)
     end
   end
 
@@ -1090,7 +1090,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         )
       end
 
-    Repo.one(stats_query) || %{processed: 0, succeeded: 0, failed: 0}
+    Repo.replica().one(stats_query) || %{processed: 0, succeeded: 0, failed: 0}
   end
 
   defp get_last_run_at(detail_worker, city_id, source_name) do
@@ -1125,7 +1125,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
         )
       end
 
-    Repo.one(timestamp_query)
+    Repo.replica().one(timestamp_query)
   end
 
   defp determine_detail_worker(sync_worker) do

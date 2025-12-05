@@ -299,7 +299,7 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
 
   defp load_cities(socket) do
     cities =
-      Repo.all(
+      Repo.replica().all(
         from(c in City,
           where: c.discovery_enabled == true,
           order_by: c.name,
@@ -418,7 +418,7 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
           from(j in query, where: j.completed_at >= ^month_ago)
       end
 
-    jobs = Repo.all(query)
+    jobs = Repo.replica().all(query)
 
     # Batch load all venues for EnrichmentJob operations to avoid N+1 queries
     venue_ids =
@@ -446,7 +446,7 @@ defmodule EventasaurusWeb.Admin.VenueImageEnrichmentHistoryLive do
         %{}
       else
         from(v in Venue, where: v.id in ^venue_ids, select: {v.id, v})
-        |> Repo.all()
+        |> Repo.replica().all()
         |> Map.new()
       end
 

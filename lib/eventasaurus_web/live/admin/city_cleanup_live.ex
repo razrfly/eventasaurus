@@ -292,7 +292,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
         where: c.name == ^city_name,
         preload: [:country]
       )
-      |> Repo.all()
+      |> Repo.replica().all()
 
     case cities do
       [] ->
@@ -363,7 +363,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
         select: c.id
       )
 
-    city_ids = Repo.all(city_ids_query)
+    city_ids = Repo.replica().all(city_ids_query)
 
     # Then load the cities with their venues and countries
     # Sort by venue count descending to preserve ordering from first query
@@ -371,7 +371,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
       where: c.id in ^city_ids,
       preload: [:venues, :country]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.sort_by(&length(&1.venues), :desc)
   end
 
@@ -426,7 +426,7 @@ defmodule EventasaurusWeb.Admin.CityCleanupLive do
       limit: 10,
       preload: [country: co]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp calculate_distance(venue, city) do

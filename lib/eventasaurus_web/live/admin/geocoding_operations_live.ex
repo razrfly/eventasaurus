@@ -127,7 +127,7 @@ defmodule EventasaurusWeb.Admin.GeocodingOperationsLive do
       )
 
     query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(&enrich_operation/1)
   end
 

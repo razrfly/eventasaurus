@@ -41,7 +41,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    cities = Repo.all(from(c in City, order_by: c.name, preload: :country))
+    cities = Repo.replica().all(from(c in City, order_by: c.name, preload: :country))
 
     socket =
       socket

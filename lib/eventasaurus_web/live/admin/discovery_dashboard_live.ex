@@ -88,7 +88,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   def handle_info(:load_venue_duplicates, socket) do
     # Load venue duplicate statistics
     groups = Venues.find_duplicate_groups(200, 0.6)
-    total_venues = Repo.aggregate(Venues.Venue, :count, :id)
+    total_venues = Repo.replica().aggregate(Venues.Venue, :count, :id)
 
     duplicate_count = length(groups)
 
@@ -196,7 +196,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         if Map.has_key?(@city_specific_sources, source) do
           city_slug = @city_specific_sources[source]
 
-          case Repo.one(from(c in City, where: c.slug == ^city_slug, select: c.id)) do
+          case Repo.replica().one(from(c in City, where: c.slug == ^city_slug, select: c.id)) do
             nil ->
               Logger.error("City not found for slug: #{city_slug}, source: #{source}")
               {:error, "City '#{city_slug}' not found in database. Please add it first."}
@@ -709,7 +709,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
     # Get active cities only (those with discovery enabled)
     cities =
-      Repo.all(
+      Repo.replica().all(
         from(c in City,
           where: c.discovery_enabled == true,
           order_by: c.name,
@@ -745,7 +745,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
             )
         ]
       )
-      |> Repo.all()
+      |> Repo.replica().all()
       |> Enum.map(fn p ->
         %{
           name: p.name,
@@ -870,7 +870,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   defp get_active_city_statistics do
     # Get all active cities with coordinates
     active_cities =
-      Repo.all(
+      Repo.replica().all(
         from(c in City,
           where: c.discovery_enabled == true,
           where: not is_nil(c.latitude) and not is_nil(c.longitude),
@@ -902,7 +902,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
       # Count events with venues in this radius
       count =
-        Repo.one(
+        Repo.replica().one(
           from(e in PublicEvent,
             join: v in EventasaurusApp.Venues.Venue,
             on: v.id == e.venue_id,
@@ -924,7 +924,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   defp get_inactive_city_statistics do
     # Get statistics for inactive cities using traditional city_id matching
-    Repo.all(
+    Repo.replica().all(
       from(e in PublicEvent,
         join: v in EventasaurusApp.Venues.Venue,
         on: v.id == e.venue_id,

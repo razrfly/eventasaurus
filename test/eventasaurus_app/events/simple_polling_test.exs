@@ -48,7 +48,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
       assert option2.poll_id == poll.id
 
       # Transition to voting
-      {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
+      {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
       assert voting_poll.phase == "voting"
 
       # Cast votes
@@ -96,7 +96,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
           suggested_by_id: user.id
         })
 
-      {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
+      {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
       # Cast approval votes (user can select multiple)
       {:ok, _vote1} = Events.cast_approval_vote(hiking, user, %{selected: true})
@@ -135,7 +135,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
           option
         end
 
-      {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
+      {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
       # Cast ranked votes
       Enum.with_index(movies, 1)
@@ -171,7 +171,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
           suggested_by_id: user.id
         })
 
-      {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
+      {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
       # Cast star rating
       {:ok, vote} = Events.cast_star_vote(restaurant, user, 4)
@@ -206,7 +206,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
           suggested_by_id: user.id
         })
 
-      {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
+      {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
       # Finalize poll with chosen option
       {:ok, final_poll} = Events.finalize_poll(voting_poll, [option.id])
@@ -232,7 +232,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
           suggested_by_id: user.id
         })
 
-      {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
+      {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
       # Cast vote
       {:ok, vote} = Events.cast_approval_vote(option, user, %{selected: true})

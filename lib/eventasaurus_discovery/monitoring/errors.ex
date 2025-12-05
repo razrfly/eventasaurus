@@ -76,7 +76,7 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
             base_query
           end
 
-        failures = Repo.all(query)
+        failures = Repo.replica().all(query)
 
         # Get total executions for context
         total_executions =
@@ -85,7 +85,7 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
             where: j.attempted_at >= ^from_time,
             select: count(j.id)
           )
-          |> Repo.one()
+          |> Repo.replica().one()
 
         if Enum.empty?(failures) do
           {:ok,
@@ -224,7 +224,7 @@ defmodule EventasaurusDiscovery.Monitoring.Errors do
             where: j.attempted_at >= ^DateTime.add(DateTime.utc_now(), -hours, :hour),
             select: count(j.id)
           )
-          |> Repo.one()
+          |> Repo.replica().one()
 
         error_rate = failure_count / worker_total * 100
         {worker_name, failure_count, error_rate}

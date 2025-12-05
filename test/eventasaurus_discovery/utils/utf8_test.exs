@@ -160,8 +160,8 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
         "Teatr Ludowy – Scena Pod Ratuszem",
         "Krakowska Pijalnia Zdrojowa, ul. Wadowicka 1b",
         "Muzeum Narodowe w Krakowie – Gmach Główny",
-        "Kino „Kijów.Centrum"",
-        "Centrum Kultury „Dworek Białoprądnicki""
+        "Kino \u{201E}Kijów.Centrum\u{201D}",
+        "Centrum Kultury \u{201E}Dworek Białoprądnicki\u{201D}"
       ]
 
       Enum.each(venues, fn venue ->

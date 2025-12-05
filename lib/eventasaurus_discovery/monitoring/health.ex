@@ -174,7 +174,7 @@ defmodule EventasaurusDiscovery.Monitoring.Health do
       order_by: [desc: j.attempted_at],
       limit: ^limit
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp calculate_health(executions, source, hours) do

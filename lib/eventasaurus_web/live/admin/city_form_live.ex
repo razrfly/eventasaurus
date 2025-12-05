@@ -207,7 +207,7 @@ defmodule EventasaurusWeb.Admin.CityFormLive do
     popular_codes = ["US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "NL", "PL"]
 
     # Load countries from database with their IDs
-    all_countries = Repo.all(Country)
+    all_countries = Repo.replica().all(Country)
 
     # Convert to format compatible with existing code (map with id/code/name keys)
     popular =

@@ -255,7 +255,7 @@ defmodule EventasaurusWeb.Admin.ScraperLogsLive do
         query
       end
 
-    recent_logs = Repo.all(query)
+    recent_logs = Repo.replica().all(query)
 
     assign(socket, :recent_logs, recent_logs)
   end

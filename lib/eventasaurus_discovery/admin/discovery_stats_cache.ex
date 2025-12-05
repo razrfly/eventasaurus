@@ -364,12 +364,12 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
       )
 
     query
-    |> Repo.all(timeout: 30_000)
+    |> Repo.replica().all(timeout: 30_000)
     |> Map.new()
   end
 
   defp count_cities do
-    Repo.aggregate(City, :count, :id, timeout: 30_000)
+    Repo.replica().aggregate(City, :count, :id, timeout: 30_000)
   end
 
   defp count_events_this_week do
@@ -381,7 +381,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
         select: count(e.id)
       )
 
-    Repo.one(query, timeout: 30_000) || 0
+    Repo.replica().one(query, timeout: 30_000) || 0
   end
 
   defp get_city_performance do
@@ -402,7 +402,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
         order_by: [desc: count(e.id)]
       )
 
-    cities = Repo.all(query, timeout: 30_000)
+    cities = Repo.replica().all(query, timeout: 30_000)
 
     # Apply geographic clustering to group metro areas
     clustered_cities = CityHierarchy.aggregate_stats_by_cluster(cities, 20.0)
@@ -453,7 +453,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
 
     city_stats =
       query
-      |> Repo.all(timeout: 30_000)
+      |> Repo.replica().all(timeout: 30_000)
       |> Map.new(fn stats ->
         change =
           if stats.last_week > 0 do
