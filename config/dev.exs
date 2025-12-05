@@ -4,8 +4,6 @@ import Config
 config :eventasaurus, :environment, :dev
 
 # Configure your database
-# Using local Postgres.app with PostGIS extension
-# To set up: createdb eventasaurus_dev && psql -d eventasaurus_dev -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 config :eventasaurus, EventasaurusApp.Repo,
   username: "postgres",
   password: "postgres",
@@ -16,7 +14,6 @@ config :eventasaurus, EventasaurusApp.Repo,
   pool_size: 10
 
 # SessionRepo for development (Oban, migrations, advisory locks)
-# In development, both repos point to the same local database
 config :eventasaurus, EventasaurusApp.SessionRepo,
   username: "postgres",
   password: "postgres",
@@ -24,11 +21,9 @@ config :eventasaurus, EventasaurusApp.SessionRepo,
   database: "eventasaurus_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  pool_size: 2
 
-# ReplicaRepo for development
-# In development, replica points to the same local database as primary
-# Production uses PlanetScale's |replica username suffix for real replica routing
+# ReplicaRepo for development (points to same DB)
 config :eventasaurus, EventasaurusApp.ReplicaRepo,
   username: "postgres",
   password: "postgres",

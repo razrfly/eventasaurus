@@ -6,6 +6,12 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   AdminDashboardLive and DiscoveryDashboardLive. Uses Cachex for in-memory caching
   with TTL-based expiration.
 
+  ## Read Replica Strategy
+
+  All read queries in this module use `Repo.replica()` to route traffic to the
+  read replica, reducing load on the primary database. This is especially important
+  for expensive aggregation queries on large tables like `oban_jobs`.
+
   ## Cache TTL Strategy
 
   - Basic counts (events, venues, performers): 10 minutes - changes slowly, high query cost
@@ -42,7 +48,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   """
   def get_total_events do
     Cachex.fetch(@cache_name, :total_events, fn ->
-      count = Repo.aggregate(PublicEvent, :count, :id)
+      count = Repo.replica().aggregate(PublicEvent, :count, :id)
       {:commit, count, expire: :timer.minutes(10)}
     end)
   end
@@ -54,7 +60,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   def get_unique_venues do
     Cachex.fetch(@cache_name, :unique_venues, fn ->
       count =
-        Repo.one(
+        Repo.replica().one(
           from(e in PublicEvent,
             where: not is_nil(e.venue_id),
             select: count(e.venue_id, :distinct)
@@ -72,7 +78,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   def get_unique_performers do
     Cachex.fetch(@cache_name, :unique_performers, fn ->
       count =
-        Repo.aggregate(
+        Repo.replica().aggregate(
           from(pep in PublicEventPerformer, select: pep.performer_id, distinct: true),
           :count,
           :performer_id
@@ -88,7 +94,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   """
   def get_total_categories do
     Cachex.fetch(@cache_name, :total_categories, fn ->
-      count = Repo.aggregate(Category, :count, :id)
+      count = Repo.replica().aggregate(Category, :count, :id)
       {:commit, count, expire: :timer.minutes(10)}
     end)
   end
@@ -100,7 +106,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   def get_unique_sources do
     Cachex.fetch(@cache_name, :unique_sources, fn ->
       count =
-        Repo.one(
+        Repo.replica().one(
           from(s in PublicEventSource,
             select: count(s.source_id, :distinct)
           )
@@ -123,7 +129,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
       today = DateTime.utc_now()
 
       count =
-        Repo.aggregate(
+        Repo.replica().aggregate(
           from(e in PublicEvent, where: e.starts_at >= ^today),
           :count,
           :id
@@ -142,7 +148,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
       today = DateTime.utc_now()
 
       count =
-        Repo.aggregate(
+        Repo.replica().aggregate(
           from(e in PublicEvent, where: e.starts_at < ^today),
           :count,
           :id
@@ -180,8 +186,9 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   """
   def get_geocoding_queue_count do
     Cachex.fetch(@cache_name, :geocoding_queue_count, fn ->
+      # Use replica for read-heavy Oban queries to reduce primary DB load
       count =
-        Repo.one(
+        Repo.replica().one(
           from(j in Oban.Job,
             where:
               j.worker in [
@@ -208,7 +215,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
       twenty_four_hours_ago = DateTime.add(DateTime.utc_now(), -24, :hour)
 
       count =
-        Repo.one(
+        Repo.replica().one(
           from(log in ScraperProcessingLog,
             where: log.status == :error,
             where: log.processed_at >= ^twenty_four_hours_ago,
@@ -230,10 +237,12 @@ defmodule EventasaurusApp.Cache.DashboardStats do
     Cachex.fetch(@cache_name, :queue_statistics, fn ->
       queues = [:discovery_sync, :discovery_import]
 
+      # Use replica for all Oban queries - these are read-heavy dashboard stats
+      # that don't need real-time consistency
       stats =
         Enum.map(queues, fn queue ->
           available =
-            Repo.aggregate(
+            Repo.replica().aggregate(
               from(j in Oban.Job,
                 where: j.queue == ^to_string(queue) and j.state == "available"
               ),
@@ -242,7 +251,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
             ) || 0
 
           executing =
-            Repo.aggregate(
+            Repo.replica().aggregate(
               from(j in Oban.Job,
                 where: j.queue == ^to_string(queue) and j.state == "executing"
               ),
@@ -251,7 +260,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
             ) || 0
 
           scheduled =
-            Repo.aggregate(
+            Repo.replica().aggregate(
               from(j in Oban.Job,
                 where: j.queue == ^to_string(queue) and j.state == "scheduled"
               ),
@@ -260,7 +269,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
             ) || 0
 
           completed =
-            Repo.aggregate(
+            Repo.replica().aggregate(
               from(j in Oban.Job,
                 where: j.queue == ^to_string(queue) and j.state == "completed"
               ),
@@ -295,7 +304,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   def get_source_statistics do
     Cachex.fetch(@cache_name, :source_statistics, fn ->
       stats =
-        Repo.all(
+        Repo.replica().all(
           from(pes in PublicEventSource,
             join: e in PublicEvent,
             on: e.id == pes.event_id,

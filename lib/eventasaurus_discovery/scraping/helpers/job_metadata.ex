@@ -109,6 +109,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
 
   @doc """
   Gets summary statistics for jobs by source and date range.
+  Uses read replica for this read-heavy aggregation query.
   """
   def get_job_stats(source_id, start_date \\ nil, end_date \\ nil) do
     start_date = start_date || DateTime.add(DateTime.utc_now(), -7 * 24 * 3600, :second)
@@ -127,7 +128,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
       )
 
     stats =
-      Repo.all(query)
+      Repo.replica().all(query)
       |> Enum.into(%{}, fn %{state: state, count: count} -> {state, count} end)
 
     %{

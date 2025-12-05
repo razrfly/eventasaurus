@@ -252,10 +252,11 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   # 1. Add database index on oban_jobs.worker column (recommended)
   # 2. Cache results with 5-minute TTL if this becomes a bottleneck
   # Current approach maintains true auto-discovery - new child jobs appear immediately
+  # Uses read replica to reduce load on primary database
   defp get_all_discovery_workers do
     import Ecto.Query
 
-    EventasaurusApp.Repo.all(
+    EventasaurusApp.Repo.replica().all(
       from(j in Oban.Job,
         where:
           fragment(
