@@ -21,6 +21,9 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Validation.VenueNameValidator
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Check data quality for a source by slug.
 
@@ -538,7 +541,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: s.id
       )
 
-    Repo.one(query)
+    repo().one(query)
   end
 
   defp count_events(source_id) do
@@ -548,7 +551,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(pes.id)
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp count_missing_venues(source_id) do
@@ -561,7 +564,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(e.id)
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp count_venues_with_low_quality_names(source_id) do
@@ -583,7 +586,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       )
 
     # Get all events with venues that have metadata
-    events_with_venues = Repo.all(query)
+    events_with_venues = repo().all(query)
 
     # Calculate how many unique venues have low-quality names
     {low_quality_ids, examples_by_venue} =
@@ -640,7 +643,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(pes.id)
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp count_missing_categories(source_id) do
@@ -660,7 +663,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(fragment("DISTINCT ?", e.id))
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp get_category_distribution(source_id) do
@@ -683,7 +686,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         order_by: [desc: count(e.id)]
       )
 
-    results = Repo.all(query)
+    results = repo().all(query)
     total_events = Enum.reduce(results, 0, fn cat, acc -> cat.count + acc end)
 
     # Add percentage to each category
@@ -723,7 +726,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           select: count(fragment("DISTINCT ?", e.id))
         )
 
-      Repo.one(query) || 0
+      repo().one(query) || 0
     end
   end
 
@@ -924,7 +927,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           order_by: [desc: count(pes.id)]
         )
 
-      price_distribution = Repo.all(price_query)
+      price_distribution = repo().all(price_query)
       unique_prices = length(price_distribution)
 
       # Calculate diversity score and warning
@@ -1176,7 +1179,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         }
       )
 
-    performer_data = Repo.all(query)
+    performer_data = repo().all(query)
     total_events = length(performer_data)
 
     if total_events == 0 do
@@ -1261,7 +1264,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         }
       )
 
-    occurrence_data = Repo.all(query)
+    occurrence_data = repo().all(query)
     total_events = length(occurrence_data)
 
     if total_events == 0 do
@@ -1476,7 +1479,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         }
       )
 
-    occurrence_data = Repo.all(query)
+    occurrence_data = repo().all(query)
     total_events = length(occurrence_data)
 
     if total_events == 0 do
@@ -1749,7 +1752,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(pes.id)
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp count_genuine_translations(source_id) do
@@ -1777,7 +1780,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(pes.id)
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp count_duplicate_translations(source_id) do
@@ -1804,7 +1807,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: count(pes.id)
       )
 
-    Repo.one(query) || 0
+    repo().one(query) || 0
   end
 
   defp supports_translations?(source_id) do

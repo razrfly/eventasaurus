@@ -42,6 +42,9 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.City
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Returns aggregate venue image statistics for a city.
 
@@ -117,11 +120,11 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         select: count(v.id)
       )
 
-    total_venues = Repo.one(total_query) || 0
-    venues_with_images = Repo.one(with_images_query) || 0
+    total_venues = repo().one(total_query) || 0
+    venues_with_images = repo().one(with_images_query) || 0
     venues_without_images = total_venues - venues_with_images
-    venues_missing_address = Repo.one(missing_address_query) || 0
-    venues_missing_coordinates = Repo.one(missing_coordinates_query) || 0
+    venues_missing_address = repo().one(missing_address_query) || 0
+    venues_missing_coordinates = repo().one(missing_coordinates_query) || 0
 
     coverage_percentage =
       if total_venues > 0 do
@@ -202,7 +205,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         }
       )
 
-    venues_with_images = Repo.all(query)
+    venues_with_images = repo().all(query)
 
     # Count by provider
     provider_counts =
@@ -309,7 +312,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         }
       )
 
-    enriched_venues = Repo.all(query)
+    enriched_venues = repo().all(query)
 
     venues_enriched = length(enriched_venues)
 
@@ -370,7 +373,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         limit: ^limit
       )
 
-    Repo.all(query)
+    repo().all(query)
   end
 
   @doc """
@@ -445,7 +448,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         limit: ^limit
       )
 
-    venues = Repo.all(query)
+    venues = repo().all(query)
 
     Enum.map(venues, fn venue ->
       has_coordinates = not is_nil(venue.latitude) and not is_nil(venue.longitude)
@@ -498,11 +501,11 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
   """
   def get_overall_stats do
     # Total venues
-    total_venues = Repo.aggregate(Venue, :count, :id)
+    total_venues = repo().aggregate(Venue, :count, :id)
 
     # Venues with images
     venues_with_images =
-      Repo.one(
+      repo().one(
         from(v in Venue,
           where: fragment("COALESCE(jsonb_array_length(?), 0) > 0", v.venue_images),
           select: count(v.id)
@@ -518,7 +521,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
 
     # Count cities with venues
     cities_analyzed =
-      Repo.one(
+      repo().one(
         from(v in Venue,
           where: not is_nil(v.city_id),
           select: count(v.city_id, :distinct)
@@ -540,7 +543,7 @@ defmodule EventasaurusDiscovery.VenueImages.QualityStats do
         order_by: [desc: count(v.id)],
         limit: 5
       )
-      |> Repo.all()
+      |> repo().all()
 
     %{
       total_venues: total_venues,

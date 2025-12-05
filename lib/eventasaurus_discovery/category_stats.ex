@@ -8,6 +8,9 @@ defmodule EventasaurusDiscovery.CategoryStats do
   alias EventasaurusDiscovery.Categories.PublicEventCategory
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Lists top categories by number of upcoming events.
 
@@ -40,6 +43,6 @@ defmodule EventasaurusDiscovery.CategoryStats do
         event_count: count(pe.id)
       }
     )
-    |> Repo.all()
+    |> repo().all()
   end
 end

@@ -14,6 +14,9 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
   alias EventasaurusDiscovery.Sources.{Source, SourceRegistry}
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Get event count trend for a source over the specified number of days.
 
@@ -60,7 +63,7 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
               where: pes.inserted_at >= ^date_start and pes.inserted_at < ^date_end,
               select: count(pes.id)
             )
-            |> Repo.one() || 0
+            |> repo().one() || 0
 
           %{date: date, count: count}
         end)
@@ -170,7 +173,7 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
                 ),
               select: count(j.id)
             )
-            |> Repo.one() || 0
+            |> repo().one() || 0
 
           # Get successful runs for this day from oban_jobs
           successful_runs =
@@ -189,7 +192,7 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
                 ),
               select: count(j.id)
             )
-            |> Repo.one() || 0
+            |> repo().one() || 0
 
           success_rate =
             if total_runs > 0 do
@@ -361,7 +364,7 @@ defmodule EventasaurusDiscovery.Admin.TrendAnalyzer do
         select: s.id
       )
 
-    Repo.one(query)
+    repo().one(query)
   end
 
   defp hex_to_rgba(hex, opacity) do

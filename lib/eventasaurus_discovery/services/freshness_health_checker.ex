@@ -31,6 +31,9 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Services.EventFreshnessChecker
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Check freshness health for a source using Oban job execution metrics.
 
@@ -64,7 +67,7 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
 
     # Count all events for this source
     total_events =
-      Repo.one(
+      repo().one(
         from(pes in PublicEventSource,
           where: pes.source_id == ^source_id,
           select: count(pes.id)
@@ -133,7 +136,7 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
     # Query oban_jobs for detail jobs with this source_id
     # Matches: VenueDetailJob, EventDetailJob, etc.
     # Use completed_at to measure jobs actually executed in the window
-    Repo.one(
+    repo().one(
       from(j in "oban_jobs",
         where: fragment("? ->> 'source_id' = ?", j.args, ^to_string(source_id)),
         where: fragment("? LIKE '%DetailJob'", j.worker),
@@ -242,7 +245,7 @@ defmodule EventasaurusDiscovery.Services.FreshnessHealthChecker do
   """
   def check_all_sources do
     sources =
-      Repo.all(
+      repo().all(
         from(s in EventasaurusDiscovery.Sources.Source,
           select: %{id: s.id, slug: s.slug, name: s.name}
         )
