@@ -673,6 +673,39 @@ if config_env() == :prod do
       handshake_timeout: 30_000,
       ssl: true,
       ssl_opts: planetscale_ssl_opts
+
+    # ReplicaRepo: Direct connection to read replicas (port 5432)
+    # PlanetScale routes to replicas when username has |replica suffix
+    # PgBouncer does NOT support replica routing, so direct connection is required
+    #
+    # Use for:
+    # - Admin dashboards and analytics
+    # - DiscoveryStatsCache background refresh
+    # - Heavy read queries where eventual consistency is acceptable
+    #
+    # DO NOT use for:
+    # - Reads immediately after writes (replication lag)
+    # - Authentication or session queries
+    # - Any write operations (will be rejected by Ecto read_only: true)
+    #
+    # Kill switch: Set USE_REPLICA=false to route all reads to primary
+    # See: https://planetscale.com/docs/postgres/scaling/replicas
+    ps_replica_user = "#{ps_user}|replica"
+
+    config :eventasaurus, EventasaurusApp.ReplicaRepo,
+      username: ps_replica_user,
+      password: ps_pass,
+      hostname: ps_host,
+      port: ps_direct_port,
+      database: ps_db,
+      pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "5"),
+      socket_options: socket_opts,
+      queue_target: 5000,
+      queue_interval: 30000,
+      connect_timeout: 30_000,
+      handshake_timeout: 30_000,
+      ssl: true,
+      ssl_opts: planetscale_ssl_opts
   else
     # Supabase configuration (legacy/fallback)
     # Path to Supabase CA certificate
