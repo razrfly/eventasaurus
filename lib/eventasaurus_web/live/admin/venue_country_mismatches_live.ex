@@ -13,7 +13,9 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   alias EventasaurusDiscovery.Admin.DataQualityChecker
 
-  @default_limit 50
+  # Higher limit for admin tool - we want to find all mismatches
+  # The geocoding check is fast (offline library), so 500 is reasonable
+  @default_limit 500
 
   @impl true
   def mount(_params, _session, socket) do
@@ -144,7 +146,7 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       confidence: :high,
       from_country: filters.from_country,
       to_country: filters.to_country,
-      limit: 50
+      limit: @default_limit
     ]
 
     case DataQualityChecker.bulk_fix_venue_countries(options) do

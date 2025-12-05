@@ -20,6 +20,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   """
 
   import Ecto.Query
+  require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventSource}
   alias EventasaurusDiscovery.Sources.Source
@@ -2073,11 +2074,26 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     # Fetch venues with their city and country preloaded
     venues = repo().all(query)
 
+    Logger.debug(
+      "[VenueCountryCheck] Fetched #{length(venues)} venues (limit: #{limit}, source: #{inspect(source_slug)}, country: #{inspect(country_filter)})"
+    )
+
+    # Log a sample venue to debug preloading
+    if length(venues) > 0 do
+      sample = hd(venues)
+
+      Logger.debug(
+        "[VenueCountryCheck] Sample venue: id=#{sample.id}, lat=#{sample.latitude}, lng=#{sample.longitude}, city_ref=#{inspect(sample.city_ref)}"
+      )
+    end
+
     # Check each venue against geocoding
     results =
       venues
       |> Enum.map(&check_venue_country/1)
       |> Enum.reject(&is_nil/1)
+
+    Logger.debug("[VenueCountryCheck] Results after filtering nil: #{length(results)}")
 
     # Aggregate results
     mismatches = Enum.filter(results, & &1.is_mismatch)
@@ -2163,6 +2179,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   # Build the query for fetching venues with their location data
+  # Orders by longitude ascending to prioritize westerly coordinates (more likely mismatches)
   defp build_venue_country_query(source_slug, country_filter, limit) do
     base_query =
       from(v in Venue,
@@ -2171,6 +2188,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         join: co in Country,
         on: co.id == c.country_id,
         where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        order_by: [asc: v.longitude],
         preload: [city_ref: {c, country: co}],
         select: v,
         limit: ^limit
@@ -2220,6 +2238,13 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
             is_mismatch = normalize_country(current_country) != normalize_country(expected_country)
 
+            # Debug log for mismatches
+            if is_mismatch do
+              Logger.debug(
+                "[VenueCountryCheck] MISMATCH: venue_id=#{venue.id}, current=#{current_country}, expected=#{expected_country} (code=#{country_code}), coords=(#{lat}, #{lng})"
+              )
+            end
+
             confidence =
               if is_mismatch do
                 determine_confidence(current_country, expected_country, lat, lng)
@@ -2242,8 +2267,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
               source: venue.source
             }
 
-          {:error, _reason} ->
+          {:error, reason} ->
             # Geocoding failed - mark as low confidence mismatch candidate
+            Logger.debug(
+              "[VenueCountryCheck] Geocoding FAILED: venue_id=#{venue.id}, coords=(#{lat}, #{lng}), reason=#{inspect(reason)}"
+            )
+
             %{
               venue_id: venue.id,
               venue_name: venue.name,
@@ -2272,39 +2301,53 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   defp get_venue_city_name(%Venue{city_ref: %City{name: name}}), do: name
   defp get_venue_city_name(_), do: nil
 
-  # Normalize country names for comparison
+  # Normalize country names for comparison by resolving to ISO code
+  # Uses CountryResolver which leverages the Countries library's unofficial_names
+  alias EventasaurusDiscovery.Locations.CountryResolver
+
   defp normalize_country(nil), do: nil
-  defp normalize_country(name), do: String.downcase(String.trim(name))
+
+  defp normalize_country(name) do
+    # Resolve to ISO code for consistent comparison
+    # This handles all variations like "United States of America" vs "United States"
+    # as they both resolve to "US"
+    case CountryResolver.get_code(name) do
+      nil ->
+        # Fall back to lowercase comparison if Countries library doesn't recognize it
+        String.downcase(String.trim(name))
+
+      code ->
+        # Use the ISO code for comparison (normalized)
+        String.downcase(code)
+    end
+  end
 
   # Determine confidence level for a mismatch
+  # Uses ISO codes for consistent comparison (normalize_country returns lowercase ISO code)
   defp determine_confidence(current_country, expected_country, lat, lng) do
     # HIGH confidence: Clear country differences (not border regions)
     # MEDIUM confidence: Border regions or territories
     # LOW confidence: Edge cases or geocoding uncertainty
 
-    current_norm = normalize_country(current_country)
-    expected_norm = normalize_country(expected_country)
+    # normalize_country now returns lowercase ISO codes (e.g., "gb", "us", "ie")
+    current_code = normalize_country(current_country)
+    expected_code = normalize_country(expected_country)
 
     cond do
       # UK vs Ireland is HIGH confidence - clearly different countries
-      (current_norm == "united kingdom" and expected_norm == "ireland") or
-          (current_norm == "ireland" and expected_norm == "united kingdom") ->
+      (current_code == "gb" and expected_code == "ie") or
+          (current_code == "ie" and expected_code == "gb") ->
         :high
 
       # US vs UK is HIGH confidence
-      (current_norm == "united kingdom" and expected_norm == "united states") or
-          (current_norm == "united states" and expected_norm == "united kingdom") ->
+      (current_code == "gb" and expected_code == "us") or
+          (current_code == "us" and expected_code == "gb") ->
         :high
 
       # Border regions - MEDIUM confidence (needs manual review)
       # Northern Ireland area (roughly north of 54.0 lat in Ireland/UK context)
-      is_border_region?(current_norm, expected_norm, lat, lng) ->
+      is_border_region?(current_code, expected_code, lat, lng) ->
         :medium
-
-      # Country name variations (e.g., "United States" vs "United States of America")
-      # These are LOW confidence as they may be data normalization issues, not real mismatches
-      is_name_variation?(current_norm, expected_norm) ->
-        :low
 
       # Default - MEDIUM confidence for unhandled country pairs
       true ->
@@ -2313,40 +2356,27 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   # Check if coordinates are in a known border region
-  defp is_border_region?(current, expected, lat, _lng) do
+  # Uses lowercase ISO codes for comparison
+  defp is_border_region?(current_code, expected_code, lat, _lng) do
     # Northern Ireland border region (lat ~54-55, between UK and Ireland)
     northern_ireland_region? =
-      ((current == "united kingdom" and expected == "ireland") or
-         (current == "ireland" and expected == "united kingdom")) and
+      ((current_code == "gb" and expected_code == "ie") or
+         (current_code == "ie" and expected_code == "gb")) and
         lat >= 54.0 and lat <= 55.5
 
     # US-Canada border regions
     us_canada_border? =
-      ((current == "united states" and expected == "canada") or
-         (current == "canada" and expected == "united states")) and
+      ((current_code == "us" and expected_code == "ca") or
+         (current_code == "ca" and expected_code == "us")) and
         lat >= 48.0 and lat <= 49.5
 
     # US-Mexico border regions
     us_mexico_border? =
-      ((current == "united states" and expected == "mexico") or
-         (current == "mexico" and expected == "united states")) and
+      ((current_code == "us" and expected_code == "mx") or
+         (current_code == "mx" and expected_code == "us")) and
         lat >= 25.0 and lat <= 33.0
 
     northern_ireland_region? or us_canada_border? or us_mexico_border?
-  end
-
-  # Check if the difference is just a country name variation
-  defp is_name_variation?(current, expected) do
-    # Common name variations that aren't real mismatches
-    variations = [
-      {"united states", "united states of america"},
-      {"uk", "united kingdom"},
-      {"great britain", "united kingdom"}
-    ]
-
-    Enum.any?(variations, fn {a, b} ->
-      (current == a and expected == b) or (current == b and expected == a)
-    end)
   end
 
   # Convert ISO country code to full name
