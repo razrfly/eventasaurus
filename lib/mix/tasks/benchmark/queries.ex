@@ -50,20 +50,24 @@ defmodule Mix.Tasks.Benchmark.Queries do
   defp capture_baseline do
     IO.puts("\n📊 Capturing query performance baseline...\n")
 
-    {:ok, baseline} = EventasaurusApp.Monitoring.QueryBenchmark.capture_baseline()
+    case EventasaurusApp.Monitoring.QueryBenchmark.capture_baseline() do
+      {:ok, baseline} ->
+        IO.puts("✅ Baseline captured at #{baseline.captured_at}")
+        IO.puts("\nEnvironment:")
+        IO.puts("  Replica Routing: #{if baseline.environment.replica_enabled, do: "✅ Enabled", else: "❌ Disabled"}")
 
-    IO.puts("✅ Baseline captured at #{baseline.captured_at}")
-    IO.puts("\nEnvironment:")
-    IO.puts("  Replica Routing: #{if baseline.environment.replica_enabled, do: "✅ Enabled", else: "❌ Disabled"}")
+        baseline.environment.indexes_applied
+        |> Enum.each(fn {index, applied} ->
+          status = if applied, do: "✅", else: "❌"
+          IO.puts("  #{index}: #{status}")
+        end)
 
-    baseline.environment.indexes_applied
-    |> Enum.each(fn {index, applied} ->
-      status = if applied, do: "✅", else: "❌"
-      IO.puts("  #{index}: #{status}")
-    end)
+        IO.puts("\nMetrics captured for #{map_size(baseline.metrics)} queries.")
+        IO.puts("\n💡 Run `mix benchmark.queries report` after 1 hour to compare results.")
 
-    IO.puts("\nMetrics captured for #{map_size(baseline.metrics)} queries.")
-    IO.puts("\n💡 Run `mix benchmark.queries report` after 1 hour to compare results.")
+      {:error, reason} ->
+        IO.puts("❌ Failed to capture baseline: #{inspect(reason)}")
+    end
   end
 
   defp run_report do
@@ -134,6 +138,8 @@ defmodule Mix.Tasks.Benchmark.Queries do
           IO.puts("   Run `mix benchmark.queries baseline` first, wait 1 hour, then run report again.")
         end
 
+      {:error, reason} ->
+        IO.puts("❌ Failed to run benchmark report: #{inspect(reason)}")
     end
   end
 
