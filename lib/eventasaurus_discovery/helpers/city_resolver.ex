@@ -36,6 +36,84 @@ defmodule EventasaurusDiscovery.Helpers.CityResolver do
   require Logger
 
   @doc """
+  Resolves both city name and ISO country code from GPS coordinates.
+
+  This function returns the country code that the geocoding library provides,
+  allowing callers to use the Countries library to get the full country name.
+
+  ## Parameters
+  - `latitude` - Float, GPS latitude coordinate
+  - `longitude` - Float, GPS longitude coordinate
+
+  ## Returns
+  - `{:ok, {city_name, country_code}}` - Successfully resolved city and ISO 2-letter country code
+  - `{:error, :missing_coordinates}` - Missing or invalid coordinates
+  - `{:error, :not_found}` - No city found near coordinates
+  - `{:error, :invalid_city_name}` - Found city failed validation
+
+  ## Examples
+
+      iex> CityResolver.resolve_city_and_country(51.8985, -8.4756)
+      {:ok, {"Cork", "IE"}}
+
+      iex> CityResolver.resolve_city_and_country(51.5074, -0.1278)
+      {:ok, {"London", "GB"}}
+
+      iex> CityResolver.resolve_city_and_country(40.7128, -74.0060)
+      {:ok, {"New York", "US"}}
+  """
+  @spec resolve_city_and_country(float() | nil, float() | nil) ::
+          {:ok, {String.t(), String.t()}} | {:error, atom()}
+  def resolve_city_and_country(latitude, longitude)
+      when is_float(latitude) and is_float(longitude) do
+    try do
+      case :geocoding.reverse(latitude, longitude) do
+        {:ok, {_continent, country_code, city_binary, _distance}} ->
+          city_name = to_string(city_binary)
+          # Uppercase country code to match ISO 3166-1 alpha-2 standard
+          country = country_code |> to_string() |> String.upcase()
+
+          case validate_city_name(city_name) do
+            {:ok, validated_name} ->
+              {:ok, {validated_name, country}}
+
+            {:error, reason} ->
+              Logger.warning(
+                "City name failed validation: #{inspect(city_name)} (#{latitude}, #{longitude}) - #{reason}"
+              )
+
+              {:error, :invalid_city_name}
+          end
+
+        {:error, _reason} ->
+          Logger.debug("No city found for coordinates: #{latitude}, #{longitude}")
+          {:error, :not_found}
+
+        other ->
+          Logger.warning(
+            "Unexpected geocoding response: #{inspect(other)} for coordinates: #{latitude}, #{longitude}"
+          )
+
+          {:error, :not_found}
+      end
+    rescue
+      error ->
+        Logger.error("Geocoding library error for (#{latitude}, #{longitude}): #{inspect(error)}")
+
+        {:error, :geocoding_error}
+    end
+  end
+
+  def resolve_city_and_country(nil, _longitude), do: {:error, :missing_coordinates}
+  def resolve_city_and_country(_latitude, nil), do: {:error, :missing_coordinates}
+
+  def resolve_city_and_country(latitude, longitude) do
+    Logger.warning("Invalid coordinate types: #{inspect(latitude)}, #{inspect(longitude)}")
+
+    {:error, :invalid_coordinates}
+  end
+
+  @doc """
   Resolves a city name from GPS coordinates using offline reverse geocoding.
 
   ## Parameters

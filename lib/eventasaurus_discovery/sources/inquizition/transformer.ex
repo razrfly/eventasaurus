@@ -228,10 +228,22 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
   - `{city_name, country}` tuple
   """
   def resolve_location(latitude, longitude, address) do
-    case CityResolver.resolve_city(latitude, longitude) do
-      {:ok, city_name} ->
-        # Successfully resolved city from coordinates
-        {city_name, "United Kingdom"}
+    case CityResolver.resolve_city_and_country(latitude, longitude) do
+      {:ok, {city_name, country_code}} ->
+        # Successfully resolved city and country from coordinates
+        # Convert ISO code to full country name using Countries library
+        country_name = country_name_from_code(country_code)
+
+        if country_name do
+          {city_name, country_name}
+        else
+          # Unknown country code - log and fall back to UK default
+          Logger.warning(
+            "Unknown country code #{inspect(country_code)} for (#{latitude}, #{longitude}). Defaulting to United Kingdom."
+          )
+
+          {city_name, "United Kingdom"}
+        end
 
       {:error, reason} ->
         # Geocoding failed - log and fall back to conservative parsing
@@ -242,6 +254,32 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Transformer do
         parse_location_from_address_conservative(address)
     end
   end
+
+  # Convert ISO 2-letter country code to full country name using Countries library
+  # Uses common/short names for better readability
+  @common_country_names %{
+    "GB" => "United Kingdom",
+    "US" => "United States"
+  }
+
+  defp country_name_from_code(code) when is_binary(code) do
+    upcase_code = String.upcase(code)
+
+    # First check our common names mapping for better readability
+    case Map.get(@common_country_names, upcase_code) do
+      nil ->
+        # Fall back to Countries library
+        case Countries.get(upcase_code) do
+          nil -> nil
+          country -> country.name
+        end
+
+      common_name ->
+        common_name
+    end
+  end
+
+  defp country_name_from_code(_), do: nil
 
   # Private functions
 
