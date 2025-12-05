@@ -481,10 +481,49 @@
       </span>
     </div>
 
+    <!-- Global Migration Button -->
+    <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+      <div class="flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold text-red-900">🌍 Global Migration</h3>
+          <p class="text-sm text-red-700 mt-1">
+            Migrate ALL venue images from Trivia Advisor across ALL cities in one operation.
+          </p>
+          <ul class="text-xs text-red-600 mt-2 list-disc list-inside">
+            <li>Spawns individual jobs for each city with venue coordinates</li>
+            <li>Each city processes unlimited venues (limit: -1)</li>
+            <li>Independent error handling per city</li>
+          </ul>
+        </div>
+        <div class="flex flex-col gap-2 ml-4">
+          <button
+            type="button"
+            phx-click="show_global_ta_migration_modal"
+            class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+            disabled={@ta_global_migration_running}
+          >
+            <%= if @ta_global_migration_running do %>
+              Migration Running...
+            <% else %>
+              Migrate All Cities
+            <% end %>
+          </button>
+          <button
+            type="button"
+            phx-click="start_global_ta_migration_dry_run"
+            class="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded hover:bg-orange-600 disabled:opacity-50 whitespace-nowrap"
+            disabled={@ta_global_migration_running}
+          >
+            Preview (Dry Run)
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Migration Form -->
       <div>
-        <h3 class="text-lg font-medium mb-3">Start Migration</h3>
+        <h3 class="text-lg font-medium mb-3">Single City Migration</h3>
 
         <form phx-submit="start_trivia_advisor_migration" class="space-y-4">
           <div>
@@ -1401,6 +1440,77 @@
             <button
               type="button"
               phx-click="hide_clear_modal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- Global Trivia Advisor Migration Confirmation Modal -->
+  <%= if @show_global_ta_migration_modal do %>
+    <div class="fixed z-10 inset-0 overflow-y-auto">
+      <div class="flex items-center justify-center min-h-screen pt-24 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" phx-click="hide_global_ta_migration_modal"></div>
+
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-16 sm:align-middle sm:max-w-lg sm:w-full">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="sm:flex sm:items-start">
+              <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                <svg class="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                  🌍 Confirm Global Migration
+                </h3>
+                <div class="mt-2">
+                  <p class="text-sm text-gray-500">
+                    This will migrate venue images from <strong>Trivia Advisor</strong> to <strong>ALL cities</strong> with venue coordinates.
+                  </p>
+
+                  <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <p class="text-sm font-medium text-yellow-800">⚠️ Important Considerations:</p>
+                    <ul class="mt-1 text-xs text-yellow-700 list-disc list-inside space-y-1">
+                      <li><strong>ImageKit Quota</strong>: Production uploads will use ImageKit quota (~2 req/sec rate limited)</li>
+                      <li><strong>Duration</strong>: May take 5-30 minutes depending on venue count</li>
+                      <li><strong>Database Load</strong>: Will connect to Trivia Advisor production database</li>
+                      <li><strong>Idempotent</strong>: Safe to re-run - existing images won't be duplicated</li>
+                    </ul>
+                  </div>
+
+                  <div class="mt-3">
+                    <label class="flex items-center">
+                      <input
+                        type="checkbox"
+                        phx-click="toggle_global_ta_migration_force"
+                        checked={@ta_global_migration_force}
+                        class="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-500 focus:ring focus:ring-red-200 focus:ring-opacity-50"
+                      />
+                      <span class="ml-2 text-sm text-gray-600">
+                        Force mode: Re-process venues that already have trivia_advisor_migration images
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="button"
+              phx-click="confirm_global_ta_migration"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Start Global Migration
+            </button>
+            <button
+              type="button"
+              phx-click="hide_global_ta_migration_modal"
               class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
             >
               Cancel
