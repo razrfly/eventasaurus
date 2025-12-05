@@ -115,8 +115,10 @@ config :eventasaurus, Oban,
     reports: 1
   ],
   plugins: [
-    # Keep completed jobs for 7 days for debugging
-    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    # Keep completed jobs for 2 days for debugging
+    # Reduced from 7 days to lower oban_jobs table row count (was 121M rows)
+    # This reduces the impact of aggregate queries on state/queue groupings
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 2},
     # Reindex daily for performance
     {Oban.Plugins.Reindexer, schedule: "@daily"},
     # Recover orphaned jobs after 60 seconds
