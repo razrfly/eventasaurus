@@ -2277,10 +2277,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   defp normalize_country(name), do: String.downcase(String.trim(name))
 
   # Determine confidence level for a mismatch
-  defp determine_confidence(current_country, expected_country, _lat, _lng) do
+  defp determine_confidence(current_country, expected_country, lat, lng) do
     # HIGH confidence: Clear country differences (not border regions)
     # MEDIUM confidence: Border regions or territories
-    # LOW confidence: Edge cases
+    # LOW confidence: Edge cases or geocoding uncertainty
 
     current_norm = normalize_country(current_country)
     expected_norm = normalize_country(expected_country)
@@ -2296,11 +2296,57 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           (current_norm == "united states" and expected_norm == "united kingdom") ->
         :high
 
-      # Same-name cities in different countries - HIGH confidence since GPS is definitive
-      # Dublin IE vs Dublin OH, Birmingham UK vs Birmingham AL, etc.
+      # Border regions - MEDIUM confidence (needs manual review)
+      # Northern Ireland area (roughly north of 54.0 lat in Ireland/UK context)
+      is_border_region?(current_norm, expected_norm, lat, lng) ->
+        :medium
+
+      # Country name variations (e.g., "United States" vs "United States of America")
+      # These are LOW confidence as they may be data normalization issues, not real mismatches
+      is_name_variation?(current_norm, expected_norm) ->
+        :low
+
+      # Default - MEDIUM confidence for unhandled country pairs
       true ->
-        :high
+        :medium
     end
+  end
+
+  # Check if coordinates are in a known border region
+  defp is_border_region?(current, expected, lat, _lng) do
+    # Northern Ireland border region (lat ~54-55, between UK and Ireland)
+    northern_ireland_region? =
+      ((current == "united kingdom" and expected == "ireland") or
+         (current == "ireland" and expected == "united kingdom")) and
+        lat >= 54.0 and lat <= 55.5
+
+    # US-Canada border regions
+    us_canada_border? =
+      ((current == "united states" and expected == "canada") or
+         (current == "canada" and expected == "united states")) and
+        lat >= 48.0 and lat <= 49.5
+
+    # US-Mexico border regions
+    us_mexico_border? =
+      ((current == "united states" and expected == "mexico") or
+         (current == "mexico" and expected == "united states")) and
+        lat >= 25.0 and lat <= 33.0
+
+    northern_ireland_region? or us_canada_border? or us_mexico_border?
+  end
+
+  # Check if the difference is just a country name variation
+  defp is_name_variation?(current, expected) do
+    # Common name variations that aren't real mismatches
+    variations = [
+      {"united states", "united states of america"},
+      {"uk", "united kingdom"},
+      {"great britain", "united kingdom"}
+    ]
+
+    Enum.any?(variations, fn {a, b} ->
+      (current == a and expected == b) or (current == b and expected == a)
+    end)
   end
 
   # Convert ISO country code to full name
@@ -2330,4 +2376,330 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   defp country_name_from_code(_), do: nil
+
+  # ===========================================================================
+  # Venue Country Fix Functions (Phase 4)
+  # ===========================================================================
+
+  alias EventasaurusApp.Venues.Venue, as: VenueSchema
+
+  @doc """
+  Fix a single venue's country assignment by moving it to the correct city.
+
+  This function:
+  1. Resolves the expected city/country from GPS coordinates
+  2. Finds or creates a city in the correct country
+  3. Updates the venue's city_id
+
+  ## Options
+  - `:reason` - Optional reason for the fix (for audit logging)
+
+  ## Returns
+  - `{:ok, %{venue: updated_venue, old_city: old_city, new_city: new_city}}` on success
+  - `{:error, reason}` on failure
+  """
+  def fix_venue_country(venue_id, options \\ []) when is_integer(venue_id) do
+    reason = Keyword.get(options, :reason, "GPS coordinates indicate different country")
+
+    # Get venue with preloads
+    venue =
+      repo().get(VenueSchema, venue_id)
+      |> repo().preload(city_ref: :country)
+
+    case venue do
+      nil ->
+        {:error, :venue_not_found}
+
+      %VenueSchema{latitude: nil} ->
+        {:error, :no_coordinates}
+
+      %VenueSchema{longitude: nil} ->
+        {:error, :no_coordinates}
+
+      venue ->
+        do_fix_venue_country(venue, reason)
+    end
+  end
+
+  defp do_fix_venue_country(venue, reason) do
+    lat = venue.latitude
+    lng = venue.longitude
+    old_city = venue.city_ref
+
+    # Get expected city/country from GPS
+    case CityResolver.resolve_city_and_country(lat, lng) do
+      {:ok, {expected_city_name, country_code}} ->
+        expected_country_name = country_name_from_code(country_code)
+
+        # Check if this is actually a mismatch
+        current_country = get_venue_country_name(venue)
+
+        if normalize_country(current_country) == normalize_country(expected_country_name) do
+          {:error, :not_a_mismatch}
+        else
+          # Find or create the correct city
+          case find_or_create_city(expected_city_name, expected_country_name, lat, lng) do
+            {:ok, new_city} ->
+              # Update venue's city_id
+              changeset =
+                venue
+                |> Ecto.Changeset.change(%{city_id: new_city.id})
+
+              case Repo.update(changeset) do
+                {:ok, updated_venue} ->
+                  # Log the fix
+                  log_venue_country_fix(venue, old_city, new_city, reason)
+
+                  {:ok,
+                   %{
+                     venue: updated_venue,
+                     old_city: old_city,
+                     new_city: new_city,
+                     old_country: current_country,
+                     new_country: expected_country_name
+                   }}
+
+                {:error, changeset} ->
+                  {:error, {:update_failed, changeset}}
+              end
+
+            {:error, reason} ->
+              {:error, {:city_creation_failed, reason}}
+          end
+        end
+
+      {:error, reason} ->
+        {:error, {:geocoding_failed, reason}}
+    end
+  end
+
+  @doc """
+  Mark a venue country mismatch as ignored (false positive).
+
+  Stores the ignore status in venue metadata so it won't appear in future scans.
+
+  ## Options
+  - `:reason` - Optional reason for ignoring
+
+  ## Returns
+  - `{:ok, updated_venue}` on success
+  - `{:error, reason}` on failure
+  """
+  def ignore_venue_country_mismatch(venue_id, options \\ []) when is_integer(venue_id) do
+    reason = Keyword.get(options, :reason, "Marked as false positive")
+
+    venue = repo().get(VenueSchema, venue_id)
+
+    case venue do
+      nil ->
+        {:error, :venue_not_found}
+
+      venue ->
+        # Add ignore flag to metadata
+        current_metadata = venue.metadata || %{}
+
+        updated_metadata =
+          Map.put(current_metadata, "country_mismatch_ignored", %{
+            "ignored_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+            "reason" => reason
+          })
+
+        changeset =
+          venue
+          |> Ecto.Changeset.change(%{metadata: updated_metadata})
+
+        case Repo.update(changeset) do
+          {:ok, updated_venue} ->
+            {:ok, updated_venue}
+
+          {:error, changeset} ->
+            {:error, {:update_failed, changeset}}
+        end
+    end
+  end
+
+  @doc """
+  Bulk fix venue country mismatches for venues matching criteria.
+
+  Only fixes HIGH confidence mismatches by default.
+
+  ## Options
+  - `:confidence` - Minimum confidence level (:high, :medium, :low). Default: :high
+  - `:from_country` - Filter by current country
+  - `:to_country` - Filter by expected country
+  - `:limit` - Maximum venues to fix. Default: 100
+
+  ## Returns
+  - `{:ok, %{fixed: count, failed: count, results: [...]}}` on success
+  """
+  def bulk_fix_venue_countries(options \\ []) do
+    confidence = Keyword.get(options, :confidence, :high)
+    from_country = Keyword.get(options, :from_country)
+    to_country = Keyword.get(options, :to_country)
+    limit = Keyword.get(options, :limit, 100)
+
+    # Get mismatches
+    check_options =
+      options
+      |> Keyword.take([:source])
+      |> Keyword.put(:limit, limit * 2)
+
+    check_options =
+      if from_country do
+        Keyword.put(check_options, :country, from_country)
+      else
+        check_options
+      end
+
+    result = check_venue_countries(check_options)
+
+    # Filter by confidence and country pair
+    mismatches =
+      result.mismatches
+      |> Enum.filter(fn m ->
+        confidence_match =
+          case confidence do
+            :high -> m.confidence == :high
+            :medium -> m.confidence in [:high, :medium]
+            :low -> true
+          end
+
+        country_match =
+          (is_nil(from_country) || m.current_country == from_country) &&
+            (is_nil(to_country) || m.expected_country == to_country)
+
+        confidence_match && country_match
+      end)
+      |> Enum.take(limit)
+
+    # Fix each venue
+    results =
+      Enum.map(mismatches, fn mismatch ->
+        case fix_venue_country(mismatch.venue_id) do
+          {:ok, fix_result} ->
+            {:ok, Map.put(fix_result, :venue_id, mismatch.venue_id)}
+
+          {:error, reason} ->
+            {:error, %{venue_id: mismatch.venue_id, reason: reason}}
+        end
+      end)
+
+    fixed_count = Enum.count(results, fn r -> match?({:ok, _}, r) end)
+    failed_count = Enum.count(results, fn r -> match?({:error, _}, r) end)
+
+    {:ok,
+     %{
+       fixed: fixed_count,
+       failed: failed_count,
+       total_attempted: length(results),
+       results: results
+     }}
+  end
+
+  # Find or create a city in the given country
+  defp find_or_create_city(city_name, country_name, lat, lng) do
+    # First, find the country
+    country =
+      repo().one(
+        from(c in Country,
+          where: c.name == ^country_name,
+          limit: 1
+        )
+      )
+
+    case country do
+      nil ->
+        {:error, :country_not_found}
+
+      country ->
+        # Look for existing city with same name in this country
+        existing_city =
+          repo().one(
+            from(c in City,
+              where: c.country_id == ^country.id,
+              where: fragment("LOWER(?) = LOWER(?)", c.name, ^city_name),
+              limit: 1
+            )
+          )
+
+        case existing_city do
+          nil ->
+            # Create new city
+            city_attrs = %{
+              name: city_name,
+              country_id: country.id,
+              latitude: Decimal.from_float(lat),
+              longitude: Decimal.from_float(lng)
+            }
+
+            %City{}
+            |> City.changeset(city_attrs)
+            |> Repo.insert()
+
+          city ->
+            {:ok, city}
+        end
+    end
+  end
+
+  # Log venue country fix for audit trail
+  defp log_venue_country_fix(venue, old_city, new_city, reason) do
+    require Logger
+
+    old_country_name =
+      case old_city do
+        %City{country: %Country{name: name}} -> name
+        _ -> "Unknown"
+      end
+
+    Logger.info("""
+    [VenueCountryFix] Venue #{venue.id} (#{venue.name})
+      From: #{old_city.name}, #{old_country_name}
+      To: #{new_city.name}, #{country_name_from_code(get_city_country_code(new_city))}
+      Reason: #{reason}
+    """)
+  end
+
+  defp get_city_country_code(%City{country_id: country_id}) when not is_nil(country_id) do
+    case repo().get(Country, country_id) do
+      %Country{code: code} -> code
+      _ -> "??"
+    end
+  end
+
+  defp get_city_country_code(_), do: "??"
+
+  @doc """
+  Get a single mismatch by venue_id for display in admin UI.
+
+  Useful for refreshing a single row after an action.
+  """
+  def get_venue_mismatch(venue_id) when is_integer(venue_id) do
+    venue =
+      repo().get(VenueSchema, venue_id)
+      |> repo().preload(city_ref: :country)
+
+    case venue do
+      nil -> nil
+      venue -> check_venue_country(venue)
+    end
+  end
+
+  @doc """
+  Check if a venue has been marked as ignored for country mismatch.
+  """
+  def venue_country_ignored?(venue_id) when is_integer(venue_id) do
+    venue = repo().get(VenueSchema, venue_id)
+
+    case venue do
+      nil ->
+        false
+
+      %VenueSchema{metadata: metadata} when is_map(metadata) ->
+        Map.has_key?(metadata, "country_mismatch_ignored")
+
+      _ ->
+        false
+    end
+  end
 end

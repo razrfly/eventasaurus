@@ -223,11 +223,13 @@ defmodule Mix.Tasks.Quality.Countries do
     Mix.shell().info("")
   end
 
-  defp truncate(str, max_len) when byte_size(str) > max_len do
-    String.slice(str, 0, max_len - 3) <> "..."
+  defp truncate(str, max_len) when is_binary(str) do
+    if String.length(str) > max_len do
+      String.slice(str, 0, max_len - 3) <> "..."
+    else
+      str
+    end
   end
-
-  defp truncate(str, _max_len), do: str
 
   defp print_json(result) do
     output = %{
