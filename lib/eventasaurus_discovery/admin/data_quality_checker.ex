@@ -40,7 +40,13 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   """
   def ensure_cache_table do
     if :ets.whereis(@cache_table) == :undefined do
-      :ets.new(@cache_table, [:set, :public, :named_table, read_concurrency: true])
+      try do
+        :ets.new(@cache_table, [:set, :public, :named_table, read_concurrency: true])
+      rescue
+        # Handle race condition where another process created the table
+        # between our whereis check and ets.new call
+        ArgumentError -> :ok
+      end
     end
 
     :ok
