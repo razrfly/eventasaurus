@@ -631,7 +631,7 @@ defmodule EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob do
   end
 
   defp is_dev_env? do
-    Application.get_env(:eventasaurus, :environment, :prod) == :dev
+    Application.get_env(:eventasaurus, :environment, :prod) in [:dev, :test]
   end
 
   defp get_dev_limit do
