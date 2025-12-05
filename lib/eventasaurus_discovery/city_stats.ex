@@ -8,6 +8,9 @@ defmodule EventasaurusDiscovery.CityStats do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusApp.Venues.Venue
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Lists top cities by number of upcoming events.
 
@@ -37,6 +40,6 @@ defmodule EventasaurusDiscovery.CityStats do
         event_count: count(pe.id)
       }
     )
-    |> Repo.all()
+    |> repo().all()
   end
 end

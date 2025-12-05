@@ -39,6 +39,9 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Get the full job tree (ancestors + job + descendants) for a given job ID.
 
@@ -57,7 +60,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       }
   """
   def get_job_tree(job_id) do
-    job = Repo.get(JobExecutionSummary, job_id)
+    job = repo().get(JobExecutionSummary, job_id)
 
     if job do
       %{
@@ -102,11 +105,11 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
     SELECT id FROM ancestors_cte WHERE depth > 0 ORDER BY depth
     """
 
-    result = Ecto.Adapters.SQL.query!(Repo, query, [job_id])
+    result = Ecto.Adapters.SQL.query!(repo(), query, [job_id])
     ancestor_ids = Enum.map(result.rows, fn [id] -> id end)
 
     # Fetch full job records for ancestor IDs
-    Repo.all(from(s in JobExecutionSummary, where: s.id in ^ancestor_ids))
+    repo().all(from(s in JobExecutionSummary, where: s.id in ^ancestor_ids))
   end
 
   @doc """
@@ -141,11 +144,11 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
     SELECT id FROM descendants_cte WHERE depth > 0 ORDER BY depth
     """
 
-    result = Ecto.Adapters.SQL.query!(Repo, query, [job_id])
+    result = Ecto.Adapters.SQL.query!(repo(), query, [job_id])
     descendant_ids = Enum.map(result.rows, fn [id] -> id end)
 
     # Fetch full job records for descendant IDs, ordered by attempted_at
-    Repo.all(
+    repo().all(
       from(s in JobExecutionSummary,
         where: s.id in ^descendant_ids,
         order_by: [desc: s.attempted_at]
@@ -168,7 +171,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       ]
   """
   def get_siblings(job_id) do
-    job = Repo.get(JobExecutionSummary, job_id)
+    job = repo().get(JobExecutionSummary, job_id)
 
     if job do
       parent_id = get_in(job.results, ["parent_job_id"])
@@ -182,7 +185,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
           where: s.id != ^job_id,
           order_by: [desc: s.attempted_at]
         )
-        |> Repo.all()
+        |> repo().all()
       else
         []
       end
@@ -206,7 +209,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       where: fragment("? ->> 'pipeline_id' = ?", s.results, ^pipeline_id),
       order_by: [desc: s.attempted_at]
     )
-    |> Repo.all()
+    |> repo().all()
   end
 
   @doc """
@@ -226,7 +229,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       ]
   """
   def find_pipeline_failures(root_job_id) do
-    root_job = Repo.get(JobExecutionSummary, root_job_id)
+    root_job = repo().get(JobExecutionSummary, root_job_id)
     descendants = get_descendants(root_job_id)
 
     # Check both root job and descendants for failures
@@ -269,7 +272,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       }
   """
   def get_pipeline_health(root_job_id) do
-    root_job = Repo.get(JobExecutionSummary, root_job_id)
+    root_job = repo().get(JobExecutionSummary, root_job_id)
 
     # Return nil if root job doesn't exist
     if is_nil(root_job) do
@@ -321,7 +324,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
     if length(ancestors) > 0 do
       List.last(ancestors)
     else
-      Repo.get(JobExecutionSummary, job_id)
+      repo().get(JobExecutionSummary, job_id)
     end
   end
 
@@ -351,7 +354,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.Lineage do
       from(d in subquery({"depth_cte", cte_query}),
         select: max(d.depth)
       )
-      |> Repo.one()
+      |> repo().one()
 
     result || 0
   end

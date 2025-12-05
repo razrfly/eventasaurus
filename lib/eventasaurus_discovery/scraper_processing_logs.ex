@@ -18,6 +18,9 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.ScraperProcessingLogs.ScraperProcessingLog
 
+  # Use read replica for read operations
+  defp read_repo, do: Repo.replica()
+
   @doc """
   Logs a successful processing attempt.
 
@@ -128,7 +131,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
         group_by: l.status,
         select: {l.status, count(l.id)}
       )
-      |> Repo.all()
+      |> read_repo().all()
       |> Map.new()
 
     success = stats["success"] || 0
@@ -178,7 +181,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
       select: {l.error_type, count(l.id)},
       order_by: [desc: count(l.id)]
     )
-    |> Repo.all()
+    |> read_repo().all()
   end
 
   @doc """
@@ -204,7 +207,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
       select: l.error_type,
       order_by: l.error_type
     )
-    |> Repo.all()
+    |> read_repo().all()
   end
 
   @doc """
@@ -252,7 +255,7 @@ defmodule EventasaurusDiscovery.ScraperProcessingLogs do
         job_id: l.job_id
       }
     )
-    |> Repo.all()
+    |> read_repo().all()
   end
 
   # Private helper functions

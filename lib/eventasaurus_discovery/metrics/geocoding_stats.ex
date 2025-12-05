@@ -35,6 +35,9 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Repo
 
+  # Use read replica for all read operations in this module
+  defp repo, do: Repo.replica()
+
   @doc """
   Calculate total geocoding costs for a given month.
 
@@ -80,7 +83,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         }
       )
 
-    case Repo.one(query) do
+    case repo().one(query) do
       nil ->
         {:ok, %{total_cost: 0.0, count: 0}}
 
@@ -152,7 +155,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         ]
       )
 
-    case Repo.all(query) do
+    case repo().all(query) do
       results -> {:ok, results}
     end
   rescue
@@ -217,7 +220,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         ]
       )
 
-    case Repo.all(query) do
+    case repo().all(query) do
       results -> {:ok, results}
     end
   rescue
@@ -245,7 +248,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         select: count(v.id)
       )
 
-    case Repo.one(query) do
+    case repo().one(query) do
       count -> {:ok, count}
     end
   rescue
@@ -280,7 +283,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         limit: ^limit
       )
 
-    case Repo.all(query) do
+    case repo().all(query) do
       results -> {:ok, results}
     end
   rescue
@@ -308,7 +311,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         select: count(v.id)
       )
 
-    case Repo.one(query) do
+    case repo().one(query) do
       count -> {:ok, count}
     end
   rescue
@@ -422,7 +425,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         }
       )
 
-    case Repo.one(query) do
+    case repo().one(query) do
       nil ->
         {:ok, %{total_cost: 0.0, count: 0}}
 
@@ -486,11 +489,11 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
       )
 
     # Execute success query
-    success_results = Repo.all(success_query)
+    success_results = repo().all(success_query)
 
     # Get total attempts by expanding attempted_providers arrays
     attempt_results =
-      Repo.all(
+      repo().all(
         from(v in Venue,
           where:
             not is_nil(v.geocoding_performance) and
@@ -614,7 +617,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         }
       )
 
-    case Repo.one(query) do
+    case repo().one(query) do
       nil ->
         {:ok, %{average_attempts: 0.0, total_geocoded: 0, single_provider_success: 0}}
 
@@ -698,7 +701,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         limit: ^limit
       )
 
-    case Repo.all(query) do
+    case repo().all(query) do
       results -> {:ok, results}
     end
   rescue
@@ -863,8 +866,8 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
         select: count(v.id)
       )
 
-    successful = Repo.one(success_query) || 0
-    failed = Repo.one(failure_query) || 0
+    successful = repo().one(success_query) || 0
+    failed = repo().one(failure_query) || 0
     total = successful + failed
 
     success_rate =
@@ -914,7 +917,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
 
     # Get all venues with geocoding attempts in the date range
     venues =
-      Repo.all(
+      repo().all(
         from(v in Venue,
           where:
             not is_nil(v.geocoding_performance) and
@@ -1028,7 +1031,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
 
     # Get all venues with geocoding attempts in the date range
     venues =
-      Repo.all(
+      repo().all(
         from(v in Venue,
           where:
             not is_nil(v.geocoding_performance) and
