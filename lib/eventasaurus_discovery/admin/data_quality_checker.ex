@@ -2555,6 +2555,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   @doc """
   Bulk fix venue country mismatches for venues matching criteria.
 
+  **DEPRECATED**: For production use, prefer `VenueCountryFixJob.queue_bulk_fix/1`
+  which processes fixes as individual Oban jobs with proper backpressure.
+
+  This synchronous function is kept for testing and IEx console use.
+
   Uses cached metadata from VenueCountryCheckJob (not real-time geocoding).
   Only fixes HIGH confidence mismatches by default.
 
@@ -2605,15 +2610,22 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       end)
       |> Enum.take(limit)
 
-    # Fix each venue using the NEW function that trusts cached metadata
+    # Process venues synchronously - for production use VenueCountryFixJob instead
     results =
       Enum.map(filtered_venues, fn venue ->
-        case fix_venue_country_from_metadata(venue) do
-          {:ok, fix_result} ->
-            {:ok, Map.put(fix_result, :venue_id, venue.id)}
+        try do
+          case fix_venue_country_from_metadata(venue) do
+            {:ok, fix_result} ->
+              {:ok, Map.put(fix_result, :venue_id, venue.id)}
 
-          {:error, reason} ->
-            {:error, %{venue_id: venue.id, reason: reason}}
+            {:error, reason} ->
+              Logger.warning("[BulkFix] Failed to fix venue #{venue.id}: #{inspect(reason)}")
+              {:error, %{venue_id: venue.id, reason: reason}}
+          end
+        rescue
+          e ->
+            Logger.error("[BulkFix] Exception fixing venue #{venue.id}: #{inspect(e)}")
+            {:error, %{venue_id: venue.id, reason: {:exception, inspect(e)}}}
         end
       end)
 
@@ -2649,6 +2661,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   - `{:ok, result}` on success
   - `{:error, reason}` on failure
   """
+  @spec fix_venue_country_from_metadata(VenueSchema.t(), keyword()) ::
+          {:ok, map()} | {:error, atom() | tuple()}
   def fix_venue_country_from_metadata(venue, options \\ []) do
     reason = Keyword.get(options, :reason, "GPS coordinates indicate different country")
 
