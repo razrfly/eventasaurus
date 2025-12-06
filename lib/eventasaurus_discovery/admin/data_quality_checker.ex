@@ -2793,7 +2793,14 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   # Find or create city in a country (matches VenueStore pattern)
   defp find_or_create_city_in_country(city_name, %Country{id: country_id}) do
     # Try to find by name and country_id first
-    city = repo().get_by(City, name: city_name, country_id: country_id)
+    # Use explicit query with limit to handle potential duplicates gracefully
+    city =
+      repo().one(
+        from(c in City,
+          where: c.name == ^city_name and c.country_id == ^country_id,
+          limit: 1
+        )
+      )
 
     # Also check alternate names
     city =
@@ -2820,8 +2827,13 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
             {:ok, city}
 
           {:error, %Ecto.Changeset{} = _changeset} ->
-            # Race condition - try to fetch again
-            case repo().get_by(City, name: city_name, country_id: country_id) do
+            # Race condition - try to fetch again (with limit to handle duplicates)
+            case repo().one(
+                   from(c in City,
+                     where: c.name == ^city_name and c.country_id == ^country_id,
+                     limit: 1
+                   )
+                 ) do
               nil -> {:error, :city_creation_failed}
               city -> {:ok, city}
             end
