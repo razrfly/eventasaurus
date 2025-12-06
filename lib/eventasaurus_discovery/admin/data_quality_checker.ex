@@ -2458,7 +2458,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     lng = venue.longitude
     old_city = venue.city_ref
 
-    # Get expected city/country from GPS
+    # Get expected city/country from GPS - CityResolver returns country CODE directly
     case CityResolver.resolve_city_and_country(lat, lng) do
       {:ok, {expected_city_name, country_code}} ->
         expected_country_name = country_name_from_code(country_code)
@@ -2469,13 +2469,21 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         if normalize_country(current_country) == normalize_country(expected_country_name) do
           {:error, :not_a_mismatch}
         else
-          # Find or create the correct city
-          case find_or_create_city(expected_city_name, expected_country_name, lat, lng) do
+          # Find or create the correct city using country CODE (same as scrapers)
+          case find_or_create_city_by_code(expected_city_name, country_code) do
             {:ok, new_city} ->
-              # Update venue's city_id
+              # Update venue's city_id AND mark metadata as fixed
+              current_metadata = venue.metadata || %{}
+              country_check = current_metadata["country_check"] || %{}
+              updated_country_check = Map.put(country_check, "status", "fixed")
+              updated_metadata = Map.put(current_metadata, "country_check", updated_country_check)
+
               changeset =
                 venue
-                |> Ecto.Changeset.change(%{city_id: new_city.id})
+                |> Ecto.Changeset.change(%{
+                  city_id: new_city.id,
+                  metadata: updated_metadata
+                })
 
               case Repo.update(changeset) do
                 {:ok, updated_venue} ->
@@ -2495,13 +2503,13 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
                   {:error, {:update_failed, changeset}}
               end
 
-            {:error, reason} ->
-              {:error, {:city_creation_failed, reason}}
+            {:error, city_reason} ->
+              {:error, {:city_creation_failed, city_reason}}
           end
         end
 
-      {:error, reason} ->
-        {:error, {:geocoding_failed, reason}}
+      {:error, geocode_reason} ->
+        {:error, {:geocoding_failed, geocode_reason}}
     end
   end
 
@@ -2669,11 +2677,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     # Get the cached country_check metadata
     country_check = venue.metadata["country_check"] || %{}
     expected_country = country_check["expected_country"]
+    expected_country_code = country_check["expected_country_code"]
     expected_city = country_check["expected_city"]
     is_mismatch = country_check["is_mismatch"]
 
     cond do
-      is_nil(expected_country) ->
+      is_nil(expected_country_code) and is_nil(expected_country) ->
         {:error, :no_expected_country}
 
       is_nil(expected_city) ->
@@ -2693,8 +2702,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         old_city = venue_with_preloads.city_ref
         current_country = get_venue_country_name(venue_with_preloads)
 
-        # Find or create the correct city
-        case find_or_create_city(expected_city, expected_country, venue.latitude, venue.longitude) do
+        # Use country CODE (not name) - same as scrapers do
+        country_code = expected_country_code || derive_country_code(expected_country)
+
+        # Find or create the correct city using country CODE
+        case find_or_create_city_by_code(expected_city, country_code) do
           {:ok, new_city} ->
             # Update venue's city_id AND mark metadata as fixed
             current_metadata = venue.metadata || %{}
@@ -2732,51 +2744,101 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
     end
   end
 
-  # Find or create a city in the given country
-  defp find_or_create_city(city_name, country_name, lat, lng) do
-    # First, find the country
-    country =
-      repo().one(
-        from(c in Country,
-          where: c.name == ^country_name,
-          limit: 1
-        )
-      )
+  # Find or create a city using country CODE (same logic as VenueStore)
+  # This ensures consistency with how scrapers create cities
+  defp find_or_create_city_by_code(city_name, country_code) when is_binary(country_code) do
+    code = String.upcase(country_code)
 
-    case country do
-      nil ->
-        {:error, :country_not_found}
+    # First find or create country by CODE
+    case find_or_create_country_by_code(code) do
+      {:ok, country} ->
+        # Then find or create city in that country
+        find_or_create_city_in_country(city_name, country)
 
-      country ->
-        # Look for existing city with same name in this country
-        existing_city =
-          repo().one(
-            from(c in City,
-              where: c.country_id == ^country.id,
-              where: fragment("LOWER(?) = LOWER(?)", c.name, ^city_name),
-              limit: 1
-            )
-          )
-
-        case existing_city do
-          nil ->
-            # Create new city
-            city_attrs = %{
-              name: city_name,
-              country_id: country.id,
-              latitude: Decimal.from_float(lat),
-              longitude: Decimal.from_float(lng)
-            }
-
-            %City{}
-            |> City.changeset(city_attrs)
-            |> Repo.insert()
-
-          city ->
-            {:ok, city}
-        end
+      {:error, _} = error ->
+        error
     end
   end
+
+  # Find or create country by ISO code (matches VenueStore pattern)
+  defp find_or_create_country_by_code(code) when is_binary(code) do
+    upcase_code = String.upcase(code)
+
+    case repo().get_by(Country, code: upcase_code) do
+      nil ->
+        # Create country with name from ISO code
+        %Country{}
+        |> Country.changeset(%{
+          name: country_name_from_code(upcase_code),
+          code: upcase_code
+        })
+        |> Repo.insert()
+        |> case do
+          {:ok, country} ->
+            {:ok, country}
+
+          {:error, %Ecto.Changeset{} = _changeset} ->
+            # Race condition - another process created it
+            case repo().get_by(Country, code: upcase_code) do
+              nil -> {:error, :country_creation_failed}
+              country -> {:ok, country}
+            end
+        end
+
+      country ->
+        {:ok, country}
+    end
+  end
+
+  # Find or create city in a country (matches VenueStore pattern)
+  defp find_or_create_city_in_country(city_name, %Country{id: country_id}) do
+    # Try to find by name and country_id first
+    city = repo().get_by(City, name: city_name, country_id: country_id)
+
+    # Also check alternate names
+    city =
+      city ||
+        repo().one(
+          from(c in City,
+            where: c.country_id == ^country_id,
+            where: fragment("? = ANY(?)", ^city_name, c.alternate_names),
+            limit: 1
+          )
+        )
+
+    case city do
+      nil ->
+        # Create new city
+        %City{}
+        |> City.changeset(%{
+          name: city_name,
+          country_id: country_id
+        })
+        |> Repo.insert()
+        |> case do
+          {:ok, city} ->
+            {:ok, city}
+
+          {:error, %Ecto.Changeset{} = _changeset} ->
+            # Race condition - try to fetch again
+            case repo().get_by(City, name: city_name, country_id: country_id) do
+              nil -> {:error, :city_creation_failed}
+              city -> {:ok, city}
+            end
+        end
+
+      city ->
+        {:ok, city}
+    end
+  end
+
+  # Derive country code from country name using CountryResolver
+  defp derive_country_code(country_name) when is_binary(country_name) do
+    alias EventasaurusDiscovery.Locations.CountryResolver
+    CountryResolver.get_code(country_name)
+  end
+
+  defp derive_country_code(_), do: nil
 
   # Log venue country fix for audit trail
   defp log_venue_country_fix(venue, old_city, new_city, reason) do
@@ -2804,6 +2866,48 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   defp get_city_country_code(_), do: "??"
+
+  @doc """
+  Update the status of a venue's country_check metadata.
+
+  Used to mark venues as "failed" when fix attempts fail,
+  or "fixed" when successful. This prevents failed venues
+  from staying in the "pending" list forever.
+
+  ## Parameters
+  - `venue` - The venue struct
+  - `status` - One of "pending", "fixed", "failed", "ignored"
+  - `error_reason` - Optional error reason (for failed status)
+
+  ## Returns
+  - `{:ok, updated_venue}` on success
+  - `{:error, reason}` on failure
+  """
+  @spec update_venue_mismatch_status(VenueSchema.t(), String.t(), term()) ::
+          {:ok, VenueSchema.t()} | {:error, term()}
+  def update_venue_mismatch_status(venue, status, error_reason \\ nil) do
+    current_metadata = venue.metadata || %{}
+    country_check = current_metadata["country_check"] || %{}
+
+    updated_country_check =
+      country_check
+      |> Map.put("status", status)
+      |> then(fn check ->
+        if error_reason do
+          check
+          |> Map.put("error_reason", inspect(error_reason))
+          |> Map.put("failed_at", DateTime.utc_now() |> DateTime.to_iso8601())
+        else
+          check
+        end
+      end)
+
+    updated_metadata = Map.put(current_metadata, "country_check", updated_country_check)
+
+    venue
+    |> Ecto.Changeset.change(%{metadata: updated_metadata})
+    |> Repo.update()
+  end
 
   @doc """
   Get a single mismatch by venue_id for display in admin UI.
