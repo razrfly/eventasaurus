@@ -31,6 +31,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
     unique: [period: 300, fields: [:args, :worker], states: [:available, :scheduled, :executing]]
 
   alias EventasaurusDiscovery.Admin.{DataQualityChecker, VenueCountryCheckJob}
+  alias EventasaurusDiscovery.Metrics.MetricsTracker
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue, as: VenueSchema
   require Logger
@@ -43,8 +44,9 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
   @pubsub_topic "venue_country_fix"
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"venue_id" => venue_id}}) do
+  def perform(%Oban.Job{args: %{"venue_id" => venue_id}} = job) do
     Logger.info("[VenueCountryFix] Processing venue #{venue_id}")
+    external_id = "venue_country_fix_#{venue_id}"
 
     # Load the venue with its metadata
     venue =
@@ -54,19 +56,40 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
     case venue do
       nil ->
         Logger.warning("[VenueCountryFix] Venue #{venue_id} not found")
+        MetricsTracker.record_failure(job, "Venue not found", external_id)
         broadcast_progress(:failed, %{venue_id: venue_id, reason: :not_found})
         # Return :ok so Oban doesn't retry - the venue doesn't exist
         :ok
 
       venue ->
+        # Get venue info for metadata before any changes
+        venue_name = venue.name
+        check = venue.metadata["country_check"] || %{}
+        old_country = check["current_country"]
+        expected_country = check["expected_country"]
+
         case DataQualityChecker.fix_venue_country_from_metadata(venue) do
           {:ok, fix_result} ->
             Logger.info("[VenueCountryFix] Fixed venue #{venue_id}: #{fix_result.old_country} -> #{fix_result.new_country}")
+            record_success_with_details(job, external_id, %{
+              venue_id: venue_id,
+              venue_name: venue_name,
+              old_country: fix_result.old_country,
+              new_country: fix_result.new_country
+            })
             broadcast_progress(:fixed, %{venue_id: venue_id, result: fix_result})
             :ok
 
           {:error, reason} ->
             Logger.warning("[VenueCountryFix] Failed venue #{venue_id}: #{inspect(reason)}")
+
+            # Record failure with venue context
+            record_failure_with_details(job, reason, external_id, %{
+              venue_id: venue_id,
+              venue_name: venue_name,
+              old_country: old_country,
+              expected_country: expected_country
+            })
 
             # Mark the venue as "failed" in metadata so it doesn't stay in pending list
             case DataQualityChecker.update_venue_mismatch_status(venue, "failed", reason) do
@@ -91,6 +114,56 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
       {:venue_country_fix_progress, Map.put(data, :status, status)}
     )
   end
+
+  # Record success with venue-specific details in job metadata
+  defp record_success_with_details(job, external_id, details) do
+    import Ecto.Query
+
+    metadata = %{
+      "status" => "success",
+      "external_id" => to_string(external_id),
+      "processed_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "venue_id" => details.venue_id,
+      "venue_name" => details.venue_name,
+      "old_country" => details.old_country,
+      "new_country" => details.new_country
+    }
+
+    updated_meta = Map.merge(job.meta || %{}, metadata)
+
+    from(j in Oban.Job, where: j.id == ^job.id)
+    |> Repo.update_all(set: [meta: updated_meta])
+  end
+
+  # Record failure with venue-specific details in job metadata
+  defp record_failure_with_details(job, reason, external_id, details) do
+    import Ecto.Query
+    alias EventasaurusDiscovery.Metrics.ErrorCategories
+
+    error_category = ErrorCategories.categorize_error(reason)
+    error_message = format_error_message(reason)
+
+    metadata = %{
+      "status" => "failed",
+      "external_id" => to_string(external_id),
+      "processed_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "error_category" => to_string(error_category),
+      "error_message" => error_message,
+      "venue_id" => details.venue_id,
+      "venue_name" => details.venue_name,
+      "old_country" => details.old_country,
+      "expected_country" => details.expected_country
+    }
+
+    updated_meta = Map.merge(job.meta || %{}, metadata)
+
+    from(j in Oban.Job, where: j.id == ^job.id)
+    |> Repo.update_all(set: [meta: updated_meta])
+  end
+
+  defp format_error_message(reason) when is_binary(reason), do: String.slice(reason, 0, 500)
+  defp format_error_message(%{__exception__: true} = ex), do: Exception.message(ex) |> String.slice(0, 500)
+  defp format_error_message(reason), do: inspect(reason) |> String.slice(0, 500)
 
   @doc """
   Queue a single venue fix job.
