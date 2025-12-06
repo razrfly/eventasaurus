@@ -64,9 +64,6 @@ defmodule Mix.Tasks.Benchmark.Queries do
 
         IO.puts("\nMetrics captured for #{map_size(baseline.metrics)} queries.")
         IO.puts("\n💡 Run `mix benchmark.queries report` after 1 hour to compare results.")
-
-      {:error, reason} ->
-        IO.puts("❌ Failed to capture baseline: #{inspect(reason)}")
     end
   end
 
@@ -137,9 +134,6 @@ defmodule Mix.Tasks.Benchmark.Queries do
           IO.puts("\n💡 No previous baseline found for comparison.")
           IO.puts("   Run `mix benchmark.queries baseline` first, wait 1 hour, then run report again.")
         end
-
-      {:error, reason} ->
-        IO.puts("❌ Failed to run benchmark report: #{inspect(reason)}")
     end
   end
 

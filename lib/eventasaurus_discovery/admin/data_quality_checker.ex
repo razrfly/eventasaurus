@@ -957,7 +957,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         }
       )
 
-    stats = Repo.one(query)
+    stats = repo().one(query)
 
     if stats.total == 0 do
       %{
@@ -1188,7 +1188,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         }
       )
 
-    stats = Repo.one(query)
+    stats = repo().one(query)
 
     if stats.total == 0 do
       %{

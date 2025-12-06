@@ -8,395 +8,536 @@
     </div>
     <div class="mt-4 sm:mt-0 flex space-x-3">
       <button
-        phx-click="export_json"
-        class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        phx-click="run_check"
+        disabled={@check_running}
+        class={"inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white #{if @check_running, do: "bg-purple-400 cursor-not-allowed", else: "bg-purple-600 hover:bg-purple-700"} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"}
       >
-        <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-        </svg>
-        Export JSON
-      </button>
-      <button
-        phx-click="refresh"
-        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        disabled={@loading}
-      >
-        <%= if @loading do %>
+        <%= if @check_running do %>
           <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          Refreshing...
+          Checking...
         <% else %>
+          <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clip-rule="evenodd" />
+          </svg>
+          Run Check Now
+        <% end %>
+      </button>
+      <%= if @data_loaded do %>
+        <button
+          phx-click="export_json"
+          class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+          Export JSON
+        </button>
+        <button
+          phx-click="refresh"
+          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
           <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
           </svg>
           Refresh
-        <% end %>
-      </button>
+        </button>
+      <% end %>
     </div>
   </div>
 
-  <%= if @result do %>
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Venues Checked</dt>
-                <dd class="text-lg font-semibold text-gray-900"><%= @result.total_checked %></dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class={"h-6 w-6 #{if @result.mismatch_count > 0, do: "text-yellow-400", else: "text-green-400"}"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Mismatches Found</dt>
-                <dd class={"text-lg font-semibold #{if @result.mismatch_count > 0, do: "text-yellow-600", else: "text-green-600"}"}><%= @result.mismatch_count %></dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">HIGH Confidence</dt>
-                <dd class="text-lg font-semibold text-green-600"><%= @result.by_confidence[:high] || 0 %></dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">MEDIUM/LOW</dt>
-                <dd class="text-lg font-semibold text-yellow-600"><%= (@result.by_confidence[:medium] || 0) + (@result.by_confidence[:low] || 0) %></dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
+  <%= if not @data_loaded do %>
+    <!-- Initial state: No data loaded yet -->
     <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg">
-      <!-- Tabs -->
-      <div class="border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-          <button
-            phx-click="switch_tab"
-            phx-value-tab="dashboard"
-            class={"#{if @active_tab == "dashboard", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
-          >
-            Dashboard
-          </button>
-
-          <button
-            phx-click="switch_tab"
-            phx-value-tab="list"
-            class={"#{if @active_tab == "list", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
-          >
-            Mismatch List
-            <%= if @result.mismatch_count > 0 do %>
-              <span class="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-600">
-                <%= @result.mismatch_count %>
-              </span>
-            <% end %>
-          </button>
-        </nav>
-      </div>
-
-      <!-- Tab Content -->
-      <div class="p-6">
-        <%= if @active_tab == "dashboard" do %>
-          <!-- Dashboard Tab -->
-          <%= if @result.mismatch_count == 0 do %>
-            <div class="text-center py-12">
-              <svg class="mx-auto h-12 w-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <div class="text-center py-16 px-6">
+        <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-gray-900">Venue Country Mismatch Tool</h3>
+        <p class="mt-2 text-sm text-gray-500 max-w-md mx-auto">
+          This tool checks if venues are assigned to the correct country based on their GPS coordinates.
+          Results are cached in venue metadata for fast access.
+        </p>
+        <div class="mt-6 space-y-4">
+          <div class="flex flex-col items-center space-y-3">
+            <button
+              phx-click="load_data"
+              class="inline-flex items-center px-6 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg class="-ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
               </svg>
-              <h3 class="mt-2 text-sm font-medium text-gray-900">No mismatches found!</h3>
-              <p class="mt-1 text-sm text-gray-500">
-                All checked venues are assigned to the correct countries.
-              </p>
-            </div>
-          <% else %>
-            <div class="space-y-6">
-              <!-- Country Pair Breakdown -->
-              <div>
-                <h3 class="text-lg font-medium text-gray-900 mb-4">Country Pair Breakdown</h3>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <%= for pair <- @country_pairs do %>
-                    <div class="relative rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-                      <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                          <span class="text-sm font-medium text-red-600"><%= pair.from %></span>
-                          <svg class="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
-                          </svg>
-                          <span class="text-sm font-medium text-green-600"><%= pair.to %></span>
-                        </div>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          <%= pair.count %> venues
-                        </span>
-                      </div>
-                      <button
-                        phx-click="filter"
-                        phx-value-from_country={pair.from}
-                        phx-value-to_country={pair.to}
-                        class="mt-3 w-full text-xs text-blue-600 hover:text-blue-800"
-                      >
-                        View details →
-                      </button>
-                    </div>
-                  <% end %>
-                </div>
-              </div>
-
-              <!-- Bulk Actions -->
-              <%= if (@result.by_confidence[:high] || 0) > 0 do %>
-                <div class="border-t border-gray-200 pt-6">
-                  <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <h4 class="text-sm font-medium text-green-900">Bulk Fix Available</h4>
-                        <p class="mt-1 text-sm text-green-700">
-                          <%= @result.by_confidence[:high] || 0 %> HIGH confidence mismatches can be fixed automatically.
-                        </p>
-                      </div>
-                      <button
-                        phx-click="bulk_fix"
-                        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                        disabled={@bulk_fixing}
-                      >
-                        <%= if @bulk_fixing do %>
-                          <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Fixing...
-                        <% else %>
-                          Fix All HIGH Confidence
-                        <% end %>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
-        <% else %>
-          <!-- List Tab -->
-          <!-- Filters -->
-          <div class="mb-6 p-4 bg-gray-50 rounded-lg">
-            <form phx-change="filter" class="flex flex-wrap gap-4">
-              <div class="flex-1 min-w-[150px]">
-                <label for="source" class="block text-xs font-medium text-gray-700 mb-1">Source</label>
-                <select
-                  name="source"
-                  id="source"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">All Sources</option>
-                  <%= for source <- @sources do %>
-                    <option value={source} selected={@filters.source == source}><%= source %></option>
-                  <% end %>
-                </select>
-              </div>
-
-              <div class="flex-1 min-w-[150px]">
-                <label for="from_country" class="block text-xs font-medium text-gray-700 mb-1">From Country</label>
-                <select
-                  name="from_country"
-                  id="from_country"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">All</option>
-                  <%= for pair <- @country_pairs do %>
-                    <option value={pair.from} selected={@filters.from_country == pair.from}><%= pair.from %></option>
-                  <% end %>
-                </select>
-              </div>
-
-              <div class="flex-1 min-w-[150px]">
-                <label for="to_country" class="block text-xs font-medium text-gray-700 mb-1">To Country</label>
-                <select
-                  name="to_country"
-                  id="to_country"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">All</option>
-                  <%= for pair <- @country_pairs do %>
-                    <option value={pair.to} selected={@filters.to_country == pair.to}><%= pair.to %></option>
-                  <% end %>
-                </select>
-              </div>
-
-              <div class="flex-1 min-w-[120px]">
-                <label for="confidence" class="block text-xs font-medium text-gray-700 mb-1">Confidence</label>
-                <select
-                  name="confidence"
-                  id="confidence"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">All</option>
-                  <option value="high" selected={@filters.confidence == :high}>HIGH</option>
-                  <option value="medium" selected={@filters.confidence == :medium}>MEDIUM</option>
-                  <option value="low" selected={@filters.confidence == :low}>LOW</option>
-                </select>
-              </div>
-
-              <div class="flex items-end">
-                <button
-                  type="button"
-                  phx-click="clear_filters"
-                  class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
+              Load Cached Results
+            </button>
+            <span class="text-xs text-gray-400">View previously checked venues with mismatches</span>
           </div>
-
-          <%= if Enum.empty?(@result.mismatches) do %>
-            <div class="text-center py-12">
-              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 class="mt-2 text-sm font-medium text-gray-900">No mismatches match your filters</h3>
-              <p class="mt-1 text-sm text-gray-500">
-                Try adjusting your filter criteria.
-              </p>
+          <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-gray-200"></div>
             </div>
-          <% else %>
-            <!-- Mismatch Table -->
-            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-              <table class="min-w-full divide-y divide-gray-300">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 sm:pl-6">Venue</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">GPS</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Current</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Expected</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Confidence</th>
-                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span class="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 bg-white">
-                  <%= for mismatch <- @result.mismatches do %>
-                    <tr class="hover:bg-gray-50">
-                      <td class="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
-                        <div class="flex flex-col">
-                          <span class="text-sm font-medium text-gray-900"><%= truncate(mismatch.venue_name, 30) %></span>
-                          <span class="text-xs text-gray-500">ID: <%= mismatch.venue_id %> | <%= mismatch.source || "unknown" %></span>
-                        </div>
-                      </td>
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        <a
-                          href={"https://www.google.com/maps?q=#{mismatch.latitude},#{mismatch.longitude}"}
-                          target="_blank"
-                          class="text-blue-600 hover:text-blue-800 hover:underline"
-                          title="Open in Google Maps"
-                        >
-                          <%= format_coords(mismatch.latitude, mismatch.longitude) %>
-                        </a>
-                      </td>
-                      <td class="whitespace-nowrap px-3 py-4">
-                        <div class="flex flex-col">
-                          <span class="text-sm text-red-600 font-medium"><%= mismatch.current_country %></span>
-                          <span class="text-xs text-gray-500"><%= mismatch.current_city %></span>
-                        </div>
-                      </td>
-                      <td class="whitespace-nowrap px-3 py-4">
-                        <div class="flex flex-col">
-                          <span class="text-sm text-green-600 font-medium"><%= mismatch.expected_country %></span>
-                          <span class="text-xs text-gray-500"><%= mismatch.expected_city %></span>
-                        </div>
-                      </td>
-                      <td class="whitespace-nowrap px-3 py-4 text-sm">
-                        <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{confidence_color(mismatch.confidence)}"}>
-                          <%= confidence_label(mismatch.confidence) %>
-                        </span>
-                      </td>
-                      <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <div class="flex justify-end space-x-2">
-                          <button
-                            phx-click="fix_venue"
-                            phx-value-venue_id={mismatch.venue_id}
-                            class="text-green-600 hover:text-green-900"
-                            title="Fix: Move to correct country"
-                          >
-                            Fix
-                          </button>
-                          <button
-                            phx-click="ignore_venue"
-                            phx-value-venue_id={mismatch.venue_id}
-                            class="text-gray-600 hover:text-gray-900"
-                            title="Ignore: Mark as false positive"
-                          >
-                            Ignore
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
+            <div class="relative flex justify-center text-sm">
+              <span class="px-2 bg-white text-gray-500">or</span>
             </div>
-
-            <%= if length(@result.mismatches) >= @limit do %>
-              <div class="mt-4 text-center text-sm text-gray-500">
-                Showing first <%= @limit %> results. Adjust limit or apply filters to see more.
-              </div>
-            <% end %>
-          <% end %>
-        <% end %>
+          </div>
+          <div class="flex flex-col items-center space-y-3">
+            <button
+              phx-click="run_check"
+              disabled={@check_running}
+              class={"inline-flex items-center px-6 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-white #{if @check_running, do: "bg-purple-400 cursor-not-allowed", else: "bg-purple-600 hover:bg-purple-700"} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"}
+            >
+              <%= if @check_running do %>
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Running Check...
+              <% else %>
+                <svg class="-ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clip-rule="evenodd" />
+                </svg>
+                Run New Check (Background)
+              <% end %>
+            </button>
+            <span class="text-xs text-gray-400">Queue background job to check all venues</span>
+          </div>
+        </div>
       </div>
     </div>
   <% else %>
-    <!-- Loading State -->
-    <div class="text-center py-12">
-      <svg class="animate-spin mx-auto h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <p class="mt-2 text-sm text-gray-500">Loading venue data...</p>
-    </div>
+    <!-- Data loading/loaded states -->
+    <.async_result :let={data} assign={@mismatch_data}>
+      <:loading>
+        <div class="text-center py-12">
+          <svg class="animate-spin mx-auto h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="mt-2 text-sm text-gray-500">Loading cached mismatch data...</p>
+          <p class="mt-1 text-xs text-gray-400">Reading from venue metadata.</p>
+        </div>
+      </:loading>
+      <:failed :let={_reason}>
+        <div class="rounded-md bg-red-50 p-4 mb-6">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <h3 class="text-sm font-medium text-red-800">Failed to load data</h3>
+              <div class="mt-2 text-sm text-red-700">
+                <p>There was an error loading the venue mismatch data. The database connection may be slow.</p>
+              </div>
+              <div class="mt-4">
+                <button
+                  phx-click="load_data"
+                  class="bg-red-100 px-2 py-1.5 rounded-md text-sm font-medium text-red-800 hover:bg-red-200"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </:failed>
+      <% result = data.result %>
+      <% sources = data.sources %>
+      <% country_pairs = data.country_pairs %>
+      <% stats = data.stats %>
+
+      <!-- Last Check Info -->
+      <%= if stats && stats[:last_checked] do %>
+        <div class="mb-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          <div class="flex items-center text-sm text-blue-800">
+            <svg class="h-5 w-5 text-blue-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+            </svg>
+            <span>
+              <strong>Last checked:</strong> <%= format_time_ago(stats[:last_checked]) %>
+              <span class="text-blue-600 ml-2">
+                (<%= stats[:total_checked] || 0 %> venues checked, <%= stats[:pending] || 0 %> pending fixes)
+              </span>
+            </span>
+          </div>
+          <%= if stats[:pending] && stats[:pending] == 0 && stats[:mismatches] && stats[:mismatches] > 0 do %>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              All resolved!
+            </span>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+          <div class="flex items-center text-sm text-yellow-800">
+            <svg class="h-5 w-5 text-yellow-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>
+              <strong>No venue checks found.</strong> Click "Run Check Now" to analyze venues for country mismatches.
+            </span>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-gray-500 truncate">Venues Checked</dt>
+                  <dd class="text-lg font-semibold text-gray-900"><%= result.total_checked %></dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <svg class={"h-6 w-6 #{if result.mismatch_count > 0, do: "text-yellow-400", else: "text-green-400"}"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-gray-500 truncate">Mismatches Found</dt>
+                  <dd class={"text-lg font-semibold #{if result.mismatch_count > 0, do: "text-yellow-600", else: "text-green-600"}"}><%= result.mismatch_count %></dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <svg class="h-6 w-6 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-gray-500 truncate">HIGH Confidence</dt>
+                  <dd class="text-lg font-semibold text-green-600"><%= result.by_confidence[:high] || 0 %></dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="p-5">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <svg class="h-6 w-6 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="ml-5 w-0 flex-1">
+                <dl>
+                  <dt class="text-sm font-medium text-gray-500 truncate">MEDIUM/LOW</dt>
+                  <dd class="text-lg font-semibold text-yellow-600"><%= (result.by_confidence[:medium] || 0) + (result.by_confidence[:low] || 0) %></dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-lg">
+        <!-- Tabs -->
+        <div class="border-b border-gray-200">
+          <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+            <button
+              phx-click="switch_tab"
+              phx-value-tab="dashboard"
+              class={"#{if @active_tab == "dashboard", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
+            >
+              Dashboard
+            </button>
+
+            <button
+              phx-click="switch_tab"
+              phx-value-tab="list"
+              class={"#{if @active_tab == "list", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"}
+            >
+              Mismatch List
+              <%= if result.mismatch_count > 0 do %>
+                <span class="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-600">
+                  <%= result.mismatch_count %>
+                </span>
+              <% end %>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="p-6">
+          <%= if @active_tab == "dashboard" do %>
+            <!-- Dashboard Tab -->
+            <%= if result.mismatch_count == 0 do %>
+              <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">No mismatches found!</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                  All checked venues are assigned to the correct countries.
+                </p>
+              </div>
+            <% else %>
+              <div class="space-y-6">
+                <!-- Country Pair Breakdown -->
+                <div>
+                  <h3 class="text-lg font-medium text-gray-900 mb-4">Country Pair Breakdown</h3>
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <%= for pair <- country_pairs do %>
+                      <div class="relative rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center space-x-2">
+                            <span class="text-sm font-medium text-red-600"><%= pair.from %></span>
+                            <svg class="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-sm font-medium text-green-600"><%= pair.to %></span>
+                          </div>
+                          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <%= pair.count %> venues
+                          </span>
+                        </div>
+                        <button
+                          phx-click="filter"
+                          phx-value-from_country={pair.from}
+                          phx-value-to_country={pair.to}
+                          class="mt-3 w-full text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          View details →
+                        </button>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+
+                <!-- Bulk Actions -->
+                <%= if (result.by_confidence[:high] || 0) > 0 do %>
+                  <div class="border-t border-gray-200 pt-6">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <h4 class="text-sm font-medium text-green-900">Bulk Fix Available</h4>
+                          <p class="mt-1 text-sm text-green-700">
+                            <%= result.by_confidence[:high] || 0 %> HIGH confidence mismatches can be fixed automatically.
+                          </p>
+                        </div>
+                        <button
+                          phx-click="bulk_fix"
+                          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          disabled={@bulk_fixing}
+                        >
+                          <%= if @bulk_fixing do %>
+                            <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Fixing...
+                          <% else %>
+                            Fix All HIGH Confidence
+                          <% end %>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          <% else %>
+            <!-- List Tab -->
+            <!-- Filters -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+              <form phx-change="filter" class="flex flex-wrap gap-4">
+                <div class="flex-1 min-w-[150px]">
+                  <label for="source" class="block text-xs font-medium text-gray-700 mb-1">Source</label>
+                  <select
+                    name="source"
+                    id="source"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  >
+                    <option value="">All Sources</option>
+                    <%= for source <- sources do %>
+                      <option value={source} selected={@filters.source == source}><%= source %></option>
+                    <% end %>
+                  </select>
+                </div>
+
+                <div class="flex-1 min-w-[150px]">
+                  <label for="from_country" class="block text-xs font-medium text-gray-700 mb-1">From Country</label>
+                  <select
+                    name="from_country"
+                    id="from_country"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  >
+                    <option value="">All</option>
+                    <%= for pair <- country_pairs do %>
+                      <option value={pair.from} selected={@filters.from_country == pair.from}><%= pair.from %></option>
+                    <% end %>
+                  </select>
+                </div>
+
+                <div class="flex-1 min-w-[150px]">
+                  <label for="to_country" class="block text-xs font-medium text-gray-700 mb-1">To Country</label>
+                  <select
+                    name="to_country"
+                    id="to_country"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  >
+                    <option value="">All</option>
+                    <%= for pair <- country_pairs do %>
+                      <option value={pair.to} selected={@filters.to_country == pair.to}><%= pair.to %></option>
+                    <% end %>
+                  </select>
+                </div>
+
+                <div class="flex-1 min-w-[120px]">
+                  <label for="confidence" class="block text-xs font-medium text-gray-700 mb-1">Confidence</label>
+                  <select
+                    name="confidence"
+                    id="confidence"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  >
+                    <option value="">All</option>
+                    <option value="high" selected={@filters.confidence == :high}>HIGH</option>
+                    <option value="medium" selected={@filters.confidence == :medium}>MEDIUM</option>
+                    <option value="low" selected={@filters.confidence == :low}>LOW</option>
+                  </select>
+                </div>
+
+                <div class="flex items-end">
+                  <button
+                    type="button"
+                    phx-click="clear_filters"
+                    class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <%= if Enum.empty?(result.mismatches) do %>
+              <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">No mismatches match your filters</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                  Try adjusting your filter criteria.
+                </p>
+              </div>
+            <% else %>
+              <!-- Mismatch Table -->
+              <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 sm:pl-6">Venue</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Source</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">GPS</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Current</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Expected</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Confidence</th>
+                      <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                        <span class="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-200 bg-white">
+                    <%= for mismatch <- result.mismatches do %>
+                      <tr class="hover:bg-gray-50">
+                        <td class="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
+                          <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-900"><%= truncate(mismatch.venue_name, 30) %></span>
+                            <span class="text-xs text-gray-500">ID: <%= mismatch.venue_id %></span>
+                          </div>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                            <%= mismatch.source || "unknown" %>
+                          </span>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <a
+                            href={"https://www.google.com/maps?q=#{mismatch.latitude},#{mismatch.longitude}"}
+                            target="_blank"
+                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                            title="Open in Google Maps"
+                          >
+                            <%= format_coords(mismatch.latitude, mismatch.longitude) %>
+                          </a>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4">
+                          <div class="flex flex-col">
+                            <span class="text-sm text-red-600 font-medium"><%= mismatch.current_country %></span>
+                            <span class="text-xs text-gray-500"><%= mismatch.current_city %></span>
+                          </div>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4">
+                          <div class="flex flex-col">
+                            <span class="text-sm text-green-600 font-medium"><%= mismatch.expected_country %></span>
+                            <span class="text-xs text-gray-500"><%= mismatch.expected_city %></span>
+                          </div>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm">
+                          <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{confidence_color(mismatch.confidence)}"}>
+                            <%= confidence_label(mismatch.confidence) %>
+                          </span>
+                        </td>
+                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                          <div class="flex justify-end space-x-2">
+                            <button
+                              phx-click="fix_venue"
+                              phx-value-venue_id={mismatch.venue_id}
+                              class="text-green-600 hover:text-green-900"
+                              title="Fix: Move to correct country"
+                            >
+                              Fix
+                            </button>
+                            <button
+                              phx-click="ignore_venue"
+                              phx-value-venue_id={mismatch.venue_id}
+                              class="text-gray-600 hover:text-gray-900"
+                              title="Ignore: Mark as false positive"
+                            >
+                              Ignore
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+
+              <%= if length(result.mismatches) >= @limit do %>
+                <div class="mt-4 text-center text-sm text-gray-500">
+                  Showing first <%= @limit %> results. Adjust limit or apply filters to see more.
+                </div>
+              <% end %>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    </.async_result>
   <% end %>
 </div>
