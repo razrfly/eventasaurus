@@ -3,35 +3,117 @@ import Config
 # Set environment
 config :eventasaurus, :environment, :dev
 
-# Configure your database
-config :eventasaurus, EventasaurusApp.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "eventasaurus_dev",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+# =============================================================================
+# Database Configuration Toggle
+# =============================================================================
+# Set USE_PROD_DB=true to connect to production PlanetScale database
+# Default: local PostgreSQL (safe for development)
+#
+# Usage:
+#   Normal dev:     mix phx.server
+#   With prod DB:   USE_PROD_DB=true mix phx.server
+#                   (or add USE_PROD_DB=true to .env temporarily)
+# =============================================================================
 
-# SessionRepo for development (Oban, migrations, advisory locks)
-config :eventasaurus, EventasaurusApp.SessionRepo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "eventasaurus_dev",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 2
+use_prod_db = System.get_env("USE_PROD_DB") == "true"
 
-# ReplicaRepo for development (points to same DB)
-config :eventasaurus, EventasaurusApp.ReplicaRepo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "eventasaurus_dev",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 5
+# Store toggle state for runtime access (e.g., admin dashboard indicator)
+config :eventasaurus, :use_prod_db, use_prod_db
+
+if use_prod_db do
+  # Print warning to console
+  IO.puts("""
+
+  ╔═══════════════════════════════════════════════════════════════════════════╗
+  ║  ⚠️  WARNING: CONNECTED TO PRODUCTION DATABASE                             ║
+  ║                                                                           ║
+  ║  USE_PROD_DB=true is set. All database operations will affect PRODUCTION! ║
+  ║  Unset USE_PROD_DB or set to 'false' to use local PostgreSQL.             ║
+  ╚═══════════════════════════════════════════════════════════════════════════╝
+
+  """)
+
+  # PlanetScale production database configuration
+  ps_host = System.get_env("PLANETSCALE_DATABASE_HOST", "localhost")
+
+  # Repo: Pooled connection via PgBouncer (port 6432) for web requests
+  # Higher pool size for dev since we're the only user and need headroom for LiveView
+  config :eventasaurus, EventasaurusApp.Repo,
+    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
+    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
+    hostname: ps_host,
+    port: String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")),
+    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 10,
+    queue_target: 5000,
+    queue_interval: 10000,
+    ssl: true,
+    ssl_opts: [verify: :verify_none],
+    prepare: :unnamed
+
+  # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
+  config :eventasaurus, EventasaurusApp.SessionRepo,
+    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
+    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
+    hostname: ps_host,
+    port: String.to_integer(System.get_env("PLANETSCALE_DATABASE_PORT", "5432")),
+    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 5,
+    queue_target: 5000,
+    queue_interval: 10000,
+    ssl: true,
+    ssl_opts: [verify: :verify_none]
+
+  # ReplicaRepo: Pooled connection for read-heavy operations
+  config :eventasaurus, EventasaurusApp.ReplicaRepo,
+    username: System.get_env("PLANETSCALE_DATABASE_USERNAME"),
+    password: System.get_env("PLANETSCALE_DATABASE_PASSWORD"),
+    hostname: ps_host,
+    port: String.to_integer(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")),
+    database: System.get_env("PLANETSCALE_DATABASE", "postgres"),
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 10,
+    queue_target: 5000,
+    queue_interval: 10000,
+    ssl: true,
+    ssl_opts: [verify: :verify_none],
+    prepare: :unnamed
+else
+  # Default: Local PostgreSQL for development
+  config :eventasaurus, EventasaurusApp.Repo,
+    username: "postgres",
+    password: "postgres",
+    hostname: "localhost",
+    database: "eventasaurus_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 10
+
+  # SessionRepo for development (Oban, migrations, advisory locks)
+  config :eventasaurus, EventasaurusApp.SessionRepo,
+    username: "postgres",
+    password: "postgres",
+    hostname: "localhost",
+    database: "eventasaurus_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 2
+
+  # ReplicaRepo for development (points to same DB)
+  config :eventasaurus, EventasaurusApp.ReplicaRepo,
+    username: "postgres",
+    password: "postgres",
+    hostname: "localhost",
+    database: "eventasaurus_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 5
+end
 
 # Development-only features
 config :eventasaurus, :dev_quick_login, true

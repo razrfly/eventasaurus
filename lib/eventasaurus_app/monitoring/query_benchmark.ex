@@ -320,7 +320,9 @@ defmodule EventasaurusApp.Monitoring.QueryBenchmark do
   defp replica_enabled? do
     # Check if Repo.replica() is properly configured
     try do
-      Repo.replica().__adapter__() != nil
+      # If __adapter__() returns a module without raising, replica is enabled
+      _ = Repo.replica().__adapter__()
+      true
     rescue
       _ -> false
     end

@@ -8,22 +8,30 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
   - Fix individual mismatches (reassign to correct country)
   - Ignore false positives
   - Bulk fix HIGH confidence mismatches
+  - Background job processing with cached results in venue metadata
+
+  Phase 2 architecture: Uses Oban background job (VenueCountryCheckJob) to process
+  venues and store results in venue.metadata["country_check"]. The page reads
+  cached results for fast loading.
   """
   use EventasaurusWeb, :live_view
 
   alias EventasaurusDiscovery.Admin.DataQualityChecker
+  alias EventasaurusDiscovery.Admin.VenueCountryCheckJob
 
-  # Higher limit for admin tool - we want to find all mismatches
-  # The geocoding check is fast (offline library), so 500 is reasonable
-  @default_limit 500
+  @default_limit 50
+  @pubsub_topic "venue_country_check"
 
   @impl true
   def mount(_params, _session, socket) do
+    # Subscribe to job progress updates
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, @pubsub_topic)
+    end
+
     socket =
       socket
       |> assign(:page_title, "Venue Country Mismatches")
-      |> assign(:loading, false)
-      |> assign(:result, nil)
       |> assign(:filters, %{
         source: nil,
         from_country: nil,
@@ -33,13 +41,45 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       |> assign(:limit, @default_limit)
       |> assign(:active_tab, "dashboard")
       |> assign(:bulk_fixing, false)
-      |> load_mismatches()
+      |> assign(:check_running, false)
+      |> assign(:data_loaded, false)
+      |> assign(:sources, [])
+      |> assign(:country_pairs, [])
+      |> assign(:last_check_stats, nil)
+
+    # Auto-load if we have existing data and connected
+    # This provides a better UX: page shows data immediately if available
+    socket =
+      if connected?(socket) and has_country_check_data?() do
+        socket
+        |> assign(:data_loaded, true)
+        |> start_async_load()
+      else
+        socket
+      end
 
     {:ok, socket}
   end
 
+  # Check if there's any country_check data in venues
+  defp has_country_check_data? do
+    import Ecto.Query
+    alias EventasaurusApp.Repo
+    alias EventasaurusApp.Venues.Venue
+
+    query =
+      from(v in Venue,
+        where: not is_nil(fragment("?->'country_check'", v.metadata)),
+        limit: 1,
+        select: 1
+      )
+
+    Repo.replica().exists?(query)
+  end
+
   @impl true
   def handle_params(params, _uri, socket) do
+    # Just update filters, NO database queries
     filters = %{
       source: params["source"],
       from_country: params["from"],
@@ -51,21 +91,159 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       socket
       |> assign(:filters, filters)
       |> assign(:limit, parse_limit(params["limit"]))
-      |> load_mismatches()
+
+    {:noreply, socket}
+  end
+
+  # Start async loading of mismatch data
+  defp start_async_load(socket) do
+    filters = socket.assigns.filters
+    limit = socket.assigns.limit
+
+    assign_async(socket, :mismatch_data, fn ->
+      load_mismatch_data(filters, limit)
+    end)
+  end
+
+  # Async data loading function - reads from cached venue metadata
+  defp load_mismatch_data(filters, limit) do
+    # Build options for fetching mismatches from venue metadata
+    options =
+      [limit: limit, status: "pending"]
+      |> maybe_add_filter(:confidence, filters.confidence && Atom.to_string(filters.confidence))
+
+    # Fetch mismatches from venue metadata (fast - just reads cached data)
+    mismatches = VenueCountryCheckJob.get_mismatches(options)
+
+    # Get last check stats for the header
+    stats = VenueCountryCheckJob.get_last_check_stats()
+
+    # Transform venue records to mismatch maps for template compatibility
+    transformed_mismatches =
+      mismatches
+      |> Enum.map(&transform_venue_to_mismatch/1)
+      |> filter_by_source(filters.source)
+      |> filter_by_from_country(filters.from_country)
+      |> filter_by_to_country(filters.to_country)
+
+    # Build confidence breakdown
+    by_confidence =
+      transformed_mismatches
+      |> Enum.group_by(& &1.confidence)
+      |> Enum.map(fn {k, v} -> {k, length(v)} end)
+      |> Enum.into(%{})
+
+    # Build country pair breakdown
+    by_country_pair =
+      transformed_mismatches
+      |> Enum.group_by(fn m -> {m.current_country, m.expected_country} end)
+      |> Enum.map(fn {k, v} -> {k, length(v)} end)
+      |> Enum.into(%{})
+
+    result = %{
+      total_checked: stats[:total_checked] || 0,
+      mismatch_count: length(transformed_mismatches),
+      mismatches: transformed_mismatches,
+      by_confidence: by_confidence,
+      by_country_pair: by_country_pair,
+      last_checked: stats[:last_checked]
+    }
+
+    # Get unique sources and country pairs for filter dropdowns
+    sources = get_unique_sources(transformed_mismatches)
+    country_pairs = get_country_pairs(by_country_pair)
+
+    # assign_async expects the key to match what was registered (:mismatch_data)
+    {:ok,
+     %{
+       mismatch_data: %{
+         result: result,
+         sources: sources,
+         country_pairs: country_pairs,
+         stats: stats
+       }
+     }}
+  end
+
+  # Transform a venue with metadata to the mismatch map format expected by template
+  defp transform_venue_to_mismatch(venue) do
+    check = venue.metadata["country_check"] || %{}
+
+    %{
+      venue_id: venue.id,
+      venue_name: venue.name,
+      latitude: venue.latitude,
+      longitude: venue.longitude,
+      # Use scraper_source from metadata (the scraper that created events for this venue)
+      # Falls back to venue.source (geocoding provider) if not available
+      source: check["scraper_source"] || venue.source,
+      current_country: check["current_country"],
+      current_city: check["current_city"],
+      expected_country: check["expected_country"],
+      expected_city: check["expected_city"],
+      confidence: parse_confidence_atom(check["confidence"]),
+      checked_at: check["checked_at"]
+    }
+  end
+
+  defp parse_confidence_atom("high"), do: :high
+  defp parse_confidence_atom("medium"), do: :medium
+  defp parse_confidence_atom("low"), do: :low
+  defp parse_confidence_atom(_), do: nil
+
+  defp filter_by_source(mismatches, nil), do: mismatches
+
+  defp filter_by_source(mismatches, source) do
+    Enum.filter(mismatches, &(&1.source == source))
+  end
+
+  defp filter_by_from_country(mismatches, nil), do: mismatches
+
+  defp filter_by_from_country(mismatches, from_country) do
+    Enum.filter(mismatches, &(&1.current_country == from_country))
+  end
+
+  @impl true
+  def handle_event("load_data", _params, socket) do
+    # User explicitly requested to load data - now we can query
+    socket =
+      socket
+      |> assign(:data_loaded, true)
+      |> start_async_load()
+      |> put_flash(:info, "Loading mismatch data...")
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("refresh", _params, socket) do
-    socket =
-      socket
-      |> assign(:loading, true)
-      |> load_mismatches()
-      |> assign(:loading, false)
-      |> put_flash(:info, "Refreshed mismatch data")
+    # Only refresh if data was already loaded
+    if socket.assigns.data_loaded do
+      socket =
+        socket
+        |> start_async_load()
+        |> put_flash(:info, "Refreshing mismatch data...")
 
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :info, "Click 'Load Data' first to view mismatches")}
+    end
+  end
+
+  @impl true
+  def handle_event("run_check", _params, socket) do
+    case VenueCountryCheckJob.queue_check() do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> assign(:check_running, true)
+          |> put_flash(:info, "Country check job queued. Processing venues in background...")
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to queue check: #{inspect(reason)}")}
+    end
   end
 
   @impl true
@@ -77,20 +255,30 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       confidence: parse_confidence(params["confidence"])
     }
 
+    socket = assign(socket, :filters, filters)
+
+    # Only reload if data was already loaded
     socket =
-      socket
-      |> assign(:filters, filters)
-      |> load_mismatches()
+      if socket.assigns.data_loaded do
+        start_async_load(socket)
+      else
+        socket
+      end
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("clear_filters", _params, socket) do
+    socket = assign(socket, :filters, %{source: nil, from_country: nil, to_country: nil, confidence: nil})
+
+    # Only reload if data was already loaded
     socket =
-      socket
-      |> assign(:filters, %{source: nil, from_country: nil, to_country: nil, confidence: nil})
-      |> load_mismatches()
+      if socket.assigns.data_loaded do
+        start_async_load(socket)
+      else
+        socket
+      end
 
     {:noreply, socket}
   end
@@ -107,7 +295,7 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
             :info,
             "Fixed venue: #{fix_result.venue.name} moved from #{fix_result.old_country} to #{fix_result.new_country}"
           )
-          |> load_mismatches()
+          |> start_async_load()
 
         {:noreply, socket}
 
@@ -126,7 +314,7 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
         socket =
           socket
           |> put_flash(:info, "Venue marked as ignored (false positive)")
-          |> load_mismatches()
+          |> start_async_load()
 
         {:noreply, socket}
 
@@ -149,27 +337,18 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       limit: @default_limit
     ]
 
-    case DataQualityChecker.bulk_fix_venue_countries(options) do
-      {:ok, result} ->
-        socket =
-          socket
-          |> assign(:bulk_fixing, false)
-          |> put_flash(
-            :info,
-            "Bulk fix complete: #{result.fixed} fixed, #{result.failed} failed"
-          )
-          |> load_mismatches()
+    {:ok, result} = DataQualityChecker.bulk_fix_venue_countries(options)
 
-        {:noreply, socket}
+    socket =
+      socket
+      |> assign(:bulk_fixing, false)
+      |> put_flash(
+        :info,
+        "Bulk fix complete: #{result.fixed} fixed, #{result.failed} failed"
+      )
+      |> start_async_load()
 
-      {:error, reason} ->
-        socket =
-          socket
-          |> assign(:bulk_fixing, false)
-          |> put_flash(:error, "Bulk fix failed: #{inspect(reason)}")
-
-        {:noreply, socket}
-    end
+    {:noreply, socket}
   end
 
   @impl true
@@ -179,58 +358,25 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   @impl true
   def handle_event("export_json", _params, socket) do
-    # Generate export data
-    result = socket.assigns.result
+    # Generate export data - only if we have loaded data
+    case socket.assigns.mismatch_data do
+      %{ok?: true} ->
+        export_data = DataQualityChecker.export_venue_country_report(limit: 1000)
+        json = Jason.encode!(export_data, pretty: true)
 
-    if result do
-      export_data = DataQualityChecker.export_venue_country_report(limit: 1000)
-      json = Jason.encode!(export_data, pretty: true)
+        {:noreply,
+         push_event(socket, "download", %{
+           filename: "venue_country_mismatches_#{Date.utc_today()}.json",
+           content: json,
+           content_type: "application/json"
+         })}
 
-      {:noreply,
-       push_event(socket, "download", %{
-         filename: "venue_country_mismatches_#{Date.utc_today()}.json",
-         content: json,
-         content_type: "application/json"
-       })}
-    else
-      {:noreply, put_flash(socket, :error, "No data to export")}
+      _ ->
+        {:noreply, put_flash(socket, :error, "No data to export - please wait for data to load")}
     end
   end
 
   # Private functions
-
-  defp load_mismatches(socket) do
-    filters = socket.assigns.filters
-    limit = socket.assigns.limit
-
-    options =
-      [limit: limit]
-      |> maybe_add_filter(:source, filters.source)
-      |> maybe_add_filter(:country, filters.from_country)
-
-    result = DataQualityChecker.check_venue_countries(options)
-
-    # Apply client-side filters for to_country and confidence
-    filtered_mismatches =
-      result.mismatches
-      |> filter_by_to_country(filters.to_country)
-      |> filter_by_confidence(filters.confidence)
-
-    filtered_result = %{
-      result
-      | mismatches: filtered_mismatches,
-        mismatch_count: length(filtered_mismatches)
-    }
-
-    # Get unique sources and country pairs for filter dropdowns
-    sources = get_unique_sources(result.mismatches)
-    country_pairs = get_country_pairs(result.by_country_pair)
-
-    socket
-    |> assign(:result, filtered_result)
-    |> assign(:sources, sources)
-    |> assign(:country_pairs, country_pairs)
-  end
 
   defp maybe_add_filter(options, _key, nil), do: options
   defp maybe_add_filter(options, key, value), do: [{key, value} | options]
@@ -239,12 +385,6 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   defp filter_by_to_country(mismatches, to_country) do
     Enum.filter(mismatches, &(&1.expected_country == to_country))
-  end
-
-  defp filter_by_confidence(mismatches, nil), do: mismatches
-
-  defp filter_by_confidence(mismatches, confidence) do
-    Enum.filter(mismatches, &(&1.confidence == confidence))
   end
 
   defp get_unique_sources(mismatches) do
@@ -321,4 +461,28 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
   end
 
   def truncate(str, _max_len), do: str
+
+  def format_time_ago(nil), do: "Never"
+
+  def format_time_ago(datetime) when is_binary(datetime) do
+    case DateTime.from_iso8601(datetime) do
+      {:ok, dt, _offset} -> format_time_ago(dt)
+      _ -> "Unknown"
+    end
+  end
+
+  def format_time_ago(%DateTime{} = datetime) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, datetime, :second)
+
+    cond do
+      diff_seconds < 60 -> "Just now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)} min ago"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)} hours ago"
+      diff_seconds < 604_800 -> "#{div(diff_seconds, 86400)} days ago"
+      true -> Calendar.strftime(datetime, "%Y-%m-%d %H:%M")
+    end
+  end
+
+  def format_time_ago(_), do: "Unknown"
 end
