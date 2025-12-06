@@ -18,15 +18,18 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   alias EventasaurusDiscovery.Admin.DataQualityChecker
   alias EventasaurusDiscovery.Admin.VenueCountryCheckJob
+  alias EventasaurusDiscovery.Admin.VenueCountryFixJob
 
   @default_limit 50
   @pubsub_topic "venue_country_check"
+  @fix_pubsub_topic "venue_country_fix"
 
   @impl true
   def mount(_params, _session, socket) do
     # Subscribe to job progress updates
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Eventasaurus.PubSub, @pubsub_topic)
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, @fix_pubsub_topic)
     end
 
     socket =
@@ -329,8 +332,6 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   @impl true
   def handle_event("bulk_fix", _params, socket) do
-    socket = assign(socket, :bulk_fixing, true)
-
     filters = socket.assigns.filters
 
     options = [
@@ -340,20 +341,21 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       limit: @default_limit
     ]
 
-    # Note: bulk_fix_venue_countries always returns {:ok, result} - individual
-    # failures are tracked in result.failed, not as function-level errors
-    {:ok, result} = DataQualityChecker.bulk_fix_venue_countries(options)
+    case VenueCountryFixJob.queue_bulk_fix(options) do
+      {:ok, %{queued: 0}} ->
+        {:noreply, put_flash(socket, :info, "No venues to fix")}
 
-    socket =
-      socket
-      |> assign(:bulk_fixing, false)
-      |> put_flash(
-        :info,
-        "Bulk fix complete: #{result.fixed} fixed, #{result.failed} failed"
-      )
-      |> start_async_load()
+      {:ok, %{queued: count}} ->
+        socket =
+          socket
+          |> assign(:bulk_fixing, true)
+          |> put_flash(:info, "Queued #{count} venue fix jobs. Processing in background...")
 
-    {:noreply, socket}
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to queue fixes: #{inspect(reason)}")}
+    end
   end
 
   @impl true
@@ -403,6 +405,59 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
   def handle_info({:venue_country_check_progress, _progress}, socket) do
     # Intermediate progress updates - could add progress bar later
     {:noreply, socket}
+  end
+
+  # Handle PubSub messages from the venue fix job
+  @impl true
+  def handle_info({:venue_country_fix_progress, %{status: :queued, total: total}}, socket) do
+    socket =
+      socket
+      |> assign(:bulk_fixing, true)
+      |> assign(:fix_progress, %{total: total, fixed: 0, failed: 0})
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:venue_country_fix_progress, %{status: :fixed}}, socket) do
+    progress = socket.assigns[:fix_progress] || %{total: 0, fixed: 0, failed: 0}
+    new_progress = Map.update!(progress, :fixed, &(&1 + 1))
+
+    socket = assign(socket, :fix_progress, new_progress)
+
+    # Check if all jobs completed
+    if new_progress.fixed + new_progress.failed >= new_progress.total do
+      socket =
+        socket
+        |> assign(:bulk_fixing, false)
+        |> put_flash(:info, "Bulk fix complete: #{new_progress.fixed} fixed, #{new_progress.failed} failed")
+        |> start_async_load()
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:venue_country_fix_progress, %{status: :failed}}, socket) do
+    progress = socket.assigns[:fix_progress] || %{total: 0, fixed: 0, failed: 0}
+    new_progress = Map.update!(progress, :failed, &(&1 + 1))
+
+    socket = assign(socket, :fix_progress, new_progress)
+
+    # Check if all jobs completed
+    if new_progress.fixed + new_progress.failed >= new_progress.total do
+      socket =
+        socket
+        |> assign(:bulk_fixing, false)
+        |> put_flash(:info, "Bulk fix complete: #{new_progress.fixed} fixed, #{new_progress.failed} failed")
+        |> start_async_load()
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
