@@ -20,56 +20,68 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
     # Flush any pending schema changes first
     flush()
 
-    # Start the geocoding application - it's needed for reverse geocoding
-    # This is safe because it's idempotent (won't fail if already started)
-    {:ok, _} = Application.ensure_all_started(:geocoding)
+    try do
+      # Start the geocoding application - it's needed for reverse geocoding
+      # This handles environments where the app may not be available
+      case Application.ensure_all_started(:geocoding) do
+        {:ok, _} -> :ok
+        {:error, reason} ->
+          IO.puts("[Migration] Warning: Could not start geocoding app: #{inspect(reason)}")
+          IO.puts("[Migration] Skipping migration - run manually when geocoding is available")
+          throw(:skip_migration)
+      end
 
-    # Get repo module - we're in a migration so use the repo directly
-    repo = EventasaurusApp.Repo
+      # Get repo module - we're in a migration so use the repo directly
+      repo = EventasaurusApp.Repo
 
-    # Log start
-    IO.puts("[Migration] Starting venue country mismatch fix...")
+      # Log start
+      IO.puts("[Migration] Starting venue country mismatch fix...")
 
-    # Query all venues with GPS coordinates, preloading city and country
-    venues =
-      from(v in "venues",
-        join: c in "cities", on: c.id == v.city_id,
-        join: co in "countries", on: co.id == c.country_id,
-        where: not is_nil(v.latitude) and not is_nil(v.longitude),
-        select: %{
-          id: v.id,
-          name: v.name,
-          latitude: v.latitude,
-          longitude: v.longitude,
-          city_id: v.city_id,
-          city_name: c.name,
-          country_id: co.id,
-          country_code: co.code,
-          country_name: co.name
-        }
-      )
-      |> repo.all()
+      # Query all venues with GPS coordinates, preloading city and country
+      venues =
+        from(v in "venues",
+          join: c in "cities", on: c.id == v.city_id,
+          join: co in "countries", on: co.id == c.country_id,
+          where: not is_nil(v.latitude) and not is_nil(v.longitude),
+          select: %{
+            id: v.id,
+            name: v.name,
+            latitude: v.latitude,
+            longitude: v.longitude,
+            city_id: v.city_id,
+            city_name: c.name,
+            country_id: co.id,
+            country_code: co.code,
+            country_name: co.name
+          }
+        )
+        |> repo.all()
 
-    IO.puts("[Migration] Checking #{length(venues)} venues with GPS coordinates...")
+      IO.puts("[Migration] Checking #{length(venues)} venues with GPS coordinates...")
 
-    # Process each venue
-    stats = %{checked: 0, fixed: 0, errors: 0, skipped: 0}
+      # Process each venue
+      stats = %{checked: 0, fixed: 0, errors: 0, skipped: 0}
 
-    stats =
-      Enum.reduce(venues, stats, fn venue, acc ->
-        case check_and_fix_venue(repo, venue) do
-          :ok -> %{acc | checked: acc.checked + 1}
-          :fixed -> %{acc | checked: acc.checked + 1, fixed: acc.fixed + 1}
-          :skipped -> %{acc | checked: acc.checked + 1, skipped: acc.skipped + 1}
-          :error -> %{acc | checked: acc.checked + 1, errors: acc.errors + 1}
-        end
-      end)
+      stats =
+        Enum.reduce(venues, stats, fn venue, acc ->
+          case check_and_fix_venue(repo, venue) do
+            :ok -> %{acc | checked: acc.checked + 1}
+            :fixed -> %{acc | checked: acc.checked + 1, fixed: acc.fixed + 1}
+            :skipped -> %{acc | checked: acc.checked + 1, skipped: acc.skipped + 1}
+            :error -> %{acc | checked: acc.checked + 1, errors: acc.errors + 1}
+          end
+        end)
 
-    IO.puts("[Migration] Complete!")
-    IO.puts("[Migration] Checked: #{stats.checked}")
-    IO.puts("[Migration] Fixed: #{stats.fixed}")
-    IO.puts("[Migration] Skipped: #{stats.skipped}")
-    IO.puts("[Migration] Errors: #{stats.errors}")
+      IO.puts("[Migration] Complete!")
+      IO.puts("[Migration] Checked: #{stats.checked}")
+      IO.puts("[Migration] Fixed: #{stats.fixed}")
+      IO.puts("[Migration] Skipped: #{stats.skipped}")
+      IO.puts("[Migration] Errors: #{stats.errors}")
+    catch
+      :skip_migration ->
+        IO.puts("[Migration] Migration skipped - no changes made")
+        :ok
+    end
   end
 
   def down do
