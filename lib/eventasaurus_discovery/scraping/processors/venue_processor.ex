@@ -48,17 +48,41 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   def process_venue(venue_data, source \\ "scraper", source_scraper \\ nil) do
     # Wrap in transaction to ensure city is rolled back if venue creation fails
     Repo.transaction(fn ->
-      # Data is already cleaned at HTTP client level (single entry point validation)
-      with {:ok, normalized_data} <- normalize_venue_data(venue_data),
-           {:ok, city} <- ensure_city(normalized_data),
-           {:ok, venue} <- find_or_create_venue(normalized_data, city, source, source_scraper) do
-        venue
-      else
-        {:error, reason} ->
-          Logger.error("Failed to process venue: #{inspect(reason)}")
-          Repo.rollback(reason)
+      case do_process_venue(venue_data, source, source_scraper) do
+        {:ok, venue} -> venue
+        {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  @doc """
+  Processes venue data without wrapping in a transaction.
+
+  Use this when calling from within an existing transaction (e.g., Ecto.Multi).
+  For standalone calls, use `process_venue/3` instead which wraps in a transaction.
+
+  ## Phase 2.3: Atomic Venue+Event Creation Support
+
+  This function is designed to be called from EventProcessor's Ecto.Multi transaction,
+  allowing venue and event creation to be atomic. If event creation fails,
+  the venue creation is also rolled back.
+  """
+  def process_venue_in_transaction(venue_data, source \\ "scraper", source_scraper \\ nil) do
+    do_process_venue(venue_data, source, source_scraper)
+  end
+
+  # Internal implementation shared by both transactional and non-transactional versions
+  defp do_process_venue(venue_data, source, source_scraper) do
+    # Data is already cleaned at HTTP client level (single entry point validation)
+    with {:ok, normalized_data} <- normalize_venue_data(venue_data),
+         {:ok, city} <- ensure_city(normalized_data),
+         {:ok, venue} <- find_or_create_venue(normalized_data, city, source, source_scraper) do
+      {:ok, venue}
+    else
+      {:error, reason} ->
+        Logger.error("Failed to process venue: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -228,12 +252,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp ensure_city(%{city_name: nil}), do: {:error, "City is required"}
 
   defp ensure_city(%{city_name: city_name, country_name: country_name} = data) do
-    country = find_or_create_country(country_name)
+    # Phase 2.1: Validate scraper country against GPS coordinates
+    # If GPS coordinates are available, use offline geocoding to verify/correct the country
+    validated_country_name = validate_country_from_gps(country_name, data)
+
+    country = find_or_create_country(validated_country_name)
 
     # If we couldn't resolve the country, we can't proceed
     if country == nil do
       {:error,
-       "Cannot process city '#{city_name}' without a valid country. Unknown country: '#{country_name}'"}
+       "Cannot process city '#{city_name}' without a valid country. Unknown country: '#{validated_country_name}'"}
     else
       # First try to find by exact name match
       city =
@@ -279,6 +307,78 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       end
     end
   end
+
+  # Phase 2.1: Validate scraper country against GPS coordinates using offline geocoding
+  #
+  # Problem: Some scrapers (e.g., speed-quizzing) default to "United Kingdom" for all venues,
+  # even when the venue is actually in Ireland. This causes venues to be assigned to the wrong
+  # country, creating data quality issues.
+  #
+  # Solution: When GPS coordinates are available, use the offline geocoding library to determine
+  # the actual country. If it differs from what the scraper provided, prefer the GPS-based country.
+  #
+  # This runs BEFORE city/country creation to ensure venues are assigned to the correct country
+  # from the start, rather than fixing them after the fact.
+  defp validate_country_from_gps(scraper_country, %{latitude: lat, longitude: lng} = _data)
+       when is_number(lat) and is_number(lng) do
+    case CityResolver.resolve_city_and_country(lat, lng) do
+      {:ok, {_gps_city, gps_country_code}} ->
+        # Get country name from the GPS-derived country code
+        gps_country_name = country_name_from_code(gps_country_code)
+
+        # Normalize both countries for comparison
+        scraper_code = derive_country_code(scraper_country)
+        scraper_code_upper = if scraper_code, do: String.upcase(scraper_code), else: nil
+        gps_code_upper = String.upcase(gps_country_code)
+
+        if scraper_code_upper && scraper_code_upper != gps_code_upper do
+          # Country mismatch detected!
+          # GPS coordinates indicate a different country than the scraper provided
+          Logger.warning("""
+          🌍 Country mismatch detected during venue processing:
+            Scraper country: #{scraper_country} (#{scraper_code_upper})
+            GPS country: #{gps_country_name} (#{gps_code_upper})
+            Coordinates: (#{lat}, #{lng})
+            ACTION: Using GPS-derived country (#{gps_country_name})
+          """)
+
+          # Prefer GPS-derived country - it's based on actual coordinates
+          gps_country_name
+        else
+          # Countries match or scraper country couldn't be resolved - use scraper's value
+          scraper_country
+        end
+
+      {:error, reason} ->
+        # Couldn't resolve country from GPS (ocean, middle of nowhere, etc.)
+        # Fall back to scraper's country
+        Logger.debug(
+          "Could not validate country from GPS (#{lat}, #{lng}): #{reason}, using scraper country: #{scraper_country}"
+        )
+
+        scraper_country
+    end
+  end
+
+  # No GPS coordinates available - use scraper's country as-is
+  defp validate_country_from_gps(scraper_country, _data), do: scraper_country
+
+  # Convert ISO country code to full country name
+  # Uses the Countries library for accurate mappings
+  defp country_name_from_code(code) when is_binary(code) do
+    upcase_code = String.upcase(code)
+
+    case Countries.get(upcase_code) do
+      nil ->
+        # Unknown code, return as-is
+        upcase_code
+
+      country ->
+        country.name
+    end
+  end
+
+  defp country_name_from_code(_), do: nil
 
   defp find_or_create_country(country_name) do
     slug = Normalizer.create_slug(country_name)
