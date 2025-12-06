@@ -13,8 +13,6 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
   """
   use Ecto.Migration
 
-  import Ecto.Query
-
   # Can't use `change` because this is a data migration with complex logic
   def up do
     # Flush any pending schema changes first
@@ -31,31 +29,34 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
           throw(:skip_migration)
       end
 
-      # Get repo module - we're in a migration so use the repo directly
-      repo = EventasaurusApp.Repo
-
       # Log start
       IO.puts("[Migration] Starting venue country mismatch fix...")
 
-      # Query all venues with GPS coordinates, preloading city and country
-      venues =
-        from(v in "venues",
-          join: c in "cities", on: c.id == v.city_id,
-          join: co in "countries", on: co.id == c.country_id,
-          where: not is_nil(v.latitude) and not is_nil(v.longitude),
-          select: %{
-            id: v.id,
-            name: v.name,
-            latitude: v.latitude,
-            longitude: v.longitude,
-            city_id: v.city_id,
-            city_name: c.name,
-            country_id: co.id,
-            country_code: co.code,
-            country_name: co.name
-          }
-        )
-        |> repo.all()
+      # Query all venues with GPS coordinates using raw SQL
+      # We can't use Ecto.Query in migrations because the Repo isn't started as a GenServer
+      {:ok, result} = repo().query("""
+        SELECT v.id, v.name, v.latitude, v.longitude, v.city_id,
+               c.name as city_name, co.id as country_id, co.code as country_code, co.name as country_name
+        FROM venues v
+        JOIN cities c ON c.id = v.city_id
+        JOIN countries co ON co.id = c.country_id
+        WHERE v.latitude IS NOT NULL AND v.longitude IS NOT NULL
+      """)
+
+      venues = Enum.map(result.rows, fn row ->
+        [id, name, lat, lng, city_id, city_name, country_id, country_code, country_name] = row
+        %{
+          id: id,
+          name: name,
+          latitude: lat,
+          longitude: lng,
+          city_id: city_id,
+          city_name: city_name,
+          country_id: country_id,
+          country_code: country_code,
+          country_name: country_name
+        }
+      end)
 
       IO.puts("[Migration] Checking #{length(venues)} venues with GPS coordinates...")
 
@@ -64,7 +65,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
 
       stats =
         Enum.reduce(venues, stats, fn venue, acc ->
-          case check_and_fix_venue(repo, venue) do
+          case check_and_fix_venue(venue) do
             :ok -> %{acc | checked: acc.checked + 1}
             :fixed -> %{acc | checked: acc.checked + 1, fixed: acc.fixed + 1}
             :skipped -> %{acc | checked: acc.checked + 1, skipped: acc.skipped + 1}
@@ -90,7 +91,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
     IO.puts("[Migration] This migration cannot be reversed - venue country assignments are permanent")
   end
 
-  defp check_and_fix_venue(repo, venue) do
+  defp check_and_fix_venue(venue) do
     lat = venue.latitude
     lng = venue.longitude
 
@@ -102,7 +103,7 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
 
         if current_code != expected_code_upper do
           # Mismatch found - try to fix
-          fix_venue_country(repo, venue, expected_code_upper)
+          fix_venue_country(venue, expected_code_upper)
         else
           :ok
         end
@@ -113,12 +114,12 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
     end
   end
 
-  defp fix_venue_country(repo, venue, expected_country_code) do
+  defp fix_venue_country(venue, expected_country_code) do
     # Find a city in the expected country
     # Prefer a city with similar name, or fall back to capital/major city
     target_city =
-      find_target_city(repo, venue.city_name, expected_country_code) ||
-      find_major_city(repo, expected_country_code)
+      find_target_city(venue.city_name, expected_country_code) ||
+      find_major_city(expected_country_code)
 
     case target_city do
       nil ->
@@ -126,9 +127,11 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
         :error
 
       city ->
-        # Update the venue's city_id
-        from(v in "venues", where: v.id == ^venue.id)
-        |> repo.update_all(set: [city_id: city.id, updated_at: DateTime.utc_now()])
+        # Update the venue's city_id using raw SQL
+        repo().query(
+          "UPDATE venues SET city_id = $1, updated_at = $2 WHERE id = $3",
+          [city.id, DateTime.utc_now(), venue.id]
+        )
 
         IO.puts("[Migration] Fixed venue #{venue.id} (#{venue.name}): #{venue.country_code} -> #{expected_country_code}")
         :fixed
@@ -136,19 +139,23 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
   end
 
   # Try to find a city with the same name in the target country
-  defp find_target_city(repo, city_name, country_code) do
-    from(c in "cities",
-      join: co in "countries", on: co.id == c.country_id,
-      where: co.code == ^country_code,
-      where: ilike(c.name, ^city_name),
-      limit: 1,
-      select: %{id: c.id, name: c.name}
-    )
-    |> repo.one()
+  defp find_target_city(city_name, country_code) do
+    {:ok, result} = repo().query("""
+      SELECT c.id, c.name
+      FROM cities c
+      JOIN countries co ON co.id = c.country_id
+      WHERE co.code = $1 AND LOWER(c.name) = LOWER($2)
+      LIMIT 1
+    """, [country_code, city_name])
+
+    case result.rows do
+      [[id, name] | _] -> %{id: id, name: name}
+      [] -> nil
+    end
   end
 
   # Find a major city in the target country (fallback)
-  defp find_major_city(repo, country_code) do
+  defp find_major_city(country_code) do
     # Priority cities for common countries
     priority_cities = %{
       "IE" => ["Dublin", "Cork", "Galway", "Limerick"],
@@ -161,23 +168,36 @@ defmodule EventasaurusApp.Repo.Migrations.FixVenueCountryMismatchesFromGps do
     cities_to_try = Map.get(priority_cities, country_code, [])
 
     # Try each priority city
-    Enum.find_value(cities_to_try, fn city_name ->
-      from(c in "cities",
-        join: co in "countries", on: co.id == c.country_id,
-        where: co.code == ^country_code,
-        where: ilike(c.name, ^"%#{city_name}%"),
-        limit: 1,
-        select: %{id: c.id, name: c.name}
-      )
-      |> repo.one()
-    end) ||
-    # Last resort: just get any city in that country
-    from(c in "cities",
-      join: co in "countries", on: co.id == c.country_id,
-      where: co.code == ^country_code,
-      limit: 1,
-      select: %{id: c.id, name: c.name}
-    )
-    |> repo.one()
+    found = Enum.find_value(cities_to_try, fn city_name ->
+      {:ok, result} = repo().query("""
+        SELECT c.id, c.name
+        FROM cities c
+        JOIN countries co ON co.id = c.country_id
+        WHERE co.code = $1 AND c.name ILIKE $2
+        LIMIT 1
+      """, [country_code, "%#{city_name}%"])
+
+      case result.rows do
+        [[id, name] | _] -> %{id: id, name: name}
+        [] -> nil
+      end
+    end)
+
+    found ||
+      # Last resort: just get any city in that country
+      (fn ->
+        {:ok, result} = repo().query("""
+          SELECT c.id, c.name
+          FROM cities c
+          JOIN countries co ON co.id = c.country_id
+          WHERE co.code = $1
+          LIMIT 1
+        """, [country_code])
+
+        case result.rows do
+          [[id, name] | _] -> %{id: id, name: name}
+          [] -> nil
+        end
+      end).()
   end
 end
