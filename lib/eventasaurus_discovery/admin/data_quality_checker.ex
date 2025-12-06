@@ -2649,11 +2649,6 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
      }}
   end
 
-  defp parse_confidence_atom("high"), do: :high
-  defp parse_confidence_atom("medium"), do: :medium
-  defp parse_confidence_atom("low"), do: :low
-  defp parse_confidence_atom(_), do: nil
-
   @doc """
   Fix a venue's country using cached metadata (no live re-verification).
 
@@ -2705,8 +2700,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         # Use country CODE (not name) - same as scrapers do
         country_code = expected_country_code || derive_country_code(expected_country)
 
-        # Find or create the correct city using country CODE
-        case find_or_create_city_by_code(expected_city, country_code) do
+        # Guard against nil country code (happens when country name can't be mapped to code)
+        if is_nil(country_code) do
+          {:error, :country_code_not_found}
+        else
+          # Find or create the correct city using country CODE
+          case find_or_create_city_by_code(expected_city, country_code) do
           {:ok, new_city} ->
             # Update venue's city_id AND mark metadata as fixed
             current_metadata = venue.metadata || %{}
@@ -2740,6 +2739,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
           {:error, reason} ->
             {:error, {:city_creation_failed, reason}}
+          end
         end
     end
   end

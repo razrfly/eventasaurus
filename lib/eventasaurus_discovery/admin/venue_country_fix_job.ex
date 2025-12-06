@@ -35,6 +35,11 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
   alias EventasaurusApp.Venues.Venue, as: VenueSchema
   require Logger
 
+  @type fix_result :: %{
+          queued: non_neg_integer(),
+          venue_ids: [integer()]
+        }
+
   @pubsub_topic "venue_country_fix"
 
   @impl Oban.Worker
@@ -50,7 +55,8 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
       nil ->
         Logger.warning("[VenueCountryFix] Venue #{venue_id} not found")
         broadcast_progress(:failed, %{venue_id: venue_id, reason: :not_found})
-        {:error, :venue_not_found}
+        # Return :ok so Oban doesn't retry - the venue doesn't exist
+        :ok
 
       venue ->
         case DataQualityChecker.fix_venue_country_from_metadata(venue) do
@@ -89,6 +95,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
   @doc """
   Queue a single venue fix job.
   """
+  @spec queue_single_fix(integer()) :: {:ok, Oban.Job.t()} | {:error, Ecto.Changeset.t()}
   def queue_single_fix(venue_id) when is_integer(venue_id) do
     %{"venue_id" => venue_id}
     |> new()
@@ -110,6 +117,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
   ## Returns
   - `{:ok, %{queued: count, venue_ids: [ids]}}` on success
   """
+  @spec queue_bulk_fix(keyword()) :: {:ok, fix_result()}
   def queue_bulk_fix(opts \\ []) do
     confidence =
       case Keyword.get(opts, :confidence, :high) do
@@ -149,22 +157,17 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
       {:ok, %{queued: 0, venue_ids: []}}
     else
       # Insert all jobs using Oban.insert_all for efficiency
+      # Note: Oban.insert_all/1 always returns a list of jobs, never an error tuple
       jobs =
         Enum.map(venue_ids, fn venue_id ->
           new(%{"venue_id" => venue_id})
         end)
 
-      case Oban.insert_all(jobs) do
-        inserted_jobs when is_list(inserted_jobs) ->
-          count = length(inserted_jobs)
-          Logger.info("[VenueCountryFix] Queued #{count} fix jobs")
-          broadcast_progress(:queued, %{total: count, venue_ids: venue_ids})
-          {:ok, %{queued: count, venue_ids: venue_ids}}
-
-        {:error, reason} ->
-          Logger.error("[VenueCountryFix] Failed to queue jobs: #{inspect(reason)}")
-          {:error, reason}
-      end
+      inserted_jobs = Oban.insert_all(jobs)
+      count = length(inserted_jobs)
+      Logger.info("[VenueCountryFix] Queued #{count} fix jobs")
+      broadcast_progress(:queued, %{total: count, venue_ids: venue_ids})
+      {:ok, %{queued: count, venue_ids: venue_ids}}
     end
   end
 end
