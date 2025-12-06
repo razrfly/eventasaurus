@@ -220,9 +220,21 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
     end
   end
 
-  # Find the scraper source(s) for a venue by looking at its events
-  # Returns the most common source slug, or nil if no events found
-  defp get_venue_scraper_source(%Venue{id: venue_id}) do
+  # Find the scraper source for a venue
+  # First tries to find via linked events, then falls back to venue metadata
+  # This handles orphan venues (venues with no events) that still have source info in metadata
+  defp get_venue_scraper_source(%Venue{id: venue_id, metadata: metadata}) do
+    # First try to get from events (most reliable when available)
+    event_source = get_venue_scraper_source_from_events(venue_id)
+
+    # Fall back to metadata if no events found
+    event_source ||
+      get_in(metadata || %{}, ["source_data", "source_scraper"]) ||
+      get_in(metadata || %{}, ["geocoding", "source_scraper"])
+  end
+
+  # Query events to find the most common scraper source
+  defp get_venue_scraper_source_from_events(venue_id) do
     query =
       from(pe in PublicEvent,
         join: pes in PublicEventSource,

@@ -58,22 +58,71 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   @doc """
   Processes event data from a source.
   Creates or updates the event and manages source associations.
+
+  ## Phase 2.3: Atomic Venue+Event Creation
+
+  This function now uses Ecto.Multi to ensure venue and event creation are atomic.
+  If event creation fails after venue is created, the entire transaction rolls back,
+  preventing orphan venues (venues with no linked events).
+
+  The transaction wraps:
+  1. Venue creation/lookup (via VenueProcessor)
+  2. Event creation/update
+  3. Event source linking
+  4. Performer, category, and movie associations
+
+  All succeed together or none persist.
   """
   def process_event(event_data, source_id, source_priority \\ 10) do
     # Data is already cleaned at HTTP client level (single entry point validation)
-    with {:ok, normalized} <- normalize_event_data(event_data),
-         {:ok, venue} <- process_venue(normalized, source_id),
-         {:ok, event, action} <- find_or_create_event(normalized, venue, source_id),
-         {:ok, _source} <-
-           maybe_update_event_source(event, source_id, source_priority, normalized, action),
-         {:ok, _performers} <- process_performers(event, normalized),
-         {:ok, _categories} <- process_categories(event, normalized, source_id),
-         {:ok, _movies} <- process_movies(event, normalized) do
-      {:ok, Repo.preload(event, [:venue, :performers, :categories, :movies])}
+    with {:ok, normalized} <- normalize_event_data(event_data) do
+      # Phase 2.3: Wrap entire venue+event creation in atomic transaction
+      # This prevents orphan venues when event creation fails
+      process_event_atomically(normalized, source_id, source_priority)
     else
       {:error, reason} = error ->
-        Logger.error("Failed to process event: #{inspect(reason)}")
+        Logger.error("Failed to normalize event data: #{inspect(reason)}")
         error
+    end
+  end
+
+  # Phase 2.3: Atomic venue+event creation using Ecto.Multi
+  # Prevents orphan venues by ensuring venue and event are created together
+  defp process_event_atomically(normalized, source_id, source_priority) do
+    result =
+      Multi.new()
+      |> Multi.run(:venue, fn _repo, _changes ->
+        process_venue(normalized, source_id)
+      end)
+      |> Multi.run(:event, fn _repo, %{venue: venue} ->
+        # find_or_create_event returns {:ok, event, action} but Ecto.Multi expects {:ok, value}
+        # Wrap the result as {:ok, {event, action}} to satisfy Multi callback contract
+        case find_or_create_event(normalized, venue, source_id) do
+          {:ok, event, action} -> {:ok, {event, action}}
+          {:error, _reason} = error -> error
+        end
+      end)
+      |> Multi.run(:event_source, fn _repo, %{event: {event, action}} ->
+        maybe_update_event_source(event, source_id, source_priority, normalized, action)
+      end)
+      |> Multi.run(:performers, fn _repo, %{event: {event, _action}} ->
+        process_performers(event, normalized)
+      end)
+      |> Multi.run(:categories, fn _repo, %{event: {event, _action}} ->
+        process_categories(event, normalized, source_id)
+      end)
+      |> Multi.run(:movies, fn _repo, %{event: {event, _action}} ->
+        process_movies(event, normalized)
+      end)
+      |> Repo.transaction()
+
+    case result do
+      {:ok, %{event: {event, _action}}} ->
+        {:ok, Repo.preload(event, [:venue, :performers, :categories, :movies])}
+
+      {:error, step, reason, _changes} ->
+        Logger.error("Failed to process event at step #{step}: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
@@ -186,7 +235,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     source = Repo.get(Source, source_id)
     source_name = if source, do: source.name, else: nil
 
-    VenueProcessor.process_venue(venue_data, "scraper", source_name)
+    # Phase 2.3: Use process_venue_in_transaction when called from within Ecto.Multi
+    # This allows the outer Multi transaction to control rollback behavior
+    VenueProcessor.process_venue_in_transaction(venue_data, "scraper", source_name)
   end
 
   defp find_or_create_event(data, venue, source_id) do
@@ -202,38 +253,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     Movie ID: #{data[:movie_id] || "None"}
     """)
 
-    # Use advisory lock to prevent race conditions in concurrent event processing
-    # Lock is scoped to venue+normalized_title to allow parallel processing of different events
-    with_recurring_event_lock(venue, data.title, fn ->
-      do_find_or_create_event(data, venue, source_id, slug)
-    end)
+    # Phase 2.3: When called from within Ecto.Multi transaction, we acquire
+    # the advisory lock directly without creating a nested transaction.
+    # The advisory lock will be released when the outer Multi transaction commits/rolls back.
+    acquire_advisory_lock(venue, data.title)
+    do_find_or_create_event(data, venue, source_id, slug)
   end
 
-  # Advisory lock wrapper to prevent concurrent processing of same recurring event
-  defp with_recurring_event_lock(venue, title, func) do
-    # Generate lock key from venue + normalized title
+  # Acquire advisory lock without creating a nested transaction
+  # Phase 2.3: This supports atomic venue+event creation via Ecto.Multi
+  defp acquire_advisory_lock(venue, title) do
     lock_key = generate_event_lock_key(venue, title)
-
     Logger.debug("🔒 Acquiring advisory lock for key: #{lock_key}")
 
-    # Wrap in transaction with advisory lock
-    Repo.transaction(fn ->
-      # Acquire transaction-scoped advisory lock
-      # This lock is automatically released when transaction completes
-      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
-
-      Logger.debug("✅ Advisory lock acquired")
-
-      # Execute the function within the locked context
-      case func.() do
-        {:ok, event, action} -> {event, action}
-        {:error, reason} -> Repo.rollback(reason)
-      end
-    end)
-    |> case do
-      {:ok, {event, action}} -> {:ok, event, action}
-      {:error, reason} -> {:error, reason}
-    end
+    # Acquire transaction-scoped advisory lock
+    # This lock is automatically released when the transaction completes
+    # Works within Ecto.Multi's outer transaction
+    Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
+    Logger.debug("✅ Advisory lock acquired")
   end
 
   # Generate a stable lock key from venue and normalized title

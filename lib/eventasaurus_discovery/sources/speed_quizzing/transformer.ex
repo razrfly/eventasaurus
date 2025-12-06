@@ -373,10 +373,34 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
     {nil, "United Kingdom"}
   end
 
+  # Irish cities for country detection (lowercase for matching)
+  @irish_cities ~w(dublin galway cork limerick waterford wexford sligo kilkenny
+                   drogheda dundalk tralee killarney athlone ennis navan letterkenny
+                   carlow cavan longford mullingar newbridge naas bray greystones
+                   arklow wicklow tullamore portlaoise clonmel thurles nenagh
+                   carrick-on-shannon roscommon castlebar westport ballina
+                   tuam ballinasloe loughrea clifden)
+
   # Detect country from address postcode patterns
   defp detect_country_from_address(address) when is_binary(address) do
+    address_lower = String.downcase(address)
+
     cond do
+      # Irish Eircode pattern (e.g., "H91 F880", "D02 XY45", "A65 T123")
+      # Format: one letter + 2 digits + space + 4 alphanumeric
+      String.match?(address, ~r/\b[A-Z][0-9]{2}\s?[A-Z0-9]{4}\b/i) ->
+        "Ireland"
+
+      # "Ireland" explicitly in address
+      String.contains?(address_lower, "ireland") ->
+        "Ireland"
+
+      # Irish city names in address
+      contains_irish_city?(address_lower) ->
+        "Ireland"
+
       # UK postcode pattern (e.g., "SW1A 1AA", "M1 1AE")
+      # Must come AFTER Eircode check since patterns can overlap
       String.match?(address, ~r/\b[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}\b/) ->
         "United Kingdom"
 
@@ -385,11 +409,11 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
         "United States"
 
       # UAE indicators
-      String.contains?(String.downcase(address), ["dubai", "abu dhabi", "uae"]) ->
+      String.contains?(address_lower, ["dubai", "abu dhabi", "uae"]) ->
         "United Arab Emirates"
 
       # Australia indicators
-      String.contains?(String.downcase(address), ["australia", "sydney", "melbourne"]) ->
+      String.contains?(address_lower, ["australia", "sydney", "melbourne"]) ->
         "Australia"
 
       # Default to UK (most common for Speed Quizzing)
@@ -399,6 +423,14 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
   end
 
   defp detect_country_from_address(_), do: "United Kingdom"
+
+  # Check if address contains any Irish city name
+  defp contains_irish_city?(address_lower) do
+    Enum.any?(@irish_cities, fn city ->
+      # Match city as whole word (with word boundaries)
+      String.match?(address_lower, ~r/\b#{Regex.escape(city)}\b/)
+    end)
+  end
 
   # Parse pricing from fee text
   defp parse_pricing(fee_text, country) when is_binary(fee_text) do
