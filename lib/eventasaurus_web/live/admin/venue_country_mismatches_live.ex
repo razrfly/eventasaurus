@@ -174,9 +174,11 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       venue_name: venue.name,
       latitude: venue.latitude,
       longitude: venue.longitude,
-      # Use scraper_source from metadata (the scraper that created events for this venue)
-      # Falls back to venue.source (geocoding provider) if not available
-      source: check["scraper_source"] || venue.source,
+      # Two separate source fields:
+      # 1. geocoding_source - where the GPS coordinates came from (mapbox, here, geoapify, etc.)
+      geocoding_source: venue.source,
+      # 2. scraper_source - which scraper created events for this venue (speed-quizzing, etc.)
+      scraper_source: check["scraper_source"],
       current_country: check["current_country"],
       current_city: check["current_city"],
       expected_country: check["expected_country"],
@@ -193,8 +195,9 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   defp filter_by_source(mismatches, nil), do: mismatches
 
+  # Filter by scraper_source (which scraper created the events)
   defp filter_by_source(mismatches, source) do
-    Enum.filter(mismatches, &(&1.source == source))
+    Enum.filter(mismatches, &(&1.scraper_source == source))
   end
 
   defp filter_by_from_country(mismatches, nil), do: mismatches
@@ -419,9 +422,10 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
     Enum.filter(mismatches, &(&1.expected_country == to_country))
   end
 
+  # Get unique scraper sources for the filter dropdown
   defp get_unique_sources(mismatches) do
     mismatches
-    |> Enum.map(& &1.source)
+    |> Enum.map(& &1.scraper_source)
     |> Enum.uniq()
     |> Enum.reject(&is_nil/1)
     |> Enum.sort()

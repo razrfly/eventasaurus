@@ -2555,10 +2555,11 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   @doc """
   Bulk fix venue country mismatches for venues matching criteria.
 
+  Uses cached metadata from VenueCountryCheckJob (not real-time geocoding).
   Only fixes HIGH confidence mismatches by default.
 
   ## Options
-  - `:confidence` - Minimum confidence level (:high, :medium, :low). Default: :high
+  - `:confidence` - Confidence level to filter by (:high, :medium, :low). Default: :high
   - `:from_country` - Filter by current country
   - `:to_country` - Filter by expected country
   - `:limit` - Maximum venues to fix. Default: 100
@@ -2568,54 +2569,51 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   """
   @spec bulk_fix_venue_countries(keyword()) :: {:ok, map()} | {:error, term()}
   def bulk_fix_venue_countries(options \\ []) do
+    alias EventasaurusDiscovery.Admin.VenueCountryCheckJob
+
     confidence = Keyword.get(options, :confidence, :high)
     from_country = Keyword.get(options, :from_country)
     to_country = Keyword.get(options, :to_country)
     limit = Keyword.get(options, :limit, 100)
 
-    # Get mismatches
-    check_options =
-      options
-      |> Keyword.take([:source])
-      |> Keyword.put(:limit, limit * 2)
-
-    check_options =
-      if from_country do
-        Keyword.put(check_options, :country, from_country)
-      else
-        check_options
+    # Get mismatches from CACHED metadata (not real-time geocoding)
+    # This ensures we fix what the UI shows
+    confidence_string =
+      case confidence do
+        :high -> "high"
+        :medium -> "medium"
+        :low -> "low"
+        _ -> "high"
       end
 
-    result = check_venue_countries(check_options)
+    venues = VenueCountryCheckJob.get_mismatches(
+      status: "pending",
+      confidence: confidence_string,
+      limit: limit * 2
+    )
 
-    # Filter by confidence and country pair
-    mismatches =
-      result.mismatches
-      |> Enum.filter(fn m ->
-        confidence_match =
-          case confidence do
-            :high -> m.confidence == :high
-            :medium -> m.confidence in [:high, :medium]
-            :low -> true
-          end
+    # Filter venues by country pair if specified
+    filtered_venues =
+      venues
+      |> Enum.filter(fn venue ->
+        check = venue.metadata["country_check"] || %{}
+        current = check["current_country"]
+        expected = check["expected_country"]
 
-        country_match =
-          (is_nil(from_country) || m.current_country == from_country) &&
-            (is_nil(to_country) || m.expected_country == to_country)
-
-        confidence_match && country_match
+        (is_nil(from_country) || current == from_country) &&
+          (is_nil(to_country) || expected == to_country)
       end)
       |> Enum.take(limit)
 
-    # Fix each venue
+    # Fix each venue using the NEW function that trusts cached metadata
     results =
-      Enum.map(mismatches, fn mismatch ->
-        case fix_venue_country(mismatch.venue_id) do
+      Enum.map(filtered_venues, fn venue ->
+        case fix_venue_country_from_metadata(venue) do
           {:ok, fix_result} ->
-            {:ok, Map.put(fix_result, :venue_id, mismatch.venue_id)}
+            {:ok, Map.put(fix_result, :venue_id, venue.id)}
 
           {:error, reason} ->
-            {:error, %{venue_id: mismatch.venue_id, reason: reason}}
+            {:error, %{venue_id: venue.id, reason: reason}}
         end
       end)
 
@@ -2629,6 +2627,95 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
        total_attempted: length(results),
        results: results
      }}
+  end
+
+  defp parse_confidence_atom("high"), do: :high
+  defp parse_confidence_atom("medium"), do: :medium
+  defp parse_confidence_atom("low"), do: :low
+  defp parse_confidence_atom(_), do: nil
+
+  @doc """
+  Fix a venue's country using cached metadata (no live re-verification).
+
+  This function trusts the country_check metadata from VenueCountryCheckJob
+  and fixes the venue based on that cached data. Use this for bulk fixes
+  where we've already verified the mismatch via the Oban job.
+
+  ## Parameters
+  - venue: The venue struct with metadata containing country_check
+  - options: Keyword list with :reason option
+
+  ## Returns
+  - `{:ok, result}` on success
+  - `{:error, reason}` on failure
+  """
+  def fix_venue_country_from_metadata(venue, options \\ []) do
+    reason = Keyword.get(options, :reason, "GPS coordinates indicate different country")
+
+    # Get the cached country_check metadata
+    country_check = venue.metadata["country_check"] || %{}
+    expected_country = country_check["expected_country"]
+    expected_city = country_check["expected_city"]
+    is_mismatch = country_check["is_mismatch"]
+
+    cond do
+      is_nil(expected_country) ->
+        {:error, :no_expected_country}
+
+      is_nil(expected_city) ->
+        {:error, :no_expected_city}
+
+      is_mismatch != true ->
+        {:error, :not_a_mismatch}
+
+      is_nil(venue.latitude) or is_nil(venue.longitude) ->
+        {:error, :no_coordinates}
+
+      true ->
+        # Get current city for logging
+        venue_with_preloads =
+          repo().preload(venue, city_ref: :country)
+
+        old_city = venue_with_preloads.city_ref
+        current_country = get_venue_country_name(venue_with_preloads)
+
+        # Find or create the correct city
+        case find_or_create_city(expected_city, expected_country, venue.latitude, venue.longitude) do
+          {:ok, new_city} ->
+            # Update venue's city_id AND mark metadata as fixed
+            current_metadata = venue.metadata || %{}
+            updated_country_check = Map.put(country_check, "status", "fixed")
+            updated_metadata = Map.put(current_metadata, "country_check", updated_country_check)
+
+            changeset =
+              venue
+              |> Ecto.Changeset.change(%{
+                city_id: new_city.id,
+                metadata: updated_metadata
+              })
+
+            case Repo.update(changeset) do
+              {:ok, updated_venue} ->
+                # Log the fix
+                log_venue_country_fix(venue_with_preloads, old_city, new_city, reason)
+
+                {:ok,
+                 %{
+                   venue: updated_venue,
+                   old_city: old_city,
+                   new_city: new_city,
+                   old_country: current_country,
+                   new_country: expected_country
+                 }}
+
+              {:error, changeset} ->
+                {:error, {:update_failed, changeset}}
+            end
+
+          {:error, reason} ->
+            {:error, {:city_creation_failed, reason}}
+        end
+    end
   end
 
   # Find or create a city in the given country
