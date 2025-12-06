@@ -337,6 +337,8 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       limit: @default_limit
     ]
 
+    # Note: bulk_fix_venue_countries always returns {:ok, result} - individual
+    # failures are tracked in result.failed, not as function-level errors
     {:ok, result} = DataQualityChecker.bulk_fix_venue_countries(options)
 
     socket =
@@ -374,6 +376,36 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       _ ->
         {:noreply, put_flash(socket, :error, "No data to export - please wait for data to load")}
     end
+  end
+
+  # Handle PubSub messages from the background job
+  @impl true
+  def handle_info({:venue_country_check_progress, %{status: :completed} = stats}, socket) do
+    socket =
+      socket
+      |> assign(:check_running, false)
+      |> assign(:last_check_stats, stats)
+      |> start_async_load()
+      |> put_flash(:info, "Country check completed! Processed #{stats[:processed] || 0} venues.")
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:venue_country_check_progress, %{status: :started}}, socket) do
+    {:noreply, assign(socket, :check_running, true)}
+  end
+
+  @impl true
+  def handle_info({:venue_country_check_progress, _progress}, socket) do
+    # Intermediate progress updates - could add progress bar later
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(_msg, socket) do
+    # Catch-all for any other messages
+    {:noreply, socket}
   end
 
   # Private functions
