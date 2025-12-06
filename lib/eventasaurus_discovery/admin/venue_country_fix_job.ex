@@ -61,6 +61,16 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
 
           {:error, reason} ->
             Logger.warning("[VenueCountryFix] Failed venue #{venue_id}: #{inspect(reason)}")
+
+            # Mark the venue as "failed" in metadata so it doesn't stay in pending list
+            case DataQualityChecker.update_venue_mismatch_status(venue, "failed", reason) do
+              {:ok, _} ->
+                Logger.info("[VenueCountryFix] Marked venue #{venue_id} as failed in metadata")
+
+              {:error, update_error} ->
+                Logger.error("[VenueCountryFix] Could not update venue #{venue_id} status: #{inspect(update_error)}")
+            end
+
             broadcast_progress(:failed, %{venue_id: venue_id, reason: reason})
             # Return :ok so Oban doesn't retry - the venue data itself is the problem
             :ok
