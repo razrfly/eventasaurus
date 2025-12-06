@@ -175,6 +175,7 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
     %{
       venue_id: venue.id,
       venue_name: venue.name,
+      venue_slug: venue.slug,
       latitude: venue.latitude,
       longitude: venue.longitude,
       # Two separate source fields:
@@ -341,6 +342,7 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       limit: @default_limit
     ]
 
+    # Note: queue_bulk_fix always returns {:ok, %{queued: count, venue_ids: [...]}}
     case VenueCountryFixJob.queue_bulk_fix(options) do
       {:ok, %{queued: 0}} ->
         {:noreply, put_flash(socket, :info, "No venues to fix")}
@@ -352,9 +354,6 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
           |> put_flash(:info, "Queued #{count} venue fix jobs. Processing in background...")
 
         {:noreply, socket}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to queue fixes: #{inspect(reason)}")}
     end
   end
 

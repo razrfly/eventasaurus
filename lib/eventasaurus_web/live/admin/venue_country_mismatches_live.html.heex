@@ -468,7 +468,14 @@
                       <tr class="hover:bg-gray-50">
                         <td class="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
                           <div class="flex flex-col">
-                            <span class="text-sm font-medium text-gray-900"><%= truncate(mismatch.venue_name, 30) %></span>
+                            <a
+                              href={~p"/venues/#{mismatch.venue_slug}"}
+                              class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                              title="View venue"
+                              target="_blank"
+                            >
+                              <%= truncate(mismatch.venue_name, 30) %>
+                            </a>
                             <span class="text-xs text-gray-500">ID: <%= mismatch.venue_id %></span>
                           </div>
                         </td>
