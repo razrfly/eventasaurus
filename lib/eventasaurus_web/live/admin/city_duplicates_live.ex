@@ -20,21 +20,39 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
       |> assign(:duplicate_groups, [])
       |> assign(:selected_city, nil)
       |> assign(:new_alternate_name, "")
-      |> assign(:loading, false)
+      |> assign(:loading, true)
       |> assign(:active_tab, "duplicates")
-      |> load_duplicates()
+      |> assign(:detection_time_ms, nil)
+
+    # Load duplicates asynchronously to avoid blocking mount
+    send(self(), :load_duplicates)
 
     {:ok, socket}
   end
 
   @impl true
+  def handle_info(:load_duplicates, socket) do
+    {time_us, duplicate_groups} = :timer.tc(fn -> CityManager.find_potential_duplicates() end)
+    time_ms = div(time_us, 1000)
+
+    socket =
+      socket
+      |> assign(:duplicate_groups, duplicate_groups)
+      |> assign(:loading, false)
+      |> assign(:detection_time_ms, time_ms)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("detect_duplicates", _params, socket) do
+    # Start async detection
+    send(self(), :load_duplicates)
+
     socket =
       socket
       |> assign(:loading, true)
-      |> load_duplicates()
-      |> assign(:loading, false)
-      |> put_flash(:info, "Duplicate detection complete")
+      |> assign(:detection_time_ms, nil)
 
     {:noreply, socket}
   end
