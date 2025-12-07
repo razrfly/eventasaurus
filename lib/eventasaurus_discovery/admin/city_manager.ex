@@ -128,14 +128,29 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     |> Repo.all()
   end
 
+  @default_per_page 50
+
   @doc """
-  Lists all cities with venue counts.
+  Lists cities with venue counts, with pagination support.
 
   Returns list of cities with a virtual `:venue_count` field.
+
+  ## Pagination
+
+  - `:page` - Page number (1-indexed, default: 1)
+  - `:per_page` - Items per page (default: 50)
+
+  ## Examples
+
+      iex> list_cities_with_venue_counts(%{page: 1, per_page: 50})
+      [%City{venue_count: 10}, ...]
   """
   def list_cities_with_venue_counts(filters \\ %{}) do
     sort_by = filters[:sort_by] || "name"
     sort_dir = filters[:sort_dir] || "asc"
+    page = parse_page(filters[:page])
+    per_page = parse_per_page(filters[:per_page])
+    offset = (page - 1) * per_page
 
     City
     |> apply_filters(filters)
@@ -147,11 +162,53 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     })
     |> preload([c], :country)
     |> apply_sorting(sort_by, sort_dir)
+    |> limit(^per_page)
+    |> offset(^offset)
     |> Repo.all()
     |> Enum.map(fn %{city: city, venue_count: count} ->
       Map.put(city, :venue_count, count)
     end)
   end
+
+  @doc """
+  Counts total cities matching the given filters.
+
+  Used for pagination to calculate total pages.
+
+  ## Examples
+
+      iex> count_cities(%{search: "war"})
+      15
+  """
+  def count_cities(filters \\ %{}) do
+    City
+    |> apply_filters(filters)
+    |> Repo.aggregate(:count)
+  end
+
+  defp parse_page(nil), do: 1
+  defp parse_page(page) when is_integer(page) and page > 0, do: page
+
+  defp parse_page(page) when is_binary(page) do
+    case Integer.parse(page) do
+      {p, _} when p > 0 -> p
+      _ -> 1
+    end
+  end
+
+  defp parse_page(_), do: 1
+
+  defp parse_per_page(nil), do: @default_per_page
+  defp parse_per_page(per_page) when is_integer(per_page) and per_page > 0, do: per_page
+
+  defp parse_per_page(per_page) when is_binary(per_page) do
+    case Integer.parse(per_page) do
+      {p, _} when p > 0 -> p
+      _ -> @default_per_page
+    end
+  end
+
+  defp parse_per_page(_), do: @default_per_page
 
   # Private functions
 
@@ -311,9 +368,12 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
 
   @doc """
   Finds potential duplicate cities based on:
-  - Similar names (case-insensitive)
+  - Similar names (normalized, case-insensitive, ignoring diacritics)
   - Same country
   - Close proximity (within ~10km)
+
+  Uses database-level detection with PostgreSQL functions for efficiency.
+  This replaces the previous O(n²) in-memory algorithm that caused OOM errors.
 
   Returns list of duplicate groups, where each group contains cities that
   might be duplicates of each other.
@@ -327,132 +387,116 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       ]
   """
   def find_potential_duplicates do
-    # Get all cities with their venue counts
-    cities =
-      from(c in City,
-        left_join: v in assoc(c, :venues),
-        group_by: c.id,
-        select: %{
-          city: c,
-          venue_count: count(v.id)
-        },
-        order_by: [c.country_id, c.name]
-      )
-      |> preload([c], :country)
-      |> Repo.all()
-      |> Enum.map(fn %{city: city, venue_count: count} ->
-        Map.put(city, :venue_count, count)
-      end)
+    # Step 1: Find all duplicate pairs using database-level detection
+    # This uses:
+    # - normalize_city_name() for name comparison (handles diacritics)
+    # - PostGIS ST_DWithin for distance calculation (10km threshold)
+    duplicate_pairs = find_duplicate_pairs_in_database()
 
-    # Group by country and find duplicates within each country
-    cities
-    |> Enum.group_by(& &1.country_id)
-    |> Enum.flat_map(fn {_country_id, country_cities} ->
-      find_duplicates_in_list(country_cities)
-    end)
+    # Step 2: Group pairs into duplicate groups
+    # (If A matches B and B matches C, they should all be in the same group)
+    groups = build_duplicate_groups(duplicate_pairs)
+
+    # Step 3: Load full city data with venue counts for each group
+    groups
+    |> Enum.map(&load_cities_for_group/1)
     |> Enum.reject(&(length(&1) < 2))
   end
 
-  # Private helper to find duplicate cities within a list
-  defp find_duplicates_in_list(cities) do
-    # Compare each city with every other city
-    cities
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {city1, idx1} ->
-      cities
-      |> Enum.drop(idx1 + 1)
-      |> Enum.filter(fn city2 ->
-        cities_are_similar?(city1, city2)
-      end)
-      |> case do
-        [] -> []
-        matches -> [[city1 | matches]]
+  # Find duplicate pairs using efficient database queries
+  defp find_duplicate_pairs_in_database do
+    # Query for cities with matching normalized names (same country)
+    name_duplicates_sql = """
+    SELECT DISTINCT
+      LEAST(c1.id, c2.id) as city1_id,
+      GREATEST(c1.id, c2.id) as city2_id
+    FROM cities c1
+    JOIN cities c2 ON c1.country_id = c2.country_id AND c1.id < c2.id
+    WHERE normalize_city_name(c1.name) = normalize_city_name(c2.name)
+    """
+
+    # Query for cities within 10km of each other (same country)
+    location_duplicates_sql = """
+    SELECT DISTINCT
+      LEAST(c1.id, c2.id) as city1_id,
+      GREATEST(c1.id, c2.id) as city2_id
+    FROM cities c1
+    JOIN cities c2 ON c1.country_id = c2.country_id AND c1.id < c2.id
+    WHERE c1.latitude IS NOT NULL
+      AND c1.longitude IS NOT NULL
+      AND c2.latitude IS NOT NULL
+      AND c2.longitude IS NOT NULL
+      AND ST_DWithin(
+        ST_SetSRID(ST_MakePoint(c1.longitude::float8, c1.latitude::float8), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(c2.longitude::float8, c2.latitude::float8), 4326)::geography,
+        10000
+      )
+    """
+
+    # Execute both queries and combine results
+    {:ok, %{rows: name_rows}} = Repo.query(name_duplicates_sql)
+    {:ok, %{rows: location_rows}} = Repo.query(location_duplicates_sql)
+
+    # Combine and deduplicate pairs
+    (name_rows ++ location_rows)
+    |> Enum.map(fn [id1, id2] -> {id1, id2} end)
+    |> Enum.uniq()
+  end
+
+  # Build groups from pairs using union-find algorithm
+  defp build_duplicate_groups(pairs) do
+    # Build a map of city_id -> group_id using union-find
+    parent = build_union_find(pairs)
+
+    # Group cities by their root parent
+    pairs
+    |> Enum.flat_map(fn {id1, id2} -> [id1, id2] end)
+    |> Enum.uniq()
+    |> Enum.group_by(fn id -> find_root(parent, id) end)
+    |> Map.values()
+  end
+
+  # Union-find: build parent map
+  defp build_union_find(pairs) do
+    Enum.reduce(pairs, %{}, fn {id1, id2}, parent ->
+      root1 = find_root(parent, id1)
+      root2 = find_root(parent, id2)
+
+      if root1 == root2 do
+        parent
+      else
+        # Union: make root1 point to root2
+        Map.put(parent, root1, root2)
       end
     end)
-    |> merge_overlapping_groups()
   end
 
-  # Check if two cities are similar enough to be potential duplicates
-  defp cities_are_similar?(city1, city2) do
-    name_similar?(city1.name, city2.name) or
-      location_similar?(city1, city2)
-  end
-
-  # Check if names are similar (case-insensitive, ignoring accents)
-  defp name_similar?(name1, name2) do
-    normalize_name(name1) == normalize_name(name2)
-  end
-
-  # Normalize name for comparison
-  defp normalize_name(name) do
-    name
-    |> String.downcase()
-    |> String.replace(~r/[àáâãäå]/, "a")
-    |> String.replace(~r/[èéêë]/, "e")
-    |> String.replace(~r/[ìíîï]/, "i")
-    |> String.replace(~r/[òóôõö]/, "o")
-    |> String.replace(~r/[ùúûü]/, "u")
-    |> String.replace(~r/[ýÿ]/, "y")
-    |> String.replace(~r/[ñ]/, "n")
-    |> String.replace(~r/[ç]/, "c")
-    |> String.replace(~r/[ł]/, "l")
-    |> String.replace(~r/[ß]/, "ss")
-  end
-
-  # Check if locations are similar (within ~10km)
-  defp location_similar?(city1, city2) do
-    case {city1.latitude, city1.longitude, city2.latitude, city2.longitude} do
-      {lat1, lon1, lat2, lon2}
-      when not is_nil(lat1) and not is_nil(lon1) and not is_nil(lat2) and not is_nil(lon2) ->
-        lat1 = Decimal.to_float(lat1)
-        lon1 = Decimal.to_float(lon1)
-        lat2 = Decimal.to_float(lat2)
-        lon2 = Decimal.to_float(lon2)
-
-        distance_km = haversine_distance(lat1, lon1, lat2, lon2)
-        distance_km < 10.0
-
-      _ ->
-        false
+  # Union-find: find root with path compression
+  defp find_root(parent, id) do
+    case Map.get(parent, id) do
+      nil -> id
+      ^id -> id
+      parent_id -> find_root(parent, parent_id)
     end
   end
 
-  # Calculate distance between two coordinates using Haversine formula
-  defp haversine_distance(lat1, lon1, lat2, lon2) do
-    earth_radius_km = 6371.0
-
-    d_lat = :math.pi() * (lat2 - lat1) / 180.0
-    d_lon = :math.pi() * (lon2 - lon1) / 180.0
-
-    a =
-      :math.sin(d_lat / 2) * :math.sin(d_lat / 2) +
-        :math.cos(:math.pi() * lat1 / 180.0) * :math.cos(:math.pi() * lat2 / 180.0) *
-          :math.sin(d_lon / 2) * :math.sin(d_lon / 2)
-
-    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
-    earth_radius_km * c
-  end
-
-  # Merge overlapping duplicate groups
-  defp merge_overlapping_groups(groups) do
-    groups
-    |> Enum.reduce([], fn group, acc ->
-      # Find if this group overlaps with any existing group
-      case Enum.find_index(acc, fn existing_group ->
-             Enum.any?(group, fn city -> city in existing_group end)
-           end) do
-        nil ->
-          # No overlap, add as new group
-          [group | acc]
-
-        idx ->
-          # Overlap found, merge groups
-          existing_group = Enum.at(acc, idx)
-          merged_group = Enum.uniq(existing_group ++ group)
-          List.replace_at(acc, idx, merged_group)
-      end
+  # Load full city data with venue counts for a group of IDs
+  defp load_cities_for_group(city_ids) do
+    from(c in City,
+      left_join: v in assoc(c, :venues),
+      where: c.id in ^city_ids,
+      group_by: c.id,
+      select: %{
+        city: c,
+        venue_count: count(v.id)
+      },
+      preload: [:country]
+    )
+    |> Repo.all()
+    |> Enum.map(fn %{city: city, venue_count: count} ->
+      Map.put(city, :venue_count, count)
     end)
-    |> Enum.map(&Enum.sort_by(&1, fn city -> {-city.venue_count, city.id} end))
+    |> Enum.sort_by(fn city -> {-city.venue_count, city.id} end)
   end
 
   # ============================================================================
