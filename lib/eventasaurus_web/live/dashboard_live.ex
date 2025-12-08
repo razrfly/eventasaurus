@@ -54,15 +54,7 @@ defmodule EventasaurusWeb.DashboardLive do
             archived_task =
               Task.async(fn ->
                 Events.list_deleted_events_by_user(user)
-                |> Enum.map(fn event ->
-                  # Transform to match unified events structure
-                  event
-                  |> Map.put(:user_role, "organizer")
-                  |> Map.put(:user_status, "confirmed")
-                  |> Map.put(:can_manage, true)
-                  |> Map.put(:participant_count, 0)
-                  |> Map.put(:participants, [])
-                end)
+                |> transform_deleted_events()
               end)
 
             socket
@@ -152,14 +144,7 @@ defmodule EventasaurusWeb.DashboardLive do
         archived_task =
           Task.async(fn ->
             Events.list_deleted_events_by_user(user)
-            |> Enum.map(fn event ->
-              event
-              |> Map.put(:user_role, "organizer")
-              |> Map.put(:user_status, "confirmed")
-              |> Map.put(:can_manage, true)
-              |> Map.put(:participant_count, 0)
-              |> Map.put(:participants, [])
-            end)
+            |> transform_deleted_events()
           end)
 
         socket
@@ -355,17 +340,8 @@ defmodule EventasaurusWeb.DashboardLive do
 
     events =
       if time_filter == :archived do
-        # For archived events, use the dedicated function
         Events.list_deleted_events_by_user(user)
-        |> Enum.map(fn event ->
-          # Transform to match unified events structure
-          event
-          |> Map.put(:user_role, "organizer")
-          |> Map.put(:user_status, "confirmed")
-          |> Map.put(:can_manage, true)
-          |> Map.put(:participant_count, 0)
-          |> Map.put(:participants, [])
-        end)
+        |> transform_deleted_events()
       else
         # For active events, use the unified function
         Events.list_unified_events_for_user_optimized(user,
@@ -436,5 +412,17 @@ defmodule EventasaurusWeb.DashboardLive do
       :all ->
         events
     end
+  end
+
+  # Transform deleted events to match unified events structure
+  defp transform_deleted_events(events) do
+    Enum.map(events, fn event ->
+      event
+      |> Map.put(:user_role, "organizer")
+      |> Map.put(:user_status, "confirmed")
+      |> Map.put(:can_manage, true)
+      |> Map.put(:participant_count, 0)
+      |> Map.put(:participants, [])
+    end)
   end
 end
