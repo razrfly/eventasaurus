@@ -6,77 +6,87 @@ defmodule EventasaurusWeb.DashboardLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    # Get user from socket assigns (set by auth hook)
-    user = socket.assigns[:user]
+    # User should be set by the :require_authenticated_user auth hook
+    # If somehow nil, the hook should have already redirected, but we handle it gracefully
+    case socket.assigns[:user] do
+      nil ->
+        # This shouldn't happen - the auth hook should have redirected
+        # But if it does, don't create an infinite loop - just show an error page
+        {:ok,
+         socket
+         |> assign(:loading, false)
+         |> assign(:time_filter, :upcoming)
+         |> assign(:ownership_filter, :all)
+         |> assign(:events, [])
+         |> assign(:events_cache, %{})
+         |> assign(:filter_counts, %{})
+         |> assign(:selected_order, nil)
+         |> assign(:loading_tasks, %{})
+         |> assign(:auth_error, true)}
 
-    if user do
-      # Subscribe to order updates for real-time notifications
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "orders:#{user.id}")
-      end
-
-      # Start async tasks to preload all tabs
-      socket_with_tasks =
+      user ->
+        # Subscribe to order updates for real-time notifications
         if connected?(socket) do
-          upcoming_task =
-            Task.async(fn ->
-              Events.list_unified_events_for_user_optimized(user,
-                time_filter: :upcoming,
-                ownership_filter: :all,
-                limit: 50
-              )
-            end)
-
-          past_task =
-            Task.async(fn ->
-              Events.list_unified_events_for_user_optimized(user,
-                time_filter: :past,
-                ownership_filter: :all,
-                limit: 50
-              )
-            end)
-
-          archived_task =
-            Task.async(fn ->
-              Events.list_deleted_events_by_user(user)
-              |> Enum.map(fn event ->
-                # Transform to match unified events structure
-                event
-                |> Map.put(:user_role, "organizer")
-                |> Map.put(:user_status, "confirmed")
-                |> Map.put(:can_manage, true)
-                |> Map.put(:participant_count, 0)
-                |> Map.put(:participants, [])
-              end)
-            end)
-
-          socket
-          |> assign(:loading_tasks, %{
-            upcoming: upcoming_task,
-            past: past_task,
-            archived: archived_task
-          })
-        else
-          socket
-          |> assign(:loading_tasks, %{})
+          Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "orders:#{user.id}")
         end
 
-      {:ok,
-       socket_with_tasks
-       |> assign(:user, user)
-       |> assign(:loading, true)
-       |> assign(:time_filter, :upcoming)
-       |> assign(:ownership_filter, :all)
-       |> assign(:events, [])
-       |> assign(:events_cache, %{})
-       |> assign(:filter_counts, %{})
-       |> assign(:selected_order, nil)
-       |> load_unified_events()}
-    else
-      {:ok,
-       socket
-       |> put_flash(:error, "You must be logged in to view the dashboard.")
-       |> redirect(to: "/auth/login")}
+        # Start async tasks to preload all tabs
+        socket_with_tasks =
+          if connected?(socket) do
+            upcoming_task =
+              Task.async(fn ->
+                Events.list_unified_events_for_user_optimized(user,
+                  time_filter: :upcoming,
+                  ownership_filter: :all,
+                  limit: 50
+                )
+              end)
+
+            past_task =
+              Task.async(fn ->
+                Events.list_unified_events_for_user_optimized(user,
+                  time_filter: :past,
+                  ownership_filter: :all,
+                  limit: 50
+                )
+              end)
+
+            archived_task =
+              Task.async(fn ->
+                Events.list_deleted_events_by_user(user)
+                |> Enum.map(fn event ->
+                  # Transform to match unified events structure
+                  event
+                  |> Map.put(:user_role, "organizer")
+                  |> Map.put(:user_status, "confirmed")
+                  |> Map.put(:can_manage, true)
+                  |> Map.put(:participant_count, 0)
+                  |> Map.put(:participants, [])
+                end)
+              end)
+
+            socket
+            |> assign(:loading_tasks, %{
+              upcoming: upcoming_task,
+              past: past_task,
+              archived: archived_task
+            })
+          else
+            socket
+            |> assign(:loading_tasks, %{})
+          end
+
+        {:ok,
+         socket_with_tasks
+         |> assign(:loading, true)
+         |> assign(:time_filter, :upcoming)
+         |> assign(:ownership_filter, :all)
+         |> assign(:events, [])
+         |> assign(:events_cache, %{})
+         |> assign(:filter_counts, %{})
+         |> assign(:selected_order, nil)
+         |> assign(:auth_error, false)
+         |> load_unified_events()}
     end
   end
 

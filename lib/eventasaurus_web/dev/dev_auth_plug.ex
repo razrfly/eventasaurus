@@ -28,23 +28,42 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
     def init(opts), do: opts
 
     def call(conn, _opts) do
+      require Logger
       # Only process if we have a dev mode login flag
-      if get_session(conn, :dev_mode_login) == true do
+      dev_mode_login = get_session(conn, :dev_mode_login)
+      Logger.debug("🔧 DEV_AUTH_PLUG: dev_mode_login = #{inspect(dev_mode_login)}")
+
+      if dev_mode_login == true do
         # First, check if we have a cached user struct in the session
         # This avoids hitting the DB on every request when USE_PROD_DB=true
         case get_session(conn, :dev_cached_user) do
-          %User{} = cached_user ->
-            # Use cached user directly - no DB call needed!
-            conn
-            |> assign(:auth_user, cached_user)
-            |> assign(:dev_mode_auth, true)
+          %User{id: cached_id} = cached_user ->
+            # Verify cached user still exists in database (handles DB switch scenarios)
+            case Repo.replica().get(User, cached_id) do
+              nil ->
+                # Cached user no longer exists - clear stale session
+                Logger.warning("🔧 DEV_AUTH_PLUG: Cached user #{cached_id} not found in DB - clearing session")
+                conn
+                |> delete_session(:dev_mode_login)
+                |> delete_session(:current_user_id)
+                |> delete_session(:dev_cached_user)
+
+              _user ->
+                # Use cached user - it's valid
+                Logger.debug("🔧 DEV_AUTH_PLUG: Using cached user #{cached_user.email}")
+                conn
+                |> assign(:auth_user, cached_user)
+                |> assign(:dev_mode_auth, true)
+            end
 
           _ ->
             # No cached user, need to load from DB (first request only)
+            Logger.debug("🔧 DEV_AUTH_PLUG: Loading user from DB")
             load_and_cache_user(conn)
         end
       else
         # Not a dev login, pass through to normal auth
+        Logger.debug("🔧 DEV_AUTH_PLUG: No dev login, passing through")
         conn
       end
     end
