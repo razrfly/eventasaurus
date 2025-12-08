@@ -98,3 +98,6 @@ scripts/clerk-migration/node_modules/
 # Note: priv/repo/structure.sql is tracked for deployment
 /*.sql
 /scripts/**/*.sql
+
+# Database backups (contains sensitive data, stored locally only)
+/backups/
