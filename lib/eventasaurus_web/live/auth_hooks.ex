@@ -74,17 +74,16 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
         {:halt, socket}
 
-      _auth_user ->
-        # Also assign the processed user for convenience
-        socket =
-          assign_new(socket, :user, fn ->
-            case ensure_user_struct(socket.assigns.auth_user) do
-              {:ok, user} -> user
-              {:error, _} -> nil
-            end
-          end)
+      auth_user ->
+        # Process auth_user into a proper User struct for templates and business logic
+        # Use assign (not assign_new) to ensure the value is always set correctly
+        user =
+          case ensure_user_struct(auth_user) do
+            {:ok, user} -> user
+            {:error, _} -> nil
+          end
 
-        {:cont, socket}
+        {:cont, assign(socket, :user, user)}
     end
   end
 
@@ -116,11 +115,18 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       if dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] do
         # Dev mode: directly load the user from database
         user_id = session["current_user_id"]
+        Logger.debug("DEV MODE PATH - loading user #{inspect(user_id)}")
 
         case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
-          nil -> nil
-          # Return the User struct directly for dev mode
-          user -> user
+          nil ->
+            # User ID in session doesn't exist in DB - stale session data
+            # Return nil to trigger re-login (session will be cleared on redirect)
+            Logger.warning("DEV MODE: User #{user_id} not found in database - stale session")
+            nil
+
+          user ->
+            Logger.debug("DEV MODE: Loaded user #{user.email}")
+            user
         end
       else
         # Get user from Clerk session
