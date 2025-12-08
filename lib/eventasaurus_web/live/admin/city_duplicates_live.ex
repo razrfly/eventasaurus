@@ -207,7 +207,10 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
     if Map.has_key?(sources_cache, city_id) do
       {:noreply, socket}
     else
-      sources = CityManager.get_city_sources(city_id)
+      sources =
+        CityManager.get_city_sources(city_id)
+        |> Enum.map(fn {name, count} -> %{name: name, event_count: count} end)
+
       updated_cache = Map.put(sources_cache, city_id, sources)
       {:noreply, assign(socket, :sources_cache, updated_cache)}
     end

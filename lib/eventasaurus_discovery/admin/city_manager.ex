@@ -685,8 +685,8 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       n1 == n2 -> 1.0
       # One is contained in the other (e.g., "St. Helens" in "St. Helens TAS7216")
       String.contains?(n1, n2) or String.contains?(n2, n1) -> 0.9
-      # Calculate Levenshtein-based similarity
-      true -> levenshtein_similarity(n1, n2)
+      # Calculate Jaro-based similarity
+      true -> jaro_similarity(n1, n2)
     end
   end
 
@@ -698,13 +698,13 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     |> String.trim()
   end
 
-  defp levenshtein_similarity(s1, s2) do
+  defp jaro_similarity(s1, s2) do
     max_len = max(String.length(s1), String.length(s2))
+
     if max_len == 0 do
       1.0
     else
-      distance = String.jaro_distance(s1, s2)
-      distance
+      String.jaro_distance(s1, s2)
     end
   end
 
