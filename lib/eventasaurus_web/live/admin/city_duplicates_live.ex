@@ -166,25 +166,6 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
     {:noreply, socket}
   end
 
-  defp maybe_update_country_filter(socket, %{"country_id" => country_id}) do
-    country_id = if country_id == "", do: nil, else: String.to_integer(country_id)
-    assign(socket, :country_filter, country_id)
-  end
-
-  defp maybe_update_country_filter(socket, _params), do: socket
-
-  defp maybe_update_sort(socket, %{"sort" => sort_by}) do
-    assign(socket, :sort_by, sort_by)
-  end
-
-  defp maybe_update_sort(socket, _params), do: socket
-
-  defp maybe_update_show_suburbs(socket, params) do
-    # Checkbox sends "true" when checked, is absent when unchecked
-    show_suburbs = Map.get(params, "show_suburbs") == "true"
-    assign(socket, :show_suburbs, show_suburbs)
-  end
-
   @impl true
   def handle_event("dismiss_group", %{"fingerprint" => fingerprint}, socket) do
     dismissed_groups = MapSet.put(socket.assigns.dismissed_groups, fingerprint)
@@ -357,6 +338,25 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
   end
 
   # Private functions
+
+  defp maybe_update_country_filter(socket, %{"country_id" => country_id}) do
+    country_id = if country_id == "", do: nil, else: String.to_integer(country_id)
+    assign(socket, :country_filter, country_id)
+  end
+
+  defp maybe_update_country_filter(socket, _params), do: socket
+
+  defp maybe_update_sort(socket, %{"sort" => sort_by}) do
+    assign(socket, :sort_by, sort_by)
+  end
+
+  defp maybe_update_sort(socket, _params), do: socket
+
+  defp maybe_update_show_suburbs(socket, params) do
+    # Checkbox sends "true" when checked, is absent when unchecked
+    show_suburbs = Map.get(params, "show_suburbs") == "true"
+    assign(socket, :show_suburbs, show_suburbs)
+  end
 
   defp reload_duplicates(socket) do
     all_groups = CityManager.find_potential_duplicates()
