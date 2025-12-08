@@ -275,20 +275,38 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   defp build_source_options(_source, _args), do: %{}
 
   # Extract city_name from city's discovery_config for cinema-city source
+  # Handles both struct-based and map-based configs with atom or string keys
   defp get_cinema_city_name_from_config(city) do
     config = city.discovery_config || %{}
-    sources = config["sources"] || []
+
+    sources =
+      cond do
+        is_map(config) and Map.has_key?(config, "sources") ->
+          config["sources"] || []
+
+        is_map(config) and Map.has_key?(config, :sources) ->
+          config[:sources] || []
+
+        true ->
+          []
+      end
 
     cinema_city_source =
       Enum.find(sources, fn source ->
-        source["name"] == "cinema-city"
+        is_map(source) && (source["name"] == "cinema-city" || source[:name] == "cinema-city")
       end)
 
-    if cinema_city_source do
-      settings = cinema_city_source["settings"] || %{}
-      settings["city_name"]
-    else
-      nil
+    case cinema_city_source do
+      %{} = source ->
+        settings = source["settings"] || source[:settings] || %{}
+
+        case settings["city_name"] || settings[:city_name] do
+          "" -> nil
+          city_name -> city_name
+        end
+
+      _ ->
+        nil
     end
   end
 
