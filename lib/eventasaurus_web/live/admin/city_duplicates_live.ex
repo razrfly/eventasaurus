@@ -8,6 +8,11 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
   - Add/remove alternate names
   - Pagination for large result sets
   - Collapsible groups for better UX
+  - Search and filtering
+  - Confidence scoring for prioritization
+  - Data quality warnings
+  - Scraper source tracking
+  - Dismiss/ignore functionality
   """
   use EventasaurusWeb, :live_view
 
@@ -18,21 +23,37 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    # Load countries for filter dropdown
+    countries = CityManager.list_countries()
+
     socket =
       socket
       |> assign(:page_title, "City Duplicates & Alternate Names")
       |> assign(:duplicate_groups, [])
+      |> assign(:all_duplicate_groups, [])
       |> assign(:selected_city, nil)
       |> assign(:new_alternate_name, "")
       |> assign(:loading, true)
       |> assign(:active_tab, "duplicates")
       |> assign(:detection_time_ms, nil)
+      # Filtering
+      |> assign(:search, "")
+      |> assign(:country_filter, nil)
+      |> assign(:sort_by, "confidence")
+      |> assign(:countries, countries)
+      |> assign(:show_suburbs, true)
       # Pagination
       |> assign(:page, 1)
       |> assign(:per_page, @per_page)
       |> assign(:total_pages, 1)
       # Expanded groups tracking (set of group indices)
       |> assign(:expanded_groups, MapSet.new())
+      # Dismissed groups (stored as MapSet of group "fingerprints")
+      |> assign(:dismissed_groups, MapSet.new())
+      # Confidence data cache (group fingerprint -> confidence data)
+      |> assign(:confidence_cache, %{})
+      # Sources cache (city_id -> sources list)
+      |> assign(:sources_cache, %{})
 
     # Load duplicates asynchronously to avoid blocking mount
     send(self(), :load_duplicates)
@@ -42,34 +63,154 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
 
   @impl true
   def handle_info(:load_duplicates, socket) do
-    {time_us, duplicate_groups} = :timer.tc(fn -> CityManager.find_potential_duplicates() end)
+    {time_us, all_groups} = :timer.tc(fn -> CityManager.find_potential_duplicates() end)
     time_ms = div(time_us, 1000)
 
-    total_pages = max(1, ceil(length(duplicate_groups) / socket.assigns.per_page))
+    # Calculate confidence for all groups and cache it
+    confidence_cache =
+      all_groups
+      |> Enum.with_index()
+      |> Enum.map(fn {group, _idx} ->
+        fingerprint = group_fingerprint(group)
+        confidence = CityManager.calculate_group_confidence(group)
+        {fingerprint, confidence}
+      end)
+      |> Map.new()
 
     socket =
       socket
-      |> assign(:duplicate_groups, duplicate_groups)
+      |> assign(:all_duplicate_groups, all_groups)
+      |> assign(:confidence_cache, confidence_cache)
       |> assign(:loading, false)
       |> assign(:detection_time_ms, time_ms)
-      |> assign(:total_pages, total_pages)
-      |> assign(:page, 1)
-      |> assign(:expanded_groups, MapSet.new())
+      |> apply_filters_and_sort()
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("detect_duplicates", _params, socket) do
-    # Start async detection
     send(self(), :load_duplicates)
 
     socket =
       socket
       |> assign(:loading, true)
       |> assign(:detection_time_ms, nil)
+      |> assign(:dismissed_groups, MapSet.new())
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("search", %{"value" => search}, socket) do
+    socket =
+      socket
+      |> assign(:search, search)
+      |> assign(:page, 1)
+      |> assign(:expanded_groups, MapSet.new())
+      |> apply_filters_and_sort()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_country", %{"country_id" => country_id}, socket) do
+    country_id = if country_id == "", do: nil, else: String.to_integer(country_id)
+
+    socket =
+      socket
+      |> assign(:country_filter, country_id)
+      |> assign(:page, 1)
+      |> assign(:expanded_groups, MapSet.new())
+      |> apply_filters_and_sort()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("sort_by", %{"sort" => sort_by}, socket) do
+    socket =
+      socket
+      |> assign(:sort_by, sort_by)
+      |> assign(:page, 1)
+      |> assign(:expanded_groups, MapSet.new())
+      |> apply_filters_and_sort()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_suburbs", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_suburbs, not socket.assigns.show_suburbs)
+      |> assign(:page, 1)
+      |> assign(:expanded_groups, MapSet.new())
+      |> apply_filters_and_sort()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_change", params, socket) do
+    # Handle all filter changes from the form
+    socket =
+      socket
+      |> maybe_update_country_filter(params)
+      |> maybe_update_sort(params)
+      |> maybe_update_show_suburbs(params)
+      |> assign(:page, 1)
+      |> assign(:expanded_groups, MapSet.new())
+      |> apply_filters_and_sort()
+
+    {:noreply, socket}
+  end
+
+  defp maybe_update_country_filter(socket, %{"country_id" => country_id}) do
+    country_id = if country_id == "", do: nil, else: String.to_integer(country_id)
+    assign(socket, :country_filter, country_id)
+  end
+
+  defp maybe_update_country_filter(socket, _params), do: socket
+
+  defp maybe_update_sort(socket, %{"sort" => sort_by}) do
+    assign(socket, :sort_by, sort_by)
+  end
+
+  defp maybe_update_sort(socket, _params), do: socket
+
+  defp maybe_update_show_suburbs(socket, params) do
+    # Checkbox sends "true" when checked, is absent when unchecked
+    show_suburbs = Map.get(params, "show_suburbs") == "true"
+    assign(socket, :show_suburbs, show_suburbs)
+  end
+
+  @impl true
+  def handle_event("dismiss_group", %{"fingerprint" => fingerprint}, socket) do
+    dismissed_groups = MapSet.put(socket.assigns.dismissed_groups, fingerprint)
+
+    socket =
+      socket
+      |> assign(:dismissed_groups, dismissed_groups)
+      |> apply_filters_and_sort()
+
+    {:noreply, put_flash(socket, :info, "Group dismissed. It will reappear on next detection.")}
+  end
+
+  @impl true
+  def handle_event("load_sources", %{"city_id" => city_id_str}, socket) do
+    city_id = String.to_integer(city_id_str)
+
+    # Check if already cached
+    sources_cache = socket.assigns.sources_cache
+
+    if Map.has_key?(sources_cache, city_id) do
+      {:noreply, socket}
+    else
+      sources = CityManager.get_city_sources(city_id)
+      updated_cache = Map.put(sources_cache, city_id, sources)
+      {:noreply, assign(socket, :sources_cache, updated_cache)}
+    end
   end
 
   @impl true
@@ -77,13 +218,11 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
     target_id = String.to_integer(params["target_id"])
     group_index = String.to_integer(params["group_index"])
     all_city_ids = String.split(params["source_ids"], ",") |> Enum.map(&String.to_integer/1)
-    # Filter out the target city from the source list
     source_ids = Enum.reject(all_city_ids, &(&1 == target_id))
     add_as_alternates = params["add_as_alternates"] == "true"
 
     case CityManager.merge_cities(target_id, source_ids, add_as_alternates) do
       {:ok, result} ->
-        # Remove merged group from memory instead of full reload
         socket = remove_group_from_list(socket, group_index)
 
         socket =
@@ -138,7 +277,7 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
           |> assign(:selected_city, updated_city |> Repo.preload(:country))
           |> assign(:new_alternate_name, "")
           |> put_flash(:info, "Alternate name \"#{name}\" added successfully")
-          |> load_duplicates()
+          |> reload_duplicates()
 
         {:noreply, socket}
 
@@ -163,7 +302,7 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
           socket
           |> assign(:selected_city, updated_city |> Repo.preload(:country))
           |> put_flash(:info, "Alternate name \"#{name}\" removed successfully")
-          |> load_duplicates()
+          |> reload_duplicates()
 
         {:noreply, socket}
 
@@ -190,7 +329,7 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
   @impl true
   def handle_event("go_to_page", %{"page" => page}, socket) do
     page = String.to_integer(page)
-    # Reset expanded groups when changing pages
+
     socket =
       socket
       |> assign(:page, page)
@@ -216,24 +355,126 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
 
   # Private functions
 
-  defp load_duplicates(socket) do
-    duplicate_groups = CityManager.find_potential_duplicates()
-    total_pages = max(1, ceil(length(duplicate_groups) / socket.assigns.per_page))
+  defp reload_duplicates(socket) do
+    all_groups = CityManager.find_potential_duplicates()
+
+    confidence_cache =
+      all_groups
+      |> Enum.map(fn group ->
+        fingerprint = group_fingerprint(group)
+        confidence = CityManager.calculate_group_confidence(group)
+        {fingerprint, confidence}
+      end)
+      |> Map.new()
 
     socket
-    |> assign(:duplicate_groups, duplicate_groups)
+    |> assign(:all_duplicate_groups, all_groups)
+    |> assign(:confidence_cache, confidence_cache)
+    |> apply_filters_and_sort()
+  end
+
+  defp apply_filters_and_sort(socket) do
+    all_groups = socket.assigns.all_duplicate_groups
+    search = socket.assigns.search |> String.downcase() |> String.trim()
+    country_filter = socket.assigns.country_filter
+    show_suburbs = socket.assigns.show_suburbs
+    sort_by = socket.assigns.sort_by
+    dismissed_groups = socket.assigns.dismissed_groups
+    confidence_cache = socket.assigns.confidence_cache
+
+    filtered_groups =
+      all_groups
+      |> Enum.reject(fn group ->
+        # Filter out dismissed groups
+        MapSet.member?(dismissed_groups, group_fingerprint(group))
+      end)
+      |> Enum.filter(fn group ->
+        # Search filter
+        matches_search =
+          if search == "" do
+            true
+          else
+            Enum.any?(group, fn city ->
+              String.contains?(String.downcase(city.name), search)
+            end)
+          end
+
+        # Country filter
+        matches_country =
+          if is_nil(country_filter) do
+            true
+          else
+            Enum.any?(group, fn city -> city.country_id == country_filter end)
+          end
+
+        # Suburb filter
+        matches_suburb_filter =
+          if show_suburbs do
+            true
+          else
+            confidence = Map.get(confidence_cache, group_fingerprint(group), %{})
+            not Map.get(confidence, :is_likely_suburb, false)
+          end
+
+        matches_search and matches_country and matches_suburb_filter
+      end)
+
+    # Sort groups
+    sorted_groups =
+      case sort_by do
+        "confidence" ->
+          Enum.sort_by(filtered_groups, fn group ->
+            confidence = Map.get(confidence_cache, group_fingerprint(group), %{})
+            -Map.get(confidence, :score, 0)
+          end)
+
+        "venues" ->
+          Enum.sort_by(filtered_groups, fn group ->
+            -total_venues_in_group(group)
+          end)
+
+        "name" ->
+          Enum.sort_by(filtered_groups, fn group ->
+            anchor = get_anchor_city(group)
+            String.downcase(anchor.name)
+          end)
+
+        _ ->
+          filtered_groups
+      end
+
+    total_pages = max(1, ceil(length(sorted_groups) / socket.assigns.per_page))
+    current_page = min(socket.assigns.page, total_pages)
+
+    socket
+    |> assign(:duplicate_groups, sorted_groups)
     |> assign(:total_pages, total_pages)
+    |> assign(:page, current_page)
   end
 
   defp remove_group_from_list(socket, group_index) do
-    duplicate_groups = List.delete_at(socket.assigns.duplicate_groups, group_index)
-    total_pages = max(1, ceil(length(duplicate_groups) / socket.assigns.per_page))
+    # Remove from both filtered and all groups
+    filtered_groups = socket.assigns.duplicate_groups
+    removed_group = Enum.at(filtered_groups, group_index)
 
-    # Adjust current page if we're now past the last page
+    # Remove from filtered list
+    new_filtered = List.delete_at(filtered_groups, group_index)
+
+    # Also remove from all groups list
+    new_all =
+      if removed_group do
+        fingerprint = group_fingerprint(removed_group)
+        Enum.reject(socket.assigns.all_duplicate_groups, fn g ->
+          group_fingerprint(g) == fingerprint
+        end)
+      else
+        socket.assigns.all_duplicate_groups
+      end
+
+    total_pages = max(1, ceil(length(new_filtered) / socket.assigns.per_page))
     current_page = socket.assigns.page
     new_page = min(current_page, total_pages)
 
-    # Remove this group from expanded set and adjust indices
     expanded_groups =
       socket.assigns.expanded_groups
       |> MapSet.delete(group_index)
@@ -242,10 +483,19 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
       |> MapSet.new()
 
     socket
-    |> assign(:duplicate_groups, duplicate_groups)
+    |> assign(:duplicate_groups, new_filtered)
+    |> assign(:all_duplicate_groups, new_all)
     |> assign(:total_pages, total_pages)
     |> assign(:page, new_page)
     |> assign(:expanded_groups, expanded_groups)
+  end
+
+  # Generate a unique fingerprint for a group based on city IDs
+  defp group_fingerprint(group) do
+    group
+    |> Enum.map(& &1.id)
+    |> Enum.sort()
+    |> Enum.join("-")
   end
 
   @doc """
@@ -296,4 +546,54 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
     end)
     |> elem(0)
   end
+
+  @doc """
+  Gets the confidence data for a group from the cache.
+  """
+  def get_group_confidence(confidence_cache, group) do
+    Map.get(confidence_cache, group_fingerprint(group), %{score: 0, reasons: [], is_likely_suburb: false, data_quality_issues: []})
+  end
+
+  @doc """
+  Formats a confidence score as a percentage string.
+  """
+  def format_confidence(score) when is_number(score) do
+    "#{round(score * 100)}%"
+  end
+
+  def format_confidence(_), do: "N/A"
+
+  @doc """
+  Returns a CSS class for confidence badge based on score.
+  """
+  def confidence_badge_class(score) when is_number(score) do
+    cond do
+      score >= 0.7 -> "bg-red-100 text-red-800"
+      score >= 0.4 -> "bg-yellow-100 text-yellow-800"
+      true -> "bg-green-100 text-green-800"
+    end
+  end
+
+  def confidence_badge_class(_), do: "bg-gray-100 text-gray-800"
+
+  @doc """
+  Returns a human-readable label for confidence level.
+  """
+  def confidence_label(score) when is_number(score) do
+    cond do
+      score >= 0.7 -> "Likely Duplicate"
+      score >= 0.4 -> "Needs Review"
+      true -> "Likely Suburbs"
+    end
+  end
+
+  def confidence_label(_), do: "Unknown"
+
+  @doc """
+  Formats data quality issues as human-readable strings.
+  """
+  def format_data_quality_issue("postcode_in_name"), do: "Postcode in name"
+  def format_data_quality_issue("state_abbreviation"), do: "State abbreviation"
+  def format_data_quality_issue("short_with_numbers"), do: "Short name with numbers"
+  def format_data_quality_issue(issue), do: issue
 end

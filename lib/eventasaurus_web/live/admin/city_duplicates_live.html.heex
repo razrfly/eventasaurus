@@ -119,283 +119,443 @@
             </p>
           </div>
         <% else %>
-        <%= if Enum.empty?(@duplicate_groups) do %>
-          <div class="text-center py-12">
-            <svg
-              class="mx-auto h-12 w-12 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No duplicates found</h3>
-            <p class="mt-1 text-sm text-gray-500">
-              Great! All cities appear to be unique. Click "Detect Duplicates" to scan again.
-            </p>
-          </div>
-        <% else %>
-          <!-- Pagination Info -->
-          <div class="mb-4 flex items-center justify-between">
-            <p class="text-sm text-gray-700">
-              Showing <span class="font-medium"><%= (@page - 1) * @per_page + 1 %></span>
-              to <span class="font-medium"><%= min(@page * @per_page, length(@duplicate_groups)) %></span>
-              of <span class="font-medium"><%= length(@duplicate_groups) %></span> groups
-            </p>
-            <p class="text-xs text-gray-500">
-              Click on a group to expand and see merge options
-            </p>
-          </div>
-
-          <div class="space-y-3">
-            <% paginated = EventasaurusWeb.Admin.CityDuplicatesLive.paginated_groups(@duplicate_groups, @page, @per_page) %>
-            <%= for {group, local_idx} <- Enum.with_index(paginated) do %>
-              <%
-                # Calculate global index for this group
-                global_idx = (@page - 1) * @per_page + local_idx
-                anchor = EventasaurusWeb.Admin.CityDuplicatesLive.get_anchor_city(group)
-                total_venues = EventasaurusWeb.Admin.CityDuplicatesLive.total_venues_in_group(group)
-                is_expanded = MapSet.member?(@expanded_groups, global_idx)
-              %>
-              <div class="border border-gray-200 rounded-lg overflow-hidden">
-                <!-- Collapsible Header -->
-                <button
-                  phx-click="toggle_group"
-                  phx-value-index={global_idx}
-                  class="w-full bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
-                >
-                  <div class="flex items-center space-x-3">
-                    <!-- Expand/Collapse Icon -->
-                    <svg
-                      class={"h-5 w-5 text-gray-500 transition-transform #{if is_expanded, do: "rotate-90", else: ""}"}
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fill-rule="evenodd"
-                        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                        clip-rule="evenodd"
-                      />
+          <!-- Filter Controls -->
+          <form class="mb-6 space-y-4" phx-change="filter_change">
+            <!-- Search and Filters Row -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <!-- Search Box -->
+              <div class="md:col-span-2">
+                <label for="search" class="sr-only">Search cities</label>
+                <div class="relative">
+                  <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
                     </svg>
-                    <div class="text-left">
-                      <h3 class="text-sm font-medium text-gray-900">
-                        Near <%= anchor.name %>
-                        <span class="ml-1 text-xs font-normal text-gray-500">
-                          (<%= anchor.country.name %>)
-                        </span>
-                      </h3>
-                      <p class="text-xs text-gray-500">
-                        <%= length(group) %> cities · <%= total_venues %> total venues
-                      </p>
+                  </div>
+                  <input
+                    type="text"
+                    name="search"
+                    id="search"
+                    class="block w-full rounded-md border-gray-300 pl-10 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Search by city name..."
+                    value={@search}
+                    phx-keyup="search"
+                    phx-debounce="300"
+                  />
+                </div>
+              </div>
+
+              <!-- Country Filter -->
+              <div>
+                <label for="country_filter" class="sr-only">Filter by country</label>
+                <select
+                  id="country_filter"
+                  name="country_id"
+                  class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="">All Countries</option>
+                  <%= for country <- @countries do %>
+                    <option value={country.id} selected={@country_filter == country.id}>
+                      <%= country.name %>
+                    </option>
+                  <% end %>
+                </select>
+              </div>
+
+              <!-- Sort By -->
+              <div>
+                <label for="sort_by" class="sr-only">Sort by</label>
+                <select
+                  id="sort_by"
+                  name="sort"
+                  class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="confidence" selected={@sort_by == "confidence"}>Sort by Confidence</option>
+                  <option value="venues" selected={@sort_by == "venues"}>Sort by Venues</option>
+                  <option value="name" selected={@sort_by == "name"}>Sort by Name</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Toggle Suburbs -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center">
+                <input
+                  type="checkbox"
+                  id="show_suburbs"
+                  name="show_suburbs"
+                  checked={@show_suburbs}
+                  value="true"
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label for="show_suburbs" class="ml-2 block text-sm text-gray-700">
+                  Show likely suburbs (low confidence groups)
+                </label>
+              </div>
+              <div class="text-sm text-gray-500">
+                <%= length(@all_duplicate_groups) %> total groups · <%= length(@duplicate_groups) %> after filters
+              </div>
+            </div>
+          </form>
+
+          <%= if Enum.empty?(@duplicate_groups) do %>
+            <div class="text-center py-12">
+              <svg
+                class="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-gray-900">No duplicates found</h3>
+              <p class="mt-1 text-sm text-gray-500">
+                <%= if @search != "" or @country_filter != nil or not @show_suburbs do %>
+                  Try adjusting your filters or search query.
+                <% else %>
+                  Great! All cities appear to be unique. Click "Detect Duplicates" to scan again.
+                <% end %>
+              </p>
+            </div>
+          <% else %>
+            <!-- Pagination Info -->
+            <div class="mb-4 flex items-center justify-between">
+              <p class="text-sm text-gray-700">
+                Showing <span class="font-medium"><%= (@page - 1) * @per_page + 1 %></span>
+                to <span class="font-medium"><%= min(@page * @per_page, length(@duplicate_groups)) %></span>
+                of <span class="font-medium"><%= length(@duplicate_groups) %></span> groups
+              </p>
+              <p class="text-xs text-gray-500">
+                Click on a group to expand and see merge options
+              </p>
+            </div>
+
+            <div class="space-y-3">
+              <% paginated = EventasaurusWeb.Admin.CityDuplicatesLive.paginated_groups(@duplicate_groups, @page, @per_page) %>
+              <%= for {group, local_idx} <- Enum.with_index(paginated) do %>
+                <%
+                  # Calculate global index for this group
+                  global_idx = (@page - 1) * @per_page + local_idx
+                  anchor = EventasaurusWeb.Admin.CityDuplicatesLive.get_anchor_city(group)
+                  total_venues = EventasaurusWeb.Admin.CityDuplicatesLive.total_venues_in_group(group)
+                  is_expanded = MapSet.member?(@expanded_groups, global_idx)
+                  confidence = EventasaurusWeb.Admin.CityDuplicatesLive.get_group_confidence(@confidence_cache, group)
+                  fingerprint = group |> Enum.map(& &1.id) |> Enum.sort() |> Enum.join("-")
+                %>
+                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                  <!-- Collapsible Header -->
+                  <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <button
+                      phx-click="toggle_group"
+                      phx-value-index={global_idx}
+                      class="flex-1 flex items-center space-x-3 hover:bg-gray-100 transition-colors rounded-md -m-2 p-2"
+                    >
+                      <!-- Expand/Collapse Icon -->
+                      <svg
+                        class={"h-5 w-5 text-gray-500 transition-transform #{if is_expanded, do: "rotate-90", else: ""}"}
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                      <div class="text-left flex-1">
+                        <h3 class="text-sm font-medium text-gray-900">
+                          Near <%= anchor.name %>
+                          <span class="ml-1 text-xs font-normal text-gray-500">
+                            (<%= anchor.country.name %>)
+                          </span>
+                        </h3>
+                        <p class="text-xs text-gray-500">
+                          <%= length(group) %> cities · <%= total_venues %> total venues
+                          <%= if confidence.data_quality_issues != [] do %>
+                            <%= for issue <- confidence.data_quality_issues |> Enum.uniq() do %>
+                              <span class="ml-2 inline-flex items-center text-orange-600" title={EventasaurusWeb.Admin.CityDuplicatesLive.format_data_quality_issue(issue)}>
+                                <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                </svg>
+                              </span>
+                            <% end %>
+                          <% end %>
+                        </p>
+                      </div>
+                    </button>
+                    <div class="flex items-center space-x-2 ml-4">
+                      <!-- Confidence Badge -->
+                      <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{EventasaurusWeb.Admin.CityDuplicatesLive.confidence_badge_class(confidence.score)}"}>
+                        <%= EventasaurusWeb.Admin.CityDuplicatesLive.format_confidence(confidence.score) %>
+                        <%= EventasaurusWeb.Admin.CityDuplicatesLive.confidence_label(confidence.score) %>
+                      </span>
+                      <!-- Dismiss Button -->
+                      <button
+                        phx-click="dismiss_group"
+                        phx-value-fingerprint={fingerprint}
+                        class="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200 transition-colors"
+                        title="Dismiss this group (will reappear on next detection)"
+                      >
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                  <div class="flex items-center space-x-2">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      Needs Review
-                    </span>
-                  </div>
-                </button>
 
-                <!-- Expanded Content -->
-                <%= if is_expanded do %>
-                  <div class="p-4">
-                    <div class="space-y-3">
-                      <%= for city <- group do %>
-                        <div class={"flex items-center justify-between p-3 border rounded-md #{if city.id == anchor.id, do: "bg-green-50 border-green-200", else: "bg-white border-gray-200"}"}>
-                          <div class="flex-1">
-                            <div class="flex items-center">
-                              <%= if city.id == anchor.id do %>
-                                <span class="mr-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                  RECOMMENDED
+                  <!-- Expanded Content -->
+                  <%= if is_expanded do %>
+                    <div class="p-4">
+                      <!-- Confidence Reasons -->
+                      <%= if confidence.reasons != [] do %>
+                        <div class="mb-4 p-3 bg-gray-50 rounded-md">
+                          <h4 class="text-xs font-medium text-gray-700 mb-1">Why this might be a duplicate:</h4>
+                          <ul class="text-xs text-gray-600 space-y-0.5">
+                            <%= for reason <- confidence.reasons do %>
+                              <li class="flex items-center">
+                                <svg class="h-3 w-3 mr-1 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <%= reason %>
+                              </li>
+                            <% end %>
+                          </ul>
+                        </div>
+                      <% end %>
+
+                      <div class="space-y-3">
+                        <%= for city <- group do %>
+                          <div class={"flex items-center justify-between p-3 border rounded-md #{if city.id == anchor.id, do: "bg-green-50 border-green-200", else: "bg-white border-gray-200"}"}>
+                            <div class="flex-1">
+                              <div class="flex items-center flex-wrap gap-2">
+                                <%= if city.id == anchor.id do %>
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    RECOMMENDED
+                                  </span>
+                                <% end %>
+                                <h4 class="text-sm font-medium text-gray-900"><%= city.name %></h4>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                  ID: <%= city.id %>
                                 </span>
+                                <%= if city.venue_count > 0 do %>
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    <%= city.venue_count %> venues
+                                  </span>
+                                <% else %>
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                    0 venues
+                                  </span>
+                                <% end %>
+                                <!-- Data Quality Warnings for this city -->
+                                <% city_issues = EventasaurusDiscovery.Admin.CityManager.detect_data_quality_issues(city.name) %>
+                                <%= for issue <- city_issues do %>
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                    <svg class="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                    </svg>
+                                    <%= EventasaurusWeb.Admin.CityDuplicatesLive.format_data_quality_issue(issue) %>
+                                  </span>
+                                <% end %>
+                              </div>
+
+                              <%= if city.alternate_names && length(city.alternate_names) > 0 do %>
+                                <div class="mt-1 text-xs text-gray-500">
+                                  Alternates: <%= Enum.join(city.alternate_names, ", ") %>
+                                </div>
                               <% end %>
-                              <h4 class="text-sm font-medium text-gray-900"><%= city.name %></h4>
-                              <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                                ID: <%= city.id %>
-                              </span>
-                              <%= if city.venue_count > 0 do %>
-                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                  <%= city.venue_count %> venues
-                                </span>
-                              <% else %>
-                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                                  0 venues
-                                </span>
+
+                              <%= if city.latitude && city.longitude do %>
+                                <div class="mt-1 text-xs text-gray-500">
+                                  Location: <%= Decimal.to_string(city.latitude) %>, <%= Decimal.to_string(city.longitude) %>
+                                </div>
                               <% end %>
+
+                              <!-- Scraper Source (lazy loaded) -->
+                              <div class="mt-2">
+                                <%= if Map.has_key?(@sources_cache, city.id) do %>
+                                  <% sources = Map.get(@sources_cache, city.id, []) %>
+                                  <%= if sources != [] do %>
+                                    <div class="text-xs text-gray-500">
+                                      <span class="font-medium">Sources:</span>
+                                      <%= for {source, idx} <- Enum.with_index(sources) do %>
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-700 ml-1">
+                                          <%= source.name %> (<%= source.event_count %>)
+                                        </span>
+                                        <%= if idx < length(sources) - 1 do %><% end %>
+                                      <% end %>
+                                    </div>
+                                  <% else %>
+                                    <div class="text-xs text-gray-400">No source data available</div>
+                                  <% end %>
+                                <% else %>
+                                  <button
+                                    phx-click="load_sources"
+                                    phx-value-city_id={city.id}
+                                    class="text-xs text-blue-600 hover:text-blue-800 underline"
+                                  >
+                                    Show scraper source
+                                  </button>
+                                <% end %>
+                              </div>
                             </div>
 
-                            <%= if city.alternate_names && length(city.alternate_names) > 0 do %>
-                              <div class="mt-1 text-xs text-gray-500">
-                                Alternates: <%= Enum.join(city.alternate_names, ", ") %>
-                              </div>
-                            <% end %>
+                            <button
+                              phx-click="select_city"
+                              phx-value-id={city.id}
+                              class="ml-4 text-sm text-blue-600 hover:text-blue-800"
+                            >
+                              Manage Alternates
+                            </button>
+                          </div>
+                        <% end %>
+                      </div>
+                      <!-- Merge Form -->
+                      <form
+                        phx-submit="merge_cities"
+                        class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md"
+                      >
+                        <h4 class="text-sm font-medium text-yellow-900 mb-3">Merge These Cities</h4>
 
-                            <%= if city.latitude && city.longitude do %>
-                              <div class="mt-1 text-xs text-gray-500">
-                                Location: <%= Decimal.to_string(city.latitude) %>, <%= Decimal.to_string(
-                                  city.longitude
-                                ) %>
-                              </div>
-                            <% end %>
+                        <div class="space-y-3">
+                          <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                              <span class="text-green-700 font-semibold">KEEP</span> which city? (all others will be merged into this one)
+                            </label>
+                            <select
+                              name="target_id"
+                              required
+                              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            >
+                              <%= for city <- Enum.sort_by(group, & &1.venue_count, :desc) do %>
+                                <option value={city.id} selected={city.id == anchor.id}>
+                                  <%= city.name %> (ID: <%= city.id %>) - <%= city.venue_count %> venues
+                                  <%= if city.id == anchor.id do %> ★ Recommended<% end %>
+                                </option>
+                              <% end %>
+                            </select>
+                            <p class="mt-1 text-xs text-gray-500">
+                              All venues and events from other cities will be moved to this city
+                            </p>
+                          </div>
+
+                          <input
+                            type="hidden"
+                            name="source_ids"
+                            value={group |> Enum.map(& &1.id) |> Enum.join(",")}
+                          />
+                          <input
+                            type="hidden"
+                            name="group_index"
+                            value={global_idx}
+                          />
+
+                          <div class="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={"add_alternates_#{global_idx}"}
+                              name="add_as_alternates"
+                              value="true"
+                              checked
+                              class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <label
+                              for={"add_alternates_#{global_idx}"}
+                              class="ml-2 block text-sm text-gray-700"
+                            >
+                              Add deleted city names as alternate names
+                            </label>
+                          </div>
+
+                          <div class="bg-red-50 border border-red-200 rounded-md p-3 mt-2">
+                            <p class="text-xs text-red-800">
+                              <strong>Warning:</strong> This will delete <%= length(group) - 1 %>
+                              <%= if length(group) - 1 == 1, do: "city", else: "cities" %> and move all their venues/events to the selected city.
+                            </p>
                           </div>
 
                           <button
-                            phx-click="select_city"
-                            phx-value-id={city.id}
-                            class="ml-4 text-sm text-blue-600 hover:text-blue-800"
+                            type="submit"
+                            class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           >
-                            Manage Alternates
+                            <svg
+                              class="-ml-1 mr-2 h-5 w-5"
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                clip-rule="evenodd"
+                              />
+                            </svg>
+                            Merge Cities (Irreversible!)
                           </button>
                         </div>
-                      <% end %>
+                      </form>
                     </div>
-                    <!-- Merge Form -->
-                    <form
-                      phx-submit="merge_cities"
-                      class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md"
-                    >
-                      <h4 class="text-sm font-medium text-yellow-900 mb-3">Merge These Cities</h4>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
 
-                      <div class="space-y-3">
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700 mb-1">
-                            <span class="text-green-700 font-semibold">KEEP</span> which city? (all others will be merged into this one)
-                          </label>
-                          <select
-                            name="target_id"
-                            required
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          >
-                            <%= for city <- Enum.sort_by(group, & &1.venue_count, :desc) do %>
-                              <option value={city.id} selected={city.id == anchor.id}>
-                                <%= city.name %> (ID: <%= city.id %>) - <%= city.venue_count %> venues
-                                <%= if city.id == anchor.id do %> ★ Recommended<% end %>
-                              </option>
-                            <% end %>
-                          </select>
-                          <p class="mt-1 text-xs text-gray-500">
-                            All venues and events from other cities will be moved to this city
-                          </p>
-                        </div>
-
-                        <input
-                          type="hidden"
-                          name="source_ids"
-                          value={group |> Enum.map(& &1.id) |> Enum.join(",")}
-                        />
-                        <input
-                          type="hidden"
-                          name="group_index"
-                          value={global_idx}
-                        />
-
-                        <div class="flex items-center">
-                          <input
-                            type="checkbox"
-                            id={"add_alternates_#{global_idx}"}
-                            name="add_as_alternates"
-                            value="true"
-                            checked
-                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          />
-                          <label
-                            for={"add_alternates_#{global_idx}"}
-                            class="ml-2 block text-sm text-gray-700"
-                          >
-                            Add deleted city names as alternate names
-                          </label>
-                        </div>
-
-                        <div class="bg-red-50 border border-red-200 rounded-md p-3 mt-2">
-                          <p class="text-xs text-red-800">
-                            <strong>Warning:</strong> This will delete <%= length(group) - 1 %>
-                            <%= if length(group) - 1 == 1, do: "city", else: "cities" %> and move all their venues/events to the selected city.
-                          </p>
-                        </div>
-
-                        <button
-                          type="submit"
-                          class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                        >
-                          <svg
-                            class="-ml-1 mr-2 h-5 w-5"
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fill-rule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                              clip-rule="evenodd"
-                            />
-                          </svg>
-                          Merge Cities (Irreversible!)
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                <% end %>
-              </div>
-            <% end %>
-          </div>
-
-          <!-- Pagination Controls -->
-          <%= if @total_pages > 1 do %>
-            <nav class="mt-6 flex items-center justify-between border-t border-gray-200 px-4 sm:px-0 pt-4">
-              <div class="-mt-px flex w-0 flex-1">
-                <%= if @page > 1 do %>
-                  <button
-                    phx-click="go_to_page"
-                    phx-value-page={@page - 1}
-                    class="inline-flex items-center border-t-2 border-transparent pt-4 pr-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                  >
-                    <svg class="mr-3 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M18 10a.75.75 0 01-.75.75H4.66l2.1 1.95a.75.75 0 11-1.02 1.1l-3.5-3.25a.75.75 0 010-1.1l3.5-3.25a.75.75 0 111.02 1.1l-2.1 1.95h12.59A.75.75 0 0118 10z" clip-rule="evenodd" />
-                    </svg>
-                    Previous
-                  </button>
-                <% end %>
-              </div>
-              <div class="hidden md:-mt-px md:flex">
-                <%= for item <- EventasaurusWeb.Admin.CityDuplicatesLive.pagination_range(@page, @total_pages) do %>
-                  <%= if item == :ellipsis do %>
-                    <span class="inline-flex items-center border-t-2 border-transparent px-4 pt-4 text-sm font-medium text-gray-500">
-                      ...
-                    </span>
-                  <% else %>
+            <!-- Pagination Controls -->
+            <%= if @total_pages > 1 do %>
+              <nav class="mt-6 flex items-center justify-between border-t border-gray-200 px-4 sm:px-0 pt-4">
+                <div class="-mt-px flex w-0 flex-1">
+                  <%= if @page > 1 do %>
                     <button
                       phx-click="go_to_page"
-                      phx-value-page={item}
-                      class={"inline-flex items-center border-t-2 px-4 pt-4 text-sm font-medium #{if item == @page, do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"}"}
+                      phx-value-page={@page - 1}
+                      class="inline-flex items-center border-t-2 border-transparent pt-4 pr-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
                     >
-                      <%= item %>
+                      <svg class="mr-3 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a.75.75 0 01-.75.75H4.66l2.1 1.95a.75.75 0 11-1.02 1.1l-3.5-3.25a.75.75 0 010-1.1l3.5-3.25a.75.75 0 111.02 1.1l-2.1 1.95h12.59A.75.75 0 0118 10z" clip-rule="evenodd" />
+                      </svg>
+                      Previous
                     </button>
                   <% end %>
-                <% end %>
-              </div>
-              <div class="-mt-px flex w-0 flex-1 justify-end">
-                <%= if @page < @total_pages do %>
-                  <button
-                    phx-click="go_to_page"
-                    phx-value-page={@page + 1}
-                    class="inline-flex items-center border-t-2 border-transparent pt-4 pl-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                  >
-                    Next
-                    <svg class="ml-3 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M2 10a.75.75 0 01.75-.75h12.59l-2.1-1.95a.75.75 0 111.02-1.1l3.5 3.25a.75.75 0 010 1.1l-3.5 3.25a.75.75 0 11-1.02-1.1l2.1-1.95H2.75A.75.75 0 012 10z" clip-rule="evenodd" />
-                    </svg>
-                  </button>
-                <% end %>
-              </div>
-            </nav>
+                </div>
+                <div class="hidden md:-mt-px md:flex">
+                  <%= for item <- EventasaurusWeb.Admin.CityDuplicatesLive.pagination_range(@page, @total_pages) do %>
+                    <%= if item == :ellipsis do %>
+                      <span class="inline-flex items-center border-t-2 border-transparent px-4 pt-4 text-sm font-medium text-gray-500">
+                        ...
+                      </span>
+                    <% else %>
+                      <button
+                        phx-click="go_to_page"
+                        phx-value-page={item}
+                        class={"inline-flex items-center border-t-2 px-4 pt-4 text-sm font-medium #{if item == @page, do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"}"}
+                      >
+                        <%= item %>
+                      </button>
+                    <% end %>
+                  <% end %>
+                </div>
+                <div class="-mt-px flex w-0 flex-1 justify-end">
+                  <%= if @page < @total_pages do %>
+                    <button
+                      phx-click="go_to_page"
+                      phx-value-page={@page + 1}
+                      class="inline-flex items-center border-t-2 border-transparent pt-4 pl-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                    >
+                      Next
+                      <svg class="ml-3 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M2 10a.75.75 0 01.75-.75h12.59l-2.1-1.95a.75.75 0 111.02-1.1l3.5 3.25a.75.75 0 010 1.1l-3.5 3.25a.75.75 0 11-1.02-1.1l2.1-1.95H2.75A.75.75 0 012 10z" clip-rule="evenodd" />
+                      </svg>
+                    </button>
+                  <% end %>
+                </div>
+              </nav>
+            <% end %>
           <% end %>
-        <% end %>
         <% end %>
       <% else %>
         <!-- Alternate Names Tab -->

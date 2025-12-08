@@ -50,6 +50,68 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   end
 
   @doc """
+  Updates a city's slug manually.
+
+  Use this when you need to fix auto-generated slugs that are incorrect
+  or when merging duplicate cities.
+
+  ## Examples
+
+      iex> update_city_slug(city, "warsaw")
+      {:ok, %City{slug: "warsaw"}}
+
+      iex> update_city_slug(city, "taken-slug")
+      {:error, :slug_taken}
+  """
+  def update_city_slug(%City{} = city, new_slug) do
+    case city
+         |> City.slug_changeset(%{slug: new_slug})
+         |> Repo.update() do
+      {:ok, city} ->
+        {:ok, city}
+
+      {:error, %Ecto.Changeset{errors: errors} = changeset} ->
+        if Keyword.has_key?(errors, :slug) do
+          {:error, :slug_taken}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  @doc """
+  Checks if a slug is available for use.
+
+  ## Parameters
+
+  - `slug` - The slug to check
+  - `exclude_city_id` - Optional city ID to exclude from the check (for updates)
+
+  ## Examples
+
+      iex> slug_available?("warsaw")
+      true
+
+      iex> slug_available?("existing-slug")
+      false
+
+      iex> slug_available?("existing-slug", 123)  # 123 has this slug
+      true
+  """
+  def slug_available?(slug, exclude_city_id \\ nil) do
+    query = from(c in City, where: c.slug == ^slug)
+
+    query =
+      if exclude_city_id do
+        from(c in query, where: c.id != ^exclude_city_id)
+      else
+        query
+      end
+
+    not Repo.exists?(query)
+  end
+
+  @doc """
   Deletes a city if it has no venues.
 
   Returns {:error, :has_venues} if the city has associated venues.
@@ -98,6 +160,17 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
   def get_city(id) do
     Repo.get(City, id)
     |> Repo.preload(:country)
+  end
+
+  @doc """
+  Lists all countries for filtering dropdowns.
+
+  Returns countries ordered by name.
+  """
+  def list_countries do
+    Country
+    |> order_by([c], c.name)
+    |> Repo.all()
   end
 
   @doc """
@@ -497,6 +570,265 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
       Map.put(city, :venue_count, count)
     end)
     |> Enum.sort_by(fn city -> {-city.venue_count, city.id} end)
+  end
+
+  @doc """
+  Gets the scraper sources that created venues for a given city.
+
+  Returns a list of {source_name, event_count} tuples sorted by event count descending.
+
+  ## Examples
+
+      iex> get_city_sources(city_id)
+      [{"Speed Quizzing", 5}, {"Bandsintown", 2}]
+  """
+  def get_city_sources(city_id) do
+    sql = """
+    SELECT s.name, COUNT(DISTINCT pes.event_id) as event_count
+    FROM cities c
+    JOIN venues v ON v.city_id = c.id
+    JOIN public_events pe ON pe.venue_id = v.id
+    JOIN public_event_sources pes ON pes.event_id = pe.id
+    JOIN sources s ON pes.source_id = s.id
+    WHERE c.id = $1
+    GROUP BY s.id, s.name
+    ORDER BY event_count DESC
+    """
+
+    case Repo.query(sql, [city_id]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn [name, count] -> {name, count} end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  @doc """
+  Calculates a confidence score for a duplicate group indicating how likely
+  they are to be real duplicates vs legitimate suburbs/neighborhoods.
+
+  Returns a score from 0.0 to 1.0 where:
+  - 1.0 = Almost certainly duplicates (should merge)
+  - 0.5 = Uncertain (needs manual review)
+  - 0.0 = Likely NOT duplicates (probably suburbs)
+
+  ## Factors considered:
+  - Name similarity (Levenshtein distance)
+  - Venue count disparity (one city has many more venues)
+  - Data quality issues (postcodes in names, abbreviations)
+  - Total venues (more data = more confidence in assessment)
+
+  ## Examples
+
+      iex> calculate_group_confidence([city1, city2])
+      %{score: 0.85, reasons: ["Similar names", "Large venue disparity"]}
+  """
+  def calculate_group_confidence(group) when is_list(group) and length(group) >= 2 do
+    names = Enum.map(group, & &1.name)
+    venue_counts = Enum.map(group, & &1.venue_count)
+
+    # Factor 1: Name similarity (0.0 to 0.4)
+    name_similarity_score = calculate_name_similarity_score(names)
+
+    # Factor 2: Venue count disparity (0.0 to 0.3)
+    # High disparity = likely one is the "real" city
+    venue_disparity_score = calculate_venue_disparity_score(venue_counts)
+
+    # Factor 3: Data quality issues (0.0 to 0.2)
+    # Postcodes, abbreviations = likely bad data that should be fixed
+    data_quality_score = calculate_data_quality_score(names)
+
+    # Factor 4: Total evidence (0.0 to 0.1)
+    # More venues = more confident in the assessment
+    evidence_score = calculate_evidence_score(venue_counts)
+
+    total_score = name_similarity_score + venue_disparity_score + data_quality_score + evidence_score
+
+    # Build reasons list
+    reasons = build_confidence_reasons(names, venue_counts, name_similarity_score, data_quality_score)
+
+    # Determine if this looks like a suburb situation
+    is_likely_suburb = is_likely_suburb_group?(names, venue_counts)
+
+    %{
+      score: Float.round(total_score, 2),
+      reasons: reasons,
+      is_likely_suburb: is_likely_suburb,
+      data_quality_issues: detect_data_quality_issues(names)
+    }
+  end
+
+  def calculate_group_confidence(_), do: %{score: 0.0, reasons: [], is_likely_suburb: false, data_quality_issues: []}
+
+  # Name similarity using normalized comparison
+  defp calculate_name_similarity_score(names) do
+    # Compare all pairs and take the best match
+    similarities =
+      for n1 <- names, n2 <- names, n1 != n2 do
+        calculate_name_similarity(n1, n2)
+      end
+
+    max_similarity = if similarities == [], do: 0.0, else: Enum.max(similarities)
+
+    # Scale: 1.0 similarity = 0.4 score, 0.0 similarity = 0.0 score
+    max_similarity * 0.4
+  end
+
+  defp calculate_name_similarity(name1, name2) do
+    # Normalize names for comparison
+    n1 = normalize_for_comparison(name1)
+    n2 = normalize_for_comparison(name2)
+
+    cond do
+      # Exact match after normalization
+      n1 == n2 -> 1.0
+      # One is contained in the other (e.g., "St. Helens" in "St. Helens TAS7216")
+      String.contains?(n1, n2) or String.contains?(n2, n1) -> 0.9
+      # Calculate Levenshtein-based similarity
+      true -> levenshtein_similarity(n1, n2)
+    end
+  end
+
+  defp normalize_for_comparison(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^\w\s]/, "")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp levenshtein_similarity(s1, s2) do
+    max_len = max(String.length(s1), String.length(s2))
+    if max_len == 0 do
+      1.0
+    else
+      distance = String.jaro_distance(s1, s2)
+      distance
+    end
+  end
+
+  # Venue count disparity score
+  defp calculate_venue_disparity_score(venue_counts) do
+    max_count = Enum.max(venue_counts)
+    min_count = Enum.min(venue_counts)
+
+    if max_count == 0 do
+      0.0
+    else
+      disparity_ratio = (max_count - min_count) / max_count
+
+      # High disparity = higher score (one is clearly the "main" city)
+      # Scale: 1.0 ratio = 0.3 score
+      disparity_ratio * 0.3
+    end
+  end
+
+  # Data quality issues score
+  defp calculate_data_quality_score(names) do
+    issues = Enum.flat_map(names, &detect_data_quality_issues/1)
+
+    cond do
+      length(issues) >= 2 -> 0.2  # Multiple issues = very likely bad data
+      length(issues) == 1 -> 0.15  # One issue = likely bad data
+      true -> 0.0
+    end
+  end
+
+  # Evidence score based on total venues
+  defp calculate_evidence_score(venue_counts) do
+    total = Enum.sum(venue_counts)
+
+    cond do
+      total >= 10 -> 0.1   # Good amount of data
+      total >= 5 -> 0.05   # Some data
+      true -> 0.0          # Little data
+    end
+  end
+
+  @doc """
+  Detects data quality issues in a city name.
+
+  Returns a list of issue descriptions.
+  """
+  def detect_data_quality_issues(name) when is_binary(name) do
+    issues = []
+
+    # Check for postcodes (4+ digits)
+    issues = if Regex.match?(~r/\d{4,}/, name), do: ["postcode_in_name" | issues], else: issues
+
+    # Check for state abbreviations at start (e.g., "MI 48357", "NSW Sydney")
+    issues = if Regex.match?(~r/^[A-Z]{2,3}\s/, name), do: ["state_abbreviation" | issues], else: issues
+
+    # Check for very short names with numbers
+    issues = if String.length(name) <= 5 and Regex.match?(~r/\d/, name), do: ["short_with_numbers" | issues], else: issues
+
+    issues
+  end
+
+  def detect_data_quality_issues(_), do: []
+
+  defp build_confidence_reasons(_names, venue_counts, name_similarity_score, data_quality_score) do
+    reasons = []
+
+    # Name similarity reason
+    reasons =
+      cond do
+        name_similarity_score >= 0.35 -> ["Near-identical names" | reasons]
+        name_similarity_score >= 0.25 -> ["Similar names" | reasons]
+        name_similarity_score >= 0.15 -> ["Somewhat similar names" | reasons]
+        true -> reasons
+      end
+
+    # Venue disparity reason
+    max_count = Enum.max(venue_counts)
+    min_count = Enum.min(venue_counts)
+
+    reasons =
+      if max_count > 0 and min_count == 0 do
+        ["One city has no venues" | reasons]
+      else
+        if max_count > 0 and (max_count - min_count) / max_count > 0.8 do
+          ["Large venue count disparity" | reasons]
+        else
+          reasons
+        end
+      end
+
+    # Data quality reason
+    reasons =
+      if data_quality_score > 0 do
+        ["Data quality issues detected" | reasons]
+      else
+        reasons
+      end
+
+    Enum.reverse(reasons)
+  end
+
+  defp is_likely_suburb_group?(names, venue_counts) do
+    # Suburbs typically:
+    # 1. Have different names (not just spelling variations)
+    # 2. Both have meaningful venue counts
+    # 3. No data quality issues
+
+    all_have_venues = Enum.all?(venue_counts, &(&1 > 0))
+    no_quality_issues = Enum.all?(names, &(detect_data_quality_issues(&1) == []))
+
+    # Check if names are fundamentally different (not just variations)
+    names_are_different =
+      for n1 <- names, n2 <- names, n1 != n2, reduce: true do
+        acc ->
+          norm1 = normalize_for_comparison(n1)
+          norm2 = normalize_for_comparison(n2)
+          # If neither contains the other and Jaro distance is low, they're different
+          different = not String.contains?(norm1, norm2) and
+                      not String.contains?(norm2, norm1) and
+                      String.jaro_distance(norm1, norm2) < 0.8
+          acc and different
+      end
+
+    all_have_venues and no_quality_issues and names_are_different
   end
 
   # ============================================================================

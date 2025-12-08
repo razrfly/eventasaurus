@@ -254,13 +254,220 @@ defmodule EventasaurusWeb.Admin.CityFormLiveTest do
     end
   end
 
+  describe "Alternate Names" do
+    setup do
+      au = insert(:country, name: "Australia", code: "AU")
+
+      sydney =
+        insert(:city,
+          name: "Sydney",
+          country: au,
+          alternate_names: ["Sídney", "悉尼"]
+        )
+
+      {:ok, australia: au, sydney: sydney}
+    end
+
+    test "displays existing alternate names on edit", %{conn: conn, sydney: sydney} do
+      {:ok, _view, html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      assert html =~ "Alternate Names"
+      assert html =~ "Sídney"
+      assert html =~ "悉尼"
+    end
+
+    test "allows adding alternate names", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Type in the input
+      view
+      |> element("input#new_alternate_name")
+      |> render_keyup(%{"value" => "Sidnei"})
+
+      # Click add button
+      html = render_click(view, "add_alternate_name", %{})
+
+      assert html =~ "Sidnei"
+      assert html =~ "added successfully"
+
+      # Verify in database
+      updated_city = Repo.get(City, sydney.id)
+      assert "Sidnei" in updated_city.alternate_names
+    end
+
+    test "prevents adding empty alternate name", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Click add without typing anything (button should be disabled, but test the handler)
+      html = render_click(view, "add_alternate_name", %{})
+
+      assert html =~ "cannot be empty"
+    end
+
+    test "prevents adding duplicate alternate name", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Try to add existing name
+      view
+      |> element("input#new_alternate_name")
+      |> render_keyup(%{"value" => "Sídney"})
+
+      html = render_click(view, "add_alternate_name", %{})
+
+      assert html =~ "already exists"
+    end
+
+    test "allows removing alternate names", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Click remove on first alternate name
+      html = render_click(view, "remove_alternate_name", %{"name" => "Sídney"})
+
+      refute html =~ ">Sídney</span>"
+      assert html =~ "removed successfully"
+
+      # Verify in database
+      updated_city = Repo.get(City, sydney.id)
+      refute "Sídney" in updated_city.alternate_names
+    end
+
+    test "alternate names section not shown for new cities", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/admin/cities/new")
+
+      # The alternate names section header (with h3 tag) should not be shown
+      refute html =~ "Add Alternate Name"
+      refute html =~ "Current Alternate Names"
+    end
+  end
+
+  describe "Slug Editing" do
+    setup do
+      au = insert(:country, name: "Australia", code: "AU")
+
+      sydney =
+        insert(:city,
+          name: "Sydney",
+          slug: "sydney",
+          country: au
+        )
+
+      melbourne =
+        insert(:city,
+          name: "Melbourne",
+          slug: "melbourne",
+          country: au
+        )
+
+      {:ok, australia: au, sydney: sydney, melbourne: melbourne}
+    end
+
+    test "displays slug editing toggle on edit", %{conn: conn, sydney: sydney} do
+      {:ok, _view, html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      assert html =~ "Advanced: Edit URL Slug"
+    end
+
+    test "slug editing section is hidden by default", %{conn: conn, sydney: sydney} do
+      {:ok, _view, html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # The collapsible section should not show the input by default
+      refute html =~ "Current Slug"
+      refute html =~ ~s(id="new_slug")
+    end
+
+    test "clicking toggle shows slug editing section", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Toggle the section open
+      html = render_click(view, "toggle_slug_editing", %{})
+
+      assert html =~ "Current Slug"
+      assert html =~ "sydney"
+      assert html =~ "New Slug"
+      assert html =~ "Warning: Changing the slug will change the URL"
+    end
+
+    test "validates slug availability", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Open slug editing
+      render_click(view, "toggle_slug_editing", %{})
+
+      # Type a new available slug
+      html =
+        view
+        |> element("input#new_slug")
+        |> render_keyup(%{"value" => "sydney-au"})
+
+      assert html =~ "available"
+    end
+
+    test "shows error for taken slug", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Open slug editing
+      render_click(view, "toggle_slug_editing", %{})
+
+      # Type a slug that's already taken (melbourne)
+      html =
+        view
+        |> element("input#new_slug")
+        |> render_keyup(%{"value" => "melbourne"})
+
+      assert html =~ "taken"
+    end
+
+    test "shows warning for invalid slug format", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Open slug editing
+      render_click(view, "toggle_slug_editing", %{})
+
+      # Type an invalid slug (only hyphens - after normalization becomes empty)
+      html =
+        view
+        |> element("input#new_slug")
+        |> render_keyup(%{"value" => "---"})
+
+      # Empty slug after normalization shows idle state
+      assert html =~ "Enter a new slug"
+    end
+
+    test "updates slug successfully", %{conn: conn, sydney: sydney} do
+      {:ok, view, _html} = live(conn, ~p"/admin/cities/#{sydney.id}/edit")
+
+      # Open slug editing
+      render_click(view, "toggle_slug_editing", %{})
+
+      # Type a new valid slug
+      view
+      |> element("input#new_slug")
+      |> render_keyup(%{"value" => "sydney-nsw"})
+
+      # Click update
+      html = render_click(view, "update_slug", %{})
+
+      assert html =~ "Slug updated successfully"
+
+      # Verify in database
+      updated_city = Repo.get(City, sydney.id)
+      assert updated_city.slug == "sydney-nsw"
+    end
+
+    test "slug editing not shown for new cities", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/admin/cities/new")
+
+      refute html =~ "Advanced: Edit URL Slug"
+    end
+  end
+
   describe "Form Validation" do
     setup do
       au = insert(:country, name: "Australia", code: "AU")
       {:ok, australia: au}
     end
 
-    test "validates as user types", %{conn: conn, australia: au} do
+    test "validates as user types", %{conn: conn, australia: _au} do
       {:ok, view, _html} = live(conn, ~p"/admin/cities/new")
 
       # Type invalid data
