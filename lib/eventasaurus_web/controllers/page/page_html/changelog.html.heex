@@ -1,4 +1,4 @@
-<div class="bg-white">
+<div class="bg-white scroll-smooth">
   <.header class="bg-white border-b border-zinc-200">
     <div class="max-w-4xl mx-auto py-16 px-4 sm:px-6 lg:px-8 text-center">
       <p class="text-base font-semibold leading-7 text-indigo-600">Changelog</p>
@@ -9,7 +9,9 @@
     </div>
   </.header>
 
-  <EventasaurusWeb.ChangelogComponents.timeline entries={@entries} />
+  <main role="main" aria-label="Changelog timeline">
+    <EventasaurusWeb.ChangelogComponents.timeline entries={@entries} />
+  </main>
   
   <div class="border-t border-zinc-200 bg-zinc-50">
     <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8 text-center">
