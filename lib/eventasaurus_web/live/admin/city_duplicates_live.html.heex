@@ -383,11 +383,10 @@
                                   <%= if sources != [] do %>
                                     <div class="text-xs text-gray-500">
                                       <span class="font-medium">Sources:</span>
-                                      <%= for {source, idx} <- Enum.with_index(sources) do %>
+                                      <%= for source <- sources do %>
                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-700 ml-1">
                                           <%= source.name %> (<%= source.event_count %>)
                                         </span>
-                                        <%= if idx < length(sources) - 1 do %><% end %>
                                       <% end %>
                                     </div>
                                   <% else %>
