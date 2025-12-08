@@ -64,11 +64,12 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
           # - High confidence (≥70%): Standard match
           # - Medium confidence (60-69%): Now Playing fallback
           # - Low-medium confidence (50-59%): Accepted with lower confidence
-          match_type = cond do
-            confidence >= 0.70 -> "standard"
-            confidence >= 0.60 -> "now_playing_fallback"
-            true -> "low_confidence_accepted"
-          end
+          match_type =
+            cond do
+              confidence >= 0.70 -> "standard"
+              confidence >= 0.60 -> "now_playing_fallback"
+              true -> "low_confidence_accepted"
+            end
 
           case TmdbMatcher.find_or_create_movie(tmdb_id) do
             {:ok, movie} ->
@@ -142,10 +143,11 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
              Cinema City ID: #{cinema_city_film_id}
           """)
 
-          {:error, %{
-            reason: :missing_title,
-            cinema_city_film_id: cinema_city_film_id
-          }}
+          {:error,
+           %{
+             reason: :missing_title,
+             cinema_city_film_id: cinema_city_film_id
+           }}
 
         {:error, :no_results} ->
           # No results from TMDB
@@ -217,7 +219,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   # 2. Title contains a separator (period, colon, dash)
   #
   # @doc false - Internal function, public for testing only
-  def extract_original_title(polish_title, %{"original_language" => "en"}) when is_binary(polish_title) do
+  def extract_original_title(polish_title, %{"original_language" => "en"})
+      when is_binary(polish_title) do
     # Common separators used in Cinema City titles
     # Order matters: try period with space first (most common)
     separators = [". ", ": ", " - ", " – ", " — "]

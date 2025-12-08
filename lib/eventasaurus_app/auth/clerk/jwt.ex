@@ -76,14 +76,20 @@ defmodule EventasaurusApp.Auth.Clerk.JWT do
   """
   def extract_user_id(claims) when is_map(claims) do
     case claims["userId"] do
-      nil -> nil
-      id when is_integer(id) -> id
+      nil ->
+        nil
+
+      id when is_integer(id) ->
+        id
+
       id when is_binary(id) ->
         case Integer.parse(id) do
           {int_id, ""} -> int_id
           _ -> nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -290,7 +296,10 @@ defmodule EventasaurusApp.Auth.Clerk.JWT do
         :ok
 
       true ->
-        Logger.warning("Invalid authorized party: #{azp}, allowed: #{inspect(authorized_parties)}")
+        Logger.warning(
+          "Invalid authorized party: #{azp}, allowed: #{inspect(authorized_parties)}"
+        )
+
         {:error, :invalid_authorized_party}
     end
   end

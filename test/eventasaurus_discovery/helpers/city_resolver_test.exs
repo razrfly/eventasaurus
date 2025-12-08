@@ -252,7 +252,9 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
 
     test "resolves New York, US from coordinates" do
       # New York City coordinates
-      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(40.7128, -74.0060)
+      assert {:ok, {city, country_code}} =
+               CityResolver.resolve_city_and_country(40.7128, -74.0060)
+
       assert is_binary(city)
       assert country_code == "US"
     end
@@ -273,7 +275,9 @@ defmodule EventasaurusDiscovery.Helpers.CityResolverTest do
 
     test "resolves Sydney, Australia from coordinates" do
       # Sydney coordinates
-      assert {:ok, {city, country_code}} = CityResolver.resolve_city_and_country(-33.8688, 151.2093)
+      assert {:ok, {city, country_code}} =
+               CityResolver.resolve_city_and_country(-33.8688, 151.2093)
+
       assert is_binary(city)
       assert country_code == "AU"
     end

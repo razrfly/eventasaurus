@@ -1389,15 +1389,23 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         select: %{
           total: count(e.id),
           with_occurrences:
-            fragment("COUNT(CASE WHEN ? IS NOT NULL AND jsonb_typeof(?) = 'object' THEN 1 END)",
-              e.occurrences, e.occurrences),
+            fragment(
+              "COUNT(CASE WHEN ? IS NOT NULL AND jsonb_typeof(?) = 'object' THEN 1 END)",
+              e.occurrences,
+              e.occurrences
+            ),
           without_occurrences:
-            fragment("COUNT(CASE WHEN ? IS NULL OR jsonb_typeof(?) != 'object' THEN 1 END)",
-              e.occurrences, e.occurrences)
+            fragment(
+              "COUNT(CASE WHEN ? IS NULL OR jsonb_typeof(?) != 'object' THEN 1 END)",
+              e.occurrences,
+              e.occurrences
+            )
         }
       )
 
-    base_counts = repo().one(base_counts_query) || %{total: 0, with_occurrences: 0, without_occurrences: 0}
+    base_counts =
+      repo().one(base_counts_query) || %{total: 0, with_occurrences: 0, without_occurrences: 0}
+
     total_events = base_counts.total || 0
 
     if total_events == 0 do
@@ -1432,22 +1440,33 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           where: pes.source_id == ^source_id,
           where: not is_nil(e.occurrences),
           where: fragment("jsonb_typeof(?) = 'object'", e.occurrences),
-          where: fragment("?->'dates' IS NOT NULL AND jsonb_typeof(?->'dates') = 'array'",
-            e.occurrences, e.occurrences),
+          where:
+            fragment(
+              "?->'dates' IS NOT NULL AND jsonb_typeof(?->'dates') = 'array'",
+              e.occurrences,
+              e.occurrences
+            ),
           select: %{
             single_date:
-              fragment("COUNT(CASE WHEN jsonb_array_length(?->'dates') = 1 THEN 1 END)",
-                e.occurrences),
+              fragment(
+                "COUNT(CASE WHEN jsonb_array_length(?->'dates') = 1 THEN 1 END)",
+                e.occurrences
+              ),
             multiple_dates:
-              fragment("COUNT(CASE WHEN jsonb_array_length(?->'dates') > 1 THEN 1 END)",
-                e.occurrences),
+              fragment(
+                "COUNT(CASE WHEN jsonb_array_length(?->'dates') > 1 THEN 1 END)",
+                e.occurrences
+              ),
             total_dates:
-              fragment("COALESCE(SUM(jsonb_array_length(?->'dates')), 0)",
-                e.occurrences)
+              fragment(
+                "COALESCE(SUM(jsonb_array_length(?->'dates')), 0)",
+                e.occurrences
+              )
           }
         )
 
-      date_counts = repo().one(date_counts_query) || %{single_date: 0, multiple_dates: 0, total_dates: 0}
+      date_counts =
+        repo().one(date_counts_query) || %{single_date: 0, multiple_dates: 0, total_dates: 0}
 
       # Query 4: Count pattern events (those with pattern field, no dates needed)
       pattern_count_query =
@@ -1455,8 +1474,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           join: pes in PublicEventSource,
           on: pes.event_id == e.id,
           where: pes.source_id == ^source_id,
-          where: fragment("?->>'type' = 'pattern' AND ?->'pattern' IS NOT NULL",
-            e.occurrences, e.occurrences),
+          where:
+            fragment(
+              "?->>'type' = 'pattern' AND ?->'pattern' IS NOT NULL",
+              e.occurrences,
+              e.occurrences
+            ),
           select: count(e.id)
         )
 
@@ -1472,9 +1495,13 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       # Adjust single/multiple dates for exhibition events with date ranges
       # (exhibitions with end_date in single date should count as multiple)
       single_date = (date_counts.single_date || 0) - validation_issues.exhibition_with_range
-      multiple_dates = (date_counts.multiple_dates || 0) + validation_issues.exhibition_with_range + pattern_with_rules
+
+      multiple_dates =
+        (date_counts.multiple_dates || 0) + validation_issues.exhibition_with_range +
+          pattern_with_rules
 
       total_dates = date_counts.total_dates || 0
+
       avg_dates =
         if events_with_occurrences > 0 do
           Float.round(total_dates / events_with_occurrences, 1)
@@ -1484,8 +1511,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
       total_validity_issues =
         validation_issues.pattern_missing_dates +
-        validation_issues.explicit_single_date +
-        validation_issues.exhibition_single_date
+          validation_issues.explicit_single_date +
+          validation_issues.exhibition_single_date
 
       validity_score =
         if events_with_occurrences > 0 do
@@ -1551,8 +1578,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
-        where: fragment("?->>'type' = 'pattern' AND ?->'pattern' IS NULL",
-          e.occurrences, e.occurrences),
+        where:
+          fragment(
+            "?->>'type' = 'pattern' AND ?->'pattern' IS NULL",
+            e.occurrences,
+            e.occurrences
+          ),
         select: count(e.id)
       )
 
@@ -1564,8 +1595,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
-        where: fragment("?->>'type' = 'explicit' AND jsonb_array_length(?->'dates') = 1",
-          e.occurrences, e.occurrences),
+        where:
+          fragment(
+            "?->>'type' = 'explicit' AND jsonb_array_length(?->'dates') = 1",
+            e.occurrences,
+            e.occurrences
+          ),
         select: count(e.id)
       )
 
@@ -1578,8 +1613,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         join: pes in PublicEventSource,
         on: pes.event_id == e.id,
         where: pes.source_id == ^source_id,
-        where: fragment("?->>'type' = 'exhibition' AND jsonb_array_length(?->'dates') = 1",
-          e.occurrences, e.occurrences),
+        where:
+          fragment(
+            "?->>'type' = 'exhibition' AND jsonb_array_length(?->'dates') = 1",
+            e.occurrences,
+            e.occurrences
+          ),
         select: fragment("?->'dates'->0->>'end_date'", e.occurrences)
       )
 
@@ -1602,7 +1641,6 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       exhibition_with_range: with_range
     }
   end
-
 
   # Calculate time quality for occurrence dates.
   #
@@ -2241,7 +2279,8 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
           {:ok, {expected_city, country_code}} ->
             expected_country = country_name_from_code(country_code)
 
-            is_mismatch = normalize_country(current_country) != normalize_country(expected_country)
+            is_mismatch =
+              normalize_country(current_country) != normalize_country(expected_country)
 
             # Debug log for mismatches
             if is_mismatch do
@@ -2604,11 +2643,12 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         _ -> "high"
       end
 
-    venues = VenueCountryCheckJob.get_mismatches(
-      status: "pending",
-      confidence: confidence_string,
-      limit: limit * 2
-    )
+    venues =
+      VenueCountryCheckJob.get_mismatches(
+        status: "pending",
+        confidence: confidence_string,
+        limit: limit * 2
+      )
 
     # Filter venues by country pair if specified
     filtered_venues =
@@ -2711,39 +2751,39 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
         else
           # Find or create the correct city using country CODE
           case find_or_create_city_by_code(expected_city, country_code) do
-          {:ok, new_city} ->
-            # Update venue's city_id AND mark metadata as fixed
-            current_metadata = venue.metadata || %{}
-            updated_country_check = Map.put(country_check, "status", "fixed")
-            updated_metadata = Map.put(current_metadata, "country_check", updated_country_check)
+            {:ok, new_city} ->
+              # Update venue's city_id AND mark metadata as fixed
+              current_metadata = venue.metadata || %{}
+              updated_country_check = Map.put(country_check, "status", "fixed")
+              updated_metadata = Map.put(current_metadata, "country_check", updated_country_check)
 
-            changeset =
-              venue
-              |> Ecto.Changeset.change(%{
-                city_id: new_city.id,
-                metadata: updated_metadata
-              })
+              changeset =
+                venue
+                |> Ecto.Changeset.change(%{
+                  city_id: new_city.id,
+                  metadata: updated_metadata
+                })
 
-            case Repo.update(changeset) do
-              {:ok, updated_venue} ->
-                # Log the fix
-                log_venue_country_fix(venue_with_preloads, old_city, new_city, reason)
+              case Repo.update(changeset) do
+                {:ok, updated_venue} ->
+                  # Log the fix
+                  log_venue_country_fix(venue_with_preloads, old_city, new_city, reason)
 
-                {:ok,
-                 %{
-                   venue: updated_venue,
-                   old_city: old_city,
-                   new_city: new_city,
-                   old_country: current_country,
-                   new_country: expected_country
-                 }}
+                  {:ok,
+                   %{
+                     venue: updated_venue,
+                     old_city: old_city,
+                     new_city: new_city,
+                     old_country: current_country,
+                     new_country: expected_country
+                   }}
 
-              {:error, changeset} ->
-                {:error, {:update_failed, changeset}}
-            end
+                {:error, changeset} ->
+                  {:error, {:update_failed, changeset}}
+              end
 
-          {:error, reason} ->
-            {:error, {:city_creation_failed, reason}}
+            {:error, reason} ->
+              {:error, {:city_creation_failed, reason}}
           end
         end
     end

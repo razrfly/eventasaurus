@@ -238,6 +238,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
 
   # Format runtime in ISO 8601 duration format (e.g., "PT2H30M")
   defp format_duration(nil), do: nil
+
   defp format_duration(runtime) when is_integer(runtime) and runtime > 0 do
     hours = div(runtime, 60)
     minutes = rem(runtime, 60)
@@ -415,6 +416,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   defp maybe_add_if_missing(schema, _key, nil), do: schema
   defp maybe_add_if_missing(schema, _key, []), do: schema
   defp maybe_add_if_missing(schema, _key, "N/A"), do: schema
+
   defp maybe_add_if_missing(schema, key, value) do
     if Map.has_key?(schema, key) do
       schema

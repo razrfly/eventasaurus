@@ -27,138 +27,138 @@ defmodule EventasaurusWeb.EventLive.New do
     user = socket.assigns[:user]
 
     if user do
-        changeset = Events.change_event(%Event{})
-        default_date = Date.utc_today() |> Date.add(5) |> Date.to_iso8601()
-        # Load groups that the user is a member of or created
-        user_groups = Groups.list_user_groups(user)
+      changeset = Events.change_event(%Event{})
+      default_date = Date.utc_today() |> Date.add(5) |> Date.to_iso8601()
+      # Load groups that the user is a member of or created
+      user_groups = Groups.list_user_groups(user)
 
-        # Load recent locations for the user
-        recent_locations = Events.get_recent_locations_for_user(user.id, limit: 5)
+      # Load recent locations for the user
+      recent_locations = Events.get_recent_locations_for_user(user.id, limit: 5)
 
-        # Auto-select a random default image
-        random_image = EventasaurusWeb.Services.DefaultImagesService.get_random_image()
+      # Auto-select a random default image
+      random_image = EventasaurusWeb.Services.DefaultImagesService.get_random_image()
 
-        {cover_image_url, external_image_data} =
-          case random_image do
-            nil ->
-              {nil, nil}
+      {cover_image_url, external_image_data} =
+        case random_image do
+          nil ->
+            {nil, nil}
 
-            image ->
-              {
-                image.url,
-                %{
-                  "source" => "default",
-                  "url" => image.url,
-                  "filename" => image.filename,
-                  "category" => image.category,
-                  "title" => ImageHelpers.title_from_filename(image.filename)
-                }
+          image ->
+            {
+              image.url,
+              %{
+                "source" => "default",
+                "url" => image.url,
+                "filename" => image.filename,
+                "category" => image.category,
+                "title" => ImageHelpers.title_from_filename(image.filename)
               }
-          end
+            }
+        end
 
-        # Enhanced default value logic for taxation_type
-        # Smart default based on event characteristics
-        default_taxation_type =
-          determine_smart_taxation_default(%{
-            # New events default to no ticketing
-            "is_ticketed" => false,
-            "setup_path" => "confirmed"
-          })
+      # Enhanced default value logic for taxation_type
+      # Smart default based on event characteristics
+      default_taxation_type =
+        determine_smart_taxation_default(%{
+          # New events default to no ticketing
+          "is_ticketed" => false,
+          "setup_path" => "confirmed"
+        })
 
-        # Update form_data with the random image and smart defaults
-        initial_form_data = %{
-          "start_date" => default_date,
-          "ends_date" => default_date,
-          # Legacy date polling field removed
-          "slug" => Nanoid.generate(10),
-          "taxation_type" => default_taxation_type,
-          "taxation_type_reasoning" => get_taxation_reasoning(default_taxation_type, false)
-        }
+      # Update form_data with the random image and smart defaults
+      initial_form_data = %{
+        "start_date" => default_date,
+        "ends_date" => default_date,
+        # Legacy date polling field removed
+        "slug" => Nanoid.generate(10),
+        "taxation_type" => default_taxation_type,
+        "taxation_type_reasoning" => get_taxation_reasoning(default_taxation_type, false)
+      }
 
-        form_data_with_image =
-          case cover_image_url do
-            nil ->
-              initial_form_data
+      form_data_with_image =
+        case cover_image_url do
+          nil ->
+            initial_form_data
 
-            url ->
-              Map.merge(initial_form_data, %{
-                "cover_image_url" => url,
-                "external_image_data" => external_image_data
-              })
-          end
+          url ->
+            Map.merge(initial_form_data, %{
+              "cover_image_url" => url,
+              "external_image_data" => external_image_data
+            })
+        end
 
-        # Check if group_id was provided in params
-        selected_group_id = Map.get(params, "group_id")
+      # Check if group_id was provided in params
+      selected_group_id = Map.get(params, "group_id")
 
-        # Update form_data and changeset with selected group if provided and user is a member
-        {final_form_data, changeset} =
-          with group_id_str when is_binary(group_id_str) <- selected_group_id,
-               {group_id_int, ""} <- Integer.parse(group_id_str),
-               true <- Enum.any?(user_groups, &(&1.id == group_id_int)) do
-            # Update both form_data and changeset
-            updated_form_data = Map.put(form_data_with_image, "group_id", group_id_str)
-            updated_changeset = Events.change_event(%Event{group_id: group_id_int})
-            {updated_form_data, updated_changeset}
-          else
-            _ -> {form_data_with_image, changeset}
-          end
+      # Update form_data and changeset with selected group if provided and user is a member
+      {final_form_data, changeset} =
+        with group_id_str when is_binary(group_id_str) <- selected_group_id,
+             {group_id_int, ""} <- Integer.parse(group_id_str),
+             true <- Enum.any?(user_groups, &(&1.id == group_id_int)) do
+          # Update both form_data and changeset
+          updated_form_data = Map.put(form_data_with_image, "group_id", group_id_str)
+          updated_changeset = Events.change_event(%Event{group_id: group_id_int})
+          {updated_form_data, updated_changeset}
+        else
+          _ -> {form_data_with_image, changeset}
+        end
 
-        socket =
-          socket
-          |> assign(:form, to_form(changeset))
-          |> assign(:user_groups, user_groups)
-          |> assign(:user, user)
-          |> assign(:changeset, changeset)
-          |> assign(:form_data, final_form_data)
-          |> assign(:is_virtual, false)
-          |> assign(:selected_venue_name, nil)
-          |> assign(:selected_venue_address, nil)
-          |> assign(:show_all_timezones, false)
-          |> assign(:cover_image_url, cover_image_url)
-          |> assign(:external_image_data, external_image_data)
-          |> assign(:show_image_picker, false)
-          |> assign(:search_query, "")
-          |> assign(:search_results, %{unsplash: [], tmdb: []})
-          |> assign(:loading, false)
-          |> assign(:error, nil)
-          |> assign(:page, 1)
-          |> assign(:per_page, 20)
-          # Changed from "unsplash" to unified search
-          |> assign(:image_tab, "search")
-          # Legacy date polling disabled
-          |> assign(:enable_date_polling, false)
-          # default to confirmed for new events
-          |> assign(:setup_path, "confirmed")
-          # New three-question dropdown assigns
-          |> assign(:date_certainty, "confirmed")
-          |> assign(:venue_certainty, "confirmed")
-          |> assign(:participation_type, "free")
-          # New unified picker assigns
-          |> assign(:selected_category, "general")
-          |> assign(
-            :default_categories,
-            EventasaurusWeb.Services.DefaultImagesService.get_categories()
-          )
-          |> assign(
-            :default_images,
-            EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general")
-          )
-          |> assign(:supabase_access_token, session["access_token"])
-          # Ticketing assigns
-          |> assign(:tickets, [])
-          |> assign(:show_ticket_modal, false)
-          |> assign(:ticket_form_data, %{})
-          |> assign(:editing_ticket_id, nil)
-          |> assign(:show_additional_options, false)
-          # Recent locations assigns
-          |> assign(:recent_locations, recent_locations)
-          |> assign(:show_recent_locations, false)
-          |> assign(:filtered_recent_locations, recent_locations)
-          # Rich data import assigns
-          |> assign(:rich_external_data, %{})
-          |> assign(:show_rich_data_import, false)
+      socket =
+        socket
+        |> assign(:form, to_form(changeset))
+        |> assign(:user_groups, user_groups)
+        |> assign(:user, user)
+        |> assign(:changeset, changeset)
+        |> assign(:form_data, final_form_data)
+        |> assign(:is_virtual, false)
+        |> assign(:selected_venue_name, nil)
+        |> assign(:selected_venue_address, nil)
+        |> assign(:show_all_timezones, false)
+        |> assign(:cover_image_url, cover_image_url)
+        |> assign(:external_image_data, external_image_data)
+        |> assign(:show_image_picker, false)
+        |> assign(:search_query, "")
+        |> assign(:search_results, %{unsplash: [], tmdb: []})
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+        |> assign(:page, 1)
+        |> assign(:per_page, 20)
+        # Changed from "unsplash" to unified search
+        |> assign(:image_tab, "search")
+        # Legacy date polling disabled
+        |> assign(:enable_date_polling, false)
+        # default to confirmed for new events
+        |> assign(:setup_path, "confirmed")
+        # New three-question dropdown assigns
+        |> assign(:date_certainty, "confirmed")
+        |> assign(:venue_certainty, "confirmed")
+        |> assign(:participation_type, "free")
+        # New unified picker assigns
+        |> assign(:selected_category, "general")
+        |> assign(
+          :default_categories,
+          EventasaurusWeb.Services.DefaultImagesService.get_categories()
+        )
+        |> assign(
+          :default_images,
+          EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general")
+        )
+        |> assign(:supabase_access_token, session["access_token"])
+        # Ticketing assigns
+        |> assign(:tickets, [])
+        |> assign(:show_ticket_modal, false)
+        |> assign(:ticket_form_data, %{})
+        |> assign(:editing_ticket_id, nil)
+        |> assign(:show_additional_options, false)
+        # Recent locations assigns
+        |> assign(:recent_locations, recent_locations)
+        |> assign(:show_recent_locations, false)
+        |> assign(:filtered_recent_locations, recent_locations)
+        # Rich data import assigns
+        |> assign(:rich_external_data, %{})
+        |> assign(:show_rich_data_import, false)
 
-        {:ok, socket}
+      {:ok, socket}
     else
       # User not available - this shouldn't happen as the route requires auth,
       # but redirect to login as a fallback

@@ -44,13 +44,18 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
     # Get city_name from options (set in admin UI per-city discovery config)
     # Falls back to legacy target_cities for backward compatibility
     city_name = options["city_name"] || options[:city_name]
-    days_ahead = options["days_ahead"] || options[:days_ahead] || args["days_ahead"] || Config.days_ahead()
+
+    days_ahead =
+      options["days_ahead"] || options[:days_ahead] || args["days_ahead"] || Config.days_ahead()
+
     force = args["force"] || false
     external_id = "cinema_city_sync_#{Date.utc_today()}"
 
     # Validate city_name is configured (reject nil and empty string)
     if is_nil(city_name) or city_name == "" do
-      error_msg = "No city_name configured for cinema-city source. Configure via Admin > Discovery > City Config."
+      error_msg =
+        "No city_name configured for cinema-city source. Configure via Admin > Discovery > City Config."
+
       Logger.error("❌ #{error_msg}")
       MetricsTracker.record_failure(job, error_msg, external_id)
       {:error, :city_name_not_configured}

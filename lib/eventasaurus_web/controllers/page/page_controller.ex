@@ -1,6 +1,10 @@
 defmodule EventasaurusWeb.PageController do
   use EventasaurusWeb, :controller
 
+  require Logger
+
+  alias Eventasaurus.Sanity.Changelog
+
   def home(conn, _params) do
     # The home page is often custom made,
     # so skip using the default app layout.
@@ -103,80 +107,54 @@ defmodule EventasaurusWeb.PageController do
     redirect(conn, to: "/invite-only")
   end
 
+  def changelog(conn, params) do
+    page = parse_page(params["page"])
 
-  def changelog(conn, _params) do
-    entries = [
+    case Changelog.list_entries(page: page) do
+      {:ok, entries, pagination} ->
+        render(conn, :changelog, entries: entries, pagination: pagination)
+
+      {:error, reason} ->
+        Logger.warning("Failed to fetch changelog from Sanity: #{inspect(reason)}")
+        render(conn, :changelog, entries: fallback_changelog_entries(), pagination: fallback_pagination())
+    end
+  end
+
+  defp parse_page(nil), do: 1
+  defp parse_page(page) when is_binary(page) do
+    case Integer.parse(page) do
+      {num, _} when num > 0 -> num
+      _ -> 1
+    end
+  end
+  defp parse_page(_), do: 1
+
+  defp fallback_pagination do
+    %{
+      page: 1,
+      page_size: 10,
+      total_entries: 1,
+      total_pages: 1,
+      has_next: false,
+      has_prev: false
+    }
+  end
+
+  # Fallback entries for when Sanity is unavailable
+  defp fallback_changelog_entries do
+    [
       %{
-        id: "1",
+        id: "fallback-1",
         date: "December 8, 2024",
         iso_date: "2024-12-08",
-        title: "December Updates",
-        summary: "Performance improvements and bug fixes for event discovery",
+        title: "Changelog Temporarily Unavailable",
+        summary: "We're having trouble loading the changelog. Please try again later.",
         changes: [
-          %{type: "added", description: "Improved city search with better autocomplete"},
-          %{type: "changed", description: "50% faster event loading through speed optimizations"},
-          %{type: "fixed", description: "Duplicate events from Bandsintown scraper"},
-          %{type: "fixed", description: "Ireland location accuracy"},
-          %{type: "security", description: "Updated authentication tokens with improved encryption"}
-        ],
-        image: nil
-      },
-      %{
-        id: "2",
-        date: "November 25, 2024",
-        iso_date: "2024-11-25",
-        title: "Infrastructure Improvements",
-        summary: "Major backend refactoring for better reliability",
-        changes: [
-          %{type: "changed", description: "Refactored Oban job processing for better reliability"},
-          %{type: "fixed", description: "Migration stability improvements"},
-          %{type: "fixed", description: "GitHub integration fixes"},
-          %{type: "removed", description: "Deprecated legacy scraper endpoints"}
-        ],
-        image: nil
-      },
-      %{
-        id: "3",
-        date: "November 15, 2024",
-        iso_date: "2024-11-15",
-        title: "Bulk Event Creation",
-        summary: "New feature for faster event imports",
-        changes: [
-          %{type: "added", description: "Bulk event creation for faster imports"},
-          %{type: "added", description: "New scraper sources added"},
-          %{type: "fixed", description: "Duplicate event handling improvements"}
-        ],
-        image: "https://placehold.co/600x300/f3f4f6/1f2937?text=Bulk+Event+Creation"
-      },
-      %{
-        id: "4",
-        date: "November 1, 2024",
-        iso_date: "2024-11-01",
-        title: "Bug Fixes & Polish",
-        summary: "Various fixes and quality improvements",
-        changes: [
-          %{type: "fixed", description: "Scraper stability for Resident Advisor"},
-          %{type: "fixed", description: "Event location accuracy improvements"},
-          %{type: "changed", description: "Improved error handling in job processing"}
-        ],
-        image: nil
-      },
-      %{
-        id: "5",
-        date: "October 20, 2024",
-        iso_date: "2024-10-20",
-        title: "Image Migration",
-        summary: "Moved all event images to new CDN",
-        changes: [
-          %{type: "changed", description: "Migrated all images to new CDN for faster loading"},
-          %{type: "changed", description: "Improved image compression"},
-          %{type: "added", description: "WebP format support"}
+          %{type: "changed", description: "Full changelog will be available shortly"}
         ],
         image: nil
       }
     ]
-
-    render(conn, :changelog, entries: entries)
   end
 
   def eventasaurus_redirect(conn, _params) do

@@ -277,7 +277,8 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
 
   @impl true
   def handle_event("clear_filters", _params, socket) do
-    socket = assign(socket, :filters, %{source: nil, from_country: nil, to_country: nil, confidence: nil})
+    socket =
+      assign(socket, :filters, %{source: nil, from_country: nil, to_country: nil, confidence: nil})
 
     # Only reload if data was already loaded
     socket =
@@ -429,7 +430,10 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       socket =
         socket
         |> assign(:bulk_fixing, false)
-        |> put_flash(:info, "Bulk fix complete: #{new_progress.fixed} fixed, #{new_progress.failed} failed")
+        |> put_flash(
+          :info,
+          "Bulk fix complete: #{new_progress.fixed} fixed, #{new_progress.failed} failed"
+        )
         |> start_async_load()
 
       {:noreply, socket}
@@ -450,7 +454,10 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
       socket =
         socket
         |> assign(:bulk_fixing, false)
-        |> put_flash(:info, "Bulk fix complete: #{new_progress.fixed} fixed, #{new_progress.failed} failed")
+        |> put_flash(
+          :info,
+          "Bulk fix complete: #{new_progress.fixed} fixed, #{new_progress.failed} failed"
+        )
         |> start_async_load()
 
       {:noreply, socket}
@@ -517,7 +524,10 @@ defmodule EventasaurusWeb.Admin.VenueCountryMismatchesLive do
   defp format_error(:no_coordinates), do: "Venue has no GPS coordinates"
   defp format_error(:not_a_mismatch), do: "Venue is not a mismatch"
   defp format_error({:geocoding_failed, reason}), do: "Geocoding failed: #{inspect(reason)}"
-  defp format_error({:city_creation_failed, reason}), do: "City creation failed: #{inspect(reason)}"
+
+  defp format_error({:city_creation_failed, reason}),
+    do: "City creation failed: #{inspect(reason)}"
+
   defp format_error({:update_failed, _}), do: "Database update failed"
   defp format_error(reason), do: inspect(reason)
 

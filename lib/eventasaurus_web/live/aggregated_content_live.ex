@@ -242,10 +242,18 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       events_for_schema = if scope == :all_cities, do: all_events, else: city_events
 
       # Generate JSON-LD structured data
-      json_ld = ItemListSchema.generate(events_for_schema, content_type, identifier, city, max_items: 20)
+      json_ld =
+        ItemListSchema.generate(events_for_schema, content_type, identifier, city, max_items: 20)
 
       # Generate Open Graph meta tags
-      og_tags = build_aggregation_open_graph(content_type, identifier, city, total_event_count, hero_image)
+      og_tags =
+        build_aggregation_open_graph(
+          content_type,
+          identifier,
+          city,
+          total_event_count,
+          hero_image
+        )
 
       socket
       |> assign(:scope, scope)
@@ -767,7 +775,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
     # Build title and description
     title = "#{identifier_name} - #{type_name} in #{city.name}"
-    description = "Discover #{String.replace(identifier, "-", " ")} and other #{type_name} in #{city.name}. #{total_event_count} #{pluralize("event", total_event_count)} available."
+
+    description =
+      "Discover #{String.replace(identifier, "-", " ")} and other #{type_name} in #{city.name}. #{total_event_count} #{pluralize("event", total_event_count)} available."
 
     # Use hero image or generate placeholder
     image_url =

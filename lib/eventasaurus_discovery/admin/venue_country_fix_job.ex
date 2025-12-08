@@ -70,13 +70,17 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
 
         case DataQualityChecker.fix_venue_country_from_metadata(venue) do
           {:ok, fix_result} ->
-            Logger.info("[VenueCountryFix] Fixed venue #{venue_id}: #{fix_result.old_country} -> #{fix_result.new_country}")
+            Logger.info(
+              "[VenueCountryFix] Fixed venue #{venue_id}: #{fix_result.old_country} -> #{fix_result.new_country}"
+            )
+
             record_success_with_details(job, external_id, %{
               venue_id: venue_id,
               venue_name: venue_name,
               old_country: fix_result.old_country,
               new_country: fix_result.new_country
             })
+
             broadcast_progress(:fixed, %{venue_id: venue_id, result: fix_result})
             :ok
 
@@ -97,7 +101,9 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
                 Logger.info("[VenueCountryFix] Marked venue #{venue_id} as failed in metadata")
 
               {:error, update_error} ->
-                Logger.error("[VenueCountryFix] Could not update venue #{venue_id} status: #{inspect(update_error)}")
+                Logger.error(
+                  "[VenueCountryFix] Could not update venue #{venue_id} status: #{inspect(update_error)}"
+                )
             end
 
             broadcast_progress(:failed, %{venue_id: venue_id, reason: reason})
@@ -162,7 +168,10 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
   end
 
   defp format_error_message(reason) when is_binary(reason), do: String.slice(reason, 0, 500)
-  defp format_error_message(%{__exception__: true} = ex), do: Exception.message(ex) |> String.slice(0, 500)
+
+  defp format_error_message(%{__exception__: true} = ex),
+    do: Exception.message(ex) |> String.slice(0, 500)
+
   defp format_error_message(reason), do: inspect(reason) |> String.slice(0, 500)
 
   @doc """
@@ -205,11 +214,12 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryFixJob do
     limit = Keyword.get(opts, :limit, 50)
 
     # Get venues to fix
-    venues = VenueCountryCheckJob.get_mismatches(
-      status: "pending",
-      confidence: confidence,
-      limit: limit * 2
-    )
+    venues =
+      VenueCountryCheckJob.get_mismatches(
+        status: "pending",
+        confidence: confidence,
+        limit: limit * 2
+      )
 
     # Filter by country pair if specified
     filtered_venues =

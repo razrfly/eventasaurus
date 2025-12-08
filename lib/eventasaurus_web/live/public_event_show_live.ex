@@ -4,7 +4,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
-  alias EventasaurusWeb.Components.{PublicPlanWithFriendsModal, Breadcrumbs, MovieDetailsCard, OpenGraphComponent}
+
+  alias EventasaurusWeb.Components.{
+    PublicPlanWithFriendsModal,
+    Breadcrumbs,
+    MovieDetailsCard,
+    OpenGraphComponent
+  }
+
   alias EventasaurusWeb.Components.Events.OccurrenceDisplay
   alias EventasaurusWeb.Components.Events.EventScheduleDisplay
   alias EventasaurusWeb.StaticMapComponent
@@ -320,7 +327,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           end
 
         # Generate Open Graph meta tags
-        og_tags = build_event_open_graph(enriched_event, description, image_url, canonical_url_for_schemas)
+        og_tags =
+          build_event_open_graph(
+            enriched_event,
+            description,
+            image_url,
+            canonical_url_for_schemas
+          )
 
         socket
         |> assign(:event, enriched_event)

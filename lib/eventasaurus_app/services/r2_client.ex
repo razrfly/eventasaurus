@@ -244,7 +244,9 @@ defmodule EventasaurusApp.Services.R2Client do
 
     account_id = r2_config[:account_id] || System.get_env("CLOUDFLARE_ACCOUNT_ID")
     access_key_id = r2_config[:access_key_id] || System.get_env("CLOUDFLARE_ACCESS_KEY_ID")
-    secret_access_key = r2_config[:secret_access_key] || System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY")
+
+    secret_access_key =
+      r2_config[:secret_access_key] || System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY")
 
     !is_nil(account_id) and account_id != "" and
       !is_nil(access_key_id) and access_key_id != "" and
@@ -256,7 +258,9 @@ defmodule EventasaurusApp.Services.R2Client do
 
     account_id = r2_config[:account_id] || System.get_env("CLOUDFLARE_ACCOUNT_ID")
     access_key_id = r2_config[:access_key_id] || System.get_env("CLOUDFLARE_ACCESS_KEY_ID")
-    secret_access_key = r2_config[:secret_access_key] || System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY")
+
+    secret_access_key =
+      r2_config[:secret_access_key] || System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY")
 
     # Return error tuple if not configured instead of raising
     cond do

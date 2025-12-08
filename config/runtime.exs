@@ -254,6 +254,13 @@ config :eventasaurus, :imagekit,
   endpoint: System.get_env("IMAGEKIT_END_POINT", "https://ik.imagekit.io/wombie"),
   folder: sanitized_imagekit_folder
 
+# Sanity CMS configuration for changelog
+# Used by Eventasaurus.Sanity.Client to fetch changelog entries
+config :eventasaurus, :sanity,
+  project_id: System.get_env("SANITY_PROJECT_ID"),
+  api_token: System.get_env("SANITY_API_TOKEN"),
+  dataset: System.get_env("SANITY_DATASET", "production")
+
 # Venue image enrichment configuration
 # Limit images processed in development to save API credits (Google Places + ImageKit)
 default_max_images = if config_env() == :prod, do: 10, else: 2

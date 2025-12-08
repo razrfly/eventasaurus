@@ -71,7 +71,10 @@ defmodule Mix.Tasks.Quality.Countries do
     # Build options for the check
     check_opts = []
     check_opts = if opts[:source], do: [{:source, opts[:source]} | check_opts], else: check_opts
-    check_opts = if opts[:country], do: [{:country, opts[:country]} | check_opts], else: check_opts
+
+    check_opts =
+      if opts[:country], do: [{:country, opts[:country]} | check_opts], else: check_opts
+
     check_opts = if opts[:limit], do: [{:limit, opts[:limit]} | check_opts], else: check_opts
 
     # Run the check

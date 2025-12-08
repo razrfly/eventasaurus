@@ -20,18 +20,18 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
 
     test "removes invalid UTF-8 sequences" do
       # Simulating corrupted en-dash (0xe2 0x80 0x93 becomes 0xe2 0x20 0x53)
-      broken = "Teatr Ludowy " <> <<0xe2, 0x20, 0x53>> <> "cena Pod Ratuszem"
+      broken = "Teatr Ludowy " <> <<0xE2, 0x20, 0x53>> <> "cena Pod Ratuszem"
       result = UTF8.ensure_valid_utf8(broken)
 
       # Should remove the invalid sequence
       assert String.valid?(result)
       # The invalid bytes should be removed
-      refute String.contains?(result, <<0xe2, 0x20, 0x53>>)
+      refute String.contains?(result, <<0xE2, 0x20, 0x53>>)
     end
 
     test "handles incomplete UTF-8 sequences" do
       # Incomplete 3-byte sequence
-      incomplete = "Test " <> <<0xe2, 0x80>> <> " text"
+      incomplete = "Test " <> <<0xE2, 0x80>> <> " text"
       result = UTF8.ensure_valid_utf8(incomplete)
 
       assert String.valid?(result)
@@ -51,7 +51,7 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
   describe "validate_map_strings/1" do
     test "validates strings in a flat map" do
       input = %{
-        "name" => "Teatr " <> <<0xe2, 0x20, 0x53>> <> "cena",
+        "name" => "Teatr " <> <<0xE2, 0x20, 0x53>> <> "cena",
         "address" => "Valid address",
         "count" => 42
       }
@@ -66,7 +66,7 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
     test "validates strings in nested maps" do
       input = %{
         "venue" => %{
-          "name" => "Teatr " <> <<0xe2, 0x20, 0x53>> <> "cena",
+          "name" => "Teatr " <> <<0xE2, 0x20, 0x53>> <> "cena",
           "city" => "Kraków"
         },
         "metadata" => %{
@@ -82,7 +82,8 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
     end
 
     test "validates strings in lists within maps" do
-      broken_str = "Test " <> <<0xe2, 0x20, 0x53>>
+      broken_str = "Test " <> <<0xE2, 0x20, 0x53>>
+
       input = %{
         "items" => [broken_str, "valid", 123],
         "nested" => [
@@ -128,7 +129,7 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
     import ExUnit.CaptureLog
 
     test "logs when invalid UTF-8 is detected" do
-      broken = "Test " <> <<0xe2, 0x20, 0x53>>
+      broken = "Test " <> <<0xE2, 0x20, 0x53>>
 
       log =
         capture_log(fn ->
@@ -167,7 +168,8 @@ defmodule EventasaurusDiscovery.Utils.UTF8Test do
       Enum.each(venues, fn venue ->
         result = UTF8.ensure_valid_utf8(venue)
         assert String.valid?(result)
-        assert result == venue  # Should preserve valid UTF-8
+        # Should preserve valid UTF-8
+        assert result == venue
       end)
     end
 

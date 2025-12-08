@@ -102,7 +102,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessorConcurrencyTes
       assert db_event.venue_id == db_venue.id, "Event should be linked to venue"
     end
 
-    test "processes multiple events in parallel without errors", %{venue: venue, source: source, city: city, country: country} do
+    test "processes multiple events in parallel without errors", %{
+      venue: venue,
+      source: source,
+      city: city,
+      country: country
+    } do
       # Create 3 different events at the same venue
       base_time = DateTime.utc_now() |> DateTime.add(30, :day)
       unique_suffix = System.unique_integer([:positive])
@@ -166,7 +171,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessorConcurrencyTes
 
       # All should succeed (no errors during parallel processing)
       success_count = Enum.count(results, fn result -> match?({:ok, _}, result) end)
-      assert success_count == 3, "Expected all 3 events to process successfully, got #{success_count}"
+
+      assert success_count == 3,
+             "Expected all 3 events to process successfully, got #{success_count}"
 
       # All successful events should have valid IDs
       successful_events = Enum.filter(results, fn result -> match?({:ok, _}, result) end)

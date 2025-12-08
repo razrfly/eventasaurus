@@ -44,14 +44,29 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
 
       # Create venues with info
       venues_with_info = [
-        {venue1, %{count: 15, slug: "dune-part-two-cinema-city", date_range: "Mar 1-15", formats: ["IMAX", "3D"]}},
+        {venue1,
+         %{
+           count: 15,
+           slug: "dune-part-two-cinema-city",
+           date_range: "Mar 1-15",
+           formats: ["IMAX", "3D"]
+         }},
         {venue2, %{count: 8, slug: "dune-part-two-baranami", date_range: "Mar 1-10", formats: []}}
       ]
 
-      {:ok, movie: movie, city: city, venues_with_info: venues_with_info, venue1: venue1, venue2: venue2}
+      {:ok,
+       movie: movie,
+       city: city,
+       venues_with_info: venues_with_info,
+       venue1: venue1,
+       venue2: venue2}
     end
 
-    test "generates basic movie schema", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "generates basic movie schema", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["@context"] == "https://schema.org"
@@ -60,10 +75,15 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert String.contains?(schema["url"], "/c/krakow/movies/dune-part-two")
     end
 
-    test "generates description with showtime count", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "generates description with showtime count", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      assert schema["description"] == "Watch Dune: Part Two in Kraków. 23 showtimes available at 2 cinemas."
+      assert schema["description"] ==
+               "Watch Dune: Part Two in Kraków. 23 showtimes available at 2 cinemas."
     end
 
     test "uses singular 'cinema' for single venue", %{movie: movie, city: city, venue1: venue1} do
@@ -76,14 +96,22 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert String.contains?(schema["description"], "1 cinema")
     end
 
-    test "includes placeholder image when no metadata", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes placeholder image when no metadata", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert String.contains?(schema["image"], "placehold.co")
       assert String.contains?(schema["image"], URI.encode("Dune: Part Two"))
     end
 
-    test "generates JSON-LD string", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "generates JSON-LD string", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       json_ld = MovieSchema.generate(movie, city, venues_with_info)
 
       assert is_binary(json_ld)
@@ -142,7 +170,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
     end
 
-    test "includes TMDb poster image", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes TMDb poster image", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["image"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
@@ -154,26 +186,42 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert schema["datePublished"] == "2024-03-01"
     end
 
-    test "includes runtime in ISO 8601 format", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes runtime in ISO 8601 format", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["duration"] == "PT2H46M"
     end
 
-    test "includes genres as array", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes genres as array", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["genre"] == ["Science Fiction", "Adventure"]
     end
 
-    test "includes director as Person", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes director as Person", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["director"]["@type"] == "Person"
       assert schema["director"]["name"] == "Denis Villeneuve"
     end
 
-    test "includes actors as array (max 10)", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes actors as array (max 10)", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert is_list(schema["actor"])
@@ -182,7 +230,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert Enum.at(schema["actor"], 0)["name"] == "Timothée Chalamet"
     end
 
-    test "includes TMDb aggregate rating", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes TMDb aggregate rating", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["aggregateRating"]["@type"] == "AggregateRating"
@@ -231,38 +283,62 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
     end
 
-    test "includes OMDb poster image", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes OMDb poster image", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["image"] == "https://example.com/poster.jpg"
     end
 
-    test "includes release date from OMDb", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes release date from OMDb", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["datePublished"] == "01 Mar 2024"
     end
 
-    test "includes runtime parsed from OMDb", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes runtime parsed from OMDb", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["duration"] == "PT2H46M"
     end
 
-    test "includes genres parsed from OMDb", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes genres parsed from OMDb", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["genre"] == ["Sci-Fi", "Adventure", "Drama"]
     end
 
-    test "includes director as Person from OMDb", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes director as Person from OMDb", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["director"]["@type"] == "Person"
       assert schema["director"]["name"] == "Denis Villeneuve"
     end
 
-    test "includes actors parsed from OMDb", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes actors parsed from OMDb", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert is_list(schema["actor"])
@@ -271,7 +347,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert Enum.at(schema["actor"], 0)["name"] == "Timothée Chalamet"
     end
 
-    test "includes IMDb rating from OMDb", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes IMDb rating from OMDb", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["aggregateRating"]["@type"] == "AggregateRating"
@@ -466,14 +546,24 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       }
 
       venues_with_info = [
-        {venue1, %{count: 15, slug: "dune-part-two-cinema-city", date_range: "Mar 1-15", formats: ["IMAX", "3D"]}},
+        {venue1,
+         %{
+           count: 15,
+           slug: "dune-part-two-cinema-city",
+           date_range: "Mar 1-15",
+           formats: ["IMAX", "3D"]
+         }},
         {venue2, %{count: 8, slug: "dune-part-two-baranami", date_range: "Mar 1-10", formats: []}}
       ]
 
       {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
     end
 
-    test "includes potentialAction with ItemList of screenings", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes potentialAction with ItemList of screenings", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       assert schema["potentialAction"]["@type"] == "ItemList"
@@ -481,7 +571,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert schema["potentialAction"]["numberOfItems"] == 2
     end
 
-    test "includes ListItem for each venue with position", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes ListItem for each venue with position", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       items = schema["potentialAction"]["itemListElement"]
@@ -494,7 +588,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert first_item["item"]["name"] == "Cinema City"
     end
 
-    test "includes venue address in ListItem", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes venue address in ListItem", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)
@@ -506,7 +604,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert address["addressCountry"] == "PL"
     end
 
-    test "includes venue URL and activity URL in ListItem", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes venue URL and activity URL in ListItem", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)
@@ -515,7 +617,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert String.contains?(first_item["item"]["url"], "/activities/dune-part-two-cinema-city")
     end
 
-    test "includes showtime count description", %{movie: movie, city: city, venues_with_info: venues_with_info} do
+    test "includes showtime count description", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)

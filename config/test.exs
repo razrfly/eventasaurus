@@ -86,7 +86,6 @@ config :eventasaurus, :auth_client, EventasaurusApp.Auth.TestClient
 # Configure Stripe mock for testing
 config :eventasaurus, :stripe_module, EventasaurusApp.StripeMock
 
-
 # Configure Wallaby for browser automation testing
 config :wallaby,
   driver: Wallaby.Chrome,

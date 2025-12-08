@@ -166,7 +166,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
       end
 
     # Generate Open Graph meta tags
-    og_tags = build_venue_open_graph(venue, description, canonical_path, socket.assigns.request_uri)
+    og_tags =
+      build_venue_open_graph(venue, description, canonical_path, socket.assigns.request_uri)
 
     socket =
       socket

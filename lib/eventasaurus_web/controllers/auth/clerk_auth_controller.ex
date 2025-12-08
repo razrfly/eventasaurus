@@ -56,7 +56,10 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
               end
 
             _ ->
-              Logger.warning("Signup attempted with invalid event_id format: #{inspect(event_id)}")
+              Logger.warning(
+                "Signup attempted with invalid event_id format: #{inspect(event_id)}"
+              )
+
               {put_flash(conn, :error, "Invalid event invitation link."), nil}
           end
 
@@ -170,11 +173,15 @@ defmodule EventasaurusWeb.Auth.ClerkAuthController do
       not String.contains?(url, "//")
     else
       case URI.parse(url) do
-        %URI{host: nil} -> String.starts_with?(url, "/")
+        %URI{host: nil} ->
+          String.starts_with?(url, "/")
+
         %URI{host: host, scheme: scheme} when scheme in ["http", "https"] ->
           app_host = EventasaurusWeb.Endpoint.host()
           host == app_host || (host == "localhost" && app_host == "localhost")
-        _ -> false
+
+        _ ->
+          false
       end
     end
   rescue

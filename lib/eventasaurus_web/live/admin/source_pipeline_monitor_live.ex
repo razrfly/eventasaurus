@@ -33,10 +33,14 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
 
     # Pipeline Health: (completed + cancelled_expected) / total
     # Only count intentional cancellations as healthy, not processing failures
-    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_expected_runs) / total_runs * 100, else: 0.0
+    overall_pipeline_health =
+      if total_runs > 0,
+        do: (successful_runs + cancelled_expected_runs) / total_runs * 100,
+        else: 0.0
 
     # Processing Failure Rate: (cancelled_failed + failed) / total
-    overall_processing_failure_rate = if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
+    overall_processing_failure_rate =
+      if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
 
     # Match Rate: completed / (completed + cancelled_expected)
     overall_match_rate =
@@ -99,10 +103,14 @@ defmodule EventasaurusWeb.Admin.SourcePipelineMonitorLive do
 
     # Pipeline Health: (completed + cancelled_expected) / total
     # Only count intentional cancellations as healthy, not processing failures
-    overall_pipeline_health = if total_runs > 0, do: (successful_runs + cancelled_expected_runs) / total_runs * 100, else: 0.0
+    overall_pipeline_health =
+      if total_runs > 0,
+        do: (successful_runs + cancelled_expected_runs) / total_runs * 100,
+        else: 0.0
 
     # Processing Failure Rate: (cancelled_failed + failed) / total
-    overall_processing_failure_rate = if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
+    overall_processing_failure_rate =
+      if total_runs > 0, do: (cancelled_failed_runs + failed_runs) / total_runs * 100, else: 0.0
 
     # Match Rate: completed / (completed + cancelled_expected)
     overall_match_rate =

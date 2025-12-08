@@ -122,11 +122,12 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     cancelled? = cancellation_reason?(reason)
 
     # Determine job state based on exception type
-    state = cond do
-      cancelled? -> :cancelled
-      job.attempt >= job.max_attempts -> :discard
-      true -> :failure
-    end
+    state =
+      cond do
+        cancelled? -> :cancelled
+        job.attempt >= job.max_attempts -> :discard
+        true -> :failure
+      end
 
     # Record job exception in summary
     error_message = Exception.format(kind, reason, stacktrace)
@@ -137,6 +138,7 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
       # Cancellations are expected behavior (e.g., movie not matched in TMDB)
       # Log as info, not error, and don't report to Sentry
       cancel_reason = extract_cancel_reason(reason)
+
       Logger.info("""
       ⏭️  Job cancelled (expected): #{job.worker} [#{job.id}]
       Reason: #{cancel_reason}
@@ -208,15 +210,16 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     # Extract cancellation reason if state is cancelled
     # For :stop events, reason is in metadata.result
     # For :exception events, reason is in metadata.reason
-    cancel_reason = if state == :cancelled do
-      cond do
-        Map.has_key?(metadata, :result) -> extract_cancel_reason(metadata.result)
-        Map.has_key?(metadata, :reason) -> extract_cancel_reason(metadata.reason)
-        true -> nil
+    cancel_reason =
+      if state == :cancelled do
+        cond do
+          Map.has_key?(metadata, :result) -> extract_cancel_reason(metadata.result)
+          Map.has_key?(metadata, :reason) -> extract_cancel_reason(metadata.reason)
+          true -> nil
+        end
+      else
+        nil
       end
-    else
-      nil
-    end
 
     # Merge results from multiple sources:
     # 1. job.meta - metadata set when job was created (e.g., parent_job_id)
@@ -252,11 +255,12 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
       end
 
     # Add cancellation reason to results if present
-    results = if cancel_reason do
-      Map.put(results, "cancel_reason", cancel_reason)
-    else
-      results
-    end
+    results =
+      if cancel_reason do
+        Map.put(results, "cancel_reason", cancel_reason)
+      else
+        results
+      end
 
     # Build summary attributes
     attrs = %{

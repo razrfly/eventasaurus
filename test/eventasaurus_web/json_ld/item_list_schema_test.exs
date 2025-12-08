@@ -83,12 +83,15 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchemaTest do
     test "generates description with event count", %{events: events, city: city} do
       schema = ItemListSchema.build_item_list_schema(events, "SocialEvent", "trivia-nights", city)
 
-      assert schema["description"] == "Discover trivia nights and other social events in Kraków. 2 events available."
+      assert schema["description"] ==
+               "Discover trivia nights and other social events in Kraków. 2 events available."
     end
 
     test "uses singular 'event' for single event", %{events: events, city: city} do
       single_event = [List.first(events)]
-      schema = ItemListSchema.build_item_list_schema(single_event, "SocialEvent", "trivia-nights", city)
+
+      schema =
+        ItemListSchema.build_item_list_schema(single_event, "SocialEvent", "trivia-nights", city)
 
       assert String.contains?(schema["description"], "1 event available")
     end
@@ -218,14 +221,16 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchemaTest do
     end
 
     test "respects max_items option", %{events: events, city: city} do
-      schema = ItemListSchema.build_item_list_schema(events, "Event", "all-events", city, max_items: 10)
+      schema =
+        ItemListSchema.build_item_list_schema(events, "Event", "all-events", city, max_items: 10)
 
       assert schema["numberOfItems"] == 10
       assert length(schema["itemListElement"]) == 10
     end
 
     test "description shows total count even when limited", %{events: events, city: city} do
-      schema = ItemListSchema.build_item_list_schema(events, "Event", "all-events", city, max_items: 10)
+      schema =
+        ItemListSchema.build_item_list_schema(events, "Event", "all-events", city, max_items: 10)
 
       # Description should show total count (25), not limited count (10)
       assert String.contains?(schema["description"], "25 events available")
@@ -355,19 +360,22 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchemaTest do
     end
 
     test "converts hyphens to spaces in title", %{event: event, city: city} do
-      schema = ItemListSchema.build_item_list_schema([event], "SocialEvent", "trivia-nights", city)
+      schema =
+        ItemListSchema.build_item_list_schema([event], "SocialEvent", "trivia-nights", city)
 
       assert String.contains?(schema["name"], "Trivia Nights")
     end
 
     test "capitalizes each word in title", %{event: event, city: city} do
-      schema = ItemListSchema.build_item_list_schema([event], "SocialEvent", "open-mic-comedy", city)
+      schema =
+        ItemListSchema.build_item_list_schema([event], "SocialEvent", "open-mic-comedy", city)
 
       assert String.contains?(schema["name"], "Open Mic Comedy")
     end
 
     test "keeps hyphens in description", %{event: event, city: city} do
-      schema = ItemListSchema.build_item_list_schema([event], "SocialEvent", "trivia-nights", city)
+      schema =
+        ItemListSchema.build_item_list_schema([event], "SocialEvent", "trivia-nights", city)
 
       assert String.contains?(schema["description"], "trivia nights")
     end
@@ -419,7 +427,9 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchemaTest do
       assert String.contains?(schema["url"], "/c/new-york/food/tastings")
 
       # Test ScreeningEvent -> movies
-      schema = ItemListSchema.build_item_list_schema([event], "ScreeningEvent", "indie-films", city)
+      schema =
+        ItemListSchema.build_item_list_schema([event], "ScreeningEvent", "indie-films", city)
+
       assert String.contains?(schema["url"], "/c/new-york/movies/indie-films")
     end
   end

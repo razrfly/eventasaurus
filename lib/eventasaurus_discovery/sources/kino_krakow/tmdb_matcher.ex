@@ -94,7 +94,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
       {fn -> search_tmdb(primary_title, year, nil) end, "original_title+year"},
 
       # Strategy 2: Normalized title (remove 3D/IMAX/etc) + year
-      {fn -> search_tmdb(normalize_title_for_search(primary_title), year, nil) end, "normalized+year"},
+      {fn -> search_tmdb(normalize_title_for_search(primary_title), year, nil) end,
+       "normalized+year"},
 
       # Strategy 3: Main title only (handle subtitles like "Film: Subtitle")
       {fn -> search_tmdb(extract_main_title(primary_title), year, nil) end, "main_title+year"},
@@ -117,7 +118,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
       {fn -> search_tmdb(normalize_title_for_search(primary_title), nil, nil) end, "normalized"},
 
       # Strategy 9: Movie-specific search endpoint (better ranking) - Try with Polish if available
-      {fn -> polish_title && search_movie_only(polish_title, year, "pl-PL") end, "movie_endpoint+polish"},
+      {fn -> polish_title && search_movie_only(polish_title, year, "pl-PL") end,
+       "movie_endpoint+polish"},
 
       # Strategy 10: Movie-specific search endpoint (original title fallback)
       {fn -> search_movie_only(primary_title, year, nil) end, "movie_endpoint+year"},
