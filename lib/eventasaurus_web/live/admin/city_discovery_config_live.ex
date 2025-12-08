@@ -203,7 +203,10 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     source = Enum.find(sources, &(&1["name"] == source_name))
 
     if source do
-      settings = source["settings"] || %{}
+      stored_settings = source["settings"] || %{}
+      # Merge default settings with stored settings so new fields appear
+      default_settings = get_default_settings(source_name)
+      settings = Map.merge(default_settings, stringify_keys(stored_settings))
 
       socket =
         socket
@@ -342,7 +345,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   defp get_default_settings("bandsintown"), do: %{"limit" => 100, "radius" => 50}
   defp get_default_settings("ticketmaster"), do: %{"limit" => 100, "radius" => 50}
-  defp get_default_settings("resident-advisor"), do: %{"limit" => 100}
+  defp get_default_settings("resident-advisor"), do: %{"limit" => 100, "area_id" => nil}
   defp get_default_settings("karnet"), do: %{"limit" => 100, "max_pages" => 10}
   defp get_default_settings("kino-krakow"), do: %{"limit" => 100, "max_pages" => 10}
   defp get_default_settings("cinema-city"), do: %{"limit" => 100}
@@ -406,4 +409,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   end
 
   defp normalize_config(config) when is_map(config), do: config
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
+  end
 end

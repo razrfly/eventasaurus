@@ -34,8 +34,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Helpers.AreaMapper do
     # TODO: Discover via DevTools
 
     # Poland
-    {"Warsaw", "Poland"} => nil,
-    # TODO: Discover via DevTools
+    {"Warsaw", "Poland"} => 454,
     {"Kraków", "Poland"} => 455,
 
     # United States

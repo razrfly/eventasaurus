@@ -474,7 +474,22 @@ The application includes several admin dashboards for monitoring:
 
 ## Database Access
 
-### Via IEx
+### Production Database (PlanetScale)
+
+**IMPORTANT**: Production database is hosted on PlanetScale (PostgreSQL), NOT Fly.io.
+
+- **Organization**: `razrfly`
+- **Database**: `wombie`
+- **Branch**: `main`
+
+Use MCP PlanetScale tools for production queries:
+```
+mcp__planetscale__run_query with org="razrfly", database="wombie", branch="main"
+mcp__planetscale__get_schema with org="razrfly", database="wombie", branch="main"
+mcp__planetscale__list_tables with org="razrfly", database="wombie", branch="main"
+```
+
+### Via IEx (Development)
 
 ```elixir
 # Start IEx with application
@@ -491,7 +506,7 @@ Repo.all(from j in JobExecutionSummary, limit: 10)
 Repo.get(JobExecutionSummary, 123)
 ```
 
-### Via psql
+### Via psql (Development)
 
 ```bash
 # Connect to development database
