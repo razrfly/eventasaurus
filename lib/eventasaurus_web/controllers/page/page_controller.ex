@@ -103,6 +103,75 @@ defmodule EventasaurusWeb.PageController do
     redirect(conn, to: "/invite-only")
   end
 
+
+  def changelog(conn, _params) do
+    entries = [
+      %{
+        id: "1",
+        date: "December 8, 2024",
+        title: "December Updates",
+        summary: "Performance improvements and bug fixes for event discovery",
+        changes: [
+          %{type: "added", description: "Improved city search with better autocomplete"},
+          %{type: "changed", description: "50% faster event loading through speed optimizations"},
+          %{type: "fixed", description: "Duplicate events from Bandsintown scraper"},
+          %{type: "fixed", description: "Ireland location accuracy"}
+        ],
+        image: nil
+      },
+      %{
+        id: "2",
+        date: "November 25, 2024",
+        title: "Infrastructure Improvements",
+        summary: "Major backend refactoring for better reliability",
+        changes: [
+          %{type: "changed", description: "Refactored Oban job processing for better reliability"},
+          %{type: "fixed", description: "Migration stability improvements"},
+          %{type: "fixed", description: "GitHub integration fixes"}
+        ],
+        image: nil
+      },
+      %{
+        id: "3",
+        date: "November 15, 2024",
+        title: "Bulk Event Creation",
+        summary: "New feature for faster event imports",
+        changes: [
+          %{type: "added", description: "Bulk event creation for faster imports"},
+          %{type: "added", description: "New scraper sources added"},
+          %{type: "fixed", description: "Duplicate event handling improvements"}
+        ],
+        image: "https://placehold.co/600x300/f3f4f6/1f2937?text=Bulk+Event+Creation"
+      },
+      %{
+        id: "4",
+        date: "November 1, 2024",
+        title: "Bug Fixes & Polish",
+        summary: "Various fixes and quality improvements",
+        changes: [
+          %{type: "fixed", description: "Scraper stability for Resident Advisor"},
+          %{type: "fixed", description: "Event location accuracy improvements"},
+          %{type: "changed", description: "Improved error handling in job processing"}
+        ],
+        image: nil
+      },
+      %{
+        id: "5",
+        date: "October 20, 2024",
+        title: "Image Migration",
+        summary: "Moved all event images to new CDN",
+        changes: [
+          %{type: "changed", description: "Migrated all images to new CDN for faster loading"},
+          %{type: "changed", description: "Improved image compression"},
+          %{type: "added", description: "WebP format support"}
+        ],
+        image: nil
+      }
+    ]
+
+    render(conn, :changelog, entries: entries)
+  end
+
   def eventasaurus_redirect(conn, _params) do
     render(conn, :eventasaurus, layout: false)
   end

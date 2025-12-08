@@ -554,6 +554,7 @@ defmodule EventasaurusWeb.Router do
       get "/crypto-pitch", PageController, :crypto_pitch
       get "/invite-only", PageController, :invite_only
       get "/logo-test", LogoTestController, :index
+      get "/changelog", PageController, :changelog
 
       # Sitemap redirect
       get "/sitemap", PageController, :sitemap_redirect

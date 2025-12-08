@@ -1,0 +1,24 @@
+<div class="bg-white">
+  <.header class="bg-white border-b border-zinc-200">
+    <div class="max-w-4xl mx-auto py-16 px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-base font-semibold leading-7 text-indigo-600">Changelog</p>
+      <h1 class="mt-2 text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">What's new in Eventasaurus</h1>
+      <p class="mt-6 text-lg leading-8 text-zinc-600 max-w-2xl mx-auto">
+        Track our latest updates, improvements, and fixes. We're constantly working to make event discovery better.
+      </p>
+    </div>
+  </.header>
+
+  <EventasaurusWeb.ChangelogComponents.timeline entries={@entries} />
+  
+  <div class="border-t border-zinc-200 bg-zinc-50">
+    <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-sm text-zinc-500">
+        Want to contribute or report a bug? 
+        <a href="https://github.com/razrfly/eventasaurus" class="font-medium text-indigo-600 hover:text-indigo-500">
+          Check us out on GitHub &rarr;
+        </a>
+      </p>
+    </div>
+  </div>
+</div>
