@@ -38,19 +38,20 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
 
   @doc """
   Ensures the ETS cache table exists. Called automatically on first use.
+
+  Uses a try/rescue pattern to handle the race condition atomically -
+  we attempt to create the table and handle the case where it already exists.
   """
   def ensure_cache_table do
-    if :ets.whereis(@cache_table) == :undefined do
-      try do
-        :ets.new(@cache_table, [:set, :public, :named_table, read_concurrency: true])
-      rescue
-        # Handle race condition where another process created the table
-        # between our whereis check and ets.new call
-        ArgumentError -> :ok
-      end
+    # Try to create the table first - this is more reliable than check-then-create
+    # because it handles the race condition atomically
+    try do
+      :ets.new(@cache_table, [:set, :public, :named_table, read_concurrency: true])
+      :ok
+    rescue
+      # Table already exists - this is fine
+      ArgumentError -> :ok
     end
-
-    :ok
   end
 
   @doc """
@@ -138,6 +139,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   Uses Task.async_stream to parallelize quality checks for better performance.
   """
   def check_quality_batch(source_slugs) when is_list(source_slugs) do
+    # Ensure the ETS cache table exists before spawning tasks
+    # This prevents race conditions where tasks try to access a non-existent table
+    ensure_cache_table()
+
     source_slugs
     |> Task.async_stream(
       fn source_slug ->
