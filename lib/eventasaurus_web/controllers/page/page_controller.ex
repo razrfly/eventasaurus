@@ -109,31 +109,36 @@ defmodule EventasaurusWeb.PageController do
       %{
         id: "1",
         date: "December 8, 2024",
+        iso_date: "2024-12-08",
         title: "December Updates",
         summary: "Performance improvements and bug fixes for event discovery",
         changes: [
           %{type: "added", description: "Improved city search with better autocomplete"},
           %{type: "changed", description: "50% faster event loading through speed optimizations"},
           %{type: "fixed", description: "Duplicate events from Bandsintown scraper"},
-          %{type: "fixed", description: "Ireland location accuracy"}
+          %{type: "fixed", description: "Ireland location accuracy"},
+          %{type: "security", description: "Updated authentication tokens with improved encryption"}
         ],
         image: nil
       },
       %{
         id: "2",
         date: "November 25, 2024",
+        iso_date: "2024-11-25",
         title: "Infrastructure Improvements",
         summary: "Major backend refactoring for better reliability",
         changes: [
           %{type: "changed", description: "Refactored Oban job processing for better reliability"},
           %{type: "fixed", description: "Migration stability improvements"},
-          %{type: "fixed", description: "GitHub integration fixes"}
+          %{type: "fixed", description: "GitHub integration fixes"},
+          %{type: "removed", description: "Deprecated legacy scraper endpoints"}
         ],
         image: nil
       },
       %{
         id: "3",
         date: "November 15, 2024",
+        iso_date: "2024-11-15",
         title: "Bulk Event Creation",
         summary: "New feature for faster event imports",
         changes: [
@@ -146,6 +151,7 @@ defmodule EventasaurusWeb.PageController do
       %{
         id: "4",
         date: "November 1, 2024",
+        iso_date: "2024-11-01",
         title: "Bug Fixes & Polish",
         summary: "Various fixes and quality improvements",
         changes: [
@@ -158,6 +164,7 @@ defmodule EventasaurusWeb.PageController do
       %{
         id: "5",
         date: "October 20, 2024",
+        iso_date: "2024-10-20",
         title: "Image Migration",
         summary: "Moved all event images to new CDN",
         changes: [
