@@ -41,6 +41,39 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     "Zielona Góra"
   ]
 
+  # Resident Advisor area IDs (discovered via browser DevTools on ra.co)
+  # Format: {display_name, area_id}
+  # To find new area IDs:
+  # 1. Open https://ra.co/events/{country}/{city} in browser
+  # 2. Open DevTools → Network → Filter "graphql"
+  # 3. Scroll page to trigger event listing query
+  # 4. Inspect request payload → variables.filters.areas.eq
+  @resident_advisor_areas [
+    {"Kraków, Poland", 455},
+    {"Warsaw, Poland", 454},
+    {"London, UK", 34},
+    {"Berlin, Germany", 143},
+    {"Amsterdam, Netherlands", 29},
+    {"Barcelona, Spain", 88},
+    {"Paris, France", 44},
+    {"New York, USA", 8},
+    {"Los Angeles, USA", 23},
+    {"Tokyo, Japan", 297},
+    {"Sydney, Australia", 113},
+    {"Melbourne, Australia", 85},
+    {"Ibiza, Spain", 25},
+    {"Detroit, USA", 26},
+    {"Chicago, USA", 37},
+    {"San Francisco, USA", 54},
+    {"Manchester, UK", 21},
+    {"Bristol, UK", 98},
+    {"Glasgow, UK", 101},
+    {"Lisbon, Portugal", 153},
+    {"Vienna, Austria", 103},
+    {"Prague, Czech Republic", 120},
+    {"Budapest, Hungary", 307}
+  ]
+
   @impl true
   def mount(%{"slug" => city_slug}, _session, socket) do
     city = Repo.get_by!(City, slug: city_slug) |> Repo.preload(:country)
@@ -443,4 +476,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
 
   # Expose Cinema City cities for dropdown in template
   def cinema_city_cities, do: @cinema_city_cities
+
+  # Expose Resident Advisor areas for dropdown in template
+  def resident_advisor_areas, do: @resident_advisor_areas
 end

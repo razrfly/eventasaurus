@@ -245,12 +245,26 @@
                                 <% end %>
                               </select>
                             <% else %>
+                            <%= if key == "area_id" and @selected_source == "resident-advisor" do %>
+                              <select
+                                name={"setting_#{key}"}
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              >
+                                <option value="">Select an area...</option>
+                                <%= for {name, area_id} <- EventasaurusWeb.Admin.CityDiscoveryConfigLive.resident_advisor_areas() do %>
+                                  <option value={area_id} selected={default_value == area_id}>
+                                    {name} (ID: {area_id})
+                                  </option>
+                                <% end %>
+                              </select>
+                            <% else %>
                               <input
                                 type={if is_integer(default_value), do: "number", else: "text"}
                                 value={default_value}
                                 name={"setting_#{key}"}
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                               />
+                            <% end %>
                             <% end %>
                           </div>
                         <% end %>
