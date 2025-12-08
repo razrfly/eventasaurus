@@ -251,7 +251,46 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     %{area_id: area_id || args["area_id"]}
   end
 
+  defp build_source_options("cinema-city", %{"city_id" => city_id}) do
+    # Cinema City requires city_name from the city's discovery_config
+    case Repo.get(City, city_id) do
+      nil ->
+        Logger.warning("⚠️ City not found for cinema-city: #{city_id}")
+        %{}
+
+      city ->
+        # Get city_name from discovery_config sources
+        city_name = get_cinema_city_name_from_config(city)
+
+        if city_name do
+          Logger.info("✅ Found Cinema City city_name '#{city_name}' for #{city.name}")
+          %{city_name: city_name}
+        else
+          Logger.warning("⚠️ No city_name configured for cinema-city source on #{city.name}")
+          %{}
+        end
+    end
+  end
+
   defp build_source_options(_source, _args), do: %{}
+
+  # Extract city_name from city's discovery_config for cinema-city source
+  defp get_cinema_city_name_from_config(city) do
+    config = city.discovery_config || %{}
+    sources = config["sources"] || []
+
+    cinema_city_source =
+      Enum.find(sources, fn source ->
+        source["name"] == "cinema-city"
+      end)
+
+    if cinema_city_source do
+      settings = cinema_city_source["settings"] || %{}
+      settings["city_name"]
+    else
+      nil
+    end
+  end
 
   defp broadcast_progress(status, data) do
     Phoenix.PubSub.broadcast(

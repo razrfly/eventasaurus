@@ -72,8 +72,16 @@ defmodule EventasaurusDiscovery.Admin.SourceOptionsBuilder do
   end
 
   def build_options("cinema-city", _city, base_settings) do
+    # city_name is the Polish city name as returned by Cinema City API
+    # e.g., "Kraków", "Warszawa", "Wrocław"
+    city_name = base_settings["city_name"] || base_settings[:city_name]
+
+    if is_nil(city_name) do
+      Logger.warning("⚠️ No city_name configured for cinema-city source")
+    end
+
     %{
-      venue_id: base_settings["venue_id"] || base_settings[:venue_id] || "krakow-bonarka",
+      city_name: city_name,
       days_ahead: base_settings["days_ahead"] || base_settings[:days_ahead] || 14
     }
   end

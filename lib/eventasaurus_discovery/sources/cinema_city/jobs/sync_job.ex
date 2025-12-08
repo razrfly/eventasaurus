@@ -39,11 +39,27 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
     source_id = args["source_id"] || get_or_create_source_id()
-    days_ahead = args["days_ahead"] || Config.days_ahead()
-    target_cities = args["target_cities"] || Config.target_cities()
+    options = args["options"] || %{}
+
+    # Get city_name from options (set in admin UI per-city discovery config)
+    # Falls back to legacy target_cities for backward compatibility
+    city_name = options["city_name"] || options[:city_name]
+    days_ahead = options["days_ahead"] || options[:days_ahead] || args["days_ahead"] || Config.days_ahead()
     force = args["force"] || false
     external_id = "cinema_city_sync_#{Date.utc_today()}"
 
+    # Validate city_name is configured
+    if is_nil(city_name) do
+      error_msg = "No city_name configured for cinema-city source. Configure via Admin > Discovery > City Config."
+      Logger.error("❌ #{error_msg}")
+      MetricsTracker.record_failure(job, error_msg, external_id)
+      {:error, :city_name_not_configured}
+    else
+      perform_sync(job, source_id, city_name, days_ahead, force, external_id)
+    end
+  end
+
+  defp perform_sync(job, source_id, city_name, days_ahead, force, external_id) do
     if force do
       Logger.info("⚡ Force mode enabled - bypassing EventFreshnessChecker")
     end
@@ -51,7 +67,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
     Logger.info("""
     🎬 Starting Cinema City distributed sync
     Days ahead: #{days_ahead}
-    Target cities: #{inspect(target_cities)}
+    Target city: #{city_name}
     """)
 
     # Fetch cinema list from API
@@ -59,16 +75,16 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
     case Client.fetch_cinema_list(until_date) do
       {:ok, cinemas} ->
-        # Filter to target cities
-        filtered_cinemas = CinemaExtractor.filter_by_cities(cinemas, target_cities)
+        # Filter to configured city (single city per discovery config)
+        filtered_cinemas = CinemaExtractor.filter_by_city(cinemas, city_name)
 
         Logger.info("""
         ✅ Found #{length(cinemas)} total cinemas
-        📍 Filtered to #{length(filtered_cinemas)} cinemas in #{inspect(target_cities)}
+        📍 Filtered to #{length(filtered_cinemas)} cinema(s) in #{city_name}
         """)
 
         if Enum.empty?(filtered_cinemas) do
-          Logger.warning("⚠️ No cinemas found in target cities")
+          Logger.warning("⚠️ No cinemas found in #{city_name}")
           MetricsTracker.record_success(job, external_id)
           {:ok, %{cinemas: 0, jobs_scheduled: 0}}
         else
@@ -78,6 +94,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
 
           Logger.info("""
           ✅ Cinema City sync job completed (distributed mode)
+          City: #{city_name}
           Cinemas: #{length(filtered_cinemas)}
           Days: #{days_ahead}
           CinemaDateJobs scheduled: #{jobs_scheduled}
@@ -89,6 +106,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
           {:ok,
            %{
              mode: "distributed",
+             city: city_name,
              cinemas: length(filtered_cinemas),
              days_ahead: days_ahead,
              jobs_scheduled: jobs_scheduled

@@ -72,8 +72,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Source do
 
       # Cinema City specific
       site_id: Config.site_id(),
-      days_ahead: Config.days_ahead(),
-      target_cities: Config.target_cities()
+      days_ahead: Config.days_ahead()
+      # NOTE: city_name is now configured per-city via Admin > Discovery > City Config
     }
   end
 

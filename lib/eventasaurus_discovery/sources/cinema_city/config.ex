@@ -61,8 +61,10 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Config do
   # Cinema City typically publishes 7-14 days ahead
   def days_ahead, do: 7
 
-  # Target cities for initial implementation
-  # Can be expanded to other Polish cities in the future
+  # DEPRECATED: city_name is now configured per-city via Admin > Discovery > City Config
+  # Each city has its own Cinema City source settings with the appropriate city_name
+  # (e.g., "Kraków", "Warszawa", "Wrocław" - must match Cinema City's addressInfo.city)
+  @deprecated "Use city_name from discovery_config instead"
   def target_cities,
     do: Application.get_env(:eventasaurus_discovery, :cinema_city_cities, ["Kraków"])
 
