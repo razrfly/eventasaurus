@@ -228,6 +228,28 @@ defmodule EventasaurusDiscovery.Locations.City do
   end
 
   @doc """
+  Changeset for manually updating a city's slug.
+
+  Use this when you need to override the auto-generated slug,
+  such as when fixing duplicate city slugs.
+
+  ## Examples
+
+      iex> slug_changeset(city, %{slug: "warsaw"})
+      %Ecto.Changeset{}
+  """
+  def slug_changeset(city, attrs) do
+    city
+    |> cast(attrs, [:slug])
+    |> validate_required([:slug])
+    |> validate_format(:slug, ~r/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/,
+      message: "must contain only lowercase letters, numbers, and hyphens"
+    )
+    |> validate_length(:slug, min: 1, max: 255)
+    |> unique_constraint(:slug)
+  end
+
+  @doc """
   Changeset for deleting a city.
   Adds constraint to prevent deletion when city has venues.
   """

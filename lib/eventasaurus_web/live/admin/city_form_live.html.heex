@@ -169,26 +169,31 @@
           Alternate names help prevent duplicate cities when event sources use different language variations (e.g., "Warszawa" for "Warsaw").
         </p>
 
-        <!-- Add Alternate Name Form -->
+        <!-- Add Alternate Name -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-2">
             Add Alternate Name
           </label>
-          <form phx-submit="add_alternate_name" class="flex space-x-2">
+          <div class="flex space-x-2">
             <input
               type="text"
-              name="name"
+              id="new_alternate_name"
+              name="new_alternate_name"
+              value={@new_alternate_name}
+              phx-keyup="update_alternate_name_input"
+              phx-debounce="100"
               placeholder="Enter alternate name (e.g., Warszawa)"
-              required
               class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             />
             <button
-              type="submit"
-              class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              type="button"
+              phx-click="add_alternate_name"
+              disabled={@new_alternate_name == ""}
+              class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               Add
             </button>
-          </form>
+          </div>
         </div>
 
         <!-- Current Alternate Names -->
@@ -216,6 +221,79 @@
           </div>
         <% else %>
           <p class="text-sm text-gray-500 italic">No alternate names defined yet.</p>
+        <% end %>
+      </div>
+
+      <!-- SECTION: Advanced - Slug Editing -->
+      <div class="mb-6 pb-6 border-b border-gray-200">
+        <button
+          type="button"
+          phx-click="toggle_slug_editing"
+          class="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
+        >
+          <svg
+            class={"h-4 w-4 mr-2 transition-transform #{if @show_slug_editing, do: "rotate-90", else: ""}"}
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+          </svg>
+          Advanced: Edit URL Slug
+        </button>
+
+        <%= if @show_slug_editing do %>
+          <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div class="flex items-start mb-3">
+              <svg class="h-5 w-5 text-amber-600 mr-2 mt-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+              </svg>
+              <div>
+                <p class="text-sm font-medium text-amber-800">Warning: Changing the slug will change the URL</p>
+                <p class="text-xs text-amber-700 mt-1">
+                  This may break existing links and bookmarks. Only change if necessary (e.g., fixing duplicate city slugs).
+                </p>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Current Slug
+              </label>
+              <p class="text-sm text-gray-600 font-mono bg-white px-3 py-2 rounded border border-gray-200">
+                <%= @city.slug %>
+              </p>
+            </div>
+
+            <div class="mb-3">
+              <label for="new_slug" class="block text-sm font-medium text-gray-700 mb-1">
+                New Slug
+              </label>
+              <div class="flex space-x-2">
+                <input
+                  type="text"
+                  id="new_slug"
+                  name="new_slug"
+                  value={@new_slug}
+                  phx-keyup="validate_slug"
+                  phx-debounce="300"
+                  placeholder="e.g., warsaw"
+                  class={"flex-1 rounded-md shadow-sm sm:text-sm font-mono #{slug_input_class(@slug_status)}"}
+                />
+                <button
+                  type="button"
+                  phx-click="update_slug"
+                  disabled={@slug_status != :available || @new_slug == "" || @new_slug == @city.slug}
+                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  Update Slug
+                </button>
+              </div>
+              <p class={"mt-1 text-xs #{slug_status_class(@slug_status)}"}>
+                <%= slug_status_message(@slug_status, @new_slug, @city.slug) %>
+              </p>
+            </div>
+          </div>
         <% end %>
       </div>
     <% end %>

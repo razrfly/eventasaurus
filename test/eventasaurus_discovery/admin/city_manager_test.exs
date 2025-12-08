@@ -284,4 +284,64 @@ defmodule EventasaurusDiscovery.Admin.CityManagerTest do
       assert hd(cities).venue_count == 2
     end
   end
+
+  describe "update_city_slug/2" do
+    setup do
+      country = insert(:country, name: "Australia", code: "AU")
+      sydney = insert(:city, name: "Sydney", slug: "sydney", country: country)
+      melbourne = insert(:city, name: "Melbourne", slug: "melbourne", country: country)
+      {:ok, country: country, sydney: sydney, melbourne: melbourne}
+    end
+
+    test "updates slug with valid unique value", %{sydney: sydney} do
+      assert {:ok, updated_city} = CityManager.update_city_slug(sydney, "sydney-nsw")
+      assert updated_city.slug == "sydney-nsw"
+    end
+
+    test "returns error for taken slug", %{sydney: sydney} do
+      # Try to use melbourne's slug
+      assert {:error, :slug_taken} = CityManager.update_city_slug(sydney, "melbourne")
+    end
+
+    test "allows updating to same slug", %{sydney: sydney} do
+      # The unique constraint should allow keeping the same slug
+      assert {:ok, updated_city} = CityManager.update_city_slug(sydney, "sydney")
+      assert updated_city.slug == "sydney"
+    end
+
+    test "returns error for invalid slug format", %{sydney: sydney} do
+      # Empty slug should fail validation
+      assert {:error, _changeset} = CityManager.update_city_slug(sydney, "")
+    end
+  end
+
+  describe "slug_available?/2" do
+    setup do
+      country = insert(:country, name: "Australia", code: "AU")
+      sydney = insert(:city, name: "Sydney", slug: "sydney", country: country)
+      {:ok, country: country, sydney: sydney}
+    end
+
+    test "returns true for available slug", %{sydney: _sydney} do
+      assert CityManager.slug_available?("new-unique-slug") == true
+    end
+
+    test "returns false for taken slug", %{sydney: _sydney} do
+      assert CityManager.slug_available?("sydney") == false
+    end
+
+    test "returns true for current city's slug when excluded", %{sydney: sydney} do
+      # When editing, the city's own slug should show as available
+      assert CityManager.slug_available?("sydney", sydney.id) == true
+    end
+
+    test "returns false for other city's slug when excluded", %{sydney: sydney} do
+      # Insert another city
+      country = insert(:country, name: "United States", code: "US")
+      insert(:city, name: "New York", slug: "new-york", country: country)
+
+      # New York's slug should not be available even when excluding Sydney
+      assert CityManager.slug_available?("new-york", sydney.id) == false
+    end
+  end
 end
