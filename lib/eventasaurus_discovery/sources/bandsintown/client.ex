@@ -1,48 +1,71 @@
 defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
   @moduledoc """
-  HTTP client for Bandsintown scraping with browser automation support.
+  HTTP client for Bandsintown scraping using the unified HTTP abstraction layer.
+
+  Uses `EventasaurusDiscovery.Http.Client` with automatic Zyte proxy routing
+  to bypass Cloudflare blocking.
 
   Handles:
-  - Browser automation for JavaScript-heavy pages
+  - Automatic proxy routing via Http.Client (configured as :zyte strategy)
   - Rate limiting
-  - User agent rotation
-  - Cookie/session management
+  - Blocking detection and fallback
+  - UTF-8 sanitization
   """
 
   require Logger
 
+  alias EventasaurusDiscovery.Http.Client, as: HttpClient
+
   @base_url "https://www.bandsintown.com"
-  @default_headers [
-    {"User-Agent",
-     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-    {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
-    {"Accept-Language", "en-US,en;q=0.5"},
-    {"Accept-Encoding", "gzip"},
-    {"DNT", "1"},
-    {"Connection", "keep-alive"},
-    {"Upgrade-Insecure-Requests", "1"}
-  ]
 
   @doc """
-  Fetches a city page using Playwright for JavaScript rendering.
-  Returns the fully rendered HTML after clicking "View all" and scrolling.
+  Fetches a city page using the unified HTTP client.
+
+  Uses Zyte proxy by default (configured in runtime.exs) which provides
+  browser rendering to handle JavaScript-heavy pages.
+
+  ## Options
+    - :timeout - Request timeout in milliseconds (default: 30_000)
+    - :mode - Zyte mode, :browser_html (default) or :http_response_body
   """
   def fetch_city_page(city_slug, opts \\ []) do
     url = "#{@base_url}/c/#{city_slug}"
-    use_playwright = Keyword.get(opts, :use_playwright, true)
 
     Logger.info("🌐 Fetching city page: #{url}")
 
-    if use_playwright do
-      fetch_with_playwright(url, opts)
-    else
-      fetch_with_httpoison(url, opts)
+    timeout = Keyword.get(opts, :timeout, 30_000)
+    mode = Keyword.get(opts, :mode, :browser_html)
+
+    case HttpClient.fetch(url, source: :bandsintown, timeout: timeout, mode: mode) do
+      {:ok, body, metadata} ->
+        Logger.info("✅ Successfully fetched city page via #{metadata.adapter}: #{url}")
+        clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(body)
+        {:ok, clean_body}
+
+      {:error, {:http_error, status_code, _body, _metadata}} ->
+        Logger.error("❌ HTTP #{status_code} for: #{url}")
+        {:error, {:http_error, status_code}}
+
+      {:error, {:all_adapters_failed, blocked_by}} ->
+        Logger.error("❌ All HTTP adapters failed for: #{url}")
+        Logger.error("   Blocked by: #{inspect(Enum.map(blocked_by, & &1.adapter))}")
+        {:error, :all_adapters_blocked}
+
+      {:error, reason} ->
+        Logger.error("❌ Failed to fetch #{url}: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
   @doc """
-  Fetches an event detail page.
-  Can use simple HTTP client as these pages are usually server-rendered.
+  Fetches an event detail page using the unified HTTP client.
+
+  Event detail pages are also protected by Cloudflare, so we use Zyte
+  via the pre-configured :bandsintown strategy.
+
+  ## Options
+    - :timeout - Request timeout in milliseconds (default: 30_000)
+    - :mode - Zyte mode, :browser_html (default) or :http_response_body
   """
   def fetch_event_page(event_path, opts \\ []) do
     url =
@@ -53,79 +76,29 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
       end
 
     Logger.info("🎵 Fetching event page: #{url}")
-    fetch_with_httpoison(url, opts)
-  end
 
-  # Use Playwright for JavaScript-heavy pages
-  defp fetch_with_playwright(url, _opts) do
-    Logger.info("🎭 Using Playwright to fetch: #{url}")
+    timeout = Keyword.get(opts, :timeout, 30_000)
+    mode = Keyword.get(opts, :mode, :browser_html)
 
-    # For now, we'll return a placeholder
-    # In production, this would use the Playwright MCP server
-    {:error, :playwright_not_configured}
-
-    # TODO: Implement actual Playwright integration
-    # with {:ok, browser} <- launch_browser(),
-    #      {:ok, page} <- new_page(browser),
-    #      :ok <- navigate(page, url),
-    #      :ok <- wait_for_load(page),
-    #      :ok <- click_view_all(page),
-    #      :ok <- scroll_to_load_all(page),
-    #      {:ok, html} <- get_page_content(page),
-    #      :ok <- close_browser(browser) do
-    #   {:ok, html}
-    # end
-  end
-
-  # Simple HTTP client for server-rendered pages
-  defp fetch_with_httpoison(url, opts) do
-    options = [
-      timeout: Keyword.get(opts, :timeout, 30_000),
-      recv_timeout: Keyword.get(opts, :recv_timeout, 30_000),
-      follow_redirect: true,
-      max_redirect: 3
-    ]
-
-    case HTTPoison.get(url, @default_headers, options) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body, headers: headers}} ->
-        Logger.info("✅ Successfully fetched: #{url}")
-
-        # Check if response is gzipped and decompress if needed
-        body =
-          if is_gzipped?(headers) do
-            case :zlib.gunzip(body) do
-              decompressed when is_binary(decompressed) ->
-                Logger.debug("📦 Decompressed gzipped response")
-                decompressed
-
-              _ ->
-                Logger.debug("📦 Failed to decompress, using original body")
-                body
-            end
-          else
-            body
-          end
-
-        # Ensure UTF-8 validity at HTTP entry point
+    case HttpClient.fetch(url, source: :bandsintown, timeout: timeout, mode: mode) do
+      {:ok, body, metadata} ->
+        Logger.info("✅ Successfully fetched event page via #{metadata.adapter}: #{url}")
         clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(body)
         {:ok, clean_body}
 
-      {:ok, %HTTPoison.Response{status_code: status_code}} ->
+      {:error, {:http_error, status_code, _body, _metadata}} ->
         Logger.error("❌ HTTP #{status_code} for: #{url}")
         {:error, {:http_error, status_code}}
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
+      {:error, {:all_adapters_failed, blocked_by}} ->
+        Logger.error("❌ All HTTP adapters failed for event page: #{url}")
+        Logger.error("   Blocked by: #{inspect(Enum.map(blocked_by, & &1.adapter))}")
+        {:error, :all_adapters_blocked}
+
+      {:error, reason} ->
         Logger.error("❌ Failed to fetch #{url}: #{inspect(reason)}")
         {:error, reason}
     end
-  end
-
-  defp is_gzipped?(headers) do
-    Enum.any?(headers, fn
-      {"content-encoding", value} -> String.contains?(String.downcase(value), "gzip")
-      {"Content-Encoding", value} -> String.contains?(String.downcase(value), "gzip")
-      _ -> false
-    end)
   end
 
   @doc """
@@ -148,6 +121,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
   Fetches additional events from the pagination API endpoint.
   This is used to get events beyond the initial 36 shown on the city page.
 
+  Uses Http.Client with :http_response_body mode for JSON API responses.
+
   ## Parameters
     - latitude: The latitude of the city
     - longitude: The longitude of the city
@@ -158,43 +133,11 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
     url =
       "#{@base_url}/all-dates/fetch-next/upcomingEvents?page=#{page}&longitude=#{longitude}&latitude=#{latitude}"
 
-    headers = [
-      {"User-Agent",
-       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-      {"Accept", "application/json, text/javascript, */*; q=0.01"},
-      {"Accept-Language", "en-US,en;q=0.5"},
-      {"Accept-Encoding", "gzip"},
-      {"X-Requested-With", "XMLHttpRequest"},
-      {"Referer", "#{@base_url}"},
-      {"DNT", "1"},
-      {"Connection", "keep-alive"}
-    ]
+    timeout = Keyword.get(opts, :timeout, 10_000)
 
-    options = [
-      timeout: Keyword.get(opts, :timeout, 10_000),
-      recv_timeout: Keyword.get(opts, :recv_timeout, 10_000),
-      follow_redirect: true,
-      max_redirect: 3
-    ]
-
-    case HTTPoison.get(url, headers, options) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body, headers: response_headers}} ->
-        # Check if response is gzipped and decompress if needed
-        body =
-          if is_gzipped?(response_headers) do
-            case :zlib.gunzip(body) do
-              decompressed when is_binary(decompressed) ->
-                Logger.debug("📦 Decompressed gzipped response")
-                decompressed
-
-              _ ->
-                Logger.debug("📦 Failed to decompress, using original body")
-                body
-            end
-          else
-            body
-          end
-
+    # Use http_response_body mode for JSON API endpoints (faster than browser rendering)
+    case HttpClient.fetch(url, source: :bandsintown, timeout: timeout, mode: :http_response_body) do
+      {:ok, body, _metadata} ->
         # Ensure UTF-8 validity at HTTP entry point
         clean_body = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(body)
 
@@ -210,11 +153,16 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
             {:ok, clean_body}
         end
 
-      {:ok, %HTTPoison.Response{status_code: status_code}} ->
+      {:error, {:http_error, status_code, _body, _metadata}} ->
         Logger.error("❌ HTTP #{status_code} for page #{page}")
         {:error, {:http_error, status_code}}
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
+      {:error, {:all_adapters_failed, blocked_by}} ->
+        Logger.error("❌ All HTTP adapters failed for pagination page #{page}")
+        Logger.error("   Blocked by: #{inspect(Enum.map(blocked_by, & &1.adapter))}")
+        {:error, :all_adapters_blocked}
+
+      {:error, reason} ->
         Logger.error("❌ Failed to fetch page #{page}: #{inspect(reason)}")
         {:error, reason}
     end
