@@ -31,14 +31,20 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
     dingle_lat = 52.1408534
     dingle_lng = -10.2671142
 
-    Mix.shell().info(IO.ANSI.bright() <> "1. Testing raw :geocoding.reverse for Dingle (#{dingle_lat}, #{dingle_lng})" <> IO.ANSI.reset())
+    Mix.shell().info(
+      IO.ANSI.bright() <>
+        "1. Testing raw :geocoding.reverse for Dingle (#{dingle_lat}, #{dingle_lng})" <>
+        IO.ANSI.reset()
+    )
 
     raw_result = :geocoding.reverse(dingle_lat, dingle_lng)
     Mix.shell().info("   Raw result: #{inspect(raw_result)}")
     Mix.shell().info("")
 
     # Test 2: CityResolver for Dingle
-    Mix.shell().info(IO.ANSI.bright() <> "2. Testing CityResolver.resolve_city_and_country" <> IO.ANSI.reset())
+    Mix.shell().info(
+      IO.ANSI.bright() <> "2. Testing CityResolver.resolve_city_and_country" <> IO.ANSI.reset()
+    )
 
     resolver_result = CityResolver.resolve_city_and_country(dingle_lat, dingle_lng)
     Mix.shell().info("   CityResolver result: #{inspect(resolver_result)}")
@@ -48,7 +54,10 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
     cork_lat = 51.8985
     cork_lng = -8.4756
 
-    Mix.shell().info(IO.ANSI.bright() <> "3. Testing Cork coordinates (#{cork_lat}, #{cork_lng})" <> IO.ANSI.reset())
+    Mix.shell().info(
+      IO.ANSI.bright() <>
+        "3. Testing Cork coordinates (#{cork_lat}, #{cork_lng})" <> IO.ANSI.reset()
+    )
 
     cork_raw = :geocoding.reverse(cork_lat, cork_lng)
     Mix.shell().info("   Raw result: #{inspect(cork_raw)}")
@@ -61,7 +70,10 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
     dublin_lat = 53.3498
     dublin_lng = -6.2603
 
-    Mix.shell().info(IO.ANSI.bright() <> "4. Testing Dublin coordinates (#{dublin_lat}, #{dublin_lng})" <> IO.ANSI.reset())
+    Mix.shell().info(
+      IO.ANSI.bright() <>
+        "4. Testing Dublin coordinates (#{dublin_lat}, #{dublin_lng})" <> IO.ANSI.reset()
+    )
 
     dublin_raw = :geocoding.reverse(dublin_lat, dublin_lng)
     Mix.shell().info("   Raw result: #{inspect(dublin_raw)}")
@@ -74,7 +86,10 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
     wicklow_lat = 52.9829065
     wicklow_lng = -6.0420741
 
-    Mix.shell().info(IO.ANSI.bright() <> "5. Testing Wicklow coordinates (#{wicklow_lat}, #{wicklow_lng})" <> IO.ANSI.reset())
+    Mix.shell().info(
+      IO.ANSI.bright() <>
+        "5. Testing Wicklow coordinates (#{wicklow_lat}, #{wicklow_lng})" <> IO.ANSI.reset()
+    )
 
     wicklow_raw = :geocoding.reverse(wicklow_lat, wicklow_lng)
     Mix.shell().info("   Raw result: #{inspect(wicklow_raw)}")
@@ -84,7 +99,11 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
     Mix.shell().info("")
 
     # Test 6: Check venue countries with limit 50
-    Mix.shell().info(IO.ANSI.bright() <> "6. Testing check_venue_countries(limit: 50, country: \"United Kingdom\")" <> IO.ANSI.reset())
+    Mix.shell().info(
+      IO.ANSI.bright() <>
+        "6. Testing check_venue_countries(limit: 50, country: \"United Kingdom\")" <>
+        IO.ANSI.reset()
+    )
 
     result = DataQualityChecker.check_venue_countries(limit: 50, country: "United Kingdom")
     Mix.shell().info("   Total checked: #{result.total_checked}")
@@ -115,7 +134,9 @@ defmodule Mix.Tasks.Quality.TestIrishVenues do
         Mix.shell().info("   No mismatches in sample - venues may already be correctly assigned")
       else
         Enum.each(all_results.mismatches, fn r ->
-          Mix.shell().info("   - #{r.venue_name}: current=#{r.current_country}, expected=#{r.expected_country}")
+          Mix.shell().info(
+            "   - #{r.venue_name}: current=#{r.current_country}, expected=#{r.expected_country}"
+          )
         end)
       end
     end

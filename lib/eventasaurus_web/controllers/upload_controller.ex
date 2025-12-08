@@ -63,7 +63,8 @@ defmodule EventasaurusWeb.UploadController do
           |> json(%{
             error: "R2 storage is not configured",
             details: message,
-            hint: "Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_ACCESS_KEY_ID, and CLOUDFLARE_SECRET_ACCESS_KEY environment variables"
+            hint:
+              "Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_ACCESS_KEY_ID, and CLOUDFLARE_SECRET_ACCESS_KEY environment variables"
           })
 
         {:error, reason} ->
@@ -111,7 +112,9 @@ defmodule EventasaurusWeb.UploadController do
 
   defp validate_folder(folder) when folder in @allowed_folders, do: {:ok, folder}
   defp validate_folder(nil), do: {:error, "folder is required"}
-  defp validate_folder(_), do: {:error, "Invalid folder. Allowed: #{Enum.join(@allowed_folders, ", ")}"}
+
+  defp validate_folder(_),
+    do: {:error, "Invalid folder. Allowed: #{Enum.join(@allowed_folders, ", ")}"}
 
   defp validate_filename(nil), do: {:error, "filename is required"}
   defp validate_filename(""), do: {:error, "filename cannot be empty"}
@@ -121,7 +124,8 @@ defmodule EventasaurusWeb.UploadController do
     if Regex.match?(~r/^[a-zA-Z0-9_\-\.]+$/, filename) do
       {:ok, filename}
     else
-      {:error, "Invalid filename. Only alphanumeric, dash, underscore, and dot characters allowed"}
+      {:error,
+       "Invalid filename. Only alphanumeric, dash, underscore, and dot characters allowed"}
     end
   end
 

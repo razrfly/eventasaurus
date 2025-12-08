@@ -115,10 +115,20 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
       Enum.reduce(venues, stats, fn venue, acc ->
         case check_and_update_venue(venue) do
           {:ok, :mismatch} ->
-            %{acc | processed: acc.processed + 1, mismatches: acc.mismatches + 1, updated: acc.updated + 1}
+            %{
+              acc
+              | processed: acc.processed + 1,
+                mismatches: acc.mismatches + 1,
+                updated: acc.updated + 1
+            }
 
           {:ok, :match} ->
-            %{acc | processed: acc.processed + 1, matches: acc.matches + 1, updated: acc.updated + 1}
+            %{
+              acc
+              | processed: acc.processed + 1,
+                matches: acc.matches + 1,
+                updated: acc.updated + 1
+            }
 
           {:error, _reason} ->
             %{acc | processed: acc.processed + 1, errors: acc.errors + 1}
@@ -184,7 +194,10 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
           end
 
         {:error, reason} ->
-          Logger.debug("[VenueCountryCheck] Geocoding failed for venue #{venue.id}: #{inspect(reason)}")
+          Logger.debug(
+            "[VenueCountryCheck] Geocoding failed for venue #{venue.id}: #{inspect(reason)}"
+          )
+
           {:error, reason}
       end
     end
@@ -297,13 +310,17 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
     # Known high-confidence mismatches (common data quality issues)
     # These are country CODE pairs that frequently indicate real misassignments
     high_confidence_pairs = [
-      {"GB", "IE"},  # UK/Ireland - common scraper confusion
+      # UK/Ireland - common scraper confusion
+      {"GB", "IE"},
       {"IE", "GB"},
-      {"DE", "AT"},  # Germany/Austria - border confusion
+      # Germany/Austria - border confusion
+      {"DE", "AT"},
       {"AT", "DE"},
-      {"US", "CA"},  # US/Canada - border confusion
+      # US/Canada - border confusion
+      {"US", "CA"},
       {"CA", "US"},
-      {"BE", "NL"},  # Belgium/Netherlands - border confusion
+      # Belgium/Netherlands - border confusion
+      {"BE", "NL"},
       {"NL", "BE"}
     ]
 
@@ -363,8 +380,7 @@ defmodule EventasaurusDiscovery.Admin.VenueCountryCheckJob do
       from(v in Venue,
         where: not is_nil(fragment("?->'country_check'", v.metadata)),
         select: %{
-          total_checked:
-            count(v.id),
+          total_checked: count(v.id),
           mismatches:
             count(
               fragment(

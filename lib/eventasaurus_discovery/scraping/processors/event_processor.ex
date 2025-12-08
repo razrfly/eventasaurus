@@ -783,8 +783,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         # CRITICAL: For showtimes, we need MULTIPLE PublicEventSource records per event
         # Each showtime (different time/date) should be a separate record with unique external_id
         # DO NOT use fallback check by (event_id, source_id) for showtimes
-        is_showtime = ext_id && (String.starts_with?(ext_id, "cinema_city_showtime_") ||
-                                 String.starts_with?(ext_id, "kino_krakow_showtime_"))
+        is_showtime =
+          ext_id &&
+            (String.starts_with?(ext_id, "cinema_city_showtime_") ||
+               String.starts_with?(ext_id, "kino_krakow_showtime_"))
 
         if is_showtime do
           # Showtime scenario: Always create new record for unique external_id

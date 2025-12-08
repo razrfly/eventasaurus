@@ -680,15 +680,25 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp format_auth_error(reason) do
     case reason do
-      %{message: msg} -> msg
+      %{message: msg} ->
+        msg
+
       %Ecto.Changeset{} = changeset ->
         Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
         |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
         |> Enum.join("; ")
-      %{status: 422} -> "Invalid email address. Please check and try again."
-      %{status: 429} -> "Too many requests. Please wait a moment and try again."
-      :already_registered -> "You're already registered for this event."
-      _ -> "Unable to complete registration. Please try again."
+
+      %{status: 422} ->
+        "Invalid email address. Please check and try again."
+
+      %{status: 429} ->
+        "Too many requests. Please wait a moment and try again."
+
+      :already_registered ->
+        "You're already registered for this event."
+
+      _ ->
+        "Unable to complete registration. Please try again."
     end
   end
 

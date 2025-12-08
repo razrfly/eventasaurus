@@ -314,7 +314,7 @@ defmodule EventasaurusWeb.Services.CocktailDataService do
 
   # Helper function for debugging types
   @spec get_type(any()) :: atom() | tuple()
-  def get_type(nil), do: :nil
+  def get_type(nil), do: nil
   def get_type(value) when is_binary(value), do: :binary
   def get_type(value) when is_integer(value), do: :integer
   def get_type(value) when is_float(value), do: :float

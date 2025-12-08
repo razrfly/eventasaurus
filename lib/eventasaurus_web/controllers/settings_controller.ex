@@ -105,7 +105,10 @@ defmodule EventasaurusWeb.SettingsController do
   """
   def update_password(conn, _params) do
     conn
-    |> put_flash(:info, "Password management is handled through your account settings. Please use the account menu to manage your password.")
+    |> put_flash(
+      :info,
+      "Password management is handled through your account settings. Please use the account menu to manage your password."
+    )
     |> redirect(to: ~p"/settings/account")
   end
 

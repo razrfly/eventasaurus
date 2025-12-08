@@ -20,12 +20,13 @@ defmodule Eventasaurus.SitemapTest do
       movie = insert(:movie, slug: "dune-part-two", updated_at: ~N[2024-12-15 10:00:00])
 
       # Create screening event
-      event = insert(:public_event,
-        slug: "dune-screening",
-        venue_id: venue.id,
-        venue: venue,
-        starts_at: ~U[2024-12-20 19:00:00Z]
-      )
+      event =
+        insert(:public_event,
+          slug: "dune-screening",
+          venue_id: venue.id,
+          venue: venue,
+          starts_at: ~U[2024-12-20 19:00:00Z]
+        )
 
       # Associate movie with event
       Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
@@ -39,9 +40,10 @@ defmodule Eventasaurus.SitemapTest do
     test "generates URLs for movies with screenings in active cities", %{movie: movie, city: city} do
       urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
 
-      movie_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/#{city.slug}/movies/#{movie.slug}"
-      end)
+      movie_url =
+        Enum.find(urls, fn url ->
+          url.loc == "https://wombie.fyi/c/#{city.slug}/movies/#{movie.slug}"
+        end)
 
       assert movie_url != nil
       assert movie_url.changefreq == :weekly
@@ -52,10 +54,13 @@ defmodule Eventasaurus.SitemapTest do
     test "does not generate URLs for movies in cities with discovery disabled" do
       # Create city with discovery disabled
       country = insert(:country, code: "US", slug: "usa")
-      disabled_city = insert(:city, slug: "inactive-city", discovery_enabled: false, country: country)
+
+      disabled_city =
+        insert(:city, slug: "inactive-city", discovery_enabled: false, country: country)
 
       # Create venue in disabled city
-      venue = insert(:venue, slug: "inactive-venue", city_id: disabled_city.id, city_ref: disabled_city)
+      venue =
+        insert(:venue, slug: "inactive-venue", city_id: disabled_city.id, city_ref: disabled_city)
 
       # Create movie and screening
       movie = insert(:movie, slug: "test-movie")
@@ -69,14 +74,18 @@ defmodule Eventasaurus.SitemapTest do
       urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
 
       # Should not include URL for movie in disabled city
-      movie_url = Enum.find(urls, fn url ->
-        String.contains?(url.loc, "/c/#{disabled_city.slug}/movies/#{movie.slug}")
-      end)
+      movie_url =
+        Enum.find(urls, fn url ->
+          String.contains?(url.loc, "/c/#{disabled_city.slug}/movies/#{movie.slug}")
+        end)
 
       assert movie_url == nil
     end
 
-    test "generates distinct URLs for movies shown in multiple cities", %{city: city1, venue: venue1} do
+    test "generates distinct URLs for movies shown in multiple cities", %{
+      city: city1,
+      venue: venue1
+    } do
       # Create second city
       country = insert(:country, code: "PL", slug: "poland-2")
       city2 = insert(:city, slug: "warsaw", discovery_enabled: true, country: country)
@@ -106,13 +115,15 @@ defmodule Eventasaurus.SitemapTest do
       urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
 
       # Should have URLs for both cities
-      krakow_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/#{city1.slug}/movies/#{movie.slug}"
-      end)
+      krakow_url =
+        Enum.find(urls, fn url ->
+          url.loc == "https://wombie.fyi/c/#{city1.slug}/movies/#{movie.slug}"
+        end)
 
-      warsaw_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/warsaw/movies/#{movie.slug}"
-      end)
+      warsaw_url =
+        Enum.find(urls, fn url ->
+          url.loc == "https://wombie.fyi/c/warsaw/movies/#{movie.slug}"
+        end)
 
       assert krakow_url != nil
       assert warsaw_url != nil
@@ -144,10 +155,11 @@ defmodule Eventasaurus.SitemapTest do
       urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
 
       # Should not have any URLs with nil or empty slugs
-      invalid_urls = Enum.filter(urls, fn url ->
-        String.contains?(url.loc, "/movies/") and
-          (String.ends_with?(url.loc, "/movies/") or String.contains?(url.loc, "/movies/nil"))
-      end)
+      invalid_urls =
+        Enum.filter(urls, fn url ->
+          String.contains?(url.loc, "/movies/") and
+            (String.ends_with?(url.loc, "/movies/") or String.contains?(url.loc, "/movies/nil"))
+        end)
 
       assert invalid_urls == []
     end
@@ -168,9 +180,10 @@ defmodule Eventasaurus.SitemapTest do
 
       urls = Sitemap.stream_urls(host: "wombie.fyi") |> Enum.to_list()
 
-      movie_url = Enum.find(urls, fn url ->
-        String.contains?(url.loc, "/movies/#{movie.slug}")
-      end)
+      movie_url =
+        Enum.find(urls, fn url ->
+          String.contains?(url.loc, "/movies/#{movie.slug}")
+        end)
 
       assert movie_url != nil
       assert movie_url.lastmod == Date.utc_today()
@@ -188,16 +201,18 @@ defmodule Eventasaurus.SitemapTest do
       venue = insert(:venue, slug: "test-venue", city_id: city.id, city_ref: city)
 
       # Create an activity
-      activity = insert(:public_event,
-        slug: "test-activity",
-        venue_id: venue.id,
-        venue: venue,
-        starts_at: ~U[2024-12-20 19:00:00Z],
-        updated_at: ~N[2024-12-15 10:00:00]
-      )
+      activity =
+        insert(:public_event,
+          slug: "test-activity",
+          venue_id: venue.id,
+          venue: venue,
+          starts_at: ~U[2024-12-20 19:00:00Z],
+          updated_at: ~N[2024-12-15 10:00:00]
+        )
 
       # Create a movie with screening
       movie = insert(:movie, slug: "test-movie")
+
       Repo.insert!(%EventasaurusDiscovery.PublicEvents.EventMovie{
         event_id: activity.id,
         movie_id: movie.id
@@ -210,9 +225,11 @@ defmodule Eventasaurus.SitemapTest do
       assert homepage != nil
 
       # Should include activity URLs
-      activity_url = Enum.find(urls, fn url ->
-        String.contains?(url.loc, "/activities/#{activity.slug}")
-      end)
+      activity_url =
+        Enum.find(urls, fn url ->
+          String.contains?(url.loc, "/activities/#{activity.slug}")
+        end)
+
       assert activity_url != nil
 
       # Should include city URLs
@@ -220,15 +237,19 @@ defmodule Eventasaurus.SitemapTest do
       assert city_url != nil
 
       # Should include venue URLs
-      venue_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/venues/#{venue.slug}"
-      end)
+      venue_url =
+        Enum.find(urls, fn url ->
+          url.loc == "https://wombie.fyi/c/krakow/venues/#{venue.slug}"
+        end)
+
       assert venue_url != nil
 
       # Should include movie URLs
-      movie_url = Enum.find(urls, fn url ->
-        url.loc == "https://wombie.fyi/c/krakow/movies/#{movie.slug}"
-      end)
+      movie_url =
+        Enum.find(urls, fn url ->
+          url.loc == "https://wombie.fyi/c/krakow/movies/#{movie.slug}"
+        end)
+
       assert movie_url != nil
     end
   end

@@ -54,7 +54,10 @@ defmodule Mix.Tasks.Benchmark.Queries do
       {:ok, baseline} ->
         IO.puts("✅ Baseline captured at #{baseline.captured_at}")
         IO.puts("\nEnvironment:")
-        IO.puts("  Replica Routing: #{if baseline.environment.replica_enabled, do: "✅ Enabled", else: "❌ Disabled"}")
+
+        IO.puts(
+          "  Replica Routing: #{if baseline.environment.replica_enabled, do: "✅ Enabled", else: "❌ Disabled"}"
+        )
 
         baseline.environment.indexes_applied
         |> Enum.each(fn {index, applied} ->
@@ -78,7 +81,10 @@ defmodule Mix.Tasks.Benchmark.Queries do
         IO.puts("═══════════════════════════════════════════════════════════════════\n")
 
         IO.puts("Environment:")
-        IO.puts("  Replica Routing: #{if current.environment.replica_enabled, do: "✅ Enabled", else: "❌ Disabled"}")
+
+        IO.puts(
+          "  Replica Routing: #{if current.environment.replica_enabled, do: "✅ Enabled", else: "❌ Disabled"}"
+        )
 
         current.environment.indexes_applied
         |> Enum.each(fn {index, applied} ->
@@ -123,16 +129,29 @@ defmodule Mix.Tasks.Benchmark.Queries do
                 else: "#{comp.change_pct}%"
 
             IO.puts("  #{query_id}: #{status_icon} #{change}")
-            IO.puts("    Before: #{comp.baseline_duration_ms}ms → After: #{comp.current_duration_ms}ms")
+
+            IO.puts(
+              "    Before: #{comp.baseline_duration_ms}ms → After: #{comp.current_duration_ms}ms"
+            )
           end)
 
           IO.puts("\nSummary:")
-          IO.puts("  #{comparison.summary.improved_count}/#{comparison.summary.total} queries improved")
-          IO.puts("  #{comparison.summary.regressed_count}/#{comparison.summary.total} queries regressed")
+
+          IO.puts(
+            "  #{comparison.summary.improved_count}/#{comparison.summary.total} queries improved"
+          )
+
+          IO.puts(
+            "  #{comparison.summary.regressed_count}/#{comparison.summary.total} queries regressed"
+          )
+
           IO.puts("  Overall: #{comparison.summary.overall_assessment}")
         else
           IO.puts("\n💡 No previous baseline found for comparison.")
-          IO.puts("   Run `mix benchmark.queries baseline` first, wait 1 hour, then run report again.")
+
+          IO.puts(
+            "   Run `mix benchmark.queries baseline` first, wait 1 hour, then run report again."
+          )
         end
     end
   end

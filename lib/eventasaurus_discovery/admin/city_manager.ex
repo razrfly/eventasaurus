@@ -643,10 +643,12 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     # More venues = more confident in the assessment
     evidence_score = calculate_evidence_score(venue_counts)
 
-    total_score = name_similarity_score + venue_disparity_score + data_quality_score + evidence_score
+    total_score =
+      name_similarity_score + venue_disparity_score + data_quality_score + evidence_score
 
     # Build reasons list
-    reasons = build_confidence_reasons(names, venue_counts, name_similarity_score, data_quality_score)
+    reasons =
+      build_confidence_reasons(names, venue_counts, name_similarity_score, data_quality_score)
 
     # Determine if this looks like a suburb situation
     is_likely_suburb = is_likely_suburb_group?(names, venue_counts)
@@ -659,7 +661,8 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     }
   end
 
-  def calculate_group_confidence(_), do: %{score: 0.0, reasons: [], is_likely_suburb: false, data_quality_issues: []}
+  def calculate_group_confidence(_),
+    do: %{score: 0.0, reasons: [], is_likely_suburb: false, data_quality_issues: []}
 
   # Name similarity using normalized comparison
   defp calculate_name_similarity_score(names) do
@@ -729,8 +732,10 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     issues = Enum.flat_map(names, &detect_data_quality_issues/1)
 
     cond do
-      length(issues) >= 2 -> 0.2  # Multiple issues = very likely bad data
-      length(issues) == 1 -> 0.15  # One issue = likely bad data
+      # Multiple issues = very likely bad data
+      length(issues) >= 2 -> 0.2
+      # One issue = likely bad data
+      length(issues) == 1 -> 0.15
       true -> 0.0
     end
   end
@@ -740,9 +745,12 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     total = Enum.sum(venue_counts)
 
     cond do
-      total >= 10 -> 0.1   # Good amount of data
-      total >= 5 -> 0.05   # Some data
-      true -> 0.0          # Little data
+      # Good amount of data
+      total >= 10 -> 0.1
+      # Some data
+      total >= 5 -> 0.05
+      # Little data
+      true -> 0.0
     end
   end
 
@@ -758,10 +766,14 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
     issues = if Regex.match?(~r/\d{4,}/, name), do: ["postcode_in_name" | issues], else: issues
 
     # Check for state abbreviations at start (e.g., "MI 48357", "NSW Sydney")
-    issues = if Regex.match?(~r/^[A-Z]{2,3}\s/, name), do: ["state_abbreviation" | issues], else: issues
+    issues =
+      if Regex.match?(~r/^[A-Z]{2,3}\s/, name), do: ["state_abbreviation" | issues], else: issues
 
     # Check for very short names with numbers
-    issues = if String.length(name) <= 5 and Regex.match?(~r/\d/, name), do: ["short_with_numbers" | issues], else: issues
+    issues =
+      if String.length(name) <= 5 and Regex.match?(~r/\d/, name),
+        do: ["short_with_numbers" | issues],
+        else: issues
 
     issues
   end
@@ -822,9 +834,11 @@ defmodule EventasaurusDiscovery.Admin.CityManager do
           norm1 = normalize_for_comparison(n1)
           norm2 = normalize_for_comparison(n2)
           # If neither contains the other and Jaro distance is low, they're different
-          different = not String.contains?(norm1, norm2) and
-                      not String.contains?(norm2, norm1) and
-                      String.jaro_distance(norm1, norm2) < 0.8
+          different =
+            not String.contains?(norm1, norm2) and
+              not String.contains?(norm2, norm1) and
+              String.jaro_distance(norm1, norm2) < 0.8
+
           acc and different
       end
 

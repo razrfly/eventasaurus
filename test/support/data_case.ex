@@ -43,7 +43,9 @@ defmodule EventasaurusApp.DataCase do
     # In tests, Repo.replica() returns the primary Repo, but we still need
     # ReplicaRepo configured for the sandbox in case it's used directly
     replica_pid =
-      Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ReplicaRepo, shared: not tags[:async])
+      Ecto.Adapters.SQL.Sandbox.start_owner!(EventasaurusApp.ReplicaRepo,
+        shared: not tags[:async]
+      )
 
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.stop_owner(pid)

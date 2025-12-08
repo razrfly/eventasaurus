@@ -467,6 +467,7 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
     new_all =
       if removed_group do
         fingerprint = group_fingerprint(removed_group)
+
         Enum.reject(socket.assigns.all_duplicate_groups, fn g ->
           group_fingerprint(g) == fingerprint
         end)
@@ -554,7 +555,12 @@ defmodule EventasaurusWeb.Admin.CityDuplicatesLive do
   Gets the confidence data for a group from the cache.
   """
   def get_group_confidence(confidence_cache, group) do
-    Map.get(confidence_cache, group_fingerprint(group), %{score: 0, reasons: [], is_likely_suburb: false, data_quality_issues: []})
+    Map.get(confidence_cache, group_fingerprint(group), %{
+      score: 0,
+      reasons: [],
+      is_likely_suburb: false,
+      data_quality_issues: []
+    })
   end
 
   @doc """

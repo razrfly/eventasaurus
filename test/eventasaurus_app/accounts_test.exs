@@ -377,5 +377,4 @@ defmodule EventasaurusApp.AccountsTest do
       assert meta_tags.twitter_description == "testuser's profile on Eventasaurus"
     end
   end
-
 end

@@ -11,12 +11,51 @@
 
   <main role="main" aria-label="Changelog timeline">
     <EventasaurusWeb.ChangelogComponents.timeline entries={@entries} />
+
+    <%!-- Pagination Controls --%>
+    <%= if @pagination.total_pages > 1 do %>
+      <nav class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12" aria-label="Pagination">
+        <div class="flex items-center justify-between border-t border-zinc-200 pt-6">
+          <%!-- Previous Button --%>
+          <div class="flex flex-1">
+            <%= if @pagination.has_prev do %>
+              <a href={"/changelog?page=#{@pagination.page - 1}"} class="inline-flex items-center px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 rounded-md hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                <svg class="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+                Previous
+              </a>
+            <% end %>
+          </div>
+
+          <%!-- Page Info --%>
+          <div class="hidden sm:block">
+            <p class="text-sm text-zinc-700">
+              Page <span class="font-medium"><%= @pagination.page %></span> of <span class="font-medium"><%= @pagination.total_pages %></span>
+              <span class="text-zinc-500">(<%= @pagination.total_entries %> entries)</span>
+            </p>
+          </div>
+
+          <%!-- Next Button --%>
+          <div class="flex flex-1 justify-end">
+            <%= if @pagination.has_next do %>
+              <a href={"/changelog?page=#{@pagination.page + 1}"} class="inline-flex items-center px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 rounded-md hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                Next
+                <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </a>
+            <% end %>
+          </div>
+        </div>
+      </nav>
+    <% end %>
   </main>
-  
+
   <div class="border-t border-zinc-200 bg-zinc-50">
     <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8 text-center">
       <p class="text-sm text-zinc-500">
-        Want to contribute or report a bug? 
+        Want to contribute or report a bug?
         <a href="https://github.com/razrfly/eventasaurus" class="font-medium text-indigo-600 hover:text-indigo-500">
           Check us out on GitHub &rarr;
         </a>
