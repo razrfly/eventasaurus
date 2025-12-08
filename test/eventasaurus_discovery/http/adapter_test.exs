@@ -5,7 +5,8 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
   This module tests that all adapters properly implement the
   EventasaurusDiscovery.Http.Adapter behaviour.
   """
-  use ExUnit.Case, async: true
+  # async: false because tests mutate global state via Application.put_env and System.put_env
+  use ExUnit.Case, async: false
 
   alias EventasaurusDiscovery.Http.Adapter
   alias EventasaurusDiscovery.Http.Adapters.{Direct, Zyte}

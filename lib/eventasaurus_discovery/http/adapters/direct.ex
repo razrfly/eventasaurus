@@ -19,10 +19,10 @@ defmodule EventasaurusDiscovery.Http.Adapters.Direct do
       alias EventasaurusDiscovery.Http.Adapters.Direct
 
       # Simple fetch
-      {:ok, body} = Direct.fetch("https://example.com")
+      {:ok, body, metadata} = Direct.fetch("https://example.com")
 
       # With options
-      {:ok, body} = Direct.fetch("https://api.example.com",
+      {:ok, body, metadata} = Direct.fetch("https://api.example.com",
         headers: [{"Authorization", "Bearer token"}],
         timeout: 10_000
       )
@@ -30,7 +30,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.Direct do
   ## Error Handling
 
   Returns normalized errors:
-  - `{:error, {:http_error, status_code}}` - Non-2xx response
+  - `{:error, {:http_error, status_code, body, metadata}}` - Non-2xx response
   - `{:error, {:timeout, :connect}}` - Connection timeout
   - `{:error, {:timeout, :recv}}` - Receive timeout
   - `{:error, {:network_error, reason}}` - Network failure
