@@ -48,8 +48,8 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
     force = args["force"] || false
     external_id = "cinema_city_sync_#{Date.utc_today()}"
 
-    # Validate city_name is configured
-    if is_nil(city_name) do
+    # Validate city_name is configured (reject nil and empty string)
+    if is_nil(city_name) or city_name == "" do
       error_msg = "No city_name configured for cinema-city source. Configure via Admin > Discovery > City Config."
       Logger.error("❌ #{error_msg}")
       MetricsTracker.record_failure(job, error_msg, external_id)

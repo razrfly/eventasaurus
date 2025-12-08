@@ -478,5 +478,6 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   def cinema_city_cities, do: @cinema_city_cities
 
   # Expose Resident Advisor areas for dropdown in template
+  @spec resident_advisor_areas() :: [{String.t(), integer()}]
   def resident_advisor_areas, do: @resident_advisor_areas
 end
