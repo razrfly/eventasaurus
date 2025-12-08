@@ -157,6 +157,39 @@ config :stripity_stripe,
   api_key: System.get_env("STRIPE_SECRET_KEY"),
   connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
 
+# Configure Zyte API for browser-rendered HTTP requests
+# Used by Http.Adapters.Zyte to bypass Cloudflare and other anti-bot protections
+# Optional: adapter returns {:error, :not_configured} when key is not set
+config :eventasaurus_discovery, :zyte_api_key, System.get_env("ZYTE_API_KEY") || ""
+
+# Configure per-source HTTP strategies for the Http.Client fallback chain
+# Each source can specify an ordered list of adapters to try:
+#   - :direct - Plain HTTPoison (fast, no cost, may be blocked)
+#   - :zyte - Zyte browser rendering proxy (bypasses blocking, has cost)
+#
+# Strategies:
+#   - Single adapter: [:direct] or [:zyte] - Use only that adapter
+#   - Fallback chain: [:direct, :zyte] - Try direct first, fallback to Zyte if blocked
+#
+# Http.Client will detect blocking (Cloudflare, CAPTCHA, rate limits) and
+# automatically try the next adapter in the chain.
+config :eventasaurus_discovery, :http_strategies, %{
+  # Default strategy: try direct first, fallback to Zyte if blocked
+  default: [:direct, :zyte],
+  # Bandsintown: always use Zyte (known Cloudflare blocking)
+  bandsintown: [:zyte],
+  # Resident Advisor: try direct first, fallback to Zyte
+  resident_advisor: [:direct, :zyte],
+  # Cinema City: direct only (API works fine)
+  cinema_city: [:direct],
+  # Kino Krakow: direct only
+  kino_krakow: [:direct],
+  # Karnet: try direct first, fallback to Zyte
+  karnet: [:direct, :zyte],
+  # Week.pl: direct only
+  week_pl: [:direct]
+}
+
 # Configure Clerk authentication
 # Clerk credentials are set in environment variables:
 #   CLERK_PUBLISHABLE_KEY - Frontend key (pk_test_... or pk_live_...)
