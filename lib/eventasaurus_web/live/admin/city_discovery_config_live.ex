@@ -14,6 +14,33 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   import Ecto.Query
   require Logger
 
+  # Cinema City Poland locations (from API: addressInfo.city)
+  # These rarely change - update if Cinema City adds/removes locations
+  @cinema_city_cities [
+    "Bielsko-Biała",
+    "Bydgoszcz",
+    "Bytom",
+    "Cieszyn",
+    "Częstochowa",
+    "Elbląg",
+    "Gliwice",
+    "Janki",
+    "Katowice",
+    "Kraków",
+    "Lublin",
+    "Łódź",
+    "Poznań",
+    "Ruda Śląska",
+    "Rybnik",
+    "Sosnowiec",
+    "Starogard Gdański",
+    "Toruń",
+    "Wałbrzych",
+    "Warszawa",
+    "Wrocław",
+    "Zielona Góra"
+  ]
+
   @impl true
   def mount(%{"slug" => city_slug}, _session, socket) do
     city = Repo.get_by!(City, slug: city_slug) |> Repo.preload(:country)
@@ -348,7 +375,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp get_default_settings("resident-advisor"), do: %{"limit" => 100, "area_id" => nil}
   defp get_default_settings("karnet"), do: %{"limit" => 100, "max_pages" => 10}
   defp get_default_settings("kino-krakow"), do: %{"limit" => 100, "max_pages" => 10}
-  defp get_default_settings("cinema-city"), do: %{"limit" => 100}
+  defp get_default_settings("cinema-city"), do: %{"limit" => 100, "city_name" => nil}
   defp get_default_settings("pubquiz-pl"), do: %{"limit" => 100}
   defp get_default_settings("question-one"), do: %{"limit" => 100}
   defp get_default_settings("geeks-who-drink"), do: %{"limit" => 100}
@@ -413,4 +440,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
+
+  # Expose Cinema City cities for dropdown in template
+  def cinema_city_cities, do: @cinema_city_cities
 end

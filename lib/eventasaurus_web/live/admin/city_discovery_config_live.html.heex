@@ -232,12 +232,26 @@
                             <label class="block text-sm text-gray-600 mb-1 capitalize">
                               {String.replace(to_string(key), "_", " ")}
                             </label>
-                            <input
-                              type={if is_integer(default_value), do: "number", else: "text"}
-                              value={default_value}
-                              name={"setting_#{key}"}
-                              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            />
+                            <%= if key == "city_name" and @selected_source == "cinema-city" do %>
+                              <select
+                                name={"setting_#{key}"}
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              >
+                                <option value="">Select a city...</option>
+                                <%= for city <- EventasaurusWeb.Admin.CityDiscoveryConfigLive.cinema_city_cities() do %>
+                                  <option value={city} selected={default_value == city}>
+                                    {city}
+                                  </option>
+                                <% end %>
+                              </select>
+                            <% else %>
+                              <input
+                                type={if is_integer(default_value), do: "number", else: "text"}
+                                value={default_value}
+                                name={"setting_#{key}"}
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              />
+                            <% end %>
                           </div>
                         <% end %>
                       </div>

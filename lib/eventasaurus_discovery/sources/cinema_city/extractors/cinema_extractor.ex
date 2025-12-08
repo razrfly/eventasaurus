@@ -60,9 +60,42 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Extractors.CinemaExtractor do
   end
 
   @doc """
-  Filter cinemas by target cities.
+  Filter cinemas by a single target city name.
+
+  The city_name should match Cinema City's `addressInfo.city` value exactly
+  (e.g., "Kraków", "Warszawa", "Wrocław"). Comparison is case-insensitive
+  and handles Polish diacritics.
+
+  ## Examples
+
+      iex> filter_by_city(cinemas, "Kraków")
+      [%{...}]
+
+      iex> filter_by_city(cinemas, "Warszawa")
+      [%{...}]
+  """
+  def filter_by_city(cinemas, city_name) when is_list(cinemas) and is_binary(city_name) do
+    normalized_target = normalize_city_name(city_name)
+
+    cinemas
+    |> Enum.filter(fn cinema ->
+      city = extract_city(cinema)
+      normalized_city = normalize_city_name(city)
+
+      normalized_city == normalized_target
+    end)
+  end
+
+  def filter_by_city(_cinemas, nil) do
+    Logger.warning("⚠️ filter_by_city called with nil city_name - returning empty list")
+    []
+  end
+
+  @doc """
+  Filter cinemas by target cities (list).
 
   Returns only cinemas from cities in the target list.
+  Kept for backward compatibility.
   """
   def filter_by_cities(cinemas, target_cities) when is_list(cinemas) and is_list(target_cities) do
     # Normalize target cities for comparison (lowercase, handle accents)
