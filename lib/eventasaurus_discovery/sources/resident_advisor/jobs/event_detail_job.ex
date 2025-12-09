@@ -163,12 +163,29 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.EventDetailJob do
 
   defp atomize_event_data(value), do: value
 
-  defp get_source_priority(event) do
-    case Repo.preload(event, :source) do
-      %{source: %{priority: priority}} -> priority
-      _ -> "unknown"
+  # Look up source priority via PublicEventSource join table
+  # The Event schema doesn't have a :source association - the priority lives in
+  # Source, which is linked through PublicEventSource
+  defp get_source_priority(%{id: event_id}) when not is_nil(event_id) do
+    import Ecto.Query
+    alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+
+    query =
+      from(pes in PublicEventSource,
+        join: s in Source,
+        on: s.id == pes.source_id,
+        where: pes.event_id == ^event_id,
+        select: s.priority,
+        limit: 1
+      )
+
+    case Repo.one(query) do
+      nil -> "unknown"
+      priority -> priority
     end
   end
+
+  defp get_source_priority(_), do: "unknown"
 
   defp process_event_if_unique(event_data, source, dedup_result) do
     case dedup_result do
