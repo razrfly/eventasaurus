@@ -13,7 +13,8 @@ defmodule Eventasaurus.Sanity.Client do
   @receive_timeout 10_000
 
   @doc """
-  Fetches all changelog entries from Sanity, ordered by date descending.
+  Fetches released changelog entries from Sanity, ordered by date descending.
+  Only returns entries with status == "released" and isPublished == true.
 
   ## Returns
 
@@ -28,13 +29,50 @@ defmodule Eventasaurus.Sanity.Client do
   @spec list_changelog_entries() :: {:ok, list(map())} | {:error, atom() | tuple()}
   def list_changelog_entries do
     query = ~s"""
-    *[_type == "changelogEntry"] | order(date desc) {
+    *[_type == "changelogEntry" && status == "released" && isPublished == true] | order(date desc) {
       _id,
       title,
       "slug": slug.current,
       date,
       summary,
       changes[] { type, description },
+      tags,
+      image {
+        asset-> { url }
+      }
+    }
+    """
+
+    execute_query(query)
+  end
+
+  @doc """
+  Fetches roadmap entries from Sanity (non-released items).
+  Returns entries with status != "released" and isPublished == true.
+  Ordered by status priority (in_progress first, then planned, then considering).
+
+  ## Returns
+
+  - `{:ok, entries}` - List of roadmap entry maps
+  - `{:error, reason}` - Error with reason
+
+  ## Examples
+
+      iex> Client.list_roadmap_entries()
+      {:ok, [%{"_id" => "...", "title" => "...", "status" => "in_progress", ...}]}
+  """
+  @spec list_roadmap_entries() :: {:ok, list(map())} | {:error, atom() | tuple()}
+  def list_roadmap_entries do
+    query = ~s"""
+    *[_type == "changelogEntry" && status != "released" && isPublished == true] | order(
+      select(status == "in_progress" => 0, status == "planned" => 1, status == "considering" => 2),
+      title asc
+    ) {
+      _id,
+      title,
+      "slug": slug.current,
+      status,
+      summary,
       tags,
       image {
         asset-> { url }
