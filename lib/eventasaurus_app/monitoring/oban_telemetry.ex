@@ -187,6 +187,19 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
   end
 
   # Convert map keys to strings for consistent JSONB storage
+  # Handles plain maps, but safely handles structs (like Ecto schemas)
+  defp stringify_keys(%{__struct__: struct_name} = struct) do
+    # For structs, just store the type and ID if available
+    # Don't try to enumerate the entire struct
+    base = %{"_struct" => inspect(struct_name)}
+
+    if Map.has_key?(struct, :id) do
+      Map.put(base, "id", struct.id)
+    else
+      base
+    end
+  end
+
   defp stringify_keys(map) when is_map(map) do
     map
     |> Enum.into(%{}, fn {k, v} ->
@@ -233,7 +246,14 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
     # This gives us parent_job_id from meta + execution results from return value
     results =
       case return_value do
-        # If return value is a map (e.g., {:ok, %{movies_scheduled: 10}}), merge it
+        # If return value is a struct (e.g., {:ok, %PublicEvent{}}), just store reference
+        {:ok, %{__struct__: struct_name, id: id}} ->
+          Map.merge(job_meta, %{"result_type" => inspect(struct_name), "result_id" => id})
+
+        {:ok, %{__struct__: struct_name}} ->
+          Map.merge(job_meta, %{"result_type" => inspect(struct_name)})
+
+        # If return value is a plain map (e.g., {:ok, %{movies_scheduled: 10}}), merge it
         {:ok, result_map} when is_map(result_map) ->
           Map.merge(job_meta, stringify_keys(result_map))
 
@@ -244,6 +264,13 @@ defmodule EventasaurusApp.Monitoring.ObanTelemetry do
         # If return value is an error tuple, store the error reason but keep job.meta
         {:error, reason} ->
           Map.put(job_meta, "error_reason", inspect(reason))
+
+        # If return value is a struct, just store reference
+        %{__struct__: struct_name, id: id} ->
+          Map.merge(job_meta, %{"result_type" => inspect(struct_name), "result_id" => id})
+
+        %{__struct__: struct_name} ->
+          Map.merge(job_meta, %{"result_type" => inspect(struct_name)})
 
         # If return value is a plain map, merge it
         result_map when is_map(result_map) ->

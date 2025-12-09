@@ -128,11 +128,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
         # Try to extract ID from URL
         case Regex.run(~r/\/(\d+)(?:\/|$)/, url) do
           [_, id] ->
-            "karnet_event_#{id}"
+            "karnet_#{id}"
 
           _ ->
             # Use URL hash as fallback
-            "karnet_event_#{:crypto.hash(:md5, url) |> Base.encode16(case: :lower)}"
+            "karnet_#{:crypto.hash(:md5, url) |> Base.encode16(case: :lower)}"
         end
     end
   end
@@ -146,7 +146,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Transformer do
     ]
 
     hash = :crypto.hash(:md5, Enum.join(components, "|")) |> Base.encode16(case: :lower)
-    "karnet_event_generated_#{hash}"
+    "karnet_generated_#{hash}"
   end
 
   defp extract_starts_at(event) do

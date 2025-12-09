@@ -55,7 +55,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
     longitude = parse_coordinate(venue_data.lng)
 
     # Generate stable external_id from event_id
-    external_id = "speed-quizzing-#{venue_data.event_id}"
+    external_id = "speed_quizzing_#{venue_data.event_id}"
 
     # Resolve city and country using offline geocoding
     {city, country} = resolve_location(latitude, longitude, address)
@@ -99,7 +99,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Transformer do
         longitude: longitude,
         phone: nil,
         postcode: venue_data.postcode,
-        external_id: "speed-quizzing-venue-#{venue_data.event_id}",
+        external_id: "speed_quizzing_venue_#{venue_data.event_id}",
         metadata: %{}
       },
 

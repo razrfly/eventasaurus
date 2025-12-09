@@ -61,7 +61,7 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.IndexPageJob do
     events_with_external_ids =
       Enum.map(events, fn event ->
         id = event["event_id"] || event["id"]
-        Map.put(event, "external_id", "speed-quizzing-#{id}")
+        Map.put(event, "external_id", "speed_quizzing_#{id}")
       end)
 
     # Filter out events that were recently updated (unless force=true)
