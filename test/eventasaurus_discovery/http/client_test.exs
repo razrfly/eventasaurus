@@ -1,5 +1,6 @@
 defmodule EventasaurusDiscovery.Http.ClientTest do
-  use ExUnit.Case, async: true
+  # async: false because tests mutate global state via Application.put_env
+  use ExUnit.Case, async: false
 
   alias EventasaurusDiscovery.Http.Client
   alias EventasaurusDiscovery.Http.Adapters.{Direct, Zyte}

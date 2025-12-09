@@ -160,7 +160,7 @@ config :stripity_stripe,
 # Configure Zyte API for browser-rendered HTTP requests
 # Used by Http.Adapters.Zyte to bypass Cloudflare and other anti-bot protections
 # Optional: adapter returns {:error, :not_configured} when key is not set
-config :eventasaurus_discovery, :zyte_api_key, System.get_env("ZYTE_API_KEY") || ""
+config :eventasaurus, :zyte_api_key, System.get_env("ZYTE_API_KEY") || ""
 
 # Configure per-source HTTP strategies for the Http.Client fallback chain
 # Each source can specify an ordered list of adapters to try:
@@ -173,7 +173,7 @@ config :eventasaurus_discovery, :zyte_api_key, System.get_env("ZYTE_API_KEY") ||
 #
 # Http.Client will detect blocking (Cloudflare, CAPTCHA, rate limits) and
 # automatically try the next adapter in the chain.
-config :eventasaurus_discovery, :http_strategies, %{
+config :eventasaurus, :http_strategies, %{
   # Default strategy: try direct first, fallback to Zyte if blocked
   default: [:direct, :zyte],
   # Bandsintown: always use Zyte (known Cloudflare blocking)

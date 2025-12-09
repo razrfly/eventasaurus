@@ -38,7 +38,12 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
   describe "attach/0" do
     test "successfully attaches telemetry handlers" do
       # Detach first if already attached (from application startup)
-      :telemetry.detach("http-client-monitoring")
+      # Wrap in try/rescue since detach raises if handler doesn't exist
+      try do
+        :telemetry.detach("http-client-monitoring")
+      rescue
+        _ -> :ok
+      end
 
       # Now attach
       assert :ok = Telemetry.attach()
@@ -109,7 +114,7 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
         }
       )
 
-      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :stop], measurements, metadata}
+      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :stop], _measurements, metadata}
       assert metadata.attempts == 2
       assert metadata.blocked_by == ["direct"]
       assert metadata.adapter == "zyte"

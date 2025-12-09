@@ -28,6 +28,7 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Client do
     - :timeout - Request timeout in milliseconds (default: 30_000)
     - :mode - Zyte mode, :browser_html (default) or :http_response_body
   """
+  @spec fetch_city_page(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def fetch_city_page(city_slug, opts \\ []) do
     url = "#{@base_url}/c/#{city_slug}"
 
