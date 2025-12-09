@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.PageController do
   require Logger
 
   alias Eventasaurus.Sanity.Changelog
+  alias Eventasaurus.Sanity.Roadmap
 
   def home(conn, _params) do
     # The home page is often custom made,
@@ -176,13 +177,25 @@ defmodule EventasaurusWeb.PageController do
   end
 
   def roadmap(conn, _params) do
-    {now_items, next_items, later_items} = mock_roadmap_items()
+    case Roadmap.list_entries() do
+      {:ok, %{now: now_items, next: next_items, later: later_items}} ->
+        render(conn, :roadmap,
+          now_items: now_items,
+          next_items: next_items,
+          later_items: later_items
+        )
 
-    render(conn, :roadmap,
-      now_items: now_items,
-      next_items: next_items,
-      later_items: later_items
-    )
+      {:error, reason} ->
+        Logger.warning("Failed to fetch roadmap from Sanity: #{inspect(reason)}")
+        # Fall back to mock data
+        {now_items, next_items, later_items} = mock_roadmap_items()
+
+        render(conn, :roadmap,
+          now_items: now_items,
+          next_items: next_items,
+          later_items: later_items
+        )
+    end
   end
 
   defp mock_roadmap_items do
