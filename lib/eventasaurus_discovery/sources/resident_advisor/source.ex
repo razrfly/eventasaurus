@@ -16,7 +16,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Source do
 
   def key, do: "resident_advisor"
 
-  def enabled?, do: Application.get_env(:eventasaurus_discovery, :resident_advisor_enabled, true)
+  def enabled?, do: Application.get_env(:eventasaurus, :resident_advisor_enabled, true)
 
   # Priority: Below Ticketmaster (90) and Bandsintown (80), above regional sources (60)
   # RA is a trusted international source for electronic music events

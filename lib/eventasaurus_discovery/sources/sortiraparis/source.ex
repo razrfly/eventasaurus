@@ -21,7 +21,7 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Source do
 
   def key, do: "sortiraparis"
 
-  def enabled?, do: Application.get_env(:eventasaurus_discovery, :sortiraparis_enabled, true)
+  def enabled?, do: Application.get_env(:eventasaurus, :sortiraparis_enabled, true)
 
   # Regional reliable source - priority 65
   # Below international sources (Ticketmaster 90, Resident Advisor 75, Bandsintown 80)

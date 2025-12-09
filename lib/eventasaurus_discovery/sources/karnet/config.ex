@@ -44,7 +44,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Config do
   def base_url, do: @base_url
   def rate_limit, do: @rate_limit
   def timeout, do: @timeout
-  def max_pages, do: Application.get_env(:eventasaurus_discovery, :karnet_max_pages, 10)
+  def max_pages, do: Application.get_env(:eventasaurus, :karnet_max_pages, 10)
 
   @doc """
   Build URL for events listing page with optional page number.

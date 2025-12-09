@@ -487,12 +487,12 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
   end
 
   defp get_new_events_window do
-    config = Application.get_env(:eventasaurus_discovery, :change_tracking, [])
+    config = Application.get_env(:eventasaurus, :change_tracking, [])
     Keyword.get(config, :new_events_window_hours, 24)
   end
 
   defp get_dropped_events_window do
-    config = Application.get_env(:eventasaurus_discovery, :change_tracking, [])
+    config = Application.get_env(:eventasaurus, :change_tracking, [])
     Keyword.get(config, :dropped_events_window_hours, 48)
   end
 end

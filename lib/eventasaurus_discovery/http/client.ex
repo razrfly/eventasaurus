@@ -73,7 +73,7 @@ defmodule EventasaurusDiscovery.Http.Client do
 
   Per-source strategies are configured in `config/runtime.exs`:
 
-      config :eventasaurus_discovery, :http_strategies,
+      config :eventasaurus, :http_strategies,
         default: [:direct, :zyte],           # Try direct first, fallback to Zyte
         bandsintown: [:zyte],                # Always use Zyte (known blocking)
         cinema_city: [:direct],              # Direct only (API works fine)

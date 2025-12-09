@@ -14,7 +14,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Source do
 
   def key, do: "kino-krakow"
 
-  def enabled?, do: Application.get_env(:eventasaurus_discovery, :kino_krakow_enabled, true)
+  def enabled?, do: Application.get_env(:eventasaurus, :kino_krakow_enabled, true)
 
   # Movies should have high priority as they're time-sensitive
   def priority, do: 15

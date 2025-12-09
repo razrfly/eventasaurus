@@ -12,7 +12,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
 
   # Get venue matching configuration
   @proximity_threshold_meters Application.compile_env(
-                                :eventasaurus_discovery,
+                                :eventasaurus,
                                 [:venue_matching, :proximity_threshold_meters],
                                 200
                               )
@@ -42,7 +42,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   end
 
   # Step 1: Try geo-proximity match
-  # Uses configurable threshold from config :eventasaurus_discovery, :venue_matching
+  # Uses configurable threshold from config :eventasaurus, :venue_matching
   defp find_by_proximity(%{latitude: lat, longitude: lng, name: name, city_id: city_id})
        when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
     # Convert to float for PostGIS

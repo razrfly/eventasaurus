@@ -130,9 +130,9 @@ defmodule EventasaurusDiscovery.Http.ClientTest do
 
     test "returns source-specific chain for :auto strategy" do
       # Set up test config
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         test_source: [:direct]
       })
 
@@ -140,7 +140,7 @@ defmodule EventasaurusDiscovery.Http.ClientTest do
         chain = Client.get_adapter_chain_for(:test_source, :auto)
         assert Direct in chain
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
   end
@@ -191,17 +191,17 @@ defmodule EventasaurusDiscovery.Http.ClientTest do
 
   describe "source-specific configuration" do
     setup do
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
       on_exit(fn ->
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end)
 
       %{original_config: original}
     end
 
     test "uses source-specific adapter chain" do
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         test_direct_only: [:direct]
       })
 
@@ -210,7 +210,7 @@ defmodule EventasaurusDiscovery.Http.ClientTest do
     end
 
     test "falls back to default for unknown source" do
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         default: [:direct]
       })
 

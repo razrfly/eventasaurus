@@ -27,11 +27,11 @@ defmodule EventasaurusDiscovery.Http.Adapters.ZyteTest do
     @tag :skip_if_zyte_configured
     test "returns :not_configured when API key is not set" do
       # Temporarily clear the API key
-      original_key = Application.get_env(:eventasaurus_discovery, :zyte_api_key)
+      original_key = Application.get_env(:eventasaurus, :zyte_api_key)
       original_env = System.get_env("ZYTE_API_KEY")
 
       try do
-        Application.put_env(:eventasaurus_discovery, :zyte_api_key, "")
+        Application.put_env(:eventasaurus, :zyte_api_key, "")
         System.delete_env("ZYTE_API_KEY")
 
         result = Zyte.fetch("https://example.com")
@@ -39,7 +39,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.ZyteTest do
       after
         # Restore the original values
         if original_key do
-          Application.put_env(:eventasaurus_discovery, :zyte_api_key, original_key)
+          Application.put_env(:eventasaurus, :zyte_api_key, original_key)
         end
 
         if original_env do

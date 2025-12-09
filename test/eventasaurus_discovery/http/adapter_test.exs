@@ -85,7 +85,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
 
     test "Zyte adapter availability depends on API key" do
       api_key = System.get_env("ZYTE_API_KEY")
-      app_key = Application.get_env(:eventasaurus_discovery, :zyte_api_key)
+      app_key = Application.get_env(:eventasaurus, :zyte_api_key)
 
       if (api_key && api_key != "") or (app_key && app_key != "") do
         assert Zyte.available?() == true
@@ -125,11 +125,11 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
 
     test "unavailable adapters return :not_configured error" do
       # Test Zyte when not configured
-      original_app_key = Application.get_env(:eventasaurus_discovery, :zyte_api_key)
+      original_app_key = Application.get_env(:eventasaurus, :zyte_api_key)
       original_env_key = System.get_env("ZYTE_API_KEY")
 
       try do
-        Application.put_env(:eventasaurus_discovery, :zyte_api_key, "")
+        Application.put_env(:eventasaurus, :zyte_api_key, "")
         System.delete_env("ZYTE_API_KEY")
 
         if not Zyte.available?() do
@@ -138,7 +138,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
         end
       after
         if original_app_key do
-          Application.put_env(:eventasaurus_discovery, :zyte_api_key, original_app_key)
+          Application.put_env(:eventasaurus, :zyte_api_key, original_app_key)
         end
         if original_env_key do
           System.put_env("ZYTE_API_KEY", original_env_key)
