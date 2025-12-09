@@ -543,6 +543,8 @@ defmodule EventasaurusWeb.Router do
 
       get "/", PageController, :home
       get "/about", PageController, :about
+      get "/about-v2", PageController, :about_v2
+      get "/about-v3", PageController, :about_v3
       get "/our-story", PageController, :our_story
       get "/whats-new", PageController, :whats_new
       get "/components", PageController, :components
