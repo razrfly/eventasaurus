@@ -305,7 +305,8 @@ defmodule EventasaurusDiscovery.Http.Client do
             {:ok, body, enhanced_metadata}
 
           {:blocked, blocking_type} ->
-            Logger.info("Adapter #{adapter.name()} blocked by #{blocking_type}, trying next adapter",
+            Logger.info(
+              "Adapter #{adapter.name()} blocked by #{blocking_type}, trying next adapter",
               adapter: adapter.name(),
               blocking_type: blocking_type,
               url: truncate_url(url)
@@ -380,7 +381,8 @@ defmodule EventasaurusDiscovery.Http.Client do
           # Last adapter failed, return error
           {:error, reason}
         else
-          Logger.debug("Adapter #{adapter.name()} failed: #{inspect(reason)}, trying next adapter",
+          Logger.debug(
+            "Adapter #{adapter.name()} failed: #{inspect(reason)}, trying next adapter",
             adapter: adapter.name(),
             error: inspect(reason)
           )

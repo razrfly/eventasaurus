@@ -162,7 +162,9 @@ defmodule EventasaurusDiscovery.Http.Adapters.ZyteTest do
       # The actual HTTP call would fail without a valid API key
       if not Zyte.available?() do
         assert {:error, :not_configured} = Zyte.fetch("https://example.com", mode: :browser_html)
-        assert {:error, :not_configured} = Zyte.fetch("https://example.com", mode: :http_response_body)
+
+        assert {:error, :not_configured} =
+                 Zyte.fetch("https://example.com", mode: :http_response_body)
       end
     end
 

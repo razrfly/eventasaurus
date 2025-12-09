@@ -19,6 +19,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
       for adapter <- @all_adapters do
         # Check that each adapter module declares the behaviour
         behaviours = adapter.__info__(:attributes) |> Keyword.get(:behaviour, [])
+
         assert Adapter in behaviours,
                "#{inspect(adapter)} should implement Adapter behaviour"
       end
@@ -57,6 +58,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
 
     test "adapter names are unique" do
       names = Enum.map(@all_adapters, & &1.name())
+
       assert length(names) == length(Enum.uniq(names)),
              "All adapters should have unique names, got: #{inspect(names)}"
     end
@@ -64,6 +66,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
     test "adapter names are lowercase strings" do
       for adapter <- @all_adapters do
         name = adapter.name()
+
         assert name == String.downcase(name),
                "#{inspect(adapter)}.name() should be lowercase, got: #{name}"
       end
@@ -74,6 +77,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
     test "all adapters return a boolean" do
       for adapter <- @all_adapters do
         result = adapter.available?()
+
         assert is_boolean(result),
                "#{inspect(adapter)}.available?() should return a boolean, got: #{inspect(result)}"
       end
@@ -102,9 +106,16 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
 
         # Should return an error, not crash
         case result do
-          {:ok, _, _} -> :ok
-          {:error, _} -> :ok
-          other -> flunk("#{inspect(adapter)}.fetch() should return {:ok, _, _} or {:error, _}, got: #{inspect(other)}")
+          {:ok, _, _} ->
+            :ok
+
+          {:error, _} ->
+            :ok
+
+          other ->
+            flunk(
+              "#{inspect(adapter)}.fetch() should return {:ok, _, _} or {:error, _}, got: #{inspect(other)}"
+            )
         end
       end
     end
@@ -112,11 +123,12 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
     test "adapters accept options without crashing" do
       for adapter <- Config.available_adapters() do
         # These will likely fail due to network/timeout, but shouldn't crash
-        _result = adapter.fetch("https://example.com",
-          headers: [{"X-Test", "value"}],
-          timeout: 1,
-          recv_timeout: 1
-        )
+        _result =
+          adapter.fetch("https://example.com",
+            headers: [{"X-Test", "value"}],
+            timeout: 1,
+            recv_timeout: 1
+          )
 
         # Just verify no crash - we're testing option handling
         assert true
@@ -140,6 +152,7 @@ defmodule EventasaurusDiscovery.Http.AdapterTest do
         if original_app_key do
           Application.put_env(:eventasaurus, :zyte_api_key, original_app_key)
         end
+
         if original_env_key do
           System.put_env("ZYTE_API_KEY", original_env_key)
         end

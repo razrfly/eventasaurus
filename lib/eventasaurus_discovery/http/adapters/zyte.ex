@@ -265,7 +265,8 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
             end
 
           true ->
-            {:error, {:zyte_error, 200, "Unexpected response format: #{inspect(Map.keys(response))}"}}
+            {:error,
+             {:zyte_error, 200, "Unexpected response format: #{inspect(Map.keys(response))}"}}
         end
 
       {:error, decode_error} ->

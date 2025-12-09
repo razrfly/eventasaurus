@@ -1,0 +1,41 @@
+<div class="bg-white scroll-smooth min-h-screen">
+  <.header class="bg-white border-b border-zinc-200">
+    <div class="max-w-4xl mx-auto py-16 px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-base font-semibold leading-7 text-indigo-600">Roadmap</p>
+      <h1 class="mt-2 text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
+        Future of Eventasaurus
+      </h1>
+      <p class="mt-6 text-lg leading-8 text-zinc-600 max-w-2xl mx-auto">
+        Here's what we're working on. We're building the future of event discovery,
+        ensuring you never miss out on what's happening.
+      </p>
+    </div>
+  </.header>
+
+  <main role="main" aria-label="Feature roadmap">
+    <EventasaurusWeb.RoadmapFeaturesComponents.board
+      now_items={@now_items}
+      next_items={@next_items}
+      later_items={@later_items}
+    />
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 text-center">
+      <div class="rounded-2xl bg-zinc-50 py-10 px-6 sm:py-16 sm:px-12 border border-zinc-200">
+        <h2 class="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
+          Have a suggestion?
+        </h2>
+        <p class="mx-auto mt-6 max-w-xl text-lg leading-8 text-zinc-600">
+          We build for you. If there's a feature you'd love to see in Eventasaurus, let us know!
+        </p>
+        <div class="mt-10 flex items-center justify-center gap-x-6">
+          <a
+            href="mailto:feedback@eventasaurus.com"
+            class="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            Send Feedback
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
