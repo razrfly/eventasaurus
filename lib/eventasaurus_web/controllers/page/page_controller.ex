@@ -124,17 +124,23 @@ defmodule EventasaurusWeb.PageController do
 
       {:error, reason} ->
         Logger.warning("Failed to fetch changelog from Sanity: #{inspect(reason)}")
-        render(conn, :changelog, entries: fallback_changelog_entries(), pagination: fallback_pagination())
+
+        render(conn, :changelog,
+          entries: fallback_changelog_entries(),
+          pagination: fallback_pagination()
+        )
     end
   end
 
   defp parse_page(nil), do: 1
+
   defp parse_page(page) when is_binary(page) do
     case Integer.parse(page) do
       {num, _} when num > 0 -> num
       _ -> 1
     end
   end
+
   defp parse_page(_), do: 1
 
   defp fallback_pagination do
@@ -161,6 +167,170 @@ defmodule EventasaurusWeb.PageController do
           %{type: "changed", description: "Full changelog will be available shortly"}
         ],
         image: nil
+      }
+    ]
+  end
+
+  def changelog_beta(conn, _params) do
+    render(conn, :changelog_beta, roadmap_items: mock_changelog_beta_items())
+  end
+
+  def roadmap(conn, _params) do
+    {now_items, next_items, later_items} = mock_roadmap_items()
+
+    render(conn, :roadmap,
+      now_items: now_items,
+      next_items: next_items,
+      later_items: later_items
+    )
+  end
+
+  defp mock_roadmap_items do
+    # Uses simpler structure matching RoadmapComponents style
+    # with status pill (In Progress, Planned, Research, Concept) and colorful tags
+    now_items = [
+      %{
+        id: 1,
+        title: "Enhanced User Profiles",
+        description:
+          "Totally revamped user profiles with customizable themes, pinned events, and improved social sharing capabilities.",
+        status: "In Progress",
+        tags: ["Social", "Design"]
+      },
+      %{
+        id: 2,
+        title: "Advanced Event Analytics",
+        description:
+          "Deep dive into your event performance with real-time stats, attendee demographics, and engagement metrics.",
+        status: "In Progress",
+        tags: ["Analytics", "Business"]
+      },
+      %{
+        id: 3,
+        title: "Real-time Notifications",
+        description:
+          "Never miss an event again. Get push notifications for events you're interested in, including price drops and new dates.",
+        status: "Planned",
+        tags: ["Mobile", "Notifications"]
+      }
+    ]
+
+    next_items = [
+      %{
+        id: 4,
+        title: "Native Mobile App",
+        description:
+          "A dedicated mobile experience for iOS and Android, bringing Eventasaurus to your pocket with offline mode.",
+        status: "Research",
+        tags: ["Mobile", "Platform"]
+      },
+      %{
+        id: 5,
+        title: "API v2 Public Access",
+        description:
+          "Opening up our robust API for third-party developers to build amazing integrations and tools.",
+        status: "Planned",
+        tags: ["API", "DevTools"]
+      },
+      %{
+        id: 6,
+        title: "Calendar Integrations",
+        description:
+          "Two-way sync with Google Calendar, Apple Calendar, and Outlook. Events you RSVP to automatically appear.",
+        status: "Planned",
+        tags: ["API", "Infrastructure"]
+      }
+    ]
+
+    later_items = [
+      %{
+        id: 7,
+        title: "AI-Powered Event Recommendations",
+        description:
+          "Smart suggestions based on your interests and past attendance to help you discover the perfect events.",
+        status: "Concept",
+        tags: ["AI", "Discovery"]
+      },
+      %{
+        id: 8,
+        title: "Group Event Planning",
+        description:
+          "Coordinate events with friends. Create polls to decide on dates, vote on venues, and split costs.",
+        status: "Concept",
+        tags: ["Social", "Groups"]
+      },
+      %{
+        id: 9,
+        title: "Accessibility Improvements",
+        description:
+          "Enhanced screen reader support, keyboard navigation, and color contrast options for everyone.",
+        status: "Research",
+        tags: ["Accessibility", "UX"]
+      }
+    ]
+
+    {now_items, next_items, later_items}
+  end
+
+  defp mock_changelog_beta_items do
+    [
+      %{
+        quarter: "Q1 2026",
+        status: "current",
+        features: [
+          %{
+            id: 1,
+            title: "Enhanced User Profiles",
+            description:
+              "Totally revamped user profiles with customizable themes, pinned events, and improved social sharing capabilities.",
+            status: "In Progress",
+            tags: ["Social", "Design"]
+          },
+          %{
+            id: 2,
+            title: "Advanced Event Analytics",
+            description:
+              "Deep dive into your event performance with real-time stats, attendee demographics, and engagement metrics.",
+            status: "Planned",
+            tags: ["Analytics", "Business"]
+          }
+        ]
+      },
+      %{
+        quarter: "Q2 2026",
+        status: "upcoming",
+        features: [
+          %{
+            id: 3,
+            title: "Native Mobile App",
+            description:
+              "A dedicated mobile experience for iOS and Android, bringing Eventasaurus to your pocket with offline mode.",
+            status: "Research",
+            tags: ["Mobile", "Platform"]
+          },
+          %{
+            id: 4,
+            title: "API v2 Public Access",
+            description:
+              "Opening up our robust API for third-party developers to build amazing integrations and tools.",
+            status: "Planned",
+            tags: ["API", "DevTools"]
+          }
+        ]
+      },
+      %{
+        quarter: "Future",
+        status: "future",
+        features: [
+          %{
+            id: 5,
+            title: "AI-Powered Event Recommendations",
+            description:
+              "Smart suggestions based on your interests and past attendance to help you discover the perfect events.",
+            status: "Concept",
+            tags: ["AI", "Discovery"]
+          }
+        ]
       }
     ]
   end

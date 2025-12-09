@@ -118,17 +118,23 @@ defmodule EventasaurusDiscovery.Http.BlockingDetectorTest do
 
     test "detects Cloudflare challenge page with cf-ray header" do
       headers = [{"cf-ray", "8a1234567890abcd-IAD"}]
-      assert {:blocked, :cloudflare} = BlockingDetector.detect(403, headers, @cloudflare_challenge_page)
+
+      assert {:blocked, :cloudflare} =
+               BlockingDetector.detect(403, headers, @cloudflare_challenge_page)
     end
 
     test "detects Cloudflare by body patterns even with 200 status but cf headers" do
       headers = [{"cf-ray", "8a1234567890abcd-IAD"}]
-      assert {:blocked, :cloudflare} = BlockingDetector.detect(200, headers, @cloudflare_challenge_page)
+
+      assert {:blocked, :cloudflare} =
+               BlockingDetector.detect(200, headers, @cloudflare_challenge_page)
     end
 
     test "detects Cloudflare error page" do
       headers = [{"cf-ray", "8a1234567890abcd-IAD"}]
-      assert {:blocked, :cloudflare} = BlockingDetector.detect(403, headers, @cloudflare_error_page)
+
+      assert {:blocked, :cloudflare} =
+               BlockingDetector.detect(403, headers, @cloudflare_error_page)
     end
 
     test "detects Cloudflare with cf-mitigated header" do
@@ -138,7 +144,9 @@ defmodule EventasaurusDiscovery.Http.BlockingDetectorTest do
 
     test "detects Cloudflare 503 with cf headers" do
       headers = [{"cf-ray", "abc123"}]
-      assert {:blocked, :cloudflare} = BlockingDetector.detect(503, headers, "Service Unavailable")
+
+      assert {:blocked, :cloudflare} =
+               BlockingDetector.detect(503, headers, "Service Unavailable")
     end
 
     test "detects reCAPTCHA" do
@@ -175,7 +183,9 @@ defmodule EventasaurusDiscovery.Http.BlockingDetectorTest do
 
     test "handles case-insensitive headers" do
       headers = [{"CF-RAY", "abc123"}, {"CF-CACHE-STATUS", "DYNAMIC"}]
-      assert {:blocked, :cloudflare} = BlockingDetector.detect(403, headers, @cloudflare_challenge_page)
+
+      assert {:blocked, :cloudflare} =
+               BlockingDetector.detect(403, headers, @cloudflare_challenge_page)
     end
 
     test "handles mixed case body patterns" do
@@ -359,7 +369,8 @@ defmodule EventasaurusDiscovery.Http.BlockingDetectorTest do
     test "Cloudflare with body but no cf headers returns access_denied for 403" do
       # If we have Cloudflare body patterns but no CF headers,
       # it's suspicious but we can't confirm it's Cloudflare
-      assert {:blocked, :access_denied} = BlockingDetector.detect(403, [], @cloudflare_challenge_page)
+      assert {:blocked, :access_denied} =
+               BlockingDetector.detect(403, [], @cloudflare_challenge_page)
     end
 
     test "normal page with cf headers but 200 status is not blocked" do

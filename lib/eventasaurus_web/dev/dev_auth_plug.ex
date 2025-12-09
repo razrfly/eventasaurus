@@ -42,7 +42,10 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
             case Repo.replica().get(User, cached_id) do
               nil ->
                 # Cached user no longer exists - clear stale session
-                Logger.warning("🔧 DEV_AUTH_PLUG: Cached user #{cached_id} not found in DB - clearing session")
+                Logger.warning(
+                  "🔧 DEV_AUTH_PLUG: Cached user #{cached_id} not found in DB - clearing session"
+                )
+
                 conn
                 |> delete_session(:dev_mode_login)
                 |> delete_session(:current_user_id)
@@ -51,6 +54,7 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
               _user ->
                 # Use cached user - it's valid
                 Logger.debug("🔧 DEV_AUTH_PLUG: Using cached user #{cached_user.email}")
+
                 conn
                 |> assign(:auth_user, cached_user)
                 |> assign(:dev_mode_auth, true)

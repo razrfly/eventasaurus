@@ -67,7 +67,9 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
         }
       )
 
-      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :start], measurements, metadata}
+      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :start], measurements,
+                      metadata}
+
       assert is_integer(measurements.system_time)
       assert metadata.url == "https://example.com/test"
       assert metadata.source == :test_source
@@ -80,7 +82,8 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
     test "captures successful request completion" do
       :telemetry.execute(
         [:eventasaurus, :http, :request, :stop],
-        %{duration: 150_000_000},  # 150ms in native time units
+        # 150ms in native time units
+        %{duration: 150_000_000},
         %{
           url: "https://example.com/test",
           source: :test_source,
@@ -91,7 +94,9 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
         }
       )
 
-      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :stop], measurements, metadata}
+      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :stop], measurements,
+                      metadata}
+
       assert is_integer(measurements.duration)
       assert metadata.url == "https://example.com/test"
       assert metadata.adapter == "direct"
@@ -103,7 +108,8 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
     test "captures request with fallback attempts" do
       :telemetry.execute(
         [:eventasaurus, :http, :request, :stop],
-        %{duration: 5_000_000_000},  # 5s
+        # 5s
+        %{duration: 5_000_000_000},
         %{
           url: "https://example.com/test",
           source: :bandsintown,
@@ -114,7 +120,9 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
         }
       )
 
-      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :stop], _measurements, metadata}
+      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :stop], _measurements,
+                      metadata}
+
       assert metadata.attempts == 2
       assert metadata.blocked_by == ["direct"]
       assert metadata.adapter == "zyte"
@@ -125,7 +133,8 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
     test "captures request failures" do
       :telemetry.execute(
         [:eventasaurus, :http, :request, :exception],
-        %{duration: 30_000_000_000},  # 30s timeout
+        # 30s timeout
+        %{duration: 30_000_000_000},
         %{
           url: "https://example.com/timeout",
           source: :test_source,
@@ -133,7 +142,9 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
         }
       )
 
-      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :exception], measurements, metadata}
+      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :exception],
+                      measurements, metadata}
+
       assert is_integer(measurements.duration)
       assert metadata.url == "https://example.com/timeout"
       assert metadata.error == {:timeout, :connect}
@@ -155,7 +166,9 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
         }
       )
 
-      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :exception], _measurements, metadata}
+      assert_receive {:telemetry_event, [:eventasaurus, :http, :request, :exception],
+                      _measurements, metadata}
+
       assert {:all_adapters_failed, _} = metadata.error
     end
   end
@@ -220,59 +233,98 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
   describe "handle_event/4" do
     test "handles start event without crashing" do
       # Just verify the handler doesn't crash
-      assert :ok = Telemetry.handle_event(
-        [:eventasaurus, :http, :request, :start],
-        %{system_time: System.system_time()},
-        %{url: "https://example.com", source: :test, strategy: :auto, adapter_chain: ["direct"]},
-        nil
-      )
+      assert :ok =
+               Telemetry.handle_event(
+                 [:eventasaurus, :http, :request, :start],
+                 %{system_time: System.system_time()},
+                 %{
+                   url: "https://example.com",
+                   source: :test,
+                   strategy: :auto,
+                   adapter_chain: ["direct"]
+                 },
+                 nil
+               )
     end
 
     test "handles stop event without crashing" do
-      assert :ok = Telemetry.handle_event(
-        [:eventasaurus, :http, :request, :stop],
-        %{duration: 1_000_000},
-        %{url: "https://example.com", source: :test, adapter: "direct", status_code: 200, attempts: 1, blocked_by: []},
-        nil
-      )
+      assert :ok =
+               Telemetry.handle_event(
+                 [:eventasaurus, :http, :request, :stop],
+                 %{duration: 1_000_000},
+                 %{
+                   url: "https://example.com",
+                   source: :test,
+                   adapter: "direct",
+                   status_code: 200,
+                   attempts: 1,
+                   blocked_by: []
+                 },
+                 nil
+               )
     end
 
     test "handles exception event without crashing" do
-      assert :ok = Telemetry.handle_event(
-        [:eventasaurus, :http, :request, :exception],
-        %{duration: 1_000_000},
-        %{url: "https://example.com", source: :test, error: {:timeout, :connect}},
-        nil
-      )
+      assert :ok =
+               Telemetry.handle_event(
+                 [:eventasaurus, :http, :request, :exception],
+                 %{duration: 1_000_000},
+                 %{url: "https://example.com", source: :test, error: {:timeout, :connect}},
+                 nil
+               )
     end
 
     test "handles blocked event without crashing" do
-      assert :ok = Telemetry.handle_event(
-        [:eventasaurus, :http, :blocked],
-        %{system_time: System.system_time()},
-        %{url: "https://example.com", source: :test, adapter: "direct", blocking_type: :cloudflare, status_code: 403},
-        nil
-      )
+      assert :ok =
+               Telemetry.handle_event(
+                 [:eventasaurus, :http, :blocked],
+                 %{system_time: System.system_time()},
+                 %{
+                   url: "https://example.com",
+                   source: :test,
+                   adapter: "direct",
+                   blocking_type: :cloudflare,
+                   status_code: 403
+                 },
+                 nil
+               )
     end
 
     test "handles slow request warning" do
       # A request over 5000ms should trigger a warning log
-      assert :ok = Telemetry.handle_event(
-        [:eventasaurus, :http, :request, :stop],
-        %{duration: 6_000_000_000},  # 6 seconds
-        %{url: "https://example.com", source: :test, adapter: "direct", status_code: 200, attempts: 1, blocked_by: []},
-        nil
-      )
+      assert :ok =
+               Telemetry.handle_event(
+                 [:eventasaurus, :http, :request, :stop],
+                 # 6 seconds
+                 %{duration: 6_000_000_000},
+                 %{
+                   url: "https://example.com",
+                   source: :test,
+                   adapter: "direct",
+                   status_code: 200,
+                   attempts: 1,
+                   blocked_by: []
+                 },
+                 nil
+               )
     end
 
     test "handles fallback usage tracking" do
       # Multiple attempts should trigger fallback logging
-      assert :ok = Telemetry.handle_event(
-        [:eventasaurus, :http, :request, :stop],
-        %{duration: 2_000_000_000},
-        %{url: "https://example.com", source: :test, adapter: "zyte", status_code: 200, attempts: 3, blocked_by: ["direct", "other"]},
-        nil
-      )
+      assert :ok =
+               Telemetry.handle_event(
+                 [:eventasaurus, :http, :request, :stop],
+                 %{duration: 2_000_000_000},
+                 %{
+                   url: "https://example.com",
+                   source: :test,
+                   adapter: "zyte",
+                   status_code: 200,
+                   attempts: 3,
+                   blocked_by: ["direct", "other"]
+                 },
+                 nil
+               )
     end
   end
 
@@ -281,7 +333,12 @@ defmodule EventasaurusDiscovery.Http.TelemetryTest do
       :telemetry.execute(
         [:eventasaurus, :http, :request, :start],
         %{system_time: System.system_time()},
-        %{url: "https://example.com", source: :bandsintown, strategy: :auto, adapter_chain: ["zyte"]}
+        %{
+          url: "https://example.com",
+          source: :bandsintown,
+          strategy: :auto,
+          adapter_chain: ["zyte"]
+        }
       )
 
       assert_receive {:telemetry_event, _, _, metadata}

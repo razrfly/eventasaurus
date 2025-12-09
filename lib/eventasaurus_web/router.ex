@@ -557,6 +557,8 @@ defmodule EventasaurusWeb.Router do
       get "/invite-only", PageController, :invite_only
       get "/logo-test", LogoTestController, :index
       get "/changelog", PageController, :changelog
+      get "/changelog-beta", PageController, :changelog_beta
+      get "/roadmap", PageController, :roadmap
 
       # Sitemap redirect
       get "/sitemap", PageController, :sitemap_redirect

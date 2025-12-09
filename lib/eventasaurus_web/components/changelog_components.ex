@@ -114,30 +114,24 @@ defmodule EventasaurusWeb.ChangelogComponents do
       "polling" -> {"bg-blue-50", "text-blue-700", "ring-blue-700/10"}
       "scheduling" -> {"bg-cyan-50", "text-cyan-700", "ring-cyan-700/10"}
       "voting" -> {"bg-indigo-50", "text-indigo-700", "ring-indigo-700/10"}
-
       # Social & Community
       "groups" -> {"bg-violet-50", "text-violet-700", "ring-violet-700/10"}
       "communities" -> {"bg-purple-50", "text-purple-700", "ring-purple-700/10"}
       "social" -> {"bg-fuchsia-50", "text-fuchsia-700", "ring-fuchsia-700/10"}
-
       # Communication
       "reminders" -> {"bg-amber-50", "text-amber-700", "ring-amber-700/10"}
       "notifications" -> {"bg-orange-50", "text-orange-700", "ring-orange-700/10"}
       "messaging" -> {"bg-yellow-50", "text-yellow-700", "ring-yellow-700/10"}
-
       # Discovery & Search
       "discovery" -> {"bg-emerald-50", "text-emerald-700", "ring-emerald-700/10"}
       "search" -> {"bg-teal-50", "text-teal-700", "ring-teal-700/10"}
-
       # Customization
       "themes" -> {"bg-pink-50", "text-pink-700", "ring-pink-700/10"}
       "design" -> {"bg-rose-50", "text-rose-700", "ring-rose-700/10"}
       "customization" -> {"bg-red-50", "text-red-700", "ring-red-700/10"}
-
       # Location
       "maps" -> {"bg-green-50", "text-green-700", "ring-green-700/10"}
       "location" -> {"bg-lime-50", "text-lime-700", "ring-lime-700/10"}
-
       # Default
       _ -> {"bg-zinc-50", "text-zinc-700", "ring-zinc-700/10"}
     end

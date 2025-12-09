@@ -119,6 +119,7 @@ defmodule Eventasaurus.Sanity.ChangelogTest do
 
     test "marks recent entries as new (within 30 days)" do
       recent_date = Date.utc_today() |> Date.add(-15) |> Date.to_iso8601()
+
       entry = %{
         "_id" => "recent",
         "title" => "Recent Entry",
@@ -133,6 +134,7 @@ defmodule Eventasaurus.Sanity.ChangelogTest do
 
     test "does not mark old entries as new (older than 30 days)" do
       old_date = Date.utc_today() |> Date.add(-60) |> Date.to_iso8601()
+
       entry = %{
         "_id" => "old",
         "title" => "Old Entry",
