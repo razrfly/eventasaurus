@@ -113,11 +113,13 @@ configure_city.("krakow", [
 
   # Resident Advisor - Electronic music events
   {"resident-advisor", %{
+    "area_id" => 455,
     "limit" => 1000
   }},
 
   # Cinema City - Movie showtimes (Bonarka location)
   {"cinema-city", %{
+    "city_name" => "Kraków",
     "limit" => 1000
   }},
 
