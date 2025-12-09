@@ -18,7 +18,18 @@ defmodule EventasaurusApp.Repo.Migrations.FixExternalIdConventions do
 
   def up do
     # Speed Quizzing: hyphens → underscores
-    # Affects: speed-quizzing-{id}, speed-quizzing-venue-{id}
+    # First, delete old format records where new format already exists (from updated scraper code)
+    execute("""
+    DELETE FROM public_event_sources old_record
+    WHERE old_record.external_id LIKE 'speed-quizzing-%'
+      AND EXISTS (
+        SELECT 1 FROM public_event_sources new_record
+        WHERE new_record.source_id = old_record.source_id
+          AND new_record.external_id = REPLACE(old_record.external_id, 'speed-quizzing-', 'speed_quizzing_')
+      )
+    """)
+
+    # Then rename remaining old format records
     execute("""
     UPDATE public_event_sources
     SET external_id = REPLACE(external_id, 'speed-quizzing-', 'speed_quizzing_')
@@ -26,7 +37,18 @@ defmodule EventasaurusApp.Repo.Migrations.FixExternalIdConventions do
     """)
 
     # Karnet: remove redundant _event_ type component
-    # Affects: karnet_event_{id}, karnet_event_generated_{hash}
+    # First, delete old format records where new format already exists (from updated scraper code)
+    execute("""
+    DELETE FROM public_event_sources old_record
+    WHERE old_record.external_id LIKE 'karnet_event_%'
+      AND EXISTS (
+        SELECT 1 FROM public_event_sources new_record
+        WHERE new_record.source_id = old_record.source_id
+          AND new_record.external_id = REPLACE(old_record.external_id, 'karnet_event_', 'karnet_')
+      )
+    """)
+
+    # Then rename remaining old format records
     execute("""
     UPDATE public_event_sources
     SET external_id = REPLACE(external_id, 'karnet_event_', 'karnet_')
