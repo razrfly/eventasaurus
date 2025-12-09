@@ -2053,7 +2053,7 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
   end
 
   defp get_quality_thresholds do
-    config = Application.get_env(:eventasaurus_discovery, :quality_thresholds, [])
+    config = Application.get_env(:eventasaurus, :quality_thresholds, [])
 
     %{
       venue_completeness: Keyword.get(config, :venue_completeness, 90),

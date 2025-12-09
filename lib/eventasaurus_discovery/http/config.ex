@@ -16,7 +16,7 @@ defmodule EventasaurusDiscovery.Http.Config do
 
   Strategies are configured in `config/runtime.exs`:
 
-      config :eventasaurus_discovery, :http_strategies,
+      config :eventasaurus, :http_strategies,
         default: [:direct, :zyte],           # Try direct first, fallback to Zyte
         bandsintown: [:zyte],                # Always use Zyte (known blocking)
         cinema_city: [:direct],              # Direct only (API works fine)
@@ -179,7 +179,7 @@ defmodule EventasaurusDiscovery.Http.Config do
   """
   @spec get_all_strategies() :: %{source() => [adapter_name()]}
   def get_all_strategies do
-    Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+    Application.get_env(:eventasaurus, :http_strategies, %{})
     |> normalize_strategies()
   end
 

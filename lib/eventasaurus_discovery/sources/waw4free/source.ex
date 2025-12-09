@@ -16,7 +16,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Source do
 
   def key, do: "waw4free"
 
-  def enabled?, do: Application.get_env(:eventasaurus_discovery, :waw4free_enabled, true)
+  def enabled?, do: Application.get_env(:eventasaurus, :waw4free_enabled, true)
 
   # Lower priority than Ticketmaster (90), BandsInTown (80), Resident Advisor (75)
   # Similar to Karnet (30) as a local/regional Polish source

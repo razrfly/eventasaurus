@@ -20,7 +20,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
 
   ```elixir
   # config/runtime.exs
-  config :eventasaurus_discovery, :zyte_api_key,
+  config :eventasaurus, :zyte_api_key,
     System.get_env("ZYTE_API_KEY") || ""
   ```
 
@@ -312,7 +312,7 @@ defmodule EventasaurusDiscovery.Http.Adapters.Zyte do
 
   defp get_api_key do
     # Try application config first, then environment variable
-    Application.get_env(:eventasaurus_discovery, :zyte_api_key) ||
+    Application.get_env(:eventasaurus, :zyte_api_key) ||
       System.get_env("ZYTE_API_KEY") ||
       ""
   end

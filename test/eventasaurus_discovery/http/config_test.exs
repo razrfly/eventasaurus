@@ -68,9 +68,9 @@ defmodule EventasaurusDiscovery.Http.ConfigTest do
 
     test "returns configured strategy when set" do
       # Set up a test config
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         test_source: [:zyte]
       })
 
@@ -78,7 +78,7 @@ defmodule EventasaurusDiscovery.Http.ConfigTest do
         strategy = Config.get_strategy(:test_source)
         assert strategy == [:zyte]
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
   end
@@ -90,9 +90,9 @@ defmodule EventasaurusDiscovery.Http.ConfigTest do
     end
 
     test "handles keyword list config" do
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, [
+      Application.put_env(:eventasaurus, :http_strategies, [
         {:default, [:direct]},
         {:test_source, [:zyte]}
       ])
@@ -102,30 +102,30 @@ defmodule EventasaurusDiscovery.Http.ConfigTest do
         assert is_map(strategies)
         assert strategies[:test_source] == [:zyte]
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
   end
 
   describe "has_blocking_protection?/1" do
     test "returns false for direct-only source" do
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         direct_only: [:direct]
       })
 
       try do
         refute Config.has_blocking_protection?(:direct_only)
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
 
     test "returns true when proxy is in chain (if available)" do
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         with_proxy: [:direct, :zyte]
       })
 
@@ -138,30 +138,30 @@ defmodule EventasaurusDiscovery.Http.ConfigTest do
           refute Config.has_blocking_protection?(:with_proxy)
         end
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
   end
 
   describe "blocking_detection_enabled?/1" do
     test "returns false for single-adapter chain" do
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         single: [:direct]
       })
 
       try do
         refute Config.blocking_detection_enabled?(:single)
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
 
     test "returns true for multi-adapter chain" do
-      original = Application.get_env(:eventasaurus_discovery, :http_strategies, %{})
+      original = Application.get_env(:eventasaurus, :http_strategies, %{})
 
-      Application.put_env(:eventasaurus_discovery, :http_strategies, %{
+      Application.put_env(:eventasaurus, :http_strategies, %{
         multi: [:direct, :zyte]
       })
 
@@ -175,7 +175,7 @@ defmodule EventasaurusDiscovery.Http.ConfigTest do
           refute Config.blocking_detection_enabled?(:multi)
         end
       after
-        Application.put_env(:eventasaurus_discovery, :http_strategies, original)
+        Application.put_env(:eventasaurus, :http_strategies, original)
       end
     end
   end

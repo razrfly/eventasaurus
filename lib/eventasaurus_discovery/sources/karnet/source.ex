@@ -15,7 +15,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Source do
 
   def key, do: "karnet"
 
-  def enabled?, do: Application.get_env(:eventasaurus_discovery, :karnet_enabled, true)
+  def enabled?, do: Application.get_env(:eventasaurus, :karnet_enabled, true)
 
   # Lower priority than Ticketmaster (10) and BandsInTown (20)
   def priority, do: 30

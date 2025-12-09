@@ -66,7 +66,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Config do
   # (e.g., "Kraków", "Warszawa", "Wrocław" - must match Cinema City's addressInfo.city)
   @deprecated "Use city_name from discovery_config instead"
   def target_cities,
-    do: Application.get_env(:eventasaurus_discovery, :cinema_city_cities, ["Kraków"])
+    do: Application.get_env(:eventasaurus, :cinema_city_cities, ["Kraków"])
 
   # HTTP headers for API requests
   def headers do

@@ -57,7 +57,7 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Config do
   def base_url, do: @base_url
   def rate_limit, do: @rate_limit
   def timeout, do: @timeout
-  def max_pages, do: Application.get_env(:eventasaurus_discovery, :waw4free_max_pages, 1)
+  def max_pages, do: Application.get_env(:eventasaurus, :waw4free_max_pages, 1)
 
   @doc """
   Categories available on waw4free.pl (in Polish).
