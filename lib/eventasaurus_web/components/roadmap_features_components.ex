@@ -45,7 +45,7 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
         <.column
           status="later"
           title="Later"
-          subtitle="Exploring"
+          subtitle="Considering"
           items={@later_items}
         />
       </div>
@@ -69,7 +69,7 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
         <.column
           status="later"
           title="Later"
-          subtitle="Exploring"
+          subtitle="Considering"
           items={@later_items}
         />
       </div>
@@ -93,7 +93,7 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
         <.mobile_section
           status="later"
           title="Later"
-          subtitle="Exploring"
+          subtitle="Considering"
           items={@later_items}
           default_open={false}
         />
@@ -229,7 +229,7 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
 
   def feature_card(assigns) do
     # Get strip color from first tag (more colorful) or fall back to status
-    first_tag = List.first(assigns.item.tags)
+    first_tag = List.first(assigns.item.tags || [])
     strip_color = if first_tag, do: tag_strip_color(first_tag), else: status_strip_color(assigns.status)
     assigns = assign(assigns, :strip_color, strip_color)
 
@@ -239,14 +239,8 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
       <div class={["absolute top-0 left-0 w-1 h-full", @strip_color]}></div>
 
       <div class="pl-2">
-        <%!-- Status pill and tags row --%>
+        <%!-- Tags row (status shown in column header, not repeated here) --%>
         <div class="flex flex-wrap items-center gap-2 mb-3">
-          <span class={[
-            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-            item_status_pill(@item.status)
-          ]}>
-            <%= @item.status %>
-          </span>
           <.tag_badge :for={tag <- @item.tags} tag={tag} />
         </div>
 
@@ -354,17 +348,6 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
       "next" -> "bg-amber-500"
       "later" -> "bg-zinc-300"
       _ -> "bg-zinc-300"
-    end
-  end
-
-  # Item status pill (In Progress, Planned, Research, Concept)
-  defp item_status_pill(status) do
-    case status do
-      "In Progress" -> "bg-indigo-50 text-indigo-700 ring-indigo-700/10"
-      "Planned" -> "bg-blue-50 text-blue-700 ring-blue-700/10"
-      "Research" -> "bg-amber-50 text-amber-700 ring-amber-700/10"
-      "Concept" -> "bg-purple-50 text-purple-700 ring-purple-700/10"
-      _ -> "bg-zinc-50 text-zinc-700 ring-zinc-700/10"
     end
   end
 
