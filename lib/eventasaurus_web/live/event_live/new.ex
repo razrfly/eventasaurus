@@ -603,6 +603,10 @@ defmodule EventasaurusWeb.EventLive.New do
     resolved_attributes = FormHelpers.resolve_event_attributes(event_params)
     event_params = Map.merge(event_params, resolved_attributes)
 
+    # Map user-friendly threshold fields to schema fields
+    # funding_goal → threshold_revenue_cents, funding_deadline → polling_deadline, etc.
+    event_params = map_threshold_fields(event_params)
+
     # Validate venue requirement when venue_certainty is "confirmed"
     # Check event_params first, then fall back to form_data
     venue_certainty =
@@ -2379,5 +2383,116 @@ defmodule EventasaurusWeb.EventLive.New do
       _ ->
         {:ok, event_params}
     end
+  end
+
+  # ============================================================================
+  # Threshold Field Mapping Helpers
+  # ============================================================================
+
+  # Maps user-friendly threshold field names from the form to database field names.
+  #
+  # Form fields:
+  # - funding_goal → threshold_revenue_cents (converted from dollars to cents)
+  # - funding_deadline → polling_deadline
+  # - minimum_attendees → threshold_count
+  # - decision_deadline → polling_deadline
+  defp map_threshold_fields(params) do
+    params
+    |> map_funding_goal_to_threshold_revenue()
+    |> map_minimum_attendees_to_threshold_count()
+    |> map_deadline_fields()
+    |> drop_intermediate_threshold_fields()
+  end
+
+  # Convert funding_goal (dollars) to threshold_revenue_cents
+  defp map_funding_goal_to_threshold_revenue(params) do
+    case Map.get(params, "funding_goal") do
+      nil ->
+        params
+
+      "" ->
+        params
+
+      goal_str when is_binary(goal_str) ->
+        case parse_currency(goal_str) do
+          nil -> params
+          cents -> Map.put(params, "threshold_revenue_cents", cents)
+        end
+
+      goal when is_number(goal) ->
+        # If it's already a number, assume dollars and convert to cents
+        Map.put(params, "threshold_revenue_cents", round(goal * 100))
+    end
+  end
+
+  # Convert minimum_attendees to threshold_count
+  defp map_minimum_attendees_to_threshold_count(params) do
+    case Map.get(params, "minimum_attendees") do
+      nil ->
+        params
+
+      "" ->
+        params
+
+      count_str when is_binary(count_str) ->
+        case Integer.parse(count_str) do
+          {count, _} when count > 0 -> Map.put(params, "threshold_count", count)
+          _ -> params
+        end
+
+      count when is_integer(count) and count > 0 ->
+        Map.put(params, "threshold_count", count)
+
+      _ ->
+        params
+    end
+  end
+
+  # Map funding_deadline or decision_deadline to polling_deadline
+  # Note: The Event schema uses polling_deadline for all deadline purposes
+  defp map_deadline_fields(params) do
+    timezone = Map.get(params, "timezone", "UTC")
+
+    # Check for funding_deadline (crowdfunding) or decision_deadline (interest)
+    deadline_str = Map.get(params, "funding_deadline") || Map.get(params, "decision_deadline")
+
+    case deadline_str do
+      nil ->
+        params
+
+      "" ->
+        params
+
+      date_str when is_binary(date_str) ->
+        # Parse the date and set time to end of day in the event's timezone
+        case Date.from_iso8601(date_str) do
+          {:ok, date} ->
+            # Set deadline to end of day (23:59:59) in event timezone
+            case DateTimeHelper.parse_user_datetime(
+                   Date.to_iso8601(date),
+                   "23:59",
+                   timezone
+                 ) do
+              {:ok, datetime} -> Map.put(params, "polling_deadline", datetime)
+              {:error, _} -> params
+            end
+
+          {:error, _} ->
+            params
+        end
+
+      _ ->
+        params
+    end
+  end
+
+  # Remove intermediate form fields that don't exist in the Event schema
+  defp drop_intermediate_threshold_fields(params) do
+    Map.drop(params, [
+      "funding_goal",
+      "funding_deadline",
+      "minimum_attendees",
+      "decision_deadline"
+    ])
   end
 end

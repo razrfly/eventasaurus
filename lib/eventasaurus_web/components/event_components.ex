@@ -1345,27 +1345,33 @@ defmodule EventasaurusWeb.EventComponents do
               <h4 class="text-sm font-medium text-gray-700">Crowdfunding Settings</h4>
               <div class="p-4 bg-purple-50 rounded-lg space-y-4">
                 <div>
-                  <label class="text-sm text-gray-700">Minimum funding goal</label>
+                  <label class="text-sm text-gray-700">Minimum funding goal <span class="text-red-500">*</span></label>
                   <div class="mt-1 relative">
                     <span class="absolute left-3 top-2 text-gray-500">$</span>
                     <input
                       type="number"
                       name="event[funding_goal]"
-                      value={get_funding_goal_value(@event)}
+                      value={get_funding_goal_form_value(@event, @form_data)}
                       class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       placeholder="5,000"
+                      required
+                      min="1"
                     >
                   </div>
                   <p class="text-xs text-gray-500 mt-1">Event will only happen if this goal is reached</p>
                 </div>
                 <div>
-                  <label class="text-sm text-gray-700">Campaign deadline</label>
+                  <label class="text-sm text-gray-700">Campaign deadline <span class="text-red-500">*</span></label>
                   <input
                     type="date"
                     name="event[funding_deadline]"
-                    value={get_threshold_deadline_date(@event)}
+                    value={get_threshold_deadline_value(@event, @form_data)}
+                    min={Date.to_iso8601(Date.utc_today())}
+                    max={get_max_deadline_date(@form_data)}
                     class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    required
                   >
+                  <p class="text-xs text-gray-500 mt-1">Must be before the event start date</p>
                 </div>
               </div>
             </div>
@@ -1377,24 +1383,29 @@ defmodule EventasaurusWeb.EventComponents do
               <h4 class="text-sm font-medium text-gray-700">Interest Validation Settings</h4>
               <div class="p-4 bg-orange-50 rounded-lg space-y-4">
                 <div>
-                  <label class="text-sm text-gray-700">Minimum attendees needed</label>
+                  <label class="text-sm text-gray-700">Minimum attendees needed <span class="text-red-500">*</span></label>
                   <input
                     type="number"
                     name="event[minimum_attendees]"
-                    value={Map.get(@event || %{}, :threshold_count)}
+                    value={get_minimum_attendees_form_value(@event, @form_data)}
                     class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     placeholder="20"
+                    required
+                    min="1"
                   >
                 </div>
                 <div>
-                  <label class="text-sm text-gray-700">Decision deadline</label>
+                  <label class="text-sm text-gray-700">Decision deadline <span class="text-red-500">*</span></label>
                   <input
                     type="date"
                     name="event[decision_deadline]"
-                    value={get_threshold_deadline_date(@event)}
+                    value={get_threshold_deadline_value(@event, @form_data)}
+                    min={Date.to_iso8601(Date.utc_today())}
+                    max={get_max_deadline_date(@form_data)}
                     class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    required
                   >
-                  <p class="text-xs text-gray-500 mt-1">You'll decide by this date whether to proceed</p>
+                  <p class="text-xs text-gray-500 mt-1">Must be before the event start date</p>
                 </div>
               </div>
             </div>
@@ -1776,7 +1787,35 @@ defmodule EventasaurusWeb.EventComponents do
     end
   end
 
-  # Helper to get threshold deadline as date string for form display
+  # Helper to get funding goal value from either event or form_data (for LiveView forms)
+  # Priority: 1) form_data value, 2) existing event value
+  defp get_funding_goal_form_value(event, form_data) do
+    # First check form_data (for values entered by user during form editing)
+    form_value = Map.get(form_data, "funding_goal")
+
+    if form_value && form_value != "" do
+      form_value
+    else
+      # Fall back to existing event value
+      get_funding_goal_value(event)
+    end
+  end
+
+  # Helper to get minimum attendees value from either event or form_data (for LiveView forms)
+  # Priority: 1) form_data value, 2) existing event value
+  defp get_minimum_attendees_form_value(event, form_data) do
+    # First check form_data (for values entered by user during form editing)
+    form_value = Map.get(form_data, "minimum_attendees")
+
+    if form_value && form_value != "" do
+      form_value
+    else
+      # Fall back to existing event value
+      Map.get(event || %{}, :threshold_count, "")
+    end
+  end
+
+  # Helper to get threshold deadline as date string for form display (legacy - used for existing events only)
   defp get_threshold_deadline_date(nil), do: ""
 
   defp get_threshold_deadline_date(event) do
@@ -1786,6 +1825,81 @@ defmodule EventasaurusWeb.EventComponents do
       _ -> ""
     end
   end
+
+  # Helper to get threshold deadline value, with auto-population based on start_date
+  # Priority: 1) existing event value, 2) form_data value, 3) computed default (48h before start)
+  defp get_threshold_deadline_value(event, form_data) do
+    # First check if event already has a polling_deadline
+    existing_deadline = get_threshold_deadline_date(event)
+
+    if existing_deadline != "" do
+      existing_deadline
+    else
+      # Check if form_data has a deadline set
+      form_deadline =
+        Map.get(form_data, "funding_deadline") || Map.get(form_data, "decision_deadline")
+
+      if form_deadline && form_deadline != "" do
+        form_deadline
+      else
+        # Compute default: 48 hours before start_date
+        compute_default_deadline(form_data)
+      end
+    end
+  end
+
+  # Compute default deadline as 48 hours (2 days) before the event start date
+  # Returns today's date if start_date is not set or too close
+  defp compute_default_deadline(form_data) do
+    start_date_str = Map.get(form_data, "start_date")
+    today = Date.utc_today()
+
+    case parse_date(start_date_str) do
+      {:ok, start_date} ->
+        # Default to 2 days before start date
+        default_deadline = Date.add(start_date, -2)
+
+        # Ensure deadline is at least today
+        if Date.compare(default_deadline, today) == :lt do
+          Date.to_iso8601(today)
+        else
+          Date.to_iso8601(default_deadline)
+        end
+
+      :error ->
+        # No valid start date, return empty (let user set it when they set start date)
+        ""
+    end
+  end
+
+  # Helper to get maximum deadline date (must be before event start date)
+  defp get_max_deadline_date(form_data) do
+    start_date_str = Map.get(form_data, "start_date")
+
+    case parse_date(start_date_str) do
+      {:ok, start_date} ->
+        # Max deadline is 1 day before start date (campaign must end before event)
+        max_date = Date.add(start_date, -1)
+        Date.to_iso8601(max_date)
+
+      :error ->
+        # No start date set, allow any future date (far future)
+        Date.to_iso8601(Date.add(Date.utc_today(), 365))
+    end
+  end
+
+  # Parse a date string safely
+  defp parse_date(nil), do: :error
+  defp parse_date(""), do: :error
+
+  defp parse_date(date_str) when is_binary(date_str) do
+    case Date.from_iso8601(date_str) do
+      {:ok, date} -> {:ok, date}
+      {:error, _} -> :error
+    end
+  end
+
+  defp parse_date(_), do: :error
 
   # Helper to determine if we should force taxation_type to "ticketless"
   # Returns false for threshold events (crowdfunding/interest) that need ticketed_event
