@@ -58,7 +58,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
             select: count(pes.id)
           )
 
-        Repo.one(query) || 0
+        Repo.replica().one(query) || 0
     end
   end
 
@@ -104,7 +104,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
             select: count(pes.id)
           )
 
-        Repo.one(query) || 0
+        Repo.replica().one(query) || 0
     end
   end
 
@@ -301,7 +301,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
         select: s.id
       )
 
-    Repo.one(query)
+    Repo.replica().one(query)
   end
 
   defp get_event_count(source_id, city_id_or_ids, days_ago_start, days_ago_end) do
@@ -347,7 +347,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
           )
       end
 
-    Repo.one(query) || 0
+    Repo.replica().one(query) || 0
   end
 
   # Batched query helpers for get_all_source_changes/2
@@ -364,7 +364,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       )
 
     query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Map.new()
   end
 
@@ -381,7 +381,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       )
 
     query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Map.new()
   end
 
@@ -401,7 +401,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       )
 
     query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Map.new()
   end
 
@@ -482,7 +482,7 @@ defmodule EventasaurusDiscovery.Admin.EventChangeTracker do
       end
 
     query
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Map.new()
   end
 

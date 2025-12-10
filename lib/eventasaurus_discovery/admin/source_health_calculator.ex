@@ -190,6 +190,11 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
   def status_emoji(:warning), do: "🟡"
   def status_emoji(:error), do: "🔴"
   def status_emoji(:no_data), do: "⚪"
+  # Handle string versions (from JSON deserialization)
+  def status_emoji("healthy"), do: "🟢"
+  def status_emoji("warning"), do: "🟡"
+  def status_emoji("error"), do: "🔴"
+  def status_emoji("no_data"), do: "⚪"
   def status_emoji(_), do: "⚪"
 
   @doc """
@@ -213,6 +218,11 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
   def status_text(:warning), do: "Warning"
   def status_text(:error), do: "Error"
   def status_text(:no_data), do: "No Data"
+  # Handle string versions (from JSON deserialization)
+  def status_text("healthy"), do: "Healthy"
+  def status_text("warning"), do: "Warning"
+  def status_text("error"), do: "Error"
+  def status_text("no_data"), do: "No Data"
   def status_text(_), do: "Unknown"
 
   @doc """
@@ -236,5 +246,10 @@ defmodule EventasaurusDiscovery.Admin.SourceHealthCalculator do
   def status_classes(:warning), do: "bg-yellow-100 text-yellow-800"
   def status_classes(:error), do: "bg-red-100 text-red-800"
   def status_classes(:no_data), do: "bg-gray-100 text-gray-800"
+  # Handle string versions (from JSON deserialization)
+  def status_classes("healthy"), do: "bg-green-100 text-green-800"
+  def status_classes("warning"), do: "bg-yellow-100 text-yellow-800"
+  def status_classes("error"), do: "bg-red-100 text-red-800"
+  def status_classes("no_data"), do: "bg-gray-100 text-gray-800"
   def status_classes(_), do: "bg-gray-100 text-gray-800"
 end
