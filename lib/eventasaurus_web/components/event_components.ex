@@ -1348,13 +1348,24 @@ defmodule EventasaurusWeb.EventComponents do
                   <label class="text-sm text-gray-700">Minimum funding goal</label>
                   <div class="mt-1 relative">
                     <span class="absolute left-3 top-2 text-gray-500">$</span>
-                    <input type="number" name="event[funding_goal]" class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="5,000">
+                    <input
+                      type="number"
+                      name="event[funding_goal]"
+                      value={get_funding_goal_value(@event)}
+                      class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      placeholder="5,000"
+                    >
                   </div>
                   <p class="text-xs text-gray-500 mt-1">Event will only happen if this goal is reached</p>
                 </div>
                 <div>
                   <label class="text-sm text-gray-700">Campaign deadline</label>
-                  <input type="date" name="event[funding_deadline]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <input
+                    type="date"
+                    name="event[funding_deadline]"
+                    value={get_threshold_deadline_date(@event)}
+                    class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
                 </div>
               </div>
             </div>
@@ -1367,19 +1378,31 @@ defmodule EventasaurusWeb.EventComponents do
               <div class="p-4 bg-orange-50 rounded-lg space-y-4">
                 <div>
                   <label class="text-sm text-gray-700">Minimum attendees needed</label>
-                  <input type="number" name="event[minimum_attendees]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="20">
+                  <input
+                    type="number"
+                    name="event[minimum_attendees]"
+                    value={Map.get(@event || %{}, :threshold_count)}
+                    class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="20"
+                  >
                 </div>
                 <div>
                   <label class="text-sm text-gray-700">Decision deadline</label>
-                  <input type="date" name="event[decision_deadline]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <input
+                    type="date"
+                    name="event[decision_deadline]"
+                    value={get_threshold_deadline_date(@event)}
+                    class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
                   <p class="text-xs text-gray-500 mt-1">You'll decide by this date whether to proceed</p>
                 </div>
               </div>
             </div>
             <% end %>
 
-            <!-- Hidden field to ensure taxation_type is submitted for ticketless events -->
-            <%= unless length(@tickets || []) > 0 do %>
+            <!-- Hidden field to ensure taxation_type is submitted for truly ticketless events -->
+            <!-- Don't set to ticketless for threshold events (crowdfunding/interest) since they need ticketed_event -->
+            <%= if should_force_ticketless?(assigns) do %>
               <input type="hidden" name="event[taxation_type]" value="ticketless" />
             <% end %>
           </div>
@@ -1742,6 +1765,39 @@ defmodule EventasaurusWeb.EventComponents do
   end
 
   defp format_cents_as_dollars(_), do: ""
+
+  # Helper to get funding goal value (cents to dollars) for form display
+  defp get_funding_goal_value(nil), do: ""
+
+  defp get_funding_goal_value(event) do
+    case Map.get(event, :threshold_revenue_cents) do
+      cents when is_integer(cents) and cents > 0 -> div(cents, 100)
+      _ -> ""
+    end
+  end
+
+  # Helper to get threshold deadline as date string for form display
+  defp get_threshold_deadline_date(nil), do: ""
+
+  defp get_threshold_deadline_date(event) do
+    # Note: The Event schema uses polling_deadline for threshold deadlines
+    case Map.get(event, :polling_deadline) do
+      %DateTime{} = datetime -> Date.to_iso8601(DateTime.to_date(datetime))
+      _ -> ""
+    end
+  end
+
+  # Helper to determine if we should force taxation_type to "ticketless"
+  # Returns false for threshold events (crowdfunding/interest) that need ticketed_event
+  defp should_force_ticketless?(assigns) do
+    tickets = Map.get(assigns, :tickets, [])
+    participation_type = Map.get(assigns, :participation_type, "free")
+
+    # Only force ticketless if:
+    # 1. No tickets exist
+    # 2. participation_type is "free" (not crowdfunding, interest, ticketed, or contribution)
+    length(tickets || []) == 0 and participation_type == "free"
+  end
 
   def threshold_has_valid_targets?(%{threshold_type: "attendee_count"} = event),
     do: event.threshold_count && event.threshold_count > 0

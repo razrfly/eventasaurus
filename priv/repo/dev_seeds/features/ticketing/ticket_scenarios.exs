@@ -411,6 +411,7 @@ defmodule DevSeeds.ExtendedTicketScenarios do
       create_community_garden_kickstarter(organizer)
       create_playground_fundraiser(organizer)
       create_book_club_threshold(organizer)
+      create_tram_party_threshold(organizer)
       create_exclusive_workshop_threshold(organizer)
       create_coding_bootcamp_combined_threshold(organizer)
 
@@ -570,6 +571,50 @@ defmodule DevSeeds.ExtendedTicketScenarios do
     }
 
     create_threshold_event_with_tickets(organizer, event_data, :minimal)
+  end
+
+  # Phase 2, Scenario 3b: Tram Party Threshold
+  defp create_tram_party_threshold(organizer) do
+    Helpers.log("Creating Tram Party (attendee threshold: 10 people)...", :blue)
+
+    event_data = %{
+      title: "Tram Party",
+      description: """
+      All aboard for the ultimate party on rails!
+
+      🚃 What to Expect:
+      - Private vintage tram rental
+      - 2-hour scenic route through the city
+      - DJ and sound system on board
+      - Drinks and snacks included
+      - Photo opportunities at iconic stops
+      - Party lights and decorations
+
+      🎯 Minimum Attendees: 10 people
+      We need at least 10 party-goers to book the tram!
+
+      🎉 Perfect For:
+      - Birthday celebrations
+      - Bachelor/bachelorette parties
+      - Team building events
+      - Just because it's awesome!
+
+      📍 Departure: Central Station Tram Stop
+      ⏰ Duration: 2 hours (8 PM - 10 PM)
+      """,
+      tagline: "Party on Rails",
+      is_ticketed: true,
+      taxation_type: "ticketed_event",
+      status: :threshold,
+      threshold_type: "attendee_count",
+      threshold_count: 10,
+      duration_hours: 2,
+      ticket_types: [
+        %{name: "Party Ticket", price: 25.00, quantity: 30, description: "Includes tram ride, drinks, snacks, and all the fun!"}
+      ]
+    }
+
+    create_threshold_event_with_tickets(organizer, event_data, :celebration)
   end
 
   # Phase 2, Scenario 4: Exclusive Workshop Threshold
