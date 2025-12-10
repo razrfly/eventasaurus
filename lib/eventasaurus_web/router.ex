@@ -271,6 +271,8 @@ defmodule EventasaurusWeb.Router do
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    # Prevent CDN/browser caching of auth-aware pages (fixes #2625)
+    plug EventasaurusWeb.Plugs.CacheControlPlug
     # Temporarily disabled CSP while debugging
     # if Mix.env() != :dev do
     #   plug EventasaurusWeb.Plugs.CSPPlug
@@ -294,6 +296,8 @@ defmodule EventasaurusWeb.Router do
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    # Prevent CDN/browser caching of auth-aware pages (fixes #2625)
+    plug EventasaurusWeb.Plugs.CacheControlPlug
 
     if Mix.env() == :dev do
       plug EventasaurusWeb.Dev.DevAuthPlug

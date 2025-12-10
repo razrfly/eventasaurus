@@ -18,6 +18,16 @@ defmodule Eventasaurus.CDN do
       config :eventasaurus, :cdn,
         enabled: true
 
+  ## Disabling CDN (e.g., when quota exceeded)
+
+  To disable CDN transformations temporarily (e.g., when Cloudflare quota is exceeded):
+
+      fly secrets set CDN_FORCE_DISABLED=true
+
+  To re-enable:
+
+      fly secrets unset CDN_FORCE_DISABLED
+
   ## Testing in Development
 
   Enable CDN temporarily for testing:
@@ -41,6 +51,10 @@ defmodule Eventasaurus.CDN do
         format: "webp"
       )
 
+      # Get both CDN and fallback URLs for client-side fallback
+      CDN.url_with_fallback("https://example.com/image.jpg", width: 800)
+      # => %{src: "https://cdn.wombie.com/...", fallback: "https://example.com/image.jpg"}
+
   ## Supported Options
 
   - `width` / `w` - Maximum width in pixels
@@ -57,7 +71,7 @@ defmodule Eventasaurus.CDN do
   Wraps an image URL with Cloudflare CDN transformations.
 
   Returns the original URL if:
-  - CDN is disabled (development mode)
+  - CDN is disabled (development mode or CDN_FORCE_DISABLED=true)
   - URL is nil or empty
   - URL is already a CDN URL
   - URL is invalid
@@ -92,7 +106,11 @@ defmodule Eventasaurus.CDN do
     resolved_url = EventasaurusWeb.Helpers.ImageUrlHelper.resolve(source_url)
 
     cond do
-      # CDN disabled - return resolved URL
+      # CDN force disabled via env var (for quota exceeded situations)
+      force_disabled?() ->
+        resolved_url
+
+      # CDN disabled in config
       not enabled?() ->
         resolved_url
 
@@ -110,7 +128,50 @@ defmodule Eventasaurus.CDN do
     end
   end
 
+  @doc """
+  Returns both the CDN URL and the fallback (original) URL.
+
+  This is useful for client-side fallback handling where the browser can
+  switch to the fallback URL if the CDN URL fails to load.
+
+  ## Examples
+
+      iex> CDN.url_with_fallback("https://example.com/image.jpg", width: 800)
+      %{src: "https://cdn.wombie.com/cdn-cgi/image/width=800/https://example.com/image.jpg",
+        fallback: "https://example.com/image.jpg"}
+
+      iex> CDN.url_with_fallback(nil)
+      %{src: nil, fallback: nil}
+  """
+  @spec url_with_fallback(String.t() | nil, keyword()) :: %{src: String.t() | nil, fallback: String.t() | nil}
+  def url_with_fallback(source_url, opts \\ [])
+  def url_with_fallback(nil, _opts), do: %{src: nil, fallback: nil}
+  def url_with_fallback("", _opts), do: %{src: "", fallback: ""}
+
+  def url_with_fallback(source_url, opts) when is_binary(source_url) do
+    # Resolve any legacy URLs first
+    resolved_url = EventasaurusWeb.Helpers.ImageUrlHelper.resolve(source_url)
+
+    %{
+      src: url(source_url, opts),
+      fallback: resolved_url
+    }
+  end
+
+  @doc """
+  Checks if CDN is currently disabled (either by config or force override).
+  """
+  @spec disabled?() :: boolean()
+  def disabled? do
+    force_disabled?() or not enabled?()
+  end
+
   ## Private Functions
+
+  # Check if CDN is force disabled via environment variable
+  defp force_disabled? do
+    System.get_env("CDN_FORCE_DISABLED") == "true"
+  end
 
   # Check if CDN is enabled via configuration
   defp enabled? do

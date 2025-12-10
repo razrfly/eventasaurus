@@ -148,8 +148,10 @@ defmodule EventasaurusDiscovery.Admin.DataQualityChecker do
       fn source_slug ->
         {source_slug, check_quality(source_slug)}
       end,
-      max_concurrency: 10,
-      timeout: 30_000,
+      # Reduced from 10 to 2 to prevent OOM on 1GB VM
+      # Each quality check runs 15+ queries, so lower concurrency = less peak memory
+      max_concurrency: 2,
+      timeout: 60_000,
       on_timeout: :kill_task
     )
     |> Enum.reduce(%{}, fn
