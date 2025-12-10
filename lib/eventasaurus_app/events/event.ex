@@ -26,10 +26,16 @@ defmodule EventasaurusApp.Events.Event do
   @valid_statuses [:draft, :polling, :threshold, :confirmed, :canceled]
   @valid_threshold_types ["attendee_count", "revenue", "both"]
   @valid_taxation_types ["ticketed_event", "contribution_collection", "ticketless"]
+  @valid_date_certainties ["confirmed", "polling", "planning"]
+  @valid_venue_certainties ["confirmed", "polling", "virtual", "tbd"]
+  @valid_participation_types ["free", "ticketed", "contribution", "crowdfunding", "interest"]
 
   def valid_statuses, do: @valid_statuses
   def valid_threshold_types, do: @valid_threshold_types
   def valid_taxation_types, do: @valid_taxation_types
+  def valid_date_certainties, do: @valid_date_certainties
+  def valid_venue_certainties, do: @valid_venue_certainties
+  def valid_participation_types, do: @valid_participation_types
 
   schema "events" do
     field(:title, :string)
@@ -84,6 +90,12 @@ defmodule EventasaurusApp.Events.Event do
     field(:polling_ended?, :boolean, virtual: true)
     field(:active_poll?, :boolean, virtual: true)
 
+    # Virtual fields for form UI state (not persisted)
+    # These replace the form_data map in LiveView for single source of truth
+    field(:date_certainty, :string, virtual: true, default: "confirmed")
+    field(:venue_certainty, :string, virtual: true, default: "confirmed")
+    field(:participation_type, :string, virtual: true, default: "free")
+
     belongs_to(:venue, EventasaurusApp.Venues.Venue)
     belongs_to(:group, EventasaurusApp.Groups.Group)
 
@@ -135,7 +147,11 @@ defmodule EventasaurusApp.Events.Event do
       :virtual_venue_url,
       :is_ticketed,
       :taxation_type,
-      :is_virtual
+      :is_virtual,
+      # Virtual fields for form UI state
+      :date_certainty,
+      :venue_certainty,
+      :participation_type
     ])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
@@ -156,6 +172,9 @@ defmodule EventasaurusApp.Events.Event do
     |> validate_virtual_event_venue()
     |> validate_canceled_at()
     |> validate_status_consistency()
+    |> validate_date_certainty()
+    |> validate_venue_certainty()
+    |> validate_participation_type()
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:group_id)
     |> unique_constraint(:slug)
@@ -456,6 +475,48 @@ defmodule EventasaurusApp.Events.Event do
     # Simplified validation - just ensure status is valid
     # Status inference and auto-correction happens at the context level
     changeset
+  end
+
+  defp validate_date_certainty(changeset) do
+    case get_field(changeset, :date_certainty) do
+      nil ->
+        changeset
+
+      certainty when certainty in @valid_date_certainties ->
+        changeset
+
+      _invalid ->
+        valid_str = @valid_date_certainties |> Enum.join(", ")
+        add_error(changeset, :date_certainty, "must be one of: #{valid_str}")
+    end
+  end
+
+  defp validate_venue_certainty(changeset) do
+    case get_field(changeset, :venue_certainty) do
+      nil ->
+        changeset
+
+      certainty when certainty in @valid_venue_certainties ->
+        changeset
+
+      _invalid ->
+        valid_str = @valid_venue_certainties |> Enum.join(", ")
+        add_error(changeset, :venue_certainty, "must be one of: #{valid_str}")
+    end
+  end
+
+  defp validate_participation_type(changeset) do
+    case get_field(changeset, :participation_type) do
+      nil ->
+        changeset
+
+      ptype when ptype in @valid_participation_types ->
+        changeset
+
+      _invalid ->
+        valid_str = @valid_participation_types |> Enum.join(", ")
+        add_error(changeset, :participation_type, "must be one of: #{valid_str}")
+    end
   end
 
   defp maybe_validate_start_at(changeset) do

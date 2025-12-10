@@ -756,14 +756,7 @@ defmodule EventasaurusWeb.EventComponents do
                 </select>
                 
                 <!-- Error display for date certainty -->
-                <% date_certainty_errors = if assigns[:for], do: Keyword.get(assigns.for.errors, :date_certainty, []), else: [] %>
-                <%= if length(date_certainty_errors) > 0 do %>
-                  <div class="mt-2 text-sm text-red-600">
-                    <%= for {msg, _} <- date_certainty_errors do %>
-                      <div><%= msg %></div>
-                    <% end %>
-                  </div>
-                <% end %>
+                <.changeset_error :if={@for} changeset={@for} field={:date_certainty} class="mt-2" />
                 
                 <!-- Conditional: Polling Fields -->
                 <%= if Map.get(assigns, :date_certainty, "confirmed") == "polling" do %>
@@ -902,14 +895,7 @@ defmodule EventasaurusWeb.EventComponents do
                 </select>
                 
                 <!-- Error display for venue certainty -->
-                <% venue_certainty_errors = if assigns[:for], do: Keyword.get(assigns.for.errors, :venue_certainty, []), else: [] %>
-                <%= if length(venue_certainty_errors) > 0 do %>
-                  <div class="mt-2 text-sm text-red-600">
-                    <%= for {msg, _} <- venue_certainty_errors do %>
-                      <div><%= msg %></div>
-                    <% end %>
-                  </div>
-                <% end %>
+                <.changeset_error :if={@for} changeset={@for} field={:venue_certainty} class="mt-2" />
               </div>
 
               <!-- Virtual Event Fields -->
@@ -1052,9 +1038,9 @@ defmodule EventasaurusWeb.EventComponents do
             <!-- Participation Method -->
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">How will people join your event?</label>
-              <select 
-                id="participation-type-select" 
-                name="event[participation_type]" 
+              <select
+                id="participation-type-select"
+                name="event[participation_type]"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 phx-change="update_participation_type"
               >
@@ -1064,6 +1050,9 @@ defmodule EventasaurusWeb.EventComponents do
                 <option value="crowdfunding" selected={Map.get(assigns, :participation_type, "free") == "crowdfunding"}>💰 Needs funding to happen</option>
                 <option value="interest" selected={Map.get(assigns, :participation_type, "free") == "interest"}>📊 Testing interest first</option>
               </select>
+
+              <!-- Error display for participation type -->
+              <.changeset_error :if={@for} changeset={@for} field={:participation_type} class="mt-2" />
             </div>
 
             <!-- Ticketing Section - Only show for ticketed events -->
