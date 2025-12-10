@@ -9,7 +9,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   - Overall system health score
   - Per-source health and run statistics
   - Per-city event counts and changes
-  - Auto-refresh every 30 seconds
+  - Auto-refresh every 15 minutes (matches stats computation schedule)
   """
   use EventasaurusWeb, :live_view
 
@@ -17,8 +17,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
 
   require Logger
 
-  # 30 seconds
-  @refresh_interval 30_000
+  # 15 minutes - matches the Oban job schedule for stats computation
+  @refresh_interval :timer.minutes(15)
 
   @impl true
   def mount(_params, _session, socket) do
@@ -169,16 +169,42 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
             <h1 class="text-3xl font-bold text-gray-900">🎯 Discovery Source Statistics</h1>
             <p class="mt-2 text-sm text-gray-600">Real-time monitoring of event discovery sources</p>
           </div>
-          <div class="flex gap-2">
-            <button
-              phx-click="force_refresh"
-              class="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
+          <div class="flex items-center gap-4">
+          <!-- Freshness indicator (compact) -->
+          <div class="text-sm text-right">
+            <%= if @loading do %>
+              <span class="text-gray-400">Loading...</span>
+            <% else %>
+              <%= if @computed_at do %>
+                <div class={if @is_stale, do: "text-amber-600", else: "text-gray-600"}>
+                  <%= if @is_stale do %>
+                    <span class="inline-block">⚠️</span>
+                  <% end %>
+                  Updated <%= format_computed_at(@computed_at) %>
+                </div>
+              <% else %>
+                <span class="text-amber-600">⏳ Computing...</span>
+              <% end %>
+            <% end %>
+          </div>
+          <button
+            phx-click="force_refresh"
+            disabled={@refreshing}
+            class={"inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{if @refreshing, do: "opacity-50 cursor-not-allowed", else: ""}"}
+          >
+            <%= if @refreshing do %>
+              <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Refreshing...
+            <% else %>
               <svg class="-ml-1 mr-2 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
               </svg>
-              Force Refresh
-            </button>
+              Refresh
+            <% end %>
+          </button>
             <.link
               navigate={~p"/admin/imports"}
               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -385,24 +411,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
           </div>
         </div>
 
-        <!-- Freshness indicator -->
-        <div class="mt-4 text-center text-sm">
-          <%= if @computed_at do %>
-            <span class={if @is_stale, do: "text-amber-600", else: "text-gray-500"}>
-              <%= if @is_stale do %>
-                ⚠️ Stats may be stale -
-              <% end %>
-              Last computed: <%= format_computed_at(@computed_at) %>
-              <%= if @computation_time_ms do %>
-                <span class="text-gray-400">(took <%= format_duration(@computation_time_ms) %>)</span>
-              <% end %>
-            </span>
-          <% else %>
-            <span class="text-amber-600">
-              ⏳ Stats are being computed for the first time...
-            </span>
+        <!-- Footer note -->
+        <div class="mt-4 text-center text-xs text-gray-400">
+          Stats computed every 15 minutes by background job
+          <%= if @computation_time_ms do %>
+            • Last computation took <%= format_duration(@computation_time_ms) %>
           <% end %>
-          <span class="text-gray-400 ml-2">• Auto-refreshing every 30 seconds</span>
         </div>
       <% end %>
     </div>

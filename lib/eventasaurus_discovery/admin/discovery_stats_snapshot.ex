@@ -76,20 +76,25 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsSnapshot do
   end
 
   # Convert string keys to atoms for compatibility with existing code
+  # Handles JSON deserialization where keys become strings
   defp atomize_keys(nil), do: nil
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn
       {key, value} when is_binary(key) ->
-        {String.to_existing_atom(key), atomize_keys(value)}
+        # Try to convert to existing atom, keep as string if not possible
+        atom_key =
+          try do
+            String.to_existing_atom(key)
+          rescue
+            ArgumentError -> key
+          end
+
+        {atom_key, atomize_keys(value)}
 
       {key, value} when is_atom(key) ->
         {key, atomize_keys(value)}
     end)
-  rescue
-    ArgumentError ->
-      # If atom doesn't exist, keep as string (shouldn't happen with our known structure)
-      map
   end
 
   defp atomize_keys(list) when is_list(list) do
