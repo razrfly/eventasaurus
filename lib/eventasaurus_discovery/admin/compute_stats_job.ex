@@ -123,10 +123,14 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
 
     Logger.info("  → Counting events per source...")
     event_counts = count_events_for_sources_batch(source_names)
+    gc_and_log("event counts")
 
-    Logger.info("  → Running quality checks (this may take a while)...")
-    quality_checks = DataQualityChecker.check_quality_batch(source_names)
-    gc_and_log("quality checks")
+    # DISABLED: Quality checks cause OOM on 1GB VM (~783MB RAM used in 2 seconds)
+    # The DataQualityChecker runs 15+ queries per source with Task.async_stream
+    # Even with max_concurrency: 2, this exceeds available memory
+    # TODO: Re-enable when we have a dedicated worker VM or larger instance
+    Logger.info("  → Skipping quality checks (disabled due to memory constraints)...")
+    quality_checks = %{}
 
     Logger.info("  → Building source data...")
     sources_data = build_sources_data(source_names, source_stats, change_stats, event_counts, quality_checks)
