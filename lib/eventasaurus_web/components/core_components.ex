@@ -464,6 +464,72 @@ defmodule EventasaurusWeb.CoreComponents do
   end
 
   @doc """
+  Renders field-specific errors from a form field.
+
+  Displays validation errors for a specific form field with consistent styling.
+  Errors are hidden by default until the field has been interacted with (via phx-no-feedback).
+
+  ## Examples
+
+      <.field_error field={@form[:title]} />
+      <.field_error field={@form[:date_certainty]} class="mt-2" />
+
+  """
+  attr :field, Phoenix.HTML.FormField,
+    required: true,
+    doc: "a form field struct retrieved from the form, for example: @form[:email]"
+
+  attr :class, :string, default: "", doc: "additional CSS classes"
+
+  def field_error(assigns) do
+    ~H"""
+    <div
+      :if={@field.errors != []}
+      class={["text-sm text-red-600 phx-no-feedback:hidden", @class]}
+    >
+      <p :for={msg <- Enum.map(@field.errors, &translate_error(&1))}>
+        <%= msg %>
+      </p>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders field-specific errors from an Ecto changeset.
+
+  Similar to `field_error/1` but works directly with changesets instead of form fields.
+  Use this in components where the form data is passed as a changeset rather than a form.
+
+  ## Examples
+
+      <.changeset_error changeset={@changeset} field={:date_certainty} />
+      <.changeset_error changeset={@changeset} field={:venue_certainty} class="mt-2" />
+
+  """
+  attr :changeset, :map, required: true, doc: "an Ecto.Changeset struct"
+  attr :field, :atom, required: true, doc: "the field name as an atom"
+  attr :class, :string, default: "", doc: "additional CSS classes"
+
+  def changeset_error(assigns) do
+    errors =
+      if assigns[:changeset] do
+        Keyword.get_values(assigns.changeset.errors, assigns.field)
+      else
+        []
+      end
+
+    assigns = assign(assigns, :errors, errors)
+
+    ~H"""
+    <div :if={@errors != []} class={["text-sm text-red-600", @class]}>
+      <p :for={{msg, _opts} <- @errors}>
+        <%= msg %>
+      </p>
+    </div>
+    """
+  end
+
+  @doc """
   Renders a taxation type selector component for event classification.
 
   This component allows users to select between "ticketless", "ticketed_event", and "contribution_collection"
