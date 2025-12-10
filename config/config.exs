@@ -171,12 +171,6 @@ config :eventasaurus, EventasaurusDiscovery.VenueImages.EnrichmentJob,
   batch_size: 100,
   max_retries: 3
 
-# Configure Trivia Advisor image migration job
-# This is a one-time migration tool for backfilling images from Trivia Advisor
-config :eventasaurus, EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob,
-  dev_limit: 10,
-  prod_default_limit: 50
-
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

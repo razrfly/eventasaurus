@@ -19,8 +19,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob
-  alias EventasaurusDiscovery.VenueImages.TriviaAdvisorBackfillJob
-  alias EventasaurusDiscovery.VenueImages.TriviaAdvisorGlobalBackfillJob
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
 
   import Ecto.Query
@@ -66,16 +64,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:backfill_geocode, true)
       |> assign(:backfill_running, false)
       |> assign(:image_providers, [])
-      # Trivia Advisor migration assigns
-      |> assign(:ta_migration_city_id, nil)
-      |> assign(:ta_migration_limit, 10)
-      |> assign(:ta_migration_dry_run, false)
-      |> assign(:ta_migration_running, false)
-      |> assign(:ta_migration_last_result, nil)
-      # Trivia Advisor GLOBAL migration assigns
-      |> assign(:show_global_ta_migration_modal, false)
-      |> assign(:ta_global_migration_running, false)
-      |> assign(:ta_global_migration_force, false)
       # Initialize venue_duplicates as nil
       |> assign(:venue_duplicates, nil)
       |> load_data()
@@ -565,130 +553,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @impl true
   def handle_event("toggle_geocode", _params, socket) do
     {:noreply, assign(socket, backfill_geocode: !socket.assigns.backfill_geocode)}
-  end
-
-  @impl true
-  def handle_event("start_trivia_advisor_migration", params, socket) do
-    city_id = parse_int(params["city_id"], nil)
-    limit = parse_int(params["limit"], socket.assigns.ta_migration_limit)
-    dry_run = socket.assigns.ta_migration_dry_run
-
-    if is_nil(city_id) do
-      {:noreply, put_flash(socket, :error, "Please select a city")}
-    else
-      # Enqueue Trivia Advisor backfill job
-      case TriviaAdvisorBackfillJob.enqueue(
-             city_id: city_id,
-             limit: limit,
-             dry_run: dry_run
-           ) do
-        {:ok, job} ->
-          city = Enum.find(socket.assigns.cities, &(&1.id == city_id))
-          city_name = if city, do: city.name, else: "City ##{city_id}"
-
-          dry_run_text = if dry_run, do: " (DRY RUN - no database updates)", else: ""
-
-          socket =
-            socket
-            |> put_flash(
-              :info,
-              "Queued Trivia Advisor migration job ##{job.id} for #{city_name} (#{limit} venues)#{dry_run_text}"
-            )
-            |> assign(:ta_migration_running, true)
-
-          {:noreply, socket}
-
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Failed to queue migration: #{inspect(reason)}")}
-      end
-    end
-  end
-
-  @impl true
-  def handle_event("select_ta_migration_city", %{"city_id" => city_id_str}, socket) do
-    city_id = parse_int(city_id_str, nil)
-    {:noreply, assign(socket, :ta_migration_city_id, city_id)}
-  end
-
-  @impl true
-  def handle_event("update_ta_migration_limit", %{"limit" => limit_str}, socket) do
-    limit = parse_int(limit_str, 10)
-    {:noreply, assign(socket, :ta_migration_limit, limit)}
-  end
-
-  @impl true
-  def handle_event("toggle_ta_migration_dry_run", _params, socket) do
-    {:noreply, assign(socket, :ta_migration_dry_run, !socket.assigns.ta_migration_dry_run)}
-  end
-
-  # Global Trivia Advisor Migration Handlers
-
-  @impl true
-  def handle_event("show_global_ta_migration_modal", _params, socket) do
-    {:noreply, assign(socket, :show_global_ta_migration_modal, true)}
-  end
-
-  @impl true
-  def handle_event("hide_global_ta_migration_modal", _params, socket) do
-    socket =
-      socket
-      |> assign(:show_global_ta_migration_modal, false)
-      |> assign(:ta_global_migration_force, false)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("toggle_global_ta_migration_force", _params, socket) do
-    {:noreply,
-     assign(socket, :ta_global_migration_force, !socket.assigns.ta_global_migration_force)}
-  end
-
-  @impl true
-  def handle_event("start_global_ta_migration_dry_run", _params, socket) do
-    # Enqueue global migration job in dry run mode
-    case TriviaAdvisorGlobalBackfillJob.enqueue(dry_run: true) do
-      {:ok, job} ->
-        socket =
-          socket
-          |> put_flash(
-            :info,
-            "Queued global migration DRY RUN job ##{job.id} - check Oban dashboard for results"
-          )
-
-        {:noreply, socket}
-
-      {:error, reason} ->
-        {:noreply,
-         put_flash(socket, :error, "Failed to queue dry run migration: #{inspect(reason)}")}
-    end
-  end
-
-  @impl true
-  def handle_event("confirm_global_ta_migration", _params, socket) do
-    force = socket.assigns.ta_global_migration_force
-
-    # Enqueue global migration job
-    case TriviaAdvisorGlobalBackfillJob.enqueue(force: force) do
-      {:ok, job} ->
-        force_text = if force, do: " (FORCE MODE)", else: ""
-
-        socket =
-          socket
-          |> put_flash(
-            :info,
-            "Queued GLOBAL Trivia Advisor migration job ##{job.id}#{force_text} - monitor progress in Oban dashboard"
-          )
-          |> assign(:show_global_ta_migration_modal, false)
-          |> assign(:ta_global_migration_running, true)
-          |> assign(:ta_global_migration_force, false)
-
-        {:noreply, socket}
-
-      {:error, reason} ->
-        {:noreply,
-         put_flash(socket, :error, "Failed to queue global migration: #{inspect(reason)}")}
-    end
   end
 
   # Private helper functions

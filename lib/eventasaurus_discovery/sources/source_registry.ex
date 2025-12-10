@@ -115,7 +115,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
         select: s.metadata
       )
 
-    case Repo.one(query) do
+    case Repo.replica().one(query) do
       nil ->
         {:error, :not_found}
 
@@ -216,7 +216,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
         select: {s.slug, s.metadata}
       )
 
-    Repo.all(query)
+    Repo.replica().all(query)
     |> Enum.group_by(
       fn {_slug, metadata} ->
         scope_string = if is_map(metadata), do: metadata["scope"], else: nil
