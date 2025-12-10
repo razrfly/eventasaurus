@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Components.RichDataImportModal
   alias EventasaurusWeb.Services.RichDataManager
   alias EventasaurusApp.DateTimeHelper
+  alias EventasaurusWeb.EventLive.FormHelpers
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -61,12 +62,45 @@ defmodule EventasaurusWeb.EventLive.Edit do
                   }
               end
 
-            # Determine setup path based on existing event properties
+            # Determine setup path based on event status
+            # Note: status may be atom or string, so normalize to string for comparison
+            event_status_str = to_string(event.status)
+
             setup_path =
               cond do
-                event.is_ticketed && Map.get(event, :requires_threshold, false) -> "threshold"
-                event.is_ticketed && !Map.get(event, :requires_threshold, false) -> "confirmed"
+                event_status_str == "threshold" -> "threshold"
+                event_status_str == "polling" -> "polling"
+                event_status_str == "draft" -> "confirmed"
                 true -> "confirmed"
+              end
+
+            # Determine participation_type based on event state
+            # Reuse event_status_str from above
+
+            participation_type =
+              cond do
+                # Threshold events - check threshold type
+                event_status_str == "threshold" && Map.get(event, :threshold_type) == "revenue" ->
+                  "crowdfunding"
+
+                event_status_str == "threshold" && Map.get(event, :threshold_type) == "attendee_count" ->
+                  "interest"
+
+                event_status_str == "threshold" ->
+                  # Default threshold type
+                  "crowdfunding"
+
+                # Contribution-based events
+                event.taxation_type == "contribution_collection" ->
+                  "contribution"
+
+                # Ticketed events
+                event.is_ticketed == true ->
+                  "ticketed"
+
+                # Default to free
+                true ->
+                  "free"
               end
 
             # Load existing tickets for the event (needed for form state)
@@ -109,7 +143,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "requires_threshold" => Map.get(event, :requires_threshold, false),
                 "taxation_type" => determine_edit_taxation_default(event),
                 "taxation_type_reasoning" => get_taxation_reasoning_for_edit(event),
-                "rich_external_data" => event.rich_external_data || %{}
+                "rich_external_data" => event.rich_external_data || %{},
+                "participation_type" => participation_type
               })
               |> assign(:is_virtual, is_virtual)
               |> assign(:selected_venue_name, venue_name)
@@ -126,6 +161,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign_new(:image_tab, fn -> "unsplash" end)
               |> assign(:enable_date_polling, false)
               |> assign(:setup_path, setup_path)
+              |> assign(:participation_type, participation_type)
               |> assign(:mode, "compact")
               |> assign(:show_stage_transitions, false)
               |> assign(:selected_category, "general")
@@ -335,6 +371,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
+    # Map participation_type to proper event attributes (status, threshold_type, etc.)
+    # This is critical for threshold/crowdfunding events to properly set the status
+    participation_attrs = FormHelpers.resolve_event_attributes(event_params)
+
+    # Merge the resolved attributes into event_params
+    # participation_attrs contains: status, is_ticketed, taxation_type, threshold_type, etc.
+    event_params = Map.merge(event_params, participation_attrs)
+
+    # Map user-friendly threshold field names to database field names
+    event_params = map_threshold_fields(event_params)
+
     # Apply taxation consistency logic before further processing
     event_params = apply_taxation_consistency(event_params)
 
@@ -797,6 +844,27 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # ============================================================================
   # Ticketing Event Handlers
   # ============================================================================
+
+  @impl true
+  def handle_event(
+        "update_participation_type",
+        %{"event" => %{"participation_type" => participation_type}},
+        socket
+      ) do
+    form_data = socket.assigns.form_data |> Map.put("participation_type", participation_type)
+
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+     assign(socket,
+       form_data: form_data,
+       form: to_form(changeset),
+       participation_type: participation_type
+     )}
+  end
 
   @impl true
   def handle_event("toggle_ticketing", _params, socket) do
@@ -2158,5 +2226,116 @@ defmodule EventasaurusWeb.EventLive.Edit do
       _ ->
         :ok
     end
+  end
+
+  # ============================================================================
+  # Threshold Field Mapping Helpers
+  # ============================================================================
+
+  # Maps user-friendly threshold field names from the form to database field names.
+  #
+  # Form fields:
+  # - funding_goal → threshold_revenue_cents (converted from dollars to cents)
+  # - funding_deadline → threshold_deadline
+  # - minimum_attendees → threshold_count
+  # - decision_deadline → threshold_deadline
+  defp map_threshold_fields(params) do
+    params
+    |> map_funding_goal_to_threshold_revenue()
+    |> map_minimum_attendees_to_threshold_count()
+    |> map_deadline_fields()
+    |> drop_intermediate_threshold_fields()
+  end
+
+  # Convert funding_goal (dollars) to threshold_revenue_cents
+  defp map_funding_goal_to_threshold_revenue(params) do
+    case Map.get(params, "funding_goal") do
+      nil ->
+        params
+
+      "" ->
+        params
+
+      goal_str when is_binary(goal_str) ->
+        case parse_currency(goal_str) do
+          nil -> params
+          cents -> Map.put(params, "threshold_revenue_cents", cents)
+        end
+
+      goal when is_number(goal) ->
+        # If it's already a number, assume dollars and convert to cents
+        Map.put(params, "threshold_revenue_cents", round(goal * 100))
+    end
+  end
+
+  # Convert minimum_attendees to threshold_count
+  defp map_minimum_attendees_to_threshold_count(params) do
+    case Map.get(params, "minimum_attendees") do
+      nil ->
+        params
+
+      "" ->
+        params
+
+      count_str when is_binary(count_str) ->
+        case Integer.parse(count_str) do
+          {count, _} when count > 0 -> Map.put(params, "threshold_count", count)
+          _ -> params
+        end
+
+      count when is_integer(count) and count > 0 ->
+        Map.put(params, "threshold_count", count)
+
+      _ ->
+        params
+    end
+  end
+
+  # Map funding_deadline or decision_deadline to polling_deadline
+  # Note: The Event schema uses polling_deadline for all deadline purposes (not threshold_deadline)
+  defp map_deadline_fields(params) do
+    timezone = Map.get(params, "timezone", "UTC")
+
+    # Check for funding_deadline (crowdfunding) or decision_deadline (interest)
+    deadline_str = Map.get(params, "funding_deadline") || Map.get(params, "decision_deadline")
+
+    case deadline_str do
+      nil ->
+        params
+
+      "" ->
+        params
+
+      date_str when is_binary(date_str) ->
+        # Parse the date and set time to end of day in the event's timezone
+        case Date.from_iso8601(date_str) do
+          {:ok, date} ->
+            # Set deadline to end of day (23:59:59) in event timezone
+            case DateTimeHelper.parse_user_datetime(
+                   Date.to_iso8601(date),
+                   "23:59",
+                   timezone
+                 ) do
+              {:ok, datetime} -> Map.put(params, "polling_deadline", datetime)
+              {:error, _} -> params
+            end
+
+          {:error, _} ->
+            params
+        end
+
+      _ ->
+        params
+    end
+  end
+
+  # Remove intermediate form fields that don't exist in the Event schema
+  defp drop_intermediate_threshold_fields(params) do
+    Map.drop(params, [
+      "funding_goal",
+      "funding_deadline",
+      "minimum_attendees",
+      "decision_deadline"
+    ])
   end
 end
