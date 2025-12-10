@@ -1771,7 +1771,7 @@ defmodule EventasaurusWeb.EventComponents do
 
   defp get_funding_goal_value(event) do
     case Map.get(event, :threshold_revenue_cents) do
-      cents when is_integer(cents) and cents > 0 -> div(cents, 100)
+      cents when is_integer(cents) and cents > 0 -> cents / 100
       _ -> ""
     end
   end
