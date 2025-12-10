@@ -30,7 +30,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
       socket
       |> assign(:page_title, "Discovery Source Statistics")
       |> assign(:refreshing, false)
-      |> assign(:expanded_metro_areas, MapSet.new())
       |> load_stats()
 
     {:ok, socket}
@@ -81,27 +80,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   end
 
   @impl true
-  def handle_event("toggle_metro_area", %{"city-id" => city_id}, socket) do
-    case Integer.parse(city_id) do
-      {city_id_int, _} ->
-        expanded = socket.assigns.expanded_metro_areas
-
-        new_expanded =
-          if MapSet.member?(expanded, city_id_int) do
-            MapSet.delete(expanded, city_id_int)
-          else
-            MapSet.put(expanded, city_id_int)
-          end
-
-        {:noreply, assign(socket, :expanded_metro_areas, new_expanded)}
-
-      :error ->
-        # Invalid city-id, no-op gracefully
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
   def handle_event("force_refresh", _params, socket) do
     # Prevent multiple concurrent refreshes to avoid duplicate polling loops
     if socket.assigns.refreshing do
@@ -126,13 +104,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   end
 
   defp load_stats(socket) do
-    # PHASE 2 OPTIMIZATION: Use cached stats instead of computing on every page load
-    # Stats are precomputed in background by DiscoveryStatsCache GenServer
-    # This reduces load time from 30+ seconds to milliseconds
+    # Stats are precomputed by ComputeStatsJob and stored in database
+    # DiscoveryStatsCache reads from database and caches in memory
     case DiscoveryStatsCache.get_stats() do
       nil ->
-        # Cache not ready yet (still initializing), keep loading state
-        Logger.warning("Stats cache not ready, keeping loading state")
+        # No stats snapshot exists yet - show loading state
+        Logger.warning("No stats snapshot found - waiting for ComputeStatsJob to run")
 
         socket
         |> assign(:loading, true)
@@ -142,17 +119,39 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         |> assign(:total_cities, 0)
         |> assign(:events_this_week, 0)
         |> assign(:city_stats, [])
+        |> assign(:computed_at, nil)
+        |> assign(:is_stale, true)
+        |> assign(:computation_time_ms, nil)
 
-      cached_stats ->
+      %{stats: nil} ->
+        # Stats data is nil - show loading state
+        Logger.warning("Stats snapshot has nil data - waiting for computation")
+
+        socket
+        |> assign(:loading, true)
+        |> assign(:sources_data, [])
+        |> assign(:overall_health, 0)
+        |> assign(:total_sources, 0)
+        |> assign(:total_cities, 0)
+        |> assign(:events_this_week, 0)
+        |> assign(:city_stats, [])
+        |> assign(:computed_at, nil)
+        |> assign(:is_stale, true)
+        |> assign(:computation_time_ms, nil)
+
+      %{stats: stats, computed_at: computed_at, is_stale: is_stale, computation_time_ms: computation_time_ms} ->
         # Load from cache (fast!)
         socket
         |> assign(:loading, false)
-        |> assign(:sources_data, cached_stats.sources_data)
-        |> assign(:overall_health, cached_stats.overall_health)
-        |> assign(:total_sources, cached_stats.total_sources)
-        |> assign(:total_cities, cached_stats.total_cities)
-        |> assign(:events_this_week, cached_stats.events_this_week)
-        |> assign(:city_stats, cached_stats.city_stats)
+        |> assign(:sources_data, stats[:sources_data] || [])
+        |> assign(:overall_health, stats[:overall_health] || 0)
+        |> assign(:total_sources, stats[:total_sources] || 0)
+        |> assign(:total_cities, stats[:total_cities] || 0)
+        |> assign(:events_this_week, stats[:events_this_week] || 0)
+        |> assign(:city_stats, stats[:city_stats] || [])
+        |> assign(:computed_at, computed_at)
+        |> assign(:is_stale, is_stale)
+        |> assign(:computation_time_ms, computation_time_ms)
     end
   end
 
@@ -348,7 +347,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         <div class="bg-white rounded-lg shadow">
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">Cities Performance</h2>
-            <p class="mt-1 text-sm text-gray-500">Top 10 cities by event count (metro areas aggregated)</p>
+            <p class="mt-1 text-sm text-gray-500">Top 10 cities by event count</p>
           </div>
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -362,31 +361,11 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 <%= for city <- @city_stats do %>
-                  <!-- Primary City Row -->
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <%= if length(city.subcities) > 0 do %>
-                        <button
-                          type="button"
-                          phx-click="toggle_metro_area"
-                          phx-value-city-id={city.city_id}
-                          aria-expanded={to_string(MapSet.member?(@expanded_metro_areas, city.city_id))}
-                          class="text-gray-500 hover:text-gray-700 mr-2"
-                        >
-                          <span class="sr-only">Toggle subcities for <%= city.city_name %></span>
-                          <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
-                            ▼
-                          <% else %>
-                            ▶
-                          <% end %>
-                        </button>
-                      <% end %>
                       <.link navigate={~p"/admin/discovery/stats/city/#{city.city_slug}"} class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                         <%= city.city_name %>
                       </.link>
-                      <%= if length(city.subcities) > 0 do %>
-                        <span class="ml-2 text-xs text-gray-500">(<%= length(city.subcities) %> areas)</span>
-                      <% end %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= format_number(city.event_count) %>
@@ -400,39 +379,30 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
                       <%= status_emoji_for_change(city.weekly_change) %>
                     </td>
                   </tr>
-
-                  <!-- Subcity Rows (Expandable) -->
-                  <%= if MapSet.member?(@expanded_metro_areas, city.city_id) do %>
-                    <%= for subcity <- city.subcities do %>
-                      <tr class="hover:bg-gray-50 bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap pl-12">
-                          <.link navigate={~p"/admin/discovery/stats/city/#{subcity.city_slug}"} class="text-sm text-gray-700 hover:text-indigo-900">
-                            ↳ <%= subcity.city_name %>
-                          </.link>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          <%= format_number(subcity.count) %>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                          <div class="text-sm text-gray-500">
-                            —
-                          </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                          <span class="text-gray-400">—</span>
-                        </td>
-                      </tr>
-                    <% end %>
-                  <% end %>
                 <% end %>
               </tbody>
             </table>
           </div>
         </div>
 
-        <!-- Auto-refresh indicator -->
-        <div class="mt-4 text-center text-xs text-gray-500">
-          Auto-refreshing every 30 seconds
+        <!-- Freshness indicator -->
+        <div class="mt-4 text-center text-sm">
+          <%= if @computed_at do %>
+            <span class={if @is_stale, do: "text-amber-600", else: "text-gray-500"}>
+              <%= if @is_stale do %>
+                ⚠️ Stats may be stale -
+              <% end %>
+              Last computed: <%= format_computed_at(@computed_at) %>
+              <%= if @computation_time_ms do %>
+                <span class="text-gray-400">(took <%= format_duration(@computation_time_ms) %>)</span>
+              <% end %>
+            </span>
+          <% else %>
+            <span class="text-amber-600">
+              ⏳ Stats are being computed for the first time...
+            </span>
+          <% end %>
+          <span class="text-gray-400 ml-2">• Auto-refreshing every 30 seconds</span>
         </div>
       <% end %>
     </div>
@@ -464,6 +434,26 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
     dt
     |> DateTime.from_naive!("Etc/UTC")
     |> time_ago_in_words()
+  end
+
+  # Handle ISO8601 string from JSON (when stats are loaded from database snapshot)
+  defp format_last_run(iso_string) when is_binary(iso_string) do
+    case DateTime.from_iso8601(iso_string) do
+      {:ok, dt, _offset} ->
+        time_ago_in_words(dt)
+
+      {:error, _} ->
+        # Try as naive datetime
+        case NaiveDateTime.from_iso8601(iso_string) do
+          {:ok, ndt} ->
+            ndt
+            |> DateTime.from_naive!("Etc/UTC")
+            |> time_ago_in_words()
+
+          {:error, _} ->
+            "Unknown"
+        end
+    end
   end
 
   defp time_ago_in_words(datetime) do
@@ -502,4 +492,26 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
   defp status_emoji_for_change(change) when change > 5, do: "🟢"
   defp status_emoji_for_change(change) when change < -5, do: "🔴"
   defp status_emoji_for_change(_), do: "🟡"
+
+  defp format_computed_at(nil), do: "Never"
+
+  defp format_computed_at(%DateTime{} = dt) do
+    time_ago_in_words(dt)
+  end
+
+  defp format_duration(nil), do: ""
+
+  defp format_duration(ms) when ms < 1000 do
+    "#{ms}ms"
+  end
+
+  defp format_duration(ms) when ms < 60_000 do
+    seconds = Float.round(ms / 1000, 1)
+    "#{seconds}s"
+  end
+
+  defp format_duration(ms) do
+    minutes = Float.round(ms / 60_000, 1)
+    "#{minutes}m"
+  end
 end

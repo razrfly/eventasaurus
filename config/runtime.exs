@@ -112,7 +112,10 @@ config :eventasaurus, Oban,
     # Venue maintenance queue for venue data quality jobs (name fixing, deduplication)
     venue_maintenance: 2,
     # Reports queue for generating analytics and cost reports
-    reports: 1
+    reports: 1,
+    # Stats computation queue for admin dashboard
+    # Single concurrency - only one stats computation should run at a time
+    stats: 1
   ],
   plugins: [
     # Keep completed jobs for 2 days for debugging
@@ -133,7 +136,10 @@ config :eventasaurus, Oban,
        # City coordinate recalculation runs daily at 1 AM UTC
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
-       {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker}
+       {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker},
+       # Admin stats computation every 15 minutes
+       # This populates the discovery_stats_snapshots table for the admin dashboard
+       {"*/15 * * * *", EventasaurusDiscovery.Admin.ComputeStatsJob}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]
