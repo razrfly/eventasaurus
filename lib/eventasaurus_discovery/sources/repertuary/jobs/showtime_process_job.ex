@@ -1,10 +1,22 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
   @moduledoc """
-  Oban job for processing individual Kino Krakow showtimes into events.
+  Oban job for processing individual Repertuary.pl showtimes into events.
 
   Retrieves the matched movie from cache/database, enriches the showtime
   with movie and cinema data, transforms to event format, and processes
   through the unified EventProcessor.
+
+  ## Multi-City Support
+
+  Pass `"city"` in job args to process showtimes for a specific city:
+
+      ShowtimeProcessJob.new(%{
+        "showtime" => showtime_data,
+        "source_id" => 123,
+        "city" => "warszawa"
+      }) |> Oban.insert()
+
+  Defaults to "krakow" for backward compatibility.
 
   If the movie was not successfully matched in MovieDetailJob, the showtime
   is skipped (not an error).
@@ -23,9 +35,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   alias EventasaurusDiscovery.Sources.{Source, Processor}
   alias EventasaurusDiscovery.Scraping.Processors.EventProcessor
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow
+  alias EventasaurusDiscovery.Sources.Repertuary
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
+    Config,
+    Cities,
     Extractors.CinemaExtractor,
     Transformer
   }
@@ -36,8 +50,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   def perform(%Oban.Job{args: args} = job) do
     showtime = args["showtime"]
     source_id = args["source_id"]
+    city = args["city"] || Config.default_city()
 
-    # CRITICAL: external_id MUST be set by DayPageJob
+    city_config = Cities.get(city)
+
+    # CRITICAL: external_id MUST be set by MoviePageJob
     # We do NOT generate it here to avoid drift (BandsInTown A+ pattern)
     external_id = showtime["external_id"]
 
@@ -45,8 +62,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
       if is_nil(external_id) do
         Logger.error("""
         🚨 CRITICAL: Missing external_id in showtime job args.
-        This indicates a bug in DayPageJob or job serialization.
+        This indicates a bug in MoviePageJob or job serialization.
         Showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}
+        City: #{city_config.name}
         """)
 
         {:error, :missing_external_id}
@@ -55,7 +73,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
         # This ensures last_seen_at is updated even if processing fails
         EventProcessor.mark_event_as_seen(external_id, source_id)
 
-        process_showtime(showtime, source_id)
+        process_showtime(showtime, source_id, city)
       end
 
     # Track metrics in job metadata
@@ -78,29 +96,31 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
     end
   end
 
-  defp process_showtime(showtime, source_id) do
-    Logger.debug("🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]}")
+  defp process_showtime(showtime, source_id, city) do
+    city_config = Cities.get(city)
+    Logger.debug("🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]} (#{city_config.name})")
 
-    # Get movie from database
+    # Get movie from database using generic repertuary_slug
     case get_movie(showtime["movie_slug"]) do
       {:ok, movie} ->
         # Movie was successfully matched and stored in database
-        process_showtime_with_movie(showtime, movie, source_id)
+        process_showtime_with_movie(showtime, movie, source_id, city)
 
       {:error, :not_found} ->
         # Movie not in database - check if MovieDetailJob completed
-        case check_movie_detail_job_status(showtime["movie_slug"]) do
+        case check_movie_detail_job_status(showtime["movie_slug"], city) do
           :completed_without_match ->
             # MovieDetailJob completed but didn't create movie (TMDB match failed)
             # Skip this showtime (not an error)
-            Logger.info("⏭️ Skipping showtime for unmatched movie: #{showtime["movie_slug"]}")
+            Logger.info("⏭️ Skipping showtime for unmatched movie: #{showtime["movie_slug"]} (#{city_config.name})")
             # Return standardized metadata for skipped items (Phase 3.1)
             {:ok,
              %{
                "job_role" => "processor",
-               "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+               "pipeline_id" => "repertuary_#{city}_#{Date.utc_today()}",
                "entity_id" => showtime["external_id"] || "unknown",
                "entity_type" => "showtime",
+               "city" => city,
                "items_processed" => 0,
                "status" => "skipped",
                "reason" => "movie_unmatched",
@@ -110,7 +130,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
           :not_found_or_pending ->
             # MovieDetailJob hasn't completed yet - retry
             Logger.warning(
-              "⏳ Movie not found in database yet, will retry: #{showtime["movie_slug"]}"
+              "⏳ Movie not found in database yet, will retry: #{showtime["movie_slug"]} (#{city_config.name})"
             )
 
             {:error, :movie_not_ready}
@@ -119,48 +139,51 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   end
 
   # Process showtime with matched movie
-  defp process_showtime_with_movie(showtime, movie, source_id) do
+  defp process_showtime_with_movie(showtime, movie, source_id, city) do
+    city_config = Cities.get(city)
+
     # Get cinema data (no HTTP request - just format from slug)
-    cinema_data = CinemaExtractor.extract("", showtime["cinema_slug"])
+    # Pass city to CinemaExtractor for city-specific context
+    cinema_data = CinemaExtractor.extract("", showtime["cinema_slug"], city)
 
     # Enrich showtime with movie and cinema data
-    enriched = enrich_showtime(showtime, movie, cinema_data)
+    enriched = enrich_showtime(showtime, movie, cinema_data, city)
 
     # Transform to event format
-    case Transformer.transform_event(enriched) do
+    case Transformer.transform_event(enriched, city) do
       {:ok, transformed} ->
         # Get source safely
         case Repo.get(Source, source_id) do
           nil ->
-            Logger.error("🚫 Discarding showtime: source #{source_id} not found")
+            Logger.error("🚫 Discarding showtime: source #{source_id} not found (#{city_config.name})")
             {:discard, :source_not_found}
 
           source ->
             # Check for duplicates before processing (pass source struct)
-            case check_deduplication(transformed, source) do
+            case check_deduplication(transformed, source, city) do
               {:ok, :unique} ->
-                Logger.debug("✅ Processing unique showtime: #{transformed[:title]}")
-                process_event(transformed, source)
+                Logger.debug("✅ Processing unique showtime: #{transformed[:title]} (#{city_config.name})")
+                process_event(transformed, source, city)
 
               {:ok, :skip_duplicate} ->
-                Logger.info("⏭️  Skipping duplicate showtime: #{transformed[:title]}")
+                Logger.info("⏭️  Skipping duplicate showtime: #{transformed[:title]} (#{city_config.name})")
                 # Still process through Processor to create/update PublicEventSource entry
-                process_event(transformed, source)
+                process_event(transformed, source, city)
 
               {:ok, :validation_failed} ->
-                Logger.warning("⚠️ Validation failed, processing anyway: #{transformed[:title]}")
-                process_event(transformed, source)
+                Logger.warning("⚠️ Validation failed, processing anyway: #{transformed[:title]} (#{city_config.name})")
+                process_event(transformed, source, city)
             end
         end
 
       {:error, reason} ->
-        Logger.error("❌ Failed to transform showtime: #{inspect(reason)}")
+        Logger.error("❌ Failed to transform showtime: #{inspect(reason)} (#{city_config.name})")
         {:error, reason}
     end
   end
 
   # Enrich showtime with movie and cinema data
-  defp enrich_showtime(showtime, movie, cinema_data) do
+  defp enrich_showtime(showtime, movie, cinema_data, city) do
     # Convert string keys to atoms for consistency
     showtime_map = atomize_keys(showtime)
 
@@ -169,6 +192,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
     showtime_map
     |> Map.put(:datetime, datetime)
+    |> Map.put(:city, city)
     |> Map.merge(%{
       movie_id: movie.id,
       tmdb_id: movie.tmdb_id,
@@ -197,13 +221,17 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
   defp parse_datetime(_), do: DateTime.utc_now()
 
-  # Get movie from database by Kino Krakow slug
+  # Get movie from database by Repertuary.pl slug
+  # Movie slugs are consistent across all cities, so we use a generic key
   defp get_movie(movie_slug) do
     # Query movie from database using metadata search
-    # MovieDetailJob stores the Kino Krakow slug in movie.metadata
+    # MovieDetailJob stores the slug in movie.metadata as "repertuary_slug"
+    # Also check legacy "kino_krakow_slug" for backward compatibility
     query =
       from(m in EventasaurusDiscovery.Movies.Movie,
-        where: fragment("?->>'kino_krakow_slug' = ?", m.metadata, ^movie_slug)
+        where:
+          fragment("?->>'repertuary_slug' = ?", m.metadata, ^movie_slug) or
+            fragment("?->>'kino_krakow_slug' = ?", m.metadata, ^movie_slug)
       )
 
     case Repo.one(query) do
@@ -213,11 +241,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   end
 
   # Check if MovieDetailJob completed for this movie slug
-  defp check_movie_detail_job_status(movie_slug) do
+  # Now city-aware to only check jobs for the same city
+  defp check_movie_detail_job_status(movie_slug, city) do
     query =
       from(j in Oban.Job,
-        where: j.worker == "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob",
+        where: j.worker == "EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob",
         where: fragment("args->>'movie_slug' = ?", ^movie_slug),
+        where: fragment("coalesce(args->>'city', 'krakow') = ?", ^city),
         select: %{state: j.state, id: j.id},
         order_by: [desc: j.id],
         limit: 1
@@ -250,7 +280,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
   # NOTE: generate_external_id removed - now handled exclusively in DayPageJob
   # This ensures consistency and prevents external_id drift (BandsInTown A+ pattern)
   # If you need to generate external_id, use:
-  #   EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler.generate_external_id(showtime_data)
+  #   EventasaurusDiscovery.Sources.Repertuary.DedupHandler.generate_external_id(showtime_data)
 
   # Convert string keys to atom keys
   defp atomize_keys(map) when is_map(map) do
@@ -264,17 +294,19 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
       map
   end
 
-  defp check_deduplication(event_data, source) do
+  defp check_deduplication(event_data, source, city) do
+    city_config = Cities.get(city)
+
     # Convert string keys to atom keys for dedup handler
     event_with_atom_keys = atomize_event_data(event_data)
 
-    case KinoKrakow.deduplicate_event(event_with_atom_keys, source) do
+    case Repertuary.deduplicate_event(event_with_atom_keys, source) do
       {:unique, _} ->
         {:ok, :unique}
 
       {:duplicate, existing} ->
         Logger.info("""
-        ⏭️  Skipping duplicate Kino Krakow event
+        ⏭️  Skipping duplicate Repertuary.pl event (#{city_config.name})
         New: #{event_data[:title] || event_data["title"]}
         Existing: #{existing.title} (ID: #{existing.id})
         """)
@@ -282,7 +314,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
         {:ok, :skip_duplicate}
 
       {:error, reason} ->
-        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)}")
+        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)} (#{city_config.name})")
         # Continue with processing even if dedup fails
         {:ok, :validation_failed}
     end
@@ -314,19 +346,22 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
 
   defp atomize_event_data(value), do: value
 
-  defp process_event(transformed, source) do
+  defp process_event(transformed, source, city) do
+    city_config = Cities.get(city)
+
     # Process through unified pipeline (matches Cinema City pattern)
     case Processor.process_single_event(transformed, source) do
       {:ok, event} ->
-        Logger.debug("✅ Created event: #{event.title}")
+        Logger.debug("✅ Created event: #{event.title} (#{city_config.name})")
 
         # Return standardized metadata structure for job tracking (Phase 3.1)
         {:ok,
          %{
            "job_role" => "processor",
-           "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+           "pipeline_id" => "repertuary_#{city}_#{Date.utc_today()}",
            "entity_id" => transformed[:external_id],
            "entity_type" => "showtime",
+           "city" => city,
            "items_processed" => 1,
            "event_id" => event.id,
            "event_title" => event.title,
@@ -334,7 +369,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob do
          }}
 
       {:error, reason} ->
-        Logger.error("❌ Failed to process event: #{inspect(reason)}")
+        Logger.error("❌ Failed to process event: #{inspect(reason)} (#{city_config.name})")
         {:error, reason}
     end
   end

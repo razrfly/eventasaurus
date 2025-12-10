@@ -74,6 +74,13 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
     {"Budapest, Hungary", 307}
   ]
 
+  # Repertuary.pl city keys - loaded from Cities module
+  # Format: {display_name, city_key}
+  # city_key is used to construct the URL (e.g., "warszawa" -> warszawa.repertuary.pl)
+  @repertuary_cities EventasaurusDiscovery.Sources.Repertuary.Cities.all()
+                     |> Enum.map(fn {key, config} -> {config.name, key} end)
+                     |> Enum.sort_by(fn {name, _key} -> name end)
+
   @impl true
   def mount(%{"slug" => city_slug}, _session, socket) do
     city = Repo.get_by!(City, slug: city_slug) |> Repo.preload(:country)
@@ -407,7 +414,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp get_default_settings("ticketmaster"), do: %{"limit" => 100, "radius" => 50}
   defp get_default_settings("resident-advisor"), do: %{"limit" => 100, "area_id" => nil}
   defp get_default_settings("karnet"), do: %{"limit" => 100, "max_pages" => 10}
-  defp get_default_settings("kino-krakow"), do: %{"limit" => 100, "max_pages" => 10}
+  defp get_default_settings("repertuary"), do: %{"limit" => 100, "city_key" => nil}
   defp get_default_settings("cinema-city"), do: %{"limit" => 100, "city_name" => nil}
   defp get_default_settings("pubquiz-pl"), do: %{"limit" => 100}
   defp get_default_settings("question-one"), do: %{"limit" => 100}
@@ -442,7 +449,7 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   defp source_icon("ticketmaster"), do: "🎫"
   defp source_icon("resident-advisor"), do: "🎧"
   defp source_icon("karnet"), do: "🎭"
-  defp source_icon("kino-krakow"), do: "🎬"
+  defp source_icon("repertuary"), do: "🎬"
   defp source_icon("cinema-city"), do: "🍿"
   defp source_icon("pubquiz-pl"), do: "🧠"
   defp source_icon("question-one"), do: "❓"
@@ -480,4 +487,8 @@ defmodule EventasaurusWeb.Admin.CityDiscoveryConfigLive do
   # Expose Resident Advisor areas for dropdown in template
   @spec resident_advisor_areas() :: [{String.t(), integer()}]
   def resident_advisor_areas, do: @resident_advisor_areas
+
+  # Expose Repertuary cities for dropdown in template
+  @spec repertuary_cities() :: [{String.t(), atom()}]
+  def repertuary_cities, do: @repertuary_cities
 end

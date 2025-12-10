@@ -28,7 +28,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "bandsintown" => EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob,
     "resident-advisor" => EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob,
     "karnet" => EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob,
-    "kino-krakow" => EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob,
+    "repertuary" => EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob,
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
     "sortiraparis" => EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
@@ -167,7 +167,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   defp get_default_scope_for_slug("resident-advisor"), do: "city"
   defp get_default_scope_for_slug("karnet"), do: "city"
   defp get_default_scope_for_slug("cinema-city"), do: "city"
-  defp get_default_scope_for_slug("kino-krakow"), do: "city"
+  defp get_default_scope_for_slug("repertuary"), do: "city"
   defp get_default_scope_for_slug("waw4free"), do: "city"
   defp get_default_scope_for_slug("week_pl"), do: "regional"
   # Safe default for unknown sources

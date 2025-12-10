@@ -18,7 +18,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries.JobExecutionSummary do
       # Record a job execution (typically called from telemetry handler)
       JobExecutionSummary.record_execution(%{
         job_id: 123,
-        worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob",
+        worker: "EventasaurusDiscovery.Sources.Repertuary.Jobs.DayPageJob",
         queue: :scraper_index,
         state: :completed,
         results: %{showtimes_scheduled: 25, movies_scheduled: 5},

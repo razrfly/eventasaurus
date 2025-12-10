@@ -68,13 +68,14 @@ case DiscoveryConfigManager.enable_source(krakow.id, "karnet", %{
   {:error, reason} -> Logger.error("  ❌ Failed: #{inspect(reason)}")
 end
 
-# Configure Kino Kraków
-Logger.info("Configuring Kino Kraków...")
+# Configure Repertuary (formerly Kino Kraków)
+Logger.info("Configuring Repertuary...")
 
-case DiscoveryConfigManager.enable_source(krakow.id, "kino-krakow", %{
-       "days_ahead" => 14
+case DiscoveryConfigManager.enable_source(krakow.id, "repertuary", %{
+       "days_ahead" => 14,
+       "max_pages" => 10
      }) do
-  {:ok, _} -> Logger.info("  ✅ Kino Kraków configured")
+  {:ok, _} -> Logger.info("  ✅ Repertuary configured")
   {:error, reason} -> Logger.error("  ❌ Failed: #{inspect(reason)}")
 end
 

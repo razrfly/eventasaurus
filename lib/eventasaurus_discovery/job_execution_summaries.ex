@@ -37,7 +37,7 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
       # Get jobs for specific worker
       JobExecutionSummaries.list_summaries(
-        worker: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob"
+        worker: "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob"
       )
 
       # Get jobs with validation errors
@@ -460,8 +460,8 @@ defmodule EventasaurusDiscovery.JobExecutionSummaries do
 
   ## Examples
 
-      iex> extract_scraper_name("EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob")
-      "kino_krakow"
+      iex> extract_scraper_name("EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob")
+      "repertuary"
 
       iex> extract_scraper_name("EventasaurusApp.Workers.UnsplashRefreshWorker")
       "unsplash"

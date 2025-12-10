@@ -178,7 +178,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       max_price: data[:max_price] || data["max_price"],
       currency: data[:currency] || data["currency"],
       is_free: data[:is_free] || data["is_free"],
-      # Movie data for movie events (Kino Krakow)
+      # Movie data for movie events (Repertuary, Cinema City)
       movie_id: data[:movie_id] || data["movie_id"],
       movie_data: data[:movie_data] || data["movie_data"],
       # Article data for article-based events (Sortiraparis)
@@ -786,7 +786,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         is_showtime =
           ext_id &&
             (String.starts_with?(ext_id, "cinema_city_showtime_") ||
-               String.starts_with?(ext_id, "kino_krakow_showtime_"))
+               String.starts_with?(ext_id, "repertuary_showtime_"))
 
         if is_showtime do
           # Showtime scenario: Always create new record for unique external_id
@@ -1021,7 +1021,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  # Process movie associations for movie events (e.g., Kino Krakow)
+  # Process movie associations for movie events (e.g., Repertuary)
   defp process_movies(_event, %{movie_id: nil}), do: {:ok, []}
   defp process_movies(_event, data) when not is_map_key(data, :movie_id), do: {:ok, []}
 

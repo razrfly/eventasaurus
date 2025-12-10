@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.MoviePageExtractor do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Extractors.MoviePageExtractor do
   @moduledoc """
-  Extracts all showtimes from a Kino Krakow movie page.
+  Extracts all showtimes from a Repertuary movie page.
 
   Movie pages display a 7-day calendar with all showtimes for that specific film
   across all cinemas. This replaces the day-based scraping approach which had

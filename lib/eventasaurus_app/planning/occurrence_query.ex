@@ -3,7 +3,7 @@ defmodule EventasaurusApp.Planning.OccurrenceQuery do
   Service for querying occurrences (showtimes, event instances, venue time slots) for poll-based planning.
 
   Supports:
-  - Movie showtimes from Cinema City and Kino Krakow sources
+  - Movie showtimes from Cinema City and Repertuary sources
   - Venue time slots (restaurants, venues) with meal period generation
 
   ## Filter Criteria

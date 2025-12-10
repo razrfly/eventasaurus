@@ -1,12 +1,12 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow do
+defmodule EventasaurusDiscovery.Sources.Repertuary do
   @moduledoc """
-  Kino Krakow integration for movie showtime discovery.
+  Repertuary.pl integration for movie showtime discovery.
 
-  Kino Krakow is a regional cinema source (priority 15) providing:
-  - Movie showtimes from Kino Krakow theaters in Kraków
+  Repertuary is a multi-city cinema source (priority 15) providing:
+  - Movie showtimes from 29+ Polish cities via repertuary.pl network
   - TMDB-enriched movie metadata
   - Cinema location data
-  - Kraków-specific coverage
+  - City-specific coverage (Krakow, Warsaw, Gdansk, etc.)
 
   ## Features
   - HTML scraping-based event discovery
@@ -14,9 +14,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow do
   - Comprehensive movie metadata via TMDB
   - Showtime details
   - Cross-source deduplication
+  - Multi-city support
 
   ## Priority System
-  Kino Krakow has priority 15, so it defers to:
+  Repertuary has priority 15, so it defers to:
   - Ticketmaster (90)
   - Bandsintown (80)
   - Resident Advisor (75)
@@ -24,10 +25,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow do
   - PubQuiz (50)
   """
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler
+  alias EventasaurusDiscovery.Sources.Repertuary.DedupHandler
 
   @doc """
-  Process a Kino Krakow event through deduplication.
+  Process a Repertuary event through deduplication.
 
   Two-phase deduplication strategy:
   - Phase 1: Check if THIS source already imported it (same-source dedup)
@@ -58,12 +59,12 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow do
   def config do
     %{
       priority: 15,
-      name: "Kino Krakow",
-      slug: "kino-krakow",
+      name: "Repertuary",
+      slug: "repertuary",
       type: :scraper,
       provides_gps: true,
       provides_movies: true,
-      coverage: :krakow
+      coverage: :poland
     }
   end
 
@@ -78,10 +79,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow do
   def validate do
     cond do
       !enabled?() ->
-        {:error, "Kino Krakow source is disabled"}
+        {:error, "Repertuary source is disabled"}
 
       true ->
-        {:ok, "Kino Krakow source configuration valid"}
+        {:ok, "Repertuary source configuration valid"}
     end
   end
 end

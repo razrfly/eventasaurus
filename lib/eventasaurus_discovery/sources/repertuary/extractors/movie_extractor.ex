@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.MovieExtractor do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Extractors.MovieExtractor do
   @moduledoc """
-  Extracts movie metadata from Kino Krakow movie detail pages.
+  Extracts movie metadata from Repertuary movie detail pages.
 
   Extracts:
   - Original title (for TMDB matching)
@@ -118,7 +118,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.MovieExtractor do
   end
 
   # Extract release year
-  # Kino Krakow has two formats:
+  # Repertuary has two formats:
   # 1. Old movies: "Produkcja: Country, YEAR" (e.g., "USA, 1995")
   # 2. New movies: "Premiera: DD month YYYY" (e.g., "10 października 2025")
   defp extract_year(doc) do

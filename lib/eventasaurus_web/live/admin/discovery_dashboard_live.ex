@@ -27,7 +27,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @refresh_interval 30_000
   @city_specific_sources %{
     "karnet" => "krakow",
-    "kino-krakow" => "krakow",
+    "repertuary" => "krakow",
     "cinema-city" => "krakow",
     "sortiraparis" => "paris",
     "waw4free" => "warsaw"

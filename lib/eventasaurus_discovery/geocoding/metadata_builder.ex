@@ -88,7 +88,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
   @doc """
   Builds metadata for Google Places API (Text Search + Details).
 
-  Used by Kino Krakow and Resident Advisor when venues don't provide coordinates.
+  Used by Repertuary and Resident Advisor when venues don't provide coordinates.
 
   ## Parameters
   - `google_response` - The full response from Google Places Details API
@@ -163,7 +163,7 @@ defmodule EventasaurusDiscovery.Geocoding.MetadataBuilder do
 
   ## Parameters
   - `metadata` - Existing metadata map
-  - `scraper` - Scraper name (e.g., "question_one", "kino_krakow")
+  - `scraper` - Scraper name (e.g., "question_one", "repertuary")
 
   ## Examples
 

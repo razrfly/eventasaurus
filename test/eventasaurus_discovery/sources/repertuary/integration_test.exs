@@ -1,4 +1,4 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.IntegrationTest do
+defmodule EventasaurusDiscovery.Sources.Repertuary.IntegrationTest do
   @moduledoc """
   Integration tests for Kino Krakow scraper against live website.
 
@@ -8,7 +8,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.IntegrationTest do
 
   use ExUnit.Case, async: false
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
     Extractors.ShowtimeExtractor,
     Extractors.MovieExtractor,
@@ -103,7 +103,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.IntegrationTest do
       # This test just documents how to manually test in IEx
       # Run in IEx:
       #
-      # alias EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob
+      # alias EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob
       # {:ok, events} = SyncJob.fetch_events("Kraków", 10, %{})
       #
       # Then inspect the results

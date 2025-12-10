@@ -1,9 +1,21 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
   @moduledoc """
-  Oban job for processing individual Kino Krakow movie details.
+  Oban job for processing individual Repertuary.pl movie details.
 
   Fetches the movie detail page, extracts metadata, matches to TMDB,
   and stores the movie in the database.
+
+  ## Multi-City Support
+
+  Pass `"city"` in job args to fetch from a specific city:
+
+      MovieDetailJob.new(%{
+        "movie_slug" => "gladiator-ii",
+        "source_id" => 123,
+        "city" => "warszawa"
+      }) |> Oban.insert()
+
+  Defaults to "krakow" for backward compatibility.
 
   This job provides granular visibility into TMDB matching success/failure:
   - High confidence (≥70%): Auto-matched, returns {:ok, %{status: :matched}}
@@ -20,8 +32,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
+    Cities,
     Extractors.MovieExtractor,
     TmdbMatcher
   }
@@ -32,20 +45,26 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
   def perform(%Oban.Job{args: args} = job) do
     movie_slug = args["movie_slug"]
     source_id = args["source_id"]
+    city = args["city"] || Config.default_city()
 
-    Logger.info("🎬 Processing movie: #{movie_slug}")
+    city_config = Cities.get(city)
 
-    # External ID for tracking
-    external_id = "kino_krakow_movie_#{movie_slug}"
+    Logger.info("""
+    🎬 Processing movie: #{movie_slug}
+    City: #{city_config.name}
+    """)
 
-    # Fetch movie detail page
-    url = Config.movie_detail_url(movie_slug)
+    # External ID for tracking - includes city
+    external_id = "repertuary_#{city}_movie_#{movie_slug}"
+
+    # Fetch movie detail page using city-specific URL
+    url = Config.movie_detail_url(movie_slug, city)
     headers = [{"User-Agent", Config.user_agent()}]
 
     result =
       case HTTPoison.get(url, headers, timeout: Config.timeout()) do
         {:ok, %{status_code: 200, body: html}} ->
-          process_movie_html(html, movie_slug, source_id, job)
+          process_movie_html(html, movie_slug, source_id, city, job)
 
         {:ok, %{status_code: 404}} ->
           Logger.warning("⚠️ Movie page not found: #{movie_slug}")
@@ -73,7 +92,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
   end
 
   # Process movie HTML and match to TMDB
-  defp process_movie_html(html, movie_slug, _source_id, job) do
+  defp process_movie_html(html, movie_slug, _source_id, city, job) do
     # Extract movie metadata
     movie_data = MovieExtractor.extract(html)
 
@@ -93,17 +112,19 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
               "✅ Auto-matched (#{match_type}): #{movie.title} (#{trunc(confidence * 100)}% confidence)"
             )
 
-            # Store Kino Krakow slug in movie metadata for later lookups
-            store_kino_krakow_slug(movie, movie_slug)
+            # Store Repertuary.pl slug in movie metadata for later lookups
+            # Using generic key since slugs are consistent across all cities
+            store_repertuary_slug(movie, movie_slug)
 
             # Return standardized metadata structure for job tracking (Phase 3.1)
             {:ok,
              %{
                "job_role" => "detail_fetcher",
-               "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+               "pipeline_id" => "repertuary_#{city}_#{Date.utc_today()}",
                "parent_job_id" => Map.get(job.meta, "parent_job_id"),
                "entity_id" => movie_slug,
                "entity_type" => "movie",
+               "city" => city,
                "items_processed" => 1,
                "status" => "matched",
                "confidence" => confidence,
@@ -174,19 +195,20 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob do
     end
   end
 
-  # Store Kino Krakow slug in movie metadata for later database lookups
-  defp store_kino_krakow_slug(movie, kino_slug) do
-    # Add kino_krakow_slug to movie metadata
-    updated_metadata = Map.put(movie.metadata || %{}, "kino_krakow_slug", kino_slug)
+  # Store Repertuary.pl slug in movie metadata for later database lookups
+  # Using generic "repertuary_slug" key since movie slugs are consistent across all cities
+  defp store_repertuary_slug(movie, movie_slug) do
+    # Add repertuary_slug to movie metadata
+    updated_metadata = Map.put(movie.metadata || %{}, "repertuary_slug", movie_slug)
 
     case EventasaurusDiscovery.Movies.MovieStore.update_movie(movie, %{metadata: updated_metadata}) do
       {:ok, _updated_movie} ->
-        Logger.debug("💾 Stored Kino Krakow slug in movie metadata: #{kino_slug} -> #{movie.id}")
+        Logger.debug("💾 Stored Repertuary slug in movie metadata: #{movie_slug} -> #{movie.id}")
         :ok
 
       {:error, changeset} ->
         Logger.error(
-          "❌ Failed to store Kino Krakow slug in metadata: #{inspect(changeset.errors)}"
+          "❌ Failed to store Repertuary slug in metadata: #{inspect(changeset.errors)}"
         )
 
         :error

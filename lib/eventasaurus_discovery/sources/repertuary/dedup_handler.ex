@@ -1,13 +1,13 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
+defmodule EventasaurusDiscovery.Sources.Repertuary.DedupHandler do
   @moduledoc """
-  Deduplication handler for Kino Krakow movie showtimes.
+  Deduplication handler for Repertuary movie showtimes.
 
-  Kino Krakow is a regional source (priority 15) focused on movie showtimes
-  at Kino Krakow theaters in Kraków, Poland. It should defer to higher-priority sources.
+  Repertuary is a regional source (priority 15) focused on movie showtimes
+  at cinemas across Poland via the Repertuary.pl network. It should defer to higher-priority sources.
 
   ## Deduplication Strategy
 
-  1. **External ID Lookup**: Check if Kino Krakow event already imported
+  1. **External ID Lookup**: Check if Repertuary event already imported
   2. **Title + Date + Venue Matching**: Fuzzy matching for duplicates
   3. **GPS Proximity**: Cinema location matching within 500m radius
   4. **Quality Assessment**: Ensure event meets minimum standards
@@ -53,13 +53,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
   @doc """
   Check if event is a duplicate.
 
-  Uses BaseDedupHandler for shared logic, implements Kino Krakow-specific fuzzy matching.
+  Uses BaseDedupHandler for shared logic, implements Repertuary-specific fuzzy matching.
   """
   def check_duplicate(event_data, source) do
     # PHASE 1: Same-source dedup
     case BaseDedupHandler.find_by_external_id(event_data[:external_id], source.id) do
       %Event{} = existing ->
-        Logger.info("🔍 Found existing Kino Krakow event by external_id (same source)")
+        Logger.info("🔍 Found existing Repertuary event by external_id (same source)")
         {:duplicate, existing}
 
       nil ->
@@ -67,7 +67,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
     end
   end
 
-  # Kino Krakow-specific fuzzy matching logic
+  # Repertuary-specific fuzzy matching logic
   defp check_fuzzy_duplicate(event_data, source) do
     title = normalize_title(event_data[:title])
     date = event_data[:starts_at]
@@ -168,26 +168,26 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.DedupHandler do
     _e -> {nil, nil}
   end
 
-  defp calculate_match_confidence(kino_krakow_event, existing_event) do
+  defp calculate_match_confidence(repertuary_event, existing_event) do
     scores = []
 
     # Title similarity (40%)
     scores =
-      if similar_title?(kino_krakow_event[:title], existing_event.title),
+      if similar_title?(repertuary_event[:title], existing_event.title),
         do: [0.4 | scores],
         else: scores
 
     # Date match (30%)
     scores =
-      if same_date?(kino_krakow_event[:starts_at], existing_event.start_at),
+      if same_date?(repertuary_event[:starts_at], existing_event.start_at),
         do: [0.3 | scores],
         else: scores
 
     # Venue proximity (30%)
     scores =
       if BaseDedupHandler.same_location?(
-           kino_krakow_event[:venue_data][:latitude],
-           kino_krakow_event[:venue_data][:longitude],
+           repertuary_event[:venue_data][:latitude],
+           repertuary_event[:venue_data][:longitude],
            existing_event.venue.latitude,
            existing_event.venue.longitude,
            threshold_meters: 500

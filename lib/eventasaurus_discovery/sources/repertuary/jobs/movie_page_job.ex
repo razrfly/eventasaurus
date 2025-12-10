@@ -1,9 +1,24 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
   @moduledoc """
   Oban job for processing a single movie's showtimes across all 7 days.
 
   This job establishes its own session and loops through days 0-6,
   fetching the movie's page for each day to collect all showtimes.
+
+  ## Multi-City Support
+
+  Pass `"city"` in job args to fetch from a specific city:
+
+      MoviePageJob.new(%{
+        "movie_slug" => "gladiator-ii",
+        "movie_title" => "Gladiator II",
+        "city" => "warszawa",
+        "source_id" => 123
+      }) |> Oban.insert()
+
+  Defaults to "krakow" for backward compatibility.
+
+  ## Architecture
 
   This architecture eliminates the race condition from the old DayPageJob
   approach by ensuring each job has an isolated session with its own
@@ -32,8 +47,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
+    Cities,
     Extractors.MoviePageExtractor
   }
 
@@ -45,23 +61,27 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
     movie_slug = args["movie_slug"]
     movie_title = args["movie_title"]
     source_id = args["source_id"]
+    city = args["city"] || Config.default_city()
     force = args["force"] || false
 
+    city_config = Cities.get(city)
+
     Logger.info("""
-    🎬 Processing Kino Krakow movie: #{movie_title}
+    🎬 Processing movie: #{movie_title}
+    City: #{city_config.name}
     Slug: #{movie_slug}
     Source ID: #{source_id}
     """)
 
-    # External ID for tracking
-    external_id = "kino_krakow_movie_page_#{movie_slug}"
+    # External ID for tracking - includes city
+    external_id = "repertuary_#{city}_movie_page_#{movie_slug}"
 
     # Establish session and fetch showtimes for all 7 days
     result =
-      with {:ok, {cookies, csrf_token}} <- establish_session(movie_slug),
-           {:ok, all_showtimes} <- fetch_all_days(movie_slug, movie_title, cookies, csrf_token) do
+      with {:ok, {cookies, csrf_token}} <- establish_session(movie_slug, city),
+           {:ok, all_showtimes} <- fetch_all_days(movie_slug, movie_title, city, cookies, csrf_token) do
         Logger.info("""
-        ✅ Movie #{movie_title} processed
+        ✅ Movie #{movie_title} processed (#{city_config.name})
         Total showtimes across 7 days: #{length(all_showtimes)}
         """)
 
@@ -74,17 +94,18 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
 
         # Schedule MovieDetailJob (should be just 1) with parent tracking
         # Returns the job struct for dependency chaining
-        movie_detail_job = schedule_movie_detail_job(unique_movies, source_id, job_id)
+        movie_detail_job = schedule_movie_detail_job(unique_movies, source_id, city, job_id)
 
         # Schedule ShowtimeProcessJobs for each showtime with parent tracking
         showtimes_scheduled =
-          schedule_showtime_jobs(all_showtimes, source_id, movie_slug, force, job_id)
+          schedule_showtime_jobs(all_showtimes, source_id, city, movie_slug, force, job_id)
 
         # Return standardized metadata structure for job tracking (Phase 3.1)
         {:ok,
          %{
            "job_role" => "coordinator",
-           "pipeline_id" => "kino_krakow_#{Date.utc_today()}",
+           "pipeline_id" => "repertuary_#{city}_#{Date.utc_today()}",
+           "city" => city,
            # Root coordinator job has no parent
            "parent_job_id" => nil,
            "entity_id" => movie_slug,
@@ -97,7 +118,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
          }}
       else
         {:error, reason} ->
-          Logger.error("❌ Failed to process movie #{movie_slug}: #{inspect(reason)}")
+          Logger.error("❌ Failed to process movie #{movie_slug} (#{city_config.name}): #{inspect(reason)}")
           {:error, reason}
       end
 
@@ -114,8 +135,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
   end
 
   # Establish session by fetching the movie page to get cookies and CSRF token
-  defp establish_session(movie_slug) do
-    movie_url = "#{Config.base_url()}/film/#{movie_slug}.html"
+  defp establish_session(movie_slug, city) do
+    movie_url = Config.movie_detail_url(movie_slug, city)
     headers = [{"User-Agent", Config.user_agent()}]
 
     Logger.debug("📡 Establishing session for movie: #{movie_slug}")
@@ -160,8 +181,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
 
   # Fetch showtimes for all 7 days by looping through day offsets
   # OPTIMIZED: Uses parallel processing with Task.async_stream for 6x performance improvement
-  defp fetch_all_days(movie_slug, movie_title, cookies, csrf_token) do
-    Logger.info("📅 Fetching all 7 days for movie: #{movie_title} (parallel mode)")
+  defp fetch_all_days(movie_slug, movie_title, city, cookies, csrf_token) do
+    city_config = Cities.get(city)
+    Logger.info("📅 Fetching all 7 days for movie: #{movie_title} in #{city_config.name} (parallel mode)")
     Logger.info("   Cookies: #{String.slice(cookies, 0..50)}...")
     Logger.info("   CSRF: #{String.slice(csrf_token, 0..20)}...")
 
@@ -173,7 +195,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
         fn day_offset ->
           Logger.info("   → Processing day #{day_offset} (parallel)...")
 
-          case fetch_day_showtimes(movie_slug, movie_title, day_offset, cookies, csrf_token) do
+          case fetch_day_showtimes(movie_slug, movie_title, city, day_offset, cookies, csrf_token) do
             {:ok, showtimes} ->
               Logger.info("   ✅ Day #{day_offset}: #{length(showtimes)} showtimes")
               {:ok, showtimes}
@@ -204,8 +226,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
   end
 
   # Fetch showtimes for a specific day
-  defp fetch_day_showtimes(movie_slug, movie_title, day_offset, cookies, csrf_token) do
-    base_url = Config.base_url()
+  defp fetch_day_showtimes(movie_slug, movie_title, city, day_offset, cookies, csrf_token) do
+    base_url = Config.base_url(city)
     movie_url = "#{base_url}/film/#{movie_slug}.html"
 
     # Headers for POST request (set day)
@@ -268,17 +290,18 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
 
   # Schedule MovieDetailJob for this movie (singular - should only be 1 unique movie)
   # Returns the job struct for dependency chaining, or nil if insertion fails
-  defp schedule_movie_detail_job(movie_slugs, source_id, parent_job_id) do
+  defp schedule_movie_detail_job(movie_slugs, source_id, city, parent_job_id) do
     Logger.debug("📽️  Scheduling MovieDetailJob for #{length(movie_slugs)} movie(s)")
 
     # Should only be 1 movie slug (this movie), but handle list for consistency
     case movie_slugs do
       [movie_slug | _] ->
         # Schedule immediately (no delay needed since dependencies handle ordering)
-        case EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob.new(
+        case EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob.new(
                %{
                  "movie_slug" => movie_slug,
-                 "source_id" => source_id
+                 "source_id" => source_id,
+                 "city" => city
                },
                queue: :scraper_detail,
                meta: %{"parent_job_id" => parent_job_id}
@@ -305,7 +328,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
   # Schedule ShowtimeProcessJobs for each showtime with delay-based ordering
   # This ensures ShowtimeProcessJobs run AFTER MovieDetailJob completes
   # Uses delay-based scheduling since Oban Pro (with depends_on) is not available
-  defp schedule_showtime_jobs(showtimes, source_id, movie_slug, force, parent_job_id) do
+  defp schedule_showtime_jobs(showtimes, source_id, city, movie_slug, force, parent_job_id) do
     # Delay-based scheduling strategy:
     # - MovieDetailJob runs immediately (scheduled at T+0)
     # - ShowtimeProcessJobs delayed by 120 seconds minimum
@@ -326,9 +349,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
         date = DateTime.to_date(datetime) |> Date.to_iso8601()
         time = DateTime.to_time(datetime) |> Time.to_string() |> String.slice(0..4)
 
-        # Generate external_id matching ShowtimeProcessJob pattern
+        # Generate external_id matching ShowtimeProcessJob pattern - includes city
         external_id =
-          "kino_krakow_showtime_#{movie}_#{cinema}_#{date}_#{time}"
+          "repertuary_#{city}_showtime_#{movie}_#{cinema}_#{date}_#{time}"
           |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
 
         Map.put(showtime_map, :external_id, external_id)
@@ -349,9 +372,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
     total_showtimes = length(showtimes)
     skipped = total_showtimes - length(showtimes_to_process)
     threshold = EventFreshnessChecker.get_threshold()
+    city_config = Cities.get(city)
 
     Logger.info("""
-    🔄 Kino Krakow Freshness Check: Movie #{movie_slug}
+    🔄 Repertuary.pl Freshness Check: Movie #{movie_slug} (#{city_config.name})
     Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes #{if force, do: "(Force mode)", else: "(#{skipped} fresh, threshold: #{threshold}h)"}
     """)
 
@@ -371,10 +395,11 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob do
           meta: %{"parent_job_id" => parent_job_id}
         ]
 
-        EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob.new(
+        EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob.new(
           %{
             "showtime" => showtime,
-            "source_id" => source_id
+            "source_id" => source_id,
+            "city" => city
           },
           job_opts
         )

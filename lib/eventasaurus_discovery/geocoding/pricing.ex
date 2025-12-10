@@ -37,12 +37,12 @@ defmodule EventasaurusDiscovery.Geocoding.Pricing do
   @google_maps_geocoding 0.005
 
   # Google Places API - Text Search
-  # Used by: Kino Krakow, Resident Advisor (via VenueProcessor)
+  # Used by: Repertuary, Resident Advisor (via VenueProcessor)
   # Pricing tier: 10,001-100,000 requests
   @google_places_text_search 0.032
 
   # Google Places API - Place Details
-  # Used by: Kino Krakow, Resident Advisor (via VenueProcessor)
+  # Used by: Repertuary, Resident Advisor (via VenueProcessor)
   # Pricing tier: 10,001-100,000 requests
   @google_places_details 0.005
 

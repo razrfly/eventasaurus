@@ -183,9 +183,9 @@ sources = [
     }
   },
   %{
-    name: "Kino Krakow",
-    slug: "kino-krakow",
-    website_url: "https://www.kino.krakow.pl",
+    name: "Repertuary",
+    slug: "repertuary",
+    website_url: "https://repertuary.pl",
     priority: 15,
     domains: ["screening", "cinema", "movies"],
     aggregate_on_index: true,
@@ -194,7 +194,8 @@ sources = [
       "rate_limit_seconds" => 1,
       "max_requests_per_hour" => 500,
       "language" => "pl",
-      "supports_screenings" => true
+      "supports_screenings" => true,
+      "supports_multi_city" => true
     }
   },
   %{

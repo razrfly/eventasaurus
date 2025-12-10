@@ -207,8 +207,8 @@ defmodule EventasaurusApp.Monitoring.JobRegistry do
   defp get_parent_worker_for_source("cinema-city"),
     do: "EventasaurusDiscovery.Sources.CinemaCity.Jobs.CinemaDateJob"
 
-  defp get_parent_worker_for_source("kino-krakow"),
-    do: "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob"
+  defp get_parent_worker_for_source("repertuary"),
+    do: "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob"
 
   defp get_parent_worker_for_source("karnet"),
     do: "EventasaurusDiscovery.Sources.Karnet.Jobs.IndexPageJob"

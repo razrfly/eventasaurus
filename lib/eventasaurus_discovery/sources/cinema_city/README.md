@@ -4,7 +4,7 @@
 
 The Cinema City scraper fetches movie showtimes from Cinema City cinemas across Poland using their public JSON API. This is a **primary source** for Cinema City screenings, providing authoritative data directly from the cinema chain.
 
-**Priority**: 15 (same as Kino Kraków)
+**Priority**: 15 (same as Repertuary)
 **Scope**: Initially Kraków (3 cinemas), expandable to all Poland (32+ locations)
 **Type**: JSON API scraper
 
@@ -269,4 +269,4 @@ Key metrics to monitor:
 - [Issue #1463: Implementation Spec](https://github.com/razrfly/eventasaurus/issues/1463)
 - Cinema City Website: https://www.cinema-city.pl
 - API Base URL: https://www.cinema-city.pl/pl/data-api-service/v1/
-- Related: `lib/eventasaurus_discovery/sources/kino_krakow/` (reference implementation)
+- Related: `lib/eventasaurus_discovery/sources/repertuary/` (reference implementation)

@@ -1,20 +1,21 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Source do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Source do
   @moduledoc """
-  Kino Krakow source configuration for movie showtimes in Kraków.
+  Repertuary source configuration for movie showtimes across Poland.
 
-  This source scrapes actual theater programming and matches to TMDB for rich metadata.
+  This source scrapes actual theater programming from the Repertuary.pl network
+  (29+ Polish cities) and matches to TMDB for rich metadata.
   """
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
     Jobs.SyncJob
   }
 
-  def name, do: "Kino Krakow"
+  def name, do: "Repertuary"
 
-  def key, do: "kino-krakow"
+  def key, do: "repertuary"
 
-  def enabled?, do: Application.get_env(:eventasaurus, :kino_krakow_enabled, true)
+  def enabled?, do: Application.get_env(:eventasaurus, :repertuary_enabled, true)
 
   # Movies should have high priority as they're time-sensitive
   def priority, do: 15
@@ -68,7 +69,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Source do
   def validate_config do
     with :ok <- validate_url_accessibility(),
          :ok <- validate_job_modules() do
-      {:ok, "Kino Krakow source configuration valid"}
+      {:ok, "Repertuary source configuration valid"}
     end
   end
 
@@ -78,10 +79,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Source do
         :ok
 
       {:ok, %{status_code: status}} ->
-        {:error, "Kino Krakow returned status #{status}"}
+        {:error, "Repertuary returned status #{status}"}
 
       {:error, reason} ->
-        {:error, "Cannot reach Kino Krakow: #{inspect(reason)}"}
+        {:error, "Cannot reach Repertuary: #{inspect(reason)}"}
     end
   end
 

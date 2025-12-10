@@ -53,35 +53,35 @@ defmodule EventasaurusDiscovery.Metrics.ScraperSLOs do
       alert_threshold: 0.80
     },
 
-    # Kino Krakow scraper
-    "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob" => %{
-      name: "Kino Krakow Sync",
+    # Repertuary scraper
+    "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob" => %{
+      name: "Repertuary Sync",
       target_success_rate: 0.95,
       target_avg_duration_ms: 2000,
       alert_threshold: 0.85
     },
-    "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MoviePageJob" => %{
-      name: "Kino Krakow Movie Page",
+    "EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob" => %{
+      name: "Repertuary Movie Page",
       target_success_rate: 0.90,
       target_avg_duration_ms: 15000,
       # Fetches 7 days
       alert_threshold: 0.80
     },
-    "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob" => %{
-      name: "Kino Krakow Day Page",
+    "EventasaurusDiscovery.Sources.Repertuary.Jobs.DayPageJob" => %{
+      name: "Repertuary Day Page",
       target_success_rate: 0.90,
       target_avg_duration_ms: 3000,
       alert_threshold: 0.80
     },
-    "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob" => %{
-      name: "Kino Krakow Movie Detail",
+    "EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob" => %{
+      name: "Repertuary Movie Detail",
       target_success_rate: 0.85,
       # Lower due to TMDB matching
       target_avg_duration_ms: 2000,
       alert_threshold: 0.75
     },
-    "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob" => %{
-      name: "Kino Krakow Showtime Process",
+    "EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob" => %{
+      name: "Repertuary Showtime Process",
       target_success_rate: 0.90,
       target_avg_duration_ms: 1500,
       alert_threshold: 0.80

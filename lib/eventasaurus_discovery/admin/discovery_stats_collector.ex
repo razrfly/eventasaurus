@@ -1146,8 +1146,8 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCollector do
       String.contains?(sync_worker, "Ticketmaster.Jobs.SyncJob") ->
         "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.EventProcessorJob"
 
-      String.contains?(sync_worker, "KinoKrakow.Jobs.SyncJob") ->
-        "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob"
+      String.contains?(sync_worker, "Repertuary.Jobs.SyncJob") ->
+        "EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob"
 
       String.contains?(sync_worker, "CinemaCity.Jobs.SyncJob") ->
         "EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob"

@@ -6,7 +6,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
   with movie and cinema data, transforms to event format, and processes
   through the unified EventProcessor.
 
-  Similar to Kino Krakow's ShowtimeProcessJob but adapted for Cinema City:
+  Similar to Repertuary's ShowtimeProcessJob but adapted for Cinema City:
   - Uses cinema_city_film_id to look up movies
   - Cinema data comes from CinemaDateJob args
   - Event data comes directly from API (no HTML scraping)

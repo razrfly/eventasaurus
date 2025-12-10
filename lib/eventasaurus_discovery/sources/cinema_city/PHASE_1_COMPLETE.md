@@ -2,7 +2,7 @@
 
 ## Summary
 
-Phase 1 of the Cinema City API scraper has been successfully implemented following the established patterns from Kino Kraków and other scrapers in the codebase.
+Phase 1 of the Cinema City API scraper has been successfully implemented following the established patterns from Repertuary and other scrapers in the codebase.
 
 ## Completed Items
 
@@ -43,9 +43,9 @@ Config.film_events_url("1088", "2025-10-03")
 **File**: `lib/eventasaurus_discovery/sources/cinema_city/source.ex`
 
 **Features**:
-- Follows exact same pattern as `KinoKrakow.Source`
+- Follows exact same pattern as `Repertuary.Source`
 - Implements all required source functions: `name/0`, `key/0`, `enabled?/0`, `priority/0`, `config/0`
-- Priority: 15 (same as Kino Kraków)
+- Priority: 15 (same as Repertuary)
 - Source slug: "cinema-city"
 - Includes `validate_config/0` for API accessibility checks
 - Supports feature flags: API, TMDB matching, movie metadata, ticket info
@@ -82,11 +82,11 @@ Source.config()    # => Full config map with all settings
 
 ## Pattern Compliance Verification
 
-### Comparison with Kino Kraków
+### Comparison with Repertuary
 
-| Aspect | Kino Kraków | Cinema City | ✅ Match |
+| Aspect | Repertuary | Cinema City | ✅ Match |
 |--------|-------------|-------------|----------|
-| **Directory Structure** | `sources/kino_krakow/` | `sources/cinema_city/` | ✅ |
+| **Directory Structure** | `sources/repertuary/` | `sources/cinema_city/` | ✅ |
 | **Config Module** | `config.ex` with URLs, rate limits | `config.ex` with API endpoints, rate limits | ✅ |
 | **Source Module** | Implements name/key/priority/config | Same implementation pattern | ✅ |
 | **Priority** | 15 (movies) | 15 (movies) | ✅ |
@@ -101,12 +101,12 @@ Source.config()    # => Full config map with all settings
 
 ### Key Design Decisions
 
-1. **Same Priority as Kino Kraków (15)**: Both are movie sources that should have equal priority
-2. **API-First Design**: Unlike Kino Kraków's HTML scraping, Cinema City uses JSON API
-3. **Distributed Job Architecture**: Planned to follow Kino Kraków's pattern:
+1. **Same Priority as Repertuary (15)**: Both are movie sources that should have equal priority
+2. **API-First Design**: Unlike Repertuary's HTML scraping, Cinema City uses JSON API
+3. **Distributed Job Architecture**: Planned to follow Repertuary's pattern:
    - SyncJob → CinemaDateJob → MovieDetailJob → ShowtimeProcessJob
 4. **Source Conflict Resolution**: Cinema City API will take precedence over aggregated data
-5. **TMDB Matching**: Will reuse/extend Kino Kraków's TMDBMatcher for Polish titles
+5. **TMDB Matching**: Will reuse/extend Repertuary's TMDBMatcher for Polish titles
 
 ## Compilation and Testing
 
@@ -165,7 +165,7 @@ Cinema City is now:
 ## Related Issues
 
 - **GitHub Issue**: #1463 - Implement Cinema City API scraper
-- **Reference Implementation**: `lib/eventasaurus_discovery/sources/kino_krakow/`
+- **Reference Implementation**: `lib/eventasaurus_discovery/sources/repertuary/`
 - **Related Documentation**:
   - `docs/kino-krakow/kino-krakow-implementation-audit.md`
   - `docs/SCRAPER_MANIFESTO.md`

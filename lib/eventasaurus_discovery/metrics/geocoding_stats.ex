@@ -177,7 +177,7 @@ defmodule EventasaurusDiscovery.Metrics.GeocodingStats do
       iex> GeocodingStats.costs_by_scraper()
       {:ok, [
         %{scraper: "resident_advisor", total_cost: 3.70, count: 100},
-        %{scraper: "kino_krakow", total_cost: 0.74, count: 20},
+        %{scraper: "repertuary", total_cost: 0.74, count: 20},
         %{scraper: "question_one", total_cost: 0.25, count: 50}
       ]}
   """

@@ -7,7 +7,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Transformer do
   - Venue with complete location data (cinema)
   - Valid start time
 
-  Adapted from Kino Krakow transformer but using Cinema City's API data structure.
+  Adapted from Repertuary transformer but using Cinema City's API data structure.
 
   Handles both atom and string keys throughout (Oban serializes to JSON with string keys).
   """

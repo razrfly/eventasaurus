@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
+defmodule EventasaurusDiscovery.Sources.Repertuary.TmdbMatcher do
   @moduledoc """
-  Matches Kino Krakow movies to TMDB with confidence scoring.
+  Matches Repertuary movies to TMDB with confidence scoring.
 
   Uses multi-signal matching:
   - Title similarity (40%)
@@ -29,7 +29,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher do
   @now_playing_threshold 0.60
 
   @doc """
-  Match a Kino Krakow movie to TMDB using multi-strategy search.
+  Match a Repertuary movie to TMDB using multi-strategy search.
 
   Returns:
   - {:ok, tmdb_id, confidence} - High confidence match

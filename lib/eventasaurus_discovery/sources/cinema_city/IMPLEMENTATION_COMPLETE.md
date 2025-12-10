@@ -63,7 +63,7 @@ Successfully implemented a complete Cinema City API scraper for movie showtimes 
 - Showtime + runtime → start/end times
 
 ### ✅ Phase 5: TMDB Integration (COMPLETE)
-**Files**: `jobs/movie_detail_job.ex` (reuses `KinoKrakow.TmdbMatcher`)
+**Files**: `jobs/movie_detail_job.ex` (reuses `Repertuary.TmdbMatcher`)
 
 - ✅ Reused existing TMDB matcher for consistency
 - ✅ Polish title matching with multi-strategy search
@@ -88,7 +88,7 @@ Successfully implemented a complete Cinema City API scraper for movie showtimes 
 
 **Priority Hierarchy** (existing system):
 1. Cinema City: Priority 15 (direct source)
-2. Kino Kraków: Priority 10 (aggregator)
+2. Repertuary: Priority 15 (aggregator)
 3. Other sources: Lower priorities
 
 ### ✅ Phase 7: Testing & Validation (COMPLETE)
