@@ -56,24 +56,30 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
       end_time = System.monotonic_time(:millisecond)
       duration_ms = end_time - start_time
 
-      # Store the snapshot
-      {:ok, snapshot} =
-        DiscoveryStatsSnapshot.insert(%{
-          stats_data: stats,
-          computed_at: DateTime.utc_now(),
-          computation_time_ms: duration_ms,
-          status: "completed"
-        })
+      # Store the snapshot with proper error handling
+      case DiscoveryStatsSnapshot.insert(%{
+             stats_data: stats,
+             computed_at: DateTime.utc_now(),
+             computation_time_ms: duration_ms,
+             status: "completed"
+           }) do
+        {:ok, snapshot} ->
+          # Cleanup old snapshots (keep last 10)
+          DiscoveryStatsSnapshot.cleanup(10)
 
-      # Cleanup old snapshots (keep last 10)
-      DiscoveryStatsSnapshot.cleanup(10)
+          Logger.info(
+            "✅ Stats computation completed in #{duration_ms}ms (snapshot ##{snapshot.id})"
+          )
 
-      Logger.info("✅ Stats computation completed in #{duration_ms}ms (snapshot ##{snapshot.id})")
+          # Notify the cache that new stats are available
+          notify_cache_updated()
 
-      # Notify the cache that new stats are available
-      notify_cache_updated()
+          :ok
 
-      :ok
+        {:error, changeset} ->
+          Logger.error("❌ Failed to save stats snapshot: #{inspect(changeset.errors)}")
+          {:error, "Failed to save snapshot"}
+      end
     rescue
       e ->
         Logger.error("❌ Stats computation failed: #{Exception.message(e)}")
