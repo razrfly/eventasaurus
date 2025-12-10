@@ -721,8 +721,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         """)
 
         # Avoid unique constraint violation on [:event_id, :source_id]
+        # Use query with limit since unique constraint was removed to support showtimes
         conflicting_by_event =
-          Repo.get_by(PublicEventSource, event_id: event.id, source_id: source_id)
+          from(pes in PublicEventSource,
+            where: pes.event_id == ^event.id and pes.source_id == ^source_id,
+            order_by: [desc: pes.last_seen_at],
+            limit: 1
+          )
+          |> Repo.one()
 
         if conflicting_by_event do
           # Use transaction to atomically delete conflict and move the external record
@@ -797,11 +803,14 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           |> Repo.insert()
         else
           # Non-showtime scenario: Check by event_id as fallback (legacy behavior)
+          # Use query with limit since unique constraint was removed to support showtimes
           existing_by_event =
-            Repo.get_by(PublicEventSource,
-              event_id: event.id,
-              source_id: source_id
+            from(pes in PublicEventSource,
+              where: pes.event_id == ^event.id and pes.source_id == ^source_id,
+              order_by: [desc: pes.last_seen_at],
+              limit: 1
             )
+            |> Repo.one()
 
           case existing_by_event do
             # Event already has a link from this source with different external_id

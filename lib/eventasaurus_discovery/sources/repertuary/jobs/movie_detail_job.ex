@@ -47,8 +47,17 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
     source_id = args["source_id"]
     city = args["city"] || Config.default_city()
 
-    city_config = Cities.get(city)
+    case Cities.get(city) do
+      nil ->
+        Logger.error("❌ Unknown city: #{city}")
+        {:error, :unknown_city}
 
+      city_config ->
+        do_perform(job, movie_slug, source_id, city, city_config)
+    end
+  end
+
+  defp do_perform(job, movie_slug, source_id, city, city_config) do
     Logger.info("""
     🎬 Processing movie: #{movie_slug}
     City: #{city_config.name}

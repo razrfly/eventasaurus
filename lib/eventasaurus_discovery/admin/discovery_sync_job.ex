@@ -272,7 +272,65 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     end
   end
 
+  defp build_source_options("repertuary", %{"city_id" => city_id}) do
+    # Repertuary requires city_key from the city's discovery_config
+    # This maps to the repertuary.pl subdomain (e.g., "warszawa" -> warszawa.repertuary.pl)
+    case Repo.get(City, city_id) do
+      nil ->
+        Logger.warning("⚠️ City not found for repertuary: #{city_id}")
+        %{}
+
+      city ->
+        # Get city_key from discovery_config sources
+        city_key = get_repertuary_city_key_from_config(city)
+
+        if city_key do
+          Logger.info("✅ Found Repertuary city_key '#{city_key}' for #{city.name}")
+          %{city: city_key}
+        else
+          Logger.warning("⚠️ No city_key configured for repertuary source on #{city.name}")
+          %{}
+        end
+    end
+  end
+
   defp build_source_options(_source, _args), do: %{}
+
+  # Extract city_key from city's discovery_config for repertuary source
+  # Handles both struct-based and map-based configs with atom or string keys
+  defp get_repertuary_city_key_from_config(city) do
+    config = city.discovery_config || %{}
+
+    sources =
+      cond do
+        is_map(config) and Map.has_key?(config, "sources") ->
+          config["sources"] || []
+
+        is_map(config) and Map.has_key?(config, :sources) ->
+          config[:sources] || []
+
+        true ->
+          []
+      end
+
+    repertuary_source =
+      Enum.find(sources, fn source ->
+        is_map(source) && (source["name"] == "repertuary" || source[:name] == "repertuary")
+      end)
+
+    case repertuary_source do
+      %{} = source ->
+        settings = source["settings"] || source[:settings] || %{}
+
+        case settings["city_key"] || settings[:city_key] do
+          "" -> nil
+          city_key -> city_key
+        end
+
+      _ ->
+        nil
+    end
+  end
 
   # Extract city_name from city's discovery_config for cinema-city source
   # Handles both struct-based and map-based configs with atom or string keys

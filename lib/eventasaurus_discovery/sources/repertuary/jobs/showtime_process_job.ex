@@ -52,8 +52,17 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
     source_id = args["source_id"]
     city = args["city"] || Config.default_city()
 
-    city_config = Cities.get(city)
+    case Cities.get(city) do
+      nil ->
+        Logger.error("❌ Unknown city: #{city}")
+        {:error, :unknown_city}
 
+      city_config ->
+        do_perform(job, showtime, source_id, city, city_config)
+    end
+  end
+
+  defp do_perform(job, showtime, source_id, city, city_config) do
     # CRITICAL: external_id MUST be set by MoviePageJob
     # We do NOT generate it here to avoid drift (BandsInTown A+ pattern)
     external_id = showtime["external_id"]
@@ -97,7 +106,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
   end
 
   defp process_showtime(showtime, source_id, city) do
-    city_config = Cities.get(city)
+    # City already validated in perform/1, but add fallback for safety
+    city_config = Cities.get(city) || Cities.get(Config.default_city())
     Logger.debug("🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]} (#{city_config.name})")
 
     # Get movie from database using generic repertuary_slug
