@@ -289,11 +289,9 @@ defmodule EventasaurusApp.Events.Event do
       {true, venue_id} when not is_nil(venue_id) ->
         add_error(changeset, :venue_id, "must be nil for virtual events")
 
-      # Physical events must have a venue
-      {false, nil} ->
-        add_error(changeset, :venue_id, "must be present for physical events")
-
-      # All other combinations are valid
+      # Physical (non-virtual) events: venue_id is optional to allow "Location TBD" scenarios
+      # The form validates venue requirement based on venue_certainty selection
+      # This allows creating events where the venue hasn't been decided yet
       _ ->
         changeset
     end
@@ -370,20 +368,48 @@ defmodule EventasaurusApp.Events.Event do
   defp validate_polling_deadline(changeset) do
     status = get_field(changeset, :status)
     polling_deadline = get_field(changeset, :polling_deadline)
+    start_at = get_field(changeset, :start_at)
 
     case {status, polling_deadline} do
+      # Polling status requires a deadline
       {:polling, nil} ->
         add_error(changeset, :polling_deadline, "is required when status is polling")
 
-      {:polling, deadline} when not is_nil(deadline) ->
-        if DateTime.compare(deadline, DateTime.utc_now()) == :gt do
-          changeset
-        else
-          add_error(changeset, :polling_deadline, "must be in the future")
-        end
+      # Threshold status (crowdfunding/interest) also requires a deadline
+      {:threshold, nil} ->
+        add_error(changeset, :polling_deadline, "is required for crowdfunding and interest events")
+
+      # Validate deadline is in the future and before start_at
+      {status, deadline} when status in [:polling, :threshold] and not is_nil(deadline) ->
+        changeset
+        |> validate_deadline_in_future(deadline)
+        |> validate_deadline_before_start(deadline, start_at)
 
       _ ->
         changeset
+    end
+  end
+
+  # Helper to validate deadline is in the future
+  defp validate_deadline_in_future(changeset, deadline) do
+    if DateTime.compare(deadline, DateTime.utc_now()) == :gt do
+      changeset
+    else
+      add_error(changeset, :polling_deadline, "must be in the future")
+    end
+  end
+
+  # Helper to validate deadline is before event start date
+  defp validate_deadline_before_start(changeset, _deadline, nil) do
+    # If no start_at, we can't validate against it
+    changeset
+  end
+
+  defp validate_deadline_before_start(changeset, deadline, start_at) do
+    if DateTime.compare(deadline, start_at) == :lt do
+      changeset
+    else
+      add_error(changeset, :polling_deadline, "must be before the event start date")
     end
   end
 
