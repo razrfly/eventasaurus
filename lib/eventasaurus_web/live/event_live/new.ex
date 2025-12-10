@@ -13,6 +13,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
+  alias EventasaurusApp.Events.Validations
   alias EventasaurusApp.Groups
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Helpers.ImageHelpers
@@ -565,9 +566,8 @@ defmodule EventasaurusWeb.EventLive.New do
     changeset =
       %Event{}
       |> Events.change_event(event_params)
+      |> Validations.validate_for_draft()
       |> Map.put(:action, :validate)
-
-    # Legacy date polling validation removed
 
     {:noreply,
      socket
@@ -788,13 +788,12 @@ defmodule EventasaurusWeb.EventLive.New do
             status: Map.get(authorized_params, "status")
           )
 
-          # Validate date polling before saving
+          # Validate with publish requirements before saving
           validation_changeset =
             %Event{}
             |> Events.change_event(authorized_params)
+            |> Validations.validate_for_publish()
             |> Map.put(:action, :validate)
-
-          # Legacy date polling validation removed
 
           if validation_changeset.valid? do
             # No date polling validation errors, proceed normally

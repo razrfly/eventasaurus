@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   import EventasaurusWeb.TokenHelpers, only: [get_current_valid_token: 1]
 
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.Validations
   alias EventasaurusApp.Groups
   alias EventasaurusWeb.Services.UnsplashService
   alias EventasaurusWeb.Services.SearchService
@@ -362,9 +363,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
     changeset =
       socket.assigns.event
       |> Events.change_event(event_params)
+      |> Validations.validate_for_draft()
       |> Map.put(:action, :validate)
-
-    # Legacy date polling validation removed
 
     {:noreply, assign(socket, form: to_form(changeset))}
   end
@@ -522,16 +522,14 @@ defmodule EventasaurusWeb.EventLive.Edit do
     # Authorize group assignment if specified
     case validate_group_assignment(final_event_params, socket.assigns.user) do
       {:ok, authorized_params} ->
-        # Validate date polling before saving
+        # Apply full publish validations before saving
         validation_changeset =
           socket.assigns.event
           |> Events.change_event(authorized_params)
+          |> Validations.validate_for_publish()
           |> Map.put(:action, :validate)
 
-        # Legacy date polling validation removed
-
         if validation_changeset.valid? do
-          # Legacy date polling updates removed - continue with event update
           case Events.update_event(socket.assigns.event, authorized_params) do
             {:ok, event} ->
               {:noreply,
