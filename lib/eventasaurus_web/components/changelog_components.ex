@@ -3,9 +3,14 @@ defmodule EventasaurusWeb.ChangelogComponents do
   Components for the Changelog page.
 
   Supports Sanity CMS change types: new, improved, enhanced, fixed, updated
+
+  Uses shared tag colors from SharedProductComponents for consistency
+  with the Roadmap page.
   """
   use Phoenix.Component
   use EventasaurusWeb, :html
+
+  import EventasaurusWeb.Components.SharedProductComponents, only: [tag_color: 1, tag_strip_color: 1]
 
   @doc """
   Renders the main timeline container.
@@ -28,6 +33,11 @@ defmodule EventasaurusWeb.ChangelogComponents do
   attr :entry, :map, required: true
 
   def timeline_entry(assigns) do
+    # Get strip color from first tag (like roadmap) or fall back to indigo
+    first_tag = List.first(assigns.entry[:tags] || [])
+    strip_color = if first_tag, do: tag_strip_color(first_tag), else: "bg-indigo-500"
+    assigns = assign(assigns, :strip_color, strip_color)
+
     ~H"""
     <article class="group flex flex-col md:flex-row gap-6 md:gap-8" role="listitem" aria-labelledby={"entry-#{@entry.id}"}>
       <%!-- Date Column (Fixed Width on Desktop) --%>
@@ -47,38 +57,42 @@ defmodule EventasaurusWeb.ChangelogComponents do
 
       <%!-- Content Column --%>
       <div class="flex-1 pb-12">
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-zinc-200/60 hover:shadow-md transition-shadow relative">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-zinc-200/60 hover:shadow-md transition-shadow relative overflow-hidden group">
+           <%!-- Colorful Left Strip (matches roadmap style) --%>
+           <div class={["absolute top-0 left-0 w-1 h-full", @strip_color]}></div>
 
-           <%!-- Mobile Date (visible only on small screens) --%>
-           <time class="md:hidden text-sm font-semibold text-zinc-500 mb-2 block" datetime={@entry[:iso_date] || @entry.date}>
-             <%= @entry.date %>
-           </time>
+           <div class="pl-2">
+             <%!-- Mobile Date (visible only on small screens) --%>
+             <time class="md:hidden text-sm font-semibold text-zinc-500 mb-2 block" datetime={@entry[:iso_date] || @entry.date}>
+               <%= @entry.date %>
+             </time>
 
-           <%!-- Tags (from Sanity) --%>
-           <%= if @entry[:tags] && length(@entry.tags) > 0 do %>
-             <div class="flex flex-wrap gap-1.5 mb-3">
-               <%= for tag <- @entry.tags do %>
-                 <.tag_badge tag={tag} />
-               <% end %>
-             </div>
-           <% end %>
-
-           <h3 id={"entry-#{@entry.id}"} class="text-xl font-bold text-zinc-900 mb-2"><%= @entry.title %></h3>
-           <p class="text-zinc-600 mb-6 leading-relaxed"><%= @entry.summary %></p>
-
-           <%!-- Optional Image --%>
-           <%= if @entry[:image] do %>
-             <figure class="mb-6 rounded-lg overflow-hidden border border-zinc-100 shadow-sm">
-               <img src={@entry.image} alt={"Screenshot for #{@entry.title}"} class="w-full h-auto object-cover" loading="lazy" />
-             </figure>
-           <% end %>
-
-           <%!-- Changes List --%>
-           <ul class="space-y-3" aria-label="List of changes">
-             <%= for change <- @entry.changes do %>
-               <.change_item change={change} />
+             <%!-- Tags (from Sanity) --%>
+             <%= if @entry[:tags] && length(@entry.tags) > 0 do %>
+               <div class="flex flex-wrap gap-2 mb-3">
+                 <%= for tag <- @entry.tags do %>
+                   <.tag_badge tag={tag} />
+                 <% end %>
+               </div>
              <% end %>
-           </ul>
+
+             <h3 id={"entry-#{@entry.id}"} class="text-xl font-bold text-zinc-900 mb-2 group-hover:text-indigo-600 transition-colors"><%= @entry.title %></h3>
+             <p class="text-zinc-600 mb-6 leading-relaxed"><%= @entry.summary %></p>
+
+             <%!-- Optional Image --%>
+             <%= if @entry[:image] do %>
+               <figure class="mb-6 rounded-lg overflow-hidden border border-zinc-100 shadow-sm">
+                 <img src={@entry.image} alt={"Screenshot for #{@entry.title}"} class="w-full h-auto object-cover" loading="lazy" />
+               </figure>
+             <% end %>
+
+             <%!-- Changes List --%>
+             <ul class="space-y-3" aria-label="List of changes">
+               <%= for change <- @entry.changes do %>
+                 <.change_item change={change} />
+               <% end %>
+             </ul>
+           </div>
         </div>
       </div>
     </article>
@@ -107,35 +121,8 @@ defmodule EventasaurusWeb.ChangelogComponents do
     """
   end
 
-  # Returns {bg_color, text_color, ring_color} for each tag
-  defp tag_color(tag) do
-    case String.downcase(tag) do
-      # Scheduling & Planning
-      "polling" -> {"bg-blue-50", "text-blue-700", "ring-blue-700/10"}
-      "scheduling" -> {"bg-cyan-50", "text-cyan-700", "ring-cyan-700/10"}
-      "voting" -> {"bg-indigo-50", "text-indigo-700", "ring-indigo-700/10"}
-      # Social & Community
-      "groups" -> {"bg-violet-50", "text-violet-700", "ring-violet-700/10"}
-      "communities" -> {"bg-purple-50", "text-purple-700", "ring-purple-700/10"}
-      "social" -> {"bg-fuchsia-50", "text-fuchsia-700", "ring-fuchsia-700/10"}
-      # Communication
-      "reminders" -> {"bg-amber-50", "text-amber-700", "ring-amber-700/10"}
-      "notifications" -> {"bg-orange-50", "text-orange-700", "ring-orange-700/10"}
-      "messaging" -> {"bg-yellow-50", "text-yellow-700", "ring-yellow-700/10"}
-      # Discovery & Search
-      "discovery" -> {"bg-emerald-50", "text-emerald-700", "ring-emerald-700/10"}
-      "search" -> {"bg-teal-50", "text-teal-700", "ring-teal-700/10"}
-      # Customization
-      "themes" -> {"bg-pink-50", "text-pink-700", "ring-pink-700/10"}
-      "design" -> {"bg-rose-50", "text-rose-700", "ring-rose-700/10"}
-      "customization" -> {"bg-red-50", "text-red-700", "ring-red-700/10"}
-      # Location
-      "maps" -> {"bg-green-50", "text-green-700", "ring-green-700/10"}
-      "location" -> {"bg-lime-50", "text-lime-700", "ring-lime-700/10"}
-      # Default
-      _ -> {"bg-zinc-50", "text-zinc-700", "ring-zinc-700/10"}
-    end
-  end
+  # Note: tag_color/1 is now imported from SharedProductComponents
+  # for consistency with the Roadmap page
 
   @doc """
   Renders a single change item in the list with type-specific icon.
