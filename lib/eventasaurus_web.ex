@@ -109,6 +109,9 @@ defmodule EventasaurusWeb do
       import EventasaurusWeb.Helpers.PublicEventDisplayHelpers
       import EventasaurusWeb.Helpers.ImageUrlHelper
 
+      # CDN image component with fallback support
+      import EventasaurusWeb.Components.CDNImage
+
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS
 

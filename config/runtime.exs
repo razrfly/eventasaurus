@@ -124,8 +124,9 @@ config :eventasaurus, Oban,
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 2},
     # Reindex daily for performance
     {Oban.Plugins.Reindexer, schedule: "@daily"},
-    # Recover orphaned jobs after 60 seconds
-    {Oban.Plugins.Lifeline, rescue_after: 60},
+    # Recover orphaned jobs after 5 minutes
+    # Extended from 60s to 300s to give stats computation more time before rescue
+    {Oban.Plugins.Lifeline, rescue_after: 300},
     # Scheduled cron jobs
     {Oban.Plugins.Cron,
      crontab: [
@@ -137,9 +138,10 @@ config :eventasaurus, Oban,
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
        {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker},
-       # Admin stats computation every 15 minutes
+       # Admin stats computation hourly (at minute 0)
        # This populates the discovery_stats_snapshots table for the admin dashboard
-       {"*/15 * * * *", EventasaurusDiscovery.Admin.ComputeStatsJob}
+       # Reduced from every 15 min to hourly due to memory constraints on 1GB VM
+       {"0 * * * *", EventasaurusDiscovery.Admin.ComputeStatsJob}
        # Note: Venue image cleanup can be triggered manually via CleanupScheduler.enqueue()
      ]}
   ]

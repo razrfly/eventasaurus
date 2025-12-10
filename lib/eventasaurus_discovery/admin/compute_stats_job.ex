@@ -108,27 +108,37 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
   end
 
   # Main computation function - mirrors the old DiscoveryStatsCache.compute_stats/0
+  # Includes explicit garbage collection between phases to reduce peak memory usage
   defp compute_all_stats do
     Logger.info("  → Fetching source list...")
     source_names = SourceRegistry.all_sources()
 
     Logger.info("  → Computing source stats for #{length(source_names)} sources...")
     source_stats = DiscoveryStatsCollector.get_metadata_based_source_stats(nil, source_names)
+    gc_and_log("source stats")
 
     Logger.info("  → Computing change tracking...")
     change_stats = EventChangeTracker.get_all_source_changes(source_names, nil)
+    gc_and_log("change tracking")
 
     Logger.info("  → Counting events per source...")
     event_counts = count_events_for_sources_batch(source_names)
 
     Logger.info("  → Running quality checks (this may take a while)...")
     quality_checks = DataQualityChecker.check_quality_batch(source_names)
+    gc_and_log("quality checks")
 
     Logger.info("  → Building source data...")
     sources_data = build_sources_data(source_names, source_stats, change_stats, event_counts, quality_checks)
 
+    # Clear intermediate data to free memory before final phase
+    # These variables are no longer needed after building sources_data
+    _ = {source_stats, change_stats, event_counts, quality_checks}
+    gc_and_log("sources data build")
+
     Logger.info("  → Calculating overall health...")
-    overall_health = SourceHealthCalculator.overall_health_score(source_stats)
+    # Recalculate health from sources_data instead of keeping source_stats in scope
+    overall_health = calculate_overall_health_from_sources(sources_data)
 
     Logger.info("  → Getting summary metrics...")
     total_sources = length(source_names)
@@ -137,6 +147,7 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
 
     Logger.info("  → Getting city performance...")
     city_stats = get_city_performance()
+    gc_and_log("city performance")
 
     %{
       sources_data: sources_data,
@@ -146,6 +157,40 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
       events_this_week: events_this_week,
       city_stats: city_stats
     }
+  end
+
+  # Run garbage collection and log memory reclaimed
+  defp gc_and_log(phase) do
+    before = :erlang.memory(:total)
+    :erlang.garbage_collect()
+    after_gc = :erlang.memory(:total)
+    freed_mb = Float.round((before - after_gc) / 1_048_576, 1)
+
+    if freed_mb > 1 do
+      Logger.info("  → GC after #{phase}: freed #{freed_mb}MB")
+    end
+  end
+
+  # Calculate overall health from already-computed sources_data
+  # This avoids keeping the full source_stats map in memory
+  defp calculate_overall_health_from_sources(sources_data) do
+    if Enum.empty?(sources_data) do
+      0
+    else
+      {total_success, total_runs} =
+        Enum.reduce(sources_data, {0, 0}, fn source, {success_acc, run_acc} ->
+          stats = Map.get(source, :stats, %{})
+          processed = Map.get(stats, :events_processed, 0)
+          succeeded = Map.get(stats, :events_succeeded, 0)
+          {success_acc + succeeded, run_acc + processed}
+        end)
+
+      if total_runs > 0 do
+        (total_success / total_runs * 100) |> round()
+      else
+        0
+      end
+    end
   end
 
   defp build_sources_data(source_names, source_stats, change_stats, event_counts, quality_checks) do
