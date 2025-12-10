@@ -5,7 +5,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   This job receives film data from CinemaDateJob, matches to TMDB,
   and stores the movie in the database.
 
-  Similar to Kino Krakow's MovieDetailJob but adapted for Cinema City's API data:
+  Similar to Repertuary's MovieDetailJob but adapted for Cinema City's API data:
   - Film data comes from API (not HTML scraping)
   - Uses Cinema City film_id for tracking
   - Reuses TmdbMatcher for consistent matching logic
@@ -34,7 +34,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher
+  alias EventasaurusDiscovery.Sources.Repertuary.TmdbMatcher
   alias EventasaurusDiscovery.Movies.MovieStore
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 

@@ -33,7 +33,7 @@ defmodule EventasaurusWeb.Helpers.SourceAttribution do
       md["url"],
       # Karnet might have it in a different location
       md["link"],
-      # Kino Krakow stores movie page URL in metadata
+      # Repertuary stores movie page URL in metadata
       md["movie_url"],
       # PRIORITY 3: Fallback to source website URL (general homepage, not event-specific)
       # This is the least useful but better than nothing

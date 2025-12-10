@@ -1,22 +1,23 @@
-# Kino Kraków Scraper
+# Repertuary Scraper
 
-Movie aggregator platform for cinemas in Kraków, Poland.
+Multi-city movie aggregator platform for cinemas across Poland via repertuary.pl network.
 
 ## Overview
 
-**Priority**: 15 (Primary movie source for Kraków)
+**Priority**: 15 (Primary movie source for Polish cities)
 **Type**: Web scraper
-**Coverage**: Kraków (all cinemas including Cinema City, Multikino, etc.)
+**Coverage**: 29+ Polish cities (Kraków, Warsaw, Gdańsk, Wrocław, etc.)
 **Event Types**: Movies
 **Update Frequency**: Daily
 
 ## Features
 
-- ✅ Aggregates all Kraków cinemas
+- ✅ Aggregates cinemas across 29+ Polish cities
 - ✅ TMDB matching for movie metadata
 - ✅ Complete showtime listings
 - ✅ Cinema venue data with GPS
 - ✅ Multi-day schedule support
+- ✅ Multi-city support with city-specific source records
 
 ## Configuration
 
@@ -27,13 +28,13 @@ No API key required.
 
 ## External ID Format
 
-`{movie_slug}-{cinema_slug}-{datetime_iso}`
+`repertuary_showtime_{movie_slug}_{cinema_slug}_{datetime_iso}`
 
-Example: `test-movie-kino-plaza-2025-10-15T18:00:00Z`
+Example: `repertuary_showtime_bugonia_pod-baranami_2025-10-15T18:00:00Z`
 
 ## Data Flow
 
-1. Scrape movie list pages
+1. Scrape movie list pages (per city)
 2. Extract showtime data
 3. Match to TMDB
 4. Transform to unified format
@@ -41,5 +42,5 @@ Example: `test-movie-kino-plaza-2025-10-15T18:00:00Z`
 
 ## Support
 
-**Tests**: `test/eventasaurus_discovery/sources/kino_krakow/`
+**Tests**: `test/eventasaurus_discovery/sources/repertuary/`
 **Docs**: See SCRAPER_SPECIFICATION.md

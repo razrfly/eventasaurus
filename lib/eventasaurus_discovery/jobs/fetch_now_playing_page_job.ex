@@ -59,7 +59,7 @@ defmodule EventasaurusDiscovery.Jobs.FetchNowPlayingPageJob do
   require Logger
 
   alias EventasaurusWeb.Services.TmdbService
-  alias EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher
+  alias EventasaurusDiscovery.Sources.Repertuary.TmdbMatcher
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do

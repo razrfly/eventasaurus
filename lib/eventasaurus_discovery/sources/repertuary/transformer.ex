@@ -1,6 +1,14 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Transformer do
   @moduledoc """
-  Transforms Kino Krakow showtime data into unified format for the Processor.
+  Transforms Repertuary.pl showtime data into unified format for the Processor.
+
+  ## Multi-City Support
+
+  Pass the city key to get city-specific transformations:
+
+      Transformer.transform_event(raw_event, "warszawa")
+
+  Defaults to "krakow" for backward compatibility.
 
   IMPORTANT: All events MUST have:
   - Movie data (title, TMDB ID)
@@ -10,17 +18,25 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
 
   require Logger
 
+  alias EventasaurusDiscovery.Sources.Repertuary.{Config, Cities}
+
   @doc """
-  Transform raw Kino Krakow showtime into unified event format.
+  Transform raw Repertuary.pl showtime into unified event format.
 
   Input should include:
   - showtime data (from ShowtimeExtractor)
   - movie data (from MovieExtractor + TmdbMatcher)
   - cinema data (from CinemaExtractor)
 
+  ## Parameters
+  - raw_event: Map containing showtime, movie, and cinema data
+  - city: City key (e.g., "krakow", "warszawa"). Defaults to "krakow".
+
   Returns {:ok, transformed_event} or {:error, reason}
   """
-  def transform_event(raw_event) do
+  def transform_event(raw_event, city \\ Config.default_city()) do
+    city_config = Cities.get(city) || Cities.get(Config.default_city())
+
     case validate_required_fields(raw_event) do
       :ok ->
         # Helper to get value from map with both atom and string keys
@@ -38,8 +54,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
           starts_at: get_value.(raw_event, :datetime),
           ends_at: calculate_end_time(raw_event),
 
-          # Venue data - REQUIRED
-          venue_data: build_venue_data(raw_event),
+          # Venue data - REQUIRED (city-aware)
+          venue_data: build_venue_data(raw_event, city_config),
 
           # Movie data - link to movies table
           movie_id: get_value.(raw_event, :movie_id),
@@ -65,21 +81,22 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
           # Category - always movies
           category: "movies",
 
-          # Metadata
+          # Metadata - city-aware source identifier
           metadata: %{
-            source: "kino-krakow",
+            source: city_config.slug,
+            city: city,
             cinema_slug: cinema_slug,
             movie_slug: movie_slug,
             confidence_score: get_value.(raw_event, :tmdb_confidence),
-            # Store movie page URL for source link
-            movie_url: build_movie_url(movie_slug)
+            # Store movie page URL for source link (city-specific)
+            movie_url: build_movie_url(movie_slug, city)
           }
         }
 
         {:ok, transformed}
 
       {:error, reason} ->
-        Logger.warning("Skipping invalid event: #{reason}")
+        Logger.warning("Skipping invalid event (#{city_config.name}): #{reason}")
         {:error, reason}
     end
   end
@@ -127,14 +144,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
 
   # Build venue data for processor
   # VenueProcessor will geocode automatically if latitude/longitude are nil
-  defp build_venue_data(event) do
+  defp build_venue_data(event, city_config) do
     cinema = event[:cinema_data] || event["cinema_data"]
 
     %{
       name: cinema[:name] || cinema["name"],
       address: cinema[:address] || cinema["address"],
-      city: cinema[:city] || cinema["city"] || "Kraków",
-      country: cinema[:country] || cinema["country"] || "Poland",
+      # Use city from cinema_data (set by CinemaExtractor) or fall back to city_config
+      city: cinema[:city] || cinema["city"] || city_config.name,
+      country: cinema[:country] || cinema["country"] || city_config.country,
       latitude: cinema[:latitude] || cinema["latitude"],
       longitude: cinema[:longitude] || cinema["longitude"],
       phone: cinema[:phone] || cinema["phone"],
@@ -145,8 +163,8 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Transformer do
     }
   end
 
-  # Build movie detail page URL
-  defp build_movie_url(movie_slug) do
-    EventasaurusDiscovery.Sources.KinoKrakow.Config.movie_detail_url(movie_slug)
+  # Build movie detail page URL (city-specific)
+  defp build_movie_url(movie_slug, city) do
+    Config.movie_detail_url(movie_slug, city)
   end
 end

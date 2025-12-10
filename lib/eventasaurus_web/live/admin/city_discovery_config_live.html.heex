@@ -245,6 +245,19 @@
                                 <% end %>
                               </select>
                             <% else %>
+                            <%= if key == "city_key" and @selected_source == "repertuary" do %>
+                              <select
+                                name={"setting_#{key}"}
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              >
+                                <option value="">Select a city...</option>
+                                <%= for {name, city_key} <- EventasaurusWeb.Admin.CityDiscoveryConfigLive.repertuary_cities() do %>
+                                  <option value={city_key} selected={to_string(default_value) == to_string(city_key)}>
+                                    {name}
+                                  </option>
+                                <% end %>
+                              </select>
+                            <% else %>
                             <%= if key == "area_id" and @selected_source == "resident-advisor" do %>
                               <select
                                 name={"setting_#{key}"}
@@ -264,6 +277,7 @@
                                 name={"setting_#{key}"}
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                               />
+                            <% end %>
                             <% end %>
                             <% end %>
                           </div>

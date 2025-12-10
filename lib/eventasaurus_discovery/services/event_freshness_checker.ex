@@ -11,7 +11,7 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
       config :eventasaurus, :event_discovery,
         freshness_threshold_hours: 168,  # Default: 7 days
         source_freshness_overrides: %{
-          "kino-krakow" => 24,    # Daily scraping
+          "repertuary" => 24,    # Daily scraping
           "cinema-city" => 48      # Every 2 days
         }
 
@@ -136,8 +136,8 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
 
   ## Examples
 
-      iex> get_threshold_for_source(kino_krakow_source_id)
-      24  # Daily scraping for Kino Krakow
+      iex> get_threshold_for_source(repertuary_source_id)
+      24  # Daily scraping for Repertuary
 
       iex> get_threshold_for_source(bandsintown_source_id)
       168  # Default 7 days for sources without override
@@ -161,11 +161,11 @@ defmodule EventasaurusDiscovery.Services.EventFreshnessChecker do
   Checks for source-specific overrides in config, falls back to default.
 
   ## Parameters
-  - source_slug: The source slug (string like "kino-krakow", "cinema-city")
+  - source_slug: The source slug (string like "repertuary", "cinema-city")
 
   ## Examples
 
-      iex> get_threshold_for_slug("kino-krakow")
+      iex> get_threshold_for_slug("repertuary")
       24  # Daily scraping
 
       iex> get_threshold_for_slug("cinema-city")

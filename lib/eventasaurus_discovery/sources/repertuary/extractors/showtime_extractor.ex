@@ -1,6 +1,14 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Extractors.ShowtimeExtractor do
   @moduledoc """
-  Extracts movie showtimes from Kino Krakow cinema program page.
+  Extracts movie showtimes from Repertuary.pl cinema program page.
+
+  ## Multi-City Support
+
+  Pass the city key when extracting showtimes for correct URL generation:
+
+      ShowtimeExtractor.extract(html, Date.utc_today(), "warszawa")
+
+  Defaults to "krakow" for backward compatibility.
 
   Parses the /cinema_program/by_movie page to extract:
   - Movie link/slug
@@ -11,9 +19,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
 
   require Logger
   alias EventasaurusDiscovery.Sources.Shared.Parsers.MultilingualDateParser
+  alias EventasaurusDiscovery.Sources.Repertuary.Config
 
   @doc """
   Extract all showtimes from HTML document.
+
+  ## Parameters
+  - html: HTML content to parse
+  - base_date: Date for year context (defaults to today)
+  - city: City key for URL generation (defaults to "krakow")
 
   Returns list of maps with:
   - movie_slug: String
@@ -30,51 +44,52 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
       <td class="cinema_film"><a href="/cinema-slug">Cinema</a></td>
       <td class="hours"><span class="hour"><a>HH:MM</a></span></td>
   """
-  def extract(html, base_date \\ Date.utc_today()) when is_binary(html) do
+  def extract(html, base_date \\ Date.utc_today(), city \\ Config.default_city())
+      when is_binary(html) do
     doc = Floki.parse_document!(html)
 
     # Find the showtime table
     doc
     |> Floki.find("table.repert")
     |> Floki.find("tbody")
-    |> extract_all_showtimes(base_date)
+    |> extract_all_showtimes(base_date, city)
     |> List.flatten()
     |> Enum.reject(&is_nil/1)
   end
 
   # Process all rows in the table, tracking current film and date
-  defp extract_all_showtimes(tbody_elements, base_date) do
+  defp extract_all_showtimes(tbody_elements, base_date, city) do
     tbody_elements
     |> Enum.flat_map(fn tbody ->
       tbody
       |> Floki.find("tr")
-      |> process_rows(nil, nil, [], base_date)
+      |> process_rows(nil, nil, [], base_date, city)
     end)
   end
 
   # Recursively process table rows, accumulating showtimes
-  defp process_rows([], _current_film, _current_date, acc, _base_date), do: Enum.reverse(acc)
+  defp process_rows([], _current_film, _current_date, acc, _base_date, _city), do: Enum.reverse(acc)
 
-  defp process_rows([row | rest], current_film, current_date, acc, base_date) do
+  defp process_rows([row | rest], current_film, current_date, acc, base_date, city) do
     cond do
       # Date header row
       is_date_row?(row) ->
         date = extract_date_from_row(row)
-        process_rows(rest, current_film, date, acc, base_date)
+        process_rows(rest, current_film, date, acc, base_date, city)
 
       # Film header row
       is_film_row?(row) ->
         film = extract_film_from_row(row)
-        process_rows(rest, film, current_date, acc, base_date)
+        process_rows(rest, film, current_date, acc, base_date, city)
 
       # Cinema/showtime row
       is_showtime_row?(row) ->
-        showtimes = extract_showtimes_from_row(row, current_film, current_date, base_date)
-        process_rows(rest, current_film, current_date, showtimes ++ acc, base_date)
+        showtimes = extract_showtimes_from_row(row, current_film, current_date, base_date, city)
+        process_rows(rest, current_film, current_date, showtimes ++ acc, base_date, city)
 
       # Skip other rows
       true ->
-        process_rows(rest, current_film, current_date, acc, base_date)
+        process_rows(rest, current_film, current_date, acc, base_date, city)
     end
   end
 
@@ -130,7 +145,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
   end
 
   # Extract all showtimes from a cinema row
-  defp extract_showtimes_from_row(row, film, date_str, base_date)
+  defp extract_showtimes_from_row(row, film, date_str, base_date, city)
        when not is_nil(film) and not is_nil(date_str) do
     # Get cinema info
     cinema_link =
@@ -144,15 +159,15 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
     row
     |> Floki.find("span.hour")
     |> Enum.map(fn hour_span ->
-      extract_single_showtime(hour_span, film, cinema_info, date_str, base_date)
+      extract_single_showtime(hour_span, film, cinema_info, date_str, base_date, city)
     end)
     |> Enum.reject(&is_nil/1)
   end
 
-  defp extract_showtimes_from_row(_row, _film, _date, _base_date), do: []
+  defp extract_showtimes_from_row(_row, _film, _date, _base_date, _city), do: []
 
   # Extract a single showtime from a <span class="hour"> element
-  defp extract_single_showtime(hour_span, film, cinema_info, date_str, base_date) do
+  defp extract_single_showtime(hour_span, film, cinema_info, date_str, base_date, city) do
     # Extract time from link text
     time_str =
       hour_span
@@ -186,7 +201,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
           cinema_slug: cinema_info.slug,
           cinema_name: cinema_info.name,
           datetime: datetime,
-          ticket_url: ticket_url && ensure_absolute_url(ticket_url)
+          ticket_url: ticket_url && ensure_absolute_url(ticket_url, city)
         }
 
       nil ->
@@ -195,7 +210,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
     end
   end
 
-  # Parse datetime using MultilingualDateParser (replaces old KinoKrakow.DateParser)
+  # Parse datetime using MultilingualDateParser (replaces old Repertuary.DateParser)
   # Combines Polish date string, year from base_date, and time string, delegates to shared parser
   defp parse_datetime(date_str, time_str, base_date)
        when is_binary(date_str) and is_binary(time_str) and is_struct(base_date, Date) do
@@ -241,10 +256,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.ShowtimeExtractor 
 
   defp extract_slug_from_url(_), do: nil
 
-  # Ensure URL is absolute
-  defp ensure_absolute_url("http" <> _ = url), do: url
+  # Ensure URL is absolute (city-aware)
+  defp ensure_absolute_url("http" <> _ = url, _city), do: url
 
-  defp ensure_absolute_url(url) do
-    "https://www.kino.krakow.pl#{url}"
+  defp ensure_absolute_url(url, city) do
+    "#{Config.base_url(city)}#{url}"
   end
 end

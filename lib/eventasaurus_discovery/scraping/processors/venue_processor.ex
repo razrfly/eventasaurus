@@ -43,7 +43,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   ## Parameters
   - `venue_data` - Raw venue data from scraper
   - `source` - Source type ("scraper", "user", "google")
-  - `source_scraper` - Optional scraper name for cost tracking (e.g., "question_one", "kino_krakow")
+  - `source_scraper` - Optional scraper name for cost tracking (e.g., "question_one", "repertuary")
   """
   def process_venue(venue_data, source \\ "scraper", source_scraper \\ nil) do
     # Wrap in transaction to ensure city is rolled back if venue creation fails

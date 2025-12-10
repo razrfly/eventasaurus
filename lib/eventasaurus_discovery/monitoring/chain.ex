@@ -4,7 +4,7 @@ defmodule EventasaurusDiscovery.Monitoring.Chain do
 
   Shows parent-child job relationships and how failures propagate through
   the execution chain. Useful for multi-step scrapers like Cinema City
-  and Kino Krakow.
+  and Repertuary.
 
   ## Examples
 
@@ -28,7 +28,7 @@ defmodule EventasaurusDiscovery.Monitoring.Chain do
 
   @source_patterns %{
     "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob",
-    "kino_krakow" => "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob",
+    "repertuary" => "EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob",
     "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
     "week_pl" => "EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob",
     "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",

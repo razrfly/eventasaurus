@@ -118,8 +118,8 @@ config :eventasaurus, :event_discovery,
   # Source-specific freshness threshold overrides
   # Sources not listed here will use the default freshness_threshold_hours
   source_freshness_overrides: %{
-    # Kino Krakow - Daily scraping due to data quality issues
-    "kino-krakow" => 24,
+    # Repertuary - Daily scraping due to data quality issues
+    "repertuary" => 24,
     # Cinema City - Every 2 days (movie showtimes change frequently)
     "cinema-city" => 48
   }

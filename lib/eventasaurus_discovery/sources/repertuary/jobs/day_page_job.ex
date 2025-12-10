@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.DayPageJob do
   @moduledoc """
-  Oban job for processing a single day's showtimes from Kino Krakow.
+  Oban job for processing a single day's showtimes from Repertuary.pl.
 
   This job is part of a distributed scraping strategy that prevents timeouts
   by breaking up the multi-day scraping into smaller, concurrent units of work.
@@ -26,7 +26,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
     Extractors.ShowtimeExtractor
   }
@@ -43,13 +43,13 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     force = args["force"] || false
 
     Logger.info("""
-    📅 Processing Kino Krakow day #{day_offset}
+    📅 Processing Repertuary day #{day_offset}
     Source ID: #{source_id}
     CSRF Token: #{String.slice(csrf_token || "none", 0..9)}...
     """)
 
     # External ID for tracking
-    external_id = "kino_krakow_day_#{day_offset}_#{Date.utc_today()}"
+    external_id = "repertuary_day_#{day_offset}_#{Date.utc_today()}"
 
     # Set the day and fetch showtimes
     result =
@@ -173,7 +173,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
         # Stagger job execution with rate limiting
         delay_seconds = index * Config.rate_limit()
 
-        EventasaurusDiscovery.Sources.KinoKrakow.Jobs.MovieDetailJob.new(
+        EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob.new(
           %{
             "movie_slug" => movie_slug,
             "source_id" => source_id
@@ -218,7 +218,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
 
         # Generate external_id matching ShowtimeProcessJob pattern
         external_id =
-          "kino_krakow_showtime_#{movie}_#{cinema}_#{date}_#{time}"
+          "repertuary_showtime_#{movie}_#{cinema}_#{date}_#{time}"
           |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
 
         Map.put(showtime_map, :external_id, external_id)
@@ -241,7 +241,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
     threshold = EventFreshnessChecker.get_threshold()
 
     Logger.info("""
-    🔄 Kino Krakow Freshness Check: Day #{day_offset}
+    🔄 Repertuary Freshness Check: Day #{day_offset}
     Processing #{length(showtimes_to_process)}/#{total_showtimes} showtimes #{if force, do: "(Force mode)", else: "(#{skipped} fresh, threshold: #{threshold}h)"}
     """)
 
@@ -253,7 +253,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.DayPageJob do
         # 2 seconds between showtimes
         delay_seconds = base_delay + index * 2
 
-        EventasaurusDiscovery.Sources.KinoKrakow.Jobs.ShowtimeProcessJob.new(
+        EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob.new(
           %{
             "showtime" => showtime,
             "source_id" => source_id

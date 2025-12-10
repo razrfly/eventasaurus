@@ -1,8 +1,10 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
   @moduledoc """
-  Coordinator Oban job for syncing Kino Krakow movie showtimes.
+  Coordinator Oban job for syncing Repertuary.pl movie showtimes.
 
-  This job orchestrates the movie-based scraping architecture:
+  This job orchestrates the movie-based scraping architecture for any city
+  in the repertuary.pl network (Krakow, Warsaw, Gdansk, etc.):
+
   1. Fetches cinema program page to get list of all movies
   2. Schedules one MoviePageJob per movie
   3. Each MoviePageJob:
@@ -10,14 +12,21 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
      - Loops through days 0-6 to fetch all showtimes
      - Schedules MovieDetailJob and ShowtimeProcessJobs
 
-  This architecture eliminates race conditions by giving each job
-  its own isolated session with independent day-selection state.
+  ## Multi-City Support
 
-  Benefits:
+  Pass `"city"` in job args to scrape a specific city:
+
+      SyncJob.new(%{"city" => "warszawa"}) |> Oban.insert()
+
+  Defaults to "krakow" for backward compatibility.
+
+  ## Benefits
+
   - No race conditions (each job has isolated session)
   - All data for one movie collected together
   - Natural unit of work (movie = one entity)
   - Parallel processing via Oban queues
+  - Single codebase supports 29+ Polish cities
 
   Uses the standardized BaseJob behaviour for consistent processing.
   """
@@ -31,8 +40,9 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
 
-  alias EventasaurusDiscovery.Sources.KinoKrakow.{
+  alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
+    Cities,
     Extractors.MovieListExtractor,
     Jobs.MoviePageJob
   }
@@ -42,6 +52,20 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
   # Override perform to use movie-based architecture
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args} = job) do
+    # Get city from args, defaulting to "krakow" for backward compatibility
+    city = args["city"] || Config.default_city()
+
+    case Cities.get(city) do
+      nil ->
+        Logger.error("❌ Unknown city: #{city}")
+        {:error, :unknown_city}
+
+      city_config ->
+        do_perform(job, job_id, args, city, city_config)
+    end
+  end
+
+  defp do_perform(job, job_id, args, city, city_config) do
     source_id = args["source_id"] || get_or_create_source_id()
     force = args["force"] || false
 
@@ -50,22 +74,25 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     end
 
     Logger.info("""
-    🎬 Starting Kino Krakow movie-based sync
+    🎬 Starting Repertuary.pl movie-based sync
+    City: #{city_config.name}
+    Base URL: #{city_config.base_url}
     Fetching list of movies...
     """)
 
-    # External ID for tracking
-    external_id = "kino_krakow_sync_#{Date.utc_today()}"
+    # External ID for tracking - includes city for uniqueness
+    external_id = "repertuary_#{city}_sync_#{Date.utc_today()}"
 
     # Fetch list of movies from cinema program page
     result =
-      case fetch_movie_list() do
+      case fetch_movie_list(city) do
         {:ok, movies} ->
           # Schedule one MoviePageJob per movie with parent tracking
-          scheduled_count = schedule_movie_page_jobs(movies, source_id, force, job_id)
+          scheduled_count = schedule_movie_page_jobs(movies, source_id, city, force, job_id)
 
           Logger.info("""
-          ✅ Kino Krakow sync job completed (movie-based mode)
+          ✅ Repertuary.pl sync job completed (movie-based mode)
+          City: #{city_config.name}
           Movies found: #{length(movies)}
           Movie jobs scheduled: #{scheduled_count}
           Each job will fetch all 7 days for its movie
@@ -74,12 +101,14 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
           {:ok,
            %{
              mode: "movie-based",
+             city: city,
+             city_name: city_config.name,
              movies_found: length(movies),
              movie_jobs_scheduled: scheduled_count
            }}
 
         {:error, reason} ->
-          Logger.error("❌ Failed to fetch movie list: #{inspect(reason)}")
+          Logger.error("❌ Failed to fetch movie list for #{city_config.name}: #{inspect(reason)}")
           {:error, reason}
       end
 
@@ -111,13 +140,20 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     []
   end
 
-  # Source configuration (required by BaseJob behavior)
+  @doc """
+  Get unified source configuration for Repertuary.
+  All cities share a single source record (Cinema City pattern).
+  """
   def source_config do
     %{
-      name: "Kino Krakow",
-      slug: "kino-krakow",
-      website_url: Config.base_url(),
+      name: "Repertuary",
+      slug: "repertuary",
+      website_url: "https://repertuary.pl",
       priority: 15,
+      domains: ["movies", "cinema"],
+      is_active: true,
+      aggregate_on_index: true,
+      aggregation_type: "movie",
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 1800,
@@ -130,12 +166,12 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
 
   # Private functions
 
-  # Fetch list of movies from cinema program page
-  defp fetch_movie_list do
-    showtimes_url = Config.showtimes_url()
+  # Fetch list of movies from cinema program page for a specific city
+  defp fetch_movie_list(city) do
+    showtimes_url = Config.showtimes_url(city)
     headers = [{"User-Agent", Config.user_agent()}]
 
-    Logger.info("📡 Fetching movie list from cinema program")
+    Logger.info("📡 Fetching movie list from #{showtimes_url}")
 
     case HTTPoison.get(showtimes_url, headers, timeout: Config.timeout()) do
       {:ok, %{status_code: 200, body: html}} ->
@@ -156,9 +192,10 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     end
   end
 
-  # Schedule MoviePageJobs for all movies
-  defp schedule_movie_page_jobs(movies, source_id, force, parent_job_id) do
-    Logger.info("📽️  Scheduling MoviePageJobs for #{length(movies)} movies")
+  # Schedule MoviePageJobs for all movies, passing city through the chain
+  defp schedule_movie_page_jobs(movies, source_id, city, force, parent_job_id) do
+    city_config = Cities.get(city)
+    Logger.info("📽️  Scheduling MoviePageJobs for #{length(movies)} movies in #{city_config.name}")
 
     scheduled_jobs =
       movies
@@ -173,6 +210,7 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
             "movie_slug" => movie.movie_slug,
             "movie_title" => movie.movie_title,
             "source_id" => source_id,
+            "city" => city,
             "force" => force
           },
           queue: :scraper_detail,
@@ -189,11 +227,21 @@ defmodule EventasaurusDiscovery.Sources.KinoKrakow.Jobs.SyncJob do
     end)
   end
 
-  # Get or create source
-  defp get_or_create_source_id do
-    case Repo.get_by(Source, slug: "kino-krakow") do
+  # Get or create the unified Repertuary source (Cinema City pattern)
+  # All cities share a single source record - city is passed via job args
+  defp get_or_create_source_id(_city \\ nil) do
+    case Repo.get_by(Source, slug: "repertuary") do
       nil ->
-        config = source_config()
+        config = %{
+          name: "Repertuary",
+          slug: "repertuary",
+          website_url: "https://repertuary.pl",
+          priority: 15,
+          domains: ["movies", "cinema"],
+          is_active: true,
+          aggregate_on_index: true,
+          aggregation_type: "movie"
+        }
 
         %Source{}
         |> Source.changeset(config)

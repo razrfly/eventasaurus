@@ -26,7 +26,7 @@ defmodule EventasaurusDiscovery.Monitoring.Baseline do
 
   @source_patterns %{
     "cinema_city" => "EventasaurusDiscovery.Sources.CinemaCity.Jobs.%",
-    "kino_krakow" => "EventasaurusDiscovery.Sources.KinoKrakow.Jobs.%",
+    "repertuary" => "EventasaurusDiscovery.Sources.Repertuary.Jobs.%",
     "karnet" => "EventasaurusDiscovery.Sources.Karnet.Jobs.%",
     "week_pl" => "EventasaurusDiscovery.Sources.WeekPl.Jobs.%",
     "bandsintown" => "EventasaurusDiscovery.Sources.Bandsintown.Jobs.%",

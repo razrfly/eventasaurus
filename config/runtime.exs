@@ -190,8 +190,8 @@ config :eventasaurus, :http_strategies, %{
   resident_advisor: [:direct, :zyte],
   # Cinema City: direct only (API works fine)
   cinema_city: [:direct],
-  # Kino Krakow: direct only
-  kino_krakow: [:direct],
+  # Repertuary: direct only
+  repertuary: [:direct],
   # Karnet: try direct first, fallback to Zyte
   karnet: [:direct, :zyte],
   # Week.pl: direct only
@@ -867,8 +867,8 @@ if config_env() == :prod do
     # Source-specific freshness threshold overrides
     # Sources not listed here will use the default freshness_threshold_hours
     source_freshness_overrides: %{
-      # Kino Krakow - Daily scraping due to data quality issues
-      "kino-krakow" => 24,
+      # Repertuary - Daily scraping due to data quality issues
+      "repertuary" => 24,
       # Cinema City - Every 2 days (movie showtimes change frequently)
       "cinema-city" => 48
     }

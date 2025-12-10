@@ -2,7 +2,7 @@
 
 ## Summary
 
-Phase 3 (Job Chain) has been successfully implemented following the distributed architecture from Kino Krakow.
+Phase 3 (Job Chain) has been successfully implemented following the distributed architecture from Repertuary.
 
 ## Completed Items
 
@@ -120,7 +120,7 @@ end
 - Uses :scraper_detail queue (max_attempts: 3)
 
 **TMDB Matching**:
-- Reuses `EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher`
+- Reuses `EventasaurusDiscovery.Sources.Repertuary.TmdbMatcher`
 - ≥70% confidence: Auto-matched (returns `{:ok, %{status: :matched}}`)
 - 60-69% confidence: Now Playing fallback match (returns `{:ok, %{status: :matched}}`)
 - 50-59% confidence: Needs review (returns `{:error, :tmdb_needs_review}`)
@@ -343,7 +343,7 @@ lib/eventasaurus_discovery/sources/cinema_city/
 
 ### Shared Components Used
 
-1. **TmdbMatcher** (`EventasaurusDiscovery.Sources.KinoKrakow.TmdbMatcher`):
+1. **TmdbMatcher** (`EventasaurusDiscovery.Sources.Repertuary.TmdbMatcher`):
    - Shared TMDB matching logic
    - Multi-strategy search with fallbacks
    - Confidence scoring (title, year, runtime, director, country)
@@ -365,7 +365,7 @@ lib/eventasaurus_discovery/sources/cinema_city/
 
 ### Pattern Consistency
 
-Cinema City follows the exact same patterns as Kino Krakow:
+Cinema City follows the exact same patterns as Repertuary:
 - ✅ Distributed job architecture
 - ✅ Oban queue usage (:discovery, :scraper_index, :scraper_detail, :scraper)
 - ✅ Rate limiting through job scheduling

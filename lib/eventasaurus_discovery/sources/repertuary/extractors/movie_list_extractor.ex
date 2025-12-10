@@ -1,6 +1,6 @@
-defmodule EventasaurusDiscovery.Sources.KinoKrakow.Extractors.MovieListExtractor do
+defmodule EventasaurusDiscovery.Sources.Repertuary.Extractors.MovieListExtractor do
   @moduledoc """
-  Extracts the list of movies from Kino Krakow cinema program page.
+  Extracts the list of movies from Repertuary cinema program page.
 
   The /cinema_program/by_movie page contains links to all movies currently
   showing, which we use to determine which MoviePageJobs to schedule.

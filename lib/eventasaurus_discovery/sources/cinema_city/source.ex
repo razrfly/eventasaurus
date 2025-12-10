@@ -31,7 +31,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Source do
   def enabled?, do: Application.get_env(:eventasaurus, :cinema_city_enabled, true)
 
   # Movies should have high priority as they're time-sensitive
-  # Same priority as Kino Krakow (15)
+  # Same priority as Repertuary (15)
   def priority, do: 15
 
   def config do

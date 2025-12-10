@@ -4,12 +4,12 @@ defmodule EventasaurusDiscovery.Locations.VenueNameMatcher do
 
   ## Problem Statement
 
-  Cinema City and Kino Krakow scrapers were creating duplicate venue records for the same
+  Cinema City and Repertuary scrapers were creating duplicate venue records for the same
   physical locations, preventing events from showing as overlapping. This happened because
   different data sources use different naming conventions for the same venues:
 
   - Cinema City source creates: "Kraków - Bonarka", "Kraków - Galeria Kazimierz"
-  - Kino Krakow source creates: "Cinema City Bonarka", "Cinema City Kazimierz"
+  - Repertuary source creates: "Cinema City Bonarka", "Cinema City Kazimierz"
 
   A simple proximity-based match (e.g., "merge all venues within 200m") would create
   false positives in shopping malls where multiple different venues (bars, museums, clubs)
@@ -30,7 +30,7 @@ defmodule EventasaurusDiscovery.Locations.VenueNameMatcher do
 
   1. **Kazimierz Cinema**
      - Name 1: "Kraków - Galeria Kazimierz" (Cinema City source)
-     - Name 2: "Cinema City Kazimierz" (Kino Krakow source)
+     - Name 2: "Cinema City Kazimierz" (Repertuary source)
      - Distance: 168m
      - Tokens: Both extract "kazimierz" as significant token
      - Status: ❌ Currently SEPARATE venues (IDs: 154, 311)
@@ -38,7 +38,7 @@ defmodule EventasaurusDiscovery.Locations.VenueNameMatcher do
 
   2. **Bonarka Cinema**
      - Name 1: "Kraków - Bonarka" (Cinema City source)
-     - Name 2: "Cinema City Bonarka" (Kino Krakow source)
+     - Name 2: "Cinema City Bonarka" (Repertuary source)
      - Distance: 724m
      - Tokens: Both extract "bonarka" as significant token
      - Status: ❌ Currently SEPARATE venues (IDs: 161, 289)
@@ -46,7 +46,7 @@ defmodule EventasaurusDiscovery.Locations.VenueNameMatcher do
 
   3. **Zakopianka Cinema**
      - Name 1: "Kraków - Zakopianka" (Cinema City source)
-     - Name 2: "Cinema City Zakopianka" (Kino Krakow source)
+     - Name 2: "Cinema City Zakopianka" (Repertuary source)
      - Distance: 173m
      - Tokens: Both extract "zakopianka" as significant token
      - Status: ❌ Currently SEPARATE venues (IDs: 157, 397)

@@ -65,8 +65,17 @@ defmodule EventasaurusDiscovery.Admin.SourceOptionsBuilder do
     }
   end
 
-  def build_options("kino-krakow", _city, base_settings) do
+  def build_options("repertuary", _city, base_settings) do
+    # city_key is the Repertuary city slug (e.g., "krakow", "warszawa")
+    # used to construct the URL (e.g., "krakow" -> krakow.repertuary.pl)
+    city_key = base_settings["city_key"] || base_settings[:city_key]
+
+    if is_nil(city_key) do
+      Logger.warning("⚠️ No city_key configured for repertuary source")
+    end
+
     %{
+      city_key: city_key,
       days_ahead: base_settings["days_ahead"] || base_settings[:days_ahead] || 14
     }
   end
