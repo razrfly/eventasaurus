@@ -1131,11 +1131,15 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
-  def handle_info({:order_update, %{order: order, action: action}}, socket) do
-    # Refresh event data when orders are confirmed to update threshold progress
-    if order.event_id == socket.assigns.event.id and action == :order_confirmed do
+  def handle_info({:order_update, %{order: order, action: _action}}, socket) do
+    # Refresh event data for this event while it's in threshold status
+    # This handles all order changes (confirmations, cancellations, refunds)
+    # to keep threshold progress in sync with the organizer dashboard
+    event = socket.assigns.event
+
+    if event.status == :threshold and order.event_id == event.id do
       # Reload event to get fresh threshold calculations
-      updated_event = Events.get_event!(socket.assigns.event.id)
+      updated_event = Events.get_event!(event.id)
       {:noreply, assign(socket, :event, updated_event)}
     else
       {:noreply, socket}

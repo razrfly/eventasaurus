@@ -15,7 +15,9 @@ defmodule EventasaurusApp.Ticketing do
   alias EventasaurusApp.Events.{Event, Ticket, Order}
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.DateTimeHelper
+  alias EventasaurusApp.EventStateMachine
   alias EventasaurusWeb.UrlHelper
+  alias Eventasaurus.Jobs.ThresholdMetNotificationJob
 
   # PubSub topic for real-time updates
   @pubsub_topic "ticketing_updates"
@@ -591,6 +593,7 @@ defmodule EventasaurusApp.Ticketing do
         {:ok, updated_order} ->
           create_event_participant(updated_order)
           maybe_broadcast_order_update(updated_order, :confirmed)
+          maybe_notify_threshold_met(updated_order)
           {:ok, updated_order}
 
         {:error, changeset} ->
@@ -809,6 +812,9 @@ defmodule EventasaurusApp.Ticketing do
       # Broadcast updates
       maybe_broadcast_order_update(confirmed_order, :confirmed)
 
+      # Check if this order caused threshold to be met
+      maybe_notify_threshold_met(confirmed_order)
+
       confirmed_order
     end)
   end
@@ -887,6 +893,8 @@ defmodule EventasaurusApp.Ticketing do
             # Create event participant for confirmed orders
             create_event_participant(updated_order)
             maybe_broadcast_order_update(updated_order, :confirmed)
+            # Check if this order caused threshold to be met
+            maybe_notify_threshold_met(updated_order)
             {:ok, updated_order}
 
           {:error, changeset} ->
@@ -1534,6 +1542,39 @@ defmodule EventasaurusApp.Ticketing do
         confirmed_at: DateTime.utc_now()
       }
     })
+  end
+
+  # Checks if this order confirmation caused the threshold to be crossed
+  # and notifies organizers if so. Uses Oban's uniqueness to prevent duplicate notifications.
+  defp maybe_notify_threshold_met(%Order{} = order) do
+    # Load event with fresh data to check current threshold status
+    event = EventasaurusApp.Events.get_event!(order.event_id)
+
+    # Only check threshold events
+    if event.status == :threshold do
+      # Check if threshold is now met
+      if EventStateMachine.threshold_met?(event) do
+        # Oban's uniqueness constraint (24h period) prevents duplicate notifications
+        # even if threshold is crossed multiple times due to cancellations/refunds
+        case ThresholdMetNotificationJob.enqueue(event) do
+          {:ok, _job} ->
+            Logger.info("Threshold met notification queued for event #{event.id}")
+
+          {:error, %Ecto.Changeset{errors: errors}} ->
+            # Likely a uniqueness constraint - notification already sent/queued
+            Logger.debug(
+              "Threshold notification not queued for event #{event.id}: #{inspect(errors)}"
+            )
+
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to queue threshold notification for event #{event.id}: #{inspect(reason)}"
+            )
+        end
+      end
+    end
+
+    :ok
   end
 
   defp maybe_broadcast_ticket_update(%Ticket{} = ticket, action) do

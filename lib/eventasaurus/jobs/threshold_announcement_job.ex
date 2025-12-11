@@ -69,9 +69,10 @@ defmodule Eventasaurus.Jobs.ThresholdAnnouncementJob do
   end
 
   defp get_attendees(event) do
-    # Get all participants who are attending (going/interested)
-    # This includes both free RSVPs and paid ticket holders
-    Events.list_participants_by_status(event, :going) ++
+    # Get all participants who are attending
+    # Valid statuses: :accepted (RSVP'd), :confirmed_with_order (bought tickets), :interested
+    Events.list_participants_by_status(event, :accepted) ++
+      Events.list_participants_by_status(event, :confirmed_with_order) ++
       Events.list_participants_by_status(event, :interested)
   end
 

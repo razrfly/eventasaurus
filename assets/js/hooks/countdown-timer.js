@@ -24,6 +24,12 @@ export const CountdownTimer = {
 
     this.deadlineDate = new Date(deadline);
 
+    // Validate that the deadline is a valid date
+    if (isNaN(this.deadlineDate.getTime())) {
+      console.error('Invalid deadline format:', deadline);
+      return;
+    }
+
     // Initial render
     this.updateDisplay();
 
@@ -47,8 +53,6 @@ export const CountdownTimer = {
     if (diff <= 0) {
       this.stopCountdown();
       this.renderExpired();
-      // Optionally notify server that deadline has passed
-      this.pushEvent("deadline_passed", {});
       return;
     }
 

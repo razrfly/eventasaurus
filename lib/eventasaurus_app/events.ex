@@ -595,8 +595,10 @@ defmodule EventasaurusApp.Events do
           end)
         end
 
-        # Schedule deadline reminder if polling_deadline was added or changed
-        if updated_event.polling_deadline != event.polling_deadline do
+        # Schedule deadline reminder if polling_deadline was added or changed,
+        # or if the event newly transitions to :threshold status with a deadline
+        if updated_event.polling_deadline != event.polling_deadline or
+             (updated_event.status == :threshold and event.status != :threshold) do
           maybe_schedule_deadline_reminder(updated_event)
         end
 
@@ -2129,8 +2131,13 @@ defmodule EventasaurusApp.Events do
       end
 
     case Repo.update(changeset) do
-      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
-      error -> error
+      {:ok, updated_event} ->
+        # Schedule deadline reminder for threshold events
+        maybe_schedule_deadline_reminder(updated_event)
+        {:ok, Event.with_computed_fields(updated_event)}
+
+      error ->
+        error
     end
   end
 
@@ -2149,8 +2156,13 @@ defmodule EventasaurusApp.Events do
     changeset = Event.changeset_with_inferred_status(event, attrs)
 
     case Repo.update(changeset) do
-      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
-      error -> error
+      {:ok, updated_event} ->
+        # Schedule deadline reminder if event has a polling deadline
+        maybe_schedule_deadline_reminder(updated_event)
+        {:ok, Event.with_computed_fields(updated_event)}
+
+      error ->
+        error
     end
   end
 
