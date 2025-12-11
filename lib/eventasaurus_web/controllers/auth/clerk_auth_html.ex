@@ -75,7 +75,7 @@ defmodule EventasaurusWeb.Auth.ClerkAuthHTML do
                   signUpUrl: '<%= ~p"/auth/register" %>',
                   appearance: {
                     elements: {
-                      rootBox: 'w-full',
+                      rootBox: 'w-full flex justify-center',
                       card: 'shadow-none border border-gray-200 rounded-lg',
                       headerTitle: 'hidden',
                       headerSubtitle: 'hidden',
@@ -179,7 +179,7 @@ defmodule EventasaurusWeb.Auth.ClerkAuthHTML do
                   signInUrl: '<%= ~p"/auth/login" %>',
                   appearance: {
                     elements: {
-                      rootBox: 'w-full',
+                      rootBox: 'w-full flex justify-center',
                       card: 'shadow-none border border-gray-200 rounded-lg',
                       headerTitle: 'hidden',
                       headerSubtitle: 'hidden',

@@ -231,7 +231,14 @@ defmodule EventasaurusWeb.RadiantComponents do
   slot :inner_block, required: false
 
   def gradient(assigns) do
+    # Use atom keys to match Ecto.Enum theme values from Event schema
     theme_gradients = %{
+      :default => "bg-gradient-to-br from-yellow-100 via-pink-300 to-purple-500",
+      :minimal => "bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200",
+      :cosmic => "bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900",
+      :velocity => "bg-gradient-to-br from-red-400 via-orange-400 to-yellow-400",
+      :professional => "bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100",
+      # Also support string keys for backwards compatibility
       "default" => "bg-gradient-to-br from-yellow-100 via-pink-300 to-purple-500",
       "minimal" => "bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200",
       "cosmic" => "bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900",
@@ -243,7 +250,7 @@ defmodule EventasaurusWeb.RadiantComponents do
       assign(
         assigns,
         :gradient_class,
-        theme_gradients[assigns.theme] || theme_gradients["default"]
+        theme_gradients[assigns.theme] || theme_gradients[:default]
       )
 
     ~H"""
@@ -266,9 +273,37 @@ defmodule EventasaurusWeb.RadiantComponents do
   attr :rest, :global
 
   def gradient_background(assigns) do
-    assigns = assign_new(assigns, :theme, fn -> "default" end)
+    assigns = assign_new(assigns, :theme, fn -> :default end)
 
+    # Use atom keys to match Ecto.Enum theme values from Event schema
+    # Also include string keys for backwards compatibility
     theme_gradients = %{
+      # Atom keys (primary - match Ecto.Enum)
+      :default => %{
+        primary: "bg-gradient-to-br from-green-200 via-yellow-200 to-pink-300",
+        secondary: "bg-gradient-to-br from-purple-200 via-pink-200 to-green-200"
+      },
+      :forest => %{
+        primary: "bg-gradient-to-br from-emerald-200 via-green-300 to-teal-200",
+        secondary: "bg-gradient-to-br from-lime-200 via-emerald-200 to-cyan-200"
+      },
+      :sunset => %{
+        primary: "bg-gradient-to-br from-orange-200 via-pink-300 to-purple-300",
+        secondary: "bg-gradient-to-br from-yellow-200 via-orange-200 to-red-300"
+      },
+      :ocean => %{
+        primary: "bg-gradient-to-br from-blue-200 via-cyan-300 to-teal-200",
+        secondary: "bg-gradient-to-br from-indigo-200 via-blue-200 to-cyan-200"
+      },
+      :cosmic => %{
+        primary: "bg-gradient-to-br from-purple-300 via-pink-300 to-indigo-300",
+        secondary: "bg-gradient-to-br from-violet-200 via-purple-200 to-pink-300"
+      },
+      :minimal => %{
+        primary: "bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300",
+        secondary: "bg-gradient-to-br from-slate-100 via-gray-100 to-zinc-200"
+      },
+      # String keys (backwards compatibility)
       "default" => %{
         primary: "bg-gradient-to-br from-green-200 via-yellow-200 to-pink-300",
         secondary: "bg-gradient-to-br from-purple-200 via-pink-200 to-green-200"
@@ -295,7 +330,7 @@ defmodule EventasaurusWeb.RadiantComponents do
       }
     }
 
-    gradients = theme_gradients[assigns.theme] || theme_gradients["default"]
+    gradients = theme_gradients[assigns.theme] || theme_gradients[:default]
     assigns = assign(assigns, :gradients, gradients)
 
     ~H"""
