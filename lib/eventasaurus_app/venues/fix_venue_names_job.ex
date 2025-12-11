@@ -18,7 +18,7 @@ defmodule EventasaurusApp.Venues.FixVenueNamesJob do
   """
 
   use Oban.Worker,
-    queue: :venue_maintenance,
+    queue: :venue,
     max_attempts: 3,
     unique: [period: 300, fields: [:args, :worker]]
 

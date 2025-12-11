@@ -10,7 +10,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Jobs.CitySyncJob do
   """
 
   use Oban.Worker,
-    queue: :api_sync,
+    queue: :discovery,
     max_attempts: 3
 
   require Logger

@@ -44,7 +44,7 @@ defmodule EventasaurusDiscovery.VenueImages.EnrichmentJob do
   """
 
   use Oban.Worker,
-    queue: :venue_enrichment,
+    queue: :venue,
     max_attempts: 3,
     priority: 2
 

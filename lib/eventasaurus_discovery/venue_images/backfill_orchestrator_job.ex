@@ -42,7 +42,7 @@ defmodule EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob do
   """
 
   use Oban.Worker,
-    queue: :venue_backfill,
+    queue: :venue,
     max_attempts: 3,
     priority: 1
 

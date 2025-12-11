@@ -29,7 +29,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.EventAvailabilityRefreshJob 
   """
 
   use Oban.Worker,
-    queue: :week_pl_refresh,
+    queue: :scraper,
     max_attempts: 2,
     # High priority for user-initiated requests
     priority: 0

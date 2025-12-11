@@ -5,7 +5,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
   """
 
   use Oban.Worker,
-    queue: :discovery_sync,
+    queue: :discovery,
     max_attempts: 3,
     unique: [period: 3600, fields: [:args], states: [:available, :scheduled, :executing]]
 

@@ -39,7 +39,7 @@ defmodule EventasaurusApp.Workers.UnsplashCountryRefreshWorker do
   - Partial success is acceptable (some categories may fail)
   """
 
-  use Oban.Worker, queue: :unsplash, max_attempts: 3
+  use Oban.Worker, queue: :enrichment, max_attempts: 3
 
   alias EventasaurusApp.Services.UnsplashImageFetcher
   alias EventasaurusApp.Repo

@@ -21,7 +21,7 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
   """
 
   use Oban.Worker,
-    queue: :stats,
+    queue: :reports,
     max_attempts: 3,
     unique: [period: 300, states: [:available, :scheduled, :executing]]
 
