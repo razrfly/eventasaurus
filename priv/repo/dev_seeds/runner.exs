@@ -52,6 +52,8 @@ if config.clean_first do
   # Delete groups before users (groups reference users via created_by_id)
   # Force delete all groups including soft-deleted ones
   Repo.query!("DELETE FROM groups")
+  # Delete Stripe Connect accounts before users
+  Repo.delete_all(EventasaurusApp.Stripe.StripeConnectAccount)
   # Delete all users (we'll recreate test users)
   Repo.delete_all(EventasaurusApp.Accounts.User)
   
@@ -107,6 +109,11 @@ DevSeeds.ExtendedTicketScenarios.seed_phase_1()
 # Create Phase 2 Kickstarter/Threshold event scenarios (Issue #2243)
 Helpers.section("Creating Phase 2: Kickstarter/Threshold Event Scenarios")
 DevSeeds.ExtendedTicketScenarios.seed_phase_2()
+
+# Seed Stripe Connect test accounts for ticketed event organizers
+Helpers.section("Seeding Stripe Connect Test Accounts")
+Code.require_file("features/ticketing/stripe_connect.exs", __DIR__)
+DevSeeds.StripeConnect.seed()
 
 # Create Phase I diverse polling events (date + movie star rating)
 Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")

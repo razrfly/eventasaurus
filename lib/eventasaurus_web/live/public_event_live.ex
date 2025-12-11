@@ -1131,10 +1131,15 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
-  def handle_info({:order_update, %{order: _order, action: _action}}, socket) do
-    # Handle order updates if needed for this event
-    # For now, we mainly care about ticket availability changes
-    {:noreply, socket}
+  def handle_info({:order_update, %{order: order, action: action}}, socket) do
+    # Refresh event data when orders are confirmed to update threshold progress
+    if order.event_id == socket.assigns.event.id and action == :order_confirmed do
+      # Reload event to get fresh threshold calculations
+      updated_event = Events.get_event!(socket.assigns.event.id)
+      {:noreply, assign(socket, :event, updated_event)}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -1643,6 +1648,17 @@ defmodule EventasaurusWeb.PublicEventLive do
 
                  <!-- Right sidebar -->
          <div class="sidebar-content lg:col-span-1">
+          <!-- Threshold Progress Section (for events in threshold status) -->
+          <%= if @event.status == :threshold do %>
+            <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+              <h3 class="text-lg font-semibold mb-4 text-gray-900">Event Progress</h3>
+              <EventasaurusWeb.EventComponents.threshold_progress event={@event} />
+              <p class="text-sm text-gray-500 mt-3">
+                This event needs to reach its goal before it's confirmed. Help make it happen!
+              </p>
+            </div>
+          <% end %>
+
           <!-- Ticket Selection Section (for events with tickets) -->
           <%= if @should_show_tickets and @event.status in [:confirmed] do %>
             <.ticket_selection_component

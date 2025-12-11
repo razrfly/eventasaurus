@@ -3,12 +3,14 @@ defmodule EventasaurusWeb.EventManageLive do
 
   alias EventasaurusApp.{Events, Ticketing, Accounts}
   alias EventasaurusApp.Events.PollOption
+  alias EventasaurusApp.EventStateMachine
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusApp.DateTimeHelper
   import EventasaurusWeb.Components.GuestInvitationModal
   import EventasaurusWeb.EmailStatusComponents
   import EventasaurusWeb.EventHTML, only: [movie_rich_data_display: 1]
+  import EventasaurusWeb.EventComponents, only: [threshold_progress: 1]
 
   require Logger
 
@@ -59,6 +61,14 @@ defmodule EventasaurusWeb.EventManageLive do
               # Load event organizers
               organizers = Events.list_event_organizers(event)
 
+              # Calculate threshold status for threshold events
+              threshold_met =
+                if event.status == :threshold do
+                  EventStateMachine.threshold_met?(event)
+                else
+                  false
+                end
+
               {:ok,
                socket
                |> assign(:event, event)
@@ -66,6 +76,8 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:page_title, "Manage Event")
                # Add missing venue assign
                |> assign(:venue, event.venue)
+               # Threshold tracking for organizer dashboard
+               |> assign(:threshold_met, threshold_met)
                |> assign_participants_with_stats(initial_participants)
                |> assign(:participants_count, total_participants)
                |> assign(:participants_loaded, length(initial_participants))
@@ -120,10 +132,23 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:show_delete_modal, false)
                |> assign(:deletion_reason, "")
                |> assign(:can_hard_delete, false)
-               |> assign(:deletion_ineligibility_reason, nil)}
+               |> assign(:deletion_ineligibility_reason, nil)
+              |> subscribe_to_threshold_updates(event)}
             end
         end
     end
+  end
+
+  # Subscribe to PubSub for real-time threshold updates (orders affect threshold progress)
+  defp subscribe_to_threshold_updates(socket, event) do
+    if connected?(socket) and event.status == :threshold do
+      # Subscribe to ticketing updates for order changes
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "ticketing_updates")
+      # Subscribe to event organizers channel for participant updates
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "event_organizers:#{event.id}")
+    end
+
+    socket
   end
 
   @impl true
@@ -993,6 +1018,97 @@ defmodule EventasaurusWeb.EventManageLive do
   @impl true
   def handle_event("update_deletion_reason", %{"value" => reason}, socket) do
     {:noreply, assign(socket, :deletion_reason, reason)}
+  end
+
+  @impl true
+  def handle_event("confirm_threshold_event", _params, socket) do
+    event = socket.assigns.event
+
+    # Verify the event is in threshold status and threshold is met
+    if event.status == :threshold and EventStateMachine.threshold_met?(event) do
+      case Events.transition_event(event, :confirmed) do
+        {:ok, updated_event} ->
+          Logger.info("Event confirmed from threshold status",
+            event_id: event.id,
+            event_slug: event.slug
+          )
+
+          {:noreply,
+           socket
+           |> assign(:event, updated_event)
+           |> assign(:threshold_met, false)
+           |> put_flash(:info, "Event has been confirmed! Your attendees will be notified.")}
+
+        {:error, reason} ->
+          Logger.error("Failed to confirm threshold event",
+            event_id: event.id,
+            error: inspect(reason)
+          )
+
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to confirm event. Please try again.")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Event cannot be confirmed - threshold not met or invalid status.")}
+    end
+  end
+
+  # Handle PubSub messages for real-time threshold updates
+
+  @impl true
+  def handle_info({:order_update, %{order: order, action: _action}}, socket) do
+    # Only update if this order is for our event and we're in threshold status
+    event = socket.assigns.event
+
+    if event.status == :threshold and order.event_id == event.id do
+      # Refresh threshold status
+      threshold_met = EventStateMachine.threshold_met?(event)
+
+      {:noreply,
+       socket
+       |> assign(:threshold_met, threshold_met)
+       |> maybe_refresh_orders(event)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:ticket_update, _data}, socket) do
+    # Ticket updates may affect availability but not threshold directly
+    # Just acknowledge the message
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:poll_activity, _activity_type, _poll, _user}, socket) do
+    # Poll activity doesn't affect threshold - just acknowledge
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:participant_update, _data}, socket) do
+    # Participant updates may affect attendee-based thresholds
+    event = socket.assigns.event
+
+    if event.status == :threshold do
+      threshold_met = EventStateMachine.threshold_met?(event)
+      {:noreply, assign(socket, :threshold_met, threshold_met)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Helper to optionally refresh orders data
+  defp maybe_refresh_orders(socket, event) do
+    orders =
+      Ticketing.list_orders_for_event(event.id)
+      |> EventasaurusApp.Repo.preload([:ticket, :user])
+
+    assign(socket, :orders, orders)
   end
 
   @impl true
@@ -1881,6 +1997,32 @@ defmodule EventasaurusWeb.EventManageLive do
 
       true ->
         Calendar.strftime(datetime, "%m/%d/%Y")
+    end
+  end
+
+  # Helper function to format time remaining until a deadline
+  defp format_time_remaining(deadline) when is_nil(deadline), do: ""
+
+  defp format_time_remaining(%DateTime{} = deadline) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(deadline, now, :second)
+
+    if diff_seconds <= 0 do
+      "Deadline has passed"
+    else
+      days = div(diff_seconds, 86400)
+      hours = div(rem(diff_seconds, 86400), 3600)
+      minutes = div(rem(diff_seconds, 3600), 60)
+
+      parts = []
+      parts = if days > 0, do: parts ++ ["#{days} day#{if days == 1, do: "", else: "s"}"], else: parts
+      parts = if hours > 0, do: parts ++ ["#{hours} hour#{if hours == 1, do: "", else: "s"}"], else: parts
+      parts = if minutes > 0 and days == 0, do: parts ++ ["#{minutes} minute#{if minutes == 1, do: "", else: "s"}"], else: parts
+
+      case parts do
+        [] -> "Less than a minute remaining"
+        _ -> Enum.join(parts, ", ") <> " remaining"
+      end
     end
   end
 
