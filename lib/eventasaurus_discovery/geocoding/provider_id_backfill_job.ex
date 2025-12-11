@@ -38,7 +38,7 @@ defmodule EventasaurusDiscovery.Geocoding.ProviderIdBackfillJob do
   """
 
   use Oban.Worker,
-    queue: :geocoding_backfill,
+    queue: :geocoding,
     max_attempts: 3,
     priority: 2
 

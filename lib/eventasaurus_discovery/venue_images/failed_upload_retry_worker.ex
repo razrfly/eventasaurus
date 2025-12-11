@@ -22,7 +22,7 @@ defmodule EventasaurusDiscovery.VenueImages.FailedUploadRetryWorker do
   """
 
   use Oban.Worker,
-    queue: :venue_enrichment,
+    queue: :venue,
     max_attempts: 3,
     unique: [fields: [:args], keys: [:venue_id], period: 600]
 

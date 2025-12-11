@@ -995,7 +995,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @doc """
   Formats queue names for display.
   """
-  def format_queue_name(:discovery_sync), do: "Discovery Sync"
+  def format_queue_name(:discovery), do: "Discovery"
   def format_queue_name(:discovery_import), do: "Discovery Import"
 
   def format_queue_name(queue) when is_atom(queue),

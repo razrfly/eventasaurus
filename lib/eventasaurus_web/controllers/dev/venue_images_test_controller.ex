@@ -453,8 +453,8 @@ defmodule EventasaurusWeb.Dev.VenueImagesTestController do
   end
 
   defp get_oban_queue_depth do
-    # Get count of jobs in venue_enrichment queue
-    case Oban.check_queue(queue: :venue_enrichment) do
+    # Get count of jobs in venue queue
+    case Oban.check_queue(queue: :venue) do
       {:ok, %{running: running, available: available}} ->
         running + available
 

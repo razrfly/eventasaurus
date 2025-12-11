@@ -33,7 +33,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RestaurantDetailJob do
   """
 
   use Oban.Worker,
-    queue: :week_pl_detail,
+    queue: :scraper_detail,
     max_attempts: 3,
     priority: 3
 

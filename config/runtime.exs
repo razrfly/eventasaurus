@@ -73,49 +73,32 @@ config :eventasaurus, Oban,
     # Scraper index queue for processing index pages
     # Low concurrency to prevent timeouts and respect rate limits
     scraper_index: 2,
-    # Discovery queue for unified sync jobs
+    # Discovery queue for unified sync jobs and admin-triggered syncs
+    # Consolidated from discovery + discovery_sync (Issue #2641)
     # Limited concurrency for discovery source sync
     discovery: 3,
-    # Discovery sync queue for admin dashboard operations
-    # Limited concurrency for admin-triggered syncs
-    discovery_sync: 2,
-    # week.pl sync queue for festival orchestration
-    # Single concurrency - only one festival sync should run at a time
-    week_pl_sync: 1,
-    # week.pl region sync queue for per-city restaurant lists
-    # Limited concurrency to respect API rate limits (0.5 req/sec)
-    week_pl_region_sync: 2,
-    # week.pl detail queue for individual restaurant processing
-    # Limited concurrency for API rate limits and consolidation
-    week_pl_detail: 3,
-    # week.pl refresh queue for user-initiated availability refresh
-    # Higher priority (0) for user-triggered jobs, limited concurrency for rate limiting
-    week_pl_refresh: 2,
-    # Google API queue for places lookups
-    # Single concurrency to respect Google's rate limits
-    google_lookup: 1,
-    # Venue enrichment queue for image fetching
-    # Serial processing (concurrency: 1) to prevent parallel jobs from overwhelming Google rate limits
-    # Combined with 500ms delays between uploads = guaranteed 2 req/sec to Google
-    venue_enrichment: 1,
-    # Venue image backfill queue for admin-triggered backfills
-    # Serial processing to prevent multiple backfills from overwhelming the venue_enrichment queue
-    # Backfill jobs spawn many enrichment jobs, so only one backfill should run at a time
-    venue_backfill: 1,
+    # Unified venue queue for all venue-related jobs
+    # Handles: image enrichment, backfill orchestration, name fixing, deduplication
+    # Consolidated from venue_enrichment, venue_backfill, venue_maintenance (Issue #2641)
+    # Low concurrency (2) to respect Google rate limits and prevent overwhelming external APIs
+    venue: 2,
     # Default queue for other background jobs
     default: 10,
     # Maintenance queue for background tasks like coordinate calculation
     maintenance: 2,
-    # Unsplash queue for city image refresh jobs
-    # Process 3 cities concurrently to stay under Unsplash rate limits (5000 req/hour)
-    unsplash: 3,
-    # Venue maintenance queue for venue data quality jobs (name fixing, deduplication)
-    venue_maintenance: 2,
-    # Reports queue for generating analytics and cost reports
-    reports: 1,
-    # Stats computation queue for admin dashboard
-    # Single concurrency - only one stats computation should run at a time
-    stats: 1
+    # Reports queue for analytics, cost reports, and stats computation
+    # Consolidated from reports + stats (Issue #2641)
+    # Low concurrency - stats computation is memory-intensive
+    reports: 2,
+    # Enrichment queue for performer data and Unsplash image refreshes
+    # Consolidated from enrichment + unsplash (Issue #2641)
+    # Used by ResidentAdvisor PerformerEnrichmentJob, UnsplashCityRefreshWorker, UnsplashCountryRefreshWorker
+    # Concurrency 3 to handle Unsplash rate limits (5000 req/hour)
+    enrichment: 3,
+    # Geocoding backfill queue for venue provider ID lookups
+    # Used by ProviderIdBackfillJob for backfilling missing provider IDs
+    # Low concurrency due to Foursquare 500 req/day limit
+    geocoding: 1
   ],
   plugins: [
     # Keep completed jobs for 2 days for debugging

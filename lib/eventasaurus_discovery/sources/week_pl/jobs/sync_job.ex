@@ -19,7 +19,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
   """
 
   use EventasaurusDiscovery.Sources.BaseJob,
-    queue: :week_pl_sync,
+    queue: :discovery,
     max_attempts: 3,
     priority: 1
 

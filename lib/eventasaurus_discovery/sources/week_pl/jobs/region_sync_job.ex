@@ -28,7 +28,7 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.RegionSyncJob do
   """
 
   use Oban.Worker,
-    queue: :week_pl_region_sync,
+    queue: :scraper_index,
     max_attempts: 3,
     priority: 2
 
