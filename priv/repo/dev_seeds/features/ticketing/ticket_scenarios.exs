@@ -712,11 +712,30 @@ defmodule DevSeeds.ExtendedTicketScenarios do
     ticket_types = Map.get(event_data, :ticket_types, [])
     duration_hours = Map.get(event_data, :duration_hours, 4)
 
-    # Generate start time once
+    # Generate start time once (30-90 days in future for threshold events)
     start_at = Faker.DateTime.forward(Enum.random(30..90))
 
     # Calculate ends_at based on duration (convert to integer for DateTime.add)
     ends_at = DateTime.add(start_at, round(duration_hours * 3600), :second)
+
+    # Threshold events require a polling_deadline that is:
+    # 1. In the future (at least 1 day from now)
+    # 2. Before the event start date
+    # Calculate a deadline 7 days before the event (minimum)
+    now = DateTime.utc_now()
+    days_until_event = DateTime.diff(start_at, now, :day)
+    # Set deadline to be ~7-14 days before the event, but at least 7 days from now
+    days_before_event = min(14, max(7, div(days_until_event, 2)))
+    polling_deadline = DateTime.add(start_at, -days_before_event * 24 * 60 * 60, :second)
+    |> DateTime.truncate(:second)
+
+    # Determine is_ticketed based on taxation_type
+    # contribution_collection and ticketless events cannot have is_ticketed: true
+    is_ticketed = case event_data.taxation_type do
+      "contribution_collection" -> false
+      "ticketless" -> false
+      _ -> event_data.is_ticketed
+    end
 
     event_params = Map.merge(%{
       title: unique_title(event_data.title),
@@ -727,11 +746,12 @@ defmodule DevSeeds.ExtendedTicketScenarios do
       theme: theme,
       is_virtual: true,  # Set to virtual since we don't create venues for these events
       virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
-      is_ticketed: event_data.is_ticketed,
+      is_ticketed: is_ticketed,
       taxation_type: event_data.taxation_type,
       threshold_type: event_data.threshold_type,
       threshold_count: Map.get(event_data, :threshold_count),
       threshold_revenue_cents: Map.get(event_data, :threshold_revenue_cents),
+      polling_deadline: polling_deadline,
       start_at: start_at,
       ends_at: ends_at,
       timezone: organizer.timezone || "America/Los_Angeles"

@@ -129,26 +129,43 @@ defmodule DevSeeds.Events do
   
   defp create_upcoming_events(count, users, groups, venue_pool) do
     Helpers.log("Creating #{count} upcoming events...")
-    
+
     Enum.map(1..count, fn _ ->
       # Upcoming events (today to 60 days)
       days_forward = Enum.random(0..60)
       start_at = Faker.DateTime.forward(days_forward) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8])
       ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
-      
-      status = Enum.random([
-        :draft, 
-        :polling, :polling,  # More polling
-        :confirmed, :confirmed, :confirmed, :confirmed  # Most are confirmed
-      ])
-      
+
+      # For polling events, we need enough time for the deadline to be:
+      # 1. Before the event start date
+      # 2. In the future (at least 1 day from now)
+      # So only allow polling status if event is at least 8 days away
+      now = DateTime.utc_now()
+      days_until_event = DateTime.diff(start_at, now, :day)
+
+      status = if days_until_event >= 8 do
+        Enum.random([
+          :draft,
+          :polling, :polling,  # More polling
+          :confirmed, :confirmed, :confirmed, :confirmed  # Most are confirmed
+        ])
+      else
+        # Not enough time for polling - skip polling status
+        Enum.random([:draft, :confirmed, :confirmed, :confirmed, :confirmed])
+      end
+
+      # Polling deadline must be BEFORE the event AND in the FUTURE
       polling_deadline = if status == :polling do
-        Faker.DateTime.forward(Enum.random(1..7)) |> truncate_datetime()
+        # Set deadline between 1 day from now and 1 day before the event
+        min_days_before = 1
+        max_days_before = min(7, days_until_event - 1)
+        days_before = Enum.random(min_days_before..max_days_before)
+        DateTime.add(start_at, -days_before * 24 * 60 * 60, :second) |> truncate_datetime()
       else
         nil
       end
-      
+
       title = generate_event_title()
       taxation_attrs = random_taxation_and_ticketing()
       create_event(Map.merge(%{
@@ -167,21 +184,24 @@ defmodule DevSeeds.Events do
       }, taxation_attrs), users, groups, venue_pool)
     end)
   end
-  
+
   defp create_future_events(count, users, groups, venue_pool) do
     Helpers.log("Creating #{count} far future events...")
-    
+
     Enum.map(1..count, fn _ ->
       # Far future events (61-365 days)
       days_forward = Enum.random(61..365)
       start_at = Faker.DateTime.forward(days_forward) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8, 24, 48, 72]) # Can be longer
       ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
-      
+
       status = Enum.random([:draft, :draft, :polling]) # Mostly drafts
-      
+
+      # Polling deadline must be BEFORE the event start date
       polling_deadline = if status == :polling do
-        Faker.DateTime.forward(Enum.random(1..7)) |> truncate_datetime()
+        # Set deadline 1-14 days before the event starts
+        days_before = Enum.random(1..14)
+        DateTime.add(start_at, -days_before * 24 * 60 * 60, :second) |> truncate_datetime()
       else
         nil
       end
