@@ -1113,63 +1113,6 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  # Handle PubSub messages for real-time threshold updates
-
-  @impl true
-  def handle_info({:order_update, %{order: order, action: _action}}, socket) do
-    # Only update if this order is for our event and we're in threshold status
-    event = socket.assigns.event
-
-    if event.status == :threshold and order.event_id == event.id do
-      # Refresh threshold status - dashboard updates in real-time
-      # Note: Announcement emails to attendees are organizer-triggered via "Announce to Attendees" button
-      threshold_met = EventStateMachine.threshold_met?(event)
-
-      {:noreply,
-       socket
-       |> assign(:threshold_met, threshold_met)
-       |> maybe_refresh_orders(event)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_info({:ticket_update, _data}, socket) do
-    # Ticket updates may affect availability but not threshold directly
-    # Just acknowledge the message
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:poll_activity, _activity_type, _poll, _user}, socket) do
-    # Poll activity doesn't affect threshold - just acknowledge
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:participant_update, _data}, socket) do
-    # Participant updates may affect attendee-based thresholds
-    # Dashboard updates in real-time; announcement emails are organizer-triggered
-    event = socket.assigns.event
-
-    if event.status == :threshold do
-      threshold_met = EventStateMachine.threshold_met?(event)
-      {:noreply, assign(socket, :threshold_met, threshold_met)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  # Helper to optionally refresh orders data
-  defp maybe_refresh_orders(socket, event) do
-    orders =
-      Ticketing.list_orders_for_event(event.id)
-      |> EventasaurusApp.Repo.preload([:ticket, :user])
-
-    assign(socket, :orders, orders)
-  end
-
   @impl true
   def handle_event("delete_event", _params, socket) do
     event = socket.assigns.event
@@ -1231,6 +1174,54 @@ defmodule EventasaurusWeb.EventManageLive do
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, "Failed to delete event: #{reason}")}
         end
+    end
+  end
+
+  # Handle PubSub messages for real-time threshold updates
+
+  @impl true
+  def handle_info({:order_update, %{order: order, action: _action}}, socket) do
+    # Only update if this order is for our event and we're in threshold status
+    event = socket.assigns.event
+
+    if event.status == :threshold and order.event_id == event.id do
+      # Refresh threshold status - dashboard updates in real-time
+      # Note: Announcement emails to attendees are organizer-triggered via "Announce to Attendees" button
+      threshold_met = EventStateMachine.threshold_met?(event)
+
+      {:noreply,
+       socket
+       |> assign(:threshold_met, threshold_met)
+       |> maybe_refresh_orders(event)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:ticket_update, _data}, socket) do
+    # Ticket updates may affect availability but not threshold directly
+    # Just acknowledge the message
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:poll_activity, _activity_type, _poll, _user}, socket) do
+    # Poll activity doesn't affect threshold - just acknowledge
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:participant_update, _data}, socket) do
+    # Participant updates may affect attendee-based thresholds
+    # Dashboard updates in real-time; announcement emails are organizer-triggered
+    event = socket.assigns.event
+
+    if event.status == :threshold do
+      threshold_met = EventStateMachine.threshold_met?(event)
+      {:noreply, assign(socket, :threshold_met, threshold_met)}
+    else
+      {:noreply, socket}
     end
   end
 
@@ -1722,6 +1713,15 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   # Helper functions
+
+  # Helper to optionally refresh orders data
+  defp maybe_refresh_orders(socket, event) do
+    orders =
+      Ticketing.list_orders_for_event(event.id)
+      |> EventasaurusApp.Repo.preload([:ticket, :user])
+
+    assign(socket, :orders, orders)
+  end
 
   # Pre-compute participant statistics to avoid repeated Enum.count operations
   defp assign_participants_with_stats(socket, participants) do
