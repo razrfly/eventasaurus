@@ -236,12 +236,9 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
   defp get_movie(movie_slug) do
     # Query movie from database using metadata search
     # MovieDetailJob stores the slug in movie.metadata as "repertuary_slug"
-    # Also check legacy "kino_krakow_slug" for backward compatibility
     query =
       from(m in EventasaurusDiscovery.Movies.Movie,
-        where:
-          fragment("?->>'repertuary_slug' = ?", m.metadata, ^movie_slug) or
-            fragment("?->>'kino_krakow_slug' = ?", m.metadata, ^movie_slug)
+        where: fragment("?->>'repertuary_slug' = ?", m.metadata, ^movie_slug)
       )
 
     case Repo.one(query) do
