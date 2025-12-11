@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.EventManageLive do
   alias EventasaurusApp.Events.PollOption
   alias EventasaurusApp.EventStateMachine
   alias Eventasaurus.Services.PosthogService
+  alias Eventasaurus.Jobs.ThresholdAnnouncementJob
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusApp.DateTimeHelper
   import EventasaurusWeb.Components.GuestInvitationModal
@@ -69,6 +70,9 @@ defmodule EventasaurusWeb.EventManageLive do
                   false
                 end
 
+              # Check if announcement has been sent (for threshold events)
+              announcement_sent = check_announcement_sent(event)
+
               {:ok,
                socket
                |> assign(:event, event)
@@ -78,6 +82,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:venue, event.venue)
                # Threshold tracking for organizer dashboard
                |> assign(:threshold_met, threshold_met)
+               |> assign(:announcement_sent, announcement_sent)
                |> assign_participants_with_stats(initial_participants)
                |> assign(:participants_count, total_participants)
                |> assign(:participants_loaded, length(initial_participants))
@@ -133,6 +138,8 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:deletion_reason, "")
                |> assign(:can_hard_delete, false)
                |> assign(:deletion_ineligibility_reason, nil)
+               # Threshold confirmation modal state
+               |> assign(:show_confirm_threshold_modal, false)
               |> subscribe_to_threshold_updates(event)}
             end
         end
@@ -1020,6 +1027,17 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, assign(socket, :deletion_reason, reason)}
   end
 
+  # Threshold confirmation modal handlers
+  @impl true
+  def handle_event("open_confirm_threshold_modal", _params, socket) do
+    {:noreply, assign(socket, :show_confirm_threshold_modal, true)}
+  end
+
+  @impl true
+  def handle_event("close_confirm_threshold_modal", _params, socket) do
+    {:noreply, assign(socket, :show_confirm_threshold_modal, false)}
+  end
+
   @impl true
   def handle_event("confirm_threshold_event", _params, socket) do
     event = socket.assigns.event
@@ -1037,6 +1055,7 @@ defmodule EventasaurusWeb.EventManageLive do
            socket
            |> assign(:event, updated_event)
            |> assign(:threshold_met, false)
+           |> assign(:show_confirm_threshold_modal, false)
            |> put_flash(:info, "Event has been confirmed! Your attendees will be notified.")}
 
         {:error, reason} ->
@@ -1047,12 +1066,50 @@ defmodule EventasaurusWeb.EventManageLive do
 
           {:noreply,
            socket
+           |> assign(:show_confirm_threshold_modal, false)
            |> put_flash(:error, "Failed to confirm event. Please try again.")}
       end
     else
       {:noreply,
        socket
+       |> assign(:show_confirm_threshold_modal, false)
        |> put_flash(:error, "Event cannot be confirmed - threshold not met or invalid status.")}
+    end
+  end
+
+  @impl true
+  def handle_event("send_threshold_announcement", _params, socket) do
+    event = socket.assigns.event
+    user = socket.assigns.user
+
+    # Verify the event is in threshold status and threshold is met
+    if event.status == :threshold and socket.assigns.threshold_met do
+      case ThresholdAnnouncementJob.enqueue(event, user) do
+        {:ok, _job} ->
+          Logger.info("Threshold announcement job enqueued",
+            event_id: event.id,
+            organizer_id: user.id
+          )
+
+          {:noreply,
+           socket
+           |> assign(:announcement_sent, true)
+           |> put_flash(:info, "We Made It! announcement is being sent to all attendees.")}
+
+        {:error, reason} ->
+          Logger.error("Failed to enqueue threshold announcement",
+            event_id: event.id,
+            error: inspect(reason)
+          )
+
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to send announcement. Please try again.")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Cannot send announcement - threshold not met or invalid event status.")}
     end
   end
 
@@ -1064,7 +1121,8 @@ defmodule EventasaurusWeb.EventManageLive do
     event = socket.assigns.event
 
     if event.status == :threshold and order.event_id == event.id do
-      # Refresh threshold status
+      # Refresh threshold status - dashboard updates in real-time
+      # Note: Announcement emails to attendees are organizer-triggered via "Announce to Attendees" button
       threshold_met = EventStateMachine.threshold_met?(event)
 
       {:noreply,
@@ -1092,6 +1150,7 @@ defmodule EventasaurusWeb.EventManageLive do
   @impl true
   def handle_info({:participant_update, _data}, socket) do
     # Participant updates may affect attendee-based thresholds
+    # Dashboard updates in real-time; announcement emails are organizer-triggered
     event = socket.assigns.event
 
     if event.status == :threshold do
@@ -2000,32 +2059,6 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  # Helper function to format time remaining until a deadline
-  defp format_time_remaining(deadline) when is_nil(deadline), do: ""
-
-  defp format_time_remaining(%DateTime{} = deadline) do
-    now = DateTime.utc_now()
-    diff_seconds = DateTime.diff(deadline, now, :second)
-
-    if diff_seconds <= 0 do
-      "Deadline has passed"
-    else
-      days = div(diff_seconds, 86400)
-      hours = div(rem(diff_seconds, 86400), 3600)
-      minutes = div(rem(diff_seconds, 3600), 60)
-
-      parts = []
-      parts = if days > 0, do: parts ++ ["#{days} day#{if days == 1, do: "", else: "s"}"], else: parts
-      parts = if hours > 0, do: parts ++ ["#{hours} hour#{if hours == 1, do: "", else: "s"}"], else: parts
-      parts = if minutes > 0 and days == 0, do: parts ++ ["#{minutes} minute#{if minutes == 1, do: "", else: "s"}"], else: parts
-
-      case parts do
-        [] -> "Less than a minute remaining"
-        _ -> Enum.join(parts, ", ") <> " remaining"
-      end
-    end
-  end
-
   # Helper function to get inviter name by finding the inviter among participants
   defp get_inviter_name(nil, _), do: "Unknown"
 
@@ -2296,4 +2329,26 @@ defmodule EventasaurusWeb.EventManageLive do
 
   # Status validation now handled by EventParticipant.parse_status/1
   # This eliminates duplication and uses schema as single source of truth
+
+  # Check if a threshold announcement has already been sent for this event
+  # by looking for completed or pending announcement jobs in Oban
+  defp check_announcement_sent(event) do
+    import Ecto.Query
+
+    # Check for any threshold announcement jobs for this event (completed, available, or executing)
+    # This prevents duplicate announcements
+    query =
+      from j in Oban.Job,
+        where:
+          j.worker == "Eventasaurus.Jobs.ThresholdAnnouncementJob" and
+            fragment("?->>'event_id' = ?", j.args, ^to_string(event.id)) and
+            fragment("?->>'notification_type' = ?", j.args, "threshold_announcement") and
+            j.state in ["completed", "available", "executing", "scheduled", "retryable"],
+        limit: 1
+
+    case EventasaurusApp.Repo.one(query) do
+      nil -> false
+      _job -> true
+    end
+  end
 end

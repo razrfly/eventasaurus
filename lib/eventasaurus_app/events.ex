@@ -20,6 +20,7 @@ defmodule EventasaurusApp.Events do
 
   alias EventasaurusApp.GuestInvitations
   alias Eventasaurus.Jobs.EmailInvitationJob
+  alias Eventasaurus.Jobs.DeadlineReminderNotificationJob
   require Logger
 
   # Private helper for applying soft delete filtering
@@ -551,6 +552,9 @@ defmodule EventasaurusApp.Events do
           end)
         end
 
+        # Schedule deadline reminder if event has a polling deadline
+        maybe_schedule_deadline_reminder(event)
+
         {:ok, event}
 
       error ->
@@ -589,6 +593,11 @@ defmodule EventasaurusApp.Events do
                 EventasaurusApp.Groups.sync_event_participants_to_group(group, updated_event)
             end
           end)
+        end
+
+        # Schedule deadline reminder if polling_deadline was added or changed
+        if updated_event.polling_deadline != event.polling_deadline do
+          maybe_schedule_deadline_reminder(updated_event)
         end
 
         {:ok, updated_event}
@@ -7856,4 +7865,20 @@ defmodule EventasaurusApp.Events do
     )
     |> Repo.exists?()
   end
+
+  # Private helper to schedule deadline reminder notifications for threshold events
+  defp maybe_schedule_deadline_reminder(%Event{status: :threshold, polling_deadline: deadline} = event)
+       when not is_nil(deadline) do
+    case DeadlineReminderNotificationJob.schedule_for_deadline(event) do
+      {:ok, _job} ->
+        Logger.info("Scheduled deadline reminder for event #{event.id} at #{deadline}")
+
+      {:error, reason} ->
+        Logger.warning(
+          "Failed to schedule deadline reminder for event #{event.id}: #{inspect(reason)}"
+        )
+    end
+  end
+
+  defp maybe_schedule_deadline_reminder(_event), do: :ok
 end

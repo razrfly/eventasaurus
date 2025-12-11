@@ -713,4 +713,935 @@ defmodule Eventasaurus.Emails do
       _ -> "https://wombie.com"
     end
   end
+
+  # ============================================================================
+  # Threshold Event Notification Emails
+  # ============================================================================
+
+  @doc """
+  Creates a threshold met notification email for the event organizer.
+
+  Sent when an event reaches its threshold goal (attendee count or revenue).
+
+  ## Parameters
+  - `organizer`: The event organizer user struct
+  - `event`: The event struct with threshold data
+
+  ## Returns
+  - `Swoosh.Email` struct ready to be sent
+  """
+  def threshold_met_email(organizer, event) do
+    unless valid_email?(organizer.email) do
+      raise ArgumentError, "Invalid email address: #{organizer.email}"
+    end
+
+    subject = "🎉 Great news! \"#{event.title}\" has reached its goal!"
+
+    new()
+    |> from({"Wombie", "notifications@wombie.com"})
+    |> to({get_organizer_name(organizer), organizer.email})
+    |> subject(subject)
+    |> html_body(build_threshold_met_html(organizer, event))
+    |> text_body(build_threshold_met_text(organizer, event))
+  end
+
+  @doc """
+  Sends a threshold met notification email.
+
+  ## Parameters
+  - `organizer`: The event organizer user struct
+  - `event`: The event struct
+
+  ## Returns
+  - `{:ok, response}` on success
+  - `{:error, reason}` on failure
+  """
+  def send_threshold_met_notification(organizer, event) do
+    try do
+      email = threshold_met_email(organizer, event)
+
+      case Eventasaurus.Mailer.deliver(email) do
+        {:ok, response} ->
+          Logger.info("Threshold met email sent successfully to #{organizer.email} for event #{event.id}")
+          {:ok, response}
+
+        {:error, reason} ->
+          Logger.error("Failed to send threshold met email to #{organizer.email}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    rescue
+      error ->
+        Logger.error("Error creating threshold met email: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Creates a deadline reminder email for the event organizer.
+
+  Sent 24 hours before the threshold/polling deadline.
+
+  ## Parameters
+  - `organizer`: The event organizer user struct
+  - `event`: The event struct with deadline data
+
+  ## Returns
+  - `Swoosh.Email` struct ready to be sent
+  """
+  def deadline_reminder_email(organizer, event) do
+    unless valid_email?(organizer.email) do
+      raise ArgumentError, "Invalid email address: #{organizer.email}"
+    end
+
+    subject = "⏰ 24 hours left: \"#{event.title}\" deadline approaching"
+
+    new()
+    |> from({"Wombie", "notifications@wombie.com"})
+    |> to({get_organizer_name(organizer), organizer.email})
+    |> subject(subject)
+    |> html_body(build_deadline_reminder_html(organizer, event))
+    |> text_body(build_deadline_reminder_text(organizer, event))
+  end
+
+  @doc """
+  Sends a deadline reminder notification email.
+
+  ## Parameters
+  - `organizer`: The event organizer user struct
+  - `event`: The event struct
+
+  ## Returns
+  - `{:ok, response}` on success
+  - `{:error, reason}` on failure
+  """
+  def send_deadline_reminder_notification(organizer, event) do
+    try do
+      email = deadline_reminder_email(organizer, event)
+
+      case Eventasaurus.Mailer.deliver(email) do
+        {:ok, response} ->
+          Logger.info("Deadline reminder email sent successfully to #{organizer.email} for event #{event.id}")
+          {:ok, response}
+
+        {:error, reason} ->
+          Logger.error("Failed to send deadline reminder email to #{organizer.email}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    rescue
+      error ->
+        Logger.error("Error creating deadline reminder email: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  # Private helpers for threshold met email
+
+  defp build_threshold_met_html(organizer, event) do
+    manage_url = build_manage_event_url(event)
+    threshold_info = format_threshold_info_html(event)
+
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Threshold Met - #{html_escape(event.title)}</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .email-container {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+                color: white;
+                padding: 40px 30px;
+                text-align: center;
+            }
+            .header h1 {
+                margin: 0 0 10px 0;
+                font-size: 28px;
+                font-weight: 600;
+            }
+            .header p {
+                margin: 0;
+                font-size: 16px;
+                opacity: 0.9;
+            }
+            .content {
+                padding: 40px 30px;
+            }
+            .content p {
+                margin: 16px 0;
+                font-size: 16px;
+            }
+            .success-box {
+                background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+                border: 1px solid #10B981;
+                border-radius: 12px;
+                padding: 25px;
+                margin: 25px 0;
+                text-align: center;
+            }
+            .success-box h2 {
+                margin: 0 0 10px 0;
+                color: #059669;
+                font-size: 24px;
+            }
+            .success-box p {
+                margin: 8px 0;
+                color: #047857;
+                font-size: 16px;
+            }
+            .event-details {
+                background: #f8f9fa;
+                padding: 25px;
+                border-radius: 12px;
+                margin: 25px 0;
+            }
+            .event-details h3 {
+                margin: 0 0 15px 0;
+                color: #333;
+            }
+            .event-details p {
+                margin: 8px 0;
+                color: #666;
+            }
+            .cta-button {
+                display: inline-block;
+                background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+                color: white;
+                padding: 16px 32px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 16px;
+                margin: 20px 0;
+            }
+            .next-steps {
+                background: #FEF3C7;
+                border-left: 4px solid #F59E0B;
+                padding: 20px;
+                margin: 25px 0;
+                border-radius: 6px;
+            }
+            .next-steps h3 {
+                margin: 0 0 12px 0;
+                color: #92400E;
+            }
+            .next-steps ul {
+                margin: 0;
+                padding-left: 20px;
+                color: #92400E;
+            }
+            .footer {
+                text-align: center;
+                color: #666;
+                font-size: 14px;
+                margin-top: 40px;
+                padding: 20px;
+                border-top: 1px solid #e9ecef;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="header">
+                <img src="https://wombie.com/images/logos/general-white.png" alt="Wombie" style="width: 184px; height: auto; margin: 0 auto 20px auto; display: block;" />
+                <h1>🎉 Goal Reached!</h1>
+                <p>Your event has met its threshold</p>
+            </div>
+
+            <div class="content">
+                <p>Hi #{html_escape(get_organizer_name(organizer))},</p>
+
+                <p>Fantastic news! Your event has reached its goal:</p>
+
+                <div class="success-box">
+                    <h2>#{html_escape(event.title)}</h2>
+                    #{threshold_info}
+                </div>
+
+                <div class="event-details">
+                    <h3>Event Details</h3>
+                    <p><strong>📅 Date:</strong> #{format_event_date(event)}</p>
+                    #{render_event_location(event)}
+                </div>
+
+                <div class="next-steps">
+                    <h3>What's Next?</h3>
+                    <ul>
+                        <li>Review your event details and confirm everything is ready</li>
+                        <li>Click "Confirm Event" to finalize and notify attendees</li>
+                        <li>Consider sending a thank-you message to early supporters</li>
+                    </ul>
+                </div>
+
+                <p style="text-align: center;">
+                    <a href="#{html_escape(manage_url)}" class="cta-button">
+                        Manage Your Event
+                    </a>
+                </p>
+
+                <p>Congratulations on reaching this milestone!</p>
+
+                <p>Best regards,<br>
+                <strong>The Wombie Team</strong></p>
+            </div>
+
+            <div class="footer">
+                <p>This notification was sent via <a href="https://wombie.com">Wombie</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+  end
+
+  defp build_threshold_met_text(organizer, event) do
+    manage_url = build_manage_event_url(event)
+    threshold_info = format_threshold_info_text(event)
+
+    """
+    🎉 GOAL REACHED!
+
+    Hi #{get_organizer_name(organizer)},
+
+    Fantastic news! Your event has reached its goal:
+
+    #{event.title}
+    #{threshold_info}
+
+    EVENT DETAILS:
+    📅 Date: #{format_event_date(event)}
+    #{render_event_location_text(event)}
+
+    WHAT'S NEXT:
+    • Review your event details and confirm everything is ready
+    • Click "Confirm Event" to finalize and notify attendees
+    • Consider sending a thank-you message to early supporters
+
+    Manage your event: #{manage_url}
+
+    Congratulations on reaching this milestone!
+
+    Best regards,
+    The Wombie Team
+
+    ---
+    This notification was sent via Wombie (https://wombie.com)
+    """
+  end
+
+  # Private helpers for deadline reminder email
+
+  defp build_deadline_reminder_html(organizer, event) do
+    manage_url = build_manage_event_url(event)
+    progress_info = format_progress_info_html(event)
+
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Deadline Reminder - #{html_escape(event.title)}</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .email-container {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+                color: white;
+                padding: 40px 30px;
+                text-align: center;
+            }
+            .header h1 {
+                margin: 0 0 10px 0;
+                font-size: 28px;
+                font-weight: 600;
+            }
+            .header p {
+                margin: 0;
+                font-size: 16px;
+                opacity: 0.9;
+            }
+            .content {
+                padding: 40px 30px;
+            }
+            .content p {
+                margin: 16px 0;
+                font-size: 16px;
+            }
+            .countdown-box {
+                background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+                border: 1px solid #F59E0B;
+                border-radius: 12px;
+                padding: 25px;
+                margin: 25px 0;
+                text-align: center;
+            }
+            .countdown-box h2 {
+                margin: 0 0 10px 0;
+                color: #92400E;
+                font-size: 24px;
+            }
+            .countdown-box .time {
+                font-size: 36px;
+                font-weight: bold;
+                color: #D97706;
+                margin: 10px 0;
+            }
+            .progress-box {
+                background: #f8f9fa;
+                padding: 25px;
+                border-radius: 12px;
+                margin: 25px 0;
+            }
+            .progress-box h3 {
+                margin: 0 0 15px 0;
+                color: #333;
+            }
+            .progress-bar {
+                background: #e9ecef;
+                border-radius: 10px;
+                height: 20px;
+                overflow: hidden;
+                margin: 15px 0;
+            }
+            .progress-fill {
+                background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+                height: 100%;
+                border-radius: 10px;
+            }
+            .cta-button {
+                display: inline-block;
+                background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+                color: white;
+                padding: 16px 32px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 16px;
+                margin: 20px 0;
+            }
+            .tips {
+                background: #EFF6FF;
+                border-left: 4px solid #3B82F6;
+                padding: 20px;
+                margin: 25px 0;
+                border-radius: 6px;
+            }
+            .tips h3 {
+                margin: 0 0 12px 0;
+                color: #1E40AF;
+            }
+            .tips ul {
+                margin: 0;
+                padding-left: 20px;
+                color: #1E40AF;
+            }
+            .footer {
+                text-align: center;
+                color: #666;
+                font-size: 14px;
+                margin-top: 40px;
+                padding: 20px;
+                border-top: 1px solid #e9ecef;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="header">
+                <img src="https://wombie.com/images/logos/general-white.png" alt="Wombie" style="width: 184px; height: auto; margin: 0 auto 20px auto; display: block;" />
+                <h1>⏰ 24 Hours Left!</h1>
+                <p>Your campaign deadline is approaching</p>
+            </div>
+
+            <div class="content">
+                <p>Hi #{html_escape(get_organizer_name(organizer))},</p>
+
+                <p>Just a friendly reminder that your event's deadline is in 24 hours:</p>
+
+                <div class="countdown-box">
+                    <h2>#{html_escape(event.title)}</h2>
+                    <div class="time">24 HOURS</div>
+                    <p>until deadline: #{format_deadline(event.polling_deadline)}</p>
+                </div>
+
+                #{progress_info}
+
+                <div class="tips">
+                    <h3>💡 Last-Minute Tips</h3>
+                    <ul>
+                        <li>Share on social media one more time</li>
+                        <li>Send a reminder to friends who haven't signed up yet</li>
+                        <li>Update your event description if needed</li>
+                    </ul>
+                </div>
+
+                <p style="text-align: center;">
+                    <a href="#{html_escape(manage_url)}" class="cta-button">
+                        View Your Event
+                    </a>
+                </p>
+
+                <p>You've got this! 💪</p>
+
+                <p>Best regards,<br>
+                <strong>The Wombie Team</strong></p>
+            </div>
+
+            <div class="footer">
+                <p>This notification was sent via <a href="https://wombie.com">Wombie</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+  end
+
+  defp build_deadline_reminder_text(organizer, event) do
+    manage_url = build_manage_event_url(event)
+    progress_info = format_progress_info_text(event)
+
+    """
+    ⏰ 24 HOURS LEFT!
+
+    Hi #{get_organizer_name(organizer)},
+
+    Just a friendly reminder that your event's deadline is in 24 hours:
+
+    #{event.title}
+    Deadline: #{format_deadline(event.polling_deadline)}
+
+    #{progress_info}
+
+    LAST-MINUTE TIPS:
+    • Share on social media one more time
+    • Send a reminder to friends who haven't signed up yet
+    • Update your event description if needed
+
+    View your event: #{manage_url}
+
+    You've got this! 💪
+
+    Best regards,
+    The Wombie Team
+
+    ---
+    This notification was sent via Wombie (https://wombie.com)
+    """
+  end
+
+  # Helper functions for threshold emails
+
+  defp build_manage_event_url(event) do
+    base_url = Application.get_env(:eventasaurus, :base_url) || get_default_base_url()
+    base = String.trim_trailing(base_url, "/")
+    "#{base}/events/#{event.slug}/manage"
+  end
+
+  defp format_threshold_info_html(event) do
+    case event.threshold_type do
+      "attendee_count" ->
+        "<p><strong>✅ #{event.threshold_count || 0} attendees reached!</strong></p>"
+
+      "revenue" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+        "<p><strong>✅ #{revenue_display} revenue goal reached!</strong></p>"
+
+      "both" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+
+        """
+        <p><strong>✅ #{event.threshold_count || 0} attendees reached!</strong></p>
+        <p><strong>✅ #{revenue_display} revenue goal reached!</strong></p>
+        """
+
+      _ ->
+        "<p><strong>✅ Goal reached!</strong></p>"
+    end
+  end
+
+  defp format_threshold_info_text(event) do
+    case event.threshold_type do
+      "attendee_count" ->
+        "✅ #{event.threshold_count || 0} attendees reached!"
+
+      "revenue" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+        "✅ #{revenue_display} revenue goal reached!"
+
+      "both" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+        "✅ #{event.threshold_count || 0} attendees reached!\n✅ #{revenue_display} revenue goal reached!"
+
+      _ ->
+        "✅ Goal reached!"
+    end
+  end
+
+  defp format_progress_info_html(event) do
+    # Calculate progress percentage (this would need actual attendee count from context)
+    # For now, show the threshold goal
+    case event.threshold_type do
+      "attendee_count" ->
+        """
+        <div class="progress-box">
+            <h3>Current Progress</h3>
+            <p>Goal: <strong>#{event.threshold_count || 0} attendees</strong></p>
+        </div>
+        """
+
+      "revenue" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+
+        """
+        <div class="progress-box">
+            <h3>Current Progress</h3>
+            <p>Goal: <strong>#{revenue_display}</strong></p>
+        </div>
+        """
+
+      "both" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+
+        """
+        <div class="progress-box">
+            <h3>Current Progress</h3>
+            <p>Attendee Goal: <strong>#{event.threshold_count || 0}</strong></p>
+            <p>Revenue Goal: <strong>#{revenue_display}</strong></p>
+        </div>
+        """
+
+      _ ->
+        ""
+    end
+  end
+
+  defp format_progress_info_text(event) do
+    case event.threshold_type do
+      "attendee_count" ->
+        "CURRENT PROGRESS:\nGoal: #{event.threshold_count || 0} attendees"
+
+      "revenue" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+        "CURRENT PROGRESS:\nGoal: #{revenue_display}"
+
+      "both" ->
+        revenue_display = format_currency(event.threshold_revenue_cents || 0)
+        "CURRENT PROGRESS:\nAttendee Goal: #{event.threshold_count || 0}\nRevenue Goal: #{revenue_display}"
+
+      _ ->
+        ""
+    end
+  end
+
+  defp format_deadline(nil), do: "Not set"
+
+  defp format_deadline(datetime) do
+    Calendar.strftime(datetime, "%B %d, %Y at %I:%M %p UTC")
+  end
+
+  defp format_currency(cents) when is_integer(cents) do
+    dollars = cents / 100
+    "$#{:erlang.float_to_binary(dollars, decimals: 2)}"
+  end
+
+  defp format_currency(_), do: "$0.00"
+
+  # ============================================================================
+  # Threshold Announcement Emails (Organizer-Triggered to Attendees)
+  # ============================================================================
+
+  @doc """
+  Creates a "We Made It!" announcement email for an attendee.
+
+  This is sent by the organizer to all registered attendees when the threshold
+  goal is reached. Unlike automatic notifications, this is organizer-triggered
+  to give them control over timing and messaging.
+
+  ## Parameters
+  - `attendee`: The attendee user struct (with email)
+  - `event`: The event struct with threshold data
+  - `organizer`: The organizer who triggered the announcement
+
+  ## Returns
+  - `Swoosh.Email` struct ready to be sent
+  """
+  def threshold_announcement_email(attendee, event, organizer) do
+    unless valid_email?(attendee.email) do
+      raise ArgumentError, "Invalid email address: #{attendee.email}"
+    end
+
+    attendee_name = get_attendee_name(attendee)
+    subject = "🎉 Great news! \"#{event.title}\" is happening!"
+
+    new()
+    |> from({"Wombie", "notifications@wombie.com"})
+    |> to({attendee_name, attendee.email})
+    |> subject(subject)
+    |> reply_to(organizer.email)
+    |> html_body(build_threshold_announcement_html(attendee, event, organizer))
+    |> text_body(build_threshold_announcement_text(attendee, event, organizer))
+  end
+
+  @doc """
+  Sends a threshold announcement email to an attendee.
+
+  ## Parameters
+  - `attendee`: The attendee user struct
+  - `event`: The event struct
+  - `organizer`: The organizer who triggered the announcement
+
+  ## Returns
+  - `{:ok, response}` on success
+  - `{:error, reason}` on failure
+  """
+  def send_threshold_announcement(attendee, event, organizer) do
+    try do
+      email = threshold_announcement_email(attendee, event, organizer)
+
+      case Eventasaurus.Mailer.deliver(email) do
+        {:ok, response} ->
+          Logger.info("Threshold announcement sent to #{attendee.email} for event #{event.id}")
+          {:ok, response}
+
+        {:error, reason} ->
+          Logger.error("Failed to send threshold announcement to #{attendee.email}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    rescue
+      error ->
+        Logger.error("Error creating threshold announcement email: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  # Private helpers for threshold announcement email
+
+  defp get_attendee_name(attendee) do
+    attendee.name || attendee.username || "there"
+  end
+
+  defp build_threshold_announcement_html(attendee, event, organizer) do
+    event_url = build_event_url(event)
+    attendee_name = get_attendee_name(attendee)
+
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>#{html_escape(event.title)} - It's Happening!</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .email-container {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+                color: white;
+                padding: 40px 30px;
+                text-align: center;
+            }
+            .header h1 {
+                margin: 0 0 10px 0;
+                font-size: 28px;
+                font-weight: 600;
+            }
+            .header p {
+                margin: 0;
+                font-size: 16px;
+                opacity: 0.9;
+            }
+            .celebration {
+                font-size: 48px;
+                margin-bottom: 15px;
+            }
+            .content {
+                padding: 40px 30px;
+            }
+            .content p {
+                margin: 16px 0;
+                font-size: 16px;
+            }
+            .success-box {
+                background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+                border: 1px solid #10B981;
+                border-radius: 12px;
+                padding: 25px;
+                margin: 25px 0;
+                text-align: center;
+            }
+            .success-box h2 {
+                margin: 0 0 10px 0;
+                color: #059669;
+                font-size: 24px;
+            }
+            .success-box p {
+                margin: 8px 0;
+                color: #047857;
+                font-size: 16px;
+            }
+            .event-details {
+                background: #f8f9fa;
+                padding: 25px;
+                border-radius: 12px;
+                margin: 25px 0;
+            }
+            .event-details h3 {
+                margin: 0 0 15px 0;
+                color: #333;
+            }
+            .event-details p {
+                margin: 8px 0;
+                color: #666;
+            }
+            .cta-button {
+                display: inline-block;
+                background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+                color: white;
+                padding: 16px 32px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 16px;
+                margin: 20px 0;
+            }
+            .footer {
+                text-align: center;
+                color: #666;
+                font-size: 14px;
+                margin-top: 40px;
+                padding: 20px;
+                border-top: 1px solid #e9ecef;
+            }
+            .footer a {
+                color: #10B981;
+                text-decoration: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="header">
+                <img src="https://wombie.com/images/logos/general-white.png" alt="Wombie" style="width: 184px; height: auto; margin: 0 auto 20px auto; display: block;" />
+                <div class="celebration">🎉</div>
+                <h1>We Made It!</h1>
+                <p>Thanks to you and other supporters</p>
+            </div>
+
+            <div class="content">
+                <p>Hi #{html_escape(attendee_name)},</p>
+
+                <p>Great news! Thanks to your support and others like you, this event has reached its goal and <strong>is officially happening!</strong></p>
+
+                <div class="success-box">
+                    <h2>#{html_escape(event.title)}</h2>
+                    <p>✅ Goal reached - Event confirmed!</p>
+                </div>
+
+                <div class="event-details">
+                    <h3>Event Details</h3>
+                    #{render_event_image(event)}
+                    <p><strong>📅 Date:</strong> #{format_event_date(event)}</p>
+                    #{render_event_location(event)}
+                </div>
+
+                <p>We're thrilled to have you as part of this event. Stay tuned for more details from #{html_escape(get_organizer_name(organizer))}.</p>
+
+                <p style="text-align: center;">
+                    <a href="#{html_escape(event_url)}" class="cta-button">
+                        View Event Details
+                    </a>
+                </p>
+
+                <p>See you there!</p>
+
+                <p>Best regards,<br>
+                #{html_escape(get_organizer_name(organizer))}<br>
+                <strong>via Wombie</strong></p>
+            </div>
+
+            <div class="footer">
+                <p>This announcement was sent by #{html_escape(get_organizer_name(organizer))} via <a href="https://wombie.com">Wombie</a></p>
+                <p>You're receiving this because you registered for this event.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+  end
+
+  defp build_threshold_announcement_text(attendee, event, organizer) do
+    event_url = build_event_url(event)
+    attendee_name = get_attendee_name(attendee)
+
+    """
+    🎉 WE MADE IT!
+
+    Hi #{attendee_name},
+
+    Great news! Thanks to your support and others like you, this event has reached its goal and is officially happening!
+
+    #{event.title}
+    ✅ Goal reached - Event confirmed!
+
+    EVENT DETAILS:
+    📅 Date: #{format_event_date(event)}
+    #{render_event_location_text(event)}
+
+    We're thrilled to have you as part of this event. Stay tuned for more details from #{get_organizer_name(organizer)}.
+
+    View event details: #{event_url}
+
+    See you there!
+
+    Best regards,
+    #{get_organizer_name(organizer)}
+    via Wombie
+
+    ---
+    This announcement was sent by #{get_organizer_name(organizer)} via Wombie (https://wombie.com)
+    You're receiving this because you registered for this event.
+    """
+  end
 end

@@ -20,6 +20,7 @@ import DragDropHooks from "./hooks/poll-drag-drop";
 import { ChartHook } from "./hooks/chart_hook";
 import VenuesMap from "./hooks/venues-map";
 import MapboxVenuesMap from "./hooks/mapbox-venues-map";
+import CountdownHooks from "./hooks/countdown-timer";
 
 // Define LiveView hooks here
 import R2ImageUpload from "./r2_upload";
@@ -59,6 +60,7 @@ const ModularHooks = {
   ...MediaHooks,
   ...PlacesHooks,
   ...DragDropHooks,
+  ...CountdownHooks, // Countdown timer for threshold deadlines
   ClerkAuthHandler, // Clerk auth handler
   AuthHandler: ClerkAuthHandler, // Active auth handler (Clerk)
   ChartHook, // Chart.js hook for Phase 6
