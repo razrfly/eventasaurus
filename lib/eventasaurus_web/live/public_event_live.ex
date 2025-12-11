@@ -1653,6 +1653,18 @@ defmodule EventasaurusWeb.PublicEventLive do
             <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
               <h3 class="text-lg font-semibold mb-4 text-gray-900">Event Progress</h3>
               <EventasaurusWeb.EventComponents.threshold_progress event={@event} />
+
+              <!-- Deadline Countdown -->
+              <%= if @event.polling_deadline do %>
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                  <EventasaurusWeb.EventComponents.countdown_timer
+                    deadline={@event.polling_deadline}
+                    label="Campaign ends in:"
+                    variant="compact"
+                  />
+                </div>
+              <% end %>
+
               <p class="text-sm text-gray-500 mt-3">
                 This event needs to reach its goal before it's confirmed. Help make it happen!
               </p>

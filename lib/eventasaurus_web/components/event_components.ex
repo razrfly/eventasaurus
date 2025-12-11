@@ -2123,4 +2123,242 @@ defmodule EventasaurusWeb.EventComponents do
   end
 
   defp parse_tmdb_id(_), do: nil
+
+  @doc """
+  Renders a visual countdown timer for threshold event deadlines.
+
+  The component uses a JavaScript hook for real-time updates (every second)
+  and provides visual urgency cues based on time remaining:
+  - Normal (green): > 72 hours
+  - Warning (amber): 24-72 hours
+  - Urgent (orange): 1-24 hours
+  - Critical (red with pulse): < 1 hour
+
+  ## Attributes
+  - `deadline` - DateTime for the deadline (required)
+  - `class` - Additional CSS classes (optional)
+  - `variant` - Display variant: "compact" (text only), "segmented" (boxes), or "full" (both). Default: "compact"
+  - `label` - Optional label to display above the countdown
+
+  ## Examples
+
+      <.countdown_timer deadline={@event.polling_deadline} />
+      <.countdown_timer deadline={@event.polling_deadline} variant="segmented" />
+      <.countdown_timer deadline={@event.polling_deadline} label="Campaign ends in:" />
+  """
+  attr :deadline, :any, required: true, doc: "DateTime for the deadline"
+  attr :class, :string, default: "", doc: "Additional CSS classes"
+  attr :variant, :string, default: "compact", doc: "Display variant: compact, segmented, or full"
+  attr :label, :string, default: nil, doc: "Optional label above the countdown"
+
+  def countdown_timer(assigns) do
+    # Handle nil deadline
+    if is_nil(assigns.deadline) do
+      assigns = assign(assigns, show_countdown: false)
+
+      ~H"""
+      <div class={@class}>
+        <!-- No deadline set -->
+      </div>
+      """
+    else
+      # Convert deadline to ISO8601 string for JavaScript
+      deadline_iso =
+        case assigns.deadline do
+          %DateTime{} = dt -> DateTime.to_iso8601(dt)
+          dt when is_binary(dt) -> dt
+          _ -> nil
+        end
+
+      # Calculate initial values for server-side render
+      {days, hours, minutes, seconds, expired} = calculate_time_remaining(assigns.deadline)
+
+      assigns =
+        assign(assigns, %{
+          deadline_iso: deadline_iso,
+          days: days,
+          hours: hours,
+          minutes: minutes,
+          seconds: seconds,
+          expired: expired,
+          show_countdown: deadline_iso != nil
+        })
+
+      ~H"""
+      <div
+        :if={@show_countdown}
+        id={"countdown-#{System.unique_integer([:positive])}"}
+        phx-hook="CountdownTimer"
+        data-deadline={@deadline_iso}
+        class={["countdown-timer", @class]}
+      >
+        <%= if @label do %>
+          <div class="text-sm text-gray-600 mb-2 flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span><%= @label %></span>
+          </div>
+        <% end %>
+
+        <%= case @variant do %>
+          <% "segmented" -> %>
+            <.countdown_segmented
+              days={@days}
+              hours={@hours}
+              minutes={@minutes}
+              seconds={@seconds}
+              expired={@expired}
+            />
+          <% "full" -> %>
+            <div class="space-y-2">
+              <.countdown_segmented
+                days={@days}
+                hours={@hours}
+                minutes={@minutes}
+                seconds={@seconds}
+                expired={@expired}
+              />
+              <.countdown_text
+                days={@days}
+                hours={@hours}
+                minutes={@minutes}
+                seconds={@seconds}
+                expired={@expired}
+              />
+            </div>
+          <% _ -> %>
+            <.countdown_text
+              days={@days}
+              hours={@hours}
+              minutes={@minutes}
+              seconds={@seconds}
+              expired={@expired}
+            />
+        <% end %>
+      </div>
+      """
+    end
+  end
+
+  # Private component for segmented countdown display
+  attr :days, :integer, required: true
+  attr :hours, :integer, required: true
+  attr :minutes, :integer, required: true
+  attr :seconds, :integer, required: true
+  attr :expired, :boolean, required: true
+
+  defp countdown_segmented(assigns) do
+    ~H"""
+    <div class="flex items-center justify-center gap-2">
+      <div class="flex flex-col items-center">
+        <div class="bg-gray-100 rounded-lg px-3 py-2 min-w-[3rem] text-center">
+          <span data-days class="text-2xl font-bold text-gray-800">
+            <%= String.pad_leading(Integer.to_string(@days), 2, "0") %>
+          </span>
+        </div>
+        <span class="text-xs text-gray-500 mt-1">days</span>
+      </div>
+      <span class="text-xl text-gray-400 font-light">:</span>
+      <div class="flex flex-col items-center">
+        <div class="bg-gray-100 rounded-lg px-3 py-2 min-w-[3rem] text-center">
+          <span data-hours class="text-2xl font-bold text-gray-800">
+            <%= String.pad_leading(Integer.to_string(@hours), 2, "0") %>
+          </span>
+        </div>
+        <span class="text-xs text-gray-500 mt-1">hours</span>
+      </div>
+      <span class="text-xl text-gray-400 font-light">:</span>
+      <div class="flex flex-col items-center">
+        <div class="bg-gray-100 rounded-lg px-3 py-2 min-w-[3rem] text-center">
+          <span data-minutes class="text-2xl font-bold text-gray-800">
+            <%= String.pad_leading(Integer.to_string(@minutes), 2, "0") %>
+          </span>
+        </div>
+        <span class="text-xs text-gray-500 mt-1">min</span>
+      </div>
+      <span class="text-xl text-gray-400 font-light">:</span>
+      <div class="flex flex-col items-center">
+        <div class="bg-gray-100 rounded-lg px-3 py-2 min-w-[3rem] text-center">
+          <span data-seconds class="text-2xl font-bold text-gray-800">
+            <%= String.pad_leading(Integer.to_string(@seconds), 2, "0") %>
+          </span>
+        </div>
+        <span class="text-xs text-gray-500 mt-1">sec</span>
+      </div>
+    </div>
+    """
+  end
+
+  # Private component for compact text countdown display
+  attr :days, :integer, required: true
+  attr :hours, :integer, required: true
+  attr :minutes, :integer, required: true
+  attr :seconds, :integer, required: true
+  attr :expired, :boolean, required: true
+
+  defp countdown_text(assigns) do
+    urgency_class =
+      cond do
+        assigns.expired -> "text-red-600 font-bold"
+        assigns.days == 0 and assigns.hours < 1 -> "text-red-600 font-bold animate-pulse"
+        assigns.days == 0 and assigns.hours < 24 -> "text-orange-600 font-semibold"
+        assigns.days < 3 -> "text-amber-600"
+        true -> "text-gray-600"
+      end
+
+    assigns = assign(assigns, urgency_class: urgency_class)
+
+    ~H"""
+    <div class="flex items-center gap-2">
+      <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span data-text class={["text-sm", @urgency_class]}>
+        <%= if @expired do %>
+          Deadline has passed
+        <% else %>
+          <%= format_countdown_text(@days, @hours, @minutes, @seconds) %>
+        <% end %>
+      </span>
+    </div>
+    """
+  end
+
+  # Helper to calculate time remaining from deadline
+  defp calculate_time_remaining(nil), do: {0, 0, 0, 0, true}
+
+  defp calculate_time_remaining(%DateTime{} = deadline) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(deadline, now, :second)
+
+    if diff_seconds <= 0 do
+      {0, 0, 0, 0, true}
+    else
+      days = div(diff_seconds, 86400)
+      hours = div(rem(diff_seconds, 86400), 3600)
+      minutes = div(rem(diff_seconds, 3600), 60)
+      seconds = rem(diff_seconds, 60)
+      {days, hours, minutes, seconds, false}
+    end
+  end
+
+  defp calculate_time_remaining(deadline) when is_binary(deadline) do
+    case DateTime.from_iso8601(deadline) do
+      {:ok, dt, _} -> calculate_time_remaining(dt)
+      _ -> {0, 0, 0, 0, true}
+    end
+  end
+
+  defp calculate_time_remaining(_), do: {0, 0, 0, 0, true}
+
+  # Helper to format countdown as human-readable text
+  defp format_countdown_text(days, hours, minutes, seconds) do
+    parts = []
+    parts = if days > 0, do: parts ++ ["#{days}d"], else: parts
+    parts = if hours > 0 or days > 0, do: parts ++ ["#{hours}h"], else: parts
+    parts = if minutes > 0 or hours > 0 or days > 0, do: parts ++ ["#{minutes}m"], else: parts
+    parts = parts ++ ["#{seconds}s"]
+    Enum.join(parts, " ") <> " remaining"
+  end
 end

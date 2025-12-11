@@ -305,7 +305,7 @@
               <!-- Polling Deadline Countdown -->
               <%= if @event.polling_deadline do %>
                 <div class="mt-4 pt-4 border-t border-amber-200">
-                  <div class="flex items-center text-sm text-gray-600">
+                  <div class="flex items-center text-sm text-gray-600 mb-2">
                     <svg class="w-4 h-4 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -313,23 +313,20 @@
                       Deadline: <%= Calendar.strftime(@event.polling_deadline, "%B %d, %Y at %I:%M %p") %>
                     </span>
                   </div>
-                  <%= if DateTime.compare(@event.polling_deadline, DateTime.utc_now()) == :gt do %>
-                    <div class="mt-1 text-xs text-gray-500 ml-6">
-                      <%= format_time_remaining(@event.polling_deadline) %>
-                    </div>
-                  <% else %>
-                    <div class="mt-1 text-xs text-red-500 ml-6 font-medium">
-                      Deadline has passed
-                    </div>
-                  <% end %>
+                  <div class="ml-6">
+                    <EventasaurusWeb.EventComponents.countdown_timer
+                      deadline={@event.polling_deadline}
+                      variant="compact"
+                    />
+                  </div>
                 </div>
               <% end %>
 
               <!-- Confirm Event Button (when threshold is met) -->
               <%= if @threshold_met do %>
-                <div class="mt-4 pt-4 border-t border-amber-200">
+                <div class="mt-4 pt-4 border-t border-amber-200 space-y-3">
                   <button
-                    phx-click="confirm_threshold_event"
+                    phx-click="open_confirm_threshold_modal"
                     class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
                   >
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,9 +334,32 @@
                     </svg>
                     Confirm Event
                   </button>
-                  <p class="mt-2 text-xs text-gray-500 text-center">
+                  <p class="text-xs text-gray-500 text-center">
                     This will transition the event to confirmed status
                   </p>
+
+                  <!-- Announce to Attendees Button -->
+                  <%= if @announcement_sent do %>
+                    <div class="flex items-center justify-center text-sm text-green-600 py-2">
+                      <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      Announcement sent to attendees
+                    </div>
+                  <% else %>
+                    <button
+                      phx-click="send_threshold_announcement"
+                      class="w-full inline-flex items-center justify-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-700 bg-amber-50 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors"
+                    >
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                      </svg>
+                      Announce to Attendees
+                    </button>
+                    <p class="text-xs text-gray-500 text-center">
+                      Send a "We Made It!" email to all registered attendees
+                    </p>
+                  <% end %>
                 </div>
               <% end %>
             </div>
@@ -1520,4 +1540,86 @@
       </div>
     </div>
   <% end %>
-</div> 
+</div>
+
+<!-- Confirm Threshold Event Modal -->
+<div
+  id="confirm-threshold-modal"
+  phx-hook="FocusTrap"
+  class={if @show_confirm_threshold_modal, do: "relative z-50", else: "hidden"}
+  aria-labelledby="confirm-threshold-modal-title"
+  role="dialog"
+  aria-modal="true"
+>
+  <%= if @show_confirm_threshold_modal do %>
+    <!-- Background backdrop -->
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+    <div class="fixed inset-0 z-10 overflow-y-auto">
+      <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+        <div
+          class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6"
+          phx-click-away="close_confirm_threshold_modal"
+          phx-window-keydown="close_confirm_threshold_modal"
+          phx-key="escape"
+        >
+          <div class="sm:flex sm:items-start">
+            <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+              <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+              <h3 class="text-base font-semibold leading-6 text-gray-900" id="confirm-threshold-modal-title">Confirm Event</h3>
+              <div class="mt-2">
+                <p class="text-sm text-gray-500">
+                  You're about to confirm "<%= @event.title %>" and transition it from threshold status to confirmed.
+                </p>
+
+                <div class="mt-4 rounded-md bg-green-50 p-4">
+                  <div class="flex">
+                    <div class="flex-shrink-0">
+                      <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                      </svg>
+                    </div>
+                    <div class="ml-3">
+                      <h3 class="text-sm font-medium text-green-800">Threshold Met!</h3>
+                      <div class="mt-2 text-sm text-green-700">
+                        <p>This action will:</p>
+                        <ul class="list-disc list-inside mt-1 space-y-1">
+                          <li>Change the event status to "Confirmed"</li>
+                          <li>Notify all registered attendees</li>
+                          <li>Lock ticket purchases at current prices</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+            <button
+              type="button"
+              phx-click="confirm_threshold_event"
+              class="inline-flex w-full justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 sm:ml-3 sm:w-auto"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Confirm Event
+            </button>
+            <button
+              type="button"
+              phx-click="close_confirm_threshold_modal"
+              class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>
