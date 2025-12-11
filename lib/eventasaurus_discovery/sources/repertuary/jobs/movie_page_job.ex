@@ -64,8 +64,17 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
     city = args["city"] || Config.default_city()
     force = args["force"] || false
 
-    city_config = Cities.get(city)
+    case Cities.get(city) do
+      nil ->
+        Logger.error("❌ Unknown city: #{city}")
+        {:error, :unknown_city}
 
+      city_config ->
+        do_perform(job, job_id, movie_slug, movie_title, source_id, city, city_config, force)
+    end
+  end
+
+  defp do_perform(job, job_id, movie_slug, movie_title, source_id, city, city_config, force) do
     Logger.info("""
     🎬 Processing movie: #{movie_title}
     City: #{city_config.name}
@@ -182,7 +191,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
   # Fetch showtimes for all 7 days by looping through day offsets
   # OPTIMIZED: Uses parallel processing with Task.async_stream for 6x performance improvement
   defp fetch_all_days(movie_slug, movie_title, city, cookies, csrf_token) do
-    city_config = Cities.get(city)
+    # City already validated in perform/1, but add fallback for safety
+    city_config = Cities.get(city) || Cities.get(Config.default_city())
     Logger.info("📅 Fetching all 7 days for movie: #{movie_title} in #{city_config.name} (parallel mode)")
     Logger.info("   Cookies: #{String.slice(cookies, 0..50)}...")
     Logger.info("   CSRF: #{String.slice(csrf_token, 0..20)}...")
@@ -372,7 +382,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
     total_showtimes = length(showtimes)
     skipped = total_showtimes - length(showtimes_to_process)
     threshold = EventFreshnessChecker.get_threshold()
-    city_config = Cities.get(city)
+    # City already validated in perform/1, but add fallback for safety
+    city_config = Cities.get(city) || Cities.get(Config.default_city())
 
     Logger.info("""
     🔄 Repertuary.pl Freshness Check: Movie #{movie_slug} (#{city_config.name})

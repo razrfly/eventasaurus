@@ -81,9 +81,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Transformer do
           # Category - always movies
           category: "movies",
 
-          # Metadata - city-aware source identifier
+          # Metadata - single source identifier (Cinema City pattern)
+          # All cities share the "repertuary" source, city is tracked separately
           metadata: %{
-            source: city_config.slug,
+            source: "repertuary",
             city: city,
             cinema_slug: cinema_slug,
             movie_slug: movie_slug,

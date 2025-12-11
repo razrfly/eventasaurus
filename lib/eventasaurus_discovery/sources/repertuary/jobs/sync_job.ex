@@ -52,8 +52,12 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
   # Override perform to use movie-based architecture
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args} = job) do
-    # Get city from args, defaulting to "krakow" for backward compatibility
-    city = args["city"] || Config.default_city()
+    # Get city from args, checking both options (from DiscoverySyncJob) and top-level (direct calls)
+    # This supports both the admin dashboard flow and direct job creation
+    options = args["options"] || %{}
+
+    city =
+      options["city"] || options[:city] || args["city"] || Config.default_city()
 
     case Cities.get(city) do
       nil ->
