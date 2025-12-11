@@ -21,12 +21,12 @@
 #   - Safe to run multiple times
 #
 # Cities configured:
-#   - Kraków (Poland): 6 sources (Ticketmaster, Bandsintown, Karnet, etc.)
+#   - Kraków (Poland): 7 sources (Ticketmaster, Bandsintown, Karnet, Repertuary, etc.)
 #   - London (United Kingdom): 3 sources
 #   - Melbourne (Australia): 2 sources
 #   - Austin (United States): 1 source
 #   - Paris (France): 1 source (Sortiraparis)
-#   - Warsaw (Poland): 2 sources (Waw4Free, Ticketmaster)
+#   - Warsaw (Poland): 3 sources (Waw4Free, PubQuiz, Repertuary)
 #
 # Usage:
 #   mix run priv/repo/seeds/reference_data/discovery_cities.exs
@@ -95,9 +95,9 @@ configure_city = fn city_slug, source_configs ->
 end
 
 # ============================================================================
-# KRAKÓW, POLAND - 6 SOURCES
+# KRAKÓW, POLAND - 7 SOURCES
 # ============================================================================
-# Note: PubQuiz Poland, Karnet, Resident Advisor, Cinema City, Bandsintown, Ticketmaster
+# Note: PubQuiz Poland, Karnet, Resident Advisor, Cinema City, Repertuary, Bandsintown, Ticketmaster
 
 configure_city.("krakow", [
   # PubQuiz Poland - Weekly pub quiz events
@@ -120,6 +120,12 @@ configure_city.("krakow", [
   # Cinema City - Movie showtimes (Bonarka location)
   {"cinema-city", %{
     "city_name" => "Kraków",
+    "limit" => 1000
+  }},
+
+  # Repertuary - Polish cinema showtimes aggregator
+  {"repertuary", %{
+    "city_slug" => "krakow",
     "limit" => 1000
   }},
 
@@ -196,7 +202,7 @@ configure_city.("paris", [
 ])
 
 # ============================================================================
-# WARSAW, POLAND - 2 SOURCES
+# WARSAW, POLAND - 3 SOURCES
 # ============================================================================
 
 configure_city.("warsaw", [
@@ -208,6 +214,12 @@ configure_city.("warsaw", [
   # Waw4Free - Free cultural events in Warsaw
   {"waw4free", %{
     "limit" => 200
+  }},
+
+  # Repertuary - Polish cinema showtimes aggregator
+  {"repertuary", %{
+    "city_slug" => "warszawa",
+    "limit" => 1000
   }}
 ])
 
