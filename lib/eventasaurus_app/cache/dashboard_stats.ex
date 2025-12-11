@@ -235,7 +235,7 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   """
   def get_queue_statistics do
     Cachex.fetch(@cache_name, :queue_statistics, fn ->
-      queues = [:discovery, :discovery_import]
+      queues = [:discovery]
 
       # Use replica for all Oban queries - these are read-heavy dashboard stats
       # that don't need real-time consistency
