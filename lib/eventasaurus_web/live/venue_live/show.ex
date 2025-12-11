@@ -490,16 +490,16 @@ defmodule EventasaurusWeb.VenueLive.Show do
     canonical_url = "#{base_url}#{canonical_path}"
 
     # Use venue cover image if available, otherwise placeholder
-    image_url =
-      if venue.cover_image_url do
-        venue.cover_image_url
-      else
-        venue_name_encoded = URI.encode(venue.name)
-        "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{venue_name_encoded}"
-      end
+    # Venue.get_cover_image/2 handles the smart fallback chain (venue images -> city gallery)
+    cdn_image_url =
+      case Venue.get_cover_image(venue, width: 1200, height: 630, quality: 85) do
+        {:ok, url, _source} ->
+          url
 
-    # Wrap with CDN
-    cdn_image_url = CDN.url(image_url)
+        {:error, :no_image} ->
+          venue_name_encoded = URI.encode(venue.name)
+          CDN.url("https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{venue_name_encoded}")
+      end
 
     # Generate Open Graph tags
     Phoenix.HTML.Safe.to_iodata(
