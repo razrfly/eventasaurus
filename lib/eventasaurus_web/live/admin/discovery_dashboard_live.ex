@@ -25,10 +25,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   require Logger
 
   @refresh_interval 30_000
+  # City-specific sources: These sources ONLY work for a single hardcoded city
+  # (they don't have multi-city support in their scraper implementation)
+  #
+  # NOTE: Cinema City and Repertuary are NOT city-specific - they support 29+ Polish
+  # cities via the "city" option in job args. They show a city dropdown in the UI.
   @city_specific_sources %{
     "karnet" => "krakow",
-    "repertuary" => "krakow",
-    "cinema-city" => "krakow",
     "sortiraparis" => "paris",
     "waw4free" => "warsaw"
   }
