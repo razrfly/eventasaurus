@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
 
   require Logger
   alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
+  alias Eventasaurus.Integrations.Cinegraph
 
   @doc """
   Extract image URL from movie data, supporting both string and atom keys.
@@ -459,25 +460,96 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   def get_movie_urls(_), do: %{}
 
   @doc """
-  Get the primary movie URL (prefers TMDB, falls back to IMDb).
+  Extract TMDB ID from movie data, supporting various data structures.
 
   ## Examples
+
+      iex> MovieUtils.get_tmdb_id(%{metadata: %{tmdb_id: 12345}})
+      12345
+
+      iex> MovieUtils.get_tmdb_id(%{"metadata" => %{"tmdb_id" => 12345}})
+      12345
+  """
+  def get_tmdb_id(%{__struct__: EventasaurusApp.Events.PollOption} = poll_option) do
+    # Handle PollOption structs - check metadata first, then external_data
+    cond do
+      poll_option.metadata && is_map(poll_option.metadata) ->
+        extract_tmdb_id_from_map(poll_option.metadata)
+
+      poll_option.external_data && is_map(poll_option.external_data) ->
+        get_tmdb_id(poll_option.external_data)
+
+      true ->
+        nil
+    end
+  end
+
+  def get_tmdb_id(movie_data) when is_map(movie_data) do
+    extract_tmdb_id_from_map(movie_data)
+  end
+
+  def get_tmdb_id(_), do: nil
+
+  defp extract_tmdb_id_from_map(data) when is_map(data) do
+    # Try various locations where tmdb_id might be stored
+    tmdb_id =
+      data["tmdb_id"] ||
+        data[:tmdb_id] ||
+        get_in(data, ["metadata", "tmdb_id"]) ||
+        get_in(data, [:metadata, :tmdb_id]) ||
+        get_in(data, ["metadata", "id"]) ||
+        get_in(data, [:metadata, "id"]) ||
+        data["id"] ||
+        data[:id]
+
+    # Ensure we return a valid integer
+    case tmdb_id do
+      id when is_integer(id) and id > 0 -> id
+      id when is_binary(id) ->
+        case Integer.parse(id) do
+          {parsed_id, _} when parsed_id > 0 -> parsed_id
+          _ -> nil
+        end
+      _ -> nil
+    end
+  end
+
+  defp extract_tmdb_id_from_map(_), do: nil
+
+  @doc """
+  Get the primary movie URL (prefers Cinegraph, falls back to TMDB/IMDb).
+
+  Cinegraph URLs are preferred when a valid TMDB ID is available, as they
+  provide a better user experience on our partner site.
+
+  ## Examples
+
+      iex> MovieUtils.get_primary_movie_url(%{metadata: %{tmdb_id: 12345}})
+      "https://cinegraph.org/movies/tmdb/12345"
 
       iex> MovieUtils.get_primary_movie_url(%{external_data: %{external_urls: %{tmdb: "https://themoviedb.org/movie/123"}}})
       "https://themoviedb.org/movie/123"
   """
   def get_primary_movie_url(movie_data) do
-    urls = get_movie_urls(movie_data)
+    # First, try to get Cinegraph URL using tmdb_id
+    tmdb_id = get_tmdb_id(movie_data)
 
-    cond do
-      # Prefer TMDB URL (string or atom key)
-      urls["tmdb"] && is_binary(urls["tmdb"]) -> urls["tmdb"]
-      urls[:tmdb] && is_binary(urls[:tmdb]) -> urls[:tmdb]
-      # Fall back to IMDb URL (string or atom key)
-      urls["imdb"] && is_binary(urls["imdb"]) -> urls["imdb"]
-      urls[:imdb] && is_binary(urls[:imdb]) -> urls[:imdb]
-      # No URL found
-      true -> nil
+    if tmdb_id && Cinegraph.linkable?(%{tmdb_id: tmdb_id}) do
+      Cinegraph.movie_url(%{tmdb_id: tmdb_id})
+    else
+      # Fall back to external URLs
+      urls = get_movie_urls(movie_data)
+
+      cond do
+        # Fall back to TMDB URL (string or atom key)
+        urls["tmdb"] && is_binary(urls["tmdb"]) -> urls["tmdb"]
+        urls[:tmdb] && is_binary(urls[:tmdb]) -> urls[:tmdb]
+        # Fall back to IMDb URL (string or atom key)
+        urls["imdb"] && is_binary(urls["imdb"]) -> urls["imdb"]
+        urls[:imdb] && is_binary(urls[:imdb]) -> urls[:imdb]
+        # No URL found
+        true -> nil
+      end
     end
   end
 
