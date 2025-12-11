@@ -1676,7 +1676,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           <% end %>
 
           <!-- Ticket Selection Section (for events with tickets) -->
-          <%= if @should_show_tickets and @event.status in [:confirmed] do %>
+          <%= if @should_show_tickets and @event.status in [:confirmed, :threshold] do %>
             <.ticket_selection_component
               tickets={@tickets}
               selected_tickets={@selected_tickets}
