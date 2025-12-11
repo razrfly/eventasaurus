@@ -996,7 +996,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   Formats queue names for display.
   """
   def format_queue_name(:discovery), do: "Discovery"
-  def format_queue_name(:discovery_import), do: "Discovery Import"
 
   def format_queue_name(queue) when is_atom(queue),
     do: queue |> to_string() |> String.capitalize()
