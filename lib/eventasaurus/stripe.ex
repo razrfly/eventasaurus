@@ -355,25 +355,7 @@ defmodule EventasaurusApp.Stripe do
 
     product_description =
       if event do
-        # Use event description if available, fallback to ticket description
-        event_desc =
-          if event.description && String.trim(event.description) != "" do
-            # Stripe has limits on description length
-            String.slice(event.description, 0, 500)
-          else
-            Map.get(params, :ticket_description, "")
-          end
-
-        # Include event date if available
-        date_info =
-          if event.start_at do
-            formatted_date = Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p")
-            "Event Date: #{formatted_date}\n\n"
-          else
-            ""
-          end
-
-        "#{date_info}#{event_desc}"
+        build_stripe_description(event)
       else
         Map.get(params, :ticket_description, "")
       end
@@ -386,14 +368,18 @@ defmodule EventasaurusApp.Stripe do
       "quantity" => Map.get(params, :quantity, 1)
     }
 
-    # Add event image if available
+    # Add event image - uses placeholder in development if needed
     line_item =
-      if event && event.cover_image_url do
-        Map.put(
-          line_item,
-          "price_data[product_data][images][0]",
-          get_full_image_url(event.cover_image_url)
-        )
+      if event do
+        image_url =
+          if event.cover_image_url do
+            get_full_image_url(event.cover_image_url)
+          else
+            # No cover image set - use placeholder
+            development_placeholder_image()
+          end
+
+        Map.put(line_item, "price_data[product_data][images][0]", image_url)
       else
         line_item
       end
@@ -967,19 +953,55 @@ defmodule EventasaurusApp.Stripe do
   end
 
   # Helper function to get full image URL for Stripe
+  # Stripe requires publicly accessible URLs - localhost won't work
   defp get_full_image_url(image_url) do
     case URI.parse(image_url) do
       %URI{scheme: scheme} when scheme in ["http", "https"] ->
-        # Already a full URL
-        image_url
+        # Already a full URL - verify it's publicly accessible (not localhost)
+        uri = URI.parse(image_url)
 
-      %URI{path: "/" <> _rest} ->
-        # Absolute path, prepend base URL
-        "#{get_base_url()}#{image_url}"
+        if uri.host in ["localhost", "127.0.0.1"] do
+          # Use a placeholder for development
+          development_placeholder_image()
+        else
+          image_url
+        end
 
       _ ->
-        # Relative path, prepend base URL with /
-        "#{get_base_url()}/#{image_url}"
+        # Relative/absolute paths need the base URL, but only if not localhost
+        base_url = get_base_url()
+
+        if String.contains?(base_url, "localhost") do
+          # Use a placeholder for development
+          development_placeholder_image()
+        else
+          case image_url do
+            "/" <> _rest -> "#{base_url}#{image_url}"
+            _ -> "#{base_url}/#{image_url}"
+          end
+        end
+    end
+  end
+
+  # Placeholder image for development when localhost images can't be accessed by Stripe
+  defp development_placeholder_image do
+    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop"
+  end
+
+  # Build plain text description for Stripe Checkout (no markdown/HTML/newlines supported)
+  defp build_stripe_description(event) do
+    # Strip HTML and collapse whitespace from description
+    clean_text =
+      (event.description || "")
+      |> HtmlSanitizeEx.strip_tags()
+      |> String.replace(~r/[\n\r]+/, " ")
+      |> String.replace(~r/\s+/, " ")
+      |> String.trim()
+
+    cond do
+      clean_text != "" -> Eventasaurus.Utils.Text.truncate_text(clean_text, 500)
+      event.tagline && event.tagline != "" -> event.tagline
+      true -> "Event ticket"
     end
   end
 end

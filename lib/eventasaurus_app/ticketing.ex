@@ -14,7 +14,6 @@ defmodule EventasaurusApp.Ticketing do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, Ticket, Order}
   alias EventasaurusApp.Accounts.User
-  alias EventasaurusApp.DateTimeHelper
   alias EventasaurusApp.EventStateMachine
   alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.Jobs.ThresholdMetNotificationJob
@@ -1764,27 +1763,9 @@ defmodule EventasaurusApp.Ticketing do
           div(order.subtotal_cents, quantity)
       end
 
-    # Enhanced product description with event details
-    product_description =
-      if event.description && String.trim(event.description) != "" do
-        # Include event date if available  
-        date_info =
-          if event.start_at do
-            # Convert to event timezone for display
-            timezone = event.timezone || "UTC"
-            shifted_datetime = DateTimeHelper.utc_to_timezone(event.start_at, timezone)
-            formatted_date = Calendar.strftime(shifted_datetime, "%B %d, %Y at %I:%M %p %Z")
-            "Event Date: #{formatted_date}\n\n"
-          else
-            ""
-          end
-
-        # Stripe has limits on description length
-        event_desc = String.slice(event.description, 0, 500)
-        "#{date_info}#{event_desc}"
-      else
-        "#{event.title} - #{ticket.title}"
-      end
+    # Build a clean, readable description for Stripe Checkout
+    # Stripe product descriptions are PLAIN TEXT only - newlines become spaces
+    product_description = build_stripe_product_description(event, ticket)
 
     # Build base product data
     product_data = %{
@@ -1831,6 +1812,23 @@ defmodule EventasaurusApp.Ticketing do
       _ ->
         # Relative path, prepend base URL with /
         UrlHelper.build_url("/#{image_url}")
+    end
+  end
+
+  # Build plain text description for Stripe Checkout (no markdown/HTML/newlines supported)
+  defp build_stripe_product_description(event, ticket) do
+    # Strip HTML and collapse whitespace from description
+    clean_text =
+      (event.description || "")
+      |> HtmlSanitizeEx.strip_tags()
+      |> String.replace(~r/[\n\r]+/, " ")
+      |> String.replace(~r/\s+/, " ")
+      |> String.trim()
+
+    cond do
+      clean_text != "" -> Eventasaurus.Utils.Text.truncate_text(clean_text, 500)
+      event.tagline && event.tagline != "" -> event.tagline
+      true -> "#{event.title} - #{ticket.title}"
     end
   end
 

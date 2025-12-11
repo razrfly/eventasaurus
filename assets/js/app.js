@@ -10,7 +10,7 @@ import { SpotifySearch } from "./spotify_search";
 // Import modular components
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
-import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut } from "./auth/clerk-manager";
+import { initClerkClient, ClerkAuthHandler, signOut as clerkSignOut, openSignIn as clerkOpenSignIn, openSignUp as clerkOpenSignUp } from "./auth/clerk-manager";
 import FormHooks from "./hooks/forms";
 import UIHooks from "./hooks/ui-interactions";
 import PaymentHooks from "./hooks/payment-business-logic";
@@ -148,6 +148,15 @@ window.liveSocket = liveSocket;
 // Expose signOut function on window for logout links
 window.signOut = async function() {
   await clerkSignOut();
+};
+
+// Expose Clerk auth functions on window for checkout and other pages
+window.openSignIn = function(options = {}) {
+  clerkOpenSignIn(options);
+};
+
+window.openSignUp = function(options = {}) {
+  clerkOpenSignUp(options);
 };
 
 // Initialize components on page load
