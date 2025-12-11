@@ -1,26 +1,31 @@
 defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   @moduledoc """
-  Sets cache control headers to prevent CDN/browser caching of auth-aware pages.
+  Sets cache control headers based on authentication state.
 
-  ## Problem Solved
+  ## Caching Strategy
 
-  Pages that render authentication-dependent content (navigation showing user name
-  vs Sign In button) must not be cached by CDNs or browsers. Without proper cache
-  headers, the following happens:
+  - **Anonymous users** (no `__session` cookie): CDN caches for 12 hours
+    - `Cache-Control: public, s-maxage=43200, max-age=0, must-revalidate`
+    - CDN serves cached content, browser always revalidates with CDN
 
-  1. First visitor (unauthenticated) loads a public page
-  2. CDN caches the response with unauthenticated navigation HTML
-  3. Subsequent authenticated users receive the cached unauthenticated HTML
-  4. Client-side Clerk SDK confirms auth, but server-rendered HTML is wrong
+  - **Authenticated users** (has `__session` cookie): No caching
+    - `Cache-Control: private, no-store, no-cache, must-revalidate`
+    - Every request goes to origin server
 
-  ## Solution
+  ## Why Check Cookie Instead of Auth State?
 
-  This plug sets two critical headers:
+  This plug runs before authentication is fully processed in the pipeline.
+  Checking for the `__session` cookie is sufficient because:
 
-  - `Cache-Control: private, no-cache, no-store, must-revalidate` - Prevents CDN
-    caching and forces browser to revalidate on every request
-  - `Vary: Cookie` - Tells caches that response varies based on Cookie header,
-    so different users get different cached versions
+  1. If a browser sends the cookie, they expect authenticated behavior
+  2. Even if the cookie is invalid/expired, we shouldn't cache their response
+  3. The presence of the cookie is the signal, not its validity
+
+  ## Cloudflare Configuration
+
+  For this to work, Cloudflare must be configured to respect origin headers:
+  - Edge TTL: "Use cache-control header if present, bypass cache if not"
+  - Browser TTL: "Respect origin TTL"
 
   ## Usage
 
@@ -33,7 +38,8 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   ## References
 
-  - GitHub Issue: https://github.com/razrfly/eventasaurus/issues/2625
+  - GitHub Issue: https://github.com/razrfly/eventasaurus/issues/2652
+  - GitHub Issue: https://github.com/razrfly/eventasaurus/issues/2651
   - HTTP Caching: https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching
   """
 
@@ -41,40 +47,40 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
 
   @behaviour Plug
 
+  # CDN cache duration for anonymous users (12 hours in seconds)
+  @anonymous_cdn_ttl 43200
+
   @impl Plug
   def init(opts), do: opts
 
   @impl Plug
   def call(conn, _opts) do
+    if has_session_cookie?(conn) do
+      set_no_cache_headers(conn)
+    else
+      set_cacheable_headers(conn)
+    end
+  end
+
+  # Check if the request has a Clerk session cookie
+  defp has_session_cookie?(conn) do
+    conn = fetch_cookies(conn)
+    cookie_value = conn.cookies["__session"]
+    cookie_value != nil and cookie_value != ""
+  end
+
+  # Headers for authenticated users - no caching
+  defp set_no_cache_headers(conn) do
     conn
-    |> put_resp_header("cache-control", "private, no-cache, no-store, must-revalidate")
-    |> put_resp_header("vary", merge_vary_header(conn, "Cookie"))
+    |> put_resp_header("cache-control", "private, no-store, no-cache, must-revalidate")
     |> put_resp_header("pragma", "no-cache")
     |> put_resp_header("expires", "0")
   end
 
-  # Merge "Cookie" with any existing Vary header values
-  defp merge_vary_header(conn, new_value) do
-    case get_resp_header(conn, "vary") do
-      [] ->
-        new_value
-
-      [existing] ->
-        existing_values =
-          existing
-          |> String.split(",")
-          |> Enum.map(&String.trim/1)
-          |> MapSet.new()
-
-        if MapSet.member?(existing_values, new_value) do
-          existing
-        else
-          "#{existing}, #{new_value}"
-        end
-
-      _multiple ->
-        # Multiple Vary headers - just append
-        new_value
-    end
+  # Headers for anonymous users - CDN caching enabled
+  defp set_cacheable_headers(conn) do
+    conn
+    |> put_resp_header("cache-control", "public, s-maxage=#{@anonymous_cdn_ttl}, max-age=0, must-revalidate")
+    |> put_resp_header("vary", "Accept-Encoding")
   end
 end

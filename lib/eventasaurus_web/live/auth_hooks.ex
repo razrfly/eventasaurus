@@ -103,7 +103,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
             end
         end
       end)
-      |> assign(:theme, "light")
+      |> assign(:theme, :minimal)
 
     {:cont, socket}
   end
