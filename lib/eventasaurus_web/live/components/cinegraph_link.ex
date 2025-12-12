@@ -23,7 +23,7 @@ defmodule EventasaurusWeb.Live.Components.CinegraphLink do
   use Phoenix.Component
   import EventasaurusWeb.CoreComponents
 
-  @cinegraph_base_url "https://cinegraph.com"
+  @cinegraph_base_url "https://cinegraph.org"
 
   attr :tmdb_id, :any, required: true
   attr :title, :string, default: nil
@@ -209,7 +209,7 @@ defmodule EventasaurusWeb.Live.Components.CinegraphLink do
   # URL building
 
   defp build_cinegraph_url(tmdb_id) when is_integer(tmdb_id) do
-    "#{@cinegraph_base_url}/movies/#{tmdb_id}"
+    "#{@cinegraph_base_url}/movies/tmdb/#{tmdb_id}"
   end
 
   defp build_cinegraph_url(tmdb_id) when is_binary(tmdb_id) do
