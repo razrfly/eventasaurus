@@ -44,6 +44,94 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   @doc """
+  Generates JSON-LD structured data for a generic movie page (no specific city).
+
+  ## Parameters
+    - movie: Movie struct with metadata
+    - cities_with_screenings: List of city screening info maps with:
+      - city: City struct
+      - screening_count: Number of screenings
+      - venue_count: Number of venues
+      - next_date: Next available screening date
+
+  ## Returns
+    - JSON-LD string ready to be included in <script type="application/ld+json">
+  """
+  def generate_generic(movie, cities_with_screenings) do
+    movie
+    |> build_generic_movie_schema(cities_with_screenings)
+    |> Jason.encode!()
+  end
+
+  @doc """
+  Builds the generic movie schema map (without JSON encoding).
+  """
+  def build_generic_movie_schema(movie, cities_with_screenings) do
+    %{
+      "@context" => "https://schema.org",
+      "@type" => "Movie",
+      "name" => movie.title,
+      "description" => generate_generic_description(movie, cities_with_screenings),
+      "url" => build_generic_url(movie)
+    }
+    |> add_image(movie)
+    |> add_metadata(movie)
+    |> add_city_offers(movie, cities_with_screenings)
+  end
+
+  # Generate SEO-friendly description for generic page
+  defp generate_generic_description(movie, cities_with_screenings) do
+    city_count = length(cities_with_screenings)
+
+    total_screenings =
+      cities_with_screenings
+      |> Enum.map(& &1.screening_count)
+      |> Enum.sum()
+
+    if city_count > 0 do
+      "Watch #{movie.title}. " <>
+        "#{total_screenings} screenings available in #{city_count} #{pluralize("city", city_count)}."
+    else
+      "Watch #{movie.title}. Find showtimes near you."
+    end
+  end
+
+  # Build generic URL for the movie page
+  defp build_generic_url(movie) do
+    base_url = EventasaurusWeb.Layouts.get_base_url()
+    "#{base_url}/movies/#{movie.tmdb_id}-#{movie.slug}"
+  end
+
+  # Add city offers for generic movie page
+  defp add_city_offers(schema, movie, cities_with_screenings) do
+    if length(cities_with_screenings) > 0 do
+      offers =
+        cities_with_screenings
+        |> Enum.map(fn city_info ->
+          %{
+            "@type" => "Offer",
+            "url" => build_city_movie_url(movie, city_info.city),
+            "areaServed" => %{
+              "@type" => "City",
+              "name" => city_info.city.name
+            },
+            "description" =>
+              "#{city_info.screening_count} screenings at #{city_info.venue_count} venues"
+          }
+        end)
+
+      Map.put(schema, "offers", offers)
+    else
+      schema
+    end
+  end
+
+  defp build_city_movie_url(movie, city) do
+    base_url = EventasaurusWeb.Layouts.get_base_url()
+    "#{base_url}/c/#{city.slug}/movies/#{movie.slug}"
+  end
+
+  @doc """
   Builds the movie schema map (without JSON encoding).
   Useful for testing or combining with other schemas.
   """
@@ -74,6 +162,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   defp pluralize(word, 1), do: word
+  defp pluralize("city", _), do: "cities"
   defp pluralize(word, _), do: word <> "s"
 
   # Build canonical URL for the movie page

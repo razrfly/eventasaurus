@@ -4,11 +4,21 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
 
   Displays the overview/synopsis and key personnel information
   like director, writers, and key crew members.
+
+  ## Props
+
+  - `rich_data` - Movie data from TMDB (required)
+  - `variant` - `:card` | `:dark` (default: `:card`)
+  - `compact` - Boolean for compact display mode (default: false)
+  - `show_links` - Boolean to show external links section (default: true)
+  - `show_personnel` - Boolean to show key personnel section (default: true)
+  - `tmdb_id` - TMDB ID for Cinegraph link (optional)
   """
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
   alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
+  alias EventasaurusWeb.Live.Components.CinegraphLink
 
   @impl true
   def update(assigns, socket) do
@@ -16,31 +26,36 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
      socket
      |> assign(assigns)
      |> assign_new(:compact, fn -> false end)
+     |> assign_new(:variant, fn -> :card end)
+     |> assign_new(:show_links, fn -> true end)
+     |> assign_new(:show_personnel, fn -> true end)
+     |> assign_new(:tmdb_id, fn -> nil end)
      |> assign_computed_data()}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="bg-white rounded-lg p-6 space-y-6">
+    <div class={section_container_classes(@variant, @compact)}>
       <!-- Overview Section -->
       <%= if @overview do %>
         <div>
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">Overview</h2>
-          <p class="text-gray-700 leading-relaxed text-lg"><%= @overview %></p>
+          <h2 class={section_title_classes(@variant, @compact)}>Overview</h2>
+          <p class={overview_text_classes(@variant, @compact)}><%= @overview %></p>
         </div>
       <% end %>
 
       <!-- Key Personnel -->
-      <%= if @has_key_personnel do %>
+      <%= if @show_personnel && @has_key_personnel do %>
         <div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4">Key Personnel</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <h3 class={subsection_title_classes(@variant)}>Key Personnel</h3>
+          <div class={personnel_grid_classes(@compact)}>
             <%= if @director do %>
               <.person_card
                 person={@director}
                 role="Director"
                 compact={@compact}
+                variant={@variant}
               />
             <% end %>
 
@@ -49,6 +64,7 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
                 person={writer}
                 role={writer["job"]}
                 compact={@compact}
+                variant={@variant}
               />
             <% end %>
 
@@ -57,6 +73,7 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
                 person={producer}
                 role={producer["job"]}
                 compact={@compact}
+                variant={@variant}
               />
             <% end %>
           </div>
@@ -64,13 +81,19 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
       <% end %>
 
       <!-- External Links -->
-      <%= if @external_links && map_size(@external_links) > 0 do %>
+      <%= if @show_links && ((@external_links && map_size(@external_links) > 0) || @tmdb_id) do %>
         <div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4">Links</h3>
+          <h3 class={subsection_title_classes(@variant)}>Links</h3>
           <div class="flex flex-wrap gap-3">
-            <%= for {type, url} <- @external_links do %>
+            <%= if @tmdb_id do %>
+              <CinegraphLink.cinegraph_link
+                tmdb_id={@tmdb_id}
+                variant={if @variant == :dark, do: :dark, else: :pill}
+              />
+            <% end %>
+            <%= for {type, url} <- @external_links || %{} do %>
               <%= if url && url != "" do %>
-                <.external_link_button type={type} url={url} />
+                <.external_link_button type={type} url={url} variant={@variant} />
               <% end %>
             <% end %>
           </div>
@@ -83,26 +106,28 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
   # Private function components
 
   defp person_card(assigns) do
+    assigns = assign_new(assigns, :initials, fn -> get_initials(assigns.person["name"]) end)
+
     ~H"""
-    <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+    <div class={person_card_classes(@variant)}>
       <%= if @person["profile_path"] do %>
         <img
           src={RichDataDisplayComponent.tmdb_image_url(@person["profile_path"], "w185")}
           alt={@person["name"]}
-          class="w-12 h-12 rounded-full object-cover flex-shrink-0"
+          class={person_image_classes(@variant)}
           loading="lazy"
         />
       <% else %>
-        <div class="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
-          <.icon name="hero-user" class="w-6 h-6 text-gray-500" />
+        <div class={person_placeholder_classes(@variant)}>
+          <span class={person_initials_classes(@variant)}><%= @initials %></span>
         </div>
       <% end %>
 
       <div class="min-w-0 flex-1">
-        <p class="text-sm font-medium text-gray-900 truncate">
+        <p class={person_name_classes(@variant)}>
           <%= @person["name"] %>
         </p>
-        <p class="text-sm text-gray-500 truncate">
+        <p class={person_role_classes(@variant)}>
           <%= @role %>
         </p>
       </div>
@@ -116,11 +141,11 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
       href={@url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+      class={external_link_classes(@variant)}
     >
-      <.link_icon type={@type} />
+      <.link_icon type={@type} variant={@variant} />
       <span class="ml-2"><%= format_link_text(@type) %></span>
-      <.icon name="hero-arrow-top-right-on-square" class="ml-2 h-3 w-3" />
+      <.icon name="hero-arrow-top-right-on-square" class="ml-2 h-3 w-3 opacity-60" />
     </a>
     """
   end
@@ -141,20 +166,116 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
     """
   end
 
-  defp link_icon(%{type: type} = assigns)
-       when type in [:facebook_url, :twitter_url, :instagram_url] do
-    case type do
-      :facebook_url -> ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-blue-600' />"
-      :twitter_url -> ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-blue-400' />"
-      :instagram_url -> ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-pink-600' />"
-    end
+  defp link_icon(%{type: :homepage} = assigns) do
+    ~H"<.icon name='hero-home' class='h-4 w-4' />"
+  end
+
+  defp link_icon(%{type: :facebook_url} = assigns) do
+    ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-blue-600' />"
+  end
+
+  defp link_icon(%{type: :twitter_url} = assigns) do
+    ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-blue-400' />"
+  end
+
+  defp link_icon(%{type: :instagram_url} = assigns) do
+    ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-pink-600' />"
   end
 
   defp link_icon(assigns) do
     ~H"<.icon name='hero-globe-alt' class='h-4 w-4' />"
   end
 
+  # CSS class helpers for variants
+
+  defp section_container_classes(:card, false), do: "bg-white rounded-lg p-6 space-y-6 shadow-sm"
+  defp section_container_classes(:card, true), do: "bg-white rounded-lg p-4 space-y-4 shadow-sm"
+
+  defp section_container_classes(:dark, false),
+    do: "bg-gray-900/50 backdrop-blur-sm rounded-lg p-6 space-y-6"
+
+  defp section_container_classes(:dark, true),
+    do: "bg-gray-900/50 backdrop-blur-sm rounded-lg p-4 space-y-4"
+
+  defp section_title_classes(:card, false), do: "text-2xl font-bold text-gray-900 mb-4"
+  defp section_title_classes(:card, true), do: "text-xl font-bold text-gray-900 mb-3"
+  defp section_title_classes(:dark, false), do: "text-2xl font-bold text-white mb-4"
+  defp section_title_classes(:dark, true), do: "text-xl font-bold text-white mb-3"
+
+  defp overview_text_classes(:card, false), do: "text-gray-700 leading-relaxed text-lg"
+  defp overview_text_classes(:card, true), do: "text-gray-700 leading-relaxed text-base"
+  defp overview_text_classes(:dark, false), do: "text-gray-300 leading-relaxed text-lg"
+  defp overview_text_classes(:dark, true), do: "text-gray-300 leading-relaxed text-base"
+
+  defp subsection_title_classes(:card), do: "text-xl font-semibold text-gray-900 mb-4"
+  defp subsection_title_classes(:dark), do: "text-xl font-semibold text-white mb-4"
+
+  defp personnel_grid_classes(false),
+    do: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+
+  defp personnel_grid_classes(true), do: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+
+  defp person_card_classes(:card), do: "flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
+  defp person_card_classes(:dark), do: "flex items-center space-x-3 p-3 bg-white/5 rounded-lg"
+
+  defp person_image_classes(:card), do: "w-12 h-12 rounded-full object-cover flex-shrink-0"
+
+  defp person_image_classes(:dark),
+    do: "w-12 h-12 rounded-full object-cover flex-shrink-0 ring-1 ring-white/10"
+
+  defp person_placeholder_classes(:card) do
+    "w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"
+  end
+
+  defp person_placeholder_classes(:dark) do
+    "w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0"
+  end
+
+  defp person_initials_classes(:card), do: "text-sm font-bold text-gray-500"
+  defp person_initials_classes(:dark), do: "text-sm font-bold text-gray-400"
+
+  defp person_name_classes(:card), do: "text-sm font-medium text-gray-900 truncate"
+  defp person_name_classes(:dark), do: "text-sm font-medium text-white truncate"
+
+  defp person_role_classes(:card), do: "text-sm text-gray-500 truncate"
+  defp person_role_classes(:dark), do: "text-sm text-gray-400 truncate"
+
+  defp external_link_classes(:card) do
+    [
+      "inline-flex items-center px-3 py-2",
+      "border border-gray-300 shadow-sm",
+      "text-sm leading-4 font-medium rounded-md",
+      "text-gray-700 bg-white hover:bg-gray-50",
+      "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+      "transition-colors"
+    ]
+  end
+
+  defp external_link_classes(:dark) do
+    [
+      "inline-flex items-center px-3 py-2",
+      "border border-white/20 bg-white/5 backdrop-blur-sm",
+      "text-sm leading-4 font-medium rounded-md",
+      "text-white hover:bg-white/10 hover:border-white/30",
+      "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+      "transition-colors"
+    ]
+  end
+
   # Private functions
+
+  defp get_initials(nil), do: "?"
+
+  defp get_initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+  end
+
+  defp get_initials(_), do: "?"
 
   defp assign_computed_data(socket) do
     rich_data = socket.assigns.rich_data
