@@ -199,7 +199,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
       <%= if @show_links && @tmdb_id do %>
         <div class="flex flex-wrap gap-3 pt-2">
           <.hero_link_button
-            href={"https://cinegraph.com/movies/#{@tmdb_id}"}
+            href={"https://cinegraph.org/movies/tmdb/#{@tmdb_id}"}
             icon={:cinegraph}
             label="Cinegraph"
             variant={@variant}

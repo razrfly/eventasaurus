@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
   alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
   alias EventasaurusWeb.Services.TmdbService
+  alias EventasaurusWeb.Services.MovieConfig
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias Eventasaurus.CDN
   import Ecto.Query
@@ -272,7 +273,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
               id="movie-cast"
               cast={@cast}
               variant={:embedded}
-              max_cast={20}
+              max_cast={10}
             />
           </div>
         <% end %>
@@ -801,7 +802,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           movie.poster_url
 
         movie.metadata && movie.metadata["poster_path"] ->
-          "https://image.tmdb.org/t/p/w500#{movie.metadata["poster_path"]}"
+          MovieConfig.build_image_url(movie.metadata["poster_path"], "w500")
 
         true ->
           movie_name_encoded = URI.encode(movie.title)

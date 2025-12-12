@@ -119,7 +119,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
               id="movie-cast"
               cast={@cast}
               variant={:embedded}
-              max_cast={20}
+              max_cast={10}
             />
           </div>
         <% end %>
