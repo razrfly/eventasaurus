@@ -7,11 +7,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.Components.{Breadcrumbs, PublicPlanWithFriendsModal}
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
-  alias EventasaurusWeb.Live.Components.MovieOverviewComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
-  alias EventasaurusWeb.Live.Components.CinegraphLink
   alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
+  alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias Eventasaurus.CDN
   import Ecto.Query
@@ -175,10 +174,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     # Build rich_data map for movie components
     rich_data = build_rich_data_from_movie(movie)
 
-    # Cast and crew not stored in current schema - would need TMDB API enrichment
-    # For now, these are empty - the MovieCastComponent won't render
-    cast = []
-    crew = []
+    # Fetch cast/crew from TMDB if we have a tmdb_id
+    {cast, crew} = fetch_cast_and_crew(movie.tmdb_id)
 
     {:noreply,
      socket
@@ -242,7 +239,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           </div>
         <% end %>
 
-        <!-- Movie Hero Section -->
+        <!-- Movie Hero Section (Cinegraph-style with backdrop, overview, and links inline) -->
         <.live_component
           module={MovieHeroComponent}
           id="movie-hero"
@@ -250,6 +247,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           variant={:card}
           show_rating={true}
           show_metadata={true}
+          show_overview={true}
+          show_links={true}
+          tmdb_id={@movie.tmdb_id}
         />
 
         <!-- Plan with Friends Button -->
@@ -265,18 +265,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             <%= gettext("Coordinate with friends to pick a screening time") %>
           </p>
         </div>
-
-        <!-- Movie Overview Section -->
-        <.live_component
-          module={MovieOverviewComponent}
-          id="movie-overview"
-          rich_data={@rich_data}
-          variant={:card}
-          compact={false}
-          show_links={true}
-          show_personnel={true}
-          tmdb_id={@movie.tmdb_id}
-        />
 
         <!-- Cast Section -->
         <%= if length(@cast) > 0 do %>
@@ -304,17 +292,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
             show_empty_state={true}
           />
         </div>
-
-        <!-- Cinegraph Link -->
-        <%= if @movie.tmdb_id do %>
-          <div class="mt-8 text-center">
-            <CinegraphLink.cinegraph_link
-              tmdb_id={@movie.tmdb_id}
-              title={@movie.title}
-              variant={:button}
-            />
-          </div>
-        <% end %>
 
         <!-- Plan with Friends Modal -->
         <%= if @show_plan_with_friends_modal do %>
@@ -925,5 +902,34 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   defp maybe_add_link(map, key, value, builder) do
     Map.put(map, key, builder.(value))
+  end
+
+  # Fetch cast and crew from TMDB API
+  # Returns {cast, crew} tuple where each is a list of maps with string keys
+  # (CastCarouselComponent expects string keys like "name", "character", "profile_path")
+  defp fetch_cast_and_crew(nil), do: {[], []}
+
+  defp fetch_cast_and_crew(tmdb_id) do
+    case TmdbService.get_cached_movie_details(tmdb_id) do
+      {:ok, movie_data} ->
+        cast =
+          (movie_data[:cast] || [])
+          |> Enum.map(&stringify_keys/1)
+
+        crew =
+          (movie_data[:crew] || [])
+          |> Enum.map(&stringify_keys/1)
+
+        {cast, crew}
+
+      {:error, _reason} ->
+        # If TMDB fetch fails, return empty arrays
+        {[], []}
+    end
+  end
+
+  # Convert map with atom keys to string keys for component compatibility
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 end
