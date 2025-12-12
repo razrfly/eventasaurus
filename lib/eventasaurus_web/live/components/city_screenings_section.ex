@@ -16,7 +16,6 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
   """
 
   use EventasaurusWeb, :live_component
-  import EventasaurusWeb.CoreComponents
 
   @impl true
   def update(assigns, socket) do
@@ -63,7 +62,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
   defp empty_state(assigns) do
     ~H"""
     <div class={empty_state_classes(@variant)}>
-      <.icon name="hero-film" class={empty_icon_classes(@variant)} />
+      <Heroicons.film class={empty_icon_classes(@variant)} />
       <p class={empty_text_classes(@variant)}>
         <%= gettext("No screenings found for this movie in %{city}", city: @city.name) %>
       </p>
@@ -87,14 +86,14 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
           <!-- Address -->
           <%= if @venue.address do %>
             <p class={venue_address_classes(@variant)}>
-              <.icon name="hero-map-pin" class="w-4 h-4 inline mr-1 flex-shrink-0" />
+              <Heroicons.map_pin class="w-4 h-4 inline mr-1 flex-shrink-0" />
               <%= @venue.address %>
             </p>
           <% end %>
 
           <!-- Date range and showtime count -->
           <div class={date_info_classes(@variant)}>
-            <.icon name="hero-calendar-days" class="w-5 h-5 mr-2 flex-shrink-0" />
+            <Heroicons.calendar_days class="w-5 h-5 mr-2 flex-shrink-0" />
             <span class="font-medium">
               <%= @info.date_range %> &bull; <%= ngettext("1 showtime", "%{count} showtimes", @info.count) %>
             </span>
@@ -131,7 +130,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
         <div class="ml-4 flex-shrink-0">
           <span class={cta_button_classes(@variant)}>
             <%= gettext("View Showtimes") %>
-            <.icon name="hero-arrow-right" class="w-4 h-4 ml-2" />
+            <Heroicons.arrow_right class="w-4 h-4 ml-2" />
           </span>
         </div>
       </div>
