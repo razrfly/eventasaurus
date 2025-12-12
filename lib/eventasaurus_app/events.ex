@@ -5456,6 +5456,7 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns all votes by a user for a poll.
+  Returns an empty list if user is nil or not a valid User struct.
   """
   def list_user_poll_votes(%Poll{} = poll, %User{} = user) do
     query =
@@ -5468,6 +5469,9 @@ defmodule EventasaurusApp.Events do
 
     Repo.all(query)
   end
+
+  # Catch-all clause for nil or invalid user - return empty list
+  def list_user_poll_votes(%Poll{}, _user), do: []
 
   @doc """
   Creates a vote based on voting system.
