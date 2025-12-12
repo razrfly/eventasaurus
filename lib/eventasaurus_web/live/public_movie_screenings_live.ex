@@ -5,7 +5,12 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusDiscovery.Movies.Movie
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusWeb.Components.{MovieDetailsCard, Breadcrumbs, PublicPlanWithFriendsModal}
+  alias EventasaurusWeb.Components.{Breadcrumbs, PublicPlanWithFriendsModal}
+  alias EventasaurusWeb.Live.Components.MovieHeroComponent
+  alias EventasaurusWeb.Live.Components.MovieOverviewComponent
+  alias EventasaurusWeb.Live.Components.MovieCastComponent
+  alias EventasaurusWeb.Live.Components.CityScreeningsSection
+  alias EventasaurusWeb.Live.Components.CinegraphLink
   alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
   alias EventasaurusWeb.JsonLd.MovieSchema
   alias Eventasaurus.CDN
@@ -160,6 +165,14 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         # Generate Open Graph meta tags
         og_tags = build_movie_open_graph(movie, city, total_showtimes)
 
+        # Build rich_data map for movie components from TMDB metadata
+        rich_data = build_rich_data_from_movie(movie)
+
+        # Extract cast and crew from TMDB credits
+        credits = movie.tmdb_metadata["credits"] || %{}
+        cast = credits["cast"] || []
+        crew = credits["crew"] || []
+
         {:noreply,
          socket
          |> assign(:page_title, "#{movie.title} - #{city.name}")
@@ -171,7 +184,10 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
          |> assign(:available_languages, available_languages)
          |> assign(:primary_category, primary_category)
          |> assign(:json_ld, json_ld)
-         |> assign(:open_graph, og_tags)}
+         |> assign(:open_graph, og_tags)
+         |> assign(:rich_data, rich_data)
+         |> assign(:cast, cast)
+         |> assign(:crew, crew)}
     end
   end
 
@@ -220,14 +236,18 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           </div>
         <% end %>
 
-        <!-- Movie Header -->
-        <MovieDetailsCard.movie_details_card
-          movie={@movie}
-          show_see_all_link={false}
+        <!-- Movie Hero Section -->
+        <.live_component
+          module={MovieHeroComponent}
+          id="movie-hero"
+          rich_data={@rich_data}
+          variant={:card}
+          show_rating={true}
+          show_metadata={true}
         />
 
         <!-- Plan with Friends Button -->
-        <div class="mb-8">
+        <div class="my-8">
           <button
             phx-click="open_plan_modal"
             class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
@@ -240,87 +260,59 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           </p>
         </div>
 
+        <!-- Movie Overview Section -->
+        <.live_component
+          module={MovieOverviewComponent}
+          id="movie-overview"
+          rich_data={@rich_data}
+          variant={:card}
+          compact={false}
+          show_links={true}
+          show_personnel={true}
+          tmdb_id={@movie.tmdb_id}
+        />
+
+        <!-- Cast Section -->
+        <%= if length(@cast) > 0 do %>
+          <div class="mt-8">
+            <.live_component
+              module={MovieCastComponent}
+              id="movie-cast"
+              cast={@cast}
+              crew={@crew}
+              variant={:card}
+              compact={false}
+              show_badges={true}
+              max_cast={12}
+              show_crew={true}
+            />
+          </div>
+        <% end %>
+
         <!-- Screenings Section -->
-        <div class="bg-white rounded-lg shadow-lg p-8">
-          <h2 class="text-2xl font-bold text-gray-900 mb-6">
-            <%= gettext("Screenings in %{city}", city: @city.name) %>
-            <span class="text-lg font-normal text-gray-600">
-              (<%= ngettext("1 showtime", "%{count} showtimes", @total_showtimes) %>)
-            </span>
-          </h2>
-
-          <%= if @venues_with_info == [] do %>
-            <div class="text-center py-12">
-              <Heroicons.film class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p class="text-gray-600 text-lg">
-                <%= gettext("No screenings found for this movie in %{city}", city: @city.name) %>
-              </p>
-            </div>
-          <% else %>
-            <div class="space-y-4">
-              <%= for {venue, info} <- @venues_with_info do %>
-                <.link
-                  navigate={~p"/activities/#{info.slug}"}
-                  class="block p-6 border border-gray-200 rounded-lg hover:border-blue-400 hover:shadow-md transition"
-                >
-                  <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                      <h3 class="text-lg font-semibold text-gray-900 mb-2">
-                        <%= venue.name %>
-                      </h3>
-
-                      <%= if venue.address do %>
-                        <p class="text-sm text-gray-600 mb-3">
-                          <Heroicons.map_pin class="w-4 h-4 inline mr-1" />
-                          <%= venue.address %>
-                        </p>
-                      <% end %>
-
-                      <!-- Date range and showtime count -->
-                      <div class="flex items-center text-gray-700 mb-2">
-                        <Heroicons.calendar_days class="w-5 h-5 mr-2 flex-shrink-0" />
-                        <span class="font-medium">
-                          <%= info.date_range %> • <%= ngettext("1 showtime", "%{count} showtimes", info.count) %>
-                        </span>
-                      </div>
-
-                      <!-- Format badges -->
-                      <%= if length(info.formats) > 0 do %>
-                        <div class="flex flex-wrap gap-2 mb-2">
-                          <%= for format <- info.formats do %>
-                            <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold">
-                              <%= format %>
-                            </span>
-                          <% end %>
-                        </div>
-                      <% end %>
-
-                      <!-- Specific dates (if limited) -->
-                      <%= if length(info.dates) <= 7 do %>
-                        <div class="text-sm text-gray-600">
-                          <%= info.dates
-                              |> Enum.take(4)
-                              |> Enum.map(&format_date_label/1)
-                              |> Enum.join(", ") %>
-                          <%= if length(info.dates) > 4 do %>
-                            <span class="text-gray-500">+<%= length(info.dates) - 4 %> more</span>
-                          <% end %>
-                        </div>
-                      <% end %>
-                    </div>
-
-                    <div class="ml-4">
-                      <div class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                        <%= gettext("View Showtimes") %>
-                        <Heroicons.arrow_right class="w-4 h-4 ml-2" />
-                      </div>
-                    </div>
-                  </div>
-                </.link>
-              <% end %>
-            </div>
-          <% end %>
+        <div class="mt-8">
+          <.live_component
+            module={CityScreeningsSection}
+            id="city-screenings"
+            city={@city}
+            venues_with_info={@venues_with_info}
+            total_showtimes={@total_showtimes}
+            variant={:card}
+            compact={false}
+            show_empty_state={true}
+          />
         </div>
+
+        <!-- Cinegraph Link -->
+        <%= if @movie.tmdb_id do %>
+          <div class="mt-8 text-center">
+            <CinegraphLink.cinegraph_link
+              tmdb_id={@movie.tmdb_id}
+              title={@movie.title}
+              variant={:button}
+            />
+          </div>
+        <% end %>
 
         <!-- Plan with Friends Modal -->
         <%= if @show_plan_with_friends_modal do %>
@@ -691,18 +683,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     "#{month_abbr} #{date.day}"
   end
 
-  # Format date with Today/Tomorrow labels
-  defp format_date_label(date) do
-    today = Date.utc_today()
-    tomorrow = Date.add(today, 1)
-
-    case date do
-      ^today -> gettext("Today")
-      ^tomorrow -> gettext("Tomorrow")
-      _ -> format_date_short(date)
-    end
-  end
-
   # Category helper functions
   defp get_primary_category(event) do
     case event.primary_category_id do
@@ -817,4 +797,47 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   defp pluralize_showtime(1), do: "showtime"
   defp pluralize_showtime(_), do: "showtimes"
+
+  # Build rich_data map from movie for use with movie components
+  defp build_rich_data_from_movie(movie) do
+    tmdb = movie.tmdb_metadata || %{}
+    credits = tmdb["credits"] || %{}
+    crew = credits["crew"] || []
+
+    # Find director from crew
+    director =
+      crew
+      |> Enum.find(fn member -> member["job"] == "Director" end)
+
+    # Build external links map
+    external_ids = tmdb["external_ids"] || %{}
+
+    external_links =
+      %{}
+      |> maybe_add_link(:imdb_url, external_ids["imdb_id"], &"https://www.imdb.com/title/#{&1}")
+      |> maybe_add_link(:tmdb_url, tmdb["id"], &"https://www.themoviedb.org/movie/#{&1}")
+      |> maybe_add_link(:homepage, tmdb["homepage"], & &1)
+
+    %{
+      "title" => movie.title,
+      "overview" => tmdb["overview"],
+      "poster_path" => tmdb["poster_path"],
+      "backdrop_path" => tmdb["backdrop_path"],
+      "release_date" => tmdb["release_date"],
+      "runtime" => tmdb["runtime"],
+      "vote_average" => tmdb["vote_average"],
+      "vote_count" => tmdb["vote_count"],
+      "genres" => tmdb["genres"] || [],
+      "director" => director,
+      "crew" => crew,
+      "external_links" => external_links
+    }
+  end
+
+  defp maybe_add_link(map, _key, nil, _builder), do: map
+  defp maybe_add_link(map, _key, "", _builder), do: map
+
+  defp maybe_add_link(map, key, value, builder) do
+    Map.put(map, key, builder.(value))
+  end
 end
