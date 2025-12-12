@@ -119,7 +119,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
                   |> Enum.join(", ") %>
               <%= if length(@info.dates) > 4 do %>
                 <span class={more_dates_classes(@variant)}>
-                  +<%= length(@info.dates) - 4 %> more
+                  <%= ngettext("+1 more", "+%{count} more", length(@info.dates) - 4) %>
                 </span>
               <% end %>
             </div>
@@ -142,12 +142,15 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
 
   defp section_container_classes(:card), do: "bg-white rounded-lg shadow-lg p-8"
   defp section_container_classes(:dark), do: "bg-gray-900/50 backdrop-blur-sm rounded-lg p-8"
+  defp section_container_classes(_), do: section_container_classes(:card)
 
   defp section_title_classes(:card), do: "text-2xl font-bold text-gray-900"
   defp section_title_classes(:dark), do: "text-2xl font-bold text-white"
+  defp section_title_classes(_), do: section_title_classes(:card)
 
   defp showtime_count_classes(:card), do: "text-lg font-normal text-gray-600"
   defp showtime_count_classes(:dark), do: "text-lg font-normal text-gray-400"
+  defp showtime_count_classes(_), do: showtime_count_classes(:card)
 
   defp venues_grid_classes(true), do: "space-y-3"
   defp venues_grid_classes(false), do: "space-y-4"
@@ -160,14 +163,19 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
     "block p-6 bg-white/5 border border-white/10 rounded-lg hover:border-white/30 hover:bg-white/10 transition-all"
   end
 
+  defp venue_card_classes(_), do: venue_card_classes(:card)
+
   defp venue_name_classes(:card), do: "text-lg font-semibold text-gray-900 mb-2"
   defp venue_name_classes(:dark), do: "text-lg font-semibold text-white mb-2"
+  defp venue_name_classes(_), do: venue_name_classes(:card)
 
   defp venue_address_classes(:card), do: "text-sm text-gray-600 mb-3"
   defp venue_address_classes(:dark), do: "text-sm text-gray-400 mb-3"
+  defp venue_address_classes(_), do: venue_address_classes(:card)
 
   defp date_info_classes(:card), do: "flex items-center text-gray-700 mb-2"
   defp date_info_classes(:dark), do: "flex items-center text-gray-300 mb-2"
+  defp date_info_classes(_), do: date_info_classes(:card)
 
   defp format_badge_classes(:card) do
     "px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold"
@@ -177,11 +185,15 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
     "px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs font-semibold"
   end
 
+  defp format_badge_classes(_), do: format_badge_classes(:card)
+
   defp dates_list_classes(:card), do: "mt-2 text-sm text-gray-600"
   defp dates_list_classes(:dark), do: "mt-2 text-sm text-gray-400"
+  defp dates_list_classes(_), do: dates_list_classes(:card)
 
   defp more_dates_classes(:card), do: "text-gray-500"
   defp more_dates_classes(:dark), do: "text-gray-500"
+  defp more_dates_classes(_), do: more_dates_classes(:card)
 
   defp cta_button_classes(:card) do
     "inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
@@ -191,14 +203,19 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
     "inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-400 transition font-medium"
   end
 
+  defp cta_button_classes(_), do: cta_button_classes(:card)
+
   defp empty_state_classes(:card), do: "text-center py-12"
   defp empty_state_classes(:dark), do: "text-center py-12"
+  defp empty_state_classes(_), do: empty_state_classes(:card)
 
   defp empty_icon_classes(:card), do: "w-16 h-16 text-gray-400 mx-auto mb-4"
   defp empty_icon_classes(:dark), do: "w-16 h-16 text-gray-600 mx-auto mb-4"
+  defp empty_icon_classes(_), do: empty_icon_classes(:card)
 
   defp empty_text_classes(:card), do: "text-gray-600 text-lg"
   defp empty_text_classes(:dark), do: "text-gray-400 text-lg"
+  defp empty_text_classes(_), do: empty_text_classes(:card)
 
   # Helper functions
 

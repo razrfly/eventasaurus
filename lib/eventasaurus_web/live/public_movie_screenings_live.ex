@@ -245,8 +245,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
           id="movie-hero"
           rich_data={@rich_data}
           variant={:card}
-          show_rating={true}
-          show_metadata={true}
           show_overview={true}
           show_links={true}
           tmdb_id={@movie.tmdb_id}
@@ -796,13 +794,14 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     base_url = EventasaurusWeb.Layouts.get_base_url()
 
     # Get movie poster image - use poster_url field directly
+    # Metadata key is "poster_path" not "poster" per TMDB API
     image_url =
       cond do
         movie.poster_url && movie.poster_url != "" ->
           movie.poster_url
 
-        movie.metadata && movie.metadata["poster"] ->
-          movie.metadata["poster"]
+        movie.metadata && movie.metadata["poster_path"] ->
+          "https://image.tmdb.org/t/p/w500#{movie.metadata["poster_path"]}"
 
         true ->
           movie_name_encoded = URI.encode(movie.title)
