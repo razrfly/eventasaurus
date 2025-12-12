@@ -97,9 +97,10 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   # Build generic URL for the movie page
+  # Note: movie.slug already contains the TMDB ID in format "title-tmdb_id"
   defp build_generic_url(movie) do
     base_url = EventasaurusWeb.Layouts.get_base_url()
-    "#{base_url}/movies/#{movie.tmdb_id}-#{movie.slug}"
+    "#{base_url}/movies/#{movie.slug}"
   end
 
   # Add city offers for generic movie page
