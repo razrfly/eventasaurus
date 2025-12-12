@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Live.Components.CinegraphLink do
 
   - `tmdb_id` - TMDB ID of the movie (required)
   - `title` - Movie title for display (optional, uses default text if not provided)
-  - `variant` - `:button` | `:text` | `:pill` | `:compact` (default: `:button`)
+  - `variant` - `:button` | `:text` | `:pill` | `:compact` | `:dark` (default: `:button`)
   - `class` - Additional CSS classes to apply
   """
 
@@ -162,6 +162,9 @@ defmodule EventasaurusWeb.Live.Components.CinegraphLink do
     ]
   end
 
+  # Fallback for unknown variants - defaults to button style
+  defp link_classes(_), do: link_classes(:button)
+
   defp icon_classes(:button), do: "w-5 h-5"
   defp icon_classes(:text), do: "w-4 h-4"
   defp icon_classes(:pill), do: "w-4 h-4"
@@ -210,7 +213,8 @@ defmodule EventasaurusWeb.Live.Components.CinegraphLink do
   end
 
   defp build_cinegraph_url(tmdb_id) when is_binary(tmdb_id) do
-    "#{@cinegraph_base_url}/movies/#{tmdb_id}"
+    sanitized_id = tmdb_id |> String.trim() |> URI.encode()
+    "#{@cinegraph_base_url}/movies/#{sanitized_id}"
   end
 
   defp build_cinegraph_url(nil), do: @cinegraph_base_url

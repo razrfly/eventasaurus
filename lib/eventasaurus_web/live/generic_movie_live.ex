@@ -106,8 +106,6 @@ defmodule EventasaurusWeb.GenericMovieLive do
           id="movie-hero"
           rich_data={@rich_data}
           variant={:card}
-          show_rating={true}
-          show_metadata={true}
           show_overview={true}
           show_links={true}
           tmdb_id={@movie.tmdb_id}
@@ -277,39 +275,49 @@ defmodule EventasaurusWeb.GenericMovieLive do
     now = DateTime.utc_now()
 
     # Query for all cities that have future screenings for this movie
-    from(pe in PublicEvent,
-      join: em in "event_movies", on: pe.id == em.event_id,
-      join: v in assoc(pe, :venue),
-      join: c in assoc(v, :city_ref),
-      where: em.movie_id == ^movie_id,
-      where: pe.ends_at > ^now or is_nil(pe.ends_at),
-      group_by: [c.id, c.name, c.slug],
-      select: %{
-        city_id: c.id,
-        city_name: c.name,
-        city_slug: c.slug,
-        screening_count: count(pe.id),
-        venue_count: count(v.id, :distinct),
-        next_date: min(pe.starts_at)
-      }
-    )
-    |> Repo.all()
-    |> Enum.map(fn row ->
-      # Load full city with country for flag display
-      city =
-        from(c in City,
-          where: c.id == ^row.city_id,
-          preload: [:country]
-        )
-        |> Repo.one()
+    # Events are considered "future" if they haven't ended yet, or if ends_at is nil
+    # and starts_at is in the future (ongoing events without explicit end time)
+    rows =
+      from(pe in PublicEvent,
+        join: em in "event_movies", on: pe.id == em.event_id,
+        join: v in assoc(pe, :venue),
+        join: c in assoc(v, :city_ref),
+        where: em.movie_id == ^movie_id,
+        where: pe.ends_at > ^now or (is_nil(pe.ends_at) and pe.starts_at > ^now),
+        group_by: [c.id, c.name, c.slug],
+        select: %{
+          city_id: c.id,
+          city_name: c.name,
+          city_slug: c.slug,
+          screening_count: count(pe.id),
+          venue_count: count(v.id, :distinct),
+          next_date: min(pe.starts_at)
+        }
+      )
+      |> Repo.all()
 
+    # Batch load all cities with countries in a single query (avoid N+1)
+    city_ids = Enum.map(rows, & &1.city_id)
+
+    cities_by_id =
+      from(c in City,
+        where: c.id in ^city_ids,
+        preload: [:country]
+      )
+      |> Repo.all()
+      |> Map.new(fn city -> {city.id, city} end)
+
+    # Build result with preloaded cities
+    rows
+    |> Enum.map(fn row ->
       %{
-        city: city,
+        city: Map.get(cities_by_id, row.city_id),
         screening_count: row.screening_count,
         venue_count: row.venue_count,
         next_date: row.next_date
       }
     end)
+    |> Enum.reject(fn row -> is_nil(row.city) end)
     |> Enum.sort_by(& &1.screening_count, :desc)
   end
 

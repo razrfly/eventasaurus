@@ -28,12 +28,15 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
 
   @impl true
   def update(assigns, socket) do
+    # Resolve variant first so we can use it for dependent defaults
+    resolved_variant = assigns[:variant] || socket.assigns[:variant] || :full
+
     {:ok,
      socket
      |> assign(assigns)
      |> assign_new(:variant, fn -> :full end)
      |> assign_new(:show_poster, fn -> true end)
-     |> assign_new(:show_director, fn -> assigns[:variant] != :compact end)
+     |> assign_new(:show_director, fn -> resolved_variant != :compact end)
      |> assign_new(:show_overview, fn -> false end)
      |> assign_new(:show_links, fn -> false end)
      |> assign_new(:tmdb_id, fn -> nil end)
@@ -297,6 +300,8 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     "absolute inset-0 h-72 md:h-80 lg:h-96"
   end
 
+  defp hero_container_classes(_), do: hero_container_classes(:full)
+
   defp hero_content_wrapper_classes(:full) do
     "relative z-10 pt-16 pb-8 md:pt-24 lg:pt-32"
   end
@@ -308,6 +313,8 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   defp hero_content_wrapper_classes(:card) do
     "relative z-10 pt-12 pb-6 md:pt-16"
   end
+
+  defp hero_content_wrapper_classes(_), do: hero_content_wrapper_classes(:full)
 
   defp fallback_container_classes(:full) do
     "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-[400px]"
@@ -321,6 +328,8 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-sm min-h-[280px]"
   end
 
+  defp fallback_container_classes(_), do: fallback_container_classes(:full)
+
   defp poster_classes(:full) do
     "w-48 md:w-56 lg:w-64 h-auto rounded-lg shadow-2xl ring-1 ring-white/10"
   end
@@ -332,6 +341,8 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   defp poster_classes(:card) do
     "w-40 md:w-48 h-auto rounded-lg shadow-lg ring-1 ring-white/10"
   end
+
+  defp poster_classes(_), do: poster_classes(:full)
 
   defp title_classes(:full) do
     "text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight drop-shadow-lg"
@@ -345,6 +356,8 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     "text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight leading-tight text-white drop-shadow-lg"
   end
 
+  defp title_classes(_), do: title_classes(:full)
+
   defp tagline_classes(:full) do
     "text-lg md:text-xl italic text-white/80"
   end
@@ -356,6 +369,8 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   defp tagline_classes(:card) do
     "text-base md:text-lg italic text-white/80"
   end
+
+  defp tagline_classes(_), do: tagline_classes(:full)
 
   # For :card variant WITH backdrop, use white text for readability
   # For :card variant WITHOUT backdrop (fallback), use dark text
