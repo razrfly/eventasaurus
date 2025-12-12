@@ -2,9 +2,13 @@ defmodule EventasaurusWeb.GenericMovieLive do
   @moduledoc """
   Generic movie page for cross-site linking.
 
-  Accessible via `/movies/:identifier` where identifier can be:
-  - TMDB ID only: `/movies/157336`
-  - TMDB ID with slug: `/movies/157336-interstellar`
+  Accessible via `/movies/:slug` where slug is in the format `title-tmdb_id`:
+  - `/movies/interstellar-157336` (canonical format)
+  - `/movies/home-alone-771`
+
+  Also supports legacy URLs and bare TMDB IDs with redirects:
+  - `/movies/157336` (TMDB ID only) → redirects to canonical
+  - `/movies/interstellar-499` (old random suffix) → redirects to canonical
 
   This page shows movie information and lists all cities with screenings,
   allowing users to navigate to city-specific screening pages.
@@ -17,11 +21,11 @@ defmodule EventasaurusWeb.GenericMovieLive do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.Components.CountryFlag
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
-  alias EventasaurusWeb.Live.Components.MovieOverviewComponent
-  alias EventasaurusWeb.Live.Components.MovieCastComponent
-  alias EventasaurusWeb.Live.Components.CinegraphLink
+  alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.JsonLd.MovieSchema
+  alias EventasaurusWeb.Services.TmdbService
   alias Eventasaurus.CDN
   import Ecto.Query
 
@@ -32,68 +36,58 @@ defmodule EventasaurusWeb.GenericMovieLive do
 
   @impl true
   def handle_params(%{"identifier" => identifier}, _url, socket) do
-    # Parse TMDB ID from identifier (e.g., "157336" or "157336-interstellar")
-    tmdb_id = parse_tmdb_id(identifier)
+    # Try to find movie by:
+    # 1. Direct slug match (canonical: "home-alone-771")
+    # 2. Legacy slug match (old format: "home-alone-499")
+    # 3. TMDB ID only ("771")
+    movie = find_movie(identifier)
 
-    case tmdb_id do
+    case movie do
       nil ->
         {:noreply,
          socket
-         |> put_flash(:error, gettext("Invalid movie identifier"))
+         |> put_flash(:error, gettext("Movie not found"))
          |> redirect(to: ~p"/activities")}
 
-      tmdb_id ->
-        # Fetch movie by TMDB ID
-        movie =
-          from(m in Movie,
-            where: m.tmdb_id == ^tmdb_id
-          )
-          |> Repo.one()
+      movie ->
+        # Redirect to canonical URL if not already there
+        if identifier != movie.slug do
+          {:noreply, redirect(socket, to: ~p"/movies/#{movie.slug}")}
+        else
+          # Fetch all cities with screenings for this movie
+          cities_with_screenings = get_cities_with_screenings(movie.id)
 
-        case movie do
-          nil ->
-            {:noreply,
-             socket
-             |> put_flash(:error, gettext("Movie not found"))
-             |> redirect(to: ~p"/activities")}
+          # Build breadcrumb navigation
+          breadcrumb_items = [
+            %{label: gettext("Home"), path: ~p"/"},
+            %{label: gettext("All Activities"), path: ~p"/activities"},
+            %{label: gettext("Film"), path: ~p"/activities?category=film"},
+            %{label: movie.title, path: nil}
+          ]
 
-          movie ->
-            # Fetch all cities with screenings for this movie
-            cities_with_screenings = get_cities_with_screenings(movie.id)
+          # Build rich_data map for movie components
+          rich_data = build_rich_data_from_movie(movie)
 
-            # Build breadcrumb navigation
-            breadcrumb_items = [
-              %{label: gettext("Home"), path: ~p"/"},
-              %{label: gettext("All Activities"), path: ~p"/activities"},
-              %{label: gettext("Film"), path: ~p"/activities?category=film"},
-              %{label: movie.title, path: nil}
-            ]
+          # Fetch cast/crew from TMDB if we have a tmdb_id
+          {cast, crew} = fetch_cast_and_crew(movie.tmdb_id)
 
-            # Build rich_data map for movie components
-            rich_data = build_rich_data_from_movie(movie)
+          # Generate JSON-LD structured data
+          json_ld = MovieSchema.generate_generic(movie, cities_with_screenings)
 
-            # Extract cast and crew from TMDB credits
-            credits = movie.tmdb_metadata["credits"] || %{}
-            cast = credits["cast"] || []
-            crew = credits["crew"] || []
+          # Generate Open Graph meta tags
+          og_tags = build_movie_open_graph(movie, cities_with_screenings)
 
-            # Generate JSON-LD structured data
-            json_ld = MovieSchema.generate_generic(movie, cities_with_screenings)
-
-            # Generate Open Graph meta tags
-            og_tags = build_movie_open_graph(movie, cities_with_screenings)
-
-            {:noreply,
-             socket
-             |> assign(:page_title, movie.title)
-             |> assign(:movie, movie)
-             |> assign(:rich_data, rich_data)
-             |> assign(:cast, cast)
-             |> assign(:crew, crew)
-             |> assign(:cities_with_screenings, cities_with_screenings)
-             |> assign(:breadcrumb_items, breadcrumb_items)
-             |> assign(:json_ld, json_ld)
-             |> assign(:open_graph, og_tags)}
+          {:noreply,
+           socket
+           |> assign(:page_title, movie.title)
+           |> assign(:movie, movie)
+           |> assign(:rich_data, rich_data)
+           |> assign(:cast, cast)
+           |> assign(:crew, crew)
+           |> assign(:cities_with_screenings, cities_with_screenings)
+           |> assign(:breadcrumb_items, breadcrumb_items)
+           |> assign(:json_ld, json_ld)
+           |> assign(:open_graph, og_tags)}
         end
     end
   end
@@ -114,41 +108,26 @@ defmodule EventasaurusWeb.GenericMovieLive do
           variant={:card}
           show_rating={true}
           show_metadata={true}
+          show_overview={true}
+          show_links={true}
+          tmdb_id={@movie.tmdb_id}
         />
-
-        <!-- Movie Overview Section -->
-        <div class="mt-8">
-          <.live_component
-            module={MovieOverviewComponent}
-            id="movie-overview"
-            rich_data={@rich_data}
-            variant={:card}
-            compact={false}
-            show_links={true}
-            show_personnel={true}
-            tmdb_id={@movie.tmdb_id}
-          />
-        </div>
 
         <!-- Cast Section -->
         <%= if length(@cast) > 0 do %>
-          <div class="mt-8">
+          <div class="mt-8 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <.live_component
-              module={MovieCastComponent}
+              module={CastCarouselComponent}
               id="movie-cast"
               cast={@cast}
-              crew={@crew}
-              variant={:card}
-              compact={false}
-              show_badges={true}
-              max_cast={12}
-              show_crew={true}
+              variant={:embedded}
+              max_cast={20}
             />
           </div>
         <% end %>
 
         <!-- Where to Watch Section -->
-        <div class="mt-8 bg-white rounded-lg shadow-lg p-8">
+        <div class="mt-8 bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
           <h2 class="text-2xl font-bold text-gray-900 mb-2">
             <%= gettext("Find Screenings Near You") %>
           </h2>
@@ -158,7 +137,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
 
           <%= if @cities_with_screenings == [] do %>
             <div class="text-center py-12">
-              <.icon name="hero-film" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <.icon name="hero-film" class="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p class="text-gray-600 text-lg mb-4">
                 <%= gettext("No screenings currently available for this movie") %>
               </p>
@@ -167,7 +146,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
               </p>
               <.link
                 navigate={~p"/activities?category=film"}
-                class="inline-flex items-center mt-6 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+                class="inline-flex items-center mt-6 px-6 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition"
               >
                 <%= gettext("Browse All Movies") %>
                 <.icon name="hero-arrow-right" class="w-4 h-4 ml-2" />
@@ -182,16 +161,6 @@ defmodule EventasaurusWeb.GenericMovieLive do
           <% end %>
         </div>
 
-        <!-- Cinegraph Link -->
-        <%= if @movie.tmdb_id do %>
-          <div class="mt-8 text-center">
-            <CinegraphLink.cinegraph_link
-              tmdb_id={@movie.tmdb_id}
-              title={@movie.title}
-              variant={:button}
-            />
-          </div>
-        <% end %>
       </div>
     </div>
     """
@@ -203,13 +172,13 @@ defmodule EventasaurusWeb.GenericMovieLive do
     ~H"""
     <.link
       navigate={~p"/c/#{@city_info.city.slug}/movies/#{@movie.slug}"}
-      class="block p-6 border border-gray-200 rounded-lg hover:border-blue-400 hover:shadow-md transition-all group"
+      class="block p-6 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all group"
     >
       <div class="flex items-start justify-between">
         <div class="flex-1">
           <div class="flex items-center gap-2 mb-2">
-            <%= if @city_info.city.country && @city_info.city.country.flag do %>
-              <span class="text-xl"><%= @city_info.city.country.flag %></span>
+            <%= if @city_info.city.country && @city_info.city.country.code do %>
+              <CountryFlag.flag country_code={@city_info.city.country.code} size="md" />
             <% end %>
             <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
               <%= @city_info.city.name %>
@@ -218,16 +187,16 @@ defmodule EventasaurusWeb.GenericMovieLive do
 
           <div class="space-y-1 text-sm text-gray-600">
             <p>
-              <.icon name="hero-ticket" class="w-4 h-4 inline mr-1" />
+              <.icon name="hero-ticket" class="w-4 h-4 inline mr-1 text-gray-400" />
               <%= ngettext("1 screening", "%{count} screenings", @city_info.screening_count) %>
             </p>
             <p>
-              <.icon name="hero-building-storefront" class="w-4 h-4 inline mr-1" />
+              <.icon name="hero-building-storefront" class="w-4 h-4 inline mr-1 text-gray-400" />
               <%= ngettext("1 venue", "%{count} venues", @city_info.venue_count) %>
             </p>
             <%= if @city_info.next_date do %>
               <p>
-                <.icon name="hero-calendar" class="w-4 h-4 inline mr-1" />
+                <.icon name="hero-calendar" class="w-4 h-4 inline mr-1 text-gray-400" />
                 <%= gettext("Next: %{date}", date: format_date(@city_info.next_date)) %>
               </p>
             <% end %>
@@ -244,13 +213,61 @@ defmodule EventasaurusWeb.GenericMovieLive do
 
   # Helper functions
 
+  # Find movie by identifier, trying multiple lookup strategies:
+  # 1. Direct slug match (canonical: "home-alone-771")
+  # 2. Legacy slug match (old format: "home-alone-499")
+  # 3. TMDB ID only ("771")
+  defp find_movie(identifier) when is_binary(identifier) do
+    # Try canonical slug first
+    movie = Repo.one(from(m in Movie, where: m.slug == ^identifier))
+
+    cond do
+      movie != nil ->
+        movie
+
+      # Try legacy slug (backwards compatibility)
+      true ->
+        movie = Repo.one(from(m in Movie, where: m.legacy_slug == ^identifier))
+
+        if movie do
+          movie
+        else
+          # Try parsing as TMDB ID
+          case parse_tmdb_id(identifier) do
+            nil -> nil
+            tmdb_id -> Repo.one(from(m in Movie, where: m.tmdb_id == ^tmdb_id))
+          end
+        end
+    end
+  end
+
+  defp find_movie(_), do: nil
+
+  # Parse TMDB ID from identifier:
+  # - "157336" -> 157336 (TMDB ID only)
+  # - "interstellar-157336" -> 157336 (slug-tmdb_id format, extracts trailing ID)
   defp parse_tmdb_id(identifier) when is_binary(identifier) do
-    # Extract leading numeric portion from identifier
-    # e.g., "157336" -> 157336
-    # e.g., "157336-interstellar" -> 157336
-    case Integer.parse(identifier) do
-      {id, _rest} when id > 0 -> id
-      _ -> nil
+    cond do
+      # Pure numeric - just TMDB ID
+      Regex.match?(~r/^\d+$/, identifier) ->
+        case Integer.parse(identifier) do
+          {id, ""} when id > 0 -> id
+          _ -> nil
+        end
+
+      # slug-tmdb_id format (e.g., "interstellar-157336")
+      # Extract the TMDB ID from the end after the last hyphen
+      Regex.match?(~r/^.+-\d+$/, identifier) ->
+        parts = String.split(identifier, "-")
+        tmdb_part = List.last(parts)
+
+        case Integer.parse(tmdb_part) do
+          {id, ""} when id > 0 -> id
+          _ -> nil
+        end
+
+      true ->
+        nil
     end
   end
 
@@ -317,40 +334,64 @@ defmodule EventasaurusWeb.GenericMovieLive do
   end
 
   # Build rich_data map from movie for use with movie components
+  # Uses actual movie fields (poster_url, backdrop_url, etc.) and metadata map
   defp build_rich_data_from_movie(movie) do
-    tmdb = movie.tmdb_metadata || %{}
-    credits = tmdb["credits"] || %{}
-    crew = credits["crew"] || []
+    metadata = movie.metadata || %{}
 
-    # Find director from crew
-    director =
-      crew
-      |> Enum.find(fn member -> member["job"] == "Director" end)
+    # Extract poster_path from full URL if present
+    # movie.poster_url is like "https://image.tmdb.org/t/p/w500/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg"
+    # We need "/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg" for the components
+    poster_path = extract_tmdb_path(movie.poster_url)
+    backdrop_path = extract_tmdb_path(movie.backdrop_url)
 
     # Build external links map
-    external_ids = tmdb["external_ids"] || %{}
-
     external_links =
       %{}
-      |> maybe_add_link(:imdb_url, external_ids["imdb_id"], &"https://www.imdb.com/title/#{&1}")
-      |> maybe_add_link(:tmdb_url, tmdb["id"], &"https://www.themoviedb.org/movie/#{&1}")
-      |> maybe_add_link(:homepage, tmdb["homepage"], & &1)
+      |> maybe_add_link(:tmdb_url, movie.tmdb_id, &"https://www.themoviedb.org/movie/#{&1}")
 
     %{
       "title" => movie.title,
-      "overview" => tmdb["overview"],
-      "poster_path" => tmdb["poster_path"],
-      "backdrop_path" => tmdb["backdrop_path"],
-      "release_date" => tmdb["release_date"],
-      "runtime" => tmdb["runtime"],
-      "vote_average" => tmdb["vote_average"],
-      "vote_count" => tmdb["vote_count"],
-      "genres" => tmdb["genres"] || [],
-      "director" => director,
-      "crew" => crew,
+      "overview" => movie.overview,
+      "poster_path" => poster_path,
+      "backdrop_path" => backdrop_path,
+      "release_date" => format_release_date(movie.release_date),
+      "runtime" => movie.runtime,
+      "vote_average" => metadata["vote_average"],
+      "vote_count" => metadata["vote_count"],
+      "genres" => build_genres_list(metadata["genres"]),
+      "director" => nil,
+      "crew" => [],
       "external_links" => external_links
     }
   end
+
+  # Extract the path portion from a full TMDB image URL
+  # "https://image.tmdb.org/t/p/w500/abc123.jpg" -> "/abc123.jpg"
+  defp extract_tmdb_path(nil), do: nil
+  defp extract_tmdb_path(""), do: nil
+  defp extract_tmdb_path(url) when is_binary(url) do
+    case Regex.run(~r{/t/p/w\d+(/[^/]+\.\w+)$}, url) do
+      [_, path] -> path
+      _ -> nil
+    end
+  end
+
+  # Format release_date for display
+  defp format_release_date(nil), do: nil
+  defp format_release_date(%Date{} = date), do: Date.to_iso8601(date)
+  defp format_release_date(date) when is_binary(date), do: date
+
+  # Build genres list - metadata may have string list or map list
+  defp build_genres_list(nil), do: []
+  defp build_genres_list(genres) when is_list(genres) do
+    Enum.map(genres, fn
+      %{"name" => name} -> %{"name" => name}
+      name when is_binary(name) -> %{"name" => name}
+      _ -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+  defp build_genres_list(_), do: []
 
   defp maybe_add_link(map, _key, nil, _builder), do: map
   defp maybe_add_link(map, _key, "", _builder), do: map
@@ -363,14 +404,11 @@ defmodule EventasaurusWeb.GenericMovieLive do
   defp build_movie_open_graph(movie, cities_with_screenings) do
     base_url = EventasaurusWeb.Layouts.get_base_url()
 
-    # Get movie poster image
+    # Get movie poster image - use actual poster_url field
     image_url =
       cond do
-        movie.tmdb_metadata && movie.tmdb_metadata["poster_path"] ->
-          "https://image.tmdb.org/t/p/w500#{movie.tmdb_metadata["poster_path"]}"
-
-        movie.metadata && movie.metadata["poster"] ->
-          movie.metadata["poster"]
+        movie.poster_url && movie.poster_url != "" ->
+          movie.poster_url
 
         true ->
           movie_name_encoded = URI.encode(movie.title)
@@ -402,12 +440,41 @@ defmodule EventasaurusWeb.GenericMovieLive do
         image_url: cdn_image_url,
         image_width: 500,
         image_height: 750,
-        url: "#{base_url}/movies/#{movie.tmdb_id}-#{movie.slug}",
+        url: "#{base_url}/movies/#{movie.slug}",
         site_name: "Wombie",
         locale: "en_US",
         twitter_card: "summary_large_image"
       })
     )
     |> IO.iodata_to_binary()
+  end
+
+  # Fetch cast and crew from TMDB API
+  # Returns {cast, crew} tuple where each is a list of maps with string keys
+  # (CastCarouselComponent expects string keys like "name", "character", "profile_path")
+  defp fetch_cast_and_crew(nil), do: {[], []}
+
+  defp fetch_cast_and_crew(tmdb_id) do
+    case TmdbService.get_cached_movie_details(tmdb_id) do
+      {:ok, movie_data} ->
+        cast =
+          (movie_data[:cast] || [])
+          |> Enum.map(&stringify_keys/1)
+
+        crew =
+          (movie_data[:crew] || [])
+          |> Enum.map(&stringify_keys/1)
+
+        {cast, crew}
+
+      {:error, _reason} ->
+        # If TMDB fetch fails, return empty arrays
+        {[], []}
+    end
+  end
+
+  # Convert map with atom keys to string keys for component compatibility
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 end

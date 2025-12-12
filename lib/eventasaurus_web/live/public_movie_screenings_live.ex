@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Components.{Breadcrumbs, PublicPlanWithFriendsModal}
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
   alias EventasaurusWeb.Live.Components.MovieOverviewComponent
-  alias EventasaurusWeb.Live.Components.MovieCastComponent
+  alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
   alias EventasaurusWeb.Live.Components.CinegraphLink
   alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
@@ -51,12 +51,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       )
       |> Repo.one()
 
-    # Fetch movie
-    movie =
-      from(m in Movie,
-        where: m.slug == ^movie_slug
-      )
-      |> Repo.one()
+    # Fetch movie by slug, legacy_slug, or TMDB ID
+    movie = find_movie(movie_slug)
 
     case {city, movie} do
       {nil, _} ->
@@ -72,123 +68,133 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
          |> redirect(to: ~p"/activities")}
 
       {city, movie} ->
-        # Fetch upcoming screenings for this movie in this city
-        _now = DateTime.utc_now()
-
-        screenings =
-          from(pe in PublicEvent,
-            join: em in "event_movies",
-            on: pe.id == em.event_id,
-            join: v in assoc(pe, :venue),
-            on: v.city_id == ^city.id,
-            where: em.movie_id == ^movie.id,
-            order_by: [asc: pe.starts_at],
-            preload: [:categories, :performers, venue: :city_ref, sources: :source]
-          )
-          |> Repo.all()
-
-        # Group by venue and extract detailed information from ALL occurrences
-        venues_with_info =
-          screenings
-          |> Enum.group_by(& &1.venue.id)
-          |> Enum.map(fn {_venue_id, events} ->
-            first_event = List.first(events)
-
-            # Extract ALL occurrences from ALL events for this venue
-            all_occurrences = extract_all_occurrences(events)
-
-            # Count actual showtimes (occurrences), not events
-            showtime_count = length(all_occurrences)
-
-            # Get date range from occurrences
-            date_range =
-              if length(all_occurrences) > 0 do
-                extract_occurrence_date_range(all_occurrences)
-              else
-                format_date_short(Date.utc_today())
-              end
-
-            # Extract unique formats from occurrence labels
-            formats = extract_occurrence_formats(all_occurrences)
-
-            # Extract unique dates for optional display
-            unique_dates =
-              all_occurrences
-              |> Enum.map(& &1.date)
-              |> Enum.uniq()
-              |> Enum.sort()
-
-            {first_event.venue,
-             %{
-               count: showtime_count,
-               slug: first_event.slug,
-               date_range: date_range,
-               formats: formats,
-               dates: unique_dates
-             }}
-          end)
-          |> Enum.sort_by(fn {venue, _info} -> venue.name end)
-
-        # Sum up all showtime counts from all venues
-        total_showtimes =
-          venues_with_info
-          |> Enum.map(fn {_venue, info} -> info.count end)
-          |> Enum.sum()
-
-        # Build breadcrumb navigation
-        breadcrumb_items = [
-          %{label: gettext("Home"), path: ~p"/"},
-          %{label: gettext("All Activities"), path: ~p"/activities"},
-          %{label: city.name, path: ~p"/c/#{city.slug}"},
-          %{label: gettext("Film"), path: ~p"/activities?category=film"},
-          %{label: movie.title, path: nil}
-        ]
-
-        # Get available languages for this city (dynamic based on country + DB translations)
-        available_languages =
-          if city && city.slug do
-            LanguageDiscovery.get_available_languages_for_city(city.slug)
-          else
-            ["en"]
-          end
-
-        # Extract primary category from first screening (all movie screenings should have same category)
-        primary_category =
-          case screenings do
-            [first_screening | _] -> get_primary_category(first_screening)
-            _ -> nil
-          end
-
-        # Generate JSON-LD structured data for movie page
-        json_ld = MovieSchema.generate(movie, city, venues_with_info)
-
-        # Generate Open Graph meta tags
-        og_tags = build_movie_open_graph(movie, city, total_showtimes)
-
-        # Build rich_data map for movie components from TMDB metadata
-        rich_data = build_rich_data_from_movie(movie)
-
-        # Extract cast and crew from TMDB credits
-        credits = movie.tmdb_metadata["credits"] || %{}
-        cast = credits["cast"] || []
-        crew = credits["crew"] || []
-
-        {:noreply,
-         socket
-         |> assign(:page_title, "#{movie.title} - #{city.name}")
-         |> assign(:city, city)
-         |> assign(:movie, movie)
-         |> assign(:venues_with_info, venues_with_info)
-         |> assign(:total_showtimes, total_showtimes)
-         |> assign(:breadcrumb_items, breadcrumb_items)
-         |> assign(:available_languages, available_languages)
-         |> assign(:primary_category, primary_category)
-         |> assign(:json_ld, json_ld)
-         |> assign(:open_graph, og_tags)
-         |> assign(:rich_data, rich_data)
-         |> assign(:cast, cast)
-         |> assign(:crew, crew)}
+        # Redirect to canonical URL if not already there
+        if movie_slug != movie.slug do
+          {:noreply, redirect(socket, to: ~p"/c/#{city.slug}/movies/#{movie.slug}")}
+        else
+          handle_movie_screenings(socket, city, movie)
+        end
     end
+  end
+
+  # Handle the movie screenings page rendering
+  defp handle_movie_screenings(socket, city, movie) do
+    # Fetch upcoming screenings for this movie in this city
+    _now = DateTime.utc_now()
+
+    screenings =
+      from(pe in PublicEvent,
+        join: em in "event_movies",
+        on: pe.id == em.event_id,
+        join: v in assoc(pe, :venue),
+        on: v.city_id == ^city.id,
+        where: em.movie_id == ^movie.id,
+        order_by: [asc: pe.starts_at],
+        preload: [:categories, :performers, venue: :city_ref, sources: :source]
+      )
+      |> Repo.all()
+
+    # Group by venue and extract detailed information from ALL occurrences
+    venues_with_info =
+      screenings
+      |> Enum.group_by(& &1.venue.id)
+      |> Enum.map(fn {_venue_id, events} ->
+        first_event = List.first(events)
+
+        # Extract ALL occurrences from ALL events for this venue
+        all_occurrences = extract_all_occurrences(events)
+
+        # Count actual showtimes (occurrences), not events
+        showtime_count = length(all_occurrences)
+
+        # Get date range from occurrences
+        date_range =
+          if length(all_occurrences) > 0 do
+            extract_occurrence_date_range(all_occurrences)
+          else
+            format_date_short(Date.utc_today())
+          end
+
+        # Extract unique formats from occurrence labels
+        formats = extract_occurrence_formats(all_occurrences)
+
+        # Extract unique dates for optional display
+        unique_dates =
+          all_occurrences
+          |> Enum.map(& &1.date)
+          |> Enum.uniq()
+          |> Enum.sort()
+
+        {first_event.venue,
+         %{
+           count: showtime_count,
+           slug: first_event.slug,
+           date_range: date_range,
+           formats: formats,
+           dates: unique_dates
+         }}
+      end)
+      |> Enum.sort_by(fn {venue, _info} -> venue.name end)
+
+    # Sum up all showtime counts from all venues
+    total_showtimes =
+      venues_with_info
+      |> Enum.map(fn {_venue, info} -> info.count end)
+      |> Enum.sum()
+
+    # Build breadcrumb navigation
+    breadcrumb_items = [
+      %{label: gettext("Home"), path: ~p"/"},
+      %{label: gettext("All Activities"), path: ~p"/activities"},
+      %{label: city.name, path: ~p"/c/#{city.slug}"},
+      %{label: gettext("Film"), path: ~p"/activities?category=film"},
+      %{label: movie.title, path: nil}
+    ]
+
+    # Get available languages for this city (dynamic based on country + DB translations)
+    available_languages =
+      if city && city.slug do
+        LanguageDiscovery.get_available_languages_for_city(city.slug)
+      else
+        ["en"]
+      end
+
+    # Extract primary category from first screening (all movie screenings should have same category)
+    primary_category =
+      case screenings do
+        [first_screening | _] -> get_primary_category(first_screening)
+        _ -> nil
+      end
+
+    # Generate JSON-LD structured data for movie page
+    json_ld = MovieSchema.generate(movie, city, venues_with_info)
+
+    # Generate Open Graph meta tags
+    og_tags = build_movie_open_graph(movie, city, total_showtimes)
+
+    # Build rich_data map for movie components
+    rich_data = build_rich_data_from_movie(movie)
+
+    # Cast and crew not stored in current schema - would need TMDB API enrichment
+    # For now, these are empty - the MovieCastComponent won't render
+    cast = []
+    crew = []
+
+    {:noreply,
+     socket
+     |> assign(:page_title, "#{movie.title} - #{city.name}")
+     |> assign(:city, city)
+     |> assign(:movie, movie)
+     |> assign(:venues_with_info, venues_with_info)
+     |> assign(:total_showtimes, total_showtimes)
+     |> assign(:breadcrumb_items, breadcrumb_items)
+     |> assign(:available_languages, available_languages)
+     |> assign(:primary_category, primary_category)
+     |> assign(:json_ld, json_ld)
+     |> assign(:open_graph, og_tags)
+     |> assign(:rich_data, rich_data)
+     |> assign(:cast, cast)
+     |> assign(:crew, crew)}
   end
 
   @impl true
@@ -274,17 +280,13 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
         <!-- Cast Section -->
         <%= if length(@cast) > 0 do %>
-          <div class="mt-8">
+          <div class="mt-8 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <.live_component
-              module={MovieCastComponent}
+              module={CastCarouselComponent}
               id="movie-cast"
               cast={@cast}
-              crew={@crew}
-              variant={:card}
-              compact={false}
-              show_badges={true}
-              max_cast={12}
-              show_crew={true}
+              variant={:embedded}
+              max_cast={20}
             />
           </div>
         <% end %>
@@ -578,6 +580,66 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     %{start: today, end: Date.add(today, 7)}
   end
 
+  # Find movie by identifier, trying multiple lookup strategies:
+  # 1. Direct slug match (canonical: "home-alone-771")
+  # 2. Legacy slug match (old format: "home-alone-499")
+  # 3. TMDB ID only ("771")
+  defp find_movie(identifier) when is_binary(identifier) do
+    # Try canonical slug first
+    movie = Repo.one(from(m in Movie, where: m.slug == ^identifier))
+
+    cond do
+      movie != nil ->
+        movie
+
+      # Try legacy slug (backwards compatibility)
+      true ->
+        movie = Repo.one(from(m in Movie, where: m.legacy_slug == ^identifier))
+
+        if movie do
+          movie
+        else
+          # Try parsing as TMDB ID
+          case parse_tmdb_id(identifier) do
+            nil -> nil
+            tmdb_id -> Repo.one(from(m in Movie, where: m.tmdb_id == ^tmdb_id))
+          end
+        end
+    end
+  end
+
+  defp find_movie(_), do: nil
+
+  # Parse TMDB ID from identifier:
+  # - "157336" -> 157336 (TMDB ID only)
+  # - "interstellar-157336" -> 157336 (slug-tmdb_id format, extracts trailing ID)
+  defp parse_tmdb_id(identifier) when is_binary(identifier) do
+    cond do
+      # Pure numeric - just TMDB ID
+      Regex.match?(~r/^\d+$/, identifier) ->
+        case Integer.parse(identifier) do
+          {id, ""} when id > 0 -> id
+          _ -> nil
+        end
+
+      # slug-tmdb_id format (e.g., "interstellar-157336")
+      # Extract the TMDB ID from the end after the last hyphen
+      Regex.match?(~r/^.+-\d+$/, identifier) ->
+        parts = String.split(identifier, "-")
+        tmdb_part = List.last(parts)
+
+        case Integer.parse(tmdb_part) do
+          {id, ""} when id > 0 -> id
+          _ -> nil
+        end
+
+      true ->
+        nil
+    end
+  end
+
+  defp parse_tmdb_id(_), do: nil
+
   # Helper functions
 
   # Extract ALL occurrences from all events and parse them into structured data
@@ -756,11 +818,11 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   defp build_movie_open_graph(movie, city, total_showtimes) do
     base_url = EventasaurusWeb.Layouts.get_base_url()
 
-    # Get movie poster image
+    # Get movie poster image - use poster_url field directly
     image_url =
       cond do
-        movie.tmdb_metadata && movie.tmdb_metadata["poster_path"] ->
-          "https://image.tmdb.org/t/p/w500#{movie.tmdb_metadata["poster_path"]}"
+        movie.poster_url && movie.poster_url != "" ->
+          movie.poster_url
 
         movie.metadata && movie.metadata["poster"] ->
           movie.metadata["poster"]
@@ -799,40 +861,64 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   defp pluralize_showtime(_), do: "showtimes"
 
   # Build rich_data map from movie for use with movie components
+  # Uses actual movie fields (poster_url, backdrop_url, etc.) and metadata map
   defp build_rich_data_from_movie(movie) do
-    tmdb = movie.tmdb_metadata || %{}
-    credits = tmdb["credits"] || %{}
-    crew = credits["crew"] || []
+    metadata = movie.metadata || %{}
 
-    # Find director from crew
-    director =
-      crew
-      |> Enum.find(fn member -> member["job"] == "Director" end)
+    # Extract poster_path from full URL if present
+    # movie.poster_url is like "https://image.tmdb.org/t/p/w500/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg"
+    # We need "/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg" for the components
+    poster_path = extract_tmdb_path(movie.poster_url)
+    backdrop_path = extract_tmdb_path(movie.backdrop_url)
 
     # Build external links map
-    external_ids = tmdb["external_ids"] || %{}
-
     external_links =
       %{}
-      |> maybe_add_link(:imdb_url, external_ids["imdb_id"], &"https://www.imdb.com/title/#{&1}")
-      |> maybe_add_link(:tmdb_url, tmdb["id"], &"https://www.themoviedb.org/movie/#{&1}")
-      |> maybe_add_link(:homepage, tmdb["homepage"], & &1)
+      |> maybe_add_link(:tmdb_url, movie.tmdb_id, &"https://www.themoviedb.org/movie/#{&1}")
 
     %{
       "title" => movie.title,
-      "overview" => tmdb["overview"],
-      "poster_path" => tmdb["poster_path"],
-      "backdrop_path" => tmdb["backdrop_path"],
-      "release_date" => tmdb["release_date"],
-      "runtime" => tmdb["runtime"],
-      "vote_average" => tmdb["vote_average"],
-      "vote_count" => tmdb["vote_count"],
-      "genres" => tmdb["genres"] || [],
-      "director" => director,
-      "crew" => crew,
+      "overview" => movie.overview,
+      "poster_path" => poster_path,
+      "backdrop_path" => backdrop_path,
+      "release_date" => format_release_date_for_rich_data(movie.release_date),
+      "runtime" => movie.runtime,
+      "vote_average" => metadata["vote_average"],
+      "vote_count" => metadata["vote_count"],
+      "genres" => build_genres_list(metadata["genres"]),
+      "director" => nil,
+      "crew" => [],
       "external_links" => external_links
     }
   end
+
+  # Extract the path portion from a full TMDB image URL
+  # "https://image.tmdb.org/t/p/w500/abc123.jpg" -> "/abc123.jpg"
+  defp extract_tmdb_path(nil), do: nil
+  defp extract_tmdb_path(""), do: nil
+  defp extract_tmdb_path(url) when is_binary(url) do
+    case Regex.run(~r{/t/p/w\d+(/[^/]+\.\w+)$}, url) do
+      [_, path] -> path
+      _ -> nil
+    end
+  end
+
+  # Format release_date for display
+  defp format_release_date_for_rich_data(nil), do: nil
+  defp format_release_date_for_rich_data(%Date{} = date), do: Date.to_iso8601(date)
+  defp format_release_date_for_rich_data(date) when is_binary(date), do: date
+
+  # Build genres list - metadata may have string list or map list
+  defp build_genres_list(nil), do: []
+  defp build_genres_list(genres) when is_list(genres) do
+    Enum.map(genres, fn
+      %{"name" => name} -> %{"name" => name}
+      name when is_binary(name) -> %{"name" => name}
+      _ -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+  defp build_genres_list(_), do: []
 
   defp maybe_add_link(map, _key, nil, _builder), do: map
   defp maybe_add_link(map, _key, "", _builder), do: map

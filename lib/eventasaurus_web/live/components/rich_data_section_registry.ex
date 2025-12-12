@@ -39,14 +39,14 @@ defmodule EventasaurusWeb.Live.Components.RichDataSectionRegistry do
     movie: %{
       hero: EventasaurusWeb.Live.Components.MovieHeroComponent,
       overview: EventasaurusWeb.Live.Components.MovieOverviewComponent,
-      cast: EventasaurusWeb.Live.Components.MovieCastComponent,
+      cast: EventasaurusWeb.Live.Components.CastCarouselComponent,
       media: EventasaurusWeb.Live.Components.MovieMediaComponent,
       details: EventasaurusWeb.Live.Components.MovieDetailsComponent
     },
     tv: %{
       hero: EventasaurusWeb.Live.Components.MovieHeroComponent,
       overview: EventasaurusWeb.Live.Components.MovieOverviewComponent,
-      cast: EventasaurusWeb.Live.Components.MovieCastComponent,
+      cast: EventasaurusWeb.Live.Components.CastCarouselComponent,
       media: EventasaurusWeb.Live.Components.MovieMediaComponent,
       details: EventasaurusWeb.Live.Components.MovieDetailsComponent
     },

@@ -1,16 +1,16 @@
 defmodule EventasaurusDiscovery.Movies.Movie.Slug do
-  use EctoAutoslugField.Slug, from: :title, to: :slug
+  use EctoAutoslugField.Slug, from: [:title, :tmdb_id], to: :slug
 
-  def build_slug(sources, changeset) do
-    # Get the default slug from sources
-    slug = super(sources, changeset)
+  # Slug format: title-tmdb_id (e.g., "home-alone-771")
+  # TMDB ID ensures uniqueness even when titles are the same (e.g., two movies named "Brother")
+  def build_slug(sources, _changeset) do
+    [title, tmdb_id] = sources
 
-    # Add randomness to ensure uniqueness (same pattern as PublicEvent)
-    "#{slug}-#{random_suffix()}"
-  end
+    title_slug =
+      title
+      |> Slug.slugify()
 
-  defp random_suffix do
-    :rand.uniform(999) |> Integer.to_string() |> String.pad_leading(3, "0")
+    "#{title_slug}-#{tmdb_id}"
   end
 end
 
@@ -24,6 +24,9 @@ defmodule EventasaurusDiscovery.Movies.Movie do
     field(:title, :string)
     field(:original_title, :string)
     field(:slug, Slug.Type)
+    # Legacy slug preserved for backwards compatibility with old URLs
+    # Can be removed after ~6 months (added Dec 2025)
+    field(:legacy_slug, :string)
     field(:overview, :string)
     field(:poster_url, :string)
     field(:backdrop_url, :string)

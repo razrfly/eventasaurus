@@ -1287,9 +1287,10 @@ defmodule EventasaurusWeb.PublicEventLive do
       <!-- Cast Carousel Section -->
       <%= if @event.rich_external_data["cast"] do %>
         <.live_component
-          module={EventasaurusWeb.Live.Components.PublicCastCarouselComponent}
+          module={EventasaurusWeb.Live.Components.CastCarouselComponent}
           id="public-cast-carousel"
           cast={@event.rich_external_data["cast"]}
+          variant={:standalone}
         />
       <% end %>
     <% end %>
