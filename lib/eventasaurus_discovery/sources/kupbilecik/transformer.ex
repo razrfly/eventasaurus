@@ -53,10 +53,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
         description: extract_description(raw_event),
         starts_at: starts_at,
         ends_at: calculate_ends_at(starts_at, raw_event),
-        url: raw_event["url"],
+        source_url: raw_event["url"],
         image_url: raw_event["image_url"],
-        venue: extract_venue(raw_event),
-        performers: extract_performers(raw_event),
+        venue_data: extract_venue(raw_event),
+        performer_names: extract_performers(raw_event),
         categories: extract_categories(raw_event),
         price_info: raw_event["price"],
         ticket_url: raw_event["ticket_url"] || raw_event["url"],
@@ -125,7 +125,8 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
 
   defp parse_with_godz_pattern(text) do
     # Pattern: "7 grudnia 2025 o godz. 20:00"
-    regex = ~r/(\d{1,2})\s+(\w+)\s+(\d{4})\s+o\s+godz\.\s*(\d{1,2}):(\d{2})/
+    # Uses \p{L} for Unicode letter support (Polish characters like ś, ę, ń, etc.)
+    regex = ~r/(\d{1,2})\s+([\p{L}]+)\s+(\d{4})\s+o\s+godz\.\s*(\d{1,2}):(\d{2})/u
 
     case Regex.run(regex, text, capture: :all_but_first) do
       [day, month_name, year, hour, minute] ->
@@ -138,7 +139,8 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
 
   defp parse_with_comma_time(text) do
     # Pattern: "7 grudnia 2025, 20:00"
-    regex = ~r/(\d{1,2})\s+(\w+)\s+(\d{4}),?\s*(\d{1,2}):(\d{2})/
+    # Uses \p{L} for Unicode letter support (Polish characters like ś, ę, ń, etc.)
+    regex = ~r/(\d{1,2})\s+([\p{L}]+)\s+(\d{4}),?\s*(\d{1,2}):(\d{2})/u
 
     case Regex.run(regex, text, capture: :all_but_first) do
       [day, month_name, year, hour, minute] ->
@@ -151,7 +153,8 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
 
   defp parse_date_only(text) do
     # Pattern: "7 grudnia 2025"
-    regex = ~r/(\d{1,2})\s+(\w+)\s+(\d{4})/
+    # Uses \p{L} for Unicode letter support (Polish characters like ś, ę, ń, etc.)
+    regex = ~r/(\d{1,2})\s+([\p{L}]+)\s+(\d{4})/u
 
     case Regex.run(regex, text, capture: :all_but_first) do
       [day, month_name, year] ->

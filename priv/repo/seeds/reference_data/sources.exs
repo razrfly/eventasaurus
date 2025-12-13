@@ -252,8 +252,8 @@ sources = [
       "requires_geocoding" => true,
       "coverage" => "Poland",
       "scope" => "national",
-      "access_pattern" => "sitemap_zyte",
-      "requires_js_rendering" => true,
+      "access_pattern" => "sitemap_http",
+      "requires_js_rendering" => false,
       "sitemap_count" => 5,
       "estimated_events" => 4100
     }

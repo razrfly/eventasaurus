@@ -84,6 +84,15 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
     end
 
     test "returns error for unknown month" do
+      # When the regex matches but month name isn't in polish_months map,
+      # we get :unknown_month error. Use a valid word pattern (letters only).
+      # Note: the code lowercases input, so we check for lowercase in error
+      assert {:error, {:unknown_month, "fakemonth"}} =
+               Transformer.parse_polish_date("7 fakemonth 2025")
+    end
+
+    test "returns error for invalid format with underscores" do
+      # Underscores in month name won't match the letter-only regex
       assert {:error, {:invalid_date_format, _}} =
                Transformer.parse_polish_date("7 unknown_month 2025")
     end
@@ -112,16 +121,16 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
       assert event.external_id == "kupbilecik_event_186000_2025-12-07"
       assert event.title == "Koncert Rockowy"
       assert event.description == "Niesamowity koncert"
-      assert event.url == "https://www.kupbilecik.pl/imprezy/186000/koncert-rockowy"
+      assert event.source_url == "https://www.kupbilecik.pl/imprezy/186000/koncert-rockowy"
       assert event.image_url == "https://example.com/image.jpg"
       assert event.starts_at.year == 2025
       assert event.starts_at.month == 12
       assert event.starts_at.day == 7
       assert event.starts_at.hour == 20
-      assert event.venue.name == "Hala Sportowa"
-      assert event.venue.address == "ul. Sportowa 1"
-      assert event.venue.city == "Warszawa"
-      assert event.venue.country == "Poland"
+      assert event.venue_data.name == "Hala Sportowa"
+      assert event.venue_data.address == "ul. Sportowa 1"
+      assert event.venue_data.city == "Warszawa"
+      assert event.venue_data.country == "Poland"
       assert event.price_info == "od 99 zł"
       assert "music" in event.categories
     end
