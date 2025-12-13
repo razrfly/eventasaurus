@@ -237,6 +237,26 @@ sources = [
       "api_type" => "graphql",
       "requires_build_id" => false
     }
+  },
+  %{
+    name: "Kupbilecik",
+    slug: "kupbilecik",
+    website_url: "https://www.kupbilecik.pl",
+    priority: 60,
+    domains: ["music", "theater", "cultural", "general"],
+    metadata: %{
+      "rate_limit_seconds" => 3,
+      "max_requests_per_hour" => 1200,
+      "language" => "pl",
+      "supports_pagination" => false,
+      "requires_geocoding" => true,
+      "coverage" => "Poland",
+      "scope" => "national",
+      "access_pattern" => "sitemap_zyte",
+      "requires_js_rendering" => true,
+      "sitemap_count" => 5,
+      "estimated_events" => 4100
+    }
   }
 ]
 

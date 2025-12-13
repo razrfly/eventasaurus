@@ -178,7 +178,9 @@ config :eventasaurus, :http_strategies, %{
   # Karnet: try direct first, fallback to Zyte
   karnet: [:direct, :zyte],
   # Week.pl: direct only
-  week_pl: [:direct]
+  week_pl: [:direct],
+  # Kupbilecik: always use Zyte (React SPA requiring JS rendering)
+  kupbilecik: [:zyte]
 }
 
 # Configure Clerk authentication
