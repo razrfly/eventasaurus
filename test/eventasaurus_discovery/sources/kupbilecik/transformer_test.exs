@@ -120,7 +120,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
 
       assert event.external_id == "kupbilecik_event_186000_2025-12-07"
       assert event.title == "Koncert Rockowy"
-      assert event.description == "Niesamowity koncert"
+      assert event.description_translations == %{"pl" => "Niesamowity koncert"}
       assert event.source_url == "https://www.kupbilecik.pl/imprezy/186000/koncert-rockowy"
       assert event.image_url == "https://example.com/image.jpg"
       assert event.starts_at.year == 2025
@@ -132,7 +132,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
       assert event.venue_data.city == "Warszawa"
       assert event.venue_data.country == "Poland"
       assert event.price_info == "od 99 zł"
-      assert "music" in event.categories
+      assert event.category == "music"
     end
 
     test "transforms event with minimal fields" do
@@ -233,10 +233,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
     test "maps Polish categories to canonical categories" do
       test_cases = [
         {"koncerty", "music"},
-        {"spektakle", "theater"},
+        {"spektakle", "theatre"},
         {"festiwale", "festival"},
         {"muzyka", "music"},
-        {"teatr", "theater"}
+        {"teatr", "theatre"}
       ]
 
       for {polish_category, expected_canonical} <- test_cases do
@@ -248,7 +248,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
         }
 
         [event] = Transformer.transform_event(raw_event)
-        assert expected_canonical in event.categories, "Failed for: #{polish_category}"
+        assert event.category == expected_canonical, "Failed for: #{polish_category}"
       end
     end
 
@@ -261,7 +261,70 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.TransformerTest do
       }
 
       [event] = Transformer.transform_event(raw_event)
-      assert "other" in event.categories
+      assert event.category == "other"
+    end
+  end
+
+  describe "parse_price/1" do
+    test "parses 'od XX zł' format" do
+      {min, max} = Transformer.parse_price("od 55 zł")
+      assert Decimal.equal?(min, Decimal.new("55"))
+      assert Decimal.equal?(max, Decimal.new("55"))
+    end
+
+    test "parses range format 'XX-YY zł'" do
+      {min, max} = Transformer.parse_price("40-55 zł")
+      assert Decimal.equal?(min, Decimal.new("40"))
+      assert Decimal.equal?(max, Decimal.new("55"))
+    end
+
+    test "parses simple 'XX zł' format" do
+      {min, max} = Transformer.parse_price("99 zł")
+      assert Decimal.equal?(min, Decimal.new("99"))
+      assert Decimal.equal?(max, Decimal.new("99"))
+    end
+
+    test "parses PLN format" do
+      {min, max} = Transformer.parse_price("120 PLN")
+      assert Decimal.equal?(min, Decimal.new("120"))
+      assert Decimal.equal?(max, Decimal.new("120"))
+    end
+
+    test "handles decimal prices with comma" do
+      {min, max} = Transformer.parse_price("od 55,50 zł")
+      assert Decimal.equal?(min, Decimal.new("55.50"))
+      assert Decimal.equal?(max, Decimal.new("55.50"))
+    end
+
+    test "handles decimal prices with dot" do
+      {min, max} = Transformer.parse_price("od 55.50 zł")
+      assert Decimal.equal?(min, Decimal.new("55.50"))
+      assert Decimal.equal?(max, Decimal.new("55.50"))
+    end
+
+    test "returns nil for nil input" do
+      assert {nil, nil} = Transformer.parse_price(nil)
+    end
+
+    test "returns nil for empty string" do
+      assert {nil, nil} = Transformer.parse_price("")
+    end
+
+    test "returns nil for unparseable string" do
+      assert {nil, nil} = Transformer.parse_price("free admission")
+    end
+
+    test "transform_event includes min_price and max_price" do
+      raw_event = %{
+        "event_id" => "123",
+        "title" => "Test Event",
+        "date_string" => "1 stycznia 2025",
+        "price" => "40-80 zł"
+      }
+
+      [event] = Transformer.transform_event(raw_event)
+      assert Decimal.equal?(event.min_price, Decimal.new("40"))
+      assert Decimal.equal?(event.max_price, Decimal.new("80"))
     end
   end
 end
