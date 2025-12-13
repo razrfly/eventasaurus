@@ -47,17 +47,22 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
   def transform_event(raw_event) do
     with {:ok, starts_at} <- parse_datetime(raw_event),
          {:ok, external_id} <- build_external_id(raw_event, starts_at) do
+      {min_price, max_price} = parse_price(raw_event["price"])
+
       event = %{
         external_id: external_id,
         title: extract_title(raw_event),
-        description: extract_description(raw_event),
+        description_translations: build_description_translations(raw_event),
         starts_at: starts_at,
         ends_at: calculate_ends_at(starts_at, raw_event),
         source_url: raw_event["url"],
         image_url: raw_event["image_url"],
         venue_data: extract_venue(raw_event),
         performer_names: extract_performers(raw_event),
-        categories: extract_categories(raw_event),
+        # Category as singular string for EventProcessor compatibility
+        category: extract_primary_category(raw_event),
+        min_price: min_price,
+        max_price: max_price,
         price_info: raw_event["price"],
         ticket_url: raw_event["ticket_url"] || raw_event["url"],
         source_data: raw_event
@@ -230,6 +235,16 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
     raw_event["description"]
   end
 
+  # Build description_translations map for EventProcessor compatibility
+  # Kupbilecik is a Polish site, so descriptions are in Polish ("pl")
+  defp build_description_translations(raw_event) do
+    case extract_description(raw_event) do
+      nil -> nil
+      "" -> nil
+      description when is_binary(description) -> %{"pl" => description}
+    end
+  end
+
   defp calculate_ends_at(starts_at, raw_event) do
     cond do
       # Explicit ends_at
@@ -276,16 +291,66 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
     end
   end
 
-  defp extract_categories(raw_event) do
+  # Extract the primary category as a single string for EventProcessor
+  # The EventProcessor expects category as a singular string, not a list
+  defp extract_primary_category(raw_event) do
     cond do
-      is_list(raw_event["categories"]) ->
-        Enum.map(raw_event["categories"], &Config.map_category/1)
+      is_list(raw_event["categories"]) && length(raw_event["categories"]) > 0 ->
+        # Take the first category and map it
+        raw_event["categories"] |> List.first() |> Config.map_category()
 
       is_binary(raw_event["category"]) ->
-        [Config.map_category(raw_event["category"])]
+        Config.map_category(raw_event["category"])
 
       true ->
-        ["other"]
+        "other"
+    end
+  end
+
+  @doc """
+  Parses a price string into min_price and max_price decimal values.
+
+  Handles formats:
+  - "od 55 zł" -> {55.0, 55.0}
+  - "40-55 zł" -> {40.0, 55.0}
+  - "99 zł" -> {99.0, 99.0}
+  - nil -> {nil, nil}
+
+  Returns {min_price, max_price} as Decimal values or {nil, nil} if unparseable.
+  """
+  def parse_price(nil), do: {nil, nil}
+  def parse_price(""), do: {nil, nil}
+
+  def parse_price(price_string) when is_binary(price_string) do
+    # Try to parse range format first: "40-55 zł"
+    case Regex.run(~r/(\d+(?:[,\.]\d+)?)\s*[-–—]\s*(\d+(?:[,\.]\d+)?)\s*(?:zł|PLN)/iu, price_string) do
+      [_, min_str, max_str] ->
+        min_val = parse_price_value(min_str)
+        max_val = parse_price_value(max_str)
+        {min_val, max_val}
+
+      nil ->
+        # Try single price format: "od 55 zł" or "55 zł"
+        case Regex.run(~r/(?:od\s+)?(\d+(?:[,\.]\d+)?)\s*(?:zł|PLN)/iu, price_string) do
+          [_, value_str] ->
+            value = parse_price_value(value_str)
+            {value, value}
+
+          nil ->
+            {nil, nil}
+        end
+    end
+  end
+
+  def parse_price(_), do: {nil, nil}
+
+  defp parse_price_value(value_str) do
+    # Replace comma with dot for decimal parsing
+    normalized = String.replace(value_str, ",", ".")
+
+    case Decimal.parse(normalized) do
+      {decimal, _} -> decimal
+      :error -> nil
     end
   end
 end

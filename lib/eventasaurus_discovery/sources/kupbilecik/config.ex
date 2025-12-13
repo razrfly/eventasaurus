@@ -161,18 +161,33 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Config do
 
   @doc """
   Category mapping from Polish to canonical categories.
+
+  Maps kupbilecik category slugs (from URL paths like /kabarety/, /koncerty/)
+  and Polish display names to canonical event categories.
   """
   def category_mapping do
     %{
+      # Music/Concert categories
       "koncerty" => "music",
       "muzyka" => "music",
-      "spektakle" => "theater",
-      "teatr" => "theater",
-      "widowiska" => "shows",
+      # Theater categories (use "theatre" to match _defaults.yml)
+      "spektakle" => "theatre",
+      "teatr" => "theatre",
+      "opera" => "theatre",
+      "musical" => "theatre",
+      "balet" => "theatre",
+      # Comedy categories
       "kabarety" => "comedy",
+      "stand-up" => "comedy",
+      # Shows and performances (map to arts as closest match)
+      "widowiska" => "arts",
+      # Festival
       "festiwale" => "festival",
+      # Sports
       "sport" => "sports",
+      # Family/Kids
       "dla-dzieci" => "family",
+      # Other/Misc
       "inne" => "other"
     }
   end
