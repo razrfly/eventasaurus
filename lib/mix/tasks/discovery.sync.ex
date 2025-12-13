@@ -22,6 +22,9 @@ defmodule Mix.Tasks.Discovery.Sync do
       # Sync from PubQuiz (Poland-wide, no city needed)
       mix discovery.sync pubquiz-pl --limit 5
 
+      # Sync from Kupbilecik (Poland-wide, no city needed)
+      mix discovery.sync kupbilecik --limit 100
+
       # Sync from all sources
       mix discovery.sync all --city krakow --limit 500
 
@@ -61,11 +64,12 @@ defmodule Mix.Tasks.Discovery.Sync do
     "cinema-city" => EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob,
     "repertuary" => EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob,
     "pubquiz-pl" => EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob,
-    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob
+    "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob,
+    "kupbilecik" => EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob
   }
 
   # Sources that don't require a city (country-wide or city-hardcoded)
-  @country_wide_sources ["pubquiz-pl", "cinema-city", "repertuary"]
+  @country_wide_sources ["pubquiz-pl", "cinema-city", "repertuary", "kupbilecik"]
 
   def run(args) do
     Application.ensure_all_started(:eventasaurus)

@@ -38,7 +38,8 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
     "inquizition" => EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob,
     "speed-quizzing" => EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob,
     "waw4free" => EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob,
-    "week_pl" => EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob
+    "week_pl" => EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob,
+    "kupbilecik" => EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob
   }
 
   @doc """
@@ -170,6 +171,7 @@ defmodule EventasaurusDiscovery.Sources.SourceRegistry do
   defp get_default_scope_for_slug("repertuary"), do: "city"
   defp get_default_scope_for_slug("waw4free"), do: "city"
   defp get_default_scope_for_slug("week_pl"), do: "regional"
+  defp get_default_scope_for_slug("kupbilecik"), do: "country"
   # Safe default for unknown sources
   defp get_default_scope_for_slug(_), do: "city"
 

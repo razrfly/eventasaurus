@@ -100,6 +100,12 @@ defmodule EventasaurusDiscovery.Admin.SourceOptionsBuilder do
     %{}
   end
 
+  def build_options("kupbilecik", _city, _base_settings) do
+    # Country-wide source using sitemap-based discovery
+    # No specific options needed - uses sitemap_count from metadata
+    %{}
+  end
+
   # Fallback for unknown sources
   def build_options(_source_name, _city, _base_settings) do
     %{}
@@ -149,6 +155,6 @@ defmodule EventasaurusDiscovery.Admin.SourceOptionsBuilder do
   Country-wide sources don't need a city_id.
   """
   def requires_city?(source_name) do
-    source_name not in ["pubquiz-pl"]
+    source_name not in ["pubquiz-pl", "kupbilecik"]
   end
 end
