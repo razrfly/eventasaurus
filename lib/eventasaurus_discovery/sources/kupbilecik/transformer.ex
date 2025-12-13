@@ -172,11 +172,11 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
          {year, _} <- Integer.parse(year_str),
          {hour, _} <- Integer.parse(hour_str),
          {minute, _} <- Integer.parse(minute_str),
-         month when not is_nil(month) <- Map.get(months, month_name) do
-      case DateTime.new(Date.new!(year, month, day), Time.new!(hour, minute, 0)) do
-        {:ok, datetime} -> {:ok, datetime}
-        {:error, reason} -> {:error, reason}
-      end
+         month when not is_nil(month) <- Map.get(months, month_name),
+         {:ok, date} <- Date.new(year, month, day),
+         {:ok, time} <- Time.new(hour, minute, 0),
+         {:ok, datetime} <- DateTime.new(date, time) do
+      {:ok, datetime}
     else
       nil -> {:error, {:unknown_month, month_name}}
       _ -> {:error, :parse_failed}

@@ -175,9 +175,14 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Client do
   Fetches event page and returns raw HTML for extraction.
 
   Convenience wrapper around fetch_page/2 for EventDetailJob.
+  Converts 404 errors to :not_found for consistent error handling.
   """
   def fetch_event_page(url) do
-    fetch_page(url)
+    case fetch_page(url) do
+      {:ok, body} -> {:ok, body}
+      {:error, {:http_error, 404}} -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   # Private functions

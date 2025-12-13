@@ -329,7 +329,9 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
     case Regex.run(~r{<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>}is, html) do
       [_, json] ->
         case Jason.decode(json) do
-          {:ok, %{"startDate" => start_date}} -> start_date
+          {:ok, %{"startDate" => start_date}} ->
+            start_date
+
           {:ok, data} when is_list(data) ->
             Enum.find_value(data, fn item ->
               item["startDate"]

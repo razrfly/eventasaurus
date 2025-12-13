@@ -103,10 +103,22 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
         result
 
       {:error, reason} ->
-        MetricsTracker.record_failure(job, reason, external_id)
+        MetricsTracker.record_failure(job, categorize_error(reason), external_id)
         result
     end
   end
+
+  # Error categorization for MetricsTracker (per coding guidelines)
+  defp categorize_error(:not_found), do: :network_error
+  defp categorize_error(:max_retries_exceeded), do: :network_error
+  defp categorize_error(:expired), do: :validation_error
+  defp categorize_error(:title_not_found), do: :validation_error
+  defp categorize_error(:date_not_found), do: :validation_error
+  defp categorize_error(:source_not_found), do: :unknown_error
+  defp categorize_error({:extraction_error, _}), do: :data_quality_error
+  defp categorize_error({:http_error, _}), do: :network_error
+  defp categorize_error({:network_error, _}), do: :network_error
+  defp categorize_error(_), do: :unknown_error
 
   # Private functions
 
@@ -115,13 +127,19 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
 
     case EventExtractor.extract(html, url) do
       {:ok, event_data} ->
-        # Merge with flat args from SyncJob
+        # Merge with flat args from SyncJob, but don't overwrite extracted values with nil
         raw_event =
-          Map.merge(event_data, %{
-            "url" => url,
-            "event_id" => event_id,
-            "external_id" => external_id
-          })
+          event_data
+          |> Map.put("url", url)
+          |> Map.put("external_id", external_id)
+          |> then(fn data ->
+            # Only set event_id if we have one from args and extracted one is missing
+            if event_id && !Map.get(data, "event_id") do
+              Map.put(data, "event_id", event_id)
+            else
+              data
+            end
+          end)
 
         Logger.debug("✅ Extracted event data: #{raw_event["title"]}")
         {:ok, raw_event}
