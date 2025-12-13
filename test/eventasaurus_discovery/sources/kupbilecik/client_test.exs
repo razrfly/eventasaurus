@@ -2,8 +2,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.ClientTest do
   @moduledoc """
   Tests for the Kupbilecik Client module.
 
-  The Client uses Zyte API for JavaScript rendering. Most tests
-  require mocked HTTP responses or are marked as integration tests.
+  The Client uses plain HTTP for server-side rendered (SSR) pages.
+  No JavaScript rendering is required as kupbilecik.pl serves
+  fully-rendered HTML for SEO purposes. Most tests require mocked
+  HTTP responses or are marked as integration tests.
   """
   use ExUnit.Case, async: true
 

@@ -94,10 +94,15 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
 
       {:error, reason} ->
         Logger.error("❌ Kupbilecik sync failed: #{inspect(reason)}")
-        MetricsTracker.record_failure(job, reason, external_id)
+        MetricsTracker.record_failure(job, categorize_error(reason), external_id)
         {:error, reason}
     end
   end
+
+  # Error categorization for MetricsTracker (per coding guidelines)
+  defp categorize_error({:network_error, _}), do: :network_error
+  defp categorize_error({:http_error, _}), do: :network_error
+  defp categorize_error(_), do: :unknown_error
 
   # Private functions
 
@@ -187,7 +192,9 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
         Logger.warning("⚠️ Failed to schedule #{failed_count} detail jobs")
       end
 
-      Logger.info("✅ Successfully scheduled #{successful_count}/#{length(event_entries)} detail jobs")
+      Logger.info(
+        "✅ Successfully scheduled #{successful_count}/#{length(event_entries)} detail jobs"
+      )
 
       {:ok, successful_count}
     end

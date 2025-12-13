@@ -4,7 +4,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJobTest do
 
   Note: Integration tests for SyncJob require:
   1. Database setup for job_execution_summaries
-  2. Mocking of HTTP/Zyte API calls
+  2. Mocking of HTTP calls (plain HTTP, no Zyte - SSR site)
   3. Valid test fixtures
 
   These tests are marked @tag :integration and excluded by default.
@@ -43,7 +43,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJobTest do
     test "successfully syncs events when API available" do
       # This test requires:
       # - Database connection
-      # - Mocked Zyte API responses
+      # - Mocked HTTP responses (plain HTTP, no Zyte - SSR site)
       # Run with: mix test --only integration
     end
   end
