@@ -3,7 +3,8 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Config do
   Configuration for Kupbilecik source.
 
   Kupbilecik.pl is a Polish ticketing platform with ~4,100+ events.
-  Uses JavaScript rendering (React/Webpack SPA), requiring Zyte API for content.
+  Uses **Server-Side Rendering (SSR)** for SEO purposes - all event data
+  is available in the initial HTML response without JavaScript.
 
   ## Sitemap Structure
 
@@ -12,8 +13,12 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Config do
 
   ## Access Pattern
 
-  - Sitemaps: Plain HTTP (XML, no JS needed)
-  - Event pages: Zyte API with browserHtml mode (JS required)
+  - Sitemaps: Plain HTTP (XML)
+  - Event pages: Plain HTTP (SSR site, no JS rendering required)
+
+  **Note**: Zyte API is NOT required for this source. Testing confirmed
+  that all event data (meta tags, semantic HTML, Schema.org markup) is
+  present in the initial HTML response.
   """
 
   @doc """
@@ -68,9 +73,9 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Config do
   @doc """
   Returns rate limit in seconds between requests.
 
-  Conservative limit to avoid overloading Zyte API costs.
+  Conservative limit to be respectful of the source server.
   """
-  def rate_limit, do: 3
+  def rate_limit, do: 1
 
   @doc """
   Returns HTTP timeout in milliseconds.
@@ -160,7 +165,9 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Config do
   def category_mapping do
     %{
       "koncerty" => "music",
+      "muzyka" => "music",
       "spektakle" => "theater",
+      "teatr" => "theater",
       "widowiska" => "shows",
       "kabarety" => "comedy",
       "festiwale" => "festival",

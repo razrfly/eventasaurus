@@ -6,28 +6,27 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
 
   ## Responsibilities
 
-  1. Fetch event HTML page via Zyte (JS rendering required)
+  1. Fetch event HTML page via plain HTTP (SSR site, no JS needed)
   2. Extract event data using EventExtractor (Floki-based)
   3. Transform to unified format using Transformer
   4. Process through EventProcessor (geocoding, deduplication)
   5. Store in database
 
-  ## Bot Protection
+  ## Access Pattern
 
-  Kupbilecik is a React SPA that requires JavaScript execution.
-  Uses Zyte API with browserHtml mode for full content rendering.
+  Kupbilecik uses Server-Side Rendering (SSR) for SEO purposes.
+  All event data is available in the initial HTML response - no
+  JavaScript rendering is required.
 
-  ## Usage
+  ## Job Args (Flat Structure - Section 13 Standard)
 
-  Jobs are automatically scheduled by SyncJob:
+  Jobs use flat args structure for dashboard visibility:
 
       EventDetailJob.new(%{
-        "source" => "kupbilecik",
         "url" => "https://www.kupbilecik.pl/imprezy/186000/",
-        "event_metadata" => %{
-          "event_id" => "186000",
-          "external_id_base" => "kupbilecik_article_186000"
-        }
+        "source_id" => 15,
+        "external_id" => "kupbilecik_article_186000",
+        "event_id" => "186000"
       })
       |> Oban.insert()
   """
@@ -54,20 +53,16 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args, id: job_id} = job) do
+    # FLAT ARGS STRUCTURE (per Job Args Standards - Section 13)
     url = args["url"]
-    event_metadata = args["event_metadata"] || %{}
-
-    # Extract external_id for metrics tracking
-    external_id =
-      to_string(
-        event_metadata["external_id_base"] || event_metadata["event_id"] || url || job_id
-      )
+    external_id = args["external_id"] || "kupbilecik_job_#{job_id}"
+    event_id = args["event_id"]
 
     Logger.info("🔍 Fetching Kupbilecik event details: #{url}")
 
     result =
       with {:ok, html} <- Client.fetch_event_page(url),
-           {:ok, raw_event} <- extract_event_data(html, url, event_metadata),
+           {:ok, raw_event} <- extract_event_data(html, url, event_id, external_id),
            :ok <- check_event_not_expired(raw_event, url),
            {:ok, transformed_events} <- transform_events(raw_event),
            {:ok, processed_count} <- process_events(transformed_events) do
@@ -81,7 +76,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
          %{
            url: url,
            events_created: processed_count,
-           event_id: event_metadata["event_id"]
+           event_id: event_id
          }}
       else
         {:error, :expired} ->
@@ -115,17 +110,17 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.EventDetailJob do
 
   # Private functions
 
-  defp extract_event_data(html, url, event_metadata) do
+  defp extract_event_data(html, url, event_id, external_id) do
     Logger.debug("📄 Extracting event data from #{url}")
 
     case EventExtractor.extract(html, url) do
       {:ok, event_data} ->
-        # Merge with metadata from SyncJob
+        # Merge with flat args from SyncJob
         raw_event =
           Map.merge(event_data, %{
             "url" => url,
-            "event_id" => event_metadata["event_id"],
-            "external_id_base" => event_metadata["external_id_base"]
+            "event_id" => event_id,
+            "external_id" => external_id
           })
 
         Logger.debug("✅ Extracted event data: #{raw_event["title"]}")

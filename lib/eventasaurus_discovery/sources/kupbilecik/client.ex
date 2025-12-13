@@ -4,26 +4,30 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Client do
 
   Handles two types of requests:
   1. **Sitemap requests**: Plain HTTP (XML, no JS needed)
-  2. **Event page requests**: Via Http.Client with Zyte adapter (JS required)
+  2. **Event page requests**: Plain HTTP (SSR site, no JS needed)
 
   ## Access Pattern
 
-  Kupbilecik.pl is a React/Webpack SPA that requires JavaScript execution.
-  Event pages return only JS bundles without content when fetched directly.
+  Kupbilecik.pl uses **Server-Side Rendering (SSR)** for SEO purposes.
+  All event data is present in the initial HTML response, including:
+  - Meta tags (og:title, og:description, og:image)
+  - Semantic HTML structure with event details
+  - Schema.org markup
 
-  - Sitemaps: HTTPoison direct (XML is static)
-  - Event pages: Http.Client with source: :kupbilecik -> Zyte browserHtml mode
+  **No JavaScript rendering (Zyte) is required** - plain HTTP fetches
+  return all necessary data for extraction.
 
   ## Rate Limiting
 
-  - 3 second delay between requests (configurable in Config)
-  - Zyte API handles browser rendering and rate limiting internally
+  - 1 second delay between requests (configurable in Config)
+  - Respects robots.txt crawl delay recommendations
   """
 
   require Logger
 
   alias EventasaurusDiscovery.Sources.Kupbilecik.Config
-  alias EventasaurusDiscovery.Http.Client, as: HttpClient
+
+  @user_agent "Mozilla/5.0 (compatible; Eventasaurus/1.0; +https://eventasaurus.com)"
 
   @doc """
   Fetches a sitemap XML file and extracts event URLs.
@@ -95,15 +99,26 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Client do
         }
       end)
       |> Enum.reject(fn entry -> is_nil(entry.event_id) end)
+      # Sort by event_id descending (higher IDs = newer events)
+      |> Enum.sort_by(
+        fn entry ->
+          case Integer.parse(entry.event_id) do
+            {num, _} -> num
+            _ -> 0
+          end
+        end,
+        :desc
+      )
 
     Logger.info("📊 Total event URLs found: #{length(event_entries)}")
     {:ok, event_entries}
   end
 
   @doc """
-  Fetches an event page using Http.Client with Zyte adapter.
+  Fetches an event page using plain HTTP.
 
-  Uses browser rendering to execute JavaScript and get full content.
+  Kupbilecik.pl uses Server-Side Rendering (SSR), so all event data
+  is present in the initial HTML response. No JavaScript rendering needed.
 
   ## Options
 
@@ -115,35 +130,44 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Client do
       {:ok, "<html>...</html>"}
   """
   def fetch_page(url, opts \\ []) do
-    Logger.debug("🌐 Fetching kupbilecik page via Zyte: #{url}")
+    Logger.debug("🌐 Fetching kupbilecik page via plain HTTP: #{url}")
 
     # Apply rate limiting
     apply_rate_limit()
 
-    # Use Http.Client with kupbilecik source config (should use Zyte)
-    case HttpClient.fetch(url, source: :kupbilecik, mode: :browser_html) do
-      {:ok, body, metadata} ->
-        Logger.debug(
-          "✅ Fetched page (#{byte_size(body)} bytes) via #{metadata.adapter} in #{metadata.duration_ms}ms"
-        )
+    headers = [
+      {"User-Agent", @user_agent},
+      {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+      {"Accept-Language", "pl,en;q=0.5"},
+      # Note: Do NOT include Accept-Encoding: gzip as HTTPoison doesn't auto-decompress
+      # and we want raw HTML content
+      {"Connection", "keep-alive"}
+    ]
 
+    case HTTPoison.get(url, headers,
+           follow_redirect: true,
+           timeout: Config.timeout(),
+           recv_timeout: Config.timeout()
+         ) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        Logger.debug("✅ Fetched page (#{byte_size(body)} bytes) via plain HTTP")
         {:ok, body}
 
-      {:error, {:all_adapters_failed, blocked_by}} ->
-        Logger.warning("🚫 All adapters failed for #{url}: #{inspect(blocked_by)}")
-        handle_retry(url, opts, :all_adapters_failed)
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        Logger.warning("⚠️ Event not found (404): #{url}")
+        {:error, {:http_error, 404}}
 
-      {:error, {:timeout, type}} ->
-        Logger.warning("⏱️ Timeout (#{type}) fetching #{url}")
-        handle_retry(url, opts, {:timeout, type})
+      {:ok, %HTTPoison.Response{status_code: status_code}} ->
+        Logger.warning("⚠️ HTTP #{status_code} for #{url}")
+        handle_retry(url, opts, {:http_error, status_code})
 
-      {:error, {:zyte_error, status, message}} ->
-        Logger.warning("⚠️ Zyte error (#{status}): #{message} for #{url}")
-        handle_retry(url, opts, {:zyte_error, status})
+      {:error, %HTTPoison.Error{reason: :timeout}} ->
+        Logger.warning("⏱️ Timeout fetching #{url}")
+        handle_retry(url, opts, :timeout)
 
-      {:error, reason} ->
+      {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("❌ Failed to fetch #{url}: #{inspect(reason)}")
-        {:error, reason}
+        handle_retry(url, opts, {:network_error, reason})
     end
   end
 

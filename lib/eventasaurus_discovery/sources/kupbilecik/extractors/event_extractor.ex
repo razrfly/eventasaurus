@@ -249,12 +249,23 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   end
 
   defp extract_meta_title(html, property) do
-    pattern = ~r{<meta\s+(?:property|name)="#{property}"\s+content="([^"]+)"}i
+    # Try multiple patterns since attributes can be in any order
+    # Pattern 1: property="og:title" followed by content
+    # Pattern 2: content followed by property="og:title"
+    # Pattern 3: Handle name="og:title" with content
+    patterns = [
+      ~r{<meta\s+[^>]*property="#{property}"[^>]*content="([^"]+)"}i,
+      ~r{<meta\s+[^>]*content="([^"]+)"[^>]*property="#{property}"}i,
+      ~r{<meta\s+[^>]*name="#{property}"[^>]*content="([^"]+)"}i,
+      ~r{<meta\s+[^>]*content="([^"]+)"[^>]*name="#{property}"}i
+    ]
 
-    case Regex.run(pattern, html) do
-      [_, title] -> title
-      _ -> nil
-    end
+    Enum.find_value(patterns, fn pattern ->
+      case Regex.run(pattern, html) do
+        [_, title] -> title
+        _ -> nil
+      end
+    end)
   end
 
   defp extract_page_title(html) do
@@ -360,10 +371,19 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   end
 
   defp extract_meta_description(html) do
-    case Regex.run(~r{<meta\s+(?:name|property)="description"\s+content="([^"]+)"}i, html) do
-      [_, desc] -> desc
-      _ -> nil
-    end
+    # Try both standard description and og:description (kupbilecik uses og:description)
+    patterns = [
+      ~r{<meta\s+(?:name|property)="description"\s+content="([^"]+)"}i,
+      ~r{<meta\s+[^>]*property="og:description"[^>]*content="([^"]+)"}i,
+      ~r{<meta\s+[^>]*content="([^"]+)"[^>]*property="og:description"}i
+    ]
+
+    Enum.find_value(patterns, fn pattern ->
+      case Regex.run(pattern, html) do
+        [_, desc] -> desc
+        _ -> nil
+      end
+    end)
   end
 
   defp extract_first_paragraph(html) do
@@ -378,12 +398,20 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   end
 
   defp extract_meta_content(html, property) do
-    pattern = ~r{<meta\s+(?:property|name)="#{property}"\s+content="([^"]+)"}i
+    # Try multiple patterns since attributes can be in any order
+    patterns = [
+      ~r{<meta\s+[^>]*property="#{property}"[^>]*content="([^"]+)"}i,
+      ~r{<meta\s+[^>]*content="([^"]+)"[^>]*property="#{property}"}i,
+      ~r{<meta\s+[^>]*name="#{property}"[^>]*content="([^"]+)"}i,
+      ~r{<meta\s+[^>]*content="([^"]+)"[^>]*name="#{property}"}i
+    ]
 
-    case Regex.run(pattern, html) do
-      [_, content] -> String.trim(content)
-      _ -> nil
-    end
+    Enum.find_value(patterns, fn pattern ->
+      case Regex.run(pattern, html) do
+        [_, content] -> String.trim(content)
+        _ -> nil
+      end
+    end)
   end
 
   defp extract_first_content_image(html) do
@@ -403,7 +431,17 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   end
 
   defp extract_venue_name(html) do
+    # Kupbilecik-specific patterns based on actual HTML structure
+    # The main venue link in the h3 header wraps the name in <b> tags:
+    # <h3><a href="/obiekty/277/..."><b>Venue Name</b></a>, Address</h3>
+    # Secondary venue links don't have <b> tags:
+    # <a href="/obiekty/277/...">Venue Name</a>
     patterns = [
+      # Primary: Link with <b> wrapper (main header venue)
+      ~r{<a[^>]*href="/obiekty/[^"]*"[^>]*><b>([^<]+)</b></a>}i,
+      # Secondary: Link without <b> wrapper
+      ~r{<a[^>]*href="/obiekty/[^"]*"[^>]*>([^<]+)</a>}i,
+      # Fallback: CSS class patterns (for future changes)
       ~r{<[^>]*class="[^"]*venue[^"]*name[^"]*"[^>]*>(.*?)</[^>]+>}is,
       ~r{<[^>]*class="[^"]*location[^"]*"[^>]*>(.*?)</[^>]+>}is,
       ~r{<[^>]*data-venue[^>]*>(.*?)</[^>]+>}is
@@ -411,22 +449,36 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
     Enum.find_value(patterns, fn pattern ->
       case Regex.run(pattern, html) do
-        [_, name] -> clean_text(name)
-        _ -> nil
+        [_, name] ->
+          cleaned = clean_text(name)
+          # Only return non-empty venue names
+          if cleaned != "" and String.length(cleaned) > 1, do: cleaned, else: nil
+
+        _ ->
+          nil
       end
     end)
   end
 
   defp extract_venue_address(html) do
+    # Kupbilecik-specific patterns based on actual HTML structure
     patterns = [
+      # Pattern 1: h3 with venue link followed by ", Address" text
+      # HTML: <h3><a href="/obiekty/...">VenueName</a>, Address Street 123</h3>
+      ~r{<h3[^>]*>\s*<a[^>]*href="/obiekty/[^"]*"[^>]*>[^<]+</a>\s*,\s*([^<]+)</h3>}is,
+      # Pattern 2: Standard CSS class patterns
       ~r{<[^>]*class="[^"]*address[^"]*"[^>]*>(.*?)</[^>]+>}is,
       ~r{<address[^>]*>(.*?)</address>}is
     ]
 
     Enum.find_value(patterns, fn pattern ->
       case Regex.run(pattern, html) do
-        [_, addr] -> clean_text(addr)
-        _ -> nil
+        [_, addr] ->
+          cleaned = clean_text(addr)
+          if cleaned != "" and String.length(cleaned) > 3, do: cleaned, else: nil
+
+        _ ->
+          nil
       end
     end)
   end
@@ -438,12 +490,48 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
       city = extract_city_element(html) ->
         city
 
+      # Try to extract from meta description (e.g., "Event Name (Bolesławiec) w dn...")
+      city = extract_city_from_meta_description(html) ->
+        city
+
+      # Try to extract from page title (e.g., "Event / Bolesławiec / 2026-03-12")
+      city = extract_city_from_title(html) ->
+        city
+
       # Try to extract from address (only if address is not nil)
       address != nil ->
         extract_city_from_address(address)
 
       true ->
         nil
+    end
+  end
+
+  defp extract_city_from_meta_description(html) do
+    # Pattern: "Event Name (CityName) w dn. ..."
+    case extract_meta_description(html) do
+      nil ->
+        nil
+
+      desc ->
+        case Regex.run(~r/\(([^)]+)\)\s+w\s+dn\./u, desc) do
+          [_, city] -> String.trim(city)
+          _ -> nil
+        end
+    end
+  end
+
+  defp extract_city_from_title(html) do
+    # Pattern: "Event Name / CityName / 2026-03-12"
+    case extract_page_title(html) do
+      nil ->
+        nil
+
+      title ->
+        case Regex.run(~r|/\s*([^/]+)\s*/\s*\d{4}-\d{2}-\d{2}|, title) do
+          [_, city] -> String.trim(city)
+          _ -> nil
+        end
     end
   end
 
@@ -455,8 +543,13 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
     Enum.find_value(patterns, fn pattern ->
       case Regex.run(pattern, html) do
-        [_, city] -> clean_text(city)
-        _ -> nil
+        [_, city] ->
+          cleaned = clean_text(city)
+          # Only return if non-empty (skip icon-city type elements)
+          if cleaned != "" and String.length(cleaned) > 0, do: cleaned, else: nil
+
+        _ ->
+          nil
       end
     end)
   end

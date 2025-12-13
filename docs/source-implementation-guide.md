@@ -1019,6 +1019,256 @@ Use this checklist when implementing a new source:
 
 ---
 
+## 12. Zyte API Usage Guidelines (CRITICAL)
+
+### When to Use Zyte (JavaScript Rendering)
+
+**Zyte API costs ~$0.001 per request and adds 3-5 seconds of latency.** It should only be used as a **last resort** when plain HTTP cannot retrieve the necessary data.
+
+### Decision Process (MANDATORY)
+
+Before implementing Zyte for a new scraper, you MUST:
+
+1. **Test Plain HTTP First**
+   ```bash
+   # Test with curl - does the data appear in the HTML?
+   curl -s "https://example.com/event/123" -H "User-Agent: Mozilla/5.0" | head -1000
+   ```
+
+2. **Check for Server-Side Rendering (SSR)**
+   - If event data appears in the initial HTML response → **Use Plain HTTP**
+   - If event data is loaded via JavaScript after page load → **Consider Zyte**
+
+3. **Look for Data in Meta Tags**
+   ```html
+   <!-- SSR sites often have data in meta tags - NO Zyte needed -->
+   <meta property="og:title" content="Event Title">
+   <meta property="og:description" content="Event description...">
+   ```
+
+4. **Check Network Tab**
+   - Open browser DevTools → Network tab → Fetch/XHR
+   - If event data comes from a JSON API endpoint → **Call the API directly (no Zyte)**
+
+### Zyte Is REQUIRED When:
+
+- ✅ Site uses **client-side JavaScript framework** (React SPA, Vue SPA) that renders content dynamically
+- ✅ Site has **Cloudflare anti-bot protection** that blocks automated requests
+- ✅ Site returns **empty HTML** or **loading spinners** without JavaScript execution
+- ✅ Content is loaded via **AJAX after initial page load** and no API endpoint is accessible
+
+### Zyte Is NOT Required When:
+
+- ❌ Site uses **Server-Side Rendering (SSR)** - data is in initial HTML
+- ❌ Site has **meta tags** with event data (og:title, og:description, etc.)
+- ❌ Site has a **public JSON API** that can be called directly
+- ❌ Site is a **static HTML** website
+- ❌ Site uses **PHP/Django/Rails** traditional backends (usually SSR)
+
+### Implementation Pattern
+
+**Plain HTTP (Preferred - FREE, ~200ms):**
+```elixir
+def fetch_page(url) do
+  headers = [{"User-Agent", "Mozilla/5.0 (compatible; Eventasaurus/1.0)"}]
+
+  case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+    {:ok, %{status_code: 200, body: body}} ->
+      {:ok, body}
+    {:ok, %{status_code: status}} ->
+      {:error, {:http_error, status}}
+    {:error, reason} ->
+      {:error, {:network_error, reason}}
+  end
+end
+```
+
+**Zyte Fallback (Only When Required - ~$0.001, 3-5s):**
+```elixir
+def fetch_page(url) do
+  # Try plain HTTP first (free, fast)
+  case fetch_with_plain_http(url) do
+    {:ok, body} when byte_size(body) > 1000 ->
+      # Validate we got real content, not a JS shell
+      if contains_expected_data?(body) do
+        {:ok, body}
+      else
+        # Content not in HTML, fall back to Zyte
+        fetch_with_zyte(url)
+      end
+
+    {:error, _} ->
+      # Network error or blocked, try Zyte
+      fetch_with_zyte(url)
+  end
+end
+```
+
+### Cost Tracking
+
+Every scraper using Zyte should log usage for cost monitoring:
+
+```elixir
+Logger.info("💰 Zyte API call: #{url} (estimated cost: $0.001)")
+```
+
+### Real-World Examples
+
+**kupbilecik.pl (Poland)** - ❌ Does NOT require Zyte
+- Uses Server-Side Rendering (SSR) for SEO
+- All event data in initial HTML (og:title, semantic markup)
+- Plain HTTP works perfectly (~200ms, FREE)
+
+**bandsintown.com** - ✅ REQUIRES Zyte
+- Uses client-side React with heavy JavaScript
+- Has Cloudflare protection
+- Plain HTTP returns empty content
+- Zyte is necessary for browser rendering
+
+### Checklist Before Using Zyte
+
+- [ ] Tested plain HTTP with curl - does data appear in HTML?
+- [ ] Checked meta tags for SSR data (og:title, og:description)
+- [ ] Verified no public JSON API is available
+- [ ] Confirmed site requires JavaScript execution
+- [ ] Documented why Zyte is required in the client module
+- [ ] Added cost logging for Zyte calls
+
+**Remember:** Unnecessary Zyte usage wastes money and adds latency. Always prove it's necessary first!
+
+---
+
+## 13. Job Args Standards (CRITICAL)
+
+Oban job arguments MUST follow a flat structure for consistency, debugging, and monitoring. **DO NOT nest metadata in sub-objects.**
+
+### Standard Args Pattern
+
+```elixir
+# ✅ CORRECT - Flat structure with external_id at top level
+%{
+  "url" => "https://example.com/event/123",
+  "source_id" => 456,
+  "external_id" => "source_event_123_2024-01-15",
+  "event_id" => "123",
+  "city_id" => 789  # Optional, if applicable
+}
+```
+
+```elixir
+# ❌ WRONG - Nested metadata object
+%{
+  "source" => "source_name",
+  "url" => "https://...",
+  "event_metadata" => %{
+    "event_id" => "123",
+    "external_id_base" => "source_article_123"
+  }
+}
+```
+
+### Required Args by Job Type
+
+#### SyncJob (Coordinator)
+```elixir
+%{
+  "limit" => 100,       # Optional: max events to process
+  "force" => false,     # Optional: force re-processing
+  "city_id" => 123      # Optional: filter by city
+}
+```
+
+#### IndexPageJob / ListingJob
+```elixir
+%{
+  "source_id" => 123,
+  "page" => 1,
+  "city_id" => 456      # Optional
+}
+```
+
+#### EventDetailJob
+```elixir
+%{
+  "url" => "https://example.com/event/123",
+  "source_id" => 123,
+  "external_id" => "source_event_123_2024-01-15",  # REQUIRED at top level
+  "event_id" => "123"   # Source-specific ID for logging
+}
+```
+
+#### ShowtimeProcessJob / MovieDetailJob
+```elixir
+%{
+  "source_id" => 123,
+  "external_id" => "source_event_abc_2024-01-15",  # REQUIRED
+  "showtime" => %{...},  # Raw data to process
+  "{source}_film_id" => "xyz"  # Source-specific ID
+}
+```
+
+### Why This Matters
+
+1. **Oban Dashboard Visibility**: Args are shown in the dashboard UI - flat structure makes debugging easier
+2. **Monitoring Queries**: Flat args allow simple SQL queries like `args->>'external_id'`
+3. **MetricsTracker Integration**: `external_id` must be easily extractable for metrics
+4. **Consistency**: All scrapers should look the same in monitoring tools
+
+### External ID in Args
+
+**CRITICAL**: The `external_id` MUST be passed in job args, NOT computed in the detail job.
+
+```elixir
+# ✅ CORRECT - SyncJob sets external_id when creating child jobs
+EventDetailJob.new(%{
+  "url" => url,
+  "source_id" => source_id,
+  "external_id" => "#{source_slug}_event_#{event_id}_#{Date.utc_today()}",
+  "event_id" => event_id
+})
+|> Oban.insert()
+```
+
+```elixir
+# ❌ WRONG - Detail job computes external_id from nested metadata
+external_id = args["event_metadata"]["external_id_base"] || args["event_metadata"]["event_id"]
+```
+
+### Viewing Jobs in Oban Dashboard
+
+With flat args, jobs appear cleanly in the dashboard:
+
+```
+Job #8659 EventDetailJob
+Args:
+  url: "https://www.kupbilecik.pl/imprezy/188122/..."
+  source_id: 15
+  external_id: "kupbilecik_event_188122_2024-01-15"
+  event_id: "188122"
+```
+
+vs nested (harder to read):
+
+```
+Job #8659 EventDetailJob
+Args:
+  source: "kupbilecik"
+  url: "https://..."
+  event_metadata:
+    event_id: "188122"
+    external_id_base: "kupbilecik_article_188122"
+```
+
+### Checklist for Job Args
+
+- [ ] `external_id` is at top level of args (not nested)
+- [ ] `source_id` is included (not source slug string)
+- [ ] No nested `event_metadata` or `metadata` objects
+- [ ] Job-specific IDs use format `{source}_{type}_id` (e.g., `cinema_city_film_id`)
+- [ ] URLs are complete (not relative paths)
+
+---
+
 ## Related Documentation
 
 - [ADDING_NEW_SOURCES.md](./ADDING_NEW_SOURCES.md) - Step-by-step guide for new sources

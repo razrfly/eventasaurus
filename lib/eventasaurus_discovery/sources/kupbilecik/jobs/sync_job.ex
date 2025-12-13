@@ -9,7 +9,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
   2. Extract event URLs from sitemaps (plain HTTP)
   3. Filter with EventFreshnessChecker (optional)
   4. Schedule EventDetailJob for each event URL
-  5. EventDetailJob fetches via Zyte API (JS rendering required)
+  5. EventDetailJob fetches via plain HTTP (SSR site, no JS needed)
 
   ## Job Flow
 
@@ -20,7 +20,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
     ↓ Filters by freshness (optional)
     ↓ Schedules EventDetailJobs
   EventDetailJob (scraper_detail queue)
-    ↓ Fetches page via Zyte (JS rendering)
+    ↓ Fetches page via plain HTTP (SSR)
     ↓ Extracts event data
     ↓ Transforms and saves to database
   ```
@@ -148,6 +148,9 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
       Logger.info("ℹ️ No jobs to schedule")
       {:ok, 0}
     else
+      # Get source_id for child jobs
+      source_id = get_source_id()
+
       # Schedule EventDetailJob for each event with staggered delays
       scheduled_jobs =
         event_entries
@@ -156,13 +159,15 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Jobs.SyncJob do
           # Stagger jobs to respect rate limiting
           delay_seconds = idx * Config.rate_limit()
 
+          # FLAT ARGS STRUCTURE (per Job Args Standards - Section 13)
+          # - external_id at top level for easy dashboard visibility
+          # - source_id instead of source slug string
+          # - No nested metadata objects
           job_args = %{
-            "source" => "kupbilecik",
             "url" => entry.url,
-            "event_metadata" => %{
-              "event_id" => entry.event_id,
-              "external_id_base" => Config.generate_article_external_id(entry.event_id)
-            }
+            "source_id" => source_id,
+            "external_id" => Config.generate_article_external_id(entry.event_id),
+            "event_id" => entry.event_id
           }
 
           EventDetailJob.new(job_args, schedule_in: delay_seconds)
