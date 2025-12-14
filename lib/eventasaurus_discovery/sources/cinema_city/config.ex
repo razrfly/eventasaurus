@@ -4,9 +4,36 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Config do
 
   Cinema City provides a public JSON API for cinema listings and showtimes
   across Poland. This configuration defines API endpoints and scraper settings.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Cross-source matching for movie showtimes
+  using movie title, venue, and date. Cinema sources may overlap with
+  other movie databases.
   """
 
+  @behaviour EventasaurusDiscovery.Sources.SourceConfig
+
   @site_id "10103"
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def source_config do
+    EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
+      name: "Cinema City",
+      slug: "cinema_city",
+      priority: 65,
+      rate_limit: 2,
+      timeout: 10_000,
+      max_retries: 3,
+      queue: :discovery,
+      base_url: base_url(),
+      api_key: nil,
+      api_secret: nil
+    })
+  end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   def base_url, do: "https://www.cinema-city.pl"
 

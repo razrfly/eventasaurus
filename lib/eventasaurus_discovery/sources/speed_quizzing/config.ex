@@ -4,7 +4,33 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Config do
 
   Provides centralized access to environment-specific settings
   for the Speed Quizzing trivia event source.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Cross-source fuzzy matching for quiz/trivia events.
+  May identify same venues across different quiz providers.
   """
+
+  @behaviour EventasaurusDiscovery.Sources.SourceConfig
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def source_config do
+    EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
+      name: "Speed Quizzing",
+      slug: "speed_quizzing",
+      priority: 50,
+      rate_limit: 2,
+      timeout: 30_000,
+      max_retries: 3,
+      queue: :discovery,
+      base_url: base_url(),
+      api_key: nil,
+      api_secret: nil
+    })
+  end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   # Speed Quizzing URLs (no authentication required - public HTML scraping)
   def index_url, do: "https://www.speedquizzing.com/find/"

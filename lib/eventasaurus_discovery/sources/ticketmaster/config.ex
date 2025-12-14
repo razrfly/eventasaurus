@@ -1,6 +1,12 @@
 defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
   @moduledoc """
   Configuration for Ticketmaster Discovery API using unified source structure.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Highest priority authoritative source.
+  Other sources defer to Ticketmaster when cross-source fuzzy matches
+  are detected using performer, venue, date, and GPS coordinates.
   """
 
   @behaviour EventasaurusDiscovery.Sources.SourceConfig
@@ -28,6 +34,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
       api_secret: api_secret()
     })
   end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   def base_url, do: @base_url
   def default_radius, do: @default_radius

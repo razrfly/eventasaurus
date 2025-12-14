@@ -4,6 +4,12 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Config do
 
   Resident Advisor (ra.co) is a major international electronic music events platform.
   Uses GraphQL API for data fetching with Google Places geocoding for venue coordinates.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Full cross-source fuzzy matching for electronic
+  music events. High-priority international source that other regional sources
+  may defer to for club/DJ events.
   """
 
   @behaviour EventasaurusDiscovery.Sources.SourceConfig
@@ -39,6 +45,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Config do
       }
     })
   end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   @doc """
   GraphQL endpoint URL for Resident Advisor API.
