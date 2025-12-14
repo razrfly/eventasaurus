@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   alias EventasaurusApp.{Repo, Venues}
   alias EventasaurusApp.Cache.DashboardStats
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
-  alias EventasaurusDiscovery.Locations.{City, CityHierarchy}
+  alias EventasaurusDiscovery.Locations.City
 
   alias EventasaurusDiscovery.Admin.{
     DataManager,
@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
-  alias EventasaurusDiscovery.Monitoring.Collisions
+  # Collisions module now used via DashboardStats cache
 
   import Ecto.Query
   require Logger
@@ -68,49 +68,153 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:backfill_geocode, true)
       |> assign(:backfill_running, false)
       |> assign(:image_providers, [])
-      # Initialize venue_duplicates as nil
+      # Initialize all data as nil/loading state - will be loaded async
       |> assign(:venue_duplicates, nil)
-      # Initialize collision_summary as nil (loaded in load_data)
       |> assign(:collision_summary, nil)
-      |> load_data()
-      |> schedule_refresh()
+      |> assign(:loading, true)
+      # Per-section loading states for staged loading
+      |> assign(:city_stats_loading, true)
+      |> assign(:collision_loading, true)
+      |> assign(:venue_duplicates_loading, true)
+      # Initialize with empty/default values for required assigns
+      |> assign(:stats, %{total_events: 0, total_venues: 0, total_performers: 0, total_categories: 0, total_sources: 0})
+      |> assign(:source_stats, [])
+      |> assign(:detailed_source_stats, [])
+      |> assign(:city_stats, [])
+      |> assign(:cities, [])
+      |> assign(:sources, [])
+      |> assign(:queue_stats, [])
+      |> assign(:upcoming_count, 0)
+      |> assign(:past_count, 0)
+      |> assign(:discovery_cities, [])
 
-    # Send message to self to load duplicates after mount completes
+    # Defer ALL expensive data loading to after mount completes
+    # This prevents mount timeout (Bad Gateway) on cold cache
     if connected?(socket) do
-      send(self(), :load_venue_duplicates)
+      send(self(), :load_initial_data)
     end
 
     {:ok, socket}
   end
 
   @impl true
-  def handle_info(:load_venue_duplicates, socket) do
-    # Load venue duplicate statistics
-    groups = Venues.find_duplicate_groups(200, 0.6)
-    total_venues = Repo.replica().aggregate(Venues.Venue, :count, :id)
+  def handle_info(:load_initial_data, socket) do
+    # STAGED LOADING: Only load basic stats first to prevent OOM
+    # Expensive operations (city_stats, collision_summary, venue_duplicates)
+    # are loaded in separate handle_info calls to isolate memory usage
+    socket =
+      socket
+      |> load_basic_data()
+      |> assign(:loading, false)
+      |> schedule_refresh()
 
-    duplicate_count = length(groups)
+    # Trigger staged loading of expensive operations
+    # Each runs in its own handle_info to isolate memory pressure
+    send(self(), :load_city_stats)
 
-    affected_venues =
-      Enum.reduce(groups, 0, fn group, acc ->
-        acc + length(group.venues)
-      end)
+    {:noreply, socket}
+  end
 
-    percentage =
-      if total_venues > 0 do
-        Float.round(affected_venues / total_venues * 100, 1)
-      else
-        0.0
+  @impl true
+  def handle_info(:load_city_stats, socket) do
+    # Load city statistics with geographic clustering
+    # This is expensive on cold cache - isolate to prevent OOM cascading
+    city_stats =
+      try do
+        get_cached(:city_stats, fn ->
+          DashboardStats.get_city_statistics_with_clustering(
+            &get_active_city_statistics/0,
+            &get_inactive_city_statistics/0,
+            20.0
+          )
+        end)
+      rescue
+        e ->
+          require Logger
+          Logger.error("Failed to load city stats: #{inspect(e)}")
+          []
       end
 
-    venue_duplicates = %{
-      duplicate_groups: duplicate_count,
-      affected_venues: affected_venues,
-      total_venues: total_venues,
-      percentage: percentage
-    }
+    # Trigger next expensive operation
+    send(self(), :load_collision_stats)
 
-    {:noreply, assign(socket, :venue_duplicates, venue_duplicates)}
+    {:noreply,
+     socket
+     |> assign(:city_stats, city_stats)
+     |> assign(:city_stats_loading, false)}
+  end
+
+  @impl true
+  def handle_info(:load_collision_stats, socket) do
+    # Load collision/deduplication summary
+    # This queries job_execution_summaries which can be heavy
+    collision_summary =
+      try do
+        get_cached(:collision_summary, fn ->
+          DashboardStats.get_collision_summary(24)
+        end)
+      rescue
+        e ->
+          require Logger
+          Logger.error("Failed to load collision summary: #{inspect(e)}")
+          nil
+      end
+
+    # Trigger next expensive operation
+    send(self(), :load_venue_duplicates)
+
+    {:noreply,
+     socket
+     |> assign(:collision_summary, collision_summary)
+     |> assign(:collision_loading, false)}
+  end
+
+  @impl true
+  def handle_info(:load_venue_duplicates, socket) do
+    # Load venue duplicate statistics - using cached version
+    # Wrap in try/rescue to prevent OOM from crashing the entire LiveView
+    venue_duplicates =
+      try do
+        groups =
+          case DashboardStats.get_venue_duplicates(200, 0.6) do
+            {:ok, result} -> result
+            {:commit, result} -> result
+            _ -> []
+          end
+
+        total_venues = Repo.replica().aggregate(Venues.Venue, :count, :id)
+
+        duplicate_count = length(groups)
+
+        affected_venues =
+          Enum.reduce(groups, 0, fn group, acc ->
+            acc + length(group.venues)
+          end)
+
+        percentage =
+          if total_venues > 0 do
+            Float.round(affected_venues / total_venues * 100, 1)
+          else
+            0.0
+          end
+
+        %{
+          duplicate_groups: duplicate_count,
+          affected_venues: affected_venues,
+          total_venues: total_venues,
+          percentage: percentage
+        }
+      rescue
+        e ->
+          require Logger
+          Logger.error("Failed to load venue duplicates: #{inspect(e)}")
+          nil
+      end
+
+    {:noreply,
+     socket
+     |> assign(:venue_duplicates, venue_duplicates)
+     |> assign(:venue_duplicates_loading, false)}
   end
 
   @impl true
@@ -630,7 +734,10 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     end
   end
 
-  defp load_data(socket) do
+  # Load only basic/fast stats - used for initial page load
+  # Expensive operations (city_stats, collision_summary, venue_duplicates)
+  # are loaded separately via staged handle_info calls
+  defp load_basic_data(socket) do
     # Get overall statistics from cache (shared with AdminDashboardLive)
     stats = %{
       total_events: get_cached(:total_events, &DashboardStats.get_total_events/0),
@@ -648,9 +755,6 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       get_cached(:detailed_source_stats, fn ->
         DashboardStats.get_detailed_source_statistics(min_events: 1)
       end)
-
-    # Get per-city statistics
-    city_stats = get_city_statistics()
 
     # Get active cities only (those with discovery enabled)
     cities =
@@ -700,8 +804,104 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         }
       end)
 
-    # Get collision/deduplication metrics (last 24 hours)
-    collision_summary = get_collision_summary()
+    socket
+    |> assign(:stats, stats)
+    |> assign(:source_stats, source_stats)
+    |> assign(:detailed_source_stats, detailed_source_stats)
+    |> assign(:cities, cities)
+    |> assign(:sources, sources)
+    |> assign(:queue_stats, queue_stats)
+    |> assign(:upcoming_count, upcoming_count)
+    |> assign(:past_count, past_count)
+    |> assign(:discovery_cities, discovery_cities)
+    |> assign(:image_providers, image_providers)
+  end
+
+  # Full data load - used for refresh (when cache is likely warm)
+  defp load_data(socket) do
+    # Get overall statistics from cache (shared with AdminDashboardLive)
+    stats = %{
+      total_events: get_cached(:total_events, &DashboardStats.get_total_events/0),
+      total_venues: get_cached(:total_venues, &DashboardStats.get_unique_venues/0),
+      total_performers: get_cached(:total_performers, &DashboardStats.get_unique_performers/0),
+      total_categories: get_cached(:total_categories, &DashboardStats.get_total_categories/0),
+      total_sources: get_cached(:total_sources, &DashboardStats.get_unique_sources/0)
+    }
+
+    # Get per-source statistics (cached)
+    source_stats = get_cached(:source_stats, &DashboardStats.get_source_statistics/0)
+
+    # Get detailed source statistics with success rates (cached)
+    detailed_source_stats =
+      get_cached(:detailed_source_stats, fn ->
+        DashboardStats.get_detailed_source_statistics(min_events: 1)
+      end)
+
+    # Get per-city statistics (cached with geographic clustering)
+    # On refresh, cache should be warm so this is fast
+    city_stats =
+      get_cached(:city_stats, fn ->
+        DashboardStats.get_city_statistics_with_clustering(
+          &get_active_city_statistics/0,
+          &get_inactive_city_statistics/0,
+          20.0
+        )
+      end)
+
+    # Get active cities only (those with discovery enabled)
+    cities =
+      Repo.replica().all(
+        from(c in City,
+          where: c.discovery_enabled == true,
+          order_by: c.name,
+          preload: :country
+        )
+      )
+
+    # Get available sources dynamically from SourceRegistry
+    # "all" is a special option for syncing from all sources
+    sources = SourceRegistry.all_sources() ++ ["all"]
+
+    # Get queue statistics (cached)
+    queue_stats = get_cached(:queue_stats, &DashboardStats.get_queue_statistics/0)
+
+    # Get upcoming vs past events (cached)
+    upcoming_count = get_cached(:upcoming_events, &DashboardStats.get_upcoming_events/0)
+    past_count = get_cached(:past_events, &DashboardStats.get_past_events/0)
+
+    # Get automated discovery cities with Oban stats
+    discovery_cities =
+      DiscoveryConfigManager.list_discovery_enabled_cities()
+      |> Enum.map(&load_city_stats/1)
+
+    # Get ALL image providers for backfill form (including disabled ones)
+    image_providers =
+      from(p in GeocodingProvider,
+        where: fragment("? @> ?", p.capabilities, ^%{"images" => true}),
+        order_by: [
+          asc:
+            fragment(
+              "COALESCE(CAST(? ->> 'images' AS INTEGER), 999)",
+              p.priorities
+            )
+        ]
+      )
+      |> Repo.replica().all()
+      |> Enum.map(fn p ->
+        %{
+          name: p.name,
+          display_name: format_provider_name(p.name),
+          is_active: p.is_active,
+          priority: get_in(p.priorities, ["images"]) || 999
+        }
+      end)
+
+    # Get collision/deduplication metrics (last 24 hours) - cached
+    # On refresh, cache should be warm so this is fast
+    collision_summary =
+      get_cached(:collision_summary, fn ->
+        DashboardStats.get_collision_summary(24)
+      end)
 
     socket
     |> assign(:stats, stats)
@@ -777,44 +977,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     end
   end
 
-  defp get_city_statistics do
-    # Get statistics for active (discovery-enabled) cities using geographic matching
-    active_city_stats =
-      get_active_city_statistics()
-      |> Enum.map(&Map.put(&1, :is_geographic, true))
-
-    # Get statistics for inactive cities using traditional city_id matching
-    inactive_city_stats =
-      get_inactive_city_statistics()
-      |> Enum.map(&Map.put(&1, :is_geographic, false))
-
-    # Combine stats
-    combined_stats = active_city_stats ++ inactive_city_stats
-
-    # DEBUG: Log Warsaw/Warszawa stats before clustering
-    warsaw_stats = Enum.filter(combined_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
-
-    if length(warsaw_stats) > 0 do
-      Logger.info("Warsaw/Warszawa before clustering: #{inspect(warsaw_stats)}")
-    end
-
-    # Apply geographic clustering to group nearby cities (e.g., Paris + Paris 8 + Paris 16)
-    # This uses a 20km distance threshold to detect metropolitan areas
-    # When clustering contains both geographic (active) and city_id (inactive) cities,
-    # use MAX instead of SUM to avoid double-counting events
-    clustered_stats = CityHierarchy.aggregate_stats_by_cluster(combined_stats, 20.0)
-
-    # DEBUG: Log Warsaw after clustering
-    warsaw_clustered =
-      Enum.find(clustered_stats, fn s -> s.city_name in ["Warsaw", "Warszawa"] end)
-
-    if warsaw_clustered do
-      Logger.info("Warsaw/Warszawa after clustering: #{inspect(warsaw_clustered)}")
-    end
-
-    # Sort by count descending
-    Enum.sort_by(clustered_stats, & &1.count, :desc)
-  end
+  # NOTE: get_city_statistics is now handled via DashboardStats.get_city_statistics_with_clustering/3
+  # The helper functions below are still used by the cached version
 
   defp get_active_city_statistics do
     # Get all active cities with coordinates
@@ -1060,12 +1224,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   end
 
   # Collision/deduplication helpers
-  defp get_collision_summary do
-    case Collisions.summary(hours: 24) do
-      {:ok, summary} -> summary
-      {:error, _reason} -> nil
-    end
-  end
+  # NOTE: get_collision_summary is now handled via DashboardStats.get_collision_summary/1
 
   # Severity class helpers for duplicate warnings
   defp duplicate_severity_class(percentage) when percentage >= 5.0,
