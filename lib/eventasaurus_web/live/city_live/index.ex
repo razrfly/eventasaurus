@@ -46,9 +46,6 @@ defmodule EventasaurusWeb.CityLive.Index do
           # Get language from session or default to English
           language = get_connect_params(socket)["locale"] || socket.assigns[:language] || "en"
 
-          # Get dynamically available languages for this city
-          available_languages = LanguageDiscovery.get_available_languages_for_city(city_slug)
-
           # Capture request URI for proper URL generation (ngrok support)
           raw_uri = get_connect_info(socket, :uri)
 
@@ -59,41 +56,27 @@ defmodule EventasaurusWeb.CityLive.Index do
               true -> nil
             end
 
-          # Generate JSON-LD structured data for the city
-          city_stats = fetch_city_stats(city)
-          json_ld = CitySchema.generate(city, city_stats)
-
-          # Generate social card URL path (relative, will be made absolute by SEOHelpers)
-          city_with_stats = Map.put(city, :stats, city_stats)
-          social_card_path = UrlBuilder.build_path(:city, city_with_stats)
-
-          # Generate Open Graph meta tags
-          og_tags = build_city_open_graph(city, city_stats, social_card_path, request_uri)
-
+          # STAGED LOADING: Initialize with loading state, defer expensive operations
+          # This prevents mount timeout and provides fast initial render
           {:ok,
            socket
            |> assign(:city, city)
+           |> assign(:city_slug, city_slug)
            |> assign(:language, language)
-           |> assign(:available_languages, available_languages)
+           |> assign(:request_uri, request_uri)
+           # Initialize with empty/loading states - will be populated by handle_info
+           |> assign(:available_languages, ["en"])
            |> assign(:radius_km, @default_radius_km)
            |> assign(:view_mode, "grid")
            |> assign(:filters, default_filters())
            |> assign(:show_filters, false)
-           |> assign(:loading, false)
+           |> assign(:loading, true)
+           |> assign(:events_loading, true)
            |> assign(:total_events, 0)
            |> assign(:all_events_count, 0)
-           |> assign(:categories, CityPageCache.get_categories(&Categories.list_categories/0))
+           |> assign(:categories, [])
            |> assign(:events, [])
-           |> assign(:open_graph, og_tags)
-           |> SEOHelpers.assign_meta_tags(
-             title: page_title(city),
-             description: meta_description(city),
-             image: social_card_path,
-             type: "website",
-             canonical_path: "/c/#{city.slug}",
-             json_ld: json_ld,
-             request_uri: request_uri
-           )
+           |> assign(:open_graph, "")
            |> assign(:pagination, %Pagination{
              entries: [],
              page_number: 1,
@@ -103,8 +86,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            })
            |> assign(:active_date_range, nil)
            |> assign(:date_range_counts, %{})
-           |> fetch_events()
-           |> fetch_nearby_cities()}
+           |> defer_expensive_loading()}
         else
           {:ok,
            socket
@@ -112,6 +94,98 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> push_navigate(to: ~p"/activities")}
         end
     end
+  end
+
+  # Defer expensive operations to handle_info for staged loading
+  defp defer_expensive_loading(socket) do
+    if connected?(socket) do
+      send(self(), :load_initial_data)
+    end
+
+    socket
+  end
+
+  @impl true
+  def handle_info(:load_initial_data, socket) do
+    # DEBUG: Artificial delay to visualize staged loading (remove in production)
+    if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
+      Process.sleep(500)
+    end
+
+    # STAGE 1: Load lightweight data (categories, languages, meta tags)
+    city = socket.assigns.city
+    city_slug = socket.assigns.city_slug
+    request_uri = socket.assigns.request_uri
+
+    # Get dynamically available languages for this city
+    available_languages =
+      try do
+        LanguageDiscovery.get_available_languages_for_city(city_slug)
+      rescue
+        _ -> ["en"]
+      end
+
+    # Get categories (cached)
+    categories = CityPageCache.get_categories(&Categories.list_categories/0)
+
+    # Generate city stats and meta tags
+    city_stats = fetch_city_stats(city)
+    json_ld = CitySchema.generate(city, city_stats)
+
+    # Generate social card URL path
+    city_with_stats = Map.put(city, :stats, city_stats)
+    social_card_path = UrlBuilder.build_path(:city, city_with_stats)
+
+    # Generate Open Graph meta tags
+    og_tags = build_city_open_graph(city, city_stats, social_card_path, request_uri)
+
+    socket =
+      socket
+      |> assign(:available_languages, available_languages)
+      |> assign(:categories, categories)
+      |> assign(:open_graph, og_tags)
+      |> SEOHelpers.assign_meta_tags(
+        title: page_title(city),
+        description: meta_description(city),
+        image: social_card_path,
+        type: "website",
+        canonical_path: "/c/#{city.slug}",
+        json_ld: json_ld,
+        request_uri: request_uri
+      )
+      |> assign(:loading, false)
+
+    # Trigger events loading (the expensive operation)
+    send(self(), :load_events)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:load_events, socket) do
+    # DEBUG: Artificial delay to visualize staged loading (remove in production)
+    if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
+      Process.sleep(2000)
+    end
+
+    # STAGE 2: Load events (expensive geographic query)
+    socket =
+      try do
+        socket
+        |> fetch_events()
+        |> fetch_nearby_cities()
+        |> assign(:events_loading, false)
+      rescue
+        e ->
+          Logger.error("Failed to load events for city #{socket.assigns.city.slug}: #{inspect(e)}")
+
+          socket
+          |> assign(:events, [])
+          |> assign(:events_loading, false)
+          |> assign(:total_events, 0)
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -448,9 +522,56 @@ defmodule EventasaurusWeb.CityLive.Index do
 
       <!-- Events Grid/List -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <%= if @loading do %>
-          <div class="flex justify-center py-12">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <%= if @loading or @events_loading do %>
+          <!-- Skeleton Loading State -->
+          <div class="animate-pulse">
+            <!-- Results count skeleton -->
+            <div class="mb-4">
+              <div class="h-4 w-32 bg-gray-200 rounded"></div>
+            </div>
+
+            <!-- Event cards skeleton grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <%= for _i <- 1..6 do %>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                  <!-- Image placeholder -->
+                  <div class="h-48 bg-gray-200"></div>
+                  <!-- Content -->
+                  <div class="p-4 space-y-3">
+                    <!-- Title -->
+                    <div class="h-5 bg-gray-200 rounded w-3/4"></div>
+                    <!-- Date/time -->
+                    <div class="flex items-center space-x-2">
+                      <div class="h-4 w-4 bg-gray-300 rounded"></div>
+                      <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                    </div>
+                    <!-- Location -->
+                    <div class="flex items-center space-x-2">
+                      <div class="h-4 w-4 bg-gray-300 rounded"></div>
+                      <div class="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                    <!-- Category badge -->
+                    <div class="flex space-x-2">
+                      <div class="h-6 w-16 bg-gray-200 rounded-full"></div>
+                      <div class="h-6 w-20 bg-gray-200 rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+
+            <!-- Pagination skeleton -->
+            <div class="mt-8 flex justify-center">
+              <div class="flex items-center space-x-2">
+                <div class="h-10 w-20 bg-gray-200 rounded"></div>
+                <div class="h-10 w-10 bg-gray-300 rounded"></div>
+                <div class="h-10 w-10 bg-gray-200 rounded"></div>
+                <div class="h-10 w-10 bg-gray-200 rounded"></div>
+                <div class="h-10 w-20 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+
+            <p class="text-center text-sm text-gray-500 mt-4">Loading events...</p>
           </div>
         <% else %>
           <%= if @events == [] do %>
