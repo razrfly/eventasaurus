@@ -109,7 +109,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractorTest
   end
 
   describe "extract_performers/1" do
-    test "extracts performers from strong tags" do
+    test "returns list type for performer extraction" do
+      # Note: This test only verifies the return type is a list.
+      # Actual performer extraction now requires labeled sections (Obsada:, /baza/ links).
+      # See "only extracts performers from labeled sections" test for extraction behavior.
       html = """
       <html>
       <body>
