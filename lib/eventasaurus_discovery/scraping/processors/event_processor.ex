@@ -937,11 +937,25 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         # Clean name before slugifying to prevent crashes
         clean_name = EventasaurusDiscovery.Utils.UTF8.ensure_valid_utf8(name)
         slug = Slug.slugify(clean_name)
-        Repo.get_by!(Performer, slug: slug)
+
+        case Repo.get_by(Performer, slug: slug) do
+          nil ->
+            # Slug not found - this shouldn't happen but log and return nil
+            Logger.warning("⚠️ Performer conflict but slug not found: #{name}")
+            nil
+
+          performer ->
+            performer
+        end
 
       {:error, changeset} ->
-        # Actual validation error - let it bubble up
-        raise "Failed to create performer: #{inspect(changeset.errors)}"
+        # Validation error - log and return nil instead of raising
+        # This allows the transaction to continue without this performer
+        Logger.warning(
+          "⚠️ Failed to create performer '#{name}': #{inspect(changeset.errors)}"
+        )
+
+        nil
     end
   end
 
