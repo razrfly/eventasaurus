@@ -458,14 +458,18 @@ defmodule EventasaurusApp.Cache.DashboardStats do
   Cached for 10 minutes.
 
   This performs similarity matching across venues which is expensive.
+  Uses row_limit to prevent OOM on large datasets.
   """
-  def get_venue_duplicates(limit \\ 100, min_similarity \\ 0.7) do
-    cache_key = {:venue_duplicates, limit, min_similarity}
+  def get_venue_duplicates(row_limit \\ 100, min_similarity \\ 0.7) do
+    cache_key = {:venue_duplicates, row_limit, min_similarity}
 
     Cachex.fetch(@cache_name, cache_key, fn ->
       Logger.info("Computing venue duplicates (cache miss)")
 
-      duplicates = Venues.find_duplicate_groups(limit: limit, min_similarity: min_similarity)
+      duplicates = Venues.find_duplicate_groups(
+        min_similarity: min_similarity,
+        row_limit: row_limit
+      )
 
       {:commit, duplicates, expire: :timer.minutes(10)}
     end)
