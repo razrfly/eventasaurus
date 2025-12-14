@@ -118,6 +118,65 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.TransformerTest do
     end
   end
 
+  describe "performer extraction" do
+    test "extracts performer as list for Processor compatibility" do
+      raw_event = %{
+        "url" => "https://www.bandsintown.com/e/104563789-artist-at-venue",
+        "artist_name" => "Omasta",
+        "venue_name" => "Jazz Club Hipnoza",
+        "venue_latitude" => 50.2649,
+        "venue_longitude" => 19.0238,
+        "date" => "2025-10-30T20:00:00",
+        "genres" => ["jazz", "funk"],
+        "image_url" => "https://example.com/omasta.jpg"
+      }
+
+      {:ok, transformed} = Transformer.transform_event(raw_event)
+
+      # Must use plural key `performers` with list value
+      assert is_list(transformed.performers)
+      assert length(transformed.performers) == 1
+
+      [performer] = transformed.performers
+      assert performer.name == "Omasta"
+      assert performer.genres == ["jazz", "funk"]
+      assert performer.image_url == "https://example.com/omasta.jpg"
+    end
+
+    test "returns empty performers list when no artist_name" do
+      raw_event = %{
+        "url" => "https://www.bandsintown.com/e/104563789-event",
+        "venue_name" => "Test Venue",
+        "venue_latitude" => 50.0614,
+        "venue_longitude" => 19.9372,
+        "date" => "2025-10-15T20:00:00"
+      }
+
+      {:ok, transformed} = Transformer.transform_event(raw_event)
+
+      # Should return empty list, not nil
+      assert transformed.performers == []
+    end
+
+    test "filters invalid image URLs for performers" do
+      raw_event = %{
+        "url" => "https://www.bandsintown.com/e/104563789-artist",
+        "artist_name" => "Test Artist",
+        "venue_name" => "Test Venue",
+        "venue_latitude" => 50.0614,
+        "venue_longitude" => 19.9372,
+        "date" => "2025-10-15T20:00:00",
+        "image_url" => "https://example.com/thumb/null.jpg"
+      }
+
+      {:ok, transformed} = Transformer.transform_event(raw_event)
+
+      [performer] = transformed.performers
+      # Invalid image URL should be filtered to nil
+      assert performer.image_url == nil
+    end
+  end
+
   describe "external_id stability" do
     test "external_id remains constant across multiple transformations" do
       raw_event = %{
