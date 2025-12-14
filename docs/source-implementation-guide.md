@@ -24,6 +24,12 @@ This guide defines the standard naming conventions, architecture patterns, and i
 6. [MetricsTracker Integration](#6-metricstracker-integration)
 7. [Testing Requirements](#7-testing-requirements)
 8. [Examples](#8-examples)
+9. [Migration Guide](#9-migration-guide)
+10. [Checklist for New Sources](#10-checklist-for-new-sources)
+11. [Architecture Decision Records (ADRs)](#11-architecture-decision-records-adrs)
+12. [Zyte API Usage Guidelines](#12-zyte-api-usage-guidelines-critical)
+13. [Job Args Standards](#13-job-args-standards-critical)
+14. [Deduplication Strategies](#14-deduplication-strategies)
 
 ---
 
@@ -1266,6 +1272,346 @@ Args:
 - [ ] No nested `event_metadata` or `metadata` objects
 - [ ] Job-specific IDs use format `{source}_{type}_id` (e.g., `cinema_city_film_id`)
 - [ ] URLs are complete (not relative paths)
+
+---
+
+## 14. Deduplication Strategies
+
+### Overview
+
+Deduplication is critical for event aggregation. When scraping from multiple sources, the same real-world event may appear from different ticketing platforms (Ticketmaster, Bandsintown, local sites). The deduplication system prevents duplicate events while respecting source priorities.
+
+### Two-Phase Deduplication Architecture
+
+All DedupHandlers follow a two-phase approach:
+
+**Phase 1: Same-Source Deduplication**
+- Check if THIS source already imported the event via `external_id` match
+- Fast lookup using `BaseDedupHandler.find_by_external_id/2`
+- Prevents re-importing the same event on subsequent syncs
+
+**Phase 2: Cross-Source Fuzzy Matching**
+- Check if a HIGHER-PRIORITY source already has this event
+- Uses fuzzy matching based on strategy type (see below)
+- Respects source priority (Ticketmaster > Bandsintown > local sources)
+- Only defers to sources with higher priority scores
+
+### Strategy Types
+
+There are **four distinct deduplication strategies** used across sources, chosen based on the type of content each source provides:
+
+#### Strategy 1: Performer-Based Deduplication
+
+**Used By:** Bandsintown, Ticketmaster, Kupbilecik
+
+**When to Use:** Music events, concerts, festivals where **performer/artist name** is the primary identifier.
+
+**Rationale:** When the same performer plays at the same venue on the same date, it's almost certainly the same event, regardless of title variations ("Taylor Swift", "Taylor Swift Concert", "Taylor Swift | The Eras Tour").
+
+**Confidence Scoring:**
+| Signal | Weight | Notes |
+|--------|--------|-------|
+| Performer Name Match | 40% | Normalized, case-insensitive |
+| Date Match | 25% | Same calendar date |
+| Venue Name Match | 20% | Fuzzy string matching |
+| GPS Proximity | 15% | Within 100m radius |
+
+**GPS Radius:** 100 meters (tight radius for concert venues)
+
+**Implementation Pattern:**
+```elixir
+defmodule MySource.DedupHandler do
+  def check_duplicate(event_data, source) do
+    # Phase 1: Same-source via external_id
+    case BaseDedupHandler.find_by_external_id(event_data[:external_id], source.id) do
+      %Event{} = existing -> {:duplicate, existing}
+      nil -> check_fuzzy_duplicate(event_data, source)
+    end
+  end
+
+  defp check_fuzzy_duplicate(event_data, source) do
+    performer_name = extract_performer_name(event_data)
+    date = event_data[:starts_at]
+    {lat, lng} = get_coordinates(event_data)
+
+    matches = BaseDedupHandler.find_events_by_date_and_proximity(
+      date, lat, lng, proximity_meters: 100
+    )
+
+    performer_matches = Enum.filter(matches, fn %{event: event} ->
+      similar_performer?(performer_name, event.title)
+    end)
+
+    # Filter for higher-priority sources only
+    higher_priority = BaseDedupHandler.filter_higher_priority_matches(performer_matches, source)
+
+    case higher_priority do
+      [] -> {:unique, event_data}
+      [match | _] ->
+        confidence = calculate_match_confidence(event_data, match.event)
+        if BaseDedupHandler.should_defer_to_match?(match, source, confidence) do
+          {:duplicate, match.event}
+        else
+          {:unique, event_data}
+        end
+    end
+  end
+end
+```
+
+---
+
+#### Strategy 2: Title + Venue + Date Deduplication
+
+**Used By:** Cinema City, Karnet, Repertuary, Resident Advisor
+
+**When to Use:** Movies, cultural events, general listings where **event title** is the primary identifier.
+
+**Rationale:** For movie screenings or cultural events, the title is consistent across sources ("Dune Part Two" will be called that everywhere). Combined with venue and date, this provides reliable matching.
+
+**Confidence Scoring:**
+| Signal | Weight | Notes |
+|--------|--------|-------|
+| Title Match | 40% | Normalized, case-insensitive |
+| Date Match | 30% | Same calendar date |
+| GPS Proximity | 30% | Within 500m radius |
+
+**GPS Radius:** 500 meters (larger radius for general venues/cinemas)
+
+**Implementation Pattern:**
+```elixir
+defp check_fuzzy_duplicate(event_data, source) do
+  title = normalize_title(event_data[:title])
+  date = event_data[:starts_at]
+  {lat, lng} = get_coordinates(event_data)
+
+  matches = BaseDedupHandler.find_events_by_date_and_proximity(
+    date, lat, lng, proximity_meters: 500
+  )
+
+  title_matches = Enum.filter(matches, fn %{event: event} ->
+    similar_title?(title, event.title)
+  end)
+
+  # Continue with priority filtering...
+end
+```
+
+---
+
+#### Strategy 3: Venue + Recurrence Deduplication
+
+**Used By:** PubQuiz
+
+**When to Use:** Recurring events at fixed venues (trivia nights, weekly meetups, regular club nights).
+
+**Rationale:** For recurring events, the venue itself is the key identifier. "Tuesday Trivia at O'Malley's" is the same event every Tuesday, regardless of slight title variations.
+
+**Confidence Scoring:**
+| Signal | Weight | Notes |
+|--------|--------|-------|
+| Venue Name Match | 50% | Primary identifier |
+| GPS Proximity | 40% | Within 50m radius |
+| Title/Theme Match | 10% | Secondary confirmation |
+
+**GPS Radius:** 50 meters (very tight radius for recurring venue events)
+
+**Implementation Pattern:**
+```elixir
+defp check_fuzzy_duplicate(event_data, source) do
+  venue_name = event_data[:venue_data][:name]
+  date = event_data[:starts_at]
+  {lat, lng} = get_coordinates(event_data)
+
+  # Very tight GPS radius for recurring venue events
+  matches = BaseDedupHandler.find_events_by_date_and_proximity(
+    date, lat, lng, proximity_meters: 50
+  )
+
+  venue_matches = Enum.filter(matches, fn %{event: event} ->
+    same_venue?(venue_name, event.venue.name)
+  end)
+
+  # Check for same day-of-week pattern (recurring events)
+  # Continue with priority filtering...
+end
+```
+
+---
+
+#### Strategy 4: Umbrella Event Detection
+
+**Used By:** Resident Advisor (special handling)
+
+**When to Use:** Festival or multi-venue events where a parent event encompasses multiple sub-events.
+
+**Rationale:** Some events like "ADE Festival" occur across many venues. These "umbrella events" need special handling to avoid treating each venue's listing as a separate event.
+
+**Detection Signals:**
+- Venue name contains "Various" or is generic ("Multiple Locations")
+- Event spans multiple days
+- Title matches known festival patterns
+
+**Implementation Note:**
+```elixir
+defp is_umbrella_event?(event_data) do
+  venue_name = event_data[:venue_data][:name] || ""
+
+  String.contains?(venue_name, "Various") ||
+    String.contains?(venue_name, "Multiple") ||
+    event_data[:is_multi_day] == true
+end
+```
+
+---
+
+### Decision Matrix: Choosing a Strategy
+
+| Source Type | Has Performer Data? | Content Type | Recommended Strategy |
+|-------------|--------------------|--------------|--------------------|
+| Ticketing (Bandsintown, TM) | ✅ Yes | Concerts | **Performer-Based** |
+| Polish Ticketing (Kupbilecik) | ✅ Yes | Concerts/Shows | **Performer-Based** |
+| Cinema (Cinema City) | ❌ No | Movie Screenings | **Title + Venue + Date** |
+| Cultural (Karnet, Repertuary) | ❌ No | Events/Shows | **Title + Venue + Date** |
+| Music (Resident Advisor) | Sometimes | Club Events | **Title + Venue + Date** |
+| Trivia/Recurring (PubQuiz) | ❌ No | Weekly Events | **Venue + Recurrence** |
+
+### Source Priority System
+
+Higher-priority sources "win" when duplicates are detected. Lower-priority sources defer to existing higher-priority events.
+
+| Priority | Source | Type |
+|----------|--------|------|
+| 90 | Ticketmaster | Major ticketing |
+| 80 | Bandsintown | Artist-focused |
+| 75 | Resident Advisor | Electronic music |
+| 70 | Kupbilecik | Polish ticketing |
+| 60 | Karnet | Cultural events |
+| 50 | Cinema City | Movie screenings |
+| 40 | PubQuiz | Trivia/recurring |
+| 30 | Waw4Free | Free events |
+
+**Priority Logic:**
+- When Kupbilecik (70) finds a matching Bandsintown event (80), it defers → `{:duplicate, bandsintown_event}`
+- When Kupbilecik (70) finds a matching Waw4Free event (30), it does NOT defer → `{:unique, event_data}`
+
+### Confidence Thresholds
+
+All strategies use a confidence threshold of **0.8 (80%)** before declaring a match:
+
+```elixir
+@confidence_threshold 0.8
+
+def should_defer_to_match?(match, source, confidence) do
+  confidence >= @confidence_threshold &&
+    match.source.priority > source.priority
+end
+```
+
+### Creating a New DedupHandler
+
+**Step 1:** Determine which strategy fits your source type (see Decision Matrix)
+
+**Step 2:** Create the handler module:
+```
+lib/eventasaurus_discovery/sources/{source_slug}/dedup_handler.ex
+```
+
+**Step 3:** Implement the required functions:
+```elixir
+defmodule EventasaurusDiscovery.Sources.MySource.DedupHandler do
+  @moduledoc """
+  Deduplication handler for MySource.
+
+  Strategy: [Performer-Based | Title + Venue + Date | Venue + Recurrence]
+  GPS Radius: [50m | 100m | 500m]
+  """
+
+  alias EventasaurusDiscovery.Sources.BaseDedupHandler
+
+  @doc "Check if event already exists"
+  def check_duplicate(event_data, source) do
+    # Phase 1: Same-source check
+    # Phase 2: Cross-source fuzzy match
+  end
+
+  @doc "Validate event quality before processing"
+  def validate_event_quality(event_data) do
+    # Required fields, date sanity checks
+  end
+end
+```
+
+**Step 4:** Add tests:
+```
+test/eventasaurus_discovery/sources/{source_slug}/dedup_handler_test.exs
+```
+
+### Testing Deduplication
+
+**Unit Tests (no database):**
+```elixir
+describe "validate_event_quality/1" do
+  test "accepts valid event data" do
+    event = %{title: "Concert", external_id: "src_123", starts_at: future_date()}
+    assert {:ok, ^event} = DedupHandler.validate_event_quality(event)
+  end
+
+  test "rejects past events" do
+    event = %{title: "Concert", external_id: "src_123", starts_at: past_date()}
+    assert {:error, reason} = DedupHandler.validate_event_quality(event)
+    assert reason =~ "past"
+  end
+end
+```
+
+**Integration Tests (with database):**
+```elixir
+describe "check_duplicate/2" do
+  test "detects same-source duplicate" do
+    existing = insert(:event, external_id: "src_event_123_2025-01-01")
+    event_data = %{external_id: "src_event_123_2025-01-01", ...}
+
+    assert {:duplicate, ^existing} = DedupHandler.check_duplicate(event_data, source)
+  end
+
+  test "defers to higher-priority source" do
+    # Create event from Bandsintown (priority 80)
+    bandsintown_event = insert(:event, source: bandsintown_source, ...)
+
+    # Try to import same event via Kupbilecik (priority 70)
+    event_data = similar_event_data(bandsintown_event)
+
+    assert {:duplicate, ^bandsintown_event} = DedupHandler.check_duplicate(event_data, kupbilecik_source)
+  end
+end
+```
+
+### Checklist for Deduplication Implementation
+
+- [ ] **Strategy Selection**
+  - [ ] Identified correct strategy for source type
+  - [ ] Documented strategy choice in module @moduledoc
+
+- [ ] **Phase 1: Same-Source**
+  - [ ] Uses `BaseDedupHandler.find_by_external_id/2`
+  - [ ] Returns `{:duplicate, existing}` on match
+
+- [ ] **Phase 2: Cross-Source**
+  - [ ] Correct GPS radius for strategy (50m/100m/500m)
+  - [ ] Proper confidence weights implemented
+  - [ ] Uses `filter_higher_priority_matches/2`
+  - [ ] Respects confidence threshold (0.8)
+
+- [ ] **Quality Validation**
+  - [ ] Required fields checked (title, external_id, starts_at)
+  - [ ] Date sanity (not past, not >2 years future)
+  - [ ] Returns `{:ok, event_data}` or `{:error, reason}`
+
+- [ ] **Testing**
+  - [ ] Unit tests for validation logic
+  - [ ] Integration tests for duplicate detection
+  - [ ] Tests for priority deferral
 
 ---
 

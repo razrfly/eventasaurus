@@ -367,6 +367,76 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractorTest
       venue = EventExtractor.extract_venue(html)
       assert is_map(venue)
     end
+
+    test "extracts venue name from /obiekty/ link with bold wrapper" do
+      html = """
+      <html>
+      <body>
+        <h3><a href="/obiekty/5453/Teatr+%C5%BBelazny/" title="Teatr Żelazny bilety"><b>Teatr Żelazny</b></a>, Ul. Gliwicka 148a</h3>
+      </body>
+      </html>
+      """
+
+      venue = EventExtractor.extract_venue(html)
+      assert venue.name == "Teatr Żelazny"
+    end
+
+    test "extracts address from h3 with venue link" do
+      html = """
+      <html>
+      <body>
+        <h3><a href="/obiekty/5453/Test+Venue/"><b>Test Venue</b></a>, Ul. Gliwicka 148a</h3>
+      </body>
+      </html>
+      """
+
+      venue = EventExtractor.extract_venue(html)
+      assert venue.address == "Ul. Gliwicka 148a"
+    end
+
+    test "extracts city from /miasta/ link" do
+      html = """
+      <html>
+      <body>
+        <h2><a href="/miasta/61/Katowice/" title="Katowice bilety"><b>Katowice</b></a></h2>
+        <h3><a href="/obiekty/123/Test/"><b>Test</b></a>, Address</h3>
+      </body>
+      </html>
+      """
+
+      venue = EventExtractor.extract_venue(html)
+      assert venue.city == "Katowice"
+    end
+
+    test "extracts city from URL when not found in HTML" do
+      html = """
+      <html>
+      <body>
+        <h3><a href="/obiekty/123/Test/"><b>Test</b></a>, Address</h3>
+      </body>
+      </html>
+      """
+
+      url = "https://www.kupbilecik.pl/imprezy/175576/Warszawa/Event-Slug/"
+      venue = EventExtractor.extract_venue(html, url)
+      assert venue.city == "Warszawa"
+    end
+
+    test "extracts all venue components from real Kupbilecik HTML structure" do
+      html = """
+      <html>
+      <body>
+        <h2><a href="/miasta/61/Katowice/" title="Katowice bilety"><b>Katowice</b></a></h2>
+        <h3><a href="/obiekty/5453/Teatr+%C5%BBelazny/" title="Teatr Żelazny bilety"><b>Teatr Żelazny</b></a>, Ul. Gliwicka 148a</h3>
+      </body>
+      </html>
+      """
+
+      venue = EventExtractor.extract_venue(html)
+      assert venue.name == "Teatr Żelazny"
+      assert venue.address == "Ul. Gliwicka 148a"
+      assert venue.city == "Katowice"
+    end
   end
 
   describe "extract_image_url/1" do

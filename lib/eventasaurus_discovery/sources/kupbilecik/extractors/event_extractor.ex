@@ -51,7 +51,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
       # Extract optional fields (don't fail if missing)
       description = extract_description(html)
       image_url = extract_image_url(html)
-      venue = extract_venue(html)
+      venue = extract_venue(html, url)
       price = extract_price(html)
       category = extract_category(html, url)
       performers = extract_performers(html)
@@ -183,10 +183,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
   Returns map with :name, :address, :city keys.
   """
-  def extract_venue(html) do
+  def extract_venue(html, url \\ nil) do
     name = extract_venue_name(html)
     address = extract_venue_address(html)
-    city = extract_city(html, address)
+    city = extract_city(html, address, url)
 
     %{
       name: name,
@@ -688,10 +688,13 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   defp extract_venue_address(html) do
     # Kupbilecik-specific patterns based on actual HTML structure
     patterns = [
-      # Pattern 1: h3 with venue link followed by ", Address" text
+      # Pattern 1: h3 with venue link (with <b> wrapper) followed by ", Address" text
+      # HTML: <h3><a href="/obiekty/..."><b>VenueName</b></a>, Address Street 123</h3>
+      ~r{<h3[^>]*>\s*<a[^>]*href="/obiekty/[^"]*"[^>]*><b>[^<]+</b></a>\s*,\s*([^<]+)</h3>}is,
+      # Pattern 2: h3 with venue link (without <b> wrapper) followed by ", Address" text
       # HTML: <h3><a href="/obiekty/...">VenueName</a>, Address Street 123</h3>
       ~r{<h3[^>]*>\s*<a[^>]*href="/obiekty/[^"]*"[^>]*>[^<]+</a>\s*,\s*([^<]+)</h3>}is,
-      # Pattern 2: Standard CSS class patterns
+      # Pattern 3: Standard CSS class patterns
       ~r{<[^>]*class="[^"]*address[^"]*"[^>]*>(.*?)</[^>]+>}is,
       ~r{<address[^>]*>(.*?)</address>}is
     ]
@@ -708,11 +711,16 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
     end)
   end
 
-  defp extract_city(html, address) do
+  defp extract_city(html, address, url) do
     # Try to find city from various sources
     cond do
-      # Look for city element
+      # Look for city element (most reliable - /miasta/ links)
       city = extract_city_element(html) ->
+        city
+
+      # Try to extract from URL path (very reliable - URLs contain city)
+      # Pattern: /imprezy/{event_id}/{city}/{slug}/
+      city = extract_city_from_url(url) ->
         city
 
       # Try to extract from meta description (e.g., "Event Name (Bolesławiec) w dn...")
@@ -728,6 +736,24 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
         extract_city_from_address(address)
 
       true ->
+        nil
+    end
+  end
+
+  defp extract_city_from_url(nil), do: nil
+
+  defp extract_city_from_url(url) when is_binary(url) do
+    # Kupbilecik URL pattern: /imprezy/{event_id}/{city}/{slug}/
+    # Example: https://www.kupbilecik.pl/imprezy/175576/Katowice/Grinch/
+    case Regex.run(~r{/imprezy/\d+/([^/]+)/}i, url) do
+      [_, city] ->
+        # URL-decode and clean the city name
+        city
+        |> URI.decode()
+        |> String.replace("+", " ")
+        |> String.trim()
+
+      _ ->
         nil
     end
   end
@@ -762,6 +788,12 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
   defp extract_city_element(html) do
     patterns = [
+      # Primary: City link with /miasta/ path (most reliable)
+      # HTML: <h2><a href="/miasta/61/Katowice/"><b>Katowice</b></a></h2>
+      ~r{<a[^>]*href="/miasta/[^"]*"[^>]*><b>([^<]+)</b></a>}i,
+      # Secondary: City link without <b> wrapper
+      ~r{<a[^>]*href="/miasta/[^"]*"[^>]*>([^<]+)</a>}i,
+      # Fallback: CSS class patterns
       ~r{<[^>]*class="[^"]*city[^"]*"[^>]*>(.*?)</[^>]+>}is,
       ~r{<[^>]*data-city="([^"]+)"}i
     ]
