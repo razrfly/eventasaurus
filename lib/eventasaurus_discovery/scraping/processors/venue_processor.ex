@@ -480,36 +480,33 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
           longitude: data[:longitude]
         }
 
-        case %City{} |> City.changeset(attrs) |> Repo.insert() do
+        # Use on_conflict: :nothing to avoid PostgreSQL transaction abort on unique constraint
+        # violation. This is critical because a standard insert failure aborts the entire
+        # transaction, making subsequent queries fail with "25P02 in_failed_sql_transaction".
+        # With on_conflict: :nothing, the insert silently succeeds (doing nothing) if a conflict
+        # occurs, keeping the transaction valid so we can query for the existing city.
+        case %City{}
+             |> City.changeset(attrs)
+             |> Repo.insert(on_conflict: :nothing, conflict_target: :slug) do
+          {:ok, %City{id: nil}} ->
+            # Insert was skipped due to conflict - find the existing city
+            Logger.debug(
+              "City insert skipped (conflict on slug), finding existing: #{validated_name}"
+            )
+
+            find_existing_city(validated_name, attrs.slug, country)
+
           {:ok, city} ->
             city
 
           {:error, changeset} ->
-            # If insert fails (e.g., unique constraint), try to find the existing city
-            # This handles race conditions and edge cases with slug generation
+            # Other insert errors (validation, non-unique constraint, etc.)
             Logger.warning(
               "Failed to create city #{validated_name}: #{inspect(changeset.errors)}"
             )
 
-            from(c in City,
-              where:
-                c.country_id == ^country.id and
-                  (c.name == ^validated_name or c.slug == ^attrs.slug),
-              limit: 1
-            )
-            |> Repo.one()
-            |> case do
-              nil ->
-                # If we still can't find it, something is wrong
-                Logger.error(
-                  "Cannot create or find city #{validated_name} in country #{country.name}"
-                )
-
-                nil
-
-              city ->
-                city
-            end
+            # Try to find existing city anyway (might be a different constraint)
+            find_existing_city(validated_name, attrs.slug, country)
         end
 
       {:error, reason} ->
@@ -525,6 +522,30 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
         # Return nil - this causes venue/event creation to fail (correct behavior)
         nil
+    end
+  end
+
+  # Helper to find existing city by name or slug
+  # Used when on_conflict: :nothing skips an insert due to slug collision
+  defp find_existing_city(name, slug, country) do
+    from(c in City,
+      where:
+        c.country_id == ^country.id and
+          (c.name == ^name or c.slug == ^slug),
+      limit: 1
+    )
+    |> Repo.one()
+    |> case do
+      nil ->
+        # If we still can't find it, something is wrong
+        Logger.error(
+          "Cannot find city #{name} (slug: #{slug}) in country #{country.name} after conflict"
+        )
+
+        nil
+
+      city ->
+        city
     end
   end
 
