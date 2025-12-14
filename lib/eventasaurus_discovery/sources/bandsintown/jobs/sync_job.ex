@@ -165,6 +165,16 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
           {:ok, last_valid}
         end
 
+      {:ok, ""} ->
+        # Empty string response - treat as no events
+        Logger.info("📭 Empty response on page #{current_page}, total pages: #{last_valid}")
+        {:ok, last_valid}
+
+      {:ok, _other} ->
+        # Non-map, non-empty response - treat as no events
+        Logger.warning("⚠️ Unexpected response format on page #{current_page}, total pages: #{last_valid}")
+        {:ok, last_valid}
+
       {:error, {:http_error, 404}} ->
         Logger.info("📭 Page #{current_page} not found, total pages: #{last_valid}")
         {:ok, last_valid}

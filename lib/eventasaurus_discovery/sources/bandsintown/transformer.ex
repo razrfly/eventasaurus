@@ -63,8 +63,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
             image_url:
               validate_image_url(raw_event["image_url"] || raw_event["artist_image_url"]),
 
-            # Performer data
-            performer: extract_performer(raw_event),
+            # Performer data - must be plural key with list for Processor compatibility
+            performers: wrap_performer(extract_performer(raw_event)),
 
             # Categories and tags
             tags: extract_tags(raw_event),
@@ -434,6 +434,11 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Transformer do
       nil
     end
   end
+
+  # Wrap single performer in list for Processor compatibility
+  # Processor expects `performers` key with a list value
+  defp wrap_performer(nil), do: []
+  defp wrap_performer(performer), do: [performer]
 
   defp extract_tags(event) do
     tags = []
