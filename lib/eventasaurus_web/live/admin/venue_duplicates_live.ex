@@ -34,7 +34,7 @@ defmodule EventasaurusWeb.Admin.VenueDuplicatesLive do
   @impl true
   def handle_info(:load_duplicates, socket) do
     # Load duplicate groups with distance and similarity data
-    duplicate_groups = Venues.find_duplicate_groups(200, 0.6)
+    duplicate_groups = Venues.find_duplicate_groups(distance: 200, min_similarity: 0.6, row_limit: 200)
 
     # Enrich venues with event counts
     enriched_groups =

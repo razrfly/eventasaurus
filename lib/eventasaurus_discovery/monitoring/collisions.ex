@@ -365,6 +365,8 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
   @doc """
   Get a summary of collision metrics suitable for dashboard display.
 
+  Uses database-level aggregations for memory efficiency (avoids OOM on large datasets).
+
   ## Options
 
     * `:hours` - Time range in hours (default: 24)
@@ -376,8 +378,8 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
   def summary(opts \\ []) do
     hours = Keyword.get(opts, :hours, 24)
 
-    with {:ok, stats} <- stats(hours: hours),
-         {:ok, matrix} <- overlap_matrix(hours: hours) do
+    with {:ok, stats} <- stats_lightweight(hours: hours),
+         {:ok, matrix} <- overlap_matrix_lightweight(hours: hours) do
       top_overlaps = Enum.take(matrix.overlaps, 5)
 
       {:ok,
@@ -389,10 +391,161 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
          same_source_count: stats.same_source_count,
          cross_source_count: stats.cross_source_count,
          avg_confidence: stats.avg_confidence,
-         sources_with_collisions: length(stats.by_source),
+         sources_with_collisions: stats.sources_with_collisions,
          top_overlaps: top_overlaps
        }}
     end
+  end
+
+  @doc """
+  Lightweight version of stats using database aggregations (avoids loading all records into memory).
+  """
+  def stats_lightweight(opts \\ []) do
+    hours = Keyword.get(opts, :hours, 24)
+    cutoff = hours_ago(hours)
+
+    # Use database aggregations instead of loading all records
+    total_processed =
+      Repo.replica().one(
+        from(j in JobExecutionSummary,
+          where: j.inserted_at >= ^cutoff,
+          select: count(j.id)
+        )
+      ) || 0
+
+    total_collisions =
+      Repo.replica().one(
+        from(j in JobExecutionSummary,
+          where:
+            j.inserted_at >= ^cutoff and
+              fragment("?->'collision_data' IS NOT NULL", j.results),
+          select: count(j.id)
+        )
+      ) || 0
+
+    same_source_count =
+      Repo.replica().one(
+        from(j in JobExecutionSummary,
+          where:
+            j.inserted_at >= ^cutoff and
+              fragment("?->'collision_data'->>'type' = 'same_source'", j.results),
+          select: count(j.id)
+        )
+      ) || 0
+
+    cross_source_count = total_collisions - same_source_count
+
+    collision_rate =
+      if total_processed > 0,
+        do: Float.round(total_collisions / total_processed * 100, 1),
+        else: 0.0
+
+    # Get average confidence using database aggregation
+    avg_confidence =
+      Repo.replica().one(
+        from(j in JobExecutionSummary,
+          where:
+            j.inserted_at >= ^cutoff and
+              fragment("?->'collision_data' IS NOT NULL", j.results),
+          select:
+            avg(
+              type(
+                fragment("(?->'collision_data'->>'confidence')::float", j.results),
+                :float
+              )
+            )
+        )
+      )
+
+    avg_confidence =
+      if avg_confidence, do: Float.round(avg_confidence, 2), else: nil
+
+    # Count distinct sources with collisions (using a limited subquery)
+    sources_with_collisions =
+      Repo.replica().one(
+        from(j in JobExecutionSummary,
+          where:
+            j.inserted_at >= ^cutoff and
+              fragment("?->'collision_data' IS NOT NULL", j.results),
+          select: count(fragment("DISTINCT split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)", j.worker, j.worker))
+        )
+      ) || 0
+
+    {:ok,
+     %{
+       period_hours: hours,
+       total_processed: total_processed,
+       total_collisions: total_collisions,
+       same_source_count: same_source_count,
+       cross_source_count: cross_source_count,
+       collision_rate: collision_rate,
+       avg_confidence: avg_confidence,
+       sources_with_collisions: sources_with_collisions,
+       by_source: []  # Skip per-source breakdown for lightweight version
+     }}
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  @doc """
+  Lightweight version of overlap_matrix using database aggregations with limits.
+  """
+  def overlap_matrix_lightweight(opts \\ []) do
+    hours = Keyword.get(opts, :hours, 24)
+    limit = Keyword.get(opts, :limit, 10)
+    cutoff = hours_ago(hours)
+
+    # Get top cross-source overlaps directly from database with aggregation
+    overlaps =
+      Repo.replica().all(
+        from(j in JobExecutionSummary,
+          where:
+            j.inserted_at >= ^cutoff and
+              fragment("?->'collision_data'->>'type' = 'cross_source'", j.results),
+          group_by: [
+            fragment("split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)", j.worker, j.worker),
+            fragment("?->'collision_data'->>'matched_source'", j.results)
+          ],
+          select: %{
+            source: fragment("split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)", j.worker, j.worker),
+            matched_source: fragment("?->'collision_data'->>'matched_source'", j.results),
+            count: count(j.id),
+            avg_confidence: avg(
+              type(
+                fragment("(?->'collision_data'->>'confidence')::float", j.results),
+                :float
+              )
+            )
+          },
+          order_by: [desc: count(j.id)],
+          limit: ^limit
+        )
+      )
+      |> Enum.map(fn overlap ->
+        %{
+          source: overlap.source,
+          matched_source: overlap.matched_source,
+          count: overlap.count,
+          avg_confidence: if(overlap.avg_confidence, do: Float.round(overlap.avg_confidence, 2), else: nil)
+        }
+      end)
+
+    # Extract unique sources from overlaps
+    sources =
+      overlaps
+      |> Enum.flat_map(fn o -> [o.source, o.matched_source] end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    {:ok,
+     %{
+       period_hours: hours,
+       sources: sources,
+       overlaps: overlaps
+     }}
+  rescue
+    e -> {:error, Exception.message(e)}
   end
 
   # Private Functions

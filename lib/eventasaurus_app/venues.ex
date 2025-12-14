@@ -544,14 +544,17 @@ defmodule EventasaurusApp.Venues do
       #   }
       # ]
   """
-  def find_duplicate_groups(distance_threshold \\ nil, similarity_threshold \\ nil) do
+  def find_duplicate_groups(opts \\ []) do
     # For finding existing duplicates, use broader thresholds to catch more potential duplicates
     # Default: 200m and 0.6 similarity (catches venues at "nearby" distance tier)
-    distance = distance_threshold || 200
-    similarity = similarity_threshold || 0.6
+    distance = Keyword.get(opts, :limit, nil) || Keyword.get(opts, :distance, nil) || 200
+    similarity = Keyword.get(opts, :min_similarity, nil) || 0.6
+    # Add a row limit to prevent OOM on large datasets (default: 500 pairs)
+    row_limit = Keyword.get(opts, :row_limit, 500)
 
     # Use a single optimized SQL query to find all duplicate pairs at once
     # This replaces the O(n²) nested loop with n²/2 database queries
+    # Added LIMIT to prevent OOM on production systems
     query = """
     SELECT
       v1.id as id1,
@@ -587,9 +590,11 @@ defmodule EventasaurusApp.Venues do
         $1
       )
       AND similarity(v1.name, v2.name) >= $2
+    ORDER BY name_similarity DESC, distance ASC
+    LIMIT $3
     """
 
-    case Repo.query(query, [distance, similarity]) do
+    case Repo.query(query, [distance, similarity, row_limit]) do
       {:ok, %{rows: rows}} ->
         # Convert query results to venue structs and similarity data
         {duplicate_pairs, venues_map} =
