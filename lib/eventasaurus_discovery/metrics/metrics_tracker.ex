@@ -319,8 +319,15 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
           base_metadata
 
         collision_data when is_map(collision_data) ->
-          collision_record = build_collision_record(collision_data)
-          Map.put(base_metadata, "collision_data", collision_record)
+          # Only store collision_data if it's valid (non-empty)
+          case build_collision_record(collision_data) do
+            %{} = collision_record when map_size(collision_record) > 0 ->
+              Map.put(base_metadata, "collision_data", collision_record)
+
+            _ ->
+              # Empty map means validation failed, don't store
+              base_metadata
+          end
 
         _invalid ->
           # Ignore invalid collision_data (non-map)
@@ -409,18 +416,27 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
       Logger.warning("build_collision_record: missing required fields (type, matched_event_id)")
       %{}
     else
-      %{
-        "type" => normalize_collision_type(type),
-        "matched_event_id" => matched_event_id,
-        "matched_source" => collision_data[:matched_source] || collision_data["matched_source"],
-        "confidence" =>
-          collision_data[:confidence] || collision_data["confidence"] || default_confidence(type),
-        "match_factors" =>
-          collision_data[:match_factors] || collision_data["match_factors"] || [],
-        "resolution" => collision_data[:resolution] || collision_data["resolution"] || "created"
-      }
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Map.new()
+      normalized_type = normalize_collision_type(type)
+
+      # Validate type like record_collision/3 does
+      unless normalized_type in ["same_source", "cross_source"] do
+        Logger.warning("build_collision_record: invalid type #{inspect(type)}")
+        %{}
+      else
+        %{
+          "type" => normalized_type,
+          "matched_event_id" => matched_event_id,
+          "matched_source" => collision_data[:matched_source] || collision_data["matched_source"],
+          "confidence" =>
+            collision_data[:confidence] || collision_data["confidence"] ||
+              default_confidence(normalized_type),
+          "match_factors" =>
+            collision_data[:match_factors] || collision_data["match_factors"] || [],
+          "resolution" => collision_data[:resolution] || collision_data["resolution"] || "created"
+        }
+        |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+        |> Map.new()
+      end
     end
   end
 
