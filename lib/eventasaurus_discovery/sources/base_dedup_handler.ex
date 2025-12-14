@@ -485,6 +485,12 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
     Resolution: #{resolution}
     """)
 
-    build_cross_source_collision(existing_event, match_source, confidence, match_factors, resolution)
+    build_cross_source_collision(
+      existing_event,
+      match_source,
+      confidence,
+      match_factors,
+      resolution
+    )
   end
 end

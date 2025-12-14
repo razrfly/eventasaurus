@@ -80,7 +80,10 @@ defmodule EventasaurusWeb.Plugs.CacheControlPlug do
   # Headers for anonymous users - CDN caching enabled
   defp set_cacheable_headers(conn) do
     conn
-    |> put_resp_header("cache-control", "public, s-maxage=#{@anonymous_cdn_ttl}, max-age=0, must-revalidate")
+    |> put_resp_header(
+      "cache-control",
+      "public, s-maxage=#{@anonymous_cdn_ttl}, max-age=0, must-revalidate"
+    )
     |> put_resp_header("vary", "Accept-Encoding")
   end
 end

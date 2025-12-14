@@ -396,14 +396,20 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     "px-3 py-1 bg-white/10 border border-white/20 rounded-full text-sm font-medium text-white/90"
   end
 
-  defp director_label_classes(:card), do: "text-sm text-white/60 uppercase tracking-wide font-semibold mb-1"
-  defp director_label_classes(_), do: "text-sm text-white/60 uppercase tracking-wide font-semibold mb-1"
+  defp director_label_classes(:card),
+    do: "text-sm text-white/60 uppercase tracking-wide font-semibold mb-1"
+
+  defp director_label_classes(_),
+    do: "text-sm text-white/60 uppercase tracking-wide font-semibold mb-1"
 
   defp director_name_classes(:card), do: "text-lg text-white font-medium"
   defp director_name_classes(_), do: "text-lg text-white font-medium"
 
-  defp overview_classes(:card), do: "text-white/90 text-base lg:text-lg leading-relaxed line-clamp-3 drop-shadow-md"
-  defp overview_classes(_), do: "text-white/90 text-base lg:text-lg leading-relaxed line-clamp-3 drop-shadow-md"
+  defp overview_classes(:card),
+    do: "text-white/90 text-base lg:text-lg leading-relaxed line-clamp-3 drop-shadow-md"
+
+  defp overview_classes(_),
+    do: "text-white/90 text-base lg:text-lg leading-relaxed line-clamp-3 drop-shadow-md"
 
   # Private functions
 

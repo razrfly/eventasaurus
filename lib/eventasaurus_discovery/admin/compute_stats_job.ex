@@ -133,7 +133,9 @@ defmodule EventasaurusDiscovery.Admin.ComputeStatsJob do
     quality_checks = %{}
 
     Logger.info("  → Building source data...")
-    sources_data = build_sources_data(source_names, source_stats, change_stats, event_counts, quality_checks)
+
+    sources_data =
+      build_sources_data(source_names, source_stats, change_stats, event_counts, quality_checks)
 
     # Clear intermediate data to free memory before final phase
     # These variables are no longer needed after building sources_data

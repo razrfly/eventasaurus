@@ -279,7 +279,8 @@ defmodule EventasaurusWeb.GenericMovieLive do
     # and starts_at is in the future (ongoing events without explicit end time)
     rows =
       from(pe in PublicEvent,
-        join: em in "event_movies", on: pe.id == em.event_id,
+        join: em in "event_movies",
+        on: pe.id == em.event_id,
         join: v in assoc(pe, :venue),
         join: c in assoc(v, :city_ref),
         where: em.movie_id == ^movie_id,
@@ -333,8 +334,12 @@ defmodule EventasaurusWeb.GenericMovieLive do
     tomorrow = Date.add(today, 1)
 
     case date do
-      ^today -> gettext("Today")
-      ^tomorrow -> gettext("Tomorrow")
+      ^today ->
+        gettext("Today")
+
+      ^tomorrow ->
+        gettext("Tomorrow")
+
       _ ->
         month_abbr = Calendar.strftime(date, "%b") |> String.capitalize()
         "#{month_abbr} #{date.day}"
@@ -377,6 +382,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
   # "https://image.tmdb.org/t/p/w500/abc123.jpg" -> "/abc123.jpg"
   defp extract_tmdb_path(nil), do: nil
   defp extract_tmdb_path(""), do: nil
+
   defp extract_tmdb_path(url) when is_binary(url) do
     case Regex.run(~r{/t/p/w\d+(/[^/]+\.\w+)$}, url) do
       [_, path] -> path
@@ -391,6 +397,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
 
   # Build genres list - metadata may have string list or map list
   defp build_genres_list(nil), do: []
+
   defp build_genres_list(genres) when is_list(genres) do
     Enum.map(genres, fn
       %{"name" => name} -> %{"name" => name}
@@ -399,6 +406,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
     end)
     |> Enum.reject(&is_nil/1)
   end
+
   defp build_genres_list(_), do: []
 
   defp maybe_add_link(map, _key, nil, _builder), do: map

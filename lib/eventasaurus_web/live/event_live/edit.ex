@@ -84,7 +84,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 event_status_str == "threshold" && Map.get(event, :threshold_type) == "revenue" ->
                   "crowdfunding"
 
-                event_status_str == "threshold" && Map.get(event, :threshold_type) == "attendee_count" ->
+                event_status_str == "threshold" &&
+                    Map.get(event, :threshold_type) == "attendee_count" ->
                   "interest"
 
                 event_status_str == "threshold" ->

@@ -162,6 +162,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
         snapshot ->
           if state.snapshot_id != snapshot.id do
             Logger.info("Found new stats snapshot ##{snapshot.id}, updating cache")
+
             %{
               stats: DiscoveryStatsSnapshot.get_latest_stats(),
               computed_at: snapshot.computed_at,
@@ -189,11 +190,17 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsCache do
     try do
       case DiscoveryStatsSnapshot.get_latest() do
         nil ->
-          Logger.warning("No stats snapshot found in database - stats will show zeros until first computation")
+          Logger.warning(
+            "No stats snapshot found in database - stats will show zeros until first computation"
+          )
+
           %{stats: nil, computed_at: nil, computation_time_ms: nil, snapshot_id: nil}
 
         snapshot ->
-          Logger.info("Loaded stats snapshot ##{snapshot.id} from database (computed at #{snapshot.computed_at})")
+          Logger.info(
+            "Loaded stats snapshot ##{snapshot.id} from database (computed at #{snapshot.computed_at})"
+          )
+
           %{
             stats: DiscoveryStatsSnapshot.get_latest_stats(),
             computed_at: snapshot.computed_at,

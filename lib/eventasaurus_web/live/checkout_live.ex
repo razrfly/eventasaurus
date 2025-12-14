@@ -35,7 +35,9 @@ defmodule EventasaurusWeb.CheckoutLive do
               is_guest = is_nil(user)
 
               # Build current path with ticket params for redirect after auth
-              ticket_params = Enum.map_join(validated_selection, "&", fn {id, qty} -> "#{id}=#{qty}" end)
+              ticket_params =
+                Enum.map_join(validated_selection, "&", fn {id, qty} -> "#{id}=#{qty}" end)
+
               current_path = "/events/#{event.slug}/checkout?#{ticket_params}"
 
               {:ok,

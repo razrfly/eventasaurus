@@ -139,7 +139,12 @@ defmodule EventasaurusWeb.Admin.DiscoveryStatsLive do
         |> assign(:is_stale, true)
         |> assign(:computation_time_ms, nil)
 
-      %{stats: stats, computed_at: computed_at, is_stale: is_stale, computation_time_ms: computation_time_ms} ->
+      %{
+        stats: stats,
+        computed_at: computed_at,
+        is_stale: is_stale,
+        computation_time_ms: computation_time_ms
+      } ->
         # Load from cache (fast!)
         socket
         |> assign(:loading, false)

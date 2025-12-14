@@ -873,6 +873,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   # "https://image.tmdb.org/t/p/w500/abc123.jpg" -> "/abc123.jpg"
   defp extract_tmdb_path(nil), do: nil
   defp extract_tmdb_path(""), do: nil
+
   defp extract_tmdb_path(url) when is_binary(url) do
     case Regex.run(~r{/t/p/w\d+(/[^/]+\.\w+)$}, url) do
       [_, path] -> path
@@ -887,6 +888,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
 
   # Build genres list - metadata may have string list or map list
   defp build_genres_list(nil), do: []
+
   defp build_genres_list(genres) when is_list(genres) do
     Enum.map(genres, fn
       %{"name" => name} -> %{"name" => name}
@@ -895,6 +897,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     end)
     |> Enum.reject(&is_nil/1)
   end
+
   defp build_genres_list(_), do: []
 
   defp maybe_add_link(map, _key, nil, _builder), do: map

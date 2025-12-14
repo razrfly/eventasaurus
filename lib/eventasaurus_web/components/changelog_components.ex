@@ -10,7 +10,8 @@ defmodule EventasaurusWeb.ChangelogComponents do
   use Phoenix.Component
   use EventasaurusWeb, :html
 
-  import EventasaurusWeb.Components.SharedProductComponents, only: [tag_color: 1, tag_strip_color: 1]
+  import EventasaurusWeb.Components.SharedProductComponents,
+    only: [tag_color: 1, tag_strip_color: 1]
 
   @doc """
   Renders the main timeline container.

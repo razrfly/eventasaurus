@@ -511,6 +511,8 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
     |> Enum.sort_by(& &1.rate, :desc)
   end
 
+  defp build_histogram(_confidences, buckets) when buckets <= 0, do: []
+
   defp build_histogram(confidences, buckets) do
     bucket_size = 1.0 / buckets
 
@@ -519,9 +521,16 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
       range_start = i * bucket_size
       range_end = (i + 1) * bucket_size
 
+      # For the last bucket, include values equal to 1.0 (use <= instead of <)
+      is_last_bucket = i == buckets - 1
+
       count =
         Enum.count(confidences, fn c ->
-          c >= range_start and c < range_end
+          if is_last_bucket do
+            c >= range_start and c <= range_end
+          else
+            c >= range_start and c < range_end
+          end
         end)
 
       range_label =

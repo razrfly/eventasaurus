@@ -143,7 +143,10 @@ defmodule Eventasaurus.CDN do
       iex> CDN.url_with_fallback(nil)
       %{src: nil, fallback: nil}
   """
-  @spec url_with_fallback(String.t() | nil, keyword()) :: %{src: String.t() | nil, fallback: String.t() | nil}
+  @spec url_with_fallback(String.t() | nil, keyword()) :: %{
+          src: String.t() | nil,
+          fallback: String.t() | nil
+        }
   def url_with_fallback(source_url, opts \\ [])
   def url_with_fallback(nil, _opts), do: %{src: nil, fallback: nil}
   def url_with_fallback("", _opts), do: %{src: "", fallback: ""}

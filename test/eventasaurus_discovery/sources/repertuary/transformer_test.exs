@@ -37,7 +37,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.TransformerTest do
       assert transformed.title
       assert String.contains?(transformed.title, "Test Movie")
       assert String.contains?(transformed.title, "Kino Kraków Plaza")
-      assert transformed.external_id == "repertuary_krakow_test-movie_kino-plaza_2025-10-15T18:00:00Z"
+
+      assert transformed.external_id ==
+               "repertuary_krakow_test-movie_kino-plaza_2025-10-15T18:00:00Z"
+
       assert transformed.starts_at == ~U[2025-10-15 18:00:00Z]
 
       # Verify venue data
@@ -52,6 +55,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.TransformerTest do
 
     test "preserves external_id from input" do
       external_id = "repertuary_krakow_test-movie_kino-plaza_2025-10-15T18:00:00Z"
+
       raw_event1 = %{
         external_id: external_id,
         movie_slug: "test-movie",
@@ -174,6 +178,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.TransformerTest do
   describe "external_id stability" do
     test "external_id remains constant across multiple transformations" do
       external_id = "repertuary_krakow_test-movie_kino-plaza_2025-10-15T18:00:00Z"
+
       raw_event = %{
         external_id: external_id,
         movie_slug: "test-movie",

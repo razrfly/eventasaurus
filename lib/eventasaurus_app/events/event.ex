@@ -396,7 +396,11 @@ defmodule EventasaurusApp.Events.Event do
 
       # Threshold status (crowdfunding/interest) also requires a deadline
       {:threshold, nil} ->
-        add_error(changeset, :polling_deadline, "is required for crowdfunding and interest events")
+        add_error(
+          changeset,
+          :polling_deadline,
+          "is required for crowdfunding and interest events"
+        )
 
       # Validate deadline is in the future and before start_at
       {status, deadline} when status in [:polling, :threshold] and not is_nil(deadline) ->

@@ -323,7 +323,10 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Transformer do
 
   def parse_price(price_string) when is_binary(price_string) do
     # Try to parse range format first: "40-55 zł"
-    case Regex.run(~r/(\d+(?:[,\.]\d+)?)\s*[-–—]\s*(\d+(?:[,\.]\d+)?)\s*(?:zł|PLN)/iu, price_string) do
+    case Regex.run(
+           ~r/(\d+(?:[,\.]\d+)?)\s*[-–—]\s*(\d+(?:[,\.]\d+)?)\s*(?:zł|PLN)/iu,
+           price_string
+         ) do
       [_, min_str, max_str] ->
         min_val = parse_price_value(min_str)
         max_val = parse_price_value(max_str)

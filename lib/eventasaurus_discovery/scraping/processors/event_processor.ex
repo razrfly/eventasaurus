@@ -951,9 +951,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       {:error, changeset} ->
         # Validation error - log and return nil instead of raising
         # This allows the transaction to continue without this performer
-        Logger.warning(
-          "⚠️ Failed to create performer '#{name}': #{inspect(changeset.errors)}"
-        )
+        Logger.warning("⚠️ Failed to create performer '#{name}': #{inspect(changeset.errors)}")
 
         nil
     end
