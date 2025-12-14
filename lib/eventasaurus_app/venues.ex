@@ -544,11 +544,12 @@ defmodule EventasaurusApp.Venues do
       #   }
       # ]
   """
+  @spec find_duplicate_groups(keyword()) :: [map()]
   def find_duplicate_groups(opts \\ []) do
     # For finding existing duplicates, use broader thresholds to catch more potential duplicates
     # Default: 200m and 0.6 similarity (catches venues at "nearby" distance tier)
-    distance = Keyword.get(opts, :limit, nil) || Keyword.get(opts, :distance, nil) || 200
-    similarity = Keyword.get(opts, :min_similarity, nil) || 0.6
+    distance = Keyword.get(opts, :distance, 200)
+    similarity = Keyword.get(opts, :min_similarity, 0.6)
     # Add a row limit to prevent OOM on large datasets (default: 500 pairs)
     row_limit = Keyword.get(opts, :row_limit, 500)
 
