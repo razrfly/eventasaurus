@@ -48,6 +48,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.DedupHandler do
   - `{:duplicate, existing_event}` - Event already exists
   - `{:unique, event_data}` - Event is unique
   """
+  @spec check_duplicate(map(), struct()) :: {:duplicate, Event.t()} | {:unique, map()}
   def check_duplicate(event_data, source) do
     # PHASE 1: Check if THIS source already imported this event (same-source dedup)
     case BaseDedupHandler.find_by_external_id(event_data[:external_id], source.id) do
@@ -74,6 +75,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.DedupHandler do
   - `{:ok, event_data}` - Event passes quality checks
   - `{:error, reason}` - Event fails validation
   """
+  @spec validate_event_quality(map()) :: {:ok, map()} | {:error, String.t()}
   def validate_event_quality(event_data) do
     with :ok <- validate_required_fields(event_data),
          :ok <- validate_date_sanity(event_data) do
@@ -286,7 +288,11 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.DedupHandler do
         # Past event - skip
         {:error, "Event is in the past"}
 
-      DateTime.compare(starts_at, DateTime.add(DateTime.utc_now(), 365 * 2, :day)) == :gt ->
+      DateTime.compare(
+        starts_at,
+        DateTime.add(DateTime.utc_now(), 365 * 2 * 24 * 60 * 60, :second)
+      ) ==
+          :gt ->
         # More than 2 years in future - likely parsing error
         {:error, "Event date seems incorrect (>2 years in future)"}
 
