@@ -27,11 +27,13 @@ defmodule EventasaurusApp.Cache.DashboardStats do
       {:ok, venues} = DashboardStats.get_unique_venues()
   """
 
-  alias EventasaurusApp.{Repo, Monitoring}
+  alias EventasaurusApp.{Repo, Monitoring, Venues}
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventPerformer, PublicEventSource}
   alias EventasaurusDiscovery.Categories.Category
   alias EventasaurusDiscovery.ScraperProcessingLogs.ScraperProcessingLog
   alias EventasaurusDiscovery.Admin.DiscoveryStatsCollector
+  alias EventasaurusDiscovery.Monitoring.Collisions
+  alias EventasaurusDiscovery.Locations.CityHierarchy
 
   import Ecto.Query
   require Logger
@@ -377,6 +379,100 @@ defmodule EventasaurusApp.Cache.DashboardStats do
     end)
   rescue
     _ -> {:ok, []}
+  end
+
+  @doc """
+  Get per-city event statistics with geographic clustering.
+  Cached for 10 minutes.
+
+  This runs the expensive O(n²) geographic clustering algorithm,
+  so caching is essential for performance.
+  """
+  def get_city_statistics_with_clustering(
+        get_active_fn,
+        get_inactive_fn,
+        cluster_radius_km \\ 20.0
+      ) do
+    cache_key = {:city_statistics_clustered, cluster_radius_km}
+
+    Cachex.fetch(@cache_name, cache_key, fn ->
+      Logger.info("Computing city statistics with clustering (cache miss)")
+
+      # Get active and inactive city stats
+      active_stats = get_active_fn.() |> Enum.map(&Map.put(&1, :is_geographic, true))
+      inactive_stats = get_inactive_fn.() |> Enum.map(&Map.put(&1, :is_geographic, false))
+
+      combined_stats = active_stats ++ inactive_stats
+
+      # Run the expensive geographic clustering
+      clustered_stats =
+        CityHierarchy.aggregate_stats_by_cluster(combined_stats, cluster_radius_km)
+
+      # Sort by count descending
+      sorted_stats = Enum.sort_by(clustered_stats, & &1.count, :desc)
+
+      {:commit, sorted_stats, expire: :timer.minutes(10)}
+    end)
+  rescue
+    e ->
+      Logger.error("Error computing city statistics with clustering: #{inspect(e)}")
+      {:ok, []}
+  end
+
+  # ========================================
+  # Collision Statistics (5 min TTL)
+  # ========================================
+
+  @doc """
+  Get collision summary for the dashboard.
+  Cached for 5 minutes.
+
+  This loads job execution summaries which can be expensive on large datasets.
+  """
+  def get_collision_summary(hours \\ 24) do
+    cache_key = {:collision_summary, hours}
+
+    Cachex.fetch(@cache_name, cache_key, fn ->
+      Logger.info("Computing collision summary (cache miss)")
+
+      result =
+        case Collisions.summary(hours: hours) do
+          {:ok, summary} -> summary
+          {:error, _reason} -> nil
+        end
+
+      {:commit, result, expire: :timer.minutes(5)}
+    end)
+  rescue
+    e ->
+      Logger.error("Error computing collision summary: #{inspect(e)}")
+      {:ok, nil}
+  end
+
+  # ========================================
+  # Venue Duplicates (10 min TTL)
+  # ========================================
+
+  @doc """
+  Get venue duplicate groups for the dashboard.
+  Cached for 10 minutes.
+
+  This performs similarity matching across venues which is expensive.
+  """
+  def get_venue_duplicates(limit \\ 100, min_similarity \\ 0.7) do
+    cache_key = {:venue_duplicates, limit, min_similarity}
+
+    Cachex.fetch(@cache_name, cache_key, fn ->
+      Logger.info("Computing venue duplicates (cache miss)")
+
+      duplicates = Venues.find_duplicate_groups(limit: limit, min_similarity: min_similarity)
+
+      {:commit, duplicates, expire: :timer.minutes(10)}
+    end)
+  rescue
+    e ->
+      Logger.error("Error computing venue duplicates: #{inspect(e)}")
+      {:ok, []}
   end
 
   # ========================================
