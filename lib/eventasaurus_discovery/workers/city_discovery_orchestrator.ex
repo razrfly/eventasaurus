@@ -116,7 +116,14 @@ defmodule EventasaurusDiscovery.Workers.CityDiscoveryOrchestrator do
           Logger.info("  ✅ Queued #{source_name} sync for #{city.name} (job ##{job.id})")
 
           # Update next_run_at to prevent duplicate queueing on next orchestrator run
-          next_run = DateTime.add(DateTime.utc_now(), frequency_hours * 3600, :second)
+          # IMPORTANT: Truncate to second precision and subtract 1 minute buffer to avoid
+          # race condition where cron runs at 00:00:00 but next_run_at is 00:00:01.xxx
+          # (microseconds from DateTime.utc_now() would make the source NOT due)
+          next_run =
+            DateTime.utc_now()
+            |> DateTime.add(frequency_hours * 3600, :second)
+            |> DateTime.truncate(:second)
+            |> DateTime.add(-60, :second)
 
           case DiscoveryConfigManager.update_source_next_run(city.id, source_name, next_run) do
             {:ok, _} ->

@@ -280,7 +280,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryConfigManager do
               source["stats"] || %{"run_count" => 0, "success_count" => 0, "error_count" => 0}
 
             frequency_hours = source["frequency_hours"] || 24
-            next_run = DateTime.add(now, frequency_hours * 3600, :second)
+
+            # Truncate to second precision and subtract 1 minute buffer to avoid
+            # race condition where cron runs at 00:00:00 but next_run_at is 00:00:01.xxx
+            next_run =
+              now
+              |> DateTime.add(frequency_hours * 3600, :second)
+              |> DateTime.truncate(:second)
+              |> DateTime.add(-60, :second)
 
             updated_stats =
               case result do
