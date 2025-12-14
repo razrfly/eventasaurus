@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   alias EventasaurusDiscovery.Sources.SourceRegistry
   alias EventasaurusDiscovery.VenueImages.BackfillOrchestratorJob
   alias EventasaurusDiscovery.Geocoding.Schema.GeocodingProvider
+  alias EventasaurusDiscovery.Monitoring.Collisions
 
   import Ecto.Query
   require Logger
@@ -69,6 +70,8 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:image_providers, [])
       # Initialize venue_duplicates as nil
       |> assign(:venue_duplicates, nil)
+      # Initialize collision_summary as nil (loaded in load_data)
+      |> assign(:collision_summary, nil)
       |> load_data()
       |> schedule_refresh()
 
@@ -697,6 +700,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
         }
       end)
 
+    # Get collision/deduplication metrics (last 24 hours)
+    collision_summary = get_collision_summary()
+
     socket
     |> assign(:stats, stats)
     |> assign(:source_stats, source_stats)
@@ -709,6 +715,7 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     |> assign(:past_count, past_count)
     |> assign(:discovery_cities, discovery_cities)
     |> assign(:image_providers, image_providers)
+    |> assign(:collision_summary, collision_summary)
   end
 
   defp load_city_stats(city) do
@@ -1049,6 +1056,14 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       "geoapify" -> "Geoapify"
       "unsplash" -> "Unsplash"
       name -> String.capitalize(name)
+    end
+  end
+
+  # Collision/deduplication helpers
+  defp get_collision_summary do
+    case Collisions.summary(hours: 24) do
+      {:ok, summary} -> summary
+      {:error, _reason} -> nil
     end
   end
 

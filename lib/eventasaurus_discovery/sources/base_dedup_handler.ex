@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
   1. Same-source deduplication (Phase 1)
   2. Cross-source domain-compatible deduplication (Phase 2)
   3. Confidence scoring and match filtering
+  4. Collision data building for MetricsTracker integration
 
   ## Usage in Source-Specific Handlers
 
@@ -14,6 +15,42 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
   2. Implement source-specific fuzzy matching logic
   3. Call `filter_higher_priority_matches/2` to apply domain compatibility
   4. Use `should_defer_to_match?/3` to determine if a match should block import
+  5. Build collision data for MetricsTracker using helper functions
+
+  ## Collision Data Integration
+
+  Use the collision data builders to record deduplication outcomes in
+  job metadata for monitoring and analysis:
+
+      alias EventasaurusDiscovery.Metrics.MetricsTracker
+      alias EventasaurusDiscovery.Sources.BaseDedupHandler
+
+      # Phase 1: Same-source dedup with collision tracking
+      case BaseDedupHandler.find_by_external_id(external_id, source.id) do
+        %Event{} = existing ->
+          collision_data = BaseDedupHandler.build_same_source_collision(existing, "deferred")
+          MetricsTracker.record_collision(job, external_id, collision_data)
+          {:duplicate, existing}
+
+        nil ->
+          check_fuzzy_duplicate(event_data, source)
+      end
+
+      # Phase 2: Cross-source dedup with collision tracking
+      case BaseDedupHandler.filter_higher_priority_matches(matches, source) do
+        [] ->
+          # No blocking matches - proceed with import
+          {:unique, event_data}
+
+        [%{event: existing, source: match_source} | _] ->
+          # Found higher-priority match - defer
+          collision_data = BaseDedupHandler.build_cross_source_collision(
+            existing, match_source, confidence,
+            ["performer", "venue", "date"], "deferred"
+          )
+          MetricsTracker.record_collision(job, external_id, collision_data)
+          {:duplicate, existing}
+      end
 
   ## Example
 
@@ -314,5 +351,140 @@ defmodule EventasaurusDiscovery.Sources.BaseDedupHandler do
         distance = calculate_distance(lat1, lng1, lat2_f, lng2_f)
         distance < threshold
     end
+  end
+
+  # ============================================================================
+  # Collision Data Builders for MetricsTracker Integration
+  # ============================================================================
+
+  @doc """
+  Build collision data for same-source deduplication (external_id match).
+
+  Use this when Phase 1 deduplication finds an existing event from
+  the same source with the same external_id.
+
+  ## Parameters
+  - `existing_event` - The existing event that was matched
+  - `resolution` - How the collision was resolved: "deferred", "updated", "created"
+
+  ## Returns
+  Map suitable for passing to `MetricsTracker.record_collision/3` or
+  `MetricsTracker.record_success/3` with collision_data option.
+
+  ## Example
+
+      case find_by_external_id(external_id, source.id) do
+        %Event{} = existing ->
+          collision_data = build_same_source_collision(existing, "deferred")
+          MetricsTracker.record_collision(job, external_id, collision_data)
+          {:duplicate, existing}
+        nil ->
+          check_fuzzy_duplicate(event_data, source)
+      end
+  """
+  def build_same_source_collision(existing_event, resolution \\ "deferred") do
+    %{
+      type: :same_source,
+      matched_event_id: existing_event.id,
+      confidence: 1.0,
+      resolution: resolution
+    }
+  end
+
+  @doc """
+  Build collision data for cross-source deduplication (fuzzy match).
+
+  Use this when Phase 2 deduplication finds a matching event from
+  a different source.
+
+  ## Parameters
+  - `existing_event` - The existing event that was matched
+  - `match_source` - The source of the existing event
+  - `confidence` - Match confidence score (0.0 to 1.0)
+  - `match_factors` - List of factors used in matching (e.g., ["performer", "venue", "date", "gps"])
+  - `resolution` - How the collision was resolved: "deferred", "created"
+
+  ## Returns
+  Map suitable for passing to `MetricsTracker.record_collision/3` or
+  `MetricsTracker.record_success/3` with collision_data option.
+
+  ## Example
+
+      # When deferring to higher-priority source
+      collision_data = build_cross_source_collision(
+        existing_event, match_source, 0.85,
+        ["performer", "venue", "date", "gps"], "deferred"
+      )
+      MetricsTracker.record_collision(job, external_id, collision_data)
+
+      # When creating despite lower-priority match
+      collision_data = build_cross_source_collision(
+        existing_event, match_source, 0.75,
+        ["performer", "date"], "created"
+      )
+      MetricsTracker.record_success(job, external_id, %{collision_data: collision_data})
+  """
+  def build_cross_source_collision(
+        existing_event,
+        match_source,
+        confidence,
+        match_factors,
+        resolution \\ "deferred"
+      ) do
+    %{
+      type: :cross_source,
+      matched_event_id: existing_event.id,
+      matched_source: match_source.slug || match_source.name,
+      confidence: confidence,
+      match_factors: match_factors,
+      resolution: resolution
+    }
+  end
+
+  @doc """
+  Enhanced duplicate logging with collision data.
+
+  Logs a duplicate event detection and returns collision_data suitable
+  for MetricsTracker.
+
+  ## Parameters
+  - `current_source` - The source that found the duplicate
+  - `event_data` - The event data being checked
+  - `existing_event` - The existing event that was matched
+  - `match_source` - The source of the existing event
+  - `confidence` - Match confidence score
+  - `match_factors` - List of factors used in matching
+  - `resolution` - How the collision was resolved
+
+  ## Returns
+  Collision data map for MetricsTracker
+
+  ## Example
+
+      collision_data = log_duplicate_with_collision(
+        source, event_data, existing, match_source,
+        0.85, ["performer", "venue", "date"], "deferred"
+      )
+      MetricsTracker.record_collision(job, external_id, collision_data)
+  """
+  def log_duplicate_with_collision(
+        current_source,
+        event_data,
+        existing_event,
+        match_source,
+        confidence,
+        match_factors,
+        resolution
+      ) do
+    Logger.info("""
+    🔍 Found likely duplicate from higher-priority, domain-compatible source
+    #{current_source.name} Event: #{event_data[:title]}
+    Existing: #{existing_event.title} (source: #{match_source.name}, priority: #{match_source.priority}, domains: #{inspect(match_source.domains)})
+    Confidence: #{Float.round(confidence, 2)}
+    Match factors: #{inspect(match_factors)}
+    Resolution: #{resolution}
+    """)
+
+    build_cross_source_collision(existing_event, match_source, confidence, match_factors, resolution)
   end
 end

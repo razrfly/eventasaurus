@@ -17,10 +17,24 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.DedupHandler do
   source (e.g., Ticketmaster, Bandsintown) has already imported the same event,
   Kupbilecik will defer to that source.
 
+  ## Collision Data Tracking
+
+  This handler returns collision data for MetricsTracker integration:
+
+      case DedupHandler.check_duplicate(event_data, source) do
+        {:duplicate, existing, collision_data} ->
+          MetricsTracker.record_collision(job, external_id, collision_data)
+          {:ok, :skipped}
+
+        {:unique, event_data} ->
+          # Process the event
+          process_event(event_data)
+      end
+
   ## Example Flow
 
       # Phase 1: Check if Kupbilecik already imported this
-      {:duplicate, existing} = check_duplicate(event_data, source)
+      {:duplicate, existing, collision_data} = check_duplicate(event_data, source)
 
       # Phase 2: Check if higher-priority source has this event
       # Uses performer + venue + date + GPS matching
@@ -45,16 +59,18 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.DedupHandler do
   - `source` - Source struct for Kupbilecik
 
   ## Returns
-  - `{:duplicate, existing_event}` - Event already exists
+  - `{:duplicate, existing_event, collision_data}` - Event already exists with collision info
   - `{:unique, event_data}` - Event is unique
   """
-  @spec check_duplicate(map(), struct()) :: {:duplicate, Event.t()} | {:unique, map()}
+  @spec check_duplicate(map(), struct()) ::
+          {:duplicate, Event.t(), map()} | {:unique, map()}
   def check_duplicate(event_data, source) do
     # PHASE 1: Check if THIS source already imported this event (same-source dedup)
     case BaseDedupHandler.find_by_external_id(event_data[:external_id], source.id) do
       %Event{} = existing ->
         Logger.info("🔍 Found existing Kupbilecik event by external_id (same source)")
-        {:duplicate, existing}
+        collision_data = BaseDedupHandler.build_same_source_collision(existing, "deferred")
+        {:duplicate, existing, collision_data}
 
       nil ->
         # PHASE 2: Check by performer + date + venue (cross-source fuzzy match)
@@ -120,21 +136,80 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.DedupHandler do
 
       [match | _] ->
         confidence = calculate_match_confidence(event_data, match.event)
+        match_factors = build_match_factors(event_data, match.event)
 
         if BaseDedupHandler.should_defer_to_match?(match, source, confidence) do
-          BaseDedupHandler.log_duplicate(
-            source,
-            event_data,
-            match.event,
-            match.source,
-            confidence
-          )
+          # Use enhanced logging that returns collision data
+          collision_data =
+            BaseDedupHandler.log_duplicate_with_collision(
+              source,
+              event_data,
+              match.event,
+              match.source,
+              confidence,
+              match_factors,
+              "deferred"
+            )
 
-          {:duplicate, match.event}
+          {:duplicate, match.event, collision_data}
         else
           {:unique, event_data}
         end
     end
+  end
+
+  # Build list of match factors that contributed to the confidence score
+  defp build_match_factors(event_data, existing_event) do
+    factors = []
+
+    # Check performer match
+    performer_name = extract_performer_name(event_data)
+
+    factors =
+      if similar_performer?(performer_name, existing_event.title) do
+        ["performer" | factors]
+      else
+        factors
+      end
+
+    # Check date match
+    factors =
+      if same_date?(event_data[:starts_at], existing_event.start_at) do
+        ["date" | factors]
+      else
+        factors
+      end
+
+    # Check venue match
+    venue_name = get_in(event_data, [:venue_data, :name])
+
+    factors =
+      if venue_name && existing_event.venue &&
+           similar_venue?(venue_name, existing_event.venue.name) do
+        ["venue" | factors]
+      else
+        factors
+      end
+
+    # Check GPS match
+    latitude = get_in(event_data, [:venue_data, :latitude])
+    longitude = get_in(event_data, [:venue_data, :longitude])
+
+    factors =
+      if latitude && longitude && existing_event.venue &&
+           BaseDedupHandler.same_location?(
+             latitude,
+             longitude,
+             existing_event.venue.latitude,
+             existing_event.venue.longitude,
+             threshold_meters: 100
+           ) do
+        ["gps" | factors]
+      else
+        factors
+      end
+
+    Enum.reverse(factors)
   end
 
   # Extract performer name from event data

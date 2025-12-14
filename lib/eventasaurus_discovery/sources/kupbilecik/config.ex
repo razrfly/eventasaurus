@@ -19,7 +19,33 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Config do
   **Note**: Zyte API is NOT required for this source. Testing confirmed
   that all event data (meta tags, semantic HTML, Schema.org markup) is
   present in the initial HTML response.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Full performer-based fuzzy matching across
+  sources with high confidence scoring (performer, venue, date, GPS factors).
   """
+
+  @behaviour EventasaurusDiscovery.Sources.SourceConfig
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def source_config do
+    EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
+      name: "Kupbilecik",
+      slug: "kupbilecik",
+      priority: 60,
+      rate_limit: 1,
+      timeout: 30_000,
+      max_retries: 3,
+      queue: :discovery,
+      base_url: base_url(),
+      api_key: nil,
+      api_secret: nil
+    })
+  end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   @doc """
   Returns the base URL for kupbilecik.pl.

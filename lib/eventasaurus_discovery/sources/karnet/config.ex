@@ -5,6 +5,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Config do
   Scrapes events from https://karnet.krakowculture.pl/ - a comprehensive cultural
   events portal for Kraków, Poland featuring festivals, concerts, performances,
   exhibitions, and outdoor events.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Full cross-source fuzzy matching using
+  performer, venue, date, and GPS coordinates. Regional cultural source
+  that defers to higher-priority sources like Bandsintown.
   """
 
   @behaviour EventasaurusDiscovery.Sources.SourceConfig
@@ -40,6 +46,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Config do
       }
     })
   end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   def base_url, do: @base_url
   def rate_limit, do: @rate_limit

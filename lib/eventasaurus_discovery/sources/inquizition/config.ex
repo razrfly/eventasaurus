@@ -4,7 +4,33 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Config do
 
   Provides centralized access to environment-specific settings
   for the Inquizition trivia event source.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Cross-source fuzzy matching for quiz/trivia events.
+  May identify same venues across different quiz providers.
   """
+
+  @behaviour EventasaurusDiscovery.Sources.SourceConfig
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def source_config do
+    EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
+      name: "Inquizition",
+      slug: "inquizition",
+      priority: 50,
+      rate_limit: 2,
+      timeout: 30_000,
+      max_retries: 3,
+      queue: :discovery,
+      base_url: "https://inquizition.com",
+      api_key: nil,
+      api_secret: nil
+    })
+  end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   # StoreLocatorWidgets CDN endpoint (public, no authentication required)
   # UID: 7f3962110f31589bc13cdc3b7b85cfd7 (Inquizition's account)

@@ -1,6 +1,12 @@
 defmodule EventasaurusDiscovery.Sources.Bandsintown.Config do
   @moduledoc """
   Configuration for BandsInTown scraper using unified source structure.
+
+  ## Deduplication Strategy
+
+  Uses `:cross_source_fuzzy` - Full cross-source fuzzy matching using
+  performer, venue, date, and GPS coordinates. High-priority source
+  that other sources defer to for music events.
   """
 
   @behaviour EventasaurusDiscovery.Sources.SourceConfig
@@ -27,6 +33,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Config do
       api_secret: nil
     })
   end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :cross_source_fuzzy
 
   def base_url, do: @base_url
   def rate_limit, do: @rate_limit

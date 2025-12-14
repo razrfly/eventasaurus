@@ -20,7 +20,15 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Config do
   - Sitemap index: https://www.sortiraparis.com/sitemap-index.xml
   - English sitemaps: sitemap-en-1.xml through sitemap-en-4.xml
   - Daily updates with new and modified events
+
+  ## Deduplication Strategy
+
+  Uses `:external_id_only` - Primarily uses external_id (article_id) for
+  deduplication within the source. Limited cross-source matching since
+  this is a Paris-specific source with unique event identifiers.
   """
+
+  @behaviour EventasaurusDiscovery.Sources.SourceConfig
 
   @base_url "https://www.sortiraparis.com"
   @sitemap_url "#{@base_url}/sitemap-index.xml"
@@ -31,6 +39,25 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Config do
 
   # Longer timeout for slower responses and bot protection delays
   @timeout 10_000
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def source_config do
+    EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
+      name: "Sortir à Paris",
+      slug: "sortiraparis",
+      priority: 60,
+      rate_limit: @rate_limit,
+      timeout: @timeout,
+      max_retries: 3,
+      queue: :discovery,
+      base_url: @base_url,
+      api_key: nil,
+      api_secret: nil
+    })
+  end
+
+  @impl EventasaurusDiscovery.Sources.SourceConfig
+  def dedup_strategy, do: :external_id_only
 
   def base_url, do: @base_url
   def sitemap_url, do: @sitemap_url
