@@ -172,7 +172,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
       {:ok, _other} ->
         # Non-map, non-empty response - treat as no events
-        Logger.warning("⚠️ Unexpected response format on page #{current_page}, total pages: #{last_valid}")
+        Logger.warning(
+          "⚠️ Unexpected response format on page #{current_page}, total pages: #{last_valid}"
+        )
+
         {:ok, last_valid}
 
       {:error, {:http_error, 404}} ->

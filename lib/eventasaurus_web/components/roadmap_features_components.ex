@@ -14,7 +14,8 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
   use Phoenix.Component
   use EventasaurusWeb, :html
 
-  import EventasaurusWeb.Components.SharedProductComponents, only: [tag_color: 1, tag_strip_color: 1]
+  import EventasaurusWeb.Components.SharedProductComponents,
+    only: [tag_color: 1, tag_strip_color: 1]
 
   # =============================================================================
   # Main Board Component
@@ -232,7 +233,10 @@ defmodule EventasaurusWeb.RoadmapFeaturesComponents do
   def feature_card(assigns) do
     # Get strip color from first tag (more colorful) or fall back to status
     first_tag = List.first(assigns.item.tags || [])
-    strip_color = if first_tag, do: tag_strip_color(first_tag), else: status_strip_color(assigns.status)
+
+    strip_color =
+      if first_tag, do: tag_strip_color(first_tag), else: status_strip_color(assigns.status)
+
     assigns = assign(assigns, :strip_color, strip_color)
 
     ~H"""

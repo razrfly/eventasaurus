@@ -132,7 +132,7 @@ defmodule Mix.Tasks.Monitor.Collisions do
 
   # Parse command line options
   defp parse_options(opts) do
-    {parsed, _, _} =
+    {parsed, _args, invalid} =
       OptionParser.parse(opts,
         strict: [
           limit: :integer,
@@ -142,18 +142,53 @@ defmodule Mix.Tasks.Monitor.Collisions do
         ]
       )
 
+    # Warn about unknown flags
+    Enum.each(invalid, fn {flag, _value} ->
+      Mix.shell().error("Unknown option: #{flag}")
+    end)
+
     # Validate type if provided
-    case Keyword.get(parsed, :type) do
+    parsed =
+      case Keyword.get(parsed, :type) do
+        nil ->
+          parsed
+
+        type when type in ["same_source", "cross_source"] ->
+          parsed
+
+        invalid_type ->
+          Mix.shell().error("Invalid type: #{invalid_type}. Must be: same_source or cross_source")
+          Mix.shell().info("Ignoring --type filter")
+          Keyword.delete(parsed, :type)
+      end
+
+    # Validate hours bounds (1-8760, i.e., 1 hour to 1 year)
+    parsed =
+      case Keyword.get(parsed, :hours) do
+        nil ->
+          parsed
+
+        hours when hours >= 1 and hours <= 8760 ->
+          parsed
+
+        invalid_hours ->
+          Mix.shell().error("Invalid hours: #{invalid_hours}. Must be between 1 and 8760")
+          Mix.shell().info("Using default: 24 hours")
+          Keyword.delete(parsed, :hours)
+      end
+
+    # Validate limit bounds (1-10000)
+    case Keyword.get(parsed, :limit) do
       nil ->
         parsed
 
-      type when type in ["same_source", "cross_source"] ->
+      limit when limit >= 1 and limit <= 10000 ->
         parsed
 
-      invalid ->
-        Mix.shell().error("Invalid type: #{invalid}. Must be: same_source or cross_source")
-        Mix.shell().info("Ignoring --type filter")
-        Keyword.delete(parsed, :type)
+      invalid_limit ->
+        Mix.shell().error("Invalid limit: #{invalid_limit}. Must be between 1 and 10000")
+        Mix.shell().info("Using default limit")
+        Keyword.delete(parsed, :limit)
     end
   end
 
@@ -177,7 +212,6 @@ defmodule Mix.Tasks.Monitor.Collisions do
     IO.puts(String.duplicate("━", 120))
 
     Enum.each(collisions, fn collision ->
-      type_colored = colorize_type(collision.type)
       confidence = format_confidence(collision.confidence)
 
       matched =
@@ -185,10 +219,14 @@ defmodule Mix.Tasks.Monitor.Collisions do
           do: collision.matched_source || "unknown",
           else: "same source"
 
+      # Pad the raw type value first, then apply color (so ANSI codes don't affect width)
+      type_padded = pad(collision.type || "-", 12)
+      type_colored = colorize_type_raw(collision.type, type_padded)
+
       IO.puts(
         format_row([
           pad(collision.source || "unknown", 15),
-          pad(type_colored, 12),
+          type_colored,
           pad(matched, 15),
           pad(confidence, 10),
           pad(collision.resolution || "-", 10),
@@ -384,14 +422,14 @@ defmodule Mix.Tasks.Monitor.Collisions do
 
   # Helper Functions
 
-  defp colorize_type("same_source"),
-    do: IO.ANSI.yellow() <> "same_source" <> IO.ANSI.reset()
+  # Apply color to an already-padded string (preserves column alignment)
+  defp colorize_type_raw("same_source", padded_str),
+    do: IO.ANSI.yellow() <> padded_str <> IO.ANSI.reset()
 
-  defp colorize_type("cross_source"),
-    do: IO.ANSI.magenta() <> "cross_source" <> IO.ANSI.reset()
+  defp colorize_type_raw("cross_source", padded_str),
+    do: IO.ANSI.magenta() <> padded_str <> IO.ANSI.reset()
 
-  defp colorize_type(nil), do: "-"
-  defp colorize_type(other), do: "#{other}"
+  defp colorize_type_raw(_, padded_str), do: padded_str
 
   defp format_confidence(nil), do: "-"
   defp format_confidence(conf) when is_float(conf), do: "#{Float.round(conf * 100, 0)}%"

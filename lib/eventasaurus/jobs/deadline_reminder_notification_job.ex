@@ -21,7 +21,9 @@ defmodule Eventasaurus.Jobs.DeadlineReminderNotificationJob do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"event_id" => event_id, "notification_type" => "deadline_reminder"}}) do
+  def perform(%Oban.Job{
+        args: %{"event_id" => event_id, "notification_type" => "deadline_reminder"}
+      }) do
     with {:ok, event} <- get_event_with_venue(event_id),
          :ok <- validate_deadline_still_valid(event),
          organizers when organizers != [] <- Events.list_event_organizers(event) do
@@ -32,15 +34,24 @@ defmodule Eventasaurus.Jobs.DeadlineReminderNotificationJob do
         {:error, :event_not_found}
 
       {:error, :deadline_passed} ->
-        Logger.info("DeadlineReminderNotificationJob: Deadline already passed for event #{event_id}")
+        Logger.info(
+          "DeadlineReminderNotificationJob: Deadline already passed for event #{event_id}"
+        )
+
         :ok
 
       {:error, :event_confirmed} ->
-        Logger.info("DeadlineReminderNotificationJob: Event #{event_id} already confirmed, skipping reminder")
+        Logger.info(
+          "DeadlineReminderNotificationJob: Event #{event_id} already confirmed, skipping reminder"
+        )
+
         :ok
 
       [] ->
-        Logger.warning("DeadlineReminderNotificationJob: No organizers found for event #{event_id}")
+        Logger.warning(
+          "DeadlineReminderNotificationJob: No organizers found for event #{event_id}"
+        )
+
         {:error, :no_organizers}
     end
   end
@@ -55,7 +66,9 @@ defmodule Eventasaurus.Jobs.DeadlineReminderNotificationJob do
   # Check if the deadline is still relevant (not passed, event not confirmed/canceled)
   defp validate_deadline_still_valid(%Event{status: :confirmed}), do: {:error, :event_confirmed}
   defp validate_deadline_still_valid(%Event{status: :canceled}), do: {:error, :event_confirmed}
-  defp validate_deadline_still_valid(%Event{polling_deadline: nil}), do: {:error, :deadline_passed}
+
+  defp validate_deadline_still_valid(%Event{polling_deadline: nil}),
+    do: {:error, :deadline_passed}
 
   defp validate_deadline_still_valid(%Event{polling_deadline: deadline}) do
     if DateTime.compare(DateTime.utc_now(), deadline) == :lt do

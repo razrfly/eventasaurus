@@ -140,7 +140,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:deletion_ineligibility_reason, nil)
                # Threshold confirmation modal state
                |> assign(:show_confirm_threshold_modal, false)
-              |> subscribe_to_threshold_updates(event)}
+               |> subscribe_to_threshold_updates(event)}
             end
         end
     end
@@ -1109,7 +1109,10 @@ defmodule EventasaurusWeb.EventManageLive do
     else
       {:noreply,
        socket
-       |> put_flash(:error, "Cannot send announcement - threshold not met or invalid event status.")}
+       |> put_flash(
+         :error,
+         "Cannot send announcement - threshold not met or invalid event status."
+       )}
     end
   end
 
@@ -2338,13 +2341,14 @@ defmodule EventasaurusWeb.EventManageLive do
     # Check for any threshold announcement jobs for this event (completed, available, or executing)
     # This prevents duplicate announcements
     query =
-      from j in Oban.Job,
+      from(j in Oban.Job,
         where:
           j.worker == "Eventasaurus.Jobs.ThresholdAnnouncementJob" and
             fragment("?->>'event_id' = ?", j.args, ^to_string(event.id)) and
             fragment("?->>'notification_type' = ?", j.args, "threshold_announcement") and
             j.state in ["completed", "available", "executing", "scheduled", "retryable"],
         limit: 1
+      )
 
     case EventasaurusApp.Repo.one(query) do
       nil -> false

@@ -7883,7 +7883,9 @@ defmodule EventasaurusApp.Events do
   end
 
   # Private helper to schedule deadline reminder notifications for threshold events
-  defp maybe_schedule_deadline_reminder(%Event{status: :threshold, polling_deadline: deadline} = event)
+  defp maybe_schedule_deadline_reminder(
+         %Event{status: :threshold, polling_deadline: deadline} = event
+       )
        when not is_nil(deadline) do
     case DeadlineReminderNotificationJob.schedule_for_deadline(event) do
       {:ok, _job} ->

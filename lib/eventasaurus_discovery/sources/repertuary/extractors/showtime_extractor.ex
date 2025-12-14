@@ -68,7 +68,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Extractors.ShowtimeExtractor 
   end
 
   # Recursively process table rows, accumulating showtimes
-  defp process_rows([], _current_film, _current_date, acc, _base_date, _city), do: Enum.reverse(acc)
+  defp process_rows([], _current_film, _current_date, acc, _base_date, _city),
+    do: Enum.reverse(acc)
 
   defp process_rows([row | rest], current_film, current_date, acc, base_date, city) do
     cond do

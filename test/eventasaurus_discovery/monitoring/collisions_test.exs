@@ -50,14 +50,16 @@ defmodule EventasaurusDiscovery.Monitoring.CollisionsTest do
       }
       |> Map.merge(opts[:extra_results] || %{})
 
-    job = create_job_summary(%{
-      worker: worker,
-      results: results
-    })
+    job =
+      create_job_summary(%{
+        worker: worker,
+        results: results
+      })
 
     # If inserted_at is specified, update it directly (bypasses timestamps)
     if opts[:inserted_at] do
       import Ecto.Query
+
       from(j in JobExecutionSummary, where: j.id == ^job.id)
       |> Repo.update_all(set: [inserted_at: opts[:inserted_at]])
     end
@@ -265,7 +267,8 @@ defmodule EventasaurusDiscovery.Monitoring.CollisionsTest do
       # kupbilecik->bandsintown should have 2 overlaps
       kup_bit = Enum.find(matrix.overlaps, &(&1.matched_source == "bandsintown"))
       assert kup_bit.count == 2
-      assert kup_bit.avg_confidence == 0.88  # (0.85 + 0.90) / 2
+      # (0.85 + 0.90) / 2
+      assert kup_bit.avg_confidence == 0.88
 
       # kupbilecik->week_pl should have 1 overlap
       kup_week = Enum.find(matrix.overlaps, &(&1.matched_source == "week_pl"))
@@ -315,7 +318,8 @@ defmodule EventasaurusDiscovery.Monitoring.CollisionsTest do
       assert dist.count == 4
       assert dist.min == 0.70
       assert dist.max == 0.90
-      assert dist.avg == 0.81  # (0.70 + 0.80 + 0.85 + 0.90) / 4 = 0.8125, rounded to 0.81
+      # (0.70 + 0.80 + 0.85 + 0.90) / 4 = 0.8125, rounded to 0.81
+      assert dist.avg == 0.81
     end
 
     test "builds histogram buckets" do

@@ -218,7 +218,8 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
   - `{:ok, updated_job}` - Successfully updated job metadata
   - `{:error, reason}` - Failed to update metadata
   """
-  def record_collision(%Oban.Job{} = job, external_id, collision_data) when is_map(collision_data) do
+  def record_collision(%Oban.Job{} = job, external_id, collision_data)
+      when is_map(collision_data) do
     # Validate required fields
     type = collision_data[:type] || collision_data["type"]
     matched_event_id = collision_data[:matched_event_id] || collision_data["matched_event_id"]
@@ -227,34 +228,41 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
       Logger.warning("record_collision: missing required fields (type, matched_event_id)")
       {:error, :missing_required_fields}
     else
-      # Build collision_data structure for storage
-      collision_record = %{
-        "type" => normalize_collision_type(type),
-        "matched_event_id" => matched_event_id,
-        "matched_source" =>
-          collision_data[:matched_source] || collision_data["matched_source"],
-        "confidence" =>
-          collision_data[:confidence] || collision_data["confidence"] || default_confidence(type),
-        "match_factors" =>
-          collision_data[:match_factors] || collision_data["match_factors"] || [],
-        "resolution" =>
-          collision_data[:resolution] || collision_data["resolution"] || "deferred"
-      }
+      normalized_type = normalize_collision_type(type)
 
-      # Remove nil values for cleaner storage
-      collision_record =
-        collision_record
-        |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-        |> Map.new()
+      unless normalized_type in ["same_source", "cross_source"] do
+        Logger.warning("record_collision: invalid type #{inspect(type)}")
+        {:error, :invalid_collision_type}
+      else
+        # Build collision_data structure for storage
+        collision_record = %{
+          "type" => normalized_type,
+          "matched_event_id" => matched_event_id,
+          "matched_source" => collision_data[:matched_source] || collision_data["matched_source"],
+          "confidence" =>
+            collision_data[:confidence] || collision_data["confidence"] ||
+              default_confidence(normalized_type),
+          "match_factors" =>
+            collision_data[:match_factors] || collision_data["match_factors"] || [],
+          "resolution" =>
+            collision_data[:resolution] || collision_data["resolution"] || "deferred"
+        }
 
-      metadata = %{
-        "status" => "success",
-        "external_id" => to_string(external_id),
-        "processed_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "collision_data" => collision_record
-      }
+        # Remove nil values for cleaner storage
+        collision_record =
+          collision_record
+          |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+          |> Map.new()
 
-      update_job_metadata(job, metadata)
+        metadata = %{
+          "status" => "success",
+          "external_id" => to_string(external_id),
+          "processed_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+          "collision_data" => collision_record
+        }
+
+        update_job_metadata(job, metadata)
+      end
     end
   end
 
@@ -313,6 +321,11 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
         collision_data when is_map(collision_data) ->
           collision_record = build_collision_record(collision_data)
           Map.put(base_metadata, "collision_data", collision_record)
+
+        _invalid ->
+          # Ignore invalid collision_data (non-map)
+          Logger.warning("record_success: collision_data must be a map, ignoring invalid value")
+          base_metadata
       end
 
     # Merge any additional metadata from opts (excluding collision_data)
@@ -389,22 +402,26 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
 
   defp build_collision_record(collision_data) do
     type = collision_data[:type] || collision_data["type"]
+    matched_event_id = collision_data[:matched_event_id] || collision_data["matched_event_id"]
 
-    %{
-      "type" => normalize_collision_type(type),
-      "matched_event_id" =>
-        collision_data[:matched_event_id] || collision_data["matched_event_id"],
-      "matched_source" =>
-        collision_data[:matched_source] || collision_data["matched_source"],
-      "confidence" =>
-        collision_data[:confidence] || collision_data["confidence"] || default_confidence(type),
-      "match_factors" =>
-        collision_data[:match_factors] || collision_data["match_factors"] || [],
-      "resolution" =>
-        collision_data[:resolution] || collision_data["resolution"] || "created"
-    }
-    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-    |> Map.new()
+    # Validate required fields - return empty map if missing
+    unless type && matched_event_id do
+      Logger.warning("build_collision_record: missing required fields (type, matched_event_id)")
+      %{}
+    else
+      %{
+        "type" => normalize_collision_type(type),
+        "matched_event_id" => matched_event_id,
+        "matched_source" => collision_data[:matched_source] || collision_data["matched_source"],
+        "confidence" =>
+          collision_data[:confidence] || collision_data["confidence"] || default_confidence(type),
+        "match_factors" =>
+          collision_data[:match_factors] || collision_data["match_factors"] || [],
+        "resolution" => collision_data[:resolution] || collision_data["resolution"] || "created"
+      }
+      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+      |> Map.new()
+    end
   end
 
   defp update_job_metadata(job, new_metadata) do

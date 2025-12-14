@@ -14,10 +14,10 @@ defmodule EventasaurusDiscovery.Admin.DiscoveryStatsSnapshot do
   alias EventasaurusApp.Repo
 
   schema "discovery_stats_snapshots" do
-    field :stats_data, :map
-    field :computed_at, :utc_datetime_usec
-    field :computation_time_ms, :integer
-    field :status, :string, default: "completed"
+    field(:stats_data, :map)
+    field(:computed_at, :utc_datetime_usec)
+    field(:computation_time_ms, :integer)
+    field(:status, :string, default: "completed")
 
     timestamps()
   end

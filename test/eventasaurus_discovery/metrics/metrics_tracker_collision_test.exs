@@ -49,7 +49,8 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTrackerCollisionTest do
         resolution: "deferred"
       }
 
-      assert {:ok, updated_job} = MetricsTracker.record_collision(job, external_id, collision_data)
+      assert {:ok, updated_job} =
+               MetricsTracker.record_collision(job, external_id, collision_data)
 
       assert updated_job.meta["status"] == "success"
       assert updated_job.meta["external_id"] == external_id
@@ -72,13 +73,21 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTrackerCollisionTest do
         resolution: "deferred"
       }
 
-      assert {:ok, updated_job} = MetricsTracker.record_collision(job, external_id, collision_data)
+      assert {:ok, updated_job} =
+               MetricsTracker.record_collision(job, external_id, collision_data)
 
       assert updated_job.meta["collision_data"]["type"] == "cross_source"
       assert updated_job.meta["collision_data"]["matched_event_id"] == 123
       assert updated_job.meta["collision_data"]["matched_source"] == "bandsintown"
       assert updated_job.meta["collision_data"]["confidence"] == 0.85
-      assert updated_job.meta["collision_data"]["match_factors"] == ["performer", "venue", "date", "gps"]
+
+      assert updated_job.meta["collision_data"]["match_factors"] == [
+               "performer",
+               "venue",
+               "date",
+               "gps"
+             ]
+
       assert updated_job.meta["collision_data"]["resolution"] == "deferred"
     end
 
@@ -87,11 +96,15 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTrackerCollisionTest do
 
       # Missing type
       collision_data = %{matched_event_id: 123}
-      assert {:error, :missing_required_fields} = MetricsTracker.record_collision(job, "ext_1", collision_data)
+
+      assert {:error, :missing_required_fields} =
+               MetricsTracker.record_collision(job, "ext_1", collision_data)
 
       # Missing matched_event_id
       collision_data = %{type: :same_source}
-      assert {:error, :missing_required_fields} = MetricsTracker.record_collision(job, "ext_2", collision_data)
+
+      assert {:error, :missing_required_fields} =
+               MetricsTracker.record_collision(job, "ext_2", collision_data)
     end
 
     test "normalizes collision type from atom to string" do
@@ -272,7 +285,13 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTrackerCollisionTest do
       assert reloaded_job.meta["collision_data"]["matched_event_id"] == 456
       assert reloaded_job.meta["collision_data"]["matched_source"] == "bandsintown"
       assert reloaded_job.meta["collision_data"]["confidence"] == 0.92
-      assert reloaded_job.meta["collision_data"]["match_factors"] == ["performer", "venue", "date"]
+
+      assert reloaded_job.meta["collision_data"]["match_factors"] == [
+               "performer",
+               "venue",
+               "date"
+             ]
+
       assert reloaded_job.meta["collision_data"]["resolution"] == "deferred"
     end
   end

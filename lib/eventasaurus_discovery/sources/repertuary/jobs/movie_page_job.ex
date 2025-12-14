@@ -88,7 +88,8 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
     # Establish session and fetch showtimes for all 7 days
     result =
       with {:ok, {cookies, csrf_token}} <- establish_session(movie_slug, city),
-           {:ok, all_showtimes} <- fetch_all_days(movie_slug, movie_title, city, cookies, csrf_token) do
+           {:ok, all_showtimes} <-
+             fetch_all_days(movie_slug, movie_title, city, cookies, csrf_token) do
         Logger.info("""
         ✅ Movie #{movie_title} processed (#{city_config.name})
         Total showtimes across 7 days: #{length(all_showtimes)}
@@ -127,7 +128,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
          }}
       else
         {:error, reason} ->
-          Logger.error("❌ Failed to process movie #{movie_slug} (#{city_config.name}): #{inspect(reason)}")
+          Logger.error(
+            "❌ Failed to process movie #{movie_slug} (#{city_config.name}): #{inspect(reason)}"
+          )
+
           {:error, reason}
       end
 
@@ -193,7 +197,11 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MoviePageJob do
   defp fetch_all_days(movie_slug, movie_title, city, cookies, csrf_token) do
     # City already validated in perform/1, but add fallback for safety
     city_config = Cities.get(city) || Cities.get(Config.default_city())
-    Logger.info("📅 Fetching all 7 days for movie: #{movie_title} in #{city_config.name} (parallel mode)")
+
+    Logger.info(
+      "📅 Fetching all 7 days for movie: #{movie_title} in #{city_config.name} (parallel mode)"
+    )
+
     Logger.info("   Cookies: #{String.slice(cookies, 0..50)}...")
     Logger.info("   CSRF: #{String.slice(csrf_token, 0..20)}...")
 

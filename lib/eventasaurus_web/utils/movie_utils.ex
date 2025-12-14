@@ -503,13 +503,17 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
 
     # Ensure we return a valid integer
     case tmdb_id do
-      id when is_integer(id) and id > 0 -> id
+      id when is_integer(id) and id > 0 ->
+        id
+
       id when is_binary(id) ->
         case Integer.parse(id) do
           {parsed_id, _} when parsed_id > 0 -> parsed_id
           _ -> nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 

@@ -108,7 +108,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
   defp process_showtime(showtime, source_id, city) do
     # City already validated in perform/1, but add fallback for safety
     city_config = Cities.get(city) || Cities.get(Config.default_city())
-    Logger.debug("🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]} (#{city_config.name})")
+
+    Logger.debug(
+      "🎫 Processing showtime: #{showtime["movie_slug"]} at #{showtime["cinema_slug"]} (#{city_config.name})"
+    )
 
     # Get movie from database using generic repertuary_slug
     case get_movie(showtime["movie_slug"]) do
@@ -122,7 +125,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
           :completed_without_match ->
             # MovieDetailJob completed but didn't create movie (TMDB match failed)
             # Skip this showtime (not an error)
-            Logger.info("⏭️ Skipping showtime for unmatched movie: #{showtime["movie_slug"]} (#{city_config.name})")
+            Logger.info(
+              "⏭️ Skipping showtime for unmatched movie: #{showtime["movie_slug"]} (#{city_config.name})"
+            )
+
             # Return standardized metadata for skipped items (Phase 3.1)
             {:ok,
              %{
@@ -165,23 +171,35 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
         # Get source safely
         case Repo.get(Source, source_id) do
           nil ->
-            Logger.error("🚫 Discarding showtime: source #{source_id} not found (#{city_config.name})")
+            Logger.error(
+              "🚫 Discarding showtime: source #{source_id} not found (#{city_config.name})"
+            )
+
             {:discard, :source_not_found}
 
           source ->
             # Check for duplicates before processing (pass source struct)
             case check_deduplication(transformed, source, city) do
               {:ok, :unique} ->
-                Logger.debug("✅ Processing unique showtime: #{transformed[:title]} (#{city_config.name})")
+                Logger.debug(
+                  "✅ Processing unique showtime: #{transformed[:title]} (#{city_config.name})"
+                )
+
                 process_event(transformed, source, city)
 
               {:ok, :skip_duplicate} ->
-                Logger.info("⏭️  Skipping duplicate showtime: #{transformed[:title]} (#{city_config.name})")
+                Logger.info(
+                  "⏭️  Skipping duplicate showtime: #{transformed[:title]} (#{city_config.name})"
+                )
+
                 # Still process through Processor to create/update PublicEventSource entry
                 process_event(transformed, source, city)
 
               {:ok, :validation_failed} ->
-                Logger.warning("⚠️ Validation failed, processing anyway: #{transformed[:title]} (#{city_config.name})")
+                Logger.warning(
+                  "⚠️ Validation failed, processing anyway: #{transformed[:title]} (#{city_config.name})"
+                )
+
                 process_event(transformed, source, city)
             end
         end
@@ -321,7 +339,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.ShowtimeProcessJob do
         {:ok, :skip_duplicate}
 
       {:error, reason} ->
-        Logger.warning("⚠️ Deduplication validation failed: #{inspect(reason)} (#{city_config.name})")
+        Logger.warning(
+          "⚠️ Deduplication validation failed: #{inspect(reason)} (#{city_config.name})"
+        )
+
         # Continue with processing even if dedup fails
         {:ok, :validation_failed}
     end

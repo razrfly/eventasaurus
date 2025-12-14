@@ -762,11 +762,17 @@ defmodule Eventasaurus.Emails do
 
       case Eventasaurus.Mailer.deliver(email) do
         {:ok, response} ->
-          Logger.info("Threshold met email sent successfully to #{organizer.email} for event #{event.id}")
+          Logger.info(
+            "Threshold met email sent successfully to #{organizer.email} for event #{event.id}"
+          )
+
           {:ok, response}
 
         {:error, reason} ->
-          Logger.error("Failed to send threshold met email to #{organizer.email}: #{inspect(reason)}")
+          Logger.error(
+            "Failed to send threshold met email to #{organizer.email}: #{inspect(reason)}"
+          )
+
           {:error, reason}
       end
     rescue
@@ -820,11 +826,17 @@ defmodule Eventasaurus.Emails do
 
       case Eventasaurus.Mailer.deliver(email) do
         {:ok, response} ->
-          Logger.info("Deadline reminder email sent successfully to #{organizer.email} for event #{event.id}")
+          Logger.info(
+            "Deadline reminder email sent successfully to #{organizer.email} for event #{event.id}"
+          )
+
           {:ok, response}
 
         {:error, reason} ->
-          Logger.error("Failed to send deadline reminder email to #{organizer.email}: #{inspect(reason)}")
+          Logger.error(
+            "Failed to send deadline reminder email to #{organizer.email}: #{inspect(reason)}"
+          )
+
           {:error, reason}
       end
     rescue
@@ -1299,6 +1311,7 @@ defmodule Eventasaurus.Emails do
 
       "both" ->
         revenue_display = format_currency(event.threshold_revenue_cents || 0)
+
         "✅ #{event.threshold_count || 0} attendees reached!\n✅ #{revenue_display} revenue goal reached!"
 
       _ ->
@@ -1355,6 +1368,7 @@ defmodule Eventasaurus.Emails do
 
       "both" ->
         revenue_display = format_currency(event.threshold_revenue_cents || 0)
+
         "CURRENT PROGRESS:\nAttendee Goal: #{event.threshold_count || 0}\nRevenue Goal: #{revenue_display}"
 
       _ ->
@@ -1433,7 +1447,10 @@ defmodule Eventasaurus.Emails do
           {:ok, response}
 
         {:error, reason} ->
-          Logger.error("Failed to send threshold announcement to #{attendee.email}: #{inspect(reason)}")
+          Logger.error(
+            "Failed to send threshold announcement to #{attendee.email}: #{inspect(reason)}"
+          )
+
           {:error, reason}
       end
     rescue
