@@ -15,6 +15,25 @@ config :eventasaurus, :environment, :dev
 #                   (or add USE_PROD_DB=true to .env temporarily)
 # =============================================================================
 
+# Load .env file at compile time if it exists (needed for USE_PROD_DB mode)
+# This ensures PlanetScale credentials are available before config is evaluated
+if File.exists?(".env") do
+  File.read!(".env")
+  |> String.split("\n")
+  |> Enum.each(fn line ->
+    case String.split(line, "=", parts: 2) do
+      [key, value] ->
+        key = String.trim(key)
+        value = String.trim(value)
+        # Skip comments and empty lines
+        unless String.starts_with?(key, "#") or key == "" do
+          System.put_env(key, value)
+        end
+      _ -> :ok
+    end
+  end)
+end
+
 use_prod_db = System.get_env("USE_PROD_DB") == "true"
 
 # Store toggle state for runtime access (e.g., admin dashboard indicator)
@@ -49,6 +68,7 @@ if use_prod_db do
     pool_size: 10,
     queue_target: 5000,
     queue_interval: 10000,
+    connect_timeout: 30_000,
     ssl: true,
     ssl_opts: [verify: :verify_none],
     prepare: :unnamed
@@ -65,6 +85,7 @@ if use_prod_db do
     pool_size: 5,
     queue_target: 5000,
     queue_interval: 10000,
+    connect_timeout: 30_000,
     ssl: true,
     ssl_opts: [verify: :verify_none]
 
@@ -80,6 +101,7 @@ if use_prod_db do
     pool_size: 10,
     queue_target: 5000,
     queue_interval: 10000,
+    connect_timeout: 30_000,
     ssl: true,
     ssl_opts: [verify: :verify_none],
     prepare: :unnamed

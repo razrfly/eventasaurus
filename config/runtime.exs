@@ -493,22 +493,10 @@ case System.get_env("SENTRY_DSN") do
 end
 
 if config_env() == :prod do
-  # Check which database provider is configured
-  # PlanetScale takes precedence if PLANETSCALE_DATABASE_HOST is set
-  use_planetscale = System.get_env("PLANETSCALE_DATABASE_HOST") != nil
-
-  if use_planetscale do
-    # Validate required PlanetScale environment variables
-    for var <-
-          ~w(PLANETSCALE_DATABASE_HOST PLANETSCALE_DATABASE PLANETSCALE_DATABASE_USERNAME PLANETSCALE_DATABASE_PASSWORD) do
-      System.fetch_env!(var)
-    end
-  else
-    # Validate required Supabase environment variables are set (legacy/fallback)
-    for var <-
-          ~w(SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_DATABASE_URL SUPABASE_SESSION_DATABASE_URL) do
-      System.fetch_env!(var)
-    end
+  # Validate required PlanetScale environment variables
+  for var <-
+        ~w(PLANETSCALE_DATABASE_HOST PLANETSCALE_DATABASE PLANETSCALE_DATABASE_USERNAME PLANETSCALE_DATABASE_PASSWORD) do
+    System.fetch_env!(var)
   end
 
   # Validate required Cloudflare R2 credentials for file storage (uploads + sitemap)
@@ -600,220 +588,143 @@ if config_env() == :prod do
   # Configure Swoosh API client
   config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
-  # Configure the database for production
-  # Supports both PlanetScale and Supabase (legacy)
+  # Configure the database for production (PlanetScale)
+  # Using hostname-based config (not URL-based) to ensure socket_options and ssl_opts
+  # are properly applied. URL-based config may not merge these options correctly.
+  # This matches the proven working configuration from cinegraph project.
+  ps_host = System.get_env("PLANETSCALE_DATABASE_HOST")
+  ps_db = System.get_env("PLANETSCALE_DATABASE")
+  ps_user = System.get_env("PLANETSCALE_DATABASE_USERNAME")
+  ps_pass = System.get_env("PLANETSCALE_DATABASE_PASSWORD")
 
-  if use_planetscale do
-    # PlanetScale configuration
-    # Using hostname-based config (not URL-based) to ensure socket_options and ssl_opts
-    # are properly applied. URL-based config may not merge these options correctly.
-    # This matches the proven working configuration from cinegraph project.
-    ps_host = System.get_env("PLANETSCALE_DATABASE_HOST")
-    ps_db = System.get_env("PLANETSCALE_DATABASE")
-    ps_user = System.get_env("PLANETSCALE_DATABASE_USERNAME")
-    ps_pass = System.get_env("PLANETSCALE_DATABASE_PASSWORD")
+  ps_direct_port =
+    case Integer.parse(System.get_env("PLANETSCALE_DATABASE_PORT", "5432")) do
+      {port, _} when port > 0 and port <= 65535 ->
+        port
 
-    ps_direct_port =
-      case Integer.parse(System.get_env("PLANETSCALE_DATABASE_PORT", "5432")) do
-        {port, _} when port > 0 and port <= 65535 ->
-          port
+      _ ->
+        require Logger
+        Logger.error("Invalid PLANETSCALE_DATABASE_PORT, using default: 5432")
+        5432
+    end
 
-        _ ->
-          require Logger
-          Logger.error("Invalid PLANETSCALE_DATABASE_PORT, using default: 5432")
-          5432
-      end
+  ps_pooler_port =
+    case Integer.parse(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")) do
+      {port, _} when port > 0 and port <= 65535 ->
+        port
 
-    ps_pooler_port =
-      case Integer.parse(System.get_env("PLANETSCALE_PG_BOUNCER_PORT", "6432")) do
-        {port, _} when port > 0 and port <= 65535 ->
-          port
+      _ ->
+        require Logger
+        Logger.error("Invalid PLANETSCALE_PG_BOUNCER_PORT, using default: 6432")
+        6432
+    end
 
-        _ ->
-          require Logger
-          Logger.error("Invalid PLANETSCALE_PG_BOUNCER_PORT, using default: 6432")
-          6432
-      end
+  # Force IPv4 unless IPv6 is explicitly enabled
+  # PlanetScale requires IPv4 for reliable connectivity from Fly.io
+  # This MUST be applied via hostname-based config, not URL-based
+  socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
 
-    # Force IPv4 unless IPv6 is explicitly enabled
-    # PlanetScale requires IPv4 for reliable connectivity from Fly.io
-    # This MUST be applied via hostname-based config, not URL-based
-    socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
-
-    # PlanetScale SSL: Standard SSL verification using CAStore
-    # (proven working configuration from cinegraph project)
-    planetscale_ssl_opts = [
-      verify: :verify_peer,
-      cacertfile: CAStore.file_path(),
-      server_name_indication: String.to_charlist(ps_host),
-      customize_hostname_check: [
-        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-      ]
+  # PlanetScale SSL: Standard SSL verification using CAStore
+  # (proven working configuration from cinegraph project)
+  planetscale_ssl_opts = [
+    verify: :verify_peer,
+    cacertfile: CAStore.file_path(),
+    server_name_indication: String.to_charlist(ps_host),
+    customize_hostname_check: [
+      match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
     ]
+  ]
 
-    # Repo: Pooled connection via PgBouncer (port 6432) for web requests
-    # Using hostname-based config to guarantee socket_options: [:inet] is applied
-    #
-    # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 3 due to PlanetScale
-    # connection limits causing "too_many_connections" during deployments.
-    # See: https://github.com/razrfly/eventasaurus/issues/2498
-    #
-    # After completing database performance optimizations (issue #2496), we can:
-    # 1. Increase pool_size back to 5-10 for better throughput
-    # 2. Remove the 'immediate' deploy strategy from fly.toml
-    #
-    # Current: 3 + 2 = 5 total connections per machine (conservative)
-    # Target: 5-10 + 3-5 = 8-15 connections per machine (after #2496 fixes)
-    config :eventasaurus, EventasaurusApp.Repo,
-      username: ps_user,
-      password: ps_pass,
-      hostname: ps_host,
-      port: ps_pooler_port,
-      database: ps_db,
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "3"),
-      socket_options: socket_opts,
-      queue_target: 5000,
-      queue_interval: 30000,
-      connect_timeout: 30_000,
-      handshake_timeout: 30_000,
-      ssl: true,
-      ssl_opts: planetscale_ssl_opts,
-      # Disable prepared statements for PgBouncer compatibility
-      prepare: :unnamed
+  # Repo: Pooled connection via PgBouncer (port 6432) for web requests
+  # Using hostname-based config to guarantee socket_options: [:inet] is applied
+  #
+  # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 3 due to PlanetScale
+  # connection limits causing "too_many_connections" during deployments.
+  # See: https://github.com/razrfly/eventasaurus/issues/2498
+  #
+  # After completing database performance optimizations (issue #2496), we can:
+  # 1. Increase pool_size back to 5-10 for better throughput
+  # 2. Remove the 'immediate' deploy strategy from fly.toml
+  #
+  # Current: 3 + 2 = 5 total connections per machine (conservative)
+  # Target: 5-10 + 3-5 = 8-15 connections per machine (after #2496 fixes)
+  config :eventasaurus, EventasaurusApp.Repo,
+    username: ps_user,
+    password: ps_pass,
+    hostname: ps_host,
+    port: ps_pooler_port,
+    database: ps_db,
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "3"),
+    socket_options: socket_opts,
+    queue_target: 5000,
+    queue_interval: 30000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
+    ssl: true,
+    ssl_opts: planetscale_ssl_opts,
+    # Disable prepared statements for PgBouncer compatibility
+    prepare: :unnamed
 
-    # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
-    # Using hostname-based config to guarantee socket_options: [:inet] is applied
-    #
-    # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 2 due to PlanetScale
-    # connection limits causing "too_many_connections" during deployments.
-    # See: https://github.com/razrfly/eventasaurus/issues/2498
-    #
-    # After completing database performance optimizations (issue #2496), we can:
-    # 1. Increase pool_size back to 3-5 for better Oban throughput
-    # 2. Remove the 'immediate' deploy strategy from fly.toml
-    #
-    # Current: Migrations need 1 connection; Oban needs 2-3 for producer/notifier
-    # Target: 3-5 connections after #2496 query optimizations reduce connection hold times
-    config :eventasaurus, EventasaurusApp.SessionRepo,
-      username: ps_user,
-      password: ps_pass,
-      hostname: ps_host,
-      port: ps_direct_port,
-      database: ps_db,
-      pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "2"),
-      socket_options: socket_opts,
-      queue_target: 5000,
-      queue_interval: 30000,
-      connect_timeout: 30_000,
-      handshake_timeout: 30_000,
-      ssl: true,
-      ssl_opts: planetscale_ssl_opts
+  # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
+  # Using hostname-based config to guarantee socket_options: [:inet] is applied
+  #
+  # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 2 due to PlanetScale
+  # connection limits causing "too_many_connections" during deployments.
+  # See: https://github.com/razrfly/eventasaurus/issues/2498
+  #
+  # After completing database performance optimizations (issue #2496), we can:
+  # 1. Increase pool_size back to 3-5 for better Oban throughput
+  # 2. Remove the 'immediate' deploy strategy from fly.toml
+  #
+  # Current: Migrations need 1 connection; Oban needs 2-3 for producer/notifier
+  # Target: 3-5 connections after #2496 query optimizations reduce connection hold times
+  config :eventasaurus, EventasaurusApp.SessionRepo,
+    username: ps_user,
+    password: ps_pass,
+    hostname: ps_host,
+    port: ps_direct_port,
+    database: ps_db,
+    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "2"),
+    socket_options: socket_opts,
+    queue_target: 5000,
+    queue_interval: 30000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
+    ssl: true,
+    ssl_opts: planetscale_ssl_opts
 
-    # ReplicaRepo: Direct connection to read replicas (port 5432)
-    # PlanetScale routes to replicas when username has |replica suffix
-    # PgBouncer does NOT support replica routing, so direct connection is required
-    #
-    # Use for:
-    # - Admin dashboards and analytics
-    # - DiscoveryStatsCache background refresh
-    # - Heavy read queries where eventual consistency is acceptable
-    #
-    # DO NOT use for:
-    # - Reads immediately after writes (replication lag)
-    # - Authentication or session queries
-    # - Any write operations (will be rejected by Ecto read_only: true)
-    #
-    # Kill switch: Set USE_REPLICA=false to route all reads to primary
-    # See: https://planetscale.com/docs/postgres/scaling/replicas
-    ps_replica_user = "#{ps_user}|replica"
+  # ReplicaRepo: Direct connection to read replicas (port 5432)
+  # PlanetScale routes to replicas when username has |replica suffix
+  # PgBouncer does NOT support replica routing, so direct connection is required
+  #
+  # Use for:
+  # - Admin dashboards and analytics
+  # - DiscoveryStatsCache background refresh
+  # - Heavy read queries where eventual consistency is acceptable
+  #
+  # DO NOT use for:
+  # - Reads immediately after writes (replication lag)
+  # - Authentication or session queries
+  # - Any write operations (will be rejected by Ecto read_only: true)
+  #
+  # Kill switch: Set USE_REPLICA=false to route all reads to primary
+  # See: https://planetscale.com/docs/postgres/scaling/replicas
+  ps_replica_user = "#{ps_user}|replica"
 
-    config :eventasaurus, EventasaurusApp.ReplicaRepo,
-      username: ps_replica_user,
-      password: ps_pass,
-      hostname: ps_host,
-      port: ps_direct_port,
-      database: ps_db,
-      pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "5"),
-      socket_options: socket_opts,
-      queue_target: 5000,
-      queue_interval: 30000,
-      connect_timeout: 30_000,
-      handshake_timeout: 30_000,
-      ssl: true,
-      ssl_opts: planetscale_ssl_opts
-  else
-    # Supabase configuration (legacy/fallback)
-    # Path to Supabase CA certificate
-    cert_path = Path.join(:code.priv_dir(:eventasaurus), "prod-ca-2021.crt")
-
-    # Transaction mode pooler SSL: Accept any hostname but validate CA chain
-    # Pooler hostname (aws-0-eu-central-1.pooler.supabase.com) doesn't match certificate
-    # (cert is for db.vnhxedeynrtvakglinnr.supabase.co)
-    # This skips hostname verification while still validating certificate chain
-    pooler_ssl_opts = [
-      verify: :verify_peer,
-      cacertfile: cert_path,
-      depth: 3,
-      # Accept any hostname but validate certificate chain
-      customize_hostname_check: [
-        match_fun: fn _Hostname, _Extension -> true end
-      ]
-    ]
-
-    # Direct connection SSL: Full certificate verification with hostname check
-    session_db_url = System.get_env("SUPABASE_SESSION_DATABASE_URL")
-
-    session_db_host =
-      if session_db_url,
-        do: URI.parse(session_db_url).host,
-        else: "db.vnhxedeynrtvakglinnr.supabase.co"
-
-    session_ssl_opts =
-      if File.exists?(cert_path) do
-        [
-          verify: :verify_peer,
-          cacertfile: cert_path,
-          depth: 3,
-          server_name_indication: String.to_charlist(session_db_host),
-          customize_hostname_check: [
-            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-          ]
-        ]
-      else
-        raise """
-        Supabase CA certificate not found at #{cert_path}.
-        This certificate is required for secure database connections in production.
-        Please ensure the certificate file exists before deploying.
-        """
-      end
-
-    config :eventasaurus, EventasaurusApp.Repo,
-      url: System.get_env("SUPABASE_DATABASE_URL"),
-      database: "postgres",
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
-      queue_target: 5000,
-      queue_interval: 30000,
-      connect_timeout: 30_000,
-      handshake_timeout: 30_000,
-      ssl: true,
-      ssl_opts: pooler_ssl_opts,
-      # Disable prepared statements for Transaction mode (pgbouncer) compatibility
-      prepare: :unnamed
-
-    # Configure SessionRepo for Session mode operations (Oban, migrations, advisory locks)
-    # Uses direct database connection with full PostgreSQL feature support
-    # Prepared statements enabled (default) for Session mode performance
-    config :eventasaurus, EventasaurusApp.SessionRepo,
-      url: System.get_env("SUPABASE_SESSION_DATABASE_URL"),
-      database: "postgres",
-      pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
-      queue_target: 5000,
-      queue_interval: 30000,
-      connect_timeout: 30_000,
-      handshake_timeout: 30_000,
-      ssl: true,
-      ssl_opts: session_ssl_opts
-  end
+  config :eventasaurus, EventasaurusApp.ReplicaRepo,
+    username: ps_replica_user,
+    password: ps_pass,
+    hostname: ps_host,
+    port: ps_direct_port,
+    database: ps_db,
+    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "5"),
+    socket_options: socket_opts,
+    queue_target: 5000,
+    queue_interval: 30000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
+    ssl: true,
+    ssl_opts: planetscale_ssl_opts
 
   # Configure Cloudflare R2 storage settings
   config :eventasaurus, :r2,

@@ -298,7 +298,7 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
   defp generate_date_range(days) do
     today = Date.utc_today()
 
-    (days - 1)..0
+    (days - 1)..0//-1
     |> Enum.map(fn offset -> Date.add(today, -offset) end)
   end
 
