@@ -122,7 +122,9 @@ defmodule EventasaurusWeb.CityLive.Index do
       try do
         LanguageDiscovery.get_available_languages_for_city(city_slug)
       rescue
-        _ -> ["en"]
+        e ->
+          Logger.warning("Language discovery failed for city_slug=#{city_slug}: #{Exception.message(e)}")
+          ["en"]
       end
 
     # Get categories (cached)
