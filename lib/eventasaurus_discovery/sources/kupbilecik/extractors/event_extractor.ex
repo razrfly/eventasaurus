@@ -4,25 +4,28 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
   ## Extraction Strategy
 
-  Kupbilecik uses React SPA architecture. After Zyte rendering,
-  the HTML contains semantic elements with Polish content.
+  Kupbilecik uses Server-Side Rendering (SSR) for SEO purposes.
+  All event data is available in the initial HTML response - no
+  JavaScript rendering is required.
 
-  Key selectors (based on Playwright analysis):
-  - Title: h1.event-title or meta og:title
+  Key selectors (based on analysis):
+  - Title: h1 tag or meta og:title
   - Date: Elements containing Polish date format ("7 grudnia 2025 o godz. 20:00")
-  - Venue: .venue-name, .venue-address classes
-  - Description: .event-description or meta description
-  - Image: og:image meta tag or first image in content
+  - Venue: Links to /obiekty/ paths with venue info
+  - Description: og:description meta tag (most reliable)
+  - Image: og:image meta tag
+  - Performers: Extracted from "Obsada:" section in description paragraphs
+  - Category: Breadcrumb links to event categories
 
   ## Date Handling
 
   Date strings are extracted raw in Polish format and passed to Transformer
   for parsing. Common format: "7 grudnia 2025 o godz. 20:00"
 
-  ## HTML Structure (React-rendered)
+  ## HTML Structure (SSR)
 
-  The React app renders to standard HTML after JavaScript execution.
-  Zyte's browserHtml mode handles the JS rendering.
+  The site serves fully-rendered HTML for SEO. Plain HTTP requests
+  return all necessary data for extraction.
   """
 
   require Logger
@@ -32,7 +35,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
   ## Parameters
 
-  - `html` - HTML content as string (Zyte-rendered)
+  - `html` - HTML content as string (plain HTTP response)
   - `url` - Page URL for context
 
   ## Returns
@@ -51,6 +54,7 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
       venue = extract_venue(html)
       price = extract_price(html)
       category = extract_category(html, url)
+      performers = extract_performers(html)
 
       event_data = %{
         "url" => url,
@@ -62,7 +66,8 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
         "address" => venue[:address],
         "city" => venue[:city],
         "price" => price,
-        "category" => category
+        "category" => category,
+        "performers" => performers
       }
 
       Logger.debug("✅ Extracted event: #{title}")
@@ -131,16 +136,19 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   @doc """
   Extract description from HTML.
 
+  Kupbilecik provides description in og:description meta tag which is the most
+  reliable source. Falls back to description elements or first paragraph.
+
   Returns nil if not found (optional field).
   """
   def extract_description(html) do
     cond do
-      # Strategy 1: Look for description container
-      desc = extract_description_element(html) ->
+      # Strategy 1: og:description meta tag (most reliable for kupbilecik)
+      desc = extract_meta_description(html) ->
         clean_text(desc)
 
-      # Strategy 2: Meta description
-      desc = extract_meta_description(html) ->
+      # Strategy 2: Look for description container
+      desc = extract_description_element(html) ->
         clean_text(desc)
 
       # Strategy 3: First paragraph in content
@@ -190,44 +198,259 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   @doc """
   Extract price information from HTML.
 
-  Returns formatted price string or nil.
+  Kupbilecik embeds prices in various ways:
+  1. Open Graph product:price meta tags (most reliable)
+  2. In description bullet points: "* Dorośli - 55 zł", "* Studenci - 40 zł"
+  3. In "Bilety:" sections with price lists
+  4. Standard price patterns: "od 99 zł", "99 zł"
+  5. Price ranges: "od 50 do 150 zł"
+
+  Returns formatted price string (e.g., "od 55 zł" or "55-150 zł") or nil.
   """
   def extract_price(html) do
-    # Look for price patterns
+    # Strategy 1: Try OG product:price meta tags first (most reliable)
+    case extract_og_product_price(html) do
+      price when is_integer(price) and price > 0 ->
+        format_price(price)
+
+      _ ->
+        # Strategy 2: Fall back to extracting prices from HTML content
+        prices = extract_all_prices(html)
+
+        case prices do
+          [] ->
+            nil
+
+          [single_price] ->
+            format_price(single_price)
+
+          multiple_prices ->
+            # Return range if we have multiple prices
+            min_price = Enum.min(multiple_prices)
+            max_price = Enum.max(multiple_prices)
+
+            if min_price == max_price do
+              format_price(min_price)
+            else
+              "#{min_price}-#{max_price} zł"
+            end
+        end
+    end
+  end
+
+  # Extract price from Open Graph product:price meta tags
+  # Format: <meta property="product:price:amount" content="105" />
+  defp extract_og_product_price(html) do
     patterns = [
-      # Polish format: "od 99 zł" or "99 zł"
-      ~r/(?:od\s+)?(\d+(?:[,\.]\d+)?)\s*zł/i,
-      # Alternative: "PLN 99" or "99 PLN"
-      ~r/(\d+(?:[,\.]\d+)?)\s*PLN/i,
-      ~r/PLN\s*(\d+(?:[,\.]\d+)?)/i
+      ~r{<meta\s+[^>]*property="product:price:amount"[^>]*content="(\d+(?:\.\d+)?)"[^>]*>}i,
+      ~r{<meta\s+[^>]*content="(\d+(?:\.\d+)?)"[^>]*property="product:price:amount"[^>]*>}i,
+      ~r{<meta\s+[^>]*property="product:original_price:amount"[^>]*content="(\d+(?:\.\d+)?)"[^>]*>}i,
+      ~r{<meta\s+[^>]*content="(\d+(?:\.\d+)?)"[^>]*property="product:original_price:amount"[^>]*>}i
     ]
 
     Enum.find_value(patterns, fn pattern ->
       case Regex.run(pattern, html) do
-        [match, _price] -> clean_text(match)
-        _ -> nil
+        [_, price_str] ->
+          case Float.parse(price_str) do
+            {value, _} -> round(value)
+            :error -> nil
+          end
+
+        _ ->
+          nil
       end
     end)
   end
+
+  defp extract_all_prices(html) do
+    # Multiple patterns to catch different price formats
+    patterns = [
+      # Pattern: "- 55 zł" (bullet point price) - most common on kupbilecik
+      ~r/[-–—]\s*(\d+(?:[,\.]\d+)?)\s*zł/iu,
+      # Pattern: "od 99 zł" or "99 zł"
+      ~r/(?:od\s+)?(\d+(?:[,\.]\d+)?)\s*zł/iu,
+      # Pattern: "PLN 99" or "99 PLN"
+      ~r/(\d+(?:[,\.]\d+)?)\s*PLN/iu,
+      ~r/PLN\s*(\d+(?:[,\.]\d+)?)/iu
+    ]
+
+    patterns
+    |> Enum.flat_map(fn pattern ->
+      Regex.scan(pattern, html)
+      |> Enum.map(fn
+        [_, price_str] -> parse_price_value(price_str)
+        _ -> nil
+      end)
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reject(&(&1 == 0))
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp parse_price_value(price_str) do
+    # Handle Polish decimal format (comma) and period
+    normalized =
+      price_str
+      |> String.replace(",", ".")
+      |> String.trim()
+
+    case Float.parse(normalized) do
+      {value, _} -> round(value)
+      :error -> nil
+    end
+  end
+
+  defp format_price(price) when is_integer(price) and price > 0 do
+    "od #{price} zł"
+  end
+
+  defp format_price(_), do: nil
 
   @doc """
   Extract category from HTML or URL.
 
   Returns Polish category name for mapping in Transformer.
+
+  Strategy (in order of preference):
+  1. Breadcrumb/navigation links with category hrefs
+  2. Event title keywords (most reliable for kupbilecik)
+  3. Keywords meta tag
+  4. URL path
   """
   def extract_category(html, url) do
-    # Try to extract from breadcrumb or category element
     cond do
+      # Strategy 1: Try breadcrumb/navigation links with category hrefs
       cat = extract_category_element(html) ->
         cat
 
-      # Extract from URL path if present
+      # Strategy 2: Extract from event title keywords (most reliable for kupbilecik)
+      cat = extract_category_from_title_keywords(html) ->
+        cat
+
+      # Strategy 3: Extract from keywords meta tag
+      cat = extract_category_from_keywords_meta(html) ->
+        cat
+
+      # Strategy 4: Extract from URL path if present
       cat = extract_category_from_url(url) ->
         cat
 
       true ->
         nil
     end
+  end
+
+  # Extract category based on keywords in the event title
+  # Kupbilecik titles often contain Polish event type words like:
+  # "Koncert Przy Świecach", "Stand-up Comedy", "Kabaret Neo-Nówka"
+  defp extract_category_from_title_keywords(html) do
+    case extract_title(html) do
+      {:ok, title} ->
+        title_lower = String.downcase(title)
+
+        cond do
+          # Music/Concert patterns
+          String.contains?(title_lower, ["koncert", "recital", "festiwal muzyki", "muzyczny"]) ->
+            "koncerty"
+
+          # Stand-up comedy (specific pattern before general comedy)
+          String.contains?(title_lower, ["stand-up", "stand up", "standup"]) ->
+            "stand-up"
+
+          # Cabaret/Comedy patterns
+          String.contains?(title_lower, ["kabaret", "kabareton"]) ->
+            "kabarety"
+
+          # Theater patterns
+          String.contains?(title_lower, ["spektakl", "sztuka", "przedstawienie", "dramat"]) ->
+            "teatr"
+
+          # Opera/Musical patterns
+          String.contains?(title_lower, ["opera", "operetka"]) ->
+            "opera"
+
+          String.contains?(title_lower, ["musical"]) ->
+            "musical"
+
+          # Ballet patterns
+          String.contains?(title_lower, ["balet"]) ->
+            "balet"
+
+          # Festival patterns
+          String.contains?(title_lower, ["festiwal", "festival"]) ->
+            "festiwale"
+
+          # Shows/performances
+          String.contains?(title_lower, ["widowisko", "show", "rewia"]) ->
+            "widowiska"
+
+          # Sports
+          String.contains?(title_lower, ["mecz", "zawody", "sport"]) ->
+            "sport"
+
+          # Kids/Family
+          String.contains?(title_lower, ["dla dzieci", "bajka", "familijny"]) ->
+            "dla-dzieci"
+
+          true ->
+            nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  # Extract category from keywords meta tag
+  # Format: <meta name="keywords" content="...,koncerty,teatr,...">
+  defp extract_category_from_keywords_meta(html) do
+    case Regex.run(~r{<meta\s+name="keywords"\s+content="([^"]+)"}i, html) do
+      [_, keywords] ->
+        keywords_lower = String.downcase(keywords)
+
+        # Priority order matters - check specific categories first
+        cond do
+          String.contains?(keywords_lower, "koncerty") -> "koncerty"
+          String.contains?(keywords_lower, "kabarety") -> "kabarety"
+          String.contains?(keywords_lower, "spektakle") -> "teatr"
+          String.contains?(keywords_lower, "teatr") -> "teatr"
+          String.contains?(keywords_lower, "festiwale") -> "festiwale"
+          String.contains?(keywords_lower, "opera") -> "opera"
+          String.contains?(keywords_lower, "musical") -> "musical"
+          String.contains?(keywords_lower, "balet") -> "balet"
+          String.contains?(keywords_lower, "sport") -> "sport"
+          true -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  @doc """
+  Extract performer names from HTML.
+
+  Kupbilecik embeds performer info in various ways:
+  1. "Obsada:" section with names in bold tags or after dashes
+  2. "Występują:" or similar labels
+  3. Names in strong tags within description paragraphs
+
+  Returns list of performer names or empty list.
+  """
+  def extract_performers(html) do
+    performers =
+      []
+      |> extract_obsada_section(html)
+      |> extract_strong_names(html)
+      |> extract_wystepuja_section(html)
+      |> Enum.uniq()
+      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(&(String.length(&1) < 3))
+      # Performer names should be reasonable length (DB column is varchar(255))
+      |> Enum.reject(&(String.length(&1) > 100))
+
+    if Enum.empty?(performers), do: [], else: performers
   end
 
   # Private helper functions
@@ -577,17 +800,107 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   end
 
   defp extract_category_element(html) do
+    # Kupbilecik has breadcrumb links with category-specific hrefs:
+    # Examples found: /kabarety/, /inne/, /koncerty/, /teatr/, /sport/, etc.
+    # These hrefs map to canonical categories via Config.category_mapping/0
+    #
+    # Strategy:
+    # 1. Extract category from href path (most reliable)
+    # 2. Fall back to link text for categories
+
+    # First try: Extract category slug from href in breadcrumb/navigation links
+    # Pattern matches links like: <a href="/kabarety/">Występy kabaretowe</a>
+    category_href_pattern =
+      ~r{<a[^>]*href="/([a-z\-]+)/"[^>]*>[^<]*</a>}iu
+
+    case Regex.scan(category_href_pattern, html) do
+      matches when is_list(matches) and length(matches) > 0 ->
+        # Find category slugs (skip generic paths like "imprezy", "bilety", etc.)
+        category_slugs = [
+          "teatr",
+          "koncerty",
+          "kabarety",
+          "festiwale",
+          "opera",
+          "musical",
+          "stand-up",
+          "widowiska",
+          "balet",
+          "sport",
+          "dla-dzieci",
+          "inne",
+          "muzyka"
+        ]
+
+        match =
+          Enum.find_value(matches, fn
+            [_, slug] ->
+              normalized_slug = String.downcase(slug)
+
+              if normalized_slug in category_slugs do
+                normalized_slug
+              else
+                nil
+              end
+
+            _ ->
+              nil
+          end)
+
+        match || extract_category_from_link_text(html)
+
+      _ ->
+        extract_category_from_link_text(html)
+    end
+  end
+
+  defp extract_category_from_link_text(html) do
+    # Fallback: Try to extract from link text or class patterns
     patterns = [
-      ~r{<[^>]*class="[^"]*category[^"]*"[^>]*>(.*?)</[^>]+>}is,
-      ~r{<[^>]*class="[^"]*breadcrumb[^"]*"[^>]*>.*?<a[^>]*>(.*?)</a>.*?</[^>]+>}is
+      # Category page links by text content (Polish names)
+      ~r{<a[^>]*href="/[^"]*"[^>]*>(Teatr|Koncerty|Kabaret[yi]?|Festiwal[ey]?|Opera|Musical|Stand-up|Widowisk[ao]|Balet|Sport|Dla dzieci|Inne|Muzyka|Występy kabaretowe)</a>}iu,
+      # Category class elements
+      ~r{<[^>]*class="[^"]*category[^"]*"[^>]*>(.*?)</[^>]+>}is
     ]
 
     Enum.find_value(patterns, fn pattern ->
       case Regex.run(pattern, html) do
-        [_, cat] -> clean_text(cat)
-        _ -> nil
+        [_, cat] ->
+          cleaned = clean_text(cat)
+          # Filter out generic/non-category text
+          if cleaned != "" and
+               not String.match?(cleaned, ~r/^(strona główna|home|kupbilecik|bilety)/iu) do
+            map_polish_category_text(cleaned)
+          else
+            nil
+          end
+
+        _ ->
+          nil
       end
     end)
+  end
+
+  # Map Polish category display names to category slugs
+  defp map_polish_category_text(text) do
+    text_lower = String.downcase(text)
+
+    cond do
+      String.contains?(text_lower, "kabaret") -> "kabarety"
+      String.contains?(text_lower, "koncert") -> "koncerty"
+      String.contains?(text_lower, "teatr") -> "teatr"
+      String.contains?(text_lower, "festiwal") -> "festiwale"
+      String.contains?(text_lower, "opera") -> "opera"
+      String.contains?(text_lower, "musical") -> "musical"
+      String.contains?(text_lower, "stand-up") -> "stand-up"
+      String.contains?(text_lower, "widowisk") -> "widowiska"
+      String.contains?(text_lower, "balet") -> "balet"
+      String.contains?(text_lower, "sport") -> "sport"
+      String.contains?(text_lower, "dzieci") -> "dla-dzieci"
+      String.contains?(text_lower, "muzyk") -> "muzyka"
+      String.contains?(text_lower, "inne") -> "inne"
+      true -> text
+    end
   end
 
   defp extract_category_from_url(url) do
@@ -614,5 +927,138 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
     |> String.replace(~r{&#\d+;}, "")
     |> String.replace(~r{\s+}, " ")
     |> String.trim()
+  end
+
+  # Performer extraction helpers
+
+  defp extract_obsada_section(acc, html) do
+    # Look for "Obsada:" section followed by names
+    # Pattern: "Obsada: Name1, Name2" or "Obsada:<br>Name1<br>Name2"
+    case Regex.run(~r/Obsada:?\s*(.*?)(?:<\/p>|<br|$)/isu, html) do
+      [_, content] ->
+        names = extract_names_from_text(content)
+        acc ++ names
+
+      _ ->
+        acc
+    end
+  end
+
+  defp extract_strong_names(acc, html) do
+    # Extract names from <strong> or <b> tags in description areas
+    # Pattern: "Role - <strong>Actor Name</strong>" or "<b>Actor Name</b>"
+    strong_matches = Regex.scan(~r/<(?:strong|b)>([^<]+)<\/(?:strong|b)>/iu, html)
+
+    names =
+      strong_matches
+      |> Enum.map(fn [_, name] -> clean_performer_name(name) end)
+      |> Enum.reject(fn name ->
+        # Filter out non-name content (dates, prices, crew labels, etc.)
+        is_nil(name) or
+          String.match?(name, ~r/^\d/) or
+          String.match?(name, ~r/zł|PLN|godz|bilety/iu) or
+          String.length(name) < 3 or
+          String.length(name) > 50 or
+          is_crew_label?(name)
+      end)
+
+    acc ++ names
+  end
+
+  # Filter out production crew labels that appear in <strong> tags
+  # These are NOT performers but crew/production staff labels
+  defp is_crew_label?(name) do
+    lowered = String.downcase(name)
+
+    String.contains?(lowered, [
+      # Production crew labels (Polish)
+      "scenariusz",
+      "reżyseria",
+      "rezyser",
+      "producent",
+      "produkcja",
+      "scenografia",
+      "kostiumy",
+      "muzyka",
+      "choreografia",
+      "światła",
+      "dźwięk",
+      "inspicjent",
+      "sufler",
+      "adaptacja",
+      "tłumaczenie",
+      "przekład",
+      "dramaturg",
+      "asystent",
+      "kierownik",
+      "autor",
+      "kompozytor",
+      "libretto",
+      # Common labels with colons
+      "premiera",
+      "występują",
+      "obsada",
+      "bilety",
+      "cena",
+      "data",
+      "miejsce",
+      "godzina",
+      "czas trwania"
+    ])
+  end
+
+  defp extract_wystepuja_section(acc, html) do
+    # Look for "Występują:" or similar labels
+    patterns = [
+      ~r/Wyst[eę]puj[aą]:?\s*(.*?)(?:<\/p>|<br|$)/isu,
+      ~r/W\s+rolach:?\s*(.*?)(?:<\/p>|<br|$)/isu,
+      ~r/Arty[sś]ci:?\s*(.*?)(?:<\/p>|<br|$)/isu
+    ]
+
+    Enum.reduce(patterns, acc, fn pattern, current_acc ->
+      case Regex.run(pattern, html) do
+        [_, content] ->
+          names = extract_names_from_text(content)
+          current_acc ++ names
+
+        _ ->
+          current_acc
+      end
+    end)
+  end
+
+  defp extract_names_from_text(text) do
+    # Clean HTML and extract names separated by commas, slashes, or newlines
+    clean = clean_text(text)
+
+    clean
+    |> String.split(~r/[,\/\n]+/)
+    |> Enum.map(&clean_performer_name/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reject(&(String.length(&1) < 3))
+  end
+
+  defp clean_performer_name(nil), do: nil
+
+  defp clean_performer_name(name) do
+    cleaned =
+      name
+      |> String.trim()
+      |> String.replace(~r/<[^>]+>/, "")
+      |> String.replace(~r/^\s*[-–—]\s*/, "")
+      |> String.replace(~r/\s*[-–—]\s*$/, "")
+      |> String.trim()
+
+    len = String.length(cleaned)
+
+    # Skip if it's not a valid name format
+    # Must be 3-100 chars, only letters/spaces/punctuation, not start with digit
+    if len >= 3 and len <= 100 and
+         String.match?(cleaned, ~r/^[\p{L}\s\.\-']+$/u) and
+         not String.match?(cleaned, ~r/^\d/) do
+      cleaned
+    else
+      nil
+    end
   end
 end
