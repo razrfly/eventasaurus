@@ -52,14 +52,14 @@ defmodule Eventasaurus.Jobs.ThresholdMetNotificationJob do
         case Eventasaurus.Emails.send_threshold_met_notification(organizer, event) do
           {:ok, _response} ->
             Logger.info(
-              "Threshold met notification sent to #{organizer.email} for event #{event.id}"
+              "Threshold met notification sent for organizer_id=#{organizer.id} event_id=#{event.id}"
             )
 
             :ok
 
           {:error, reason} ->
             Logger.error(
-              "Failed to send threshold met notification to #{organizer.email}: #{inspect(reason)}"
+              "Failed to send threshold met notification for organizer_id=#{organizer.id}: #{inspect(reason)}"
             )
 
             {:error, reason}
