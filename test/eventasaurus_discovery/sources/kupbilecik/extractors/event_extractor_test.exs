@@ -188,6 +188,76 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractorTest
       # Long name should be filtered out
       refute Enum.any?(performers, &(String.length(&1) > 100))
     end
+
+    test "filters out single-word garbage names from user comments" do
+      # Regression test for garbage performer extraction from user comments
+      # These are names that appeared from extracting ALL <strong> tags on the page
+      # They come from user comments, form labels, and random page content
+      html = """
+      <html>
+      <body>
+        <strong>menu</strong>
+        <strong>english</strong>
+        <strong>deutsch</strong>
+        <strong>Krystian</strong>
+        <strong>KATARZYNA</strong>
+        <strong>Karolina</strong>
+        <strong>Przemyslaw</strong>
+        <strong>ŁukasTomasNieMam</strong>
+        <strong>Daniel</strong>
+        <strong>Marcin</strong>
+        <strong>Patrycja</strong>
+        <strong>Radosław</strong>
+        <strong>Wiktor</strong>
+        <p>Obsada: Anna Kowalska, Jan Nowak</p>
+      </body>
+      </html>
+      """
+
+      performers = EventExtractor.extract_performers(html)
+
+      # Single-word garbage names should NOT appear
+      refute Enum.member?(performers, "Krystian")
+      refute Enum.member?(performers, "KATARZYNA")
+      refute Enum.member?(performers, "Karolina")
+      refute Enum.member?(performers, "Przemyslaw")
+      refute Enum.member?(performers, "ŁukasTomasNieMam")
+      refute Enum.member?(performers, "Daniel")
+      refute Enum.member?(performers, "Marcin")
+      refute Enum.member?(performers, "Patrycja")
+      refute Enum.member?(performers, "Radosław")
+      refute Enum.member?(performers, "Wiktor")
+
+      # Navigation garbage should NOT appear
+      refute Enum.member?(performers, "menu")
+      refute Enum.member?(performers, "english")
+      refute Enum.member?(performers, "deutsch")
+
+      # But proper names from Obsada section SHOULD appear
+      assert Enum.member?(performers, "Anna Kowalska")
+      assert Enum.member?(performers, "Jan Nowak")
+    end
+
+    test "only extracts performers from labeled sections not global strong tags" do
+      # We intentionally do NOT extract from all <strong>/<b> tags
+      # Only from labeled sections like "Obsada:" or "Występują:"
+      html = """
+      <html>
+      <body>
+        <p><strong>Random Bold Text</strong></p>
+        <p><strong>Another Random Name</strong></p>
+        <h1>Event Title</h1>
+      </body>
+      </html>
+      """
+
+      performers = EventExtractor.extract_performers(html)
+
+      # Should NOT include random strong text when there's no labeled section
+      refute Enum.member?(performers, "Random Bold Text")
+      refute Enum.member?(performers, "Another Random Name")
+      assert performers == []
+    end
   end
 
   describe "extract_category/2" do

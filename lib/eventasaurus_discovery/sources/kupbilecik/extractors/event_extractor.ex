@@ -431,24 +431,32 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
   @doc """
   Extract performer names from HTML.
 
-  Kupbilecik embeds performer info in various ways:
-  1. "Obsada:" section with names in bold tags or after dashes
-  2. "Występują:" or similar labels
-  3. Names in strong tags within description paragraphs
+  Kupbilecik embeds performer info in several ways:
+  1. **PRIMARY**: Links to /baza/{id}/{name}/ - artist database entries (most reliable)
+  2. **SECONDARY**: "Obsada:" section with names in bold tags or after dashes
+  3. **SECONDARY**: "Występują:" or similar labels
+
+  Note: We intentionally do NOT extract from all <strong>/<b> tags globally,
+  as these often contain user comments, form labels, prices, etc.
+  Only /baza/ links and labeled sections are reliable sources for performer names.
 
   Returns list of performer names or empty list.
   """
   def extract_performers(html) do
     performers =
       []
+      # PRIMARY: Extract from /baza/ links (artist database - most reliable)
+      |> extract_baza_performers(html)
+      # SECONDARY: Extract from labeled sections
       |> extract_obsada_section(html)
-      |> extract_strong_names(html)
       |> extract_wystepuja_section(html)
       |> Enum.uniq()
       |> Enum.reject(&is_nil/1)
       |> Enum.reject(&(String.length(&1) < 3))
       # Performer names should be reasonable length (DB column is varchar(255))
       |> Enum.reject(&(String.length(&1) > 100))
+      # Filter to only names that look like real performer names
+      |> Enum.filter(&looks_like_performer_name?/1)
 
     if Enum.empty?(performers), do: [], else: performers
   end
@@ -963,6 +971,107 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
 
   # Performer extraction helpers
 
+  # Extract performer names from /baza/ links (artist database - PRIMARY source)
+  # Kupbilecik links performers to their database entries:
+  # <a href="/baza/1846/Cezary+Jurkiewicz/">Cezary Jurkiewicz</a>
+  # The URL-encoded name in the path is the most reliable source
+  defp extract_baza_performers(acc, html) do
+    # Pattern: /baza/{id}/{url-encoded-name}/
+    # Extract the name from the URL path (more reliable than link text)
+    case Regex.scan(~r{<a[^>]*href="/baza/\d+/([^/]+)/"[^>]*>}i, html) do
+      matches when is_list(matches) and length(matches) > 0 ->
+        names =
+          matches
+          |> Enum.map(fn [_, url_encoded_name] ->
+            # Decode URL encoding: "Cezary+Jurkiewicz" -> "Cezary Jurkiewicz"
+            url_encoded_name
+            |> String.replace("+", " ")
+            |> URI.decode()
+            |> String.trim()
+          end)
+          |> Enum.reject(&(String.length(&1) < 3))
+          |> Enum.uniq()
+
+        acc ++ names
+
+      _ ->
+        acc
+    end
+  end
+
+  # Validate that a name looks like an actual performer name
+  # Filters out random text extracted from HTML that isn't a real name
+  defp looks_like_performer_name?(name) when is_binary(name) do
+    # Must have at least one space (first + last name) OR be a known single-name performer format
+    # Single names are acceptable if they look like stage names (capitalized, reasonable length)
+    word_count = name |> String.split(~r/\s+/) |> length()
+
+    cond do
+      # Must have at least one space for most names (First Last)
+      word_count >= 2 ->
+        # Multi-word name - validate format
+        validate_multi_word_name(name)
+
+      # Single word names are only valid if they look like stage names
+      word_count == 1 ->
+        validate_single_name(name)
+
+      true ->
+        false
+    end
+  end
+
+  defp looks_like_performer_name?(_), do: false
+
+  # Validate multi-word names (First Last, etc.)
+  defp validate_multi_word_name(name) do
+    words = String.split(name, ~r/\s+/)
+
+    # Each word should start with uppercase (proper names)
+    # Allow for particles like "von", "de", "van" which may be lowercase
+    all_valid_words =
+      Enum.all?(words, fn word ->
+        # Allow lowercase particles (2-3 chars)
+        # Or starts with uppercase
+        String.length(word) <= 3 or
+          String.match?(word, ~r/^[\p{Lu}]/u)
+      end)
+
+    # At least one word must be properly capitalized (the main name part)
+    has_capitalized_word =
+      Enum.any?(words, fn word ->
+        String.length(word) > 1 and String.match?(word, ~r/^[\p{Lu}]/u)
+      end)
+
+    # Not too many words (4 is reasonable max for names)
+    reasonable_word_count = length(words) <= 4
+
+    # No garbage patterns (all caps, random strings)
+    not_all_caps = not String.match?(name, ~r/^[\p{Lu}\s]+$/u) or String.length(name) <= 10
+
+    all_valid_words and has_capitalized_word and reasonable_word_count and not_all_caps
+  end
+
+  # Validate single-word names (stage names like "Cher", "Madonna", etc.)
+  defp validate_single_name(name) do
+    # Single names must:
+    # 1. Start with uppercase
+    # 2. Be reasonable length (4-20 chars)
+    # 3. Not be all uppercase (unless short)
+    # 4. Look like a proper name (not random text)
+
+    len = String.length(name)
+
+    starts_uppercase = String.match?(name, ~r/^[\p{Lu}]/u)
+    reasonable_length = len >= 4 and len <= 20
+    not_all_caps = not String.match?(name, ~r/^[\p{Lu}]+$/u) or len <= 6
+
+    # Reject obvious non-names
+    not_garbage = not String.match?(name, ~r/^(menu|english|deutsch|polski|home|bilety)$/i)
+
+    starts_uppercase and reasonable_length and not_all_caps and not_garbage
+  end
+
   defp extract_obsada_section(acc, html) do
     # Look for "Obsada:" section followed by names
     # Pattern: "Obsada: Name1, Name2" or "Obsada:<br>Name1<br>Name2"
@@ -974,69 +1083,6 @@ defmodule EventasaurusDiscovery.Sources.Kupbilecik.Extractors.EventExtractor do
       _ ->
         acc
     end
-  end
-
-  defp extract_strong_names(acc, html) do
-    # Extract names from <strong> or <b> tags in description areas
-    # Pattern: "Role - <strong>Actor Name</strong>" or "<b>Actor Name</b>"
-    strong_matches = Regex.scan(~r/<(?:strong|b)>([^<]+)<\/(?:strong|b)>/iu, html)
-
-    names =
-      strong_matches
-      |> Enum.map(fn [_, name] -> clean_performer_name(name) end)
-      |> Enum.reject(fn name ->
-        # Filter out non-name content (dates, prices, crew labels, etc.)
-        is_nil(name) or
-          String.match?(name, ~r/^\d/) or
-          String.match?(name, ~r/zł|PLN|godz|bilety/iu) or
-          String.length(name) < 3 or
-          String.length(name) > 50 or
-          is_crew_label?(name)
-      end)
-
-    acc ++ names
-  end
-
-  # Filter out production crew labels that appear in <strong> tags
-  # These are NOT performers but crew/production staff labels
-  defp is_crew_label?(name) do
-    lowered = String.downcase(name)
-
-    String.contains?(lowered, [
-      # Production crew labels (Polish)
-      "scenariusz",
-      "reżyseria",
-      "rezyser",
-      "producent",
-      "produkcja",
-      "scenografia",
-      "kostiumy",
-      "muzyka",
-      "choreografia",
-      "światła",
-      "dźwięk",
-      "inspicjent",
-      "sufler",
-      "adaptacja",
-      "tłumaczenie",
-      "przekład",
-      "dramaturg",
-      "asystent",
-      "kierownik",
-      "autor",
-      "kompozytor",
-      "libretto",
-      # Common labels with colons
-      "premiera",
-      "występują",
-      "obsada",
-      "bilety",
-      "cena",
-      "data",
-      "miejsce",
-      "godzina",
-      "czas trwania"
-    ])
   end
 
   defp extract_wystepuja_section(acc, html) do
