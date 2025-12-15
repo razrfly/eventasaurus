@@ -29,7 +29,10 @@ defmodule EventasaurusDiscovery.Movies.Movie.Slug do
   end
 
   # Extract title and tmdb_id from sources list, handling EctoAutoslugField's
-  # behavior of filtering out nil values
+  # behavior of filtering out nil values.
+  #
+  # Also handles edge cases where tmdb_id might be passed as a single-element list
+  # (e.g., [1280941] instead of 1280941) due to upstream data formatting issues.
   defp extract_slug_parts(sources, changeset) do
     case sources do
       [title, tmdb_id] when is_binary(title) and is_integer(tmdb_id) ->
@@ -46,21 +49,27 @@ defmodule EventasaurusDiscovery.Movies.Movie.Slug do
       [single] when is_binary(single) ->
         # Only title was non-nil, try to get tmdb_id from changeset
         tmdb_id = Ecto.Changeset.get_field(changeset, :tmdb_id)
-        {single, tmdb_id}
+        {single, parse_tmdb_id(tmdb_id)}
 
       [] ->
         # Both were nil, try to get from changeset
         title = Ecto.Changeset.get_field(changeset, :title)
         tmdb_id = Ecto.Changeset.get_field(changeset, :tmdb_id)
-        {title, tmdb_id}
+        {title, parse_tmdb_id(tmdb_id)}
 
       _ ->
-        {nil, nil}
+        # Fallback: try to get from changeset for any unmatched pattern
+        title = Ecto.Changeset.get_field(changeset, :title)
+        tmdb_id = Ecto.Changeset.get_field(changeset, :tmdb_id)
+        {title, parse_tmdb_id(tmdb_id)}
     end
   end
 
+  # Parse tmdb_id from various formats, with defensive handling for lists
   defp parse_tmdb_id(id) when is_integer(id), do: id
   defp parse_tmdb_id(id) when is_binary(id), do: String.to_integer(id)
+  defp parse_tmdb_id([id]) when is_integer(id), do: id
+  defp parse_tmdb_id([id]) when is_binary(id), do: String.to_integer(id)
   defp parse_tmdb_id(_), do: nil
 end
 
@@ -97,8 +106,11 @@ defmodule EventasaurusDiscovery.Movies.Movie do
 
   @doc false
   def changeset(movie, attrs) do
+    # Normalize attrs before cast to ensure tmdb_id is an integer
+    normalized_attrs = normalize_attrs(attrs)
+
     movie
-    |> cast(attrs, [
+    |> cast(normalized_attrs, [
       :tmdb_id,
       :title,
       :original_title,
@@ -114,6 +126,37 @@ defmodule EventasaurusDiscovery.Movies.Movie do
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:tmdb_id)
     |> unique_constraint(:slug)
+  end
+
+  # Normalize attrs to handle edge cases like list-wrapped tmdb_id
+  defp normalize_attrs(attrs) when is_map(attrs) do
+    case Map.get(attrs, :tmdb_id) || Map.get(attrs, "tmdb_id") do
+      [id] when is_integer(id) ->
+        # Unwrap single-element list
+        update_tmdb_id(attrs, id)
+
+      [id] when is_binary(id) ->
+        # Unwrap and parse string
+        update_tmdb_id(attrs, String.to_integer(id))
+
+      id when is_binary(id) ->
+        # Parse string to integer
+        update_tmdb_id(attrs, String.to_integer(id))
+
+      _ ->
+        # Already an integer or nil, no change needed
+        attrs
+    end
+  end
+
+  defp normalize_attrs(attrs), do: attrs
+
+  defp update_tmdb_id(attrs, id) do
+    cond do
+      Map.has_key?(attrs, :tmdb_id) -> Map.put(attrs, :tmdb_id, id)
+      Map.has_key?(attrs, "tmdb_id") -> Map.put(attrs, "tmdb_id", id)
+      true -> attrs
+    end
   end
 
   defp sanitize_utf8(changeset) do

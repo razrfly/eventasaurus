@@ -53,6 +53,42 @@ defmodule EventasaurusDiscovery.Movies.MovieStoreTest do
       assert is_binary(movie.title)
       assert is_binary(movie.overview)
     end
+
+    test "handles tmdb_id passed as single-element list" do
+      # Bug fix: tmdb_id sometimes arrives as [id] instead of id
+      # This can happen due to upstream data formatting issues
+      attrs = %{
+        tmdb_id: [1280941],
+        title: "The Boy with Pink Pants"
+      }
+
+      assert {:ok, %Movie{} = movie} = MovieStore.create_movie(attrs)
+      assert movie.tmdb_id == 1_280_941
+      assert movie.title == "The Boy with Pink Pants"
+      assert movie.slug =~ "the-boy-with-pink-pants"
+    end
+
+    test "handles tmdb_id passed as string" do
+      attrs = %{
+        tmdb_id: "550",
+        title: "Fight Club"
+      }
+
+      assert {:ok, %Movie{} = movie} = MovieStore.create_movie(attrs)
+      assert movie.tmdb_id == 550
+      assert movie.title == "Fight Club"
+    end
+
+    test "handles tmdb_id passed as string in single-element list" do
+      attrs = %{
+        tmdb_id: ["550"],
+        title: "Fight Club"
+      }
+
+      assert {:ok, %Movie{} = movie} = MovieStore.create_movie(attrs)
+      assert movie.tmdb_id == 550
+      assert movie.title == "Fight Club"
+    end
   end
 
   describe "find_or_create_by_tmdb_id/2" do
