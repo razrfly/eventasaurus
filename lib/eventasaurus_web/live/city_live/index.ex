@@ -191,6 +191,32 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   @impl true
+  def handle_info(:load_filtered_events, socket) do
+    # DEBUG: Artificial delay to visualize staged loading on filter changes
+    if Application.get_env(:eventasaurus, :debug_staged_loading, false) do
+      Process.sleep(2000)
+    end
+
+    # Load events with current filters (expensive geographic query)
+    socket =
+      try do
+        socket
+        |> fetch_events()
+        |> assign(:events_loading, false)
+      rescue
+        e ->
+          Logger.error("Failed to load filtered events for city #{socket.assigns.city.slug}: #{inspect(e)}")
+
+          socket
+          |> assign(:events, [])
+          |> assign(:events_loading, false)
+          |> assign(:total_events, 0)
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_params(params, _url, socket) do
     socket =
       socket
@@ -204,12 +230,14 @@ defmodule EventasaurusWeb.CityLive.Index do
   def handle_event("search", %{"search" => search_term}, socket) do
     filters = Map.put(socket.assigns.filters, :search, search_term)
 
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:filters, filters)
-      |> fetch_events()
+      |> assign(:events_loading, true)
       |> push_patch(to: build_path(socket, filters))
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
@@ -217,12 +245,14 @@ defmodule EventasaurusWeb.CityLive.Index do
   def handle_event("clear_search", _params, socket) do
     filters = Map.put(socket.assigns.filters, :search, nil)
 
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:filters, filters)
-      |> fetch_events()
+      |> assign(:events_loading, true)
       |> push_patch(to: build_path(socket, filters))
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
@@ -240,13 +270,15 @@ defmodule EventasaurusWeb.CityLive.Index do
       |> Map.put(:sort_order, :asc)
       |> Map.put(:page, 1)
 
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:filters, filters)
       |> assign(:radius_km, radius_km)
-      |> fetch_events()
+      |> assign(:events_loading, true)
       |> push_patch(to: build_path(socket, filters))
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
@@ -266,14 +298,16 @@ defmodule EventasaurusWeb.CityLive.Index do
       show_past: false
     }
 
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:filters, cleared_filters)
       |> assign(:radius_km, @default_radius_km)
       |> assign(:active_date_range, nil)
-      |> fetch_events()
+      |> assign(:events_loading, true)
       |> push_patch(to: build_path(socket, cleared_filters))
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
@@ -289,11 +323,13 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @impl true
   def handle_event("change_language", %{"language" => language}, socket) do
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:language, language)
-      |> fetch_events()
+      |> assign(:events_loading, true)
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
@@ -302,12 +338,14 @@ defmodule EventasaurusWeb.CityLive.Index do
     page = String.to_integer(page)
     updated_filters = Map.put(socket.assigns.filters, :page, page)
 
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:filters, updated_filters)
-      |> fetch_events()
+      |> assign(:events_loading, true)
       |> push_patch(to: build_path(socket, updated_filters))
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
@@ -321,13 +359,15 @@ defmodule EventasaurusWeb.CityLive.Index do
         # Set active_date_range (nil for :all, atom for others)
         active_date_range = if range_atom == :all, do: nil, else: range_atom
 
+        # ASYNC: Show skeleton immediately, load events in background
         socket =
           socket
           |> assign(:filters, filters)
           |> assign(:active_date_range, active_date_range)
-          |> fetch_events()
+          |> assign(:events_loading, true)
           |> push_patch(to: build_path(socket, filters))
 
+        send(self(), :load_filtered_events)
         {:noreply, socket}
 
       :error ->
@@ -341,13 +381,15 @@ defmodule EventasaurusWeb.CityLive.Index do
     # Use EventFilters shared helper
     filters = EventFilters.clear_date_filter(socket.assigns.filters)
 
+    # ASYNC: Show skeleton immediately, load events in background
     socket =
       socket
       |> assign(:filters, filters)
       |> assign(:active_date_range, nil)
-      |> fetch_events()
+      |> assign(:events_loading, true)
       |> push_patch(to: build_path(socket, filters))
 
+    send(self(), :load_filtered_events)
     {:noreply, socket}
   end
 
