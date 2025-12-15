@@ -265,12 +265,18 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.ShowtimeProcessJob do
   defp parse_datetime(_), do: DateTime.utc_now()
 
   # Get movie from database by Cinema City film_id
+  # NOTE: Due to historical data corruption, there may be multiple movies with the same
+  # cinema_city_film_id. We use the OLDEST one (first created) as the authoritative match,
+  # since duplicates were created later due to incorrect matching.
   defp get_movie(cinema_city_film_id) do
     # Query movie from database using metadata search
     # MovieDetailJob stores the cinema_city_film_id in movie.metadata
+    # Order by inserted_at to get the oldest (most likely correct) movie first
     query =
       from(m in EventasaurusDiscovery.Movies.Movie,
-        where: fragment("?->>'cinema_city_film_id' = ?", m.metadata, ^cinema_city_film_id)
+        where: fragment("?->>'cinema_city_film_id' = ?", m.metadata, ^cinema_city_film_id),
+        order_by: [asc: m.inserted_at],
+        limit: 1
       )
 
     case Repo.one(query) do

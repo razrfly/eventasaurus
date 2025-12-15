@@ -244,28 +244,59 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
   def extract_original_title(_polish_title, _language_info), do: nil
 
   # Store Cinema City film_id in movie metadata for later database lookups
+  # IMPORTANT: Only store if the movie doesn't already have a DIFFERENT cinema_city_film_id
+  # This prevents data corruption when the same TMDB movie is incorrectly matched
+  # to multiple Cinema City films
   defp store_cinema_city_film_id(movie, cinema_city_film_id, source_id) do
-    # Add cinema_city_film_id to movie metadata
-    updated_metadata =
-      Map.put(movie.metadata || %{}, "cinema_city_film_id", cinema_city_film_id)
+    current_metadata = movie.metadata || %{}
+    existing_film_id = Map.get(current_metadata, "cinema_city_film_id")
 
-    # Also store source_id for tracking
-    updated_metadata = Map.put(updated_metadata, "cinema_city_source_id", source_id)
-
-    case MovieStore.update_movie(movie, %{metadata: updated_metadata}) do
-      {:ok, _updated_movie} ->
+    cond do
+      # Same film_id already stored - nothing to do
+      existing_film_id == cinema_city_film_id ->
         Logger.debug(
-          "💾 Stored Cinema City film_id in movie metadata: #{cinema_city_film_id} -> #{movie.id}"
+          "💾 Cinema City film_id already stored: #{cinema_city_film_id} -> #{movie.id}"
         )
 
         :ok
 
-      {:error, changeset} ->
-        Logger.error(
-          "❌ Failed to store Cinema City film_id in metadata: #{inspect(changeset.errors)}"
-        )
+      # Different film_id already stored - DON'T overwrite!
+      # This is likely a matching error - log a warning
+      is_binary(existing_film_id) and existing_film_id != cinema_city_film_id ->
+        Logger.warning("""
+        ⚠️ Cinema City film_id conflict detected!
+           Movie: #{movie.title} (ID: #{movie.id}, TMDB: #{movie.tmdb_id})
+           Existing film_id: #{existing_film_id}
+           New film_id: #{cinema_city_film_id}
+           Keeping existing film_id to prevent data corruption.
+           This may indicate an incorrect TMDB match.
+        """)
 
-        :error
+        # Return :ok to not fail the job, but don't store the new film_id
+        :ok
+
+      # No existing film_id - safe to store
+      true ->
+        updated_metadata =
+          current_metadata
+          |> Map.put("cinema_city_film_id", cinema_city_film_id)
+          |> Map.put("cinema_city_source_id", source_id)
+
+        case MovieStore.update_movie(movie, %{metadata: updated_metadata}) do
+          {:ok, _updated_movie} ->
+            Logger.debug(
+              "💾 Stored Cinema City film_id in movie metadata: #{cinema_city_film_id} -> #{movie.id}"
+            )
+
+            :ok
+
+          {:error, changeset} ->
+            Logger.error(
+              "❌ Failed to store Cinema City film_id in metadata: #{inspect(changeset.errors)}"
+            )
+
+            :error
+        end
     end
   end
 end
