@@ -3,15 +3,65 @@ defmodule EventasaurusDiscovery.Movies.Movie.Slug do
 
   # Slug format: title-tmdb_id (e.g., "home-alone-771")
   # TMDB ID ensures uniqueness even when titles are the same (e.g., two movies named "Brother")
-  def build_slug(sources, _changeset) do
-    [title, tmdb_id] = sources
+  #
+  # EctoAutoslugField only passes non-nil values from the `from` list, so we need to handle
+  # cases where title might be nil (receives [tmdb_id] instead of [title, tmdb_id])
+  def build_slug(sources, changeset) do
+    {title, tmdb_id} = extract_slug_parts(sources, changeset)
 
-    title_slug =
-      title
-      |> Slug.slugify()
+    case {title, tmdb_id} do
+      {nil, nil} ->
+        # Neither title nor tmdb_id available - cannot generate slug
+        nil
 
-    "#{title_slug}-#{tmdb_id}"
+      {nil, id} ->
+        # Only tmdb_id available - use "movie-{id}" as fallback
+        "movie-#{id}"
+
+      {t, nil} ->
+        # Only title available - just use slugified title
+        Slug.slugify(t)
+
+      {t, id} ->
+        # Both available - standard format
+        "#{Slug.slugify(t)}-#{id}"
+    end
   end
+
+  # Extract title and tmdb_id from sources list, handling EctoAutoslugField's
+  # behavior of filtering out nil values
+  defp extract_slug_parts(sources, changeset) do
+    case sources do
+      [title, tmdb_id] when is_binary(title) and is_integer(tmdb_id) ->
+        {title, tmdb_id}
+
+      [title, tmdb_id] when is_binary(title) ->
+        {title, parse_tmdb_id(tmdb_id)}
+
+      [single] when is_integer(single) ->
+        # Only tmdb_id was non-nil, try to get title from changeset
+        title = Ecto.Changeset.get_field(changeset, :title)
+        {title, single}
+
+      [single] when is_binary(single) ->
+        # Only title was non-nil, try to get tmdb_id from changeset
+        tmdb_id = Ecto.Changeset.get_field(changeset, :tmdb_id)
+        {single, tmdb_id}
+
+      [] ->
+        # Both were nil, try to get from changeset
+        title = Ecto.Changeset.get_field(changeset, :title)
+        tmdb_id = Ecto.Changeset.get_field(changeset, :tmdb_id)
+        {title, tmdb_id}
+
+      _ ->
+        {nil, nil}
+    end
+  end
+
+  defp parse_tmdb_id(id) when is_integer(id), do: id
+  defp parse_tmdb_id(id) when is_binary(id), do: String.to_integer(id)
+  defp parse_tmdb_id(_), do: nil
 end
 
 defmodule EventasaurusDiscovery.Movies.Movie do

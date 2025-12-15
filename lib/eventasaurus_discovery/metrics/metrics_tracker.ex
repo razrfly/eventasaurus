@@ -72,6 +72,21 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
         "processed_at" => "2025-01-07T12:00:00Z"
       }
 
+  Failure case with context (e.g., TMDB lookup failure):
+
+      %{
+        "status" => "failed",
+        "error_category" => "tmdb_error",
+        "error_message" => "%{reason: :tmdb_low_confidence, ...}",
+        "error_context" => %{
+          "polish_title" => "Film Title",
+          "release_year" => 2024,
+          "cinema_city_film_id" => "abc123"
+        },
+        "external_id" => "cinema_city_film_abc123",
+        "processed_at" => "2025-01-07T12:00:00Z"
+      }
+
   Collision case (success with dedup):
 
       %{
@@ -101,7 +116,8 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
   Records failed event processing in job metadata with categorized error.
 
   Updates the job's meta field with failure status, error category,
-  error message, external_id, and processing timestamp.
+  error message, external_id, and processing timestamp. Optionally extracts
+  error context from structured error maps for debugging.
 
   ## Examples
 
@@ -111,20 +127,35 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
       iex> record_failure(job, %ArgumentError{message: "bad value"}, "evt_456")
       {:ok, %Oban.Job{meta: %{"status" => "failed", ...}}}
 
+      # With structured error map (TMDB failure)
+      iex> record_failure(job, %{reason: :tmdb_low_confidence, polish_title: "Film"}, "evt_789")
+      {:ok, %Oban.Job{meta: %{"status" => "failed", "error_context" => %{"polish_title" => "Film"}, ...}}}
+
+      # With explicit context
+      iex> record_failure(job, :tmdb_no_results, "evt_789", %{context: %{"title" => "Film"}})
+      {:ok, %Oban.Job{meta: %{"status" => "failed", "error_context" => %{"title" => "Film"}, ...}}}
+
   ## Parameters
 
   - `job` - The Oban.Job struct for the current job
-  - `error_reason` - The error reason (string, exception, or any term)
+  - `error_reason` - The error reason (string, exception, map, or any term)
   - `external_id` - The external identifier for the failed event
+  - `opts` - Optional map with additional data:
+    - `:context` - Additional context to store with the error
 
   ## Returns
 
   - `{:ok, updated_job}` - Successfully updated job metadata
   - `{:error, reason}` - Failed to update metadata (logged as error)
   """
-  def record_failure(%Oban.Job{} = job, error_reason, external_id) do
+  def record_failure(job, error_reason, external_id, opts \\ %{})
+
+  def record_failure(%Oban.Job{} = job, error_reason, external_id, opts) when is_map(opts) do
     error_category = ErrorCategories.categorize_error(error_reason)
     error_message = format_error_message(error_reason)
+
+    # Extract context from structured error maps or explicit opts
+    context = extract_error_context(error_reason, opts)
 
     metadata = %{
       "status" => "failed",
@@ -133,6 +164,14 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
       "external_id" => to_string(external_id),
       "processed_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
+
+    # Add error_context if present
+    metadata =
+      if map_size(context) > 0 do
+        Map.put(metadata, "error_context", context)
+      else
+        metadata
+      end
 
     update_job_metadata(job, metadata)
   end
@@ -512,5 +551,67 @@ defmodule EventasaurusDiscovery.Metrics.MetricsTracker do
     reason
     |> inspect()
     |> String.slice(0, 500)
+  end
+
+  # Extract error context from structured error maps for debugging
+  # These keys contain useful debugging info for TMDB and other failures
+  @context_keys [
+    :polish_title,
+    :original_title,
+    :release_year,
+    :movie_slug,
+    :cinema_city_film_id,
+    :confidence_range,
+    :candidate_count,
+    :tmdb_id,
+    :confidence,
+    # String key variants
+    "polish_title",
+    "original_title",
+    "release_year",
+    "movie_slug",
+    "cinema_city_film_id",
+    "confidence_range",
+    "candidate_count",
+    "tmdb_id",
+    "confidence"
+  ]
+
+  defp extract_error_context(%{__exception__: true}, opts) do
+    # Exceptions don't have useful context fields, just use explicit opts
+    extract_explicit_context(opts)
+  end
+
+  defp extract_error_context(%{} = error_map, opts) do
+    # Extract known context keys from structured error maps
+    base_context =
+      error_map
+      |> Map.take(@context_keys)
+      |> stringify_keys()
+
+    # Merge with explicit context from opts
+    explicit_context = extract_explicit_context(opts)
+
+    Map.merge(base_context, explicit_context)
+  end
+
+  defp extract_error_context(_error, opts) do
+    # For non-map errors (atoms, strings, etc.), just use explicit opts
+    extract_explicit_context(opts)
+  end
+
+  defp extract_explicit_context(opts) when is_map(opts) do
+    case opts[:context] || opts["context"] do
+      context when is_map(context) -> stringify_keys(context)
+      _ -> %{}
+    end
+  end
+
+  defp extract_explicit_context(_), do: %{}
+
+  defp stringify_keys(map) when is_map(map) do
+    map
+    |> Enum.map(fn {k, v} -> {to_string(k), v} end)
+    |> Map.new()
   end
 end
