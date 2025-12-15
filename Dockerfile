@@ -42,12 +42,12 @@ RUN mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # Patch geocoding library to use getline instead of fgetln for Linux compatibility
-COPY geocoding_fix.patch ./
+COPY docker/patches/geocoding_fix.patch ./docker/patches/
 RUN if [ -f deps/geocoding/c_src/GeocodingDriver.cpp ]; then \
     echo "=== BEFORE PATCH ===" && \
     grep -n "char\* end = line" deps/geocoding/c_src/GeocodingDriver.cpp && \
     cd deps/geocoding && \
-    patch -p1 < ../../geocoding_fix.patch && \
+    patch -p1 < ../../docker/patches/geocoding_fix.patch && \
     echo "=== AFTER PATCH ===" && \
     grep -n "char\* end = line" c_src/GeocodingDriver.cpp && \
     echo "=== Geocoding patch applied successfully ==="; \
