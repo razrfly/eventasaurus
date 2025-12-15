@@ -11,6 +11,7 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
   - `:geocoding_error` - Address geocoding failures, coordinate issues
   - `:venue_error` - Venue processing or matching failures
   - `:performer_error` - Performer/artist processing failures
+  - `:tmdb_error` - TMDB lookup failures (no results, low confidence, needs review)
   - `:category_error` - Category classification or matching failures
   - `:duplicate_error` - Duplicate event detection, unique constraint violations
   - `:network_error` - HTTP errors, timeouts, rate limits, API failures
@@ -34,6 +35,7 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
     geocoding_error
     venue_error
     performer_error
+    tmdb_error
     category_error
     duplicate_error
     network_error
@@ -48,8 +50,8 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
 
       iex> ErrorCategories.categories()
       [:validation_error, :geocoding_error, :venue_error, :performer_error,
-       :category_error, :duplicate_error, :network_error, :data_quality_error,
-       :unknown_error]
+       :tmdb_error, :category_error, :duplicate_error, :network_error,
+       :data_quality_error, :unknown_error]
   """
   def categories, do: @categories
 
@@ -92,6 +94,10 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
       # Performer errors - artist/performer issues
       performer_error?(error_lower) ->
         :performer_error
+
+      # TMDB errors - movie database lookup failures
+      tmdb_error?(error_lower) ->
+        :tmdb_error
 
       # Category errors - classification issues
       category_error?(error_lower) ->
@@ -176,6 +182,27 @@ defmodule EventasaurusDiscovery.Metrics.ErrorCategories do
         "artist",
         "performer processing",
         "artist not found"
+      ],
+      &String.contains?(error_lower, &1)
+    )
+  end
+
+  defp tmdb_error?(error_lower) do
+    Enum.any?(
+      [
+        "tmdb",
+        "movie not found",
+        "movie not matched",
+        "movie_not_matched",
+        "no results",
+        "no_results",
+        "low confidence",
+        "low_confidence",
+        "needs review",
+        "needs_review",
+        "tmdb_low_confidence",
+        "tmdb_no_results",
+        "tmdb_needs_review"
       ],
       &String.contains?(error_lower, &1)
     )
