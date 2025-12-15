@@ -134,6 +134,52 @@ defmodule EventasaurusWeb.Services.TmdbService do
     end
   end
 
+  @doc """
+  Get upcoming movies for a specific region.
+  Returns movies that are scheduled for release in theaters.
+
+  ## Examples
+
+      iex> get_upcoming_movies("PL", 1)
+      {:ok, [%{"id" => 83533, "title" => "Avatar: Fire and Ash", ...}]}
+  """
+  @impl EventasaurusWeb.Services.TmdbServiceBehaviour
+  def get_upcoming_movies(region \\ "PL", page \\ 1) do
+    with :ok <- check_rate_limit(),
+         {:ok, api_key} <- get_api_key() do
+      fetch_upcoming_movies(region, page, api_key)
+    else
+      {:error, :rate_limited} ->
+        {:error, "Rate limit exceeded, please try again later"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Get alternative titles for a movie by TMDB ID.
+  Returns list of alternative titles including Polish titles.
+
+  ## Examples
+
+      iex> get_alternative_titles(76600)
+      {:ok, [%{"iso_3166_1" => "PL", "title" => "Avatar: Istota wody", "type" => ""}]}
+  """
+  @impl EventasaurusWeb.Services.TmdbServiceBehaviour
+  def get_alternative_titles(movie_id) do
+    with :ok <- check_rate_limit(),
+         {:ok, api_key} <- get_api_key() do
+      fetch_alternative_titles(movie_id, api_key)
+    else
+      {:error, :rate_limited} ->
+        {:error, "Rate limit exceeded, please try again later"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   @impl EventasaurusWeb.Services.TmdbServiceBehaviour
   def search_multi(query, page \\ 1, language \\ nil) do
     # Handle nil or empty queries
@@ -773,6 +819,136 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
       {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("TMDB translations HTTP error: #{inspect(reason)}")
+        {:error, "Network error: #{inspect(reason)}"}
+    end
+  end
+
+  defp fetch_upcoming_movies(region, page, api_key) do
+    url = "#{@base_url}/movie/upcoming?api_key=#{api_key}&region=#{region}&page=#{page}"
+    headers = [{"Accept", "application/json"}]
+
+    Logger.debug(
+      "TMDB upcoming URL: #{@base_url}/movie/upcoming?region=#{region}&page=#{page}"
+    )
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"results" => movies}} ->
+            {:ok, movies}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode TMDB upcoming response: #{inspect(decode_error)}")
+            {:error, "Failed to decode upcoming data"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+        Logger.error("TMDB upcoming error: #{code} - #{body}")
+        {:error, "TMDB API error: #{code}"}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("TMDB upcoming HTTP error: #{inspect(reason)}")
+        {:error, "Network error: #{inspect(reason)}"}
+    end
+  end
+
+  defp fetch_alternative_titles(movie_id, api_key) do
+    url = "#{@base_url}/movie/#{movie_id}/alternative_titles?api_key=#{api_key}"
+    headers = [{"Accept", "application/json"}]
+
+    Logger.debug("TMDB alternative titles URL: #{@base_url}/movie/#{movie_id}/alternative_titles")
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"titles" => titles}} ->
+            # Return list of alternative titles with country codes
+            {:ok, titles}
+
+          {:error, decode_error} ->
+            Logger.error(
+              "Failed to decode TMDB alternative titles response: #{inspect(decode_error)}"
+            )
+
+            {:error, "Failed to decode alternative titles"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        {:error, "Movie not found"}
+
+      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+        Logger.error("TMDB alternative titles error: #{code} - #{body}")
+        {:error, "TMDB API error: #{code}"}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("TMDB alternative titles HTTP error: #{inspect(reason)}")
+        {:error, "Network error: #{inspect(reason)}"}
+    end
+  end
+
+  @doc """
+  Find a movie by external ID (e.g., IMDB ID).
+
+  This enables bridging from other databases (like OMDb) to TMDB by using
+  the external ID to look up the corresponding TMDB ID.
+
+  ## Parameters
+
+  - `external_id` - The external ID to search for (e.g., "tt0172495")
+  - `external_source` - The source of the external ID (default: "imdb_id")
+    - Supported values: "imdb_id", "tvdb_id", "wikidata_id", "facebook_id", "instagram_id", "twitter_id"
+
+  ## Examples
+
+      iex> TmdbService.find_by_external_id("tt0172495")
+      {:ok, %{movie_results: [%{"id" => 98, "title" => "Gladiator", ...}], ...}}
+
+      iex> TmdbService.find_by_external_id("tt9999999999")
+      {:ok, %{movie_results: []}}
+
+  """
+  def find_by_external_id(external_id, external_source \\ "imdb_id") do
+    case get_api_key() do
+      {:ok, api_key} ->
+        fetch_by_external_id(external_id, external_source, api_key)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp fetch_by_external_id(external_id, external_source, api_key) do
+    url = "#{@base_url}/find/#{URI.encode(external_id)}?api_key=#{api_key}&external_source=#{external_source}"
+    headers = [{"Accept", "application/json"}]
+
+    Logger.debug("TMDB find URL: #{@base_url}/find/#{external_id}?external_source=#{external_source}")
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, results} ->
+            {:ok, %{
+              movie_results: Map.get(results, "movie_results", []),
+              tv_results: Map.get(results, "tv_results", []),
+              person_results: Map.get(results, "person_results", []),
+              tv_episode_results: Map.get(results, "tv_episode_results", []),
+              tv_season_results: Map.get(results, "tv_season_results", [])
+            }}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode TMDB find response: #{inspect(decode_error)}")
+            {:error, "Failed to decode find response"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: 404}} ->
+        {:error, "External ID not found"}
+
+      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+        Logger.error("TMDB find error: #{code} - #{body}")
+        {:error, "TMDB API error: #{code}"}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("TMDB find HTTP error: #{inspect(reason)}")
         {:error, "Network error: #{inspect(reason)}"}
     end
   end

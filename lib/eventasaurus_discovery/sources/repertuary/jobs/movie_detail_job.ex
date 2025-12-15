@@ -35,9 +35,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.MovieDetailJob do
   alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
     Cities,
-    Extractors.MovieExtractor,
-    TmdbMatcher
+    Extractors.MovieExtractor
   }
+
+  alias EventasaurusDiscovery.Movies.TmdbMatcher
 
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
