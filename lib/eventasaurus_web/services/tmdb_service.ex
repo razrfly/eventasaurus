@@ -908,12 +908,15 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
   """
   def find_by_external_id(external_id, external_source \\ "imdb_id") do
-    case get_api_key() do
-      {:ok, api_key} ->
-        fetch_by_external_id(external_id, external_source, api_key)
+    with :ok <- check_rate_limit(),
+         {:ok, api_key} <- get_api_key() do
+      fetch_by_external_id(external_id, external_source, api_key)
+    else
+      {:error, :rate_limited} ->
+        {:error, "Rate limit exceeded, please try again later"}
 
-      {:error, _} = error ->
-        error
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

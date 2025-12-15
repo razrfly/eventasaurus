@@ -215,11 +215,11 @@ defmodule EventasaurusDiscovery.Movies.Providers.TmdbProvider do
   end
 
   # Format details from TmdbService response
+  # Note: TmdbService.get_movie_details returns :tmdb_id, not :id
   defp format_details(details) do
     %{
-      tmdb_id: details[:id],
+      tmdb_id: details[:tmdb_id],
       title: details[:title],
-      original_title: details[:original_title],
       overview: details[:overview],
       release_date: details[:release_date],
       runtime: details[:runtime],

@@ -1,5 +1,6 @@
 defmodule EventasaurusDiscovery.Movies.MovieLookupServiceTest do
-  use EventasaurusApp.DataCase, async: true
+  # async: false to avoid race conditions with shared ETS cache table
+  use EventasaurusApp.DataCase, async: false
 
   alias EventasaurusDiscovery.Movies.MovieLookupService
   alias EventasaurusDiscovery.Movies.Providers.{TmdbProvider, OmdbProvider}

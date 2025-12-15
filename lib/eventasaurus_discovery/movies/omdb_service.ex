@@ -30,7 +30,7 @@ defmodule EventasaurusDiscovery.Movies.OmdbService do
 
   require Logger
 
-  @base_url "http://www.omdbapi.com"
+  @base_url "https://www.omdbapi.com"
   @timeout 15_000
   @recv_timeout 15_000
 
@@ -251,8 +251,8 @@ defmodule EventasaurusDiscovery.Movies.OmdbService do
   defp parse_year("N/A"), do: nil
 
   defp parse_year(year) when is_binary(year) do
-    # Handle range years like "2020-2023" or single years "2020"
-    case String.split(year, "–") do
+    # Handle range years like "2020-2023" or "2020–2023" (en-dash) or single years "2020"
+    case String.split(year, ~r/[–-]/) do
       [single] -> parse_int(single)
       [start | _] -> parse_int(start)
     end
