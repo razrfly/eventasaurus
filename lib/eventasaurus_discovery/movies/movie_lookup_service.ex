@@ -7,8 +7,8 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
 
   ## Features
 
-  - **Multi-provider search**: Queries TMDB (primary) and OMDb (fallback)
-  - **Intelligent fallback**: Tries secondary providers when primary fails
+  - **Multi-provider search**: Queries TMDB (primary), OMDb (secondary), IMDB web (tertiary)
+  - **Intelligent fallback**: Tries secondary/tertiary providers when primary fails
   - **Confidence aggregation**: Combines scores across providers
   - **Result deduplication**: Merges results from multiple providers
   - **Caching**: Reduces API calls for repeated lookups
@@ -41,7 +41,7 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   Providers and thresholds can be configured in config.exs:
 
       config :eventasaurus_discovery, :movie_lookup,
-        providers: [:tmdb, :omdb],
+        providers: [:tmdb, :omdb, :imdb],
         confidence_threshold: 0.7,
         review_threshold: 0.5,
         cache_ttl: :timer.hours(24)
@@ -49,16 +49,18 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
   ## Providers
 
   - **TmdbProvider** (priority: 10): Primary provider with comprehensive data
-  - **OmdbProvider** (priority: 20): Fallback that bridges to TMDB via IMDB ID
+  - **OmdbProvider** (priority: 20): Secondary that bridges to TMDB via IMDB ID
+  - **ImdbProvider** (priority: 30): Tertiary that uses Zyte web scraping for IMDB AKA data
   """
 
   require Logger
 
-  alias EventasaurusDiscovery.Movies.Providers.{TmdbProvider, OmdbProvider}
+  alias EventasaurusDiscovery.Movies.Providers.{TmdbProvider, OmdbProvider, ImdbProvider}
   alias EventasaurusDiscovery.Movies.MovieStore
 
   # Configuration defaults
-  @default_providers [TmdbProvider, OmdbProvider]
+  # ImdbProvider (priority 30) is tried last as it uses Zyte web scraping
+  @default_providers [TmdbProvider, OmdbProvider, ImdbProvider]
   @default_confidence_threshold 0.70
   @default_review_threshold 0.50
   @default_cache_ttl :timer.hours(24)
