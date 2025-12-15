@@ -34,7 +34,7 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.MovieDetailJob do
 
   require Logger
 
-  alias EventasaurusDiscovery.Sources.Repertuary.TmdbMatcher
+  alias EventasaurusDiscovery.Movies.TmdbMatcher
   alias EventasaurusDiscovery.Movies.MovieStore
   alias EventasaurusDiscovery.Metrics.MetricsTracker
 
