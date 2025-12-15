@@ -67,9 +67,23 @@ defmodule EventasaurusDiscovery.Movies.Movie.Slug do
 
   # Parse tmdb_id from various formats, with defensive handling for lists
   defp parse_tmdb_id(id) when is_integer(id), do: id
-  defp parse_tmdb_id(id) when is_binary(id), do: String.to_integer(id)
+
+  defp parse_tmdb_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
   defp parse_tmdb_id([id]) when is_integer(id), do: id
-  defp parse_tmdb_id([id]) when is_binary(id), do: String.to_integer(id)
+
+  defp parse_tmdb_id([id]) when is_binary(id) do
+    case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
   defp parse_tmdb_id(_), do: nil
 end
 
@@ -136,12 +150,18 @@ defmodule EventasaurusDiscovery.Movies.Movie do
         update_tmdb_id(attrs, id)
 
       [id] when is_binary(id) ->
-        # Unwrap and parse string
-        update_tmdb_id(attrs, String.to_integer(id))
+        # Unwrap and parse string, or leave as-is if invalid (let cast/validation handle it)
+        case Integer.parse(id) do
+          {int, ""} -> update_tmdb_id(attrs, int)
+          _ -> attrs
+        end
 
       id when is_binary(id) ->
-        # Parse string to integer
-        update_tmdb_id(attrs, String.to_integer(id))
+        # Parse string to integer, or leave as-is if invalid
+        case Integer.parse(id) do
+          {int, ""} -> update_tmdb_id(attrs, int)
+          _ -> attrs
+        end
 
       _ ->
         # Already an integer or nil, no change needed
