@@ -388,6 +388,34 @@ end
 
 ## 🔍 Automated Monitoring & Quality Checks
 
+### Scraper Audit Tools
+
+**CLI tools for auditing scraper health and detecting data issues:**
+
+```bash
+# Scheduler Health - verify scheduler-triggered jobs are running
+mix audit.scheduler_health
+mix audit.scheduler_health --json
+USE_PROD_DB=true mix audit.scheduler_health  # Production
+
+# Date Coverage - analyze showtime date coverage for gaps
+mix audit.date_coverage
+mix audit.date_coverage --json
+USE_PROD_DB=true mix audit.date_coverage  # Production
+
+# Collision Monitoring - detect TMDB matching collisions
+mix monitor.collisions
+mix monitor.collisions --verbose
+mix monitor.collisions --json
+
+# Fix Duplicate Film IDs - repair cinema_city_film_id duplicates
+mix fix_cinema_city_duplicates          # Dry run
+mix fix_cinema_city_duplicates --apply  # Apply fixes
+
+# Production fix (via Fly.io)
+fly ssh console -C "bin/eventasaurus eval 'EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates()'"
+```
+
 ### Freshness Health Check
 
 **Check if EventFreshnessChecker is working correctly:**

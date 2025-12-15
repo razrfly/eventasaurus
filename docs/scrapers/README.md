@@ -85,6 +85,12 @@
 2. Review error handling in [SCRAPER_SPECIFICATION.md](./SCRAPER_SPECIFICATION.md)
 3. Look at job logs and error patterns
 
+**Audit scraper health**
+1. Run `mix audit.scheduler_health` to verify jobs are running on schedule
+2. Run `mix audit.date_coverage` to check for gaps in date coverage
+3. Run `mix monitor.collisions` to detect TMDB matching issues
+4. See [../scraper-monitoring-guide.md](../scraper-monitoring-guide.md) for detailed audit tool documentation
+
 ---
 
 ## 🚨 Critical Warnings
@@ -174,10 +180,11 @@ When working on scrapers:
 2. Review [SCRAPER_SPECIFICATION.md](./SCRAPER_SPECIFICATION.md) for standards
 3. Look at reference implementations (Resident Advisor, Ticketmaster)
 4. Check [SCRAPER_AUDIT_REPORT.md](./SCRAPER_AUDIT_REPORT.md) for known issues
-5. Create a GitHub issue if needed
+5. Run audit tools: `mix audit.scheduler_health`, `mix audit.date_coverage`, `mix monitor.collisions`
+6. Create a GitHub issue if needed
 
 ---
 
-**Last Updated**: 2025-10-07
+**Last Updated**: 2025-12-15
 **Specification Version**: 1.0
 **Average Scraper Grade**: 83.3/100 (B)
