@@ -157,7 +157,7 @@ defmodule Mix.Tasks.Audit.DateCoverage do
 
         # Check for critical gaps
         alerts =
-          if days_with_events < div(days, 2) do
+          if days > 0 and days_with_events * 2 < days do
             IO.puts(
               IO.ANSI.red() <>
                 "  🚨 Critical: Less than 50% date coverage!" <> IO.ANSI.reset()
