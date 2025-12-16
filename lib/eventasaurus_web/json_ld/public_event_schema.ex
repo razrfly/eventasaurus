@@ -190,10 +190,24 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   # Add location to schema if venue exists
   defp maybe_add_location(schema, nil), do: schema
-  defp maybe_add_location(schema, venue), do: Map.put(schema, "location", build_location(venue))
 
-  # Build schema.org Place object for venue location
-  defp build_location(venue) do
+  defp maybe_add_location(schema, venue) do
+    event_type = schema["@type"]
+    Map.put(schema, "location", build_location(venue, event_type))
+  end
+
+  # Build schema.org Place or MovieTheater object for venue location
+  # Use MovieTheater for ScreeningEvents (cinema venues)
+  defp build_location(venue, "ScreeningEvent") do
+    %{
+      "@type" => "MovieTheater",
+      "name" => venue.name,
+      "address" => build_postal_address(venue)
+    }
+    |> add_geo_coordinates(venue)
+  end
+
+  defp build_location(venue, _event_type) do
     %{
       "@type" => "Place",
       "name" => venue.name,
@@ -631,18 +645,369 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     if schema["@type"] == "ScreeningEvent" && event.movies && event.movies != [] do
       movie = List.first(event.movies)
 
-      work = %{
-        "@type" => "Movie",
-        "name" => movie.title
-      }
+      work =
+        %{
+          "@type" => "Movie",
+          "name" => movie.title
+        }
+        |> maybe_add_movie_image(movie)
+        |> maybe_add_movie_date_created(movie)
+        |> maybe_add_movie_metadata(movie)
+        |> maybe_add_movie_same_as(movie)
 
-      # TODO: Add director, actors, genre when available in movie metadata
-      # work = maybe_add_movie_director(work, movie)
-      # work = maybe_add_movie_actors(work, movie)
-
-      Map.put(schema, "workPresented", work)
+      schema
+      |> Map.put("workPresented", work)
+      |> maybe_add_video_format(event)
+      |> maybe_add_in_language(event)
     else
       schema
     end
   end
+
+  # Add movie poster image (required by Google)
+  defp maybe_add_movie_image(work, movie) do
+    cond do
+      # Use poster_url from movie if available
+      movie.poster_url && movie.poster_url != "" ->
+        Map.put(work, "image", CDN.url(movie.poster_url))
+
+      # Fallback to backdrop if no poster
+      movie.backdrop_url && movie.backdrop_url != "" ->
+        Map.put(work, "image", CDN.url(movie.backdrop_url))
+
+      true ->
+        work
+    end
+  end
+
+  # Add dateCreated from movie release_date (Google optional field)
+  defp maybe_add_movie_date_created(work, movie) do
+    cond do
+      # Use release_date if available
+      movie.release_date ->
+        Map.put(work, "dateCreated", Date.to_iso8601(movie.release_date))
+
+      true ->
+        work
+    end
+  end
+
+  # Add rich movie metadata from TMDb/OMDb when available
+  defp maybe_add_movie_metadata(work, movie) do
+    work
+    |> maybe_add_from_tmdb(movie.tmdb_metadata)
+    |> maybe_add_from_omdb(movie.metadata)
+  end
+
+  # Add metadata from TMDb
+  defp maybe_add_from_tmdb(work, nil), do: work
+
+  defp maybe_add_from_tmdb(work, tmdb) do
+    work
+    |> maybe_put("datePublished", tmdb["release_date"])
+    |> maybe_put("genre", extract_tmdb_genres(tmdb["genres"]))
+    |> maybe_put("director", extract_tmdb_directors(tmdb["credits"]))
+    |> maybe_put("actor", extract_tmdb_actors(tmdb["credits"]))
+    |> maybe_put("duration", format_iso_duration(tmdb["runtime"]))
+    |> maybe_put("aggregateRating", build_tmdb_aggregate_rating(tmdb))
+  end
+
+  # Add metadata from OMDb (only if not already present from TMDb)
+  defp maybe_add_from_omdb(work, nil), do: work
+
+  defp maybe_add_from_omdb(work, omdb) do
+    work
+    |> maybe_put_missing("datePublished", omdb["Released"])
+    |> maybe_put_missing("genre", parse_comma_list(omdb["Genre"]))
+    |> maybe_put_missing("director", build_person_schema(omdb["Director"]))
+    |> maybe_put_missing("actor", build_actors_from_string(omdb["Actors"]))
+    |> maybe_put_missing("duration", format_omdb_duration(omdb["Runtime"]))
+    |> maybe_put_missing("aggregateRating", build_omdb_aggregate_rating(omdb))
+  end
+
+  # Add sameAs URLs - primarily cinegraph.org, plus IMDb for cross-reference
+  defp maybe_add_movie_same_as(work, movie) do
+    same_as = []
+
+    # Add cinegraph.org URL (our canonical movie reference)
+    same_as =
+      if movie.slug && movie.slug != "" do
+        same_as ++ ["https://cinegraph.org/movies/#{movie.slug}"]
+      else
+        same_as
+      end
+
+    # Add IMDb URL from OMDb metadata for additional cross-reference
+    same_as =
+      case get_in(movie.metadata || %{}, ["imdbID"]) do
+        id when is_binary(id) and id != "" and id != "N/A" ->
+          same_as ++ ["https://www.imdb.com/title/#{id}/"]
+
+        _ ->
+          same_as
+      end
+
+    case same_as do
+      [] -> work
+      urls -> Map.put(work, "sameAs", urls)
+    end
+  end
+
+  # Add videoFormat from event source metadata (IMAX, 3D, 4DX)
+  defp maybe_add_video_format(schema, event) do
+    format_info = get_format_info_from_sources(event)
+
+    video_formats =
+      []
+      |> maybe_append(get_in(format_info, ["is_3d"]) || get_in(format_info, [:is_3d]), "3D")
+      |> maybe_append(get_in(format_info, ["is_imax"]) || get_in(format_info, [:is_imax]), "IMAX")
+      |> maybe_append(get_in(format_info, ["is_4dx"]) || get_in(format_info, [:is_4dx]), "4DX")
+
+    case video_formats do
+      [] -> schema
+      [single] -> Map.put(schema, "videoFormat", single)
+      multiple -> Map.put(schema, "videoFormat", multiple)
+    end
+  end
+
+  # Add inLanguage from event source metadata
+  defp maybe_add_in_language(schema, event) do
+    language_info = get_language_info_from_sources(event)
+
+    # Try to get the original language or dubbed language
+    language =
+      cond do
+        lang = get_in(language_info, ["original_language"]) || get_in(language_info, [:original_language]) ->
+          lang
+
+        lang = get_in(language_info, ["dubbed_language"]) || get_in(language_info, [:dubbed_language]) ->
+          lang
+
+        true ->
+          nil
+      end
+
+    if language && language != "" do
+      Map.put(schema, "inLanguage", language)
+    else
+      schema
+    end
+  end
+
+  # Extract format_info from event sources metadata
+  defp get_format_info_from_sources(event) do
+    if event.sources && event.sources != [] do
+      event.sources
+      |> Enum.find_value(%{}, fn source ->
+        format_info = get_in(source.metadata || %{}, ["format_info"])
+        if format_info && format_info != %{}, do: format_info, else: nil
+      end)
+    else
+      %{}
+    end
+  end
+
+  # Extract language_info from event sources metadata
+  defp get_language_info_from_sources(event) do
+    if event.sources && event.sources != [] do
+      event.sources
+      |> Enum.find_value(%{}, fn source ->
+        language_info = get_in(source.metadata || %{}, ["language_info"])
+        if language_info && language_info != %{}, do: language_info, else: nil
+      end)
+    else
+      %{}
+    end
+  end
+
+  # Helper to extract genres from TMDb format
+  defp extract_tmdb_genres(nil), do: nil
+  defp extract_tmdb_genres([]), do: nil
+
+  defp extract_tmdb_genres(genres) when is_list(genres) do
+    genres
+    |> Enum.map(fn genre -> genre["name"] end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # Helper to extract directors from TMDb credits
+  defp extract_tmdb_directors(nil), do: nil
+
+  defp extract_tmdb_directors(credits) do
+    case get_in(credits, ["crew"]) do
+      nil ->
+        nil
+
+      crew ->
+        directors =
+          crew
+          |> Enum.filter(fn person -> person["job"] == "Director" end)
+          |> Enum.map(fn person ->
+            %{"@type" => "Person", "name" => person["name"]}
+          end)
+
+        case directors do
+          [] -> nil
+          [single] -> single
+          multiple -> multiple
+        end
+    end
+  end
+
+  # Helper to extract actors from TMDb credits
+  defp extract_tmdb_actors(nil), do: nil
+
+  defp extract_tmdb_actors(credits) do
+    case get_in(credits, ["cast"]) do
+      nil ->
+        nil
+
+      cast ->
+        actors =
+          cast
+          |> Enum.take(10)
+          |> Enum.map(fn person ->
+            %{"@type" => "Person", "name" => person["name"]}
+          end)
+
+        case actors do
+          [] -> nil
+          list -> list
+        end
+    end
+  end
+
+  # Helper to format runtime in ISO 8601 duration format
+  defp format_iso_duration(nil), do: nil
+
+  defp format_iso_duration(runtime) when is_integer(runtime) and runtime > 0 do
+    hours = div(runtime, 60)
+    minutes = rem(runtime, 60)
+
+    cond do
+      hours > 0 and minutes > 0 -> "PT#{hours}H#{minutes}M"
+      hours > 0 -> "PT#{hours}H"
+      minutes > 0 -> "PT#{minutes}M"
+      true -> nil
+    end
+  end
+
+  defp format_iso_duration(_), do: nil
+
+  # Helper to format OMDb runtime ("142 min")
+  defp format_omdb_duration(nil), do: nil
+  defp format_omdb_duration("N/A"), do: nil
+
+  defp format_omdb_duration(runtime_string) when is_binary(runtime_string) do
+    case Integer.parse(runtime_string) do
+      {minutes, _} -> format_iso_duration(minutes)
+      :error -> nil
+    end
+  end
+
+  # Build TMDb aggregate rating
+  defp build_tmdb_aggregate_rating(nil), do: nil
+
+  defp build_tmdb_aggregate_rating(metadata) do
+    vote_average = metadata["vote_average"]
+    vote_count = metadata["vote_count"]
+
+    if vote_average && vote_count && vote_count > 0 do
+      %{
+        "@type" => "AggregateRating",
+        "ratingValue" => vote_average,
+        "ratingCount" => vote_count,
+        "bestRating" => 10,
+        "worstRating" => 0
+      }
+    else
+      nil
+    end
+  end
+
+  # Build OMDb aggregate rating
+  defp build_omdb_aggregate_rating(nil), do: nil
+
+  defp build_omdb_aggregate_rating(metadata) do
+    imdb_rating = metadata["imdbRating"]
+    imdb_votes = metadata["imdbVotes"]
+
+    with rating when is_binary(rating) and rating != "N/A" <- imdb_rating,
+         votes when is_binary(votes) and votes != "N/A" <- imdb_votes,
+         {rating_float, _} <- Float.parse(rating),
+         votes_clean = String.replace(votes, ",", ""),
+         {votes_int, _} <- Integer.parse(votes_clean) do
+      %{
+        "@type" => "AggregateRating",
+        "ratingValue" => rating_float,
+        "ratingCount" => votes_int,
+        "bestRating" => 10,
+        "worstRating" => 1
+      }
+    else
+      _ -> nil
+    end
+  end
+
+  # Parse comma-separated string (for OMDb genre, actors)
+  defp parse_comma_list(nil), do: nil
+  defp parse_comma_list("N/A"), do: nil
+
+  defp parse_comma_list(string) when is_binary(string) do
+    parts =
+      string
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    case parts do
+      [] -> nil
+      list -> list
+    end
+  end
+
+  # Build Person schema from name
+  defp build_person_schema(nil), do: nil
+  defp build_person_schema("N/A"), do: nil
+
+  defp build_person_schema(name) when is_binary(name) do
+    %{"@type" => "Person", "name" => name}
+  end
+
+  # Build actors list from comma-separated string
+  defp build_actors_from_string(nil), do: nil
+  defp build_actors_from_string("N/A"), do: nil
+
+  defp build_actors_from_string(actors_string) when is_binary(actors_string) do
+    actors =
+      actors_string
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.take(10)
+      |> Enum.map(&build_person_schema/1)
+
+    case actors do
+      [] -> nil
+      list -> list
+    end
+  end
+
+  # Helper to conditionally put a value
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, _key, []), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  # Helper to conditionally put a value only if not already present
+  defp maybe_put_missing(map, _key, nil), do: map
+  defp maybe_put_missing(map, _key, []), do: map
+  defp maybe_put_missing(map, _key, "N/A"), do: map
+
+  defp maybe_put_missing(map, key, value) do
+    if Map.has_key?(map, key), do: map, else: Map.put(map, key, value)
+  end
+
+  # Helper to conditionally append to list
+  defp maybe_append(list, true, value), do: list ++ [value]
+  defp maybe_append(list, _, _), do: list
 end
