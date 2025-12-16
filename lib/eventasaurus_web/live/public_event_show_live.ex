@@ -1901,9 +1901,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp combine_json_ld_schemas(schemas) when is_list(schemas) do
-    # Decode each JSON string, combine into array, re-encode
-    schemas
-    |> Enum.map(&Jason.decode!/1)
+    # Decode each JSON string, flatten any nested arrays, combine into @graph format
+    # This handles the case where generate_with_occurrences returns an array of ScreeningEvents
+    decoded_schemas =
+      schemas
+      |> Enum.map(&Jason.decode!/1)
+      |> Enum.flat_map(fn
+        list when is_list(list) -> list  # Flatten arrays (multiple ScreeningEvents)
+        item -> [item]                    # Wrap single items in a list
+      end)
+      # Remove @context from individual items since we'll have one at the top level
+      |> Enum.map(&Map.delete(&1, "@context"))
+
+    # Use @graph format for multiple schemas (valid JSON-LD structure)
+    %{"@context" => "https://schema.org", "@graph" => decoded_schemas}
     |> Jason.encode!()
   end
 
