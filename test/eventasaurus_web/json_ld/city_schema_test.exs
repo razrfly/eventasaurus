@@ -102,7 +102,8 @@ defmodule EventasaurusWeb.JsonLd.CitySchemaTest do
 
       refute Map.has_key?(schema, "containedInPlace")
       assert schema["description"] =~ "Test City"
-      refute schema["description"] =~ ","
+      # Description should not include "City, Country" format when no country
+      refute schema["description"] =~ "Test City,"
     end
 
     test "handles zero stats gracefully" do

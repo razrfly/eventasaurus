@@ -15,8 +15,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   - Schema.org Movie: https://schema.org/Movie
   """
 
-  require Logger
-  alias Eventasaurus.CDN
+  alias EventasaurusWeb.JsonLd.Helpers
 
   @doc """
   Generates JSON-LD structured data for a movie aggregation page.
@@ -90,7 +89,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
 
     if city_count > 0 do
       "Watch #{movie.title}. " <>
-        "#{total_screenings} screenings available in #{city_count} #{pluralize("city", city_count)}."
+        "#{total_screenings} screenings available in #{city_count} #{Helpers.pluralize("city", city_count)}."
     else
       "Watch #{movie.title}. Find showtimes near you."
     end
@@ -99,8 +98,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   # Build generic URL for the movie page
   # Note: movie.slug already contains the TMDB ID in format "title-tmdb_id"
   defp build_generic_url(movie) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-    "#{base_url}/movies/#{movie.slug}"
+    Helpers.build_url("/movies/#{movie.slug}")
   end
 
   # Add city offers for generic movie page
@@ -128,8 +126,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   defp build_city_movie_url(movie, city) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-    "#{base_url}/c/#{city.slug}/movies/#{movie.slug}"
+    Helpers.build_url("/c/#{city.slug}/movies/#{movie.slug}")
   end
 
   @doc """
@@ -159,17 +156,12 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
       |> Enum.sum()
 
     "Watch #{movie.title} in #{city.name}. " <>
-      "#{total_showtimes} showtimes available at #{venue_count} #{pluralize("cinema", venue_count)}."
+      "#{total_showtimes} showtimes available at #{venue_count} #{Helpers.pluralize("cinema", venue_count)}."
   end
-
-  defp pluralize(word, 1), do: word
-  defp pluralize("city", _), do: "cities"
-  defp pluralize(word, _), do: word <> "s"
 
   # Build canonical URL for the movie page
   defp build_canonical_url(movie, city) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-    "#{base_url}/c/#{city.slug}/movies/#{movie.slug}"
+    Helpers.build_url("/c/#{city.slug}/movies/#{movie.slug}")
   end
 
   # Add movie poster/image
@@ -177,16 +169,15 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   defp add_image(schema, movie) do
     case get_movie_image_url(movie) do
       nil -> schema
-      image_url -> Map.put(schema, "image", CDN.url(image_url))
+      image_url -> Helpers.maybe_add(schema, "image", Helpers.cdn_url(image_url))
     end
   end
 
-  # Add metadata from TMDb or OMDb if available
+  # Add metadata from TMDb if available
   # Also adds dateCreated from movie.release_date if not already present from metadata
   defp add_metadata(schema, movie) do
     schema
     |> add_tmdb_metadata(movie.tmdb_metadata)
-    |> add_omdb_metadata(movie.metadata)
     |> maybe_add_date_from_movie(movie)
   end
 
@@ -197,8 +188,8 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
     date_string = Date.to_iso8601(release_date)
 
     schema
-    |> maybe_add_if_missing("datePublished", date_string)
-    |> maybe_add_if_missing("dateCreated", date_string)
+    |> Helpers.maybe_add_if_missing("datePublished", date_string)
+    |> Helpers.maybe_add_if_missing("dateCreated", date_string)
   end
 
   defp maybe_add_date_from_movie(schema, _movie), do: schema
@@ -208,238 +199,13 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
 
   defp add_tmdb_metadata(schema, tmdb_metadata) do
     schema
-    |> maybe_add(
-      "datePublished",
-      tmdb_metadata["release_date"]
-    )
-    |> maybe_add(
-      "dateCreated",
-      tmdb_metadata["release_date"]
-    )
-    |> maybe_add(
-      "genre",
-      extract_genres(tmdb_metadata["genres"])
-    )
-    |> maybe_add(
-      "director",
-      extract_directors(tmdb_metadata["credits"])
-    )
-    |> maybe_add(
-      "actor",
-      extract_actors(tmdb_metadata["credits"])
-    )
-    |> maybe_add(
-      "duration",
-      format_duration(tmdb_metadata["runtime"])
-    )
-    |> maybe_add(
-      "aggregateRating",
-      build_tmdb_rating(tmdb_metadata)
-    )
-  end
-
-  # Add metadata from OMDb API (only if not already present from TMDb)
-  defp add_omdb_metadata(schema, nil), do: schema
-
-  defp add_omdb_metadata(schema, omdb_metadata) do
-    schema
-    |> maybe_add_if_missing(
-      "datePublished",
-      omdb_metadata["Released"]
-    )
-    |> maybe_add_if_missing(
-      "dateCreated",
-      omdb_metadata["Released"]
-    )
-    |> maybe_add_if_missing(
-      "genre",
-      parse_omdb_genres(omdb_metadata["Genre"])
-    )
-    |> maybe_add_if_missing(
-      "director",
-      build_person(omdb_metadata["Director"])
-    )
-    |> maybe_add_if_missing(
-      "actor",
-      parse_omdb_actors(omdb_metadata["Actors"])
-    )
-    |> maybe_add_if_missing(
-      "duration",
-      format_omdb_runtime(omdb_metadata["Runtime"])
-    )
-    |> maybe_add_if_missing(
-      "aggregateRating",
-      build_omdb_rating(omdb_metadata)
-    )
-  end
-
-  # Extract genre names from TMDb genres array
-  defp extract_genres(nil), do: nil
-  defp extract_genres([]), do: nil
-
-  defp extract_genres(genres) when is_list(genres) do
-    Enum.map(genres, fn genre -> genre["name"] end)
-  end
-
-  # Extract directors from TMDb credits
-  defp extract_directors(nil), do: nil
-
-  defp extract_directors(credits) do
-    case get_in(credits, ["crew"]) do
-      nil ->
-        nil
-
-      crew ->
-        directors =
-          crew
-          |> Enum.filter(fn person -> person["job"] == "Director" end)
-          |> Enum.map(fn person ->
-            %{
-              "@type" => "Person",
-              "name" => person["name"]
-            }
-          end)
-
-        case directors do
-          [] -> nil
-          [single] -> single
-          multiple -> multiple
-        end
-    end
-  end
-
-  # Extract actors from TMDb credits
-  defp extract_actors(nil), do: nil
-
-  defp extract_actors(credits) do
-    case get_in(credits, ["cast"]) do
-      nil ->
-        nil
-
-      cast ->
-        actors =
-          cast
-          |> Enum.take(10)
-          |> Enum.map(fn person ->
-            %{
-              "@type" => "Person",
-              "name" => person["name"]
-            }
-          end)
-
-        case actors do
-          [] -> nil
-          list -> list
-        end
-    end
-  end
-
-  # Format runtime in ISO 8601 duration format (e.g., "PT2H30M")
-  defp format_duration(nil), do: nil
-
-  defp format_duration(runtime) when is_integer(runtime) and runtime > 0 do
-    hours = div(runtime, 60)
-    minutes = rem(runtime, 60)
-
-    cond do
-      hours > 0 and minutes > 0 -> "PT#{hours}H#{minutes}M"
-      hours > 0 -> "PT#{hours}H"
-      minutes > 0 -> "PT#{minutes}M"
-      true -> nil
-    end
-  end
-
-  defp format_duration(_), do: nil
-
-  # Build TMDb aggregate rating
-  defp build_tmdb_rating(nil), do: nil
-
-  defp build_tmdb_rating(metadata) do
-    vote_average = metadata["vote_average"]
-    vote_count = metadata["vote_count"]
-
-    if vote_average && vote_count && vote_count > 0 do
-      %{
-        "@type" => "AggregateRating",
-        "ratingValue" => vote_average,
-        "ratingCount" => vote_count,
-        "bestRating" => 10,
-        "worstRating" => 0
-      }
-    else
-      nil
-    end
-  end
-
-  # Parse OMDb genre string ("Action, Adventure, Sci-Fi")
-  defp parse_omdb_genres(nil), do: nil
-  defp parse_omdb_genres("N/A"), do: nil
-
-  defp parse_omdb_genres(genre_string) when is_binary(genre_string) do
-    genre_string
-    |> String.split(",")
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-  end
-
-  # Parse OMDb actors string
-  defp parse_omdb_actors(nil), do: nil
-  defp parse_omdb_actors("N/A"), do: nil
-
-  defp parse_omdb_actors(actors_string) when is_binary(actors_string) do
-    actors_string
-    |> String.split(",")
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.take(10)
-    |> Enum.map(&build_person/1)
-  end
-
-  # Build Person schema
-  defp build_person(nil), do: nil
-  defp build_person("N/A"), do: nil
-
-  defp build_person(name) when is_binary(name) do
-    %{
-      "@type" => "Person",
-      "name" => name
-    }
-  end
-
-  # Format OMDb runtime ("142 min")
-  defp format_omdb_runtime(nil), do: nil
-  defp format_omdb_runtime("N/A"), do: nil
-
-  defp format_omdb_runtime(runtime_string) when is_binary(runtime_string) do
-    case Integer.parse(runtime_string) do
-      {minutes, _} -> format_duration(minutes)
-      :error -> nil
-    end
-  end
-
-  # Build OMDb aggregate rating
-  defp build_omdb_rating(nil), do: nil
-
-  defp build_omdb_rating(metadata) do
-    imdb_rating = metadata["imdbRating"]
-    imdb_votes = metadata["imdbVotes"]
-
-    with rating when is_binary(rating) and rating != "N/A" <- imdb_rating,
-         votes when is_binary(votes) and votes != "N/A" <- imdb_votes,
-         {rating_float, _} <- Float.parse(rating),
-         # Parse votes (remove commas: "123,456" -> "123456")
-         votes_clean = String.replace(votes, ",", ""),
-         {votes_int, _} <- Integer.parse(votes_clean) do
-      %{
-        "@type" => "AggregateRating",
-        "ratingValue" => rating_float,
-        "ratingCount" => votes_int,
-        "bestRating" => 10,
-        "worstRating" => 1
-      }
-    else
-      _ -> nil
-    end
+    |> Helpers.maybe_add("datePublished", tmdb_metadata["release_date"])
+    |> Helpers.maybe_add("dateCreated", tmdb_metadata["release_date"])
+    |> Helpers.maybe_add("genre", Helpers.extract_genres(tmdb_metadata["genres"]))
+    |> Helpers.maybe_add("director", Helpers.extract_directors(tmdb_metadata["credits"]))
+    |> Helpers.maybe_add("actor", Helpers.extract_actors(tmdb_metadata["credits"]))
+    |> Helpers.maybe_add("duration", Helpers.format_iso_duration(tmdb_metadata["runtime"]))
+    |> Helpers.maybe_add("aggregateRating", Helpers.build_aggregate_rating(tmdb_metadata))
   end
 
   # Add screening events for this movie as an ItemList of ScreeningEvents
@@ -476,7 +242,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
         "eventAttendanceMode" => "https://schema.org/OfflineEventAttendanceMode",
         "eventStatus" => "https://schema.org/EventScheduled",
         "description" =>
-          "#{info.count} #{pluralize("showtime", info.count)} available. #{info.date_range}",
+          "#{info.count} #{Helpers.pluralize("showtime", info.count)} available. #{info.date_range}",
         "location" => build_movie_theater_location(venue, city),
         "workPresented" => build_work_presented(movie)
       }
@@ -504,22 +270,9 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
       "@type" => location_type,
       "@id" => build_venue_url(venue, city),
       "name" => venue.name,
-      "address" => build_postal_address(venue, city)
+      "address" => Helpers.build_postal_address(venue, city)
     }
-    |> maybe_add_geo(venue)
-  end
-
-  # Add geo coordinates if available
-  defp maybe_add_geo(location, venue) do
-    if venue.latitude && venue.longitude do
-      Map.put(location, "geo", %{
-        "@type" => "GeoCoordinates",
-        "latitude" => venue.latitude,
-        "longitude" => venue.longitude
-      })
-    else
-      location
-    end
+    |> Helpers.add_geo_coordinates(venue)
   end
 
   # Add startDate from the first available date
@@ -552,7 +305,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
     image_url = get_movie_image_url(movie)
 
     if image_url do
-      Map.put(base, "image", CDN.url(image_url))
+      Helpers.maybe_add(base, "image", Helpers.cdn_url(image_url))
     else
       base
     end
@@ -563,17 +316,13 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   defp get_movie_image_url(movie) do
     cond do
       # Direct poster_url field (stored in DB from TMDB)
-      movie.poster_url && movie.poster_url != "" ->
+      is_binary(movie.poster_url) && movie.poster_url != "" ->
         movie.poster_url
 
       # TMDb poster path in metadata (fallback)
-      movie.metadata && movie.metadata["poster_path"] ->
+      movie.metadata && is_binary(movie.metadata["poster_path"]) &&
+          movie.metadata["poster_path"] != "" ->
         "https://image.tmdb.org/t/p/w500#{movie.metadata["poster_path"]}"
-
-      # OMDb poster (if available in metadata)
-      movie.metadata && is_binary(movie.metadata["Poster"]) &&
-          movie.metadata["Poster"] != "N/A" ->
-        movie.metadata["Poster"]
 
       true ->
         nil
@@ -584,50 +333,17 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   defp maybe_add_screening_image(schema, movie) do
     case get_movie_image_url(movie) do
       nil -> schema
-      image_url -> Map.put(schema, "image", CDN.url(image_url))
+      image_url -> Helpers.maybe_add(schema, "image", Helpers.cdn_url(image_url))
     end
   end
 
   # Build venue URL
   defp build_venue_url(venue, city) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-    "#{base_url}/c/#{city.slug}/venues/#{venue.slug}"
+    Helpers.build_url("/c/#{city.slug}/venues/#{venue.slug}")
   end
 
   # Build activity URL for screening
   defp build_activity_url(slug) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-    "#{base_url}/activities/#{slug}"
-  end
-
-  # Build PostalAddress schema
-  defp build_postal_address(venue, city) do
-    country_code = (city.country && city.country.code) || Map.get(city, :country_code) || "US"
-
-    %{
-      "@type" => "PostalAddress",
-      "streetAddress" => venue.address || "",
-      "addressLocality" => city.name,
-      "addressCountry" => country_code
-    }
-  end
-
-  # Helper to conditionally add a field if value is not nil
-  defp maybe_add(schema, _key, nil), do: schema
-  defp maybe_add(schema, _key, []), do: schema
-  defp maybe_add(schema, key, value), do: Map.put(schema, key, value)
-
-  # Helper to conditionally add a field only if it doesn't already exist
-  # Used for OMDb metadata to avoid overwriting TMDb metadata
-  defp maybe_add_if_missing(schema, _key, nil), do: schema
-  defp maybe_add_if_missing(schema, _key, []), do: schema
-  defp maybe_add_if_missing(schema, _key, "N/A"), do: schema
-
-  defp maybe_add_if_missing(schema, key, value) do
-    if Map.has_key?(schema, key) do
-      schema
-    else
-      Map.put(schema, key, value)
-    end
+    Helpers.build_url("/activities/#{slug}")
   end
 end

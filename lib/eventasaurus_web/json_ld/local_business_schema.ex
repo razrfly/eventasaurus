@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
 
   require Logger
 
+  alias EventasaurusWeb.JsonLd.Helpers
   alias EventasaurusWeb.UrlHelper
 
   @doc """
@@ -51,7 +52,7 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
       "name" => venue.name,
       "address" => build_address(venue)
     }
-    |> add_geo_coordinates(venue)
+    |> Helpers.add_geo_coordinates(venue)
     |> add_place_id(venue)
     |> add_url(venue)
   end
@@ -100,24 +101,12 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
     end
   end
 
-  # Add geographic coordinates
-  defp add_geo_coordinates(schema, venue) do
-    if venue.latitude && venue.longitude do
-      Map.put(schema, "geo", %{
-        "@type" => "GeoCoordinates",
-        "latitude" => venue.latitude,
-        "longitude" => venue.longitude
-      })
-    else
-      schema
-    end
-  end
-
   # Add Google Place ID if available (from provider_ids)
   defp add_place_id(schema, venue) do
     # Try to get Google Places ID from provider_ids JSONB field
+    # Use Map.get to handle missing provider_ids field gracefully
     google_place_id =
-      case venue.provider_ids do
+      case Map.get(venue, :provider_ids) || Map.get(venue, "provider_ids") do
         %{"google_places" => id} when is_binary(id) -> id
         %{google_places: id} when is_binary(id) -> id
         _ -> nil

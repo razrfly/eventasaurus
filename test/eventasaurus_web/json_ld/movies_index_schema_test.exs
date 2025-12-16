@@ -331,37 +331,6 @@ defmodule EventasaurusWeb.JsonLd.MoviesIndexSchemaTest do
       assert item["item"]["aggregateRating"]["ratingCount"] == 5000
     end
 
-    test "falls back to OMDb metadata when TMDb not available" do
-      movie =
-        build_movie(%{
-          tmdb_metadata: nil,
-          metadata: %{
-            "Poster" => "https://example.com/poster.jpg",
-            "Released" => "15 Mar 2024",
-            "Genre" => "Action, Comedy",
-            "Runtime" => "95 min",
-            "imdbRating" => "7.8",
-            "imdbVotes" => "10,000",
-            "Director" => "James Cameron",
-            "Actors" => "Sam Worthington, Zoe Saldana, Sigourney Weaver"
-          }
-        })
-
-      movies = [build_movie_info(movie)]
-
-      schema = MoviesIndexSchema.build_movies_index_schema(movies)
-      [item] = schema["itemListElement"]
-
-      assert item["item"]["datePublished"] == "15 Mar 2024"
-      assert item["item"]["dateCreated"] == "15 Mar 2024"
-      assert item["item"]["genre"] == ["Action", "Comedy"]
-      assert item["item"]["duration"] == "PT1H35M"
-      assert item["item"]["aggregateRating"]["ratingValue"] == 7.8
-      assert item["item"]["director"]["@type"] == "Person"
-      assert item["item"]["director"]["name"] == "James Cameron"
-      assert is_list(item["item"]["actor"])
-      assert length(item["item"]["actor"]) == 3
-    end
   end
 
   describe "potentialAction (next screening)" do

@@ -276,187 +276,8 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
     end
   end
 
-  describe "OMDb metadata integration" do
-    setup do
-      country = %Country{id: 1, name: "USA", code: "US", slug: "usa"}
-      city = %City{id: 1, name: "New York", slug: "new-york", country_id: 1, country: country}
-
-      venue = %Venue{
-        id: 1,
-        name: "Test Cinema",
-        slug: "test-cinema",
-        city_ref: city
-      }
-
-      venues_with_info = [
-        {venue, %{count: 5, slug: "test-slug", date_range: "Mar 1-5", formats: []}}
-      ]
-
-      omdb_metadata = %{
-        "Poster" => "https://example.com/poster.jpg",
-        "Released" => "01 Mar 2024",
-        "Runtime" => "166 min",
-        "Genre" => "Sci-Fi, Adventure, Drama",
-        "Director" => "Denis Villeneuve",
-        "Actors" => "Timothée Chalamet, Zendaya, Rebecca Ferguson",
-        "imdbRating" => "8.5",
-        "imdbVotes" => "123,456"
-      }
-
-      movie = %Movie{
-        id: 1,
-        title: "Dune: Part Two",
-        slug: "dune-part-two",
-        tmdb_metadata: nil,
-        metadata: omdb_metadata
-      }
-
-      {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
-    end
-
-    test "falls back to OMDb poster when no poster_url", %{
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      # Movie with only OMDb metadata (no poster_url or tmdb_metadata)
-      movie_with_omdb = %Movie{
-        id: 1,
-        title: "Dune: Part Two",
-        slug: "dune-part-two",
-        poster_url: nil,
-        tmdb_metadata: nil,
-        metadata: %{
-          "Poster" => "https://example.com/omdb-poster.jpg",
-          "Released" => "01 Mar 2024",
-          "Runtime" => "166 min"
-        }
-      }
-
-      schema = MovieSchema.build_movie_schema(movie_with_omdb, city, venues_with_info)
-
-      # Should use CDN-wrapped OMDb poster
-      assert String.contains?(schema["image"], "omdb-poster.jpg")
-    end
-
-    test "includes release date from OMDb", %{
-      movie: movie,
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      assert schema["datePublished"] == "01 Mar 2024"
-    end
-
-    test "includes runtime parsed from OMDb", %{
-      movie: movie,
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      assert schema["duration"] == "PT2H46M"
-    end
-
-    test "includes genres parsed from OMDb", %{
-      movie: movie,
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      assert schema["genre"] == ["Sci-Fi", "Adventure", "Drama"]
-    end
-
-    test "includes director as Person from OMDb", %{
-      movie: movie,
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      assert schema["director"]["@type"] == "Person"
-      assert schema["director"]["name"] == "Denis Villeneuve"
-    end
-
-    test "includes actors parsed from OMDb", %{
-      movie: movie,
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      assert is_list(schema["actor"])
-      assert length(schema["actor"]) == 3
-      assert Enum.at(schema["actor"], 0)["@type"] == "Person"
-      assert Enum.at(schema["actor"], 0)["name"] == "Timothée Chalamet"
-    end
-
-    test "includes IMDb rating from OMDb", %{
-      movie: movie,
-      city: city,
-      venues_with_info: venues_with_info
-    } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      assert schema["aggregateRating"]["@type"] == "AggregateRating"
-      assert schema["aggregateRating"]["ratingValue"] == 8.5
-      assert schema["aggregateRating"]["ratingCount"] == 123_456
-      assert schema["aggregateRating"]["bestRating"] == 10
-      assert schema["aggregateRating"]["worstRating"] == 1
-    end
-
-    test "handles N/A values gracefully" do
-      country = %Country{id: 1, name: "USA", code: "US", slug: "usa"}
-      city = %City{id: 1, name: "New York", slug: "new-york", country_id: 1, country: country}
-
-      venue = %Venue{
-        id: 1,
-        name: "Test Cinema",
-        slug: "test-cinema",
-        city_ref: city
-      }
-
-      venues_with_info = [
-        {venue, %{count: 5, slug: "test-slug", date_range: "Mar 1-5", formats: []}}
-      ]
-
-      omdb_metadata = %{
-        "Poster" => "N/A",
-        "Released" => "N/A",
-        "Runtime" => "N/A",
-        "Genre" => "N/A",
-        "Director" => "N/A",
-        "Actors" => "N/A",
-        "imdbRating" => "N/A",
-        "imdbVotes" => "N/A"
-      }
-
-      movie = %Movie{
-        id: 1,
-        title: "Test Movie",
-        slug: "test-movie",
-        tmdb_metadata: nil,
-        metadata: omdb_metadata
-      }
-
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
-
-      # Should omit image field when poster is N/A (Google requires real images)
-      refute Map.has_key?(schema, "image")
-
-      # Should not include fields with N/A values
-      refute Map.has_key?(schema, "datePublished")
-      refute Map.has_key?(schema, "genre")
-      refute Map.has_key?(schema, "director")
-      refute Map.has_key?(schema, "actor")
-      refute Map.has_key?(schema, "duration")
-      refute Map.has_key?(schema, "aggregateRating")
-    end
-  end
-
   describe "image field precedence" do
-    test "poster_url takes precedence over all metadata" do
+    test "poster_url takes precedence over metadata poster_path" do
       country = %Country{id: 1, name: "USA", code: "US", slug: "usa"}
       city = %City{id: 1, name: "New York", slug: "new-york", country_id: 1, country: country}
 
@@ -477,24 +298,18 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
         "runtime" => 150
       }
 
-      omdb_metadata = %{
-        "Poster" => "https://example.com/omdb-poster.jpg",
-        "Released" => "15 Mar 2024",
-        "Runtime" => "180 min"
-      }
-
       movie = %Movie{
         id: 1,
         title: "Test Movie",
         slug: "test-movie",
         poster_url: "https://image.tmdb.org/t/p/w500/stored-poster.jpg",
         tmdb_metadata: tmdb_metadata,
-        metadata: omdb_metadata
+        metadata: nil
       }
 
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      # poster_url should be used (CDN wrapped), not tmdb_metadata or omdb_metadata
+      # poster_url should be used (CDN wrapped), not tmdb_metadata poster_path
       assert String.contains?(schema["image"], "/stored-poster.jpg")
 
       # TMDb values should still be used for other metadata
@@ -502,7 +317,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert schema["duration"] == "PT2H30M"
     end
 
-    test "TMDb metadata takes precedence over OMDb for non-image fields" do
+    test "falls back to metadata poster_path when poster_url is nil" do
       country = %Country{id: 1, name: "USA", code: "US", slug: "usa"}
       city = %City{id: 1, name: "New York", slug: "new-york", country_id: 1, country: country}
 
@@ -517,28 +332,26 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
         {venue, %{count: 5, slug: "test-slug", date_range: "Mar 1-5", formats: []}}
       ]
 
-      tmdb_metadata = %{
-        "release_date" => "2024-03-01",
-        "runtime" => 150
-      }
-
-      omdb_metadata = %{
-        "Released" => "15 Mar 2024",
-        "Runtime" => "180 min"
-      }
-
       movie = %Movie{
         id: 1,
         title: "Test Movie",
         slug: "test-movie",
         poster_url: nil,
-        tmdb_metadata: tmdb_metadata,
-        metadata: omdb_metadata
+        tmdb_metadata: %{
+          "release_date" => "2024-03-01",
+          "runtime" => 150
+        },
+        metadata: %{
+          "poster_path" => "/metadata-poster.jpg"
+        }
       }
 
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      # TMDb values should be used for date and duration
+      # Should fall back to metadata poster_path
+      assert String.contains?(schema["image"], "/metadata-poster.jpg")
+
+      # TMDb metadata values should be used for date and duration
       assert schema["datePublished"] == "2024-03-01"
       assert schema["duration"] == "PT2H30M"
     end

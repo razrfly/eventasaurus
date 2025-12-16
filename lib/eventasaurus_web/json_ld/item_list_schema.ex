@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchema do
   """
 
   require Logger
+  alias EventasaurusWeb.JsonLd.Helpers
   alias EventasaurusWeb.JsonLd.PublicEventSchema
 
   @doc """
@@ -96,8 +97,7 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchema do
       "#{total_count} #{pluralize("event", total_count)} available."
   end
 
-  defp pluralize(word, 1), do: word
-  defp pluralize(word, _), do: word <> "s"
+  defp pluralize(word, count), do: Helpers.pluralize(word, count)
 
   # Convert schema.org type to friendly name
   defp schema_type_to_friendly_name(schema_type) do
@@ -118,12 +118,10 @@ defmodule EventasaurusWeb.JsonLd.ItemListSchema do
 
   # Build canonical URL for the aggregation page
   defp build_canonical_url(schema_type, identifier, city) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-
     # Convert schema.org type to URL slug
     content_type_slug = EventasaurusDiscovery.AggregationTypeSlug.to_slug(schema_type)
 
-    "#{base_url}/c/#{city.slug}/#{content_type_slug}/#{identifier}"
+    Helpers.build_url("/c/#{city.slug}/#{content_type_slug}/#{identifier}")
   end
 
   # Build a ListItem for an event
