@@ -475,32 +475,12 @@ The analysis output directly informs updates to category mapping files in `priv/
 
 Eventasaurus includes CLI tools for auditing scraper health and detecting data issues:
 
-```bash
-# Scheduler Health - verify scheduler-triggered jobs are running
-mix audit.scheduler_health
-mix audit.scheduler_health --json
+- **`mix audit.scheduler_health`** — Verify scrapers are running on schedule
+- **`mix audit.date_coverage`** — Check date coverage for upcoming showtimes
+- **`mix monitor.collisions`** — Detect TMDB matching collisions
+- **`mix fix_cinema_city_duplicates`** — Repair duplicate film ID data
 
-# Date Coverage - analyze showtime date coverage for gaps
-mix audit.date_coverage
-mix audit.date_coverage --json
-
-# Collision Monitoring - detect TMDB matching collisions
-mix monitor.collisions
-mix monitor.collisions --verbose
-
-# Fix Duplicate Film IDs - repair cinema_city_film_id duplicates
-mix fix_cinema_city_duplicates          # Dry run
-mix fix_cinema_city_duplicates --apply  # Apply fixes
-```
-
-**Production Usage** (via Fly.io):
-```bash
-USE_PROD_DB=true mix audit.scheduler_health
-USE_PROD_DB=true mix audit.date_coverage
-fly ssh console -C "bin/eventasaurus eval 'EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates()'"
-```
-
-See `docs/scraper-monitoring-guide.md` for detailed documentation on these audit tools.
+See **[Scraper Monitoring Guide](docs/scraper-monitoring-guide.md#cli-audit--maintenance-tools)** for complete usage examples, production deployment instructions, and all available options.
 
 ### Adding a New Scraper
 
