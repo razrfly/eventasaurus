@@ -46,7 +46,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="relative">
+    <div class={root_wrapper_classes(@variant, @has_backdrop)}>
       <%= if @has_backdrop do %>
         <!-- Full-bleed Backdrop Hero -->
         <div class={hero_container_classes(@variant)}>
@@ -288,6 +288,14 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
 
   # CSS class helpers
 
+  # Root wrapper controls outer card treatment. For :card with a backdrop, we want
+  # rounded corners, subtle border, and overflow clipping so the backdrop respects radius.
+  defp root_wrapper_classes(:card, true),
+    do: "relative rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+
+  # For other variants or when there's no backdrop, rely on inner container styling.
+  defp root_wrapper_classes(_, _), do: "relative"
+
   defp hero_container_classes(:full) do
     "absolute inset-0 h-96 md:h-[450px] lg:h-[500px]"
   end
@@ -297,7 +305,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
   end
 
   defp hero_container_classes(:card) do
-    "absolute inset-0 h-72 md:h-80 lg:h-96"
+    "absolute inset-0"
   end
 
   defp hero_container_classes(_), do: hero_container_classes(:full)

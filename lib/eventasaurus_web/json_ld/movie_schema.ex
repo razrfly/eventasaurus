@@ -293,8 +293,11 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
 
   defp maybe_add_screening_formats(schema, _), do: schema
 
-  # Build workPresented Movie reference with required image field
-  # Google requires image field on all Movie objects, including nested references
+  # Build workPresented Movie reference with required/recommended fields
+  # Google validates ALL Movie objects including nested references, so we need:
+  # - image (required)
+  # - dateCreated (optional but recommended)
+  # - director (optional but recommended)
   defp build_work_presented(movie) do
     base = %{
       "@type" => "Movie",
@@ -304,11 +307,31 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
     # Add image URL if available (required by Google for Movie type)
     image_url = get_movie_image_url(movie)
 
-    if image_url do
-      Helpers.maybe_add(base, "image", Helpers.cdn_url(image_url))
-    else
-      base
-    end
+    base =
+      if image_url do
+        Helpers.maybe_add(base, "image", Helpers.cdn_url(image_url))
+      else
+        base
+      end
+
+    # Add dateCreated from release_date (Google optional field)
+    base =
+      if movie.release_date do
+        Map.put(base, "dateCreated", Date.to_iso8601(movie.release_date))
+      else
+        base
+      end
+
+    # Add director from tmdb_metadata if available
+    base =
+      if movie.tmdb_metadata do
+        director = Helpers.extract_directors(movie.tmdb_metadata["credits"])
+        Helpers.maybe_add(base, "director", director)
+      else
+        base
+      end
+
+    base
   end
 
   # Get the movie image URL from available sources
