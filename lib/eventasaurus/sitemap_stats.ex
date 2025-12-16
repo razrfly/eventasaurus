@@ -20,6 +20,7 @@ defmodule Eventasaurus.SitemapStats do
 
   Delegates to `Sitemap.url_stats/0` for the single source of truth.
   """
+  @spec expected_counts() :: map()
   def expected_counts do
     stats = Sitemap.url_stats()
 
@@ -37,6 +38,7 @@ defmodule Eventasaurus.SitemapStats do
 
   Delegates to `Sitemap.url_stats/0` for the single source of truth.
   """
+  @spec sample_urls(String.t()) :: map()
   def sample_urls(base_url \\ "https://wombie.com") do
     Sitemap.url_stats(host: base_url)
     |> Enum.map(fn stat -> {stat.key, stat.sample} end)
@@ -50,6 +52,7 @@ defmodule Eventasaurus.SitemapStats do
   This is the preferred method for the admin UI as it provides
   richer information than expected_counts/0 and sample_urls/0.
   """
+  @spec categories(String.t()) :: [map()]
   def categories(base_url \\ "https://wombie.com") do
     Sitemap.url_stats(host: base_url)
   end
@@ -57,6 +60,7 @@ defmodule Eventasaurus.SitemapStats do
   @doc """
   Returns the total URL count across all categories.
   """
+  @spec total_count() :: non_neg_integer()
   def total_count do
     Sitemap.url_stats()
     |> Enum.map(& &1.count)
