@@ -108,7 +108,7 @@ defmodule Eventasaurus.Sitemap do
       %{
         key: :venues,
         name: "Venues",
-        description: "Venue pages within cities",
+        description: "Venue pages within cities (only venues with public events)",
         count: count_venues(),
         sample: sample_venue_url(base_url)
       },
@@ -346,16 +346,21 @@ defmodule Eventasaurus.Sitemap do
     end)
   end
 
-  # Returns a stream of all venues in active cities
+  # Returns a stream of all venues in active cities that have public events
+  # Excludes private venues (user home addresses, etc.) that have no public events
   defp venue_urls(opts) do
     base_url = get_base_url(opts)
 
-    # Query venues that belong to active cities
+    # Query venues that belong to active cities AND have at least one public event
+    # This excludes private venues (like user home addresses) from the sitemap
     from(v in EventasaurusApp.Venues.Venue,
       join: c in EventasaurusDiscovery.Locations.City,
       on: v.city_id == c.id,
+      inner_join: pe in PublicEvent,
+      on: pe.venue_id == v.id,
       select: %{slug: v.slug, updated_at: v.updated_at, city_slug: c.slug},
-      where: c.discovery_enabled == true and not is_nil(v.slug)
+      where: c.discovery_enabled == true and not is_nil(v.slug),
+      distinct: v.id
     )
     |> Repo.stream()
     |> Stream.map(fn venue ->
@@ -730,12 +735,15 @@ defmodule Eventasaurus.Sitemap do
     active_cities * 10
   end
 
-  # Count venues in active cities
+  # Count venues in active cities that have public events
+  # Must match the filtering logic in venue_urls/1
   defp count_venues do
     from(v in EventasaurusApp.Venues.Venue,
       join: c in EventasaurusDiscovery.Locations.City,
       on: v.city_id == c.id,
-      select: count(v.id),
+      inner_join: pe in PublicEvent,
+      on: pe.venue_id == v.id,
+      select: count(v.id, :distinct),
       where: c.discovery_enabled == true and not is_nil(v.slug)
     )
     |> Repo.one() || 0
@@ -815,12 +823,15 @@ defmodule Eventasaurus.Sitemap do
     end
   end
 
-  # Get a sample venue URL
+  # Get a sample venue URL (only venues with public events)
+  # Must match the filtering logic in venue_urls/1
   defp sample_venue_url(base_url) do
     venue =
       from(v in EventasaurusApp.Venues.Venue,
         join: c in EventasaurusDiscovery.Locations.City,
         on: v.city_id == c.id,
+        inner_join: pe in PublicEvent,
+        on: pe.venue_id == v.id,
         select: %{venue_slug: v.slug, city_slug: c.slug},
         where: c.discovery_enabled == true and not is_nil(v.slug),
         limit: 1

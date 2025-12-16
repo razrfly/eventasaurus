@@ -39,8 +39,8 @@ defmodule Eventasaurus.SitemapStats do
   Delegates to `Sitemap.url_stats/0` for the single source of truth.
   """
   @spec sample_urls(String.t()) :: map()
-  def sample_urls(base_url \\ "https://wombie.com") do
-    Sitemap.url_stats(host: base_url)
+  def sample_urls(host \\ "wombie.com") do
+    Sitemap.url_stats(host: host)
     |> Enum.map(fn stat -> {stat.key, stat.sample} end)
     |> Map.new()
   end
@@ -53,8 +53,8 @@ defmodule Eventasaurus.SitemapStats do
   richer information than expected_counts/0 and sample_urls/0.
   """
   @spec categories(String.t()) :: [map()]
-  def categories(base_url \\ "https://wombie.com") do
-    Sitemap.url_stats(host: base_url)
+  def categories(host \\ "wombie.com") do
+    Sitemap.url_stats(host: host)
   end
 
   @doc """
