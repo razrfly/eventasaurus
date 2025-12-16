@@ -79,6 +79,7 @@ defmodule Eventasaurus.Sitemap do
   ## Options
   * `:host` - Override host for URL generation (default: wombie.com in prod)
   """
+  @spec url_stats(keyword()) :: [map()]
   def url_stats(opts \\ []) do
     base_url = get_base_url(opts)
 
@@ -700,7 +701,7 @@ defmodule Eventasaurus.Sitemap do
   # Count static pages (dynamically from static_urls list)
   defp count_static_urls do
     # Count the actual static URLs list to stay in sync
-    8
+    static_urls([]) |> Enum.count()
   end
 
   # Count activities (public events with valid slugs)
@@ -761,18 +762,23 @@ defmodule Eventasaurus.Sitemap do
 
   # Count city-specific movie pages (movie + city combinations)
   defp count_city_movies do
-    from(m in EventasaurusDiscovery.Movies.Movie,
-      join: em in "event_movies",
-      on: em.movie_id == m.id,
-      join: pe in PublicEvent,
-      on: pe.id == em.event_id,
-      join: v in EventasaurusApp.Venues.Venue,
-      on: v.id == pe.venue_id,
-      join: c in EventasaurusDiscovery.Locations.City,
-      on: c.id == v.city_id,
-      select: count(fragment("DISTINCT (?, ?)", m.id, c.id)),
-      where: c.discovery_enabled == true and not is_nil(m.slug) and m.slug != ""
-    )
+    # Use subquery with DISTINCT to get unique movie-city pairs, then count
+    subquery =
+      from(m in EventasaurusDiscovery.Movies.Movie,
+        join: em in "event_movies",
+        on: em.movie_id == m.id,
+        join: pe in PublicEvent,
+        on: pe.id == em.event_id,
+        join: v in EventasaurusApp.Venues.Venue,
+        on: v.id == pe.venue_id,
+        join: c in EventasaurusDiscovery.Locations.City,
+        on: c.id == v.city_id,
+        select: %{movie_id: m.id, city_id: c.id},
+        where: c.discovery_enabled == true and not is_nil(m.slug) and m.slug != "",
+        distinct: true
+      )
+
+    from(s in subquery(subquery), select: count(s.movie_id))
     |> Repo.one() || 0
   end
 
