@@ -540,6 +540,93 @@ ProcessJob: external_id = "question_one_event_456"
 - Multi-step validation chains
 - Experimental/new scrapers
 
+## CLI Audit & Maintenance Tools
+
+In addition to dashboards, Eventasaurus provides command-line tools for auditing scraper health, detecting data issues, and performing maintenance.
+
+### Scheduler Health Audit (`mix audit.scheduler_health`)
+
+Verify that scheduler-triggered jobs are running successfully and on schedule:
+
+```bash
+# Check all cinema scrapers
+mix audit.scheduler_health
+
+# JSON output for automation
+mix audit.scheduler_health --json
+
+# Production database
+USE_PROD_DB=true mix audit.scheduler_health
+```
+
+**What it checks:**
+- Last successful execution time for each cinema scraper
+- Whether jobs are running on expected schedule
+- Job failure patterns and error rates
+
+### Date Coverage Audit (`mix audit.date_coverage`)
+
+Analyze showtime date coverage to identify gaps in scraped data:
+
+```bash
+# Check date coverage for all cinemas
+mix audit.date_coverage
+
+# JSON output
+mix audit.date_coverage --json
+
+# Production database
+USE_PROD_DB=true mix audit.date_coverage
+```
+
+**What it checks:**
+- Date range coverage for each cinema
+- Missing dates that should have showtimes
+- Coverage gaps and anomalies
+
+### Collision Monitoring (`mix monitor.collisions`)
+
+Detect and analyze TMDB matching collisions where different films match to the same TMDB ID:
+
+```bash
+# Check for collisions
+mix monitor.collisions
+
+# Detailed output with affected showtimes
+mix monitor.collisions --verbose
+
+# JSON output
+mix monitor.collisions --json
+```
+
+**What it detects:**
+- Multiple Cinema City films matching same TMDB movie
+- Potential false-positive TMDB matches
+- Data integrity issues in movie matching
+
+### Fix Cinema City Duplicates (`mix fix_cinema_city_duplicates`)
+
+Repair duplicate `cinema_city_film_id` entries caused by incorrect TMDB matching:
+
+```bash
+# Dry run - show what would be fixed
+mix fix_cinema_city_duplicates
+
+# Apply fixes
+mix fix_cinema_city_duplicates --apply
+```
+
+**What it fixes:**
+- Removes duplicate `cinema_city_film_id` from newer movie entries
+- Preserves the oldest (most likely correct) movie's film_id
+- Allows correct re-matching on next scraper run
+
+**Production Usage** (via Fly.io):
+```bash
+fly ssh console -C "bin/eventasaurus eval 'EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates()'"
+fly ssh console -C "bin/eventasaurus eval 'EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates(true)'"
+```
+
 ## Getting Help
 
 **Documentation:**
@@ -552,11 +639,17 @@ ProcessJob: external_id = "question_one_event_456"
 - Error Trends: `/admin/error-trends`
 - Oban Dashboard: `/admin/oban`
 
+**CLI Audit Tools:**
+- Scheduler Health: `mix audit.scheduler_health`
+- Date Coverage: `mix audit.date_coverage`
+- Collision Monitor: `mix monitor.collisions`
+- Duplicate Fix: `mix fix_cinema_city_duplicates`
+
 **Example Implementations:**
 - Cinema City: `lib/eventasaurus_discovery/sources/cinema_city/jobs/`
 - Kino Krakow: `lib/eventasaurus_discovery/sources/kino_krakow/jobs/`
 
 ---
 
-**Last Updated**: 2025-11-23
+**Last Updated**: 2025-12-15
 **Phase**: Phase 4 - Rollout to All Scrapers

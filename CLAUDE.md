@@ -171,6 +171,14 @@ mix monitor.chain cinema_city --limit=5 --failed-only
 
 # Compare two baselines
 mix monitor.compare --before=baseline1.json --after=baseline2.json
+
+# Monitor collision/deduplication metrics
+mix monitor.collisions stats                       # Show statistics (default: last 24h)
+mix monitor.collisions stats --hours 168           # Last week
+mix monitor.collisions list --source cinema_city   # Recent collisions by source
+mix monitor.collisions list --type cross_source    # Filter by collision type
+mix monitor.collisions matrix                      # Cross-source overlap matrix
+mix monitor.collisions confidence                  # Confidence score distribution
 ```
 
 ### Programmatic API (Elixir Code)
@@ -381,6 +389,87 @@ if Compare.has_regressions?(comparison) do
   IO.puts("⚠️  Regressions detected!")
   IO.inspect(comparison.regressions)
 end
+```
+
+## Scraper Audit Tools (mix audit.*)
+
+Tools for auditing scraper completeness and data quality. These verify that scrapers are running correctly and capturing complete data.
+
+### Scheduler Health Check (mix audit.scheduler_health)
+
+Verifies that scrapers are running daily and identifies gaps or failures:
+
+```bash
+# Check last 7 days (default)
+mix audit.scheduler_health
+
+# Check specific number of days
+mix audit.scheduler_health --days 14
+
+# Check specific source only
+mix audit.scheduler_health --source cinema_city
+mix audit.scheduler_health --source repertuary
+```
+
+**Output includes:**
+- Day-by-day breakdown of SyncJob executions
+- Execution status (success/failure)
+- Duration and jobs spawned
+- Alerts for missing days or failures
+- Recommendations for fixing issues
+
+### Date Coverage Report (mix audit.date_coverage)
+
+Verifies that scrapers are creating events for the expected date range (7 days ahead):
+
+```bash
+# Check default 7-day coverage
+mix audit.date_coverage
+
+# Check specific number of days ahead
+mix audit.date_coverage --days 14
+
+# Check specific source only
+mix audit.date_coverage --source cinema_city
+mix audit.date_coverage --source repertuary
+```
+
+**Output includes:**
+- Day-by-day event counts with visual coverage bars
+- Status indicators (OK, LOW, MISSING)
+- Coverage percentage per day
+- Alerts for missing or low-coverage dates
+
+## Data Maintenance Tasks
+
+Tasks for fixing data quality issues and cleaning up corrupted data.
+
+### Fix Cinema City Duplicate Film IDs
+
+Fixes duplicate `cinema_city_film_id` entries in the movies table that can occur due to race conditions:
+
+```bash
+# Dry run - show what would be fixed (no changes)
+mix fix_cinema_city_duplicates
+
+# Actually apply the fixes
+mix fix_cinema_city_duplicates --apply
+```
+
+**What it does:**
+1. Finds all `cinema_city_film_id` values that appear on multiple movies
+2. For each duplicate group, keeps the OLDEST movie's film_id (first created)
+3. Removes `cinema_city_film_id` from the NEWER movies
+
+The affected movies will get correctly re-matched on the next scraper run.
+
+**Production usage** (via release task):
+```bash
+# Dry run
+bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates()"
+
+# Apply fixes
+bin/eventasaurus eval "EventasaurusApp.ReleaseTasks.fix_cinema_city_duplicates(true)"
 ```
 
 ## Implementing Scraper Monitoring
@@ -662,6 +751,14 @@ gt stack submit
 - Error Categories: `lib/eventasaurus_discovery/metrics/error_categories.ex` - Standard error types
 - MetricsTracker: `lib/eventasaurus_discovery/metrics/metrics_tracker.ex` - Monitoring API
 - BaseJob: `lib/eventasaurus_discovery/sources/base_job.ex` - Base behavior for standard jobs
+
+**CLI Tools Quick Reference:**
+- `mix monitor.jobs` - Real-time job execution monitoring
+- `mix monitor.collisions` - Collision/deduplication metrics
+- `mix monitor.health` - Health and SLO compliance
+- `mix audit.scheduler_health` - Verify scrapers running daily
+- `mix audit.date_coverage` - Verify 7-day event coverage
+- `mix fix_cinema_city_duplicates` - Fix duplicate film ID data
 
 **Example Implementations:**
 - Cinema City: `lib/eventasaurus_discovery/sources/cinema_city/jobs/` - Complex multi-stage scraper
