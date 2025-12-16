@@ -13,6 +13,8 @@ defmodule EventasaurusWeb.MoviesIndexLive do
 
   alias EventasaurusDiscovery.Movies.MovieStats
   alias EventasaurusWeb.Components.MovieCards
+  alias EventasaurusWeb.JsonLd.MoviesIndexSchema
+  alias EventasaurusWeb.Helpers.SEOHelpers
 
   @impl true
   def mount(_params, _session, socket) do
@@ -33,6 +35,9 @@ defmodule EventasaurusWeb.MoviesIndexLive do
     [now_showing, cities_with_movies, movie_count, screening_count, upcoming_movies] =
       Task.await_many(tasks)
 
+    # Generate JSON-LD structured data for movie carousel
+    json_ld = MoviesIndexSchema.generate(now_showing)
+
     socket =
       socket
       |> assign(:page_title, gettext("Movies Now Showing"))
@@ -42,6 +47,15 @@ defmodule EventasaurusWeb.MoviesIndexLive do
       |> assign(:screening_count, screening_count)
       |> assign(:upcoming_movies, upcoming_movies)
       |> assign(:search_query, "")
+      |> SEOHelpers.assign_meta_tags(
+        title: "Movies Now Showing | Wombie",
+        description:
+          "Discover #{movie_count} movies now showing in cinemas. " <>
+            "#{screening_count} screenings available across #{length(cities_with_movies)} cities.",
+        type: "website",
+        canonical_path: "/movies",
+        json_ld: json_ld
+      )
 
     {:ok, socket}
   end

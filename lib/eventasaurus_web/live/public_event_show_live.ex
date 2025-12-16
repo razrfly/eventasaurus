@@ -287,7 +287,17 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         canonical_url_for_schemas = UrlHelper.build_url(canonical_path, request_uri)
 
         # Generate JSON-LD structured data
-        event_json_ld = PublicEventSchema.generate(enriched_event)
+        # For movie screenings with multiple showtimes, generate multiple ScreeningEvents
+        event_json_ld =
+          if is_movie && enriched_event.occurrence_list &&
+               length(enriched_event.occurrence_list) > 0 do
+            PublicEventSchema.generate_with_occurrences(
+              enriched_event,
+              enriched_event.occurrence_list
+            )
+          else
+            PublicEventSchema.generate(enriched_event)
+          end
 
         breadcrumb_json_ld =
           BreadcrumbListSchema.from_breadcrumb_builder_items(

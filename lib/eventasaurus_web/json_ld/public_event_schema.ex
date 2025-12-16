@@ -48,6 +48,98 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   end
 
   @doc """
+  Generates JSON-LD for multiple ScreeningEvents when occurrences are provided.
+
+  For movie screenings with multiple showtimes, Google recommends adding a separate
+  Event element for each performance. This function generates an array of ScreeningEvents,
+  one per occurrence/showtime.
+
+  ## Parameters
+    - event: PublicEvent struct with preloaded associations
+    - occurrences: List of occurrence maps with :datetime, :label, :external_id
+
+  ## Returns
+    - JSON-LD string with array of ScreeningEvents (if multiple)
+    - Single ScreeningEvent JSON-LD (if one occurrence)
+    - Falls back to regular generate/1 (if no occurrences)
+  """
+  def generate_with_occurrences(event, nil), do: generate(event)
+  def generate_with_occurrences(event, []), do: generate(event)
+
+  def generate_with_occurrences(event, occurrences) when is_list(occurrences) do
+    # Only generate multiple schemas for ScreeningEvents (movies)
+    if determine_event_type(event) == "ScreeningEvent" do
+      schemas =
+        occurrences
+        |> Enum.map(fn occurrence ->
+          build_screening_event_for_occurrence(event, occurrence)
+        end)
+
+      # Return array if multiple, single object if one
+      case schemas do
+        [single] -> Jason.encode!(single)
+        multiple -> Jason.encode!(multiple)
+      end
+    else
+      # Non-movie events: just use regular single schema
+      generate(event)
+    end
+  end
+
+  # Build a ScreeningEvent schema for a specific occurrence
+  defp build_screening_event_for_occurrence(event, occurrence) do
+    %{
+      "@context" => "https://schema.org",
+      "@type" => "ScreeningEvent",
+      "name" => get_event_name(event),
+      "startDate" => DateTime.to_iso8601(occurrence.datetime),
+      "eventAttendanceMode" => "https://schema.org/OfflineEventAttendanceMode",
+      "eventStatus" => "https://schema.org/EventScheduled"
+    }
+    |> maybe_add_location(event.venue)
+    |> add_description(event)
+    |> add_images(event)
+    |> add_offers(event)
+    |> add_organizer(event)
+    |> add_work_presented(event)
+    |> maybe_add_video_format_from_occurrence(occurrence)
+  end
+
+  # Add videoFormat from occurrence label (e.g., "3D", "IMAX", "Dolby")
+  defp maybe_add_video_format_from_occurrence(schema, %{label: label}) when is_binary(label) do
+    format = extract_video_format_from_label(label)
+
+    if format do
+      Map.put(schema, "videoFormat", format)
+    else
+      schema
+    end
+  end
+
+  defp maybe_add_video_format_from_occurrence(schema, _), do: schema
+
+  # Extract video format from occurrence label string
+  # Common labels: "3D", "IMAX", "4DX", "Dolby Atmos", "2D", etc.
+  defp extract_video_format_from_label(label) when is_binary(label) do
+    label_upper = String.upcase(label)
+
+    formats =
+      []
+      |> maybe_append(String.contains?(label_upper, "3D"), "3D")
+      |> maybe_append(String.contains?(label_upper, "IMAX"), "IMAX")
+      |> maybe_append(String.contains?(label_upper, "4DX"), "4DX")
+      |> maybe_append(String.contains?(label_upper, "DOLBY"), "Dolby")
+
+    case formats do
+      [] -> nil
+      [single] -> single
+      multiple -> multiple
+    end
+  end
+
+  defp extract_video_format_from_label(_), do: nil
+
+  @doc """
   Builds the event schema map (without JSON encoding).
   Useful for testing or combining with other schemas.
   """
@@ -777,10 +869,14 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     # Try to get the original language or dubbed language
     language =
       cond do
-        lang = get_in(language_info, ["original_language"]) || get_in(language_info, [:original_language]) ->
+        lang =
+            get_in(language_info, ["original_language"]) ||
+              get_in(language_info, [:original_language]) ->
           lang
 
-        lang = get_in(language_info, ["dubbed_language"]) || get_in(language_info, [:dubbed_language]) ->
+        lang =
+            get_in(language_info, ["dubbed_language"]) ||
+              get_in(language_info, [:dubbed_language]) ->
           lang
 
         true ->
