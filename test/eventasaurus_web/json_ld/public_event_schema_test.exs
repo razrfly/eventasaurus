@@ -893,4 +893,473 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert String.length(schema["description"]) == 5000
     end
   end
+
+  # Phase 1: Enhanced JSON-LD Structured Data for ScreeningEvent
+  describe "Phase 1: Enhanced ScreeningEvent structured data" do
+    setup do
+      country = %Country{id: 1, name: "Poland", code: "PL", slug: "poland"}
+      city = %City{id: 1, name: "Kraków", slug: "krakow", country_id: 1, country: country}
+
+      venue = %Venue{
+        id: 1,
+        name: "Cinema City Bonarka",
+        address: "Kamieńskiego 11",
+        latitude: 50.0234,
+        longitude: 19.9567,
+        city_id: 1,
+        city_ref: city
+      }
+
+      category = %Category{
+        id: 1,
+        name: "Movies",
+        slug: "movies",
+        schema_type: "ScreeningEvent"
+      }
+
+      {:ok, venue: venue, category: category}
+    end
+
+    test "uses MovieTheater instead of Place for ScreeningEvent", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert schema["@type"] == "ScreeningEvent"
+      assert schema["location"]["@type"] == "MovieTheater"
+      assert schema["location"]["name"] == "Cinema City Bonarka"
+    end
+
+    test "uses Place for non-ScreeningEvent even with cinema venue", %{venue: venue} do
+      category = %Category{id: 2, name: "Concerts", slug: "concerts", schema_type: "MusicEvent"}
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Concert at Cinema",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert schema["@type"] == "MusicEvent"
+      assert schema["location"]["@type"] == "Place"
+    end
+
+    test "includes full movie metadata in workPresented from TMDb", %{venue: venue, category: category} do
+      movie = %Movie{
+        id: 1,
+        title: "Dune: Part Two",
+        tmdb_id: 693_134,
+        tmdb_metadata: %{
+          "release_date" => "2024-02-27",
+          "runtime" => 166,
+          "vote_average" => 8.3,
+          "vote_count" => 5432,
+          "genres" => [
+            %{"id" => 878, "name" => "Science Fiction"},
+            %{"id" => 12, "name" => "Adventure"}
+          ],
+          "credits" => %{
+            "crew" => [
+              %{"job" => "Director", "name" => "Denis Villeneuve"},
+              %{"job" => "Producer", "name" => "Mary Parent"}
+            ],
+            "cast" => [
+              %{"name" => "Timothée Chalamet"},
+              %{"name" => "Zendaya"},
+              %{"name" => "Rebecca Ferguson"}
+            ]
+          }
+        },
+        metadata: %{
+          "imdbID" => "tt15239678"
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Dune: Part Two Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      work = schema["workPresented"]
+
+      assert work["@type"] == "Movie"
+      assert work["name"] == "Dune: Part Two"
+      assert work["datePublished"] == "2024-02-27"
+      assert work["duration"] == "PT2H46M"
+      assert work["genre"] == ["Science Fiction", "Adventure"]
+
+      # Director
+      assert work["director"]["@type"] == "Person"
+      assert work["director"]["name"] == "Denis Villeneuve"
+
+      # Actors
+      assert is_list(work["actor"])
+      assert length(work["actor"]) == 3
+      assert Enum.at(work["actor"], 0)["name"] == "Timothée Chalamet"
+
+      # Rating
+      assert work["aggregateRating"]["@type"] == "AggregateRating"
+      assert work["aggregateRating"]["ratingValue"] == 8.3
+      assert work["aggregateRating"]["ratingCount"] == 5432
+    end
+
+    test "includes movie image from poster_url", %{venue: venue, category: category} do
+      movie = %Movie{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        tmdb_id: 12345,
+        poster_url: "https://image.tmdb.org/t/p/w500/poster.jpg"
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      work = schema["workPresented"]
+
+      assert work["image"] != nil
+      assert String.contains?(work["image"], "poster.jpg")
+    end
+
+    test "includes sameAs URLs for cinegraph.org and IMDb", %{venue: venue, category: category} do
+      movie = %Movie{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        tmdb_id: 12345,
+        metadata: %{
+          "imdbID" => "tt1234567"
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      work = schema["workPresented"]
+
+      assert is_list(work["sameAs"])
+      assert "https://cinegraph.org/movies/test-movie" in work["sameAs"]
+      assert "https://www.imdb.com/title/tt1234567/" in work["sameAs"]
+    end
+
+    test "includes only cinegraph.org URL when IMDb ID not available", %{venue: venue, category: category} do
+      movie = %Movie{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        tmdb_id: 12345,
+        metadata: nil
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      work = schema["workPresented"]
+
+      assert work["sameAs"] == ["https://cinegraph.org/movies/test-movie"]
+    end
+
+    test "includes videoFormat from source metadata", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Avatar", tmdb_id: 76600}
+
+      source_record = %Source{id: 1, name: "Cinema City"}
+
+      source = %PublicEventSource{
+        id: 1,
+        source_id: 1,
+        source: source_record,
+        metadata: %{
+          "format_info" => %{
+            "is_3d" => true,
+            "is_imax" => true,
+            "is_4dx" => false
+          }
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Avatar: The Way of Water 3D IMAX",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: [source]
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert is_list(schema["videoFormat"])
+      assert "3D" in schema["videoFormat"]
+      assert "IMAX" in schema["videoFormat"]
+      refute "4DX" in schema["videoFormat"]
+    end
+
+    test "includes single videoFormat when only one format", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
+
+      source_record = %Source{id: 1, name: "Cinema City"}
+
+      source = %PublicEventSource{
+        id: 1,
+        source_id: 1,
+        source: source_record,
+        metadata: %{
+          "format_info" => %{
+            "is_3d" => false,
+            "is_imax" => true,
+            "is_4dx" => false
+          }
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie IMAX",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: [source]
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert schema["videoFormat"] == "IMAX"
+    end
+
+    test "includes inLanguage from source metadata", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
+
+      source_record = %Source{id: 1, name: "Cinema City"}
+
+      source = %PublicEventSource{
+        id: 1,
+        source_id: 1,
+        source: source_record,
+        metadata: %{
+          "language_info" => %{
+            "original_language" => "EN",
+            "is_dubbed" => false,
+            "is_subbed" => true
+          }
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie with Subtitles",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: [source]
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert schema["inLanguage"] == "EN"
+    end
+
+    test "uses dubbed_language when original_language not available", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
+
+      source_record = %Source{id: 1, name: "Cinema City"}
+
+      source = %PublicEventSource{
+        id: 1,
+        source_id: 1,
+        source: source_record,
+        metadata: %{
+          "language_info" => %{
+            "is_dubbed" => true,
+            "dubbed_language" => "PL"
+          }
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Dubbed Movie",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: [source]
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert schema["inLanguage"] == "PL"
+    end
+
+    test "falls back to OMDb metadata when TMDb not available", %{venue: venue, category: category} do
+      movie = %Movie{
+        id: 1,
+        title: "The Matrix",
+        tmdb_id: 603,
+        tmdb_metadata: nil,
+        metadata: %{
+          "imdbID" => "tt0133093",
+          "imdbRating" => "8.7",
+          "imdbVotes" => "2,000,000",
+          "Released" => "1999-03-31",
+          "Genre" => "Action, Sci-Fi",
+          "Director" => "Lana Wachowski, Lilly Wachowski",
+          "Actors" => "Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss",
+          "Runtime" => "136 min"
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "The Matrix Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      work = schema["workPresented"]
+
+      assert work["@type"] == "Movie"
+      assert work["name"] == "The Matrix"
+      assert work["datePublished"] == "1999-03-31"
+      assert work["duration"] == "PT2H16M"
+      assert work["genre"] == ["Action", "Sci-Fi"]
+
+      # Director from OMDb
+      assert work["director"]["@type"] == "Person"
+      assert work["director"]["name"] == "Lana Wachowski, Lilly Wachowski"
+
+      # Actors from OMDb
+      assert is_list(work["actor"])
+      assert length(work["actor"]) == 3
+
+      # Rating from OMDb
+      assert work["aggregateRating"]["@type"] == "AggregateRating"
+      assert work["aggregateRating"]["ratingValue"] == 8.7
+      assert work["aggregateRating"]["ratingCount"] == 2_000_000
+    end
+
+    test "does not include videoFormat or inLanguage when not in metadata", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie Screening",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      refute Map.has_key?(schema, "videoFormat")
+      refute Map.has_key?(schema, "inLanguage")
+    end
+
+    test "handles format_info with atom keys", %{venue: venue, category: category} do
+      movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
+
+      source_record = %Source{id: 1, name: "Cinema City"}
+
+      # Note: using atom keys like the transformer creates
+      source = %PublicEventSource{
+        id: 1,
+        source_id: 1,
+        source: source_record,
+        metadata: %{
+          "format_info" => %{
+            is_3d: true,
+            is_imax: false,
+            is_4dx: true
+          }
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Movie 3D 4DX",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: [source]
+      }
+
+      schema = PublicEventSchema.build_event_schema(event)
+
+      assert is_list(schema["videoFormat"])
+      assert "3D" in schema["videoFormat"]
+      assert "4DX" in schema["videoFormat"]
+    end
+  end
 end

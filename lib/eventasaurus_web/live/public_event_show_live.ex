@@ -296,8 +296,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             base_url
           )
 
+        # Skip LocalBusinessSchema for movie screenings - ScreeningEvent already includes
+        # MovieTheater location in the event schema, so separate venue schema is redundant
         venue_json_ld =
-          if enriched_event.venue do
+          if enriched_event.venue && !is_movie do
             LocalBusinessSchema.generate(enriched_event.venue)
           else
             nil
