@@ -173,35 +173,35 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
   end
 
   # Add movie poster/image
+  # Uses poster_url field directly (stored in DB), falling back to metadata paths
   defp add_image(schema, movie) do
-    image_url =
-      cond do
-        # TMDb poster path (if available in metadata)
-        movie.tmdb_metadata && movie.tmdb_metadata["poster_path"] ->
-          "https://image.tmdb.org/t/p/w500#{movie.tmdb_metadata["poster_path"]}"
-
-        # OMDb poster (if available in metadata) - check capitalized key and not N/A
-        movie.metadata && is_binary(movie.metadata["Poster"]) && movie.metadata["Poster"] != "N/A" ->
-          movie.metadata["Poster"]
-
-        # Fallback to placeholder
-        true ->
-          movie_name_encoded = URI.encode(movie.title)
-          "https://placehold.co/500x750/4ECDC4/FFFFFF?text=#{movie_name_encoded}"
-      end
-
-    # Wrap with CDN
-    cdn_url = CDN.url(image_url)
-
-    Map.put(schema, "image", cdn_url)
+    case get_movie_image_url(movie) do
+      nil -> schema
+      image_url -> Map.put(schema, "image", CDN.url(image_url))
+    end
   end
 
   # Add metadata from TMDb or OMDb if available
+  # Also adds dateCreated from movie.release_date if not already present from metadata
   defp add_metadata(schema, movie) do
     schema
     |> add_tmdb_metadata(movie.tmdb_metadata)
     |> add_omdb_metadata(movie.metadata)
+    |> maybe_add_date_from_movie(movie)
   end
+
+  # Add datePublished and dateCreated from movie.release_date if not already present
+  # This handles cases where tmdb_metadata and metadata don't have release dates
+  defp maybe_add_date_from_movie(schema, %{release_date: release_date})
+       when not is_nil(release_date) do
+    date_string = Date.to_iso8601(release_date)
+
+    schema
+    |> maybe_add_if_missing("datePublished", date_string)
+    |> maybe_add_if_missing("dateCreated", date_string)
+  end
+
+  defp maybe_add_date_from_movie(schema, _movie), do: schema
 
   # Add metadata from TMDb API
   defp add_tmdb_metadata(schema, nil), do: schema
@@ -210,6 +210,10 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
     schema
     |> maybe_add(
       "datePublished",
+      tmdb_metadata["release_date"]
+    )
+    |> maybe_add(
+      "dateCreated",
       tmdb_metadata["release_date"]
     )
     |> maybe_add(
@@ -241,6 +245,10 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
     schema
     |> maybe_add_if_missing(
       "datePublished",
+      omdb_metadata["Released"]
+    )
+    |> maybe_add_if_missing(
+      "dateCreated",
       omdb_metadata["Released"]
     )
     |> maybe_add_if_missing(
@@ -434,9 +442,9 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
     end
   end
 
-  # Add screening events for this movie
+  # Add screening events for this movie as an ItemList of ScreeningEvents
+  # This creates a carousel-friendly structure for Google rich results
   defp add_screening_events(schema, movie, city, venues_with_info) do
-    # If we have screenings, add them as an ItemList
     if length(venues_with_info) > 0 do
       screening_list = %{
         "@type" => "ItemList",
@@ -446,30 +454,138 @@ defmodule EventasaurusWeb.JsonLd.MovieSchema do
           venues_with_info
           |> Enum.with_index(1)
           |> Enum.map(fn {{venue, info}, position} ->
-            build_screening_list_item(venue, info, movie, city, position)
+            build_screening_event_item(venue, info, movie, city, position)
           end)
       }
 
-      Map.put(schema, "potentialAction", screening_list)
+      Map.put(schema, "subjectOf", screening_list)
     else
       schema
     end
   end
 
-  # Build a list item for a screening venue
-  defp build_screening_list_item(venue, info, _movie, city, position) do
+  # Build a ScreeningEvent list item for a venue
+  # Each item represents the screening series at a specific cinema
+  defp build_screening_event_item(venue, info, movie, city, position) do
+    # Build the ScreeningEvent
+    screening_event =
+      %{
+        "@type" => "ScreeningEvent",
+        "name" => "#{movie.title} at #{venue.name}",
+        "url" => build_activity_url(info.slug),
+        "eventAttendanceMode" => "https://schema.org/OfflineEventAttendanceMode",
+        "eventStatus" => "https://schema.org/EventScheduled",
+        "description" =>
+          "#{info.count} #{pluralize("showtime", info.count)} available. #{info.date_range}",
+        "location" => build_movie_theater_location(venue, city),
+        "workPresented" => build_work_presented(movie)
+      }
+      |> maybe_add_first_start_date(info)
+      |> maybe_add_screening_formats(info)
+      |> maybe_add_screening_image(movie)
+
     %{
       "@type" => "ListItem",
       "position" => position,
-      "item" => %{
-        "@type" => "Place",
-        "@id" => build_venue_url(venue, city),
-        "name" => venue.name,
-        "address" => build_postal_address(venue, city),
-        "url" => build_activity_url(info.slug),
-        "description" => "#{info.count} #{pluralize("showtime", info.count)} available"
-      }
+      "item" => screening_event
     }
+  end
+
+  # Build MovieTheater location for screening events
+  defp build_movie_theater_location(venue, city) do
+    location_type =
+      if venue.venue_type == "cinema" do
+        "MovieTheater"
+      else
+        "Place"
+      end
+
+    %{
+      "@type" => location_type,
+      "@id" => build_venue_url(venue, city),
+      "name" => venue.name,
+      "address" => build_postal_address(venue, city)
+    }
+    |> maybe_add_geo(venue)
+  end
+
+  # Add geo coordinates if available
+  defp maybe_add_geo(location, venue) do
+    if venue.latitude && venue.longitude do
+      Map.put(location, "geo", %{
+        "@type" => "GeoCoordinates",
+        "latitude" => venue.latitude,
+        "longitude" => venue.longitude
+      })
+    else
+      location
+    end
+  end
+
+  # Add startDate from the first available date
+  defp maybe_add_first_start_date(schema, %{dates: [first_date | _]}) do
+    Map.put(schema, "startDate", Date.to_iso8601(first_date))
+  end
+
+  defp maybe_add_first_start_date(schema, _), do: schema
+
+  # Add videoFormat from screening formats
+  defp maybe_add_screening_formats(schema, %{formats: formats}) when is_list(formats) do
+    case formats do
+      [] -> schema
+      [single] -> Map.put(schema, "videoFormat", single)
+      multiple -> Map.put(schema, "videoFormat", multiple)
+    end
+  end
+
+  defp maybe_add_screening_formats(schema, _), do: schema
+
+  # Build workPresented Movie reference with required image field
+  # Google requires image field on all Movie objects, including nested references
+  defp build_work_presented(movie) do
+    base = %{
+      "@type" => "Movie",
+      "name" => movie.title
+    }
+
+    # Add image URL if available (required by Google for Movie type)
+    image_url = get_movie_image_url(movie)
+
+    if image_url do
+      Map.put(base, "image", CDN.url(image_url))
+    else
+      base
+    end
+  end
+
+  # Get the movie image URL from available sources
+  # Shared logic used by add_image, maybe_add_screening_image, and build_work_presented
+  defp get_movie_image_url(movie) do
+    cond do
+      # Direct poster_url field (stored in DB from TMDB)
+      movie.poster_url && movie.poster_url != "" ->
+        movie.poster_url
+
+      # TMDb poster path in metadata (fallback)
+      movie.metadata && movie.metadata["poster_path"] ->
+        "https://image.tmdb.org/t/p/w500#{movie.metadata["poster_path"]}"
+
+      # OMDb poster (if available in metadata)
+      movie.metadata && is_binary(movie.metadata["Poster"]) &&
+          movie.metadata["Poster"] != "N/A" ->
+        movie.metadata["Poster"]
+
+      true ->
+        nil
+    end
+  end
+
+  # Add movie image to screening event
+  defp maybe_add_screening_image(schema, movie) do
+    case get_movie_image_url(movie) do
+      nil -> schema
+      image_url -> Map.put(schema, "image", CDN.url(image_url))
+    end
   end
 
   # Build venue URL

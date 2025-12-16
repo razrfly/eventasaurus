@@ -920,7 +920,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       {:ok, venue: venue, category: category}
     end
 
-    test "uses MovieTheater instead of Place for ScreeningEvent", %{venue: venue, category: category} do
+    test "uses MovieTheater instead of Place for ScreeningEvent", %{
+      venue: venue,
+      category: category
+    } do
       movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
 
       event = %PublicEvent{
@@ -961,7 +964,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert schema["location"]["@type"] == "Place"
     end
 
-    test "includes full movie metadata in workPresented from TMDb", %{venue: venue, category: category} do
+    test "includes full movie metadata in workPresented from TMDb", %{
+      venue: venue,
+      category: category
+    } do
       movie = %Movie{
         id: 1,
         title: "Dune: Part Two",
@@ -1087,7 +1093,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert "https://www.imdb.com/title/tt1234567/" in work["sameAs"]
     end
 
-    test "includes only cinegraph.org URL when IMDb ID not available", %{venue: venue, category: category} do
+    test "includes only cinegraph.org URL when IMDb ID not available", %{
+      venue: venue,
+      category: category
+    } do
       movie = %Movie{
         id: 1,
         title: "Test Movie",
@@ -1219,7 +1228,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert schema["inLanguage"] == "EN"
     end
 
-    test "uses dubbed_language when original_language not available", %{venue: venue, category: category} do
+    test "uses dubbed_language when original_language not available", %{
+      venue: venue,
+      category: category
+    } do
       movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
 
       source_record = %Source{id: 1, name: "Cinema City"}
@@ -1252,7 +1264,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert schema["inLanguage"] == "PL"
     end
 
-    test "falls back to OMDb metadata when TMDb not available", %{venue: venue, category: category} do
+    test "falls back to OMDb metadata when TMDb not available", %{
+      venue: venue,
+      category: category
+    } do
       movie = %Movie{
         id: 1,
         title: "The Matrix",
@@ -1305,7 +1320,10 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert work["aggregateRating"]["ratingCount"] == 2_000_000
     end
 
-    test "does not include videoFormat or inLanguage when not in metadata", %{venue: venue, category: category} do
+    test "does not include videoFormat or inLanguage when not in metadata", %{
+      venue: venue,
+      category: category
+    } do
       movie = %Movie{id: 1, title: "Test Movie", tmdb_id: 12345}
 
       event = %PublicEvent{
@@ -1360,6 +1378,247 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchemaTest do
       assert is_list(schema["videoFormat"])
       assert "3D" in schema["videoFormat"]
       assert "4DX" in schema["videoFormat"]
+    end
+  end
+
+  describe "generate_with_occurrences/2" do
+    setup do
+      country = %Country{id: 1, name: "Poland", code: "PL", slug: "poland"}
+      city = %City{id: 1, name: "Kraków", slug: "krakow", country_id: 1, country: country}
+
+      venue = %Venue{
+        id: 1,
+        name: "Cinema City",
+        address: "Test Street 123",
+        latitude: 50.0647,
+        longitude: 19.9450,
+        city_id: 1,
+        city_ref: city,
+        venue_type: "cinema"
+      }
+
+      category = %Category{
+        id: 1,
+        name: "Movies",
+        slug: "movies",
+        schema_type: "ScreeningEvent"
+      }
+
+      movie = %Movie{
+        id: 1,
+        title: "Avatar: Fire and Ash",
+        slug: "avatar-fire-and-ash",
+        metadata: %{
+          "Poster" => "https://example.com/poster.jpg"
+        }
+      }
+
+      event = %PublicEvent{
+        id: 1,
+        title: "Avatar: Fire and Ash at Cinema City",
+        slug: "avatar-fire-and-ash-at-cinema-city",
+        starts_at: ~U[2024-12-15 19:00:00Z],
+        ends_at: ~U[2024-12-15 22:00:00Z],
+        venue_id: 1,
+        venue: venue,
+        categories: [category],
+        performers: [],
+        movies: [movie],
+        sources: []
+      }
+
+      {:ok, event: event, venue: venue, movie: movie}
+    end
+
+    test "returns single schema when occurrences is nil", %{event: event} do
+      json = PublicEventSchema.generate_with_occurrences(event, nil)
+      schema = Jason.decode!(json)
+
+      # Should return single object, not array
+      assert is_map(schema)
+      assert schema["@type"] == "ScreeningEvent"
+    end
+
+    test "returns single schema when occurrences is empty list", %{event: event} do
+      json = PublicEventSchema.generate_with_occurrences(event, [])
+      schema = Jason.decode!(json)
+
+      assert is_map(schema)
+      assert schema["@type"] == "ScreeningEvent"
+    end
+
+    test "returns single schema for one occurrence", %{event: event} do
+      occurrences = [
+        %{
+          datetime: ~U[2024-12-15 19:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[19:00:00],
+          label: "2D",
+          external_id: "cinema_city_123"
+        }
+      ]
+
+      json = PublicEventSchema.generate_with_occurrences(event, occurrences)
+      schema = Jason.decode!(json)
+
+      # Single occurrence returns single object
+      assert is_map(schema)
+      assert schema["@type"] == "ScreeningEvent"
+      assert schema["startDate"] == "2024-12-15T19:00:00Z"
+    end
+
+    test "returns array of schemas for multiple occurrences", %{event: event} do
+      occurrences = [
+        %{
+          datetime: ~U[2024-12-15 15:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[15:00:00],
+          label: "2D",
+          external_id: "cinema_city_123_1500"
+        },
+        %{
+          datetime: ~U[2024-12-15 18:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[18:00:00],
+          label: "3D",
+          external_id: "cinema_city_123_1800"
+        },
+        %{
+          datetime: ~U[2024-12-15 21:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[21:00:00],
+          label: "IMAX",
+          external_id: "cinema_city_123_2100"
+        }
+      ]
+
+      json = PublicEventSchema.generate_with_occurrences(event, occurrences)
+      schemas = Jason.decode!(json)
+
+      # Multiple occurrences return array
+      assert is_list(schemas)
+      assert length(schemas) == 3
+
+      # Each schema is a ScreeningEvent
+      Enum.each(schemas, fn schema ->
+        assert schema["@type"] == "ScreeningEvent"
+        assert schema["@context"] == "https://schema.org"
+      end)
+
+      # Check start times are correct
+      start_dates = Enum.map(schemas, & &1["startDate"])
+      assert "2024-12-15T15:00:00Z" in start_dates
+      assert "2024-12-15T18:00:00Z" in start_dates
+      assert "2024-12-15T21:00:00Z" in start_dates
+    end
+
+    test "extracts videoFormat from occurrence label", %{event: event} do
+      occurrences = [
+        %{
+          datetime: ~U[2024-12-15 15:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[15:00:00],
+          label: "3D",
+          external_id: "cinema_city_123_3d"
+        },
+        %{
+          datetime: ~U[2024-12-15 18:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[18:00:00],
+          label: "IMAX 3D",
+          external_id: "cinema_city_123_imax3d"
+        }
+      ]
+
+      json = PublicEventSchema.generate_with_occurrences(event, occurrences)
+      schemas = Jason.decode!(json)
+
+      # First showtime should have 3D format
+      first_schema = Enum.find(schemas, &(&1["startDate"] == "2024-12-15T15:00:00Z"))
+      assert first_schema["videoFormat"] == "3D"
+
+      # Second showtime should have both IMAX and 3D
+      second_schema = Enum.find(schemas, &(&1["startDate"] == "2024-12-15T18:00:00Z"))
+      assert is_list(second_schema["videoFormat"])
+      assert "3D" in second_schema["videoFormat"]
+      assert "IMAX" in second_schema["videoFormat"]
+    end
+
+    test "includes workPresented movie in each occurrence", %{event: event} do
+      occurrences = [
+        %{
+          datetime: ~U[2024-12-15 19:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[19:00:00],
+          label: "2D",
+          external_id: "cinema_city_123"
+        }
+      ]
+
+      json = PublicEventSchema.generate_with_occurrences(event, occurrences)
+      schema = Jason.decode!(json)
+
+      assert schema["workPresented"]
+      assert schema["workPresented"]["@type"] == "Movie"
+      assert schema["workPresented"]["name"] == "Avatar: Fire and Ash"
+    end
+
+    test "uses MovieTheater location for cinema venues", %{event: event} do
+      occurrences = [
+        %{
+          datetime: ~U[2024-12-15 19:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[19:00:00],
+          label: "2D",
+          external_id: "cinema_city_123"
+        }
+      ]
+
+      json = PublicEventSchema.generate_with_occurrences(event, occurrences)
+      schema = Jason.decode!(json)
+
+      assert schema["location"]
+      assert schema["location"]["@type"] == "MovieTheater"
+      assert schema["location"]["name"] == "Cinema City"
+    end
+
+    test "falls back to regular generate for non-movie events", %{venue: venue} do
+      # Create a music event (not a movie)
+      music_category = %Category{
+        id: 2,
+        name: "Concerts",
+        slug: "concerts",
+        schema_type: "MusicEvent"
+      }
+
+      music_event = %PublicEvent{
+        id: 2,
+        title: "Rock Concert",
+        slug: "rock-concert",
+        starts_at: ~U[2024-12-15 20:00:00Z],
+        venue: venue,
+        categories: [music_category],
+        performers: [],
+        movies: [],
+        sources: []
+      }
+
+      occurrences = [
+        %{
+          datetime: ~U[2024-12-15 20:00:00Z],
+          date: ~D[2024-12-15],
+          time: ~T[20:00:00],
+          label: nil,
+          external_id: "concert_123"
+        }
+      ]
+
+      json = PublicEventSchema.generate_with_occurrences(music_event, occurrences)
+      schema = Jason.decode!(json)
+
+      # Non-movie events should use regular generate (single schema)
+      assert is_map(schema)
+      assert schema["@type"] == "MusicEvent"
     end
   end
 end

@@ -96,15 +96,15 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert String.contains?(schema["description"], "1 cinema")
     end
 
-    test "includes placeholder image when no metadata", %{
+    test "omits image when no poster_url or metadata", %{
       movie: movie,
       city: city,
       venues_with_info: venues_with_info
     } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      assert String.contains?(schema["image"], "placehold.co")
-      assert String.contains?(schema["image"], URI.encode("Dune: Part Two"))
+      # Google requires real images, so we omit the field rather than using placeholder
+      refute Map.has_key?(schema, "image")
     end
 
     test "generates JSON-LD string", %{
@@ -170,14 +170,45 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
     end
 
-    test "includes TMDb poster image", %{
-      movie: movie,
+    test "includes image from poster_url field (CDN wrapped)", %{
       city: city,
       venues_with_info: venues_with_info
     } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+      # Movie with poster_url set (as stored in DB)
+      movie_with_poster = %Movie{
+        id: 1,
+        title: "Dune: Part Two",
+        slug: "dune-part-two",
+        poster_url: "https://image.tmdb.org/t/p/w500/poster.jpg",
+        tmdb_metadata: nil,
+        metadata: nil
+      }
 
-      assert schema["image"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
+      schema = MovieSchema.build_movie_schema(movie_with_poster, city, venues_with_info)
+
+      # Should use CDN-wrapped poster_url
+      assert String.contains?(schema["image"], "/poster.jpg")
+    end
+
+    test "falls back to metadata poster_path when no poster_url", %{
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      # Movie with only metadata poster_path (no poster_url)
+      # Note: poster_path is stored in metadata map, not tmdb_metadata (which is virtual)
+      movie_with_metadata = %Movie{
+        id: 1,
+        title: "Dune: Part Two",
+        slug: "dune-part-two",
+        poster_url: nil,
+        tmdb_metadata: nil,
+        metadata: %{"poster_path" => "/tmdb-poster.jpg"}
+      }
+
+      schema = MovieSchema.build_movie_schema(movie_with_metadata, city, venues_with_info)
+
+      # Should use CDN-wrapped poster path from metadata
+      assert String.contains?(schema["image"], "/tmdb-poster.jpg")
     end
 
     test "includes release date", %{movie: movie, city: city, venues_with_info: venues_with_info} do
@@ -283,14 +314,28 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
     end
 
-    test "includes OMDb poster image", %{
-      movie: movie,
+    test "falls back to OMDb poster when no poster_url", %{
       city: city,
       venues_with_info: venues_with_info
     } do
-      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+      # Movie with only OMDb metadata (no poster_url or tmdb_metadata)
+      movie_with_omdb = %Movie{
+        id: 1,
+        title: "Dune: Part Two",
+        slug: "dune-part-two",
+        poster_url: nil,
+        tmdb_metadata: nil,
+        metadata: %{
+          "Poster" => "https://example.com/omdb-poster.jpg",
+          "Released" => "01 Mar 2024",
+          "Runtime" => "166 min"
+        }
+      }
 
-      assert schema["image"] == "https://example.com/poster.jpg"
+      schema = MovieSchema.build_movie_schema(movie_with_omdb, city, venues_with_info)
+
+      # Should use CDN-wrapped OMDb poster
+      assert String.contains?(schema["image"], "omdb-poster.jpg")
     end
 
     test "includes release date from OMDb", %{
@@ -397,8 +442,8 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
 
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      # Should use placeholder image when poster is N/A
-      assert String.contains?(schema["image"], "placehold.co")
+      # Should omit image field when poster is N/A (Google requires real images)
+      refute Map.has_key?(schema, "image")
 
       # Should not include fields with N/A values
       refute Map.has_key?(schema, "datePublished")
@@ -410,8 +455,8 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
     end
   end
 
-  describe "TMDb metadata takes precedence over OMDb" do
-    test "TMDb metadata is preferred when both exist" do
+  describe "image field precedence" do
+    test "poster_url takes precedence over all metadata" do
       country = %Country{id: 1, name: "USA", code: "US", slug: "usa"}
       city = %City{id: 1, name: "New York", slug: "new-york", country_id: 1, country: country}
 
@@ -442,14 +487,58 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
         id: 1,
         title: "Test Movie",
         slug: "test-movie",
+        poster_url: "https://image.tmdb.org/t/p/w500/stored-poster.jpg",
         tmdb_metadata: tmdb_metadata,
         metadata: omdb_metadata
       }
 
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      # TMDb values should be used
-      assert schema["image"] == "https://image.tmdb.org/t/p/w500/tmdb-poster.jpg"
+      # poster_url should be used (CDN wrapped), not tmdb_metadata or omdb_metadata
+      assert String.contains?(schema["image"], "/stored-poster.jpg")
+
+      # TMDb values should still be used for other metadata
+      assert schema["datePublished"] == "2024-03-01"
+      assert schema["duration"] == "PT2H30M"
+    end
+
+    test "TMDb metadata takes precedence over OMDb for non-image fields" do
+      country = %Country{id: 1, name: "USA", code: "US", slug: "usa"}
+      city = %City{id: 1, name: "New York", slug: "new-york", country_id: 1, country: country}
+
+      venue = %Venue{
+        id: 1,
+        name: "Test Cinema",
+        slug: "test-cinema",
+        city_ref: city
+      }
+
+      venues_with_info = [
+        {venue, %{count: 5, slug: "test-slug", date_range: "Mar 1-5", formats: []}}
+      ]
+
+      tmdb_metadata = %{
+        "release_date" => "2024-03-01",
+        "runtime" => 150
+      }
+
+      omdb_metadata = %{
+        "Released" => "15 Mar 2024",
+        "Runtime" => "180 min"
+      }
+
+      movie = %Movie{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        poster_url: nil,
+        tmdb_metadata: tmdb_metadata,
+        metadata: omdb_metadata
+      }
+
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      # TMDb values should be used for date and duration
       assert schema["datePublished"] == "2024-03-01"
       assert schema["duration"] == "PT2H30M"
     end
@@ -514,7 +603,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
     end
   end
 
-  describe "screening events ItemList" do
+  describe "screening events ItemList (carousel)" do
     setup do
       country = %Country{id: 1, name: "Poland", code: "PL", slug: "poland"}
       city = %City{id: 1, name: "Kraków", slug: "krakow", country_id: 1, country: country}
@@ -525,7 +614,10 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
         address: "Main Street 123",
         slug: "cinema-city",
         city_id: 1,
-        city_ref: city
+        city_ref: city,
+        venue_type: "cinema",
+        latitude: 50.0647,
+        longitude: 19.9450
       }
 
       venue2 = %Venue{
@@ -534,13 +626,15 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
         address: "Market Square 27",
         slug: "kino-pod-baranami",
         city_id: 1,
-        city_ref: city
+        city_ref: city,
+        venue_type: "cinema"
       }
 
       movie = %Movie{
         id: 1,
         title: "Dune: Part Two",
         slug: "dune-part-two",
+        poster_url: "https://image.tmdb.org/t/p/w500/dune2.jpg",
         tmdb_metadata: nil,
         metadata: nil
       }
@@ -551,52 +645,75 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
            count: 15,
            slug: "dune-part-two-cinema-city",
            date_range: "Mar 1-15",
-           formats: ["IMAX", "3D"]
+           formats: ["IMAX", "3D"],
+           dates: [~D[2024-03-01], ~D[2024-03-02], ~D[2024-03-03]]
          }},
-        {venue2, %{count: 8, slug: "dune-part-two-baranami", date_range: "Mar 1-10", formats: []}}
+        {venue2,
+         %{
+           count: 8,
+           slug: "dune-part-two-baranami",
+           date_range: "Mar 1-10",
+           formats: [],
+           dates: [~D[2024-03-01], ~D[2024-03-05]]
+         }}
       ]
 
       {:ok, movie: movie, city: city, venues_with_info: venues_with_info}
     end
 
-    test "includes potentialAction with ItemList of screenings", %{
+    test "includes subjectOf with ItemList of ScreeningEvents", %{
       movie: movie,
       city: city,
       venues_with_info: venues_with_info
     } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      assert schema["potentialAction"]["@type"] == "ItemList"
-      assert schema["potentialAction"]["name"] == "Screenings of Dune: Part Two in Kraków"
-      assert schema["potentialAction"]["numberOfItems"] == 2
+      assert schema["subjectOf"]["@type"] == "ItemList"
+      assert schema["subjectOf"]["name"] == "Screenings of Dune: Part Two in Kraków"
+      assert schema["subjectOf"]["numberOfItems"] == 2
     end
 
-    test "includes ListItem for each venue with position", %{
+    test "includes ListItem with ScreeningEvent for each venue", %{
       movie: movie,
       city: city,
       venues_with_info: venues_with_info
     } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      items = schema["potentialAction"]["itemListElement"]
+      items = schema["subjectOf"]["itemListElement"]
       assert length(items) == 2
 
       first_item = Enum.at(items, 0)
       assert first_item["@type"] == "ListItem"
       assert first_item["position"] == 1
-      assert first_item["item"]["@type"] == "Place"
-      assert first_item["item"]["name"] == "Cinema City"
+      assert first_item["item"]["@type"] == "ScreeningEvent"
+      assert first_item["item"]["name"] == "Dune: Part Two at Cinema City"
     end
 
-    test "includes venue address in ListItem", %{
+    test "ScreeningEvent includes MovieTheater location for cinema venues", %{
       movie: movie,
       city: city,
       venues_with_info: venues_with_info
     } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)
-      address = first_item["item"]["address"]
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      location = first_item["item"]["location"]
+
+      assert location["@type"] == "MovieTheater"
+      assert location["name"] == "Cinema City"
+      assert String.contains?(location["@id"], "/c/krakow/venues/cinema-city")
+    end
+
+    test "ScreeningEvent location includes PostalAddress", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      address = first_item["item"]["location"]["address"]
 
       assert address["@type"] == "PostalAddress"
       assert address["streetAddress"] == "Main Street 123"
@@ -604,31 +721,115 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       assert address["addressCountry"] == "PL"
     end
 
-    test "includes venue URL and activity URL in ListItem", %{
+    test "ScreeningEvent location includes geo coordinates when available", %{
       movie: movie,
       city: city,
       venues_with_info: venues_with_info
     } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      geo = first_item["item"]["location"]["geo"]
 
-      assert String.contains?(first_item["item"]["@id"], "/c/krakow/venues/cinema-city")
+      assert geo["@type"] == "GeoCoordinates"
+      assert geo["latitude"] == 50.0647
+      assert geo["longitude"] == 19.9450
+
+      # Second venue has no coordinates
+      second_item = Enum.at(schema["subjectOf"]["itemListElement"], 1)
+      refute Map.has_key?(second_item["item"]["location"], "geo")
+    end
+
+    test "ScreeningEvent includes workPresented movie reference with image", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      work = first_item["item"]["workPresented"]
+
+      assert work["@type"] == "Movie"
+      assert work["name"] == "Dune: Part Two"
+      # Google requires image field on all Movie objects, including nested references
+      assert String.contains?(work["image"], "/dune2.jpg")
+    end
+
+    test "ScreeningEvent includes activity URL", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
       assert String.contains?(first_item["item"]["url"], "/activities/dune-part-two-cinema-city")
     end
 
-    test "includes showtime count description", %{
+    test "ScreeningEvent includes showtime count in description", %{
       movie: movie,
       city: city,
       venues_with_info: venues_with_info
     } do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)
-      assert first_item["item"]["description"] == "15 showtimes available"
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      assert String.contains?(first_item["item"]["description"], "15 showtimes available")
+      assert String.contains?(first_item["item"]["description"], "Mar 1-15")
 
-      second_item = Enum.at(schema["potentialAction"]["itemListElement"], 1)
-      assert second_item["item"]["description"] == "8 showtimes available"
+      second_item = Enum.at(schema["subjectOf"]["itemListElement"], 1)
+      assert String.contains?(second_item["item"]["description"], "8 showtimes available")
+    end
+
+    test "ScreeningEvent includes startDate from first available date", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      assert first_item["item"]["startDate"] == "2024-03-01"
+    end
+
+    test "ScreeningEvent includes videoFormat when formats available", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      # Multiple formats returns array
+      assert first_item["item"]["videoFormat"] == ["IMAX", "3D"]
+
+      # Second venue has no formats
+      second_item = Enum.at(schema["subjectOf"]["itemListElement"], 1)
+      refute Map.has_key?(second_item["item"], "videoFormat")
+    end
+
+    test "ScreeningEvent includes image from movie", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      assert String.contains?(first_item["item"]["image"], "/dune2.jpg")
+    end
+
+    test "ScreeningEvent includes eventAttendanceMode and eventStatus", %{
+      movie: movie,
+      city: city,
+      venues_with_info: venues_with_info
+    } do
+      schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
+
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      assert first_item["item"]["eventAttendanceMode"] == "https://schema.org/OfflineEventAttendanceMode"
+      assert first_item["item"]["eventStatus"] == "https://schema.org/EventScheduled"
     end
 
     test "uses singular 'showtime' for single screening" do
@@ -639,7 +840,8 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
         id: 1,
         name: "Test Cinema",
         slug: "test-cinema",
-        city_ref: city
+        city_ref: city,
+        venue_type: "cinema"
       }
 
       movie = %Movie{
@@ -651,16 +853,16 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       }
 
       venues_with_info = [
-        {venue, %{count: 1, slug: "test-slug", date_range: "Mar 1", formats: []}}
+        {venue, %{count: 1, slug: "test-slug", date_range: "Mar 1", formats: [], dates: []}}
       ]
 
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
-      first_item = Enum.at(schema["potentialAction"]["itemListElement"], 0)
-      assert first_item["item"]["description"] == "1 showtime available"
+      first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
+      assert String.contains?(first_item["item"]["description"], "1 showtime available")
     end
 
-    test "does not include potentialAction when no venues" do
+    test "does not include subjectOf when no venues" do
       country = %Country{id: 1, name: "Poland", code: "PL", slug: "poland"}
       city = %City{id: 1, name: "Kraków", slug: "krakow", country_id: 1, country: country}
 
@@ -674,7 +876,7 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
 
       schema = MovieSchema.build_movie_schema(movie, city, [])
 
-      refute Map.has_key?(schema, "potentialAction")
+      refute Map.has_key?(schema, "subjectOf")
     end
   end
 

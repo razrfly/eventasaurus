@@ -166,17 +166,21 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         _ -> nil
       end
 
-    # Generate JSON-LD structured data for movie page
-    json_ld = MovieSchema.generate(movie, city, venues_with_info)
-
-    # Generate Open Graph meta tags
-    og_tags = build_movie_open_graph(movie, city, total_showtimes)
-
     # Build rich_data map for movie components
     rich_data = build_rich_data_from_movie(movie)
 
     # Fetch cast/crew from TMDB if we have a tmdb_id
     {cast, crew} = fetch_cast_and_crew(movie.tmdb_id)
+
+    # Enrich movie with TMDB metadata for JSON-LD generation
+    # This populates the virtual tmdb_metadata field with credits data
+    movie_with_metadata = enrich_movie_for_json_ld(movie, cast, crew)
+
+    # Generate JSON-LD structured data for movie page
+    json_ld = MovieSchema.generate(movie_with_metadata, city, venues_with_info)
+
+    # Generate Open Graph meta tags
+    og_tags = build_movie_open_graph(movie, city, total_showtimes)
 
     {:noreply,
      socket
@@ -934,5 +938,23 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   # Convert map with atom keys to string keys for component compatibility
   defp stringify_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
+  end
+
+  # Enrich movie struct with TMDB metadata for JSON-LD generation
+  # This populates the virtual tmdb_metadata field with credits data
+  # so that director/actor fields can be extracted by MovieSchema
+  defp enrich_movie_for_json_ld(movie, cast, crew) do
+    # Build tmdb_metadata map with credits data for JSON-LD extraction
+    tmdb_metadata = %{
+      "credits" => %{
+        "cast" => cast,
+        "crew" => crew
+      },
+      "release_date" =>
+        if(movie.release_date, do: Date.to_iso8601(movie.release_date), else: nil),
+      "runtime" => movie.runtime
+    }
+
+    %{movie | tmdb_metadata: tmdb_metadata}
   end
 end
