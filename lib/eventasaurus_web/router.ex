@@ -701,6 +701,10 @@ defmodule EventasaurusWeb.Router do
       # See AggregationTypeSlug for the complete list of valid content types
       live "/social/:identifier", AggregatedContentLive, :multi_city
       live "/food/:identifier", AggregatedContentLive, :multi_city
+
+      # Movies index page - shows all movies currently in cinemas
+      live "/movies", MoviesIndexLive, :index
+
       # Generic movie page - cross-site linking from Cinegraph
       # Identifier can be TMDB ID (e.g., /movies/157336) or slug-tmdb_id (e.g., /movies/interstellar-157336)
       live "/movies/:identifier", GenericMovieLive, :show
