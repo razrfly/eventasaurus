@@ -85,7 +85,8 @@ defmodule Eventasaurus.Sitemap do
       city_urls(opts),
       venue_urls(opts),
       container_urls(opts),
-      movie_urls(opts)
+      movie_urls(opts),
+      generic_movie_urls(opts)
       # aggregation_urls(opts) - Disabled: AggregatedEventGroup is virtual struct, not queryable
     ]
     |> Enum.reduce(Stream.concat([]), fn stream, acc ->
@@ -138,6 +139,12 @@ defmodule Eventasaurus.Sitemap do
         loc: "#{base_url}/your-data",
         changefreq: :monthly,
         priority: 0.3,
+        lastmod: Date.utc_today()
+      },
+      %Sitemapper.URL{
+        loc: "#{base_url}/movies",
+        changefreq: :daily,
+        priority: 0.9,
         lastmod: Date.utc_today()
       }
     ]
@@ -385,6 +392,33 @@ defmodule Eventasaurus.Sitemap do
         loc: "#{base_url}/c/#{movie.city_slug}/movies/#{movie.movie_slug}",
         changefreq: :weekly,
         priority: 0.8,
+        lastmod: lastmod
+      }
+    end)
+  end
+
+  # Returns a stream of generic movie pages (not city-specific)
+  defp generic_movie_urls(opts) do
+    base_url = get_base_url(opts)
+
+    # Query all movies with valid slugs
+    from(m in EventasaurusDiscovery.Movies.Movie,
+      select: %{slug: m.slug, updated_at: m.updated_at},
+      where: not is_nil(m.slug) and m.slug != ""
+    )
+    |> Repo.stream()
+    |> Stream.map(fn movie ->
+      lastmod =
+        if movie.updated_at do
+          NaiveDateTime.to_date(movie.updated_at)
+        else
+          Date.utc_today()
+        end
+
+      %Sitemapper.URL{
+        loc: "#{base_url}/movies/#{movie.slug}",
+        changefreq: :weekly,
+        priority: 0.7,
         lastmod: lastmod
       }
     end)
