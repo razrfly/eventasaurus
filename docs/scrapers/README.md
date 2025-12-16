@@ -89,7 +89,8 @@
 1. Run `mix audit.scheduler_health` to verify jobs are running on schedule
 2. Run `mix audit.date_coverage` to check for gaps in date coverage
 3. Run `mix monitor.collisions` to detect TMDB matching issues
-4. See [../scraper-monitoring-guide.md](../scraper-monitoring-guide.md) for detailed audit tool documentation
+4. Run `mix fix_cinema_city_duplicates` to repair duplicate film ID data
+5. See [Scraper Monitoring Guide](../scraper-monitoring-guide.md#cli-audit--maintenance-tools) for complete documentation
 
 ---
 
@@ -180,7 +181,7 @@ When working on scrapers:
 2. Review [SCRAPER_SPECIFICATION.md](./SCRAPER_SPECIFICATION.md) for standards
 3. Look at reference implementations (Resident Advisor, Ticketmaster)
 4. Check [SCRAPER_AUDIT_REPORT.md](./SCRAPER_AUDIT_REPORT.md) for known issues
-5. Run audit tools: `mix audit.scheduler_health`, `mix audit.date_coverage`, `mix monitor.collisions`
+5. Run [audit tools](../scraper-monitoring-guide.md#cli-audit--maintenance-tools) to diagnose health issues
 6. Create a GitHub issue if needed
 
 ---
