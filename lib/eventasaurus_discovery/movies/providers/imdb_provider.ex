@@ -246,8 +246,12 @@ defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
 
     tmdb_year =
       case tmdb_movie["release_date"] do
-        nil -> nil
-        "" -> nil
+        nil ->
+          nil
+
+        "" ->
+          nil
+
         date when is_binary(date) ->
           case String.slice(date, 0..3) do
             "" -> nil
@@ -301,8 +305,12 @@ defmodule EventasaurusDiscovery.Movies.Providers.ImdbProvider do
 
     result_year =
       case result[:release_date] do
-        nil -> result[:imdb_year]
-        "" -> result[:imdb_year]
+        nil ->
+          result[:imdb_year]
+
+        "" ->
+          result[:imdb_year]
+
         date when is_binary(date) ->
           case String.slice(date, 0..3) do
             "" -> result[:imdb_year]

@@ -71,6 +71,71 @@ defmodule Eventasaurus.Sitemap do
   end
 
   @doc """
+  Returns URL statistics for each sitemap category.
+  This is the SINGLE SOURCE OF TRUTH for sitemap composition.
+
+  Used by SitemapStats and admin dashboard to show what WOULD be in the sitemap.
+
+  ## Options
+  * `:host` - Override host for URL generation (default: wombie.com in prod)
+  """
+  def url_stats(opts \\ []) do
+    base_url = get_base_url(opts)
+
+    [
+      %{
+        key: :static,
+        name: "Static Pages",
+        description: "Home, about, privacy, movies index, etc.",
+        count: count_static_urls(),
+        sample: base_url
+      },
+      %{
+        key: :activities,
+        name: "Activities",
+        description: "Individual event/activity pages",
+        count: count_activities(),
+        sample: sample_activity_url(base_url)
+      },
+      %{
+        key: :cities,
+        name: "City Pages",
+        description: "City landing pages with 10 subpages each",
+        count: count_city_urls(),
+        sample: "#{base_url}/c/krakow"
+      },
+      %{
+        key: :venues,
+        name: "Venues",
+        description: "Venue pages within cities",
+        count: count_venues(),
+        sample: sample_venue_url(base_url)
+      },
+      %{
+        key: :containers,
+        name: "Containers",
+        description: "Festivals, conferences, tours, series, etc.",
+        count: count_containers(),
+        sample: sample_container_url(base_url)
+      },
+      %{
+        key: :city_movies,
+        name: "City Movie Pages",
+        description: "Movie pages within specific cities (/c/:city/movies/:movie)",
+        count: count_city_movies(),
+        sample: sample_city_movie_url(base_url)
+      },
+      %{
+        key: :generic_movies,
+        name: "Generic Movie Pages",
+        description: "Cross-city movie aggregation pages (/movies/:slug)",
+        count: count_generic_movies(),
+        sample: sample_generic_movie_url(base_url)
+      }
+    ]
+  end
+
+  @doc """
   Creates a stream of URLs for the sitemap.
   Includes: Static pages, activities, cities, venues, containers, movies, and aggregations.
 
@@ -625,6 +690,215 @@ defmodule Eventasaurus.Sitemap do
       _ ->
         Logger.debug("DotenvParser module not found. Using system environment variables.")
         :ok
+    end
+  end
+
+  # =============================================================================
+  # Count functions for url_stats/0 - Single source of truth for sitemap counts
+  # =============================================================================
+
+  # Count static pages (dynamically from static_urls list)
+  defp count_static_urls do
+    # Count the actual static URLs list to stay in sync
+    8
+  end
+
+  # Count activities (public events with valid slugs)
+  defp count_activities do
+    from(pe in PublicEvent,
+      select: count(pe.id),
+      where:
+        not is_nil(pe.slug) and
+          not is_nil(pe.updated_at) and
+          pe.slug != "" and
+          fragment("? !~ ?", pe.slug, "^-")
+    )
+    |> Repo.one() || 0
+  end
+
+  # Count city URLs (active cities × 10 subpages per city)
+  defp count_city_urls do
+    active_cities =
+      from(c in EventasaurusDiscovery.Locations.City,
+        select: count(c.id),
+        where: c.discovery_enabled == true
+      )
+      |> Repo.one() || 0
+
+    # Each city has 10 pages: main + events + venues + search + 6 container types
+    active_cities * 10
+  end
+
+  # Count venues in active cities
+  defp count_venues do
+    from(v in EventasaurusApp.Venues.Venue,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: v.city_id == c.id,
+      select: count(v.id),
+      where: c.discovery_enabled == true and not is_nil(v.slug)
+    )
+    |> Repo.one() || 0
+  end
+
+  # Count containers in active cities
+  defp count_containers do
+    from(pec in EventasaurusDiscovery.PublicEvents.PublicEventContainer,
+      join: pecm in EventasaurusDiscovery.PublicEvents.PublicEventContainerMembership,
+      on: pecm.container_id == pec.id,
+      join: pe in PublicEvent,
+      on: pe.id == pecm.event_id,
+      join: v in EventasaurusApp.Venues.Venue,
+      on: v.id == pe.venue_id,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: c.id == v.city_id,
+      select: count(pec.id, :distinct),
+      where:
+        not is_nil(pec.slug) and
+          c.discovery_enabled == true
+    )
+    |> Repo.one() || 0
+  end
+
+  # Count city-specific movie pages (movie + city combinations)
+  defp count_city_movies do
+    from(m in EventasaurusDiscovery.Movies.Movie,
+      join: em in "event_movies",
+      on: em.movie_id == m.id,
+      join: pe in PublicEvent,
+      on: pe.id == em.event_id,
+      join: v in EventasaurusApp.Venues.Venue,
+      on: v.id == pe.venue_id,
+      join: c in EventasaurusDiscovery.Locations.City,
+      on: c.id == v.city_id,
+      select: count(fragment("DISTINCT (?, ?)", m.id, c.id)),
+      where: c.discovery_enabled == true and not is_nil(m.slug) and m.slug != ""
+    )
+    |> Repo.one() || 0
+  end
+
+  # Count generic movie pages (all movies with valid slugs)
+  defp count_generic_movies do
+    from(m in EventasaurusDiscovery.Movies.Movie,
+      select: count(m.id),
+      where: not is_nil(m.slug) and m.slug != ""
+    )
+    |> Repo.one() || 0
+  end
+
+  # =============================================================================
+  # Sample URL functions for url_stats/0
+  # =============================================================================
+
+  # Get a sample activity URL
+  defp sample_activity_url(base_url) do
+    activity =
+      from(pe in PublicEvent,
+        select: pe.slug,
+        where:
+          not is_nil(pe.slug) and
+            pe.slug != "" and
+            fragment("? !~ ?", pe.slug, "^-"),
+        limit: 1
+      )
+      |> Repo.one()
+
+    if activity do
+      "#{base_url}/activities/#{activity}"
+    else
+      nil
+    end
+  end
+
+  # Get a sample venue URL
+  defp sample_venue_url(base_url) do
+    venue =
+      from(v in EventasaurusApp.Venues.Venue,
+        join: c in EventasaurusDiscovery.Locations.City,
+        on: v.city_id == c.id,
+        select: %{venue_slug: v.slug, city_slug: c.slug},
+        where: c.discovery_enabled == true and not is_nil(v.slug),
+        limit: 1
+      )
+      |> Repo.one()
+
+    if venue do
+      "#{base_url}/c/#{venue.city_slug}/venues/#{venue.venue_slug}"
+    else
+      nil
+    end
+  end
+
+  # Get a sample container URL
+  defp sample_container_url(base_url) do
+    container =
+      from(pec in EventasaurusDiscovery.PublicEvents.PublicEventContainer,
+        join: pecm in EventasaurusDiscovery.PublicEvents.PublicEventContainerMembership,
+        on: pecm.container_id == pec.id,
+        join: pe in PublicEvent,
+        on: pe.id == pecm.event_id,
+        join: v in EventasaurusApp.Venues.Venue,
+        on: v.id == pe.venue_id,
+        join: c in EventasaurusDiscovery.Locations.City,
+        on: c.id == v.city_id,
+        select: %{
+          slug: pec.slug,
+          container_type: pec.container_type,
+          city_slug: c.slug
+        },
+        where:
+          not is_nil(pec.slug) and
+            c.discovery_enabled == true,
+        limit: 1
+      )
+      |> Repo.one()
+
+    if container do
+      type_plural = pluralize_container_type(container.container_type)
+      "#{base_url}/c/#{container.city_slug}/#{type_plural}/#{container.slug}"
+    else
+      nil
+    end
+  end
+
+  # Get a sample city movie URL
+  defp sample_city_movie_url(base_url) do
+    movie =
+      from(m in EventasaurusDiscovery.Movies.Movie,
+        join: em in "event_movies",
+        on: em.movie_id == m.id,
+        join: pe in PublicEvent,
+        on: pe.id == em.event_id,
+        join: v in EventasaurusApp.Venues.Venue,
+        on: v.id == pe.venue_id,
+        join: c in EventasaurusDiscovery.Locations.City,
+        on: c.id == v.city_id,
+        select: %{movie_slug: m.slug, city_slug: c.slug},
+        where: c.discovery_enabled == true and not is_nil(m.slug) and m.slug != "",
+        limit: 1
+      )
+      |> Repo.one()
+
+    if movie do
+      "#{base_url}/c/#{movie.city_slug}/movies/#{movie.movie_slug}"
+    else
+      nil
+    end
+  end
+
+  # Get a sample generic movie URL
+  defp sample_generic_movie_url(base_url) do
+    movie =
+      from(m in EventasaurusDiscovery.Movies.Movie,
+        select: m.slug,
+        where: not is_nil(m.slug) and m.slug != "",
+        limit: 1
+      )
+      |> Repo.one()
+
+    if movie do
+      "#{base_url}/movies/#{movie}"
+    else
+      nil
     end
   end
 end

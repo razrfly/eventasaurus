@@ -56,13 +56,14 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} = OptionParser.parse(args,
-      switches: [
-        providers: :string,
-        skip_cache: :boolean,
-        verbose: :boolean
-      ]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        switches: [
+          providers: :string,
+          skip_cache: :boolean,
+          verbose: :boolean
+        ]
+      )
 
     # Start the application
     Mix.Task.run("app.start")
@@ -90,11 +91,14 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
     IO.puts("Provider Status:")
     IO.puts("  TmdbProvider: ✅ Available")
     IO.puts("  OmdbProvider: ✅ Available")
-    imdb_status = if ImdbProvider in providers and EventasaurusDiscovery.Movies.ImdbService.available?() do
-      "✅ Available (Zyte configured)"
-    else
-      "⚠️  Skipped (Zyte not configured or excluded)"
-    end
+
+    imdb_status =
+      if ImdbProvider in providers and EventasaurusDiscovery.Movies.ImdbService.available?() do
+        "✅ Available (Zyte configured)"
+      else
+        "⚠️  Skipped (Zyte not configured or excluded)"
+      end
+
     IO.puts("  ImdbProvider: #{imdb_status}")
     IO.puts("")
 
@@ -106,9 +110,10 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
 
     start_time = System.monotonic_time(:millisecond)
 
-    results = Enum.map(@test_cases, fn test_case ->
-      run_test_case(test_case, providers, skip_cache, verbose)
-    end)
+    results =
+      Enum.map(@test_cases, fn test_case ->
+        run_test_case(test_case, providers, skip_cache, verbose)
+      end)
 
     total_time = System.monotonic_time(:millisecond) - start_time
 
@@ -117,6 +122,7 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
   end
 
   defp parse_providers(nil), do: [TmdbProvider, OmdbProvider, ImdbProvider]
+
   defp parse_providers(str) do
     str
     |> String.split(",")
@@ -159,32 +165,33 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
     result = MovieLookupService.lookup(query, opts)
     duration = System.monotonic_time(:millisecond) - start_time
 
-    outcome = case result do
-      {:ok, tmdb_id, confidence} ->
-        %{
-          status: :success,
-          tmdb_id: tmdb_id,
-          confidence: confidence,
-          duration: duration
-        }
+    outcome =
+      case result do
+        {:ok, tmdb_id, confidence} ->
+          %{
+            status: :success,
+            tmdb_id: tmdb_id,
+            confidence: confidence,
+            duration: duration
+          }
 
-      {:needs_review, candidates} ->
-        %{
-          status: :needs_review,
-          candidates: length(candidates),
-          top_confidence: get_top_confidence(candidates),
-          duration: duration
-        }
+        {:needs_review, candidates} ->
+          %{
+            status: :needs_review,
+            candidates: length(candidates),
+            top_confidence: get_top_confidence(candidates),
+            duration: duration
+          }
 
-      {:error, :no_results} ->
-        %{status: :no_results, duration: duration}
+        {:error, :no_results} ->
+          %{status: :no_results, duration: duration}
 
-      {:error, :low_confidence} ->
-        %{status: :low_confidence, duration: duration}
+        {:error, :low_confidence} ->
+          %{status: :low_confidence, duration: duration}
 
-      {:error, reason} ->
-        %{status: :error, reason: reason, duration: duration}
-    end
+        {:error, reason} ->
+          %{status: :error, reason: reason, duration: duration}
+      end
 
     if verbose do
       print_verbose_result(title, outcome)
@@ -194,28 +201,40 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
   end
 
   defp get_top_confidence([]), do: 0.0
+
   defp get_top_confidence(candidates) do
     candidates
-    |> Enum.map(& &1[:confidence] || 0.0)
+    |> Enum.map(&(&1[:confidence] || 0.0))
     |> Enum.max()
   end
 
   defp print_verbose_result(title, outcome) do
-    status_icon = case outcome.status do
-      :success -> "✅"
-      :needs_review -> "🔍"
-      :no_results -> "❌"
-      :low_confidence -> "⚠️"
-      :error -> "💥"
-    end
+    status_icon =
+      case outcome.status do
+        :success -> "✅"
+        :needs_review -> "🔍"
+        :no_results -> "❌"
+        :low_confidence -> "⚠️"
+        :error -> "💥"
+      end
 
-    details = case outcome.status do
-      :success -> "TMDB #{outcome.tmdb_id} (#{trunc(outcome.confidence * 100)}%)"
-      :needs_review -> "#{outcome.candidates} candidates (top: #{trunc(outcome.top_confidence * 100)}%)"
-      :no_results -> "No results"
-      :low_confidence -> "Low confidence"
-      :error -> "Error: #{inspect(outcome.reason)}"
-    end
+    details =
+      case outcome.status do
+        :success ->
+          "TMDB #{outcome.tmdb_id} (#{trunc(outcome.confidence * 100)}%)"
+
+        :needs_review ->
+          "#{outcome.candidates} candidates (top: #{trunc(outcome.top_confidence * 100)}%)"
+
+        :no_results ->
+          "No results"
+
+        :low_confidence ->
+          "Low confidence"
+
+        :error ->
+          "Error: #{inspect(outcome.reason)}"
+      end
 
     IO.puts("  #{status_icon} #{title}: #{details} [#{outcome.duration}ms]")
   end
@@ -265,35 +284,48 @@ defmodule Mix.Tasks.Benchmark.MovieLookup do
     IO.puts("")
 
     # Check IMDB-expected cases
-    imdb_cases = Enum.filter(results, & &1.expected == :imdb_helps)
+    imdb_cases = Enum.filter(results, &(&1.expected == :imdb_helps))
+
     if length(imdb_cases) > 0 do
       IO.puts("IMDB-Expected Cases (classic films):")
+
       Enum.each(imdb_cases, fn result ->
         status_icon = if result.outcome.status == :success, do: "✅", else: "❌"
-        details = case result.outcome.status do
-          :success ->
-            correct = if result[:expected_tmdb] == result.outcome.tmdb_id, do: "correct", else: "WRONG"
-            "TMDB #{result.outcome.tmdb_id} (#{correct})"
-          :needs_review ->
-            "#{result.outcome.candidates} candidates"
-          _ ->
-            "#{result.outcome.status}"
-        end
+
+        details =
+          case result.outcome.status do
+            :success ->
+              correct =
+                if result[:expected_tmdb] == result.outcome.tmdb_id, do: "correct", else: "WRONG"
+
+              "TMDB #{result.outcome.tmdb_id} (#{correct})"
+
+            :needs_review ->
+              "#{result.outcome.candidates} candidates"
+
+            _ ->
+              "#{result.outcome.status}"
+          end
+
         IO.puts("  #{status_icon} #{result.polish_title}: #{details}")
       end)
+
       IO.puts("")
     end
 
     # Detailed failure analysis
-    failures = Enum.filter(results, fn r ->
-      r.outcome.status in [:no_results, :error, :low_confidence]
-    end)
+    failures =
+      Enum.filter(results, fn r ->
+        r.outcome.status in [:no_results, :error, :low_confidence]
+      end)
 
     if length(failures) > 0 do
       IO.puts("Failed Lookups:")
+
       Enum.each(failures, fn result ->
         IO.puts("  ❌ #{result.polish_title}")
       end)
+
       IO.puts("")
     end
 

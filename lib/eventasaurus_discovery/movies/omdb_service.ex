@@ -308,6 +308,7 @@ defmodule EventasaurusDiscovery.Movies.OmdbService do
   end
 
   defp format_ratings(nil), do: []
+
   defp format_ratings(ratings) when is_list(ratings) do
     Enum.map(ratings, fn rating ->
       %{

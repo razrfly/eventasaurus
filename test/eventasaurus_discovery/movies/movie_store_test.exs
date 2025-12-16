@@ -58,7 +58,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStoreTest do
       # Bug fix: tmdb_id sometimes arrives as [id] instead of id
       # This can happen due to upstream data formatting issues
       attrs = %{
-        tmdb_id: [1280941],
+        tmdb_id: [1_280_941],
         title: "The Boy with Pink Pants"
       }
 

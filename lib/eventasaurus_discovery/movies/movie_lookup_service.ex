@@ -307,9 +307,7 @@ defmodule EventasaurusDiscovery.Movies.MovieLookupService do
           sorted
         else
           # Continue searching other providers
-          Logger.debug(
-            "⏭️ #{provider.name()} best match below threshold, trying next provider"
-          )
+          Logger.debug("⏭️ #{provider.name()} best match below threshold, trying next provider")
 
           more_results = search_until_confident(rest, query, opts, threshold)
           deduplicate_results(sorted ++ more_results)

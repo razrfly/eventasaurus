@@ -467,7 +467,14 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
           where:
             j.inserted_at >= ^cutoff and
               fragment("?->'collision_data' IS NOT NULL", j.results),
-          select: count(fragment("DISTINCT split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)", j.worker, j.worker))
+          select:
+            count(
+              fragment(
+                "DISTINCT split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)",
+                j.worker,
+                j.worker
+              )
+            )
         )
       ) || 0
 
@@ -481,7 +488,8 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
        collision_rate: collision_rate,
        avg_confidence: avg_confidence,
        sources_with_collisions: sources_with_collisions,
-       by_source: []  # Skip per-source breakdown for lightweight version
+       # Skip per-source breakdown for lightweight version
+       by_source: []
      }}
   rescue
     e -> {:error, Exception.message(e)}
@@ -503,19 +511,29 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
             j.inserted_at >= ^cutoff and
               fragment("?->'collision_data'->>'type' = 'cross_source'", j.results),
           group_by: [
-            fragment("split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)", j.worker, j.worker),
+            fragment(
+              "split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)",
+              j.worker,
+              j.worker
+            ),
             fragment("?->'collision_data'->>'matched_source'", j.results)
           ],
           select: %{
-            source: fragment("split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)", j.worker, j.worker),
+            source:
+              fragment(
+                "split_part(?, '.', array_length(string_to_array(?, '.'), 1) - 2)",
+                j.worker,
+                j.worker
+              ),
             matched_source: fragment("?->'collision_data'->>'matched_source'", j.results),
             count: count(j.id),
-            avg_confidence: avg(
-              type(
-                fragment("(?->'collision_data'->>'confidence')::float", j.results),
-                :float
+            avg_confidence:
+              avg(
+                type(
+                  fragment("(?->'collision_data'->>'confidence')::float", j.results),
+                  :float
+                )
               )
-            )
           },
           order_by: [desc: count(j.id)],
           limit: ^limit
@@ -526,7 +544,8 @@ defmodule EventasaurusDiscovery.Monitoring.Collisions do
           source: overlap.source,
           matched_source: overlap.matched_source,
           count: overlap.count,
-          avg_confidence: if(overlap.avg_confidence, do: Float.round(overlap.avg_confidence, 2), else: nil)
+          avg_confidence:
+            if(overlap.avg_confidence, do: Float.round(overlap.avg_confidence, 2), else: nil)
         }
       end)
 

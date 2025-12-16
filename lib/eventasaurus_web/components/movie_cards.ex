@@ -199,7 +199,9 @@ defmodule EventasaurusWeb.Components.MovieCards do
   defp get_genres(%{metadata: %{"genres" => genres}}) when is_list(genres), do: genres
   defp get_genres(_), do: nil
 
-  defp get_vote_average(%{metadata: %{"vote_average" => avg}}) when is_number(avg) and avg > 0, do: avg / 1.0
+  defp get_vote_average(%{metadata: %{"vote_average" => avg}}) when is_number(avg) and avg > 0,
+    do: avg / 1.0
+
   defp get_vote_average(_), do: nil
 
   defp format_tmdb_date(date_str) when is_binary(date_str) do
@@ -208,5 +210,6 @@ defmodule EventasaurusWeb.Components.MovieCards do
       _ -> date_str
     end
   end
+
   defp format_tmdb_date(_), do: ""
 end

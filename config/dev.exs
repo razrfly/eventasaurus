@@ -29,7 +29,9 @@ if File.exists?(".env") do
         unless String.starts_with?(key, "#") or key == "" do
           System.put_env(key, value)
         end
-      _ -> :ok
+
+      _ ->
+        :ok
     end
   end)
 end

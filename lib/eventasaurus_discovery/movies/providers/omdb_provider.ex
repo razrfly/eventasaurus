@@ -221,14 +221,20 @@ defmodule EventasaurusDiscovery.Movies.Providers.OmdbProvider do
 
     tmdb_year =
       case tmdb_movie["release_date"] do
-        nil -> nil
-        "" -> nil
+        nil ->
+          nil
+
+        "" ->
+          nil
+
         date when is_binary(date) and byte_size(date) >= 4 ->
           case Integer.parse(String.slice(date, 0..3)) do
             {year, _} -> year
             :error -> nil
           end
-        _ -> nil
+
+        _ ->
+          nil
       end
 
     omdb_year = parse_omdb_year(omdb_result[:year])
@@ -288,14 +294,20 @@ defmodule EventasaurusDiscovery.Movies.Providers.OmdbProvider do
 
     result_year =
       case result[:release_date] do
-        nil -> nil
-        "" -> nil
+        nil ->
+          nil
+
+        "" ->
+          nil
+
         date when is_binary(date) and byte_size(date) >= 4 ->
           case Integer.parse(String.slice(date, 0..3)) do
             {year, _} -> year
             :error -> nil
           end
-        _ -> nil
+
+        _ ->
+          nil
       end
 
     cond do

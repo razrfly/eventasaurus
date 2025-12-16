@@ -466,10 +466,11 @@ defmodule EventasaurusApp.Cache.DashboardStats do
     Cachex.fetch(@cache_name, cache_key, fn ->
       Logger.info("Computing venue duplicates (cache miss)")
 
-      duplicates = Venues.find_duplicate_groups(
-        min_similarity: min_similarity,
-        row_limit: row_limit
-      )
+      duplicates =
+        Venues.find_duplicate_groups(
+          min_similarity: min_similarity,
+          row_limit: row_limit
+        )
 
       {:commit, duplicates, expire: :timer.minutes(10)}
     end)
