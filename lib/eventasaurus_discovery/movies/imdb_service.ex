@@ -97,11 +97,15 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
 
     url = build_search_url(title)
 
-    Logger.info("🔍 ImdbService: Searching IMDB for \"#{title}\"#{if year, do: " (#{year})", else: ""}")
+    Logger.info(
+      "🔍 ImdbService: Searching IMDB for \"#{title}\"#{if year, do: " (#{year})", else: ""}"
+    )
 
     case Zyte.fetch(url, timeout: @timeout, recv_timeout: @timeout) do
       {:ok, html, metadata} ->
-        Logger.debug("ImdbService: Received #{byte_size(html)} bytes in #{metadata[:duration_ms]}ms")
+        Logger.debug(
+          "ImdbService: Received #{byte_size(html)} bytes in #{metadata[:duration_ms]}ms"
+        )
 
         results =
           html
@@ -247,7 +251,9 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
     pattern = Regex.compile!("#{escaped_id}[^<]*</a>[^(]*\\((\\d{4})\\)", "i")
 
     case Regex.run(pattern, html) do
-      [_, year] -> parse_year(year)
+      [_, year] ->
+        parse_year(year)
+
       nil ->
         # Alternative: look for year in a span after the link
         alt_pattern = Regex.compile!("#{escaped_id}[^<]*</a>.*?<span[^>]*>(\\d{4})</span>", "is")
@@ -264,7 +270,9 @@ defmodule EventasaurusDiscovery.Movies.ImdbService do
     # Look for type indicators near the IMDB ID
 
     escaped_id = Regex.escape(imdb_id)
-    context_pattern = Regex.compile!("#{escaped_id}[^<]*</a>[^<]*(?:<[^>]*>([^<]*)</[^>]*>)?", "i")
+
+    context_pattern =
+      Regex.compile!("#{escaped_id}[^<]*</a>[^<]*(?:<[^>]*>([^<]*)</[^>]*>)?", "i")
 
     case Regex.run(context_pattern, html) do
       [_, type_hint] when is_binary(type_hint) ->

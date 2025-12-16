@@ -30,7 +30,8 @@ defmodule EventasaurusWeb.MoviesIndexLive do
       end)
     ]
 
-    [now_showing, cities_with_movies, movie_count, screening_count, upcoming_movies] = Task.await_many(tasks)
+    [now_showing, cities_with_movies, movie_count, screening_count, upcoming_movies] =
+      Task.await_many(tasks)
 
     socket =
       socket

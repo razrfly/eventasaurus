@@ -77,7 +77,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       |> assign(:collision_loading, true)
       |> assign(:venue_duplicates_loading, true)
       # Initialize with empty/default values for required assigns
-      |> assign(:stats, %{total_events: 0, total_venues: 0, total_performers: 0, total_categories: 0, total_sources: 0})
+      |> assign(:stats, %{
+        total_events: 0,
+        total_venues: 0,
+        total_performers: 0,
+        total_categories: 0,
+        total_sources: 0
+      })
       |> assign(:source_stats, [])
       |> assign(:detailed_source_stats, [])
       |> assign(:city_stats, [])

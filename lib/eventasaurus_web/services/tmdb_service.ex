@@ -827,9 +827,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
     url = "#{@base_url}/movie/upcoming?api_key=#{api_key}&region=#{region}&page=#{page}"
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug(
-      "TMDB upcoming URL: #{@base_url}/movie/upcoming?region=#{region}&page=#{page}"
-    )
+    Logger.debug("TMDB upcoming URL: #{@base_url}/movie/upcoming?region=#{region}&page=#{page}")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -921,22 +919,27 @@ defmodule EventasaurusWeb.Services.TmdbService do
   end
 
   defp fetch_by_external_id(external_id, external_source, api_key) do
-    url = "#{@base_url}/find/#{URI.encode(external_id)}?api_key=#{api_key}&external_source=#{external_source}"
+    url =
+      "#{@base_url}/find/#{URI.encode(external_id)}?api_key=#{api_key}&external_source=#{external_source}"
+
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("TMDB find URL: #{@base_url}/find/#{external_id}?external_source=#{external_source}")
+    Logger.debug(
+      "TMDB find URL: #{@base_url}/find/#{external_id}?external_source=#{external_source}"
+    )
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         case Jason.decode(body) do
           {:ok, results} ->
-            {:ok, %{
-              movie_results: Map.get(results, "movie_results", []),
-              tv_results: Map.get(results, "tv_results", []),
-              person_results: Map.get(results, "person_results", []),
-              tv_episode_results: Map.get(results, "tv_episode_results", []),
-              tv_season_results: Map.get(results, "tv_season_results", [])
-            }}
+            {:ok,
+             %{
+               movie_results: Map.get(results, "movie_results", []),
+               tv_results: Map.get(results, "tv_results", []),
+               person_results: Map.get(results, "person_results", []),
+               tv_episode_results: Map.get(results, "tv_episode_results", []),
+               tv_season_results: Map.get(results, "tv_season_results", [])
+             }}
 
           {:error, decode_error} ->
             Logger.error("Failed to decode TMDB find response: #{inspect(decode_error)}")

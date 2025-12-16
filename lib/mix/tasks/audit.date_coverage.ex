@@ -197,7 +197,9 @@ defmodule Mix.Tasks.Audit.DateCoverage do
     IO.puts(
       "  #{pad(format_date(date), 12)} #{pad(day_name, 4)} " <>
         "#{pad(Integer.to_string(event_count), 8)} " <>
-        status_color <> pad(status, 10) <> IO.ANSI.reset() <>
+        status_color <>
+        pad(status, 10) <>
+        IO.ANSI.reset() <>
         "#{coverage_bar} #{coverage_pct}%"
     )
 
@@ -207,7 +209,10 @@ defmodule Mix.Tasks.Audit.DateCoverage do
 
     cond do
       event_count == 0 && days_ahead <= 3 ->
-        [{source_key, :missing_near, "Missing events for #{format_date(date)} (#{days_ahead} days ahead)"}]
+        [
+          {source_key, :missing_near,
+           "Missing events for #{format_date(date)} (#{days_ahead} days ahead)"}
+        ]
 
       event_count == 0 ->
         [{source_key, :missing_far, "Missing events for #{format_date(date)}"}]
@@ -226,7 +231,9 @@ defmodule Mix.Tasks.Audit.DateCoverage do
     if Enum.empty?(alerts) do
       IO.puts(IO.ANSI.green() <> "✅ All scrapers have good date coverage" <> IO.ANSI.reset())
     else
-      critical = Enum.count(alerts, fn {_, type, _} -> type in [:critical_gaps, :missing_near] end)
+      critical =
+        Enum.count(alerts, fn {_, type, _} -> type in [:critical_gaps, :missing_near] end)
+
       warnings = length(alerts) - critical
 
       color = if critical > 0, do: IO.ANSI.red(), else: IO.ANSI.yellow()
@@ -267,7 +274,9 @@ defmodule Mix.Tasks.Audit.DateCoverage do
       if critical > 0 or warnings > 0 do
         IO.puts(IO.ANSI.blue() <> "💡 Recommendations:" <> IO.ANSI.reset())
 
-        missing_count = Enum.count(alerts, fn {_, type, _} -> type in [:missing_near, :missing_far] end)
+        missing_count =
+          Enum.count(alerts, fn {_, type, _} -> type in [:missing_near, :missing_far] end)
+
         low_count = Enum.count(alerts, fn {_, type, _} -> type == :low_near end)
 
         if missing_count > 0 do

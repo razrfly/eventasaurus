@@ -79,7 +79,11 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     IO.puts("")
     IO.puts(IO.ANSI.cyan() <> "🗓️  Scheduler Health Report" <> IO.ANSI.reset())
     IO.puts(IO.ANSI.cyan() <> String.duplicate("━", 70) <> IO.ANSI.reset())
-    IO.puts("Period: Last #{days} days (#{format_date(days_ago(days))} to #{format_date(Date.utc_today())})")
+
+    IO.puts(
+      "Period: Last #{days} days (#{format_date(days_ago(days))} to #{format_date(Date.utc_today())})"
+    )
+
     IO.puts("")
 
     all_alerts = []
@@ -103,7 +107,11 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
     executions = fetch_sync_job_executions(config.pattern, from_date)
 
     if Enum.empty?(executions) do
-      IO.puts(IO.ANSI.yellow() <> "  ⚠️  No SyncJob executions found in the last #{days} days" <> IO.ANSI.reset())
+      IO.puts(
+        IO.ANSI.yellow() <>
+          "  ⚠️  No SyncJob executions found in the last #{days} days" <> IO.ANSI.reset()
+      )
+
       IO.puts("")
       [{source_key, :no_executions, "No executions found in last #{days} days"}]
     else
@@ -114,7 +122,10 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
       expected_dates = generate_date_range(days)
 
       # Display table header
-      IO.puts("  #{pad("Date", 12)} #{pad("Status", 10)} #{pad("Duration", 10)} #{pad("Jobs Spawned", 15)} Error")
+      IO.puts(
+        "  #{pad("Date", 12)} #{pad("Status", 10)} #{pad("Duration", 10)} #{pad("Jobs Spawned", 15)} Error"
+      )
+
       IO.puts("  #{String.duplicate("─", 65)}")
 
       alerts =
@@ -124,9 +135,12 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
               # Missing day
               IO.puts(
                 "  #{pad(format_date(date), 12)} " <>
-                  IO.ANSI.red() <> pad("MISSING", 10) <> IO.ANSI.reset() <>
+                  IO.ANSI.red() <>
+                  pad("MISSING", 10) <>
+                  IO.ANSI.reset() <>
                   " #{pad("-", 10)} #{pad("-", 15)}"
               )
+
               [{source_key, :missing, "Missing execution on #{format_date(date)}"}]
 
             execs ->
@@ -136,7 +150,11 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
 
               if latest.state != "completed" do
                 error_msg = get_in(latest.results || %{}, ["error_message"]) || "Unknown error"
-                [{source_key, :failure, "Failed on #{format_date(date)}: #{String.slice(error_msg, 0, 50)}"}]
+
+                [
+                  {source_key, :failure,
+                   "Failed on #{format_date(date)}: #{String.slice(error_msg, 0, 50)}"}
+                ]
               else
                 []
               end
@@ -154,9 +172,11 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
 
       # Check for recent execution (last 24 hours)
       recent_cutoff = DateTime.add(DateTime.utc_now(), -24, :hour)
-      has_recent = Enum.any?(executions, fn exec ->
-        DateTime.compare(exec.attempted_at, recent_cutoff) == :gt
-      end)
+
+      has_recent =
+        Enum.any?(executions, fn exec ->
+          DateTime.compare(exec.attempted_at, recent_cutoff) == :gt
+        end)
 
       alerts =
         if has_recent do
@@ -211,7 +231,9 @@ defmodule Mix.Tasks.Audit.SchedulerHealth do
 
     date_str = format_date(DateTime.to_date(exec.attempted_at))
 
-    IO.puts("  #{pad(date_str, 12)} #{status} #{pad(duration, 10)} #{pad(jobs_spawned, 15)} #{error_preview}")
+    IO.puts(
+      "  #{pad(date_str, 12)} #{status} #{pad(duration, 10)} #{pad(jobs_spawned, 15)} #{error_preview}"
+    )
   end
 
   defp display_summary(alerts, _days) do

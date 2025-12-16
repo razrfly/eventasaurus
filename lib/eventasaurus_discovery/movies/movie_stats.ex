@@ -62,7 +62,7 @@ defmodule EventasaurusDiscovery.Movies.MovieStats do
     query =
       if search && search != "" do
         search_term = "%#{search}%"
-        from [m, em, pe, v] in query, where: ilike(m.title, ^search_term)
+        from([m, em, pe, v] in query, where: ilike(m.title, ^search_term))
       else
         query
       end

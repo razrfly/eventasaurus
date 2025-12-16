@@ -1,4 +1,11 @@
 defmodule EventasaurusWeb.Admin.SitemapLive do
+  @moduledoc """
+  Admin dashboard for sitemap statistics and generation.
+
+  Uses `SitemapStats.categories/0` which delegates to `Sitemap.url_stats/0`
+  ensuring this page always reflects the actual sitemap content.
+  """
+
   use EventasaurusWeb, :live_view
 
   alias Eventasaurus.SitemapStats
@@ -28,7 +35,7 @@ defmodule EventasaurusWeb.Admin.SitemapLive do
           socket
           |> put_flash(
             :info,
-            "✅ Queued sitemap generation job ##{job.id}. This will take a few minutes."
+            "Queued sitemap generation job ##{job.id}. This will take a few minutes."
           )
           |> assign(:generating, true)
 
@@ -40,12 +47,13 @@ defmodule EventasaurusWeb.Admin.SitemapLive do
   end
 
   defp load_stats(socket) do
-    stats = SitemapStats.expected_counts()
-    samples = SitemapStats.sample_urls()
+    # Use the new categories/0 function for full category details
+    categories = SitemapStats.categories()
+    total = categories |> Enum.map(& &1.count) |> Enum.sum()
 
     socket
-    |> assign(:stats, stats)
-    |> assign(:samples, samples)
+    |> assign(:categories, categories)
+    |> assign(:total, total)
     |> assign(:last_updated, DateTime.utc_now())
     |> assign(:generating, false)
   end
@@ -53,8 +61,8 @@ defmodule EventasaurusWeb.Admin.SitemapLive do
   defp assign_defaults(socket) do
     socket
     |> assign(:page_title, "Sitemap Statistics")
-    |> assign(:stats, nil)
-    |> assign(:samples, nil)
+    |> assign(:categories, nil)
+    |> assign(:total, 0)
     |> assign(:last_updated, nil)
     |> assign(:generating, false)
   end

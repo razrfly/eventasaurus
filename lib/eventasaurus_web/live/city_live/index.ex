@@ -123,7 +123,10 @@ defmodule EventasaurusWeb.CityLive.Index do
         LanguageDiscovery.get_available_languages_for_city(city_slug)
       rescue
         e ->
-          Logger.warning("Language discovery failed for city_slug=#{city_slug}: #{Exception.message(e)}")
+          Logger.warning(
+            "Language discovery failed for city_slug=#{city_slug}: #{Exception.message(e)}"
+          )
+
           ["en"]
       end
 
@@ -179,7 +182,9 @@ defmodule EventasaurusWeb.CityLive.Index do
         |> assign(:events_loading, false)
       rescue
         e ->
-          Logger.error("Failed to load events for city #{socket.assigns.city.slug}: #{inspect(e)}")
+          Logger.error(
+            "Failed to load events for city #{socket.assigns.city.slug}: #{inspect(e)}"
+          )
 
           socket
           |> assign(:events, [])
@@ -205,7 +210,9 @@ defmodule EventasaurusWeb.CityLive.Index do
         |> assign(:events_loading, false)
       rescue
         e ->
-          Logger.error("Failed to load filtered events for city #{socket.assigns.city.slug}: #{inspect(e)}")
+          Logger.error(
+            "Failed to load filtered events for city #{socket.assigns.city.slug}: #{inspect(e)}"
+          )
 
           socket
           |> assign(:events, [])
