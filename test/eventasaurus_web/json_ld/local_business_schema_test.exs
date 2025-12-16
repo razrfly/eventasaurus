@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchemaTest do
         latitude: 50.068512,
         longitude: 19.998699,
         venue_type: "venue",
-        place_id: "ChIJa_8MdK5bFkcRwLIIIJIH5O0",
+        provider_ids: %{"google_places" => "ChIJa_8MdK5bFkcRwLIIIJIH5O0"},
         city_ref: %{
           name: "Kraków",
           slug: "krakow",
@@ -160,7 +160,7 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchemaTest do
         latitude: 50.0,
         longitude: 19.0,
         venue_type: "venue",
-        place_id: "test123",
+        provider_ids: %{"google_places" => "test123"},
         city_ref: %{
           name: "Test City",
           slug: "test",

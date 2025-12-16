@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.JsonLd.CitySchema do
   """
 
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.JsonLd.Helpers
   alias EventasaurusWeb.UrlHelper
 
   @doc """
@@ -60,7 +61,7 @@ defmodule EventasaurusWeb.JsonLd.CitySchema do
       "url" => "#{base_url}/c/#{city.slug}",
       "description" => build_description(city, stats)
     }
-    |> add_geo_coordinates(city)
+    |> Helpers.add_geo_coordinates(city)
     |> add_contained_in_place(city)
     |> add_image(city_with_stats, base_url)
     |> add_same_as(city)
@@ -84,23 +85,6 @@ defmodule EventasaurusWeb.JsonLd.CitySchema do
 
       true ->
         "Discover upcoming events in #{city.name}. Find concerts, festivals, nightlife, cultural events and more happening in the city."
-    end
-  end
-
-  # Add geo coordinates if available
-  defp add_geo_coordinates(schema, city) do
-    if city.latitude && city.longitude do
-      # Convert Decimal to float for JSON compatibility
-      lat = Decimal.to_float(city.latitude)
-      lng = Decimal.to_float(city.longitude)
-
-      Map.put(schema, "geo", %{
-        "@type" => "GeoCoordinates",
-        "latitude" => lat,
-        "longitude" => lng
-      })
-    else
-      schema
     end
   end
 

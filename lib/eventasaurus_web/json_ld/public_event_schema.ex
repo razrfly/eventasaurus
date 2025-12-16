@@ -21,6 +21,7 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   require Logger
   alias Eventasaurus.CDN
   alias EventasaurusWeb.Helpers.SourceAttribution
+  alias EventasaurusWeb.JsonLd.Helpers
 
   @doc """
   Generates JSON-LD structured data for a public event.
@@ -294,57 +295,18 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     %{
       "@type" => "MovieTheater",
       "name" => venue.name,
-      "address" => build_postal_address(venue)
+      "address" => Helpers.build_postal_address(venue, venue.city_ref)
     }
-    |> add_geo_coordinates(venue)
+    |> Helpers.add_geo_coordinates(venue)
   end
 
   defp build_location(venue, _event_type) do
     %{
       "@type" => "Place",
       "name" => venue.name,
-      "address" => build_postal_address(venue)
+      "address" => Helpers.build_postal_address(venue, venue.city_ref)
     }
-    |> add_geo_coordinates(venue)
-  end
-
-  # Build schema.org PostalAddress
-  defp build_postal_address(venue) do
-    address = %{
-      "@type" => "PostalAddress",
-      "streetAddress" => venue.address || ""
-    }
-
-    # Add city information if available
-    address =
-      if venue.city_ref && venue.city_ref.name do
-        Map.put(address, "addressLocality", venue.city_ref.name)
-      else
-        address
-      end
-
-    # Add country code if available
-    address =
-      if venue.city_ref && venue.city_ref.country do
-        Map.put(address, "addressCountry", venue.city_ref.country.code || "US")
-      else
-        address
-      end
-
-    address
-  end
-
-  # Add geo coordinates to location if available
-  defp add_geo_coordinates(location, venue) do
-    if venue.latitude && venue.longitude do
-      Map.put(location, "geo", %{
-        "@type" => "GeoCoordinates",
-        "latitude" => venue.latitude,
-        "longitude" => venue.longitude
-      })
-    else
-      location
-    end
+    |> Helpers.add_geo_coordinates(venue)
   end
 
   # Add end date if available
@@ -502,7 +464,6 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
   defp collect_images(event) do
     []
     |> add_event_images(event)
-    |> add_movie_posters(event)
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(5)
@@ -573,24 +534,6 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
       true ->
         nil
-    end
-  end
-
-  # Add movie posters for ScreeningEvent
-  defp add_movie_posters(images, event) do
-    if event.movies && event.movies != [] do
-      movie_images =
-        event.movies
-        |> Enum.map(fn _movie ->
-          # TODO: Extract poster URL from movie metadata when available
-          # For now, return nil to filter out
-          nil
-        end)
-        |> Enum.reject(&is_nil/1)
-
-      images ++ movie_images
-    else
-      images
     end
   end
 
@@ -796,12 +739,12 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   defp maybe_add_from_tmdb(work, tmdb) do
     work
-    |> maybe_put("datePublished", tmdb["release_date"])
-    |> maybe_put("genre", extract_tmdb_genres(tmdb["genres"]))
-    |> maybe_put("director", extract_tmdb_directors(tmdb["credits"]))
-    |> maybe_put("actor", extract_tmdb_actors(tmdb["credits"]))
-    |> maybe_put("duration", format_iso_duration(tmdb["runtime"]))
-    |> maybe_put("aggregateRating", build_tmdb_aggregate_rating(tmdb))
+    |> Helpers.maybe_add("datePublished", tmdb["release_date"])
+    |> Helpers.maybe_add("genre", Helpers.extract_genres(tmdb["genres"]))
+    |> Helpers.maybe_add("director", Helpers.extract_directors(tmdb["credits"]))
+    |> Helpers.maybe_add("actor", Helpers.extract_actors(tmdb["credits"]))
+    |> Helpers.maybe_add("duration", Helpers.format_iso_duration(tmdb["runtime"]))
+    |> Helpers.maybe_add("aggregateRating", Helpers.build_aggregate_rating(tmdb))
   end
 
   # Add metadata from OMDb (only if not already present from TMDb)
@@ -809,12 +752,12 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   defp maybe_add_from_omdb(work, omdb) do
     work
-    |> maybe_put_missing("datePublished", omdb["Released"])
-    |> maybe_put_missing("genre", parse_comma_list(omdb["Genre"]))
-    |> maybe_put_missing("director", build_person_schema(omdb["Director"]))
-    |> maybe_put_missing("actor", build_actors_from_string(omdb["Actors"]))
-    |> maybe_put_missing("duration", format_omdb_duration(omdb["Runtime"]))
-    |> maybe_put_missing("aggregateRating", build_omdb_aggregate_rating(omdb))
+    |> Helpers.maybe_add_if_missing("datePublished", omdb["Released"])
+    |> Helpers.maybe_add_if_missing("genre", parse_comma_list(omdb["Genre"]))
+    |> Helpers.maybe_add_if_missing("director", build_person_schema(omdb["Director"]))
+    |> Helpers.maybe_add_if_missing("actor", build_actors_from_string(omdb["Actors"]))
+    |> Helpers.maybe_add_if_missing("duration", format_omdb_duration(omdb["Runtime"]))
+    |> Helpers.maybe_add_if_missing("aggregateRating", build_omdb_aggregate_rating(omdb))
   end
 
   # Add sameAs URLs - primarily cinegraph.org, plus IMDb for cross-reference
@@ -916,79 +859,6 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     end
   end
 
-  # Helper to extract genres from TMDb format
-  defp extract_tmdb_genres(nil), do: nil
-  defp extract_tmdb_genres([]), do: nil
-
-  defp extract_tmdb_genres(genres) when is_list(genres) do
-    genres
-    |> Enum.map(fn genre -> genre["name"] end)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  # Helper to extract directors from TMDb credits
-  defp extract_tmdb_directors(nil), do: nil
-
-  defp extract_tmdb_directors(credits) do
-    case get_in(credits, ["crew"]) do
-      nil ->
-        nil
-
-      crew ->
-        directors =
-          crew
-          |> Enum.filter(fn person -> person["job"] == "Director" end)
-          |> Enum.map(fn person ->
-            %{"@type" => "Person", "name" => person["name"]}
-          end)
-
-        case directors do
-          [] -> nil
-          [single] -> single
-          multiple -> multiple
-        end
-    end
-  end
-
-  # Helper to extract actors from TMDb credits
-  defp extract_tmdb_actors(nil), do: nil
-
-  defp extract_tmdb_actors(credits) do
-    case get_in(credits, ["cast"]) do
-      nil ->
-        nil
-
-      cast ->
-        actors =
-          cast
-          |> Enum.take(10)
-          |> Enum.map(fn person ->
-            %{"@type" => "Person", "name" => person["name"]}
-          end)
-
-        case actors do
-          [] -> nil
-          list -> list
-        end
-    end
-  end
-
-  # Helper to format runtime in ISO 8601 duration format
-  defp format_iso_duration(nil), do: nil
-
-  defp format_iso_duration(runtime) when is_integer(runtime) and runtime > 0 do
-    hours = div(runtime, 60)
-    minutes = rem(runtime, 60)
-
-    cond do
-      hours > 0 and minutes > 0 -> "PT#{hours}H#{minutes}M"
-      hours > 0 -> "PT#{hours}H"
-      minutes > 0 -> "PT#{minutes}M"
-      true -> nil
-    end
-  end
-
-  defp format_iso_duration(_), do: nil
 
   # Helper to format OMDb runtime ("142 min")
   defp format_omdb_duration(nil), do: nil
@@ -996,28 +866,8 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
 
   defp format_omdb_duration(runtime_string) when is_binary(runtime_string) do
     case Integer.parse(runtime_string) do
-      {minutes, _} -> format_iso_duration(minutes)
+      {minutes, _} -> Helpers.format_iso_duration(minutes)
       :error -> nil
-    end
-  end
-
-  # Build TMDb aggregate rating
-  defp build_tmdb_aggregate_rating(nil), do: nil
-
-  defp build_tmdb_aggregate_rating(metadata) do
-    vote_average = metadata["vote_average"]
-    vote_count = metadata["vote_count"]
-
-    if vote_average && vote_count && vote_count > 0 do
-      %{
-        "@type" => "AggregateRating",
-        "ratingValue" => vote_average,
-        "ratingCount" => vote_count,
-        "bestRating" => 10,
-        "worstRating" => 0
-      }
-    else
-      nil
     end
   end
 
@@ -1089,19 +939,6 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     end
   end
 
-  # Helper to conditionally put a value
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, _key, []), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  # Helper to conditionally put a value only if not already present
-  defp maybe_put_missing(map, _key, nil), do: map
-  defp maybe_put_missing(map, _key, []), do: map
-  defp maybe_put_missing(map, _key, "N/A"), do: map
-
-  defp maybe_put_missing(map, key, value) do
-    if Map.has_key?(map, key), do: map, else: Map.put(map, key, value)
-  end
 
   # Helper to conditionally append to list
   defp maybe_append(list, true, value), do: list ++ [value]
