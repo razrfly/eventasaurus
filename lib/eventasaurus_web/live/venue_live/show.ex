@@ -7,10 +7,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Components.OpenGraphComponent
-  alias EventasaurusWeb.VenueLive.Components.ImageGallery
-  alias EventasaurusWeb.StaticMapComponent
+  alias EventasaurusWeb.Components.Activity.VenueHeroCard
+  alias EventasaurusWeb.Components.Activity.VenueLocationCard
+  alias EventasaurusWeb.Components.Activity.ActivityLayout
   alias EventasaurusWeb.Components.Breadcrumbs
-  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, SEOHelpers}
+  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, SEOHelpers}
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
   alias EventasaurusWeb.UrlHelper
@@ -38,6 +39,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:venue, nil)
       |> assign(:loading, true)
       |> assign(:language, language)
+      |> assign(:available_languages, ["en"])
       |> assign(:request_uri, request_uri)
       |> assign(:upcoming_events, [])
       |> assign(:future_events, [])
@@ -123,13 +125,6 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
   # Helper functions
 
-  # Check if venue has any images
-  defp has_venue_images?(%Venue{venue_images: images})
-       when is_list(images) and length(images) > 0,
-       do: true
-
-  defp has_venue_images?(_), do: false
-
   # Shared logic for loading and assigning venue data to socket
   defp load_and_assign_venue(venue, socket) do
     # Preload city and country (venue_images is a field, not an association)
@@ -148,6 +143,17 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
     # Build breadcrumb items with city hierarchy using BreadcrumbBuilder
     breadcrumb_items = BreadcrumbBuilder.build_venue_breadcrumbs(venue)
+
+    # Get available languages for this venue's city (dynamic based on country + DB translations)
+    available_languages =
+      if venue.city_ref && venue.city_ref.slug do
+        LanguageDiscovery.get_available_languages_for_city(venue.city_ref.slug)
+      else
+        ["en"]
+      end
+
+    # Determine language based on session locale (already set in mount) or default
+    language = socket.assigns.language
 
     # Generate JSON-LD structured data
     json_ld_schemas =
@@ -176,6 +182,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:past_events, events.past)
       |> assign(:nearby_events, nearby_events)
       |> assign(:breadcrumb_items, breadcrumb_items)
+      |> assign(:available_languages, available_languages)
+      |> assign(:language, language)
       |> assign(:loading, false)
       |> assign(:open_graph, og_tags)
       |> SEOHelpers.assign_meta_tags(
@@ -417,241 +425,220 @@ defmodule EventasaurusWeb.VenueLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50">
+    <div class="min-h-screen bg-white">
       <%= if @loading do %>
         <div class="flex items-center justify-center py-12">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
         </div>
       <% else %>
         <!-- Hero Section -->
-        <div class="bg-gray-50">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <!-- Breadcrumb -->
-            <div class="mb-6">
-              <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
-            </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <!-- Breadcrumb -->
+          <nav class="mb-4">
+            <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
+          </nav>
 
-            <!-- Venue Hero -->
-            <div class="flex flex-col lg:flex-row gap-8">
-              <!-- Venue Image (if available) -->
-              <%= if has_venue_images?(@venue) do %>
-                <div class="lg:w-2/5">
-                  <div class="aspect-[4/3] rounded-xl overflow-hidden shadow-lg">
-                    <ImageGallery.image_gallery venue={@venue} />
-                  </div>
+          <!-- Venue Hero Card -->
+          <VenueHeroCard.venue_hero_card
+            venue={@venue}
+            upcoming_event_count={length(@upcoming_events) + length(@future_events)}
+          />
+        </div>
+
+        <!-- Main Content with Two-Column Layout -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ActivityLayout.activity_layout>
+            <:main>
+              <!-- Events Section -->
+              <div class="space-y-8">
+                <!-- Upcoming Events (Next 30 Days) -->
+                <div>
+                  <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                    <%= gettext("Upcoming Events") %>
+                  </h2>
+                  <p class="text-gray-600 mb-6">
+                    <%= gettext("Next 30 days") %>
+                    <%= if length(@upcoming_events) > 0 do %>
+                      <span class="text-gray-500">
+                        · <%= length(@upcoming_events) %> <%= ngettext("event", "events", length(@upcoming_events)) %>
+                      </span>
+                    <% end %>
+                  </p>
+
+                  <%= if Enum.empty?(@upcoming_events) do %>
+                    <div class="bg-gray-50 rounded-lg p-8 text-center">
+                      <Heroicons.calendar class="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p class="text-gray-600"><%= gettext("No events in the next 30 days.") %></p>
+                    </div>
+                  <% else %>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <%= for event <- Enum.take(@upcoming_events, @upcoming_visible_count) do %>
+                        <.event_card event={event} language={@language} show_city={false} />
+                      <% end %>
+                    </div>
+                    <%= if length(@upcoming_events) > @upcoming_visible_count do %>
+                      <div class="text-center mt-6">
+                        <button
+                          type="button"
+                          phx-click="load_more_upcoming"
+                          class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
+                        >
+                          <%= gettext("Load More") %> (<%= length(@upcoming_events) - @upcoming_visible_count %> <%= gettext("remaining") %>)
+                        </button>
+                      </div>
+                    <% end %>
+                  <% end %>
                 </div>
-              <% end %>
 
-              <!-- Venue Details -->
-              <div class={if has_venue_images?(@venue), do: "lg:w-3/5", else: "w-full"}>
-                <h1 class="text-4xl font-bold text-gray-900 mb-6"><%= @venue.name %></h1>
+                <!-- Future Events (30+ Days) - Collapsible -->
+                <%= if !Enum.empty?(@future_events) do %>
+                  <div class="border-t border-gray-200 pt-8">
+                    <button
+                      type="button"
+                      phx-click="toggle_future_events"
+                      class="flex items-center justify-between w-full text-left group"
+                    >
+                      <div>
+                        <h2 class="text-xl font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                          <%= gettext("Future Events") %>
+                        </h2>
+                        <p class="text-sm text-gray-500">
+                          <%= gettext("30+ days away") %> · <%= length(@future_events) %> <%= ngettext("event", "events", length(@future_events)) %>
+                        </p>
+                      </div>
+                      <Heroicons.chevron_down class={"w-5 h-5 text-gray-500 transform transition-transform #{if @show_future_events, do: "rotate-180", else: ""}"} />
+                    </button>
 
-                <div class="space-y-4">
-                  <!-- Address -->
-                  <%= if @venue.address do %>
-                    <div class="flex items-start gap-3">
-                      <svg
-                        class="h-6 w-6 text-indigo-600 flex-shrink-0 mt-0.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                        />
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                      </svg>
-                      <div class="text-lg">
-                        <div class="font-medium text-gray-900"><%= @venue.address %></div>
-                        <%= if @venue.city_ref do %>
-                          <div class="text-gray-600">
-                            <%= @venue.city_ref.name %><%= if @venue.city_ref.country, do: ", #{@venue.city_ref.country.name}", else: "" %>
+                    <%= if @show_future_events do %>
+                      <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <%= for event <- Enum.take(@future_events, @future_visible_count) do %>
+                          <div class="opacity-90">
+                            <.event_card event={event} language={@language} show_city={false} />
                           </div>
                         <% end %>
                       </div>
-                    </div>
-                  <% end %>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-          <!-- Events -->
-          <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">📅 Events at <%= @venue.name %></h2>
-
-            <!-- Upcoming Events (Next 30 Days) -->
-            <h3 class="text-lg font-medium text-gray-900 mb-3">
-              Upcoming Events (Next 30 Days)
-              <%= if length(@upcoming_events) > 0 do %>
-                <span class="text-sm text-gray-500 font-normal">
-                  (<%= length(@upcoming_events) %> total)
-                </span>
-              <% end %>
-            </h3>
-            <%= if Enum.empty?(@upcoming_events) do %>
-              <p class="text-gray-600 mb-6">No events in the next 30 days.</p>
-            <% else %>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
-                <%= for event <- Enum.take(@upcoming_events, @upcoming_visible_count) do %>
-                  <.event_card event={event} language={@language} show_city={false} />
-                <% end %>
-              </div>
-              <%= if length(@upcoming_events) > @upcoming_visible_count do %>
-                <div class="text-center mb-6">
-                  <button
-                    type="button"
-                    phx-click="load_more_upcoming"
-                    class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
-                  >
-                    Load More (<%= length(@upcoming_events) - @upcoming_visible_count %> remaining)
-                  </button>
-                </div>
-              <% end %>
-            <% end %>
-
-            <!-- Future Events (30+ Days) -->
-            <%= if !Enum.empty?(@future_events) do %>
-              <div class="border-t border-gray-200 pt-6 mb-6">
-                <button
-                  type="button"
-                  phx-click="toggle_future_events"
-                  class="flex items-center justify-between w-full text-left"
-                >
-                  <h3 class="text-lg font-medium text-gray-900">
-                    Future Events (30+ Days)
-                    <span class="text-sm text-gray-500 font-normal">
-                      (<%= length(@future_events) %> total)
-                    </span>
-                  </h3>
-                  <svg
-                    class={
-                      "w-5 h-5 transform transition-transform #{if @show_future_events, do: "rotate-180", else: ""}"
-                    }
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
-
-                <%= if @show_future_events do %>
-                  <div class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
-                    <%= for event <- Enum.take(@future_events, @future_visible_count) do %>
-                      <div class="opacity-90">
-                        <.event_card event={event} language={@language} show_city={false} />
-                      </div>
+                      <%= if length(@future_events) > @future_visible_count do %>
+                        <div class="text-center mt-6">
+                          <button
+                            type="button"
+                            phx-click="load_more_future"
+                            class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
+                          >
+                            <%= gettext("Load More") %> (<%= length(@future_events) - @future_visible_count %> <%= gettext("remaining") %>)
+                          </button>
+                        </div>
+                      <% end %>
                     <% end %>
                   </div>
-                  <%= if length(@future_events) > @future_visible_count do %>
-                    <div class="text-center">
-                      <button
-                        type="button"
-                        phx-click="load_more_future"
-                        class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
-                      >
-                        Load More (<%= length(@future_events) - @future_visible_count %> remaining)
-                      </button>
-                    </div>
-                  <% end %>
                 <% end %>
-              </div>
-            <% end %>
-            <!-- Past Events (Collapsible) -->
-            <%= if !Enum.empty?(@past_events) do %>
-              <div class="border-t border-gray-200 pt-6">
-                <button
-                  type="button"
-                  phx-click="toggle_past_events"
-                  class="flex items-center justify-between w-full text-left"
-                >
-                  <h3 class="text-lg font-medium text-gray-900">
-                    Past Events
-                    <span class="text-sm text-gray-500 font-normal">
-                      (<%= length(@past_events) %> total)
-                    </span>
-                  </h3>
-                  <svg
-                    class={"w-5 h-5 transform transition-transform #{if @show_past_events, do: "rotate-180", else: ""}"}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
 
-                <%= if @show_past_events do %>
-                  <div class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
-                    <%= for event <- Enum.take(@past_events, @past_visible_count) do %>
-                      <div class="opacity-75">
-                        <.event_card event={event} language={@language} show_city={false} />
+                <!-- Past Events - Collapsible -->
+                <%= if !Enum.empty?(@past_events) do %>
+                  <div class="border-t border-gray-200 pt-8">
+                    <button
+                      type="button"
+                      phx-click="toggle_past_events"
+                      class="flex items-center justify-between w-full text-left group"
+                    >
+                      <div>
+                        <h2 class="text-xl font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                          <%= gettext("Past Events") %>
+                        </h2>
+                        <p class="text-sm text-gray-500">
+                          <%= length(@past_events) %> <%= ngettext("event", "events", length(@past_events)) %>
+                        </p>
                       </div>
+                      <Heroicons.chevron_down class={"w-5 h-5 text-gray-500 transform transition-transform #{if @show_past_events, do: "rotate-180", else: ""}"} />
+                    </button>
+
+                    <%= if @show_past_events do %>
+                      <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <%= for event <- Enum.take(@past_events, @past_visible_count) do %>
+                          <div class="opacity-75">
+                            <.event_card event={event} language={@language} show_city={false} />
+                          </div>
+                        <% end %>
+                      </div>
+                      <%= if length(@past_events) > @past_visible_count do %>
+                        <div class="text-center mt-6">
+                          <button
+                            type="button"
+                            phx-click="load_more_past"
+                            class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
+                          >
+                            <%= gettext("Load More") %> (<%= length(@past_events) - @past_visible_count %> <%= gettext("remaining") %>)
+                          </button>
+                        </div>
+                      <% end %>
                     <% end %>
                   </div>
-                  <%= if length(@past_events) > @past_visible_count do %>
-                    <div class="text-center">
-                      <button
-                        type="button"
-                        phx-click="load_more_past"
-                        class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
-                      >
-                        Load More (<%= length(@past_events) - @past_visible_count %> remaining)
-                      </button>
-                    </div>
-                  <% end %>
                 <% end %>
               </div>
-            <% end %>
-          </div>
+            </:main>
 
-          <!-- Location Map -->
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">🗺️ Location</h2>
-            <.live_component
-              module={StaticMapComponent}
-              id="venue-map"
-              venue={@venue}
-              theme={:professional}
-              size={:large}
-            />
-          </div>
-          <!-- Nearby Events -->
-          <%= if !Enum.empty?(@nearby_events) do %>
-            <div class="bg-white rounded-lg shadow-md p-6 mt-8">
-              <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                🎉 More Events in <%= @venue.city_ref.name %>
-              </h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <%= for event <- @nearby_events do %>
-                  <.event_card event={event} language={@language} show_city={false} />
-                <% end %>
-              </div>
-            </div>
-          <% end %>
+            <:sidebar>
+              <!-- Location Map Card -->
+              <VenueLocationCard.venue_location_card
+                venue={@venue}
+                map_id="venue-location-map"
+              />
+
+              <!-- Nearby Events -->
+              <%= if !Enum.empty?(@nearby_events) do %>
+                <div class="bg-white rounded-xl border border-gray-200 p-5">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <span class="flex items-center gap-2">
+                      <Heroicons.sparkles class="w-5 h-5 text-indigo-500" />
+                      <%= gettext("More in %{city}", city: @venue.city_ref.name) %>
+                    </span>
+                  </h3>
+                  <div class="space-y-4">
+                    <%= for event <- Enum.take(@nearby_events, 3) do %>
+                      <.link navigate={~p"/activities/#{event.slug}"} class="block group">
+                        <div class="flex gap-3">
+                          <%= if Map.get(event, :cover_image_url) do %>
+                            <div class="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+                              <img
+                                src={Map.get(event, :cover_image_url)}
+                                alt=""
+                                class="w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                            </div>
+                          <% else %>
+                            <div class="flex-shrink-0 w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                              <Heroicons.calendar class="w-6 h-6 text-gray-400" />
+                            </div>
+                          <% end %>
+                          <div class="min-w-0 flex-1">
+                            <p class="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-2 text-sm">
+                              <%= event.display_title || event.title %>
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1">
+                              <%= if event.starts_at do %>
+                                <%= Calendar.strftime(event.starts_at, "%b %d") %>
+                              <% end %>
+                              <%= if event.venue do %>
+                                · <%= event.venue.name %>
+                              <% end %>
+                            </p>
+                          </div>
+                        </div>
+                      </.link>
+                    <% end %>
+                  </div>
+                  <%= if length(@nearby_events) > 3 do %>
+                    <.link
+                      navigate={~p"/c/#{@venue.city_ref.slug}"}
+                      class="mt-4 block text-center text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                      <%= gettext("View all events in %{city}", city: @venue.city_ref.name) %> →
+                    </.link>
+                  <% end %>
+                </div>
+              <% end %>
+            </:sidebar>
+          </ActivityLayout.activity_layout>
         </div>
       <% end %>
     </div>
