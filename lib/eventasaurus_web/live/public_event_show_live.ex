@@ -8,13 +8,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.Components.{
     PublicPlanWithFriendsModal,
     Breadcrumbs,
-    MovieDetailsCard,
-    OpenGraphComponent
+    MovieHeroCard,
+    OpenGraphComponent,
+    VenueInfoCard,
+    CategoryDisplay
   }
 
   alias EventasaurusWeb.Components.Events.OccurrenceDisplay
   alias EventasaurusWeb.Components.Events.EventScheduleDisplay
   alias EventasaurusWeb.StaticMapComponent
+  alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Helpers.LanguageHelpers
@@ -1147,93 +1150,50 @@ defmodule EventasaurusWeb.PublicEventShowLive do
               </div>
             <% end %>
 
+            <!-- Movie Hero Section (for movie screenings) -->
+            <%= if @is_movie_screening && @movie do %>
+              <MovieHeroCard.movie_hero_card
+                movie={@movie}
+                show_see_all_link={true}
+                aggregated_movie_url={@aggregated_movie_url}
+              />
+
+              <!-- Cast Carousel for Movie Screenings -->
+              <%= if cast = get_in(@movie.metadata, ["credits", "cast"]) do %>
+                <div class="mb-8">
+                  <.live_component
+                    module={CastCarouselComponent}
+                    id="movie-cast-carousel"
+                    cast={cast}
+                    variant={:embedded}
+                    title={gettext("Cast")}
+                    max_cast={15}
+                  />
+                </div>
+              <% end %>
+            <% end %>
+
             <!-- Event Header -->
             <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-              <!-- Cover Image - for movie screenings, only use movie backdrop; for other events, use event cover -->
-              <%= if @is_movie_screening do %>
-                <%= if @movie && @movie.backdrop_url do %>
-                  <div class="h-96 relative">
-                    <img
-                      src={CDN.url(@movie.backdrop_url, width: 1200, quality: 90)}
-                      alt={@movie.title}
-                      class="w-full h-full object-cover"
-                    />
-                  </div>
-                <% end %>
-              <% else %>
-                <%= if Map.get(@event, :cover_image_url) do %>
-                  <div class="h-96 relative">
-                    <img
-                      src={CDN.url(Map.get(@event, :cover_image_url), width: 1200, quality: 90)}
-                      alt={@event.display_title}
-                      class="w-full h-full object-cover"
-                    />
-                  </div>
-                <% end %>
+              <!-- Cover Image (for non-movie events only) -->
+              <%= if !@is_movie_screening && Map.get(@event, :cover_image_url) do %>
+                <div class="h-96 relative">
+                  <img
+                    src={CDN.url(Map.get(@event, :cover_image_url), width: 1200, quality: 90)}
+                    alt={@event.display_title}
+                    class="w-full h-full object-cover"
+                  />
+                </div>
               <% end %>
 
               <div class="p-8">
                 <!-- Categories -->
-                <%= if @event.categories && @event.categories != [] do %>
-                  <div class="mb-4">
-                    <!-- Primary Category -->
-                    <% primary_category = get_primary_category(@event) %>
-                    <% secondary_categories = get_secondary_categories(@event) %>
-
-                    <div class="flex flex-wrap gap-2 items-center">
-                      <!-- Primary category - larger and emphasized -->
-                      <%= if primary_category do %>
-                        <.link
-                          navigate={~p"/activities?#{[category: primary_category.slug]}"}
-                          class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition"
-                          style={safe_background_style(primary_category.color)}
-                        >
-                          <%= if primary_category.icon do %>
-                            <span class="mr-1"><%= primary_category.icon %></span>
-                          <% end %>
-                          <%= primary_category.name %>
-                        </.link>
-                      <% end %>
-
-                      <!-- Secondary categories - smaller and less emphasized -->
-                      <%= if secondary_categories != [] do %>
-                        <span class="text-gray-400 mx-1">•</span>
-                        <%= for category <- secondary_categories do %>
-                          <.link
-                            navigate={~p"/activities?#{[category: category.slug]}"}
-                            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
-                          >
-                            <%= category.name %>
-                          </.link>
-                        <% end %>
-                      <% end %>
-                    </div>
-
-                    <!-- Category hint text -->
-                    <p class="mt-2 text-xs text-gray-500">
-                      <%= if secondary_categories != [] do %>
-                        <%= gettext("Also filed under: %{categories}",
-                            categories: Enum.map_join(secondary_categories, ", ", & &1.name)) %>
-                      <% else %>
-                        <%= gettext("Click category to see related events") %>
-                      <% end %>
-                    </p>
-                  </div>
-                <% end %>
+                <CategoryDisplay.event_category_section event={@event} />
 
                 <!-- Title -->
                 <h1 class="text-4xl font-bold text-gray-900 mb-6">
                   <%= @event.display_title %>
                 </h1>
-
-                <!-- Movie Information Section (for movie screenings) -->
-                <%= if @is_movie_screening && @movie do %>
-                  <MovieDetailsCard.movie_details_card
-                    movie={@movie}
-                    show_see_all_link={true}
-                    aggregated_movie_url={@aggregated_movie_url}
-                  />
-                <% end %>
 
                 <!-- Key Details Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -1247,26 +1207,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
                   <!-- Venue -->
                   <%= if @event.venue do %>
-                    <div>
-                      <div class="flex items-center text-gray-600 mb-1">
-                        <Heroicons.map_pin class="w-5 h-5 mr-2" />
-                        <span class="font-medium"><%= gettext("Venue") %></span>
-                      </div>
-                      <p class="text-gray-900">
-                        <.link
-                          navigate={~p"/venues/#{@event.venue.slug}"}
-                          class="font-semibold hover:text-indigo-600 transition-colors"
-                        >
-                          <%= @event.venue.name %>
-                        </.link>
-                        <%= if @event.venue.address do %>
-                          <br />
-                          <span class="text-sm text-gray-600">
-                            <%= @event.venue.address %>
-                          </span>
-                        <% end %>
-                      </p>
-                    </div>
+                    <VenueInfoCard.venue_info_card venue={@event.venue} />
                   <% end %>
 
                   <!-- Map Display -->
@@ -1281,21 +1222,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       />
                     </div>
                   <% end %>
-
-                  <%!-- Price display temporarily hidden - no APIs provide price data
-                       Infrastructure retained for future API support
-                       See GitHub issue #1281 for details
-                  <!-- Price -->
-                  <div>
-                    <div class="flex items-center text-gray-600 mb-1">
-                      <Heroicons.currency_dollar class="w-5 h-5 mr-2" />
-                      <span class="font-medium"><%= gettext("Price") %></span>
-                    </div>
-                    <p class="text-gray-900">
-                      <%= format_price_range(@event) %>
-                    </p>
-                  </div>
-                  --%>
 
                   <!-- Ticket Link -->
                   <%= if ticket_url = get_primary_source_ticket_url(@event) do %>
@@ -1487,35 +1413,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp format_event_datetime(datetime) do
     Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
   end
-
-  # Commented out - price display temporarily hidden as no APIs provide price data
-  # See GitHub issue #1281 for details
-  # defp format_price_range(event) do
-  #   symbol = currency_symbol(event.currency)
-  #
-  #   cond do
-  #     event.min_price && event.max_price && event.min_price == event.max_price ->
-  #       "#{symbol}#{event.min_price}"
-  #
-  #     event.min_price && event.max_price ->
-  #       "#{symbol}#{event.min_price} - #{symbol}#{event.max_price}"
-  #
-  #     event.min_price ->
-  #       gettext("From %{price}", price: "#{symbol}#{event.min_price}")
-  #
-  #     event.max_price ->
-  #       gettext("Up to %{price}", price: "#{symbol}#{event.max_price}")
-  #
-  #     true ->
-  #       gettext("See details")
-  #   end
-  # end
-  #
-  # defp currency_symbol(nil), do: "$"
-  # defp currency_symbol("USD"), do: "$"
-  # defp currency_symbol("EUR"), do: "€"
-  # defp currency_symbol("PLN"), do: "zł"
-  # defp currency_symbol(_), do: "$"
 
   defp format_description(nil), do: Phoenix.HTML.raw("")
 
@@ -1808,27 +1705,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     email =~ ~r/^[^\s]+@[^\s]+\.[^\s]+$/
   end
 
-  # Category helper functions
-  defp get_primary_category(event) do
-    case event.primary_category_id do
-      nil -> nil
-      cat_id -> Enum.find(event.categories, &(&1.id == cat_id))
-    end
-  end
-
-  defp get_secondary_categories(event) do
-    case event.primary_category_id do
-      nil ->
-        # If no primary found, treat all but first as secondary
-        case event.categories do
-          [_first | rest] -> rest
-          _ -> []
-        end
-
-      primary_id ->
-        Enum.reject(event.categories, &(&1.id == primary_id))
-    end
-  end
+  # Category helper functions (get_primary_category and get_secondary_categories
+  # moved to EventasaurusWeb.Components.CategoryDisplay.event_category_section/1)
 
   defp get_primary_category_id(event_id) do
     Repo.one(
@@ -1840,28 +1718,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     )
   end
 
-  defp safe_background_style(color) do
-    color =
-      if valid_hex_color?(color) do
-        color
-      else
-        "#6B7280"
-      end
-
-    "background-color: #{color}"
-  end
-
-  defp valid_hex_color?(color) when is_binary(color) do
-    case color do
-      <<?#, _::binary>> = hex when byte_size(hex) in [4, 7] ->
-        String.match?(hex, ~r/^#(?:[0-9a-fA-F]{3}){1,2}$/)
-
-      _ ->
-        false
-    end
-  end
-
-  defp valid_hex_color?(_), do: false
+  # safe_background_style and valid_hex_color? moved to
+  # EventasaurusWeb.Components.CategoryDisplay
 
   # Movie helper functions
 
