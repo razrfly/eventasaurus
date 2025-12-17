@@ -107,7 +107,9 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchemaTest do
       assert schema["name"] == "Małopolska Region"
     end
 
-    test "handles venue without place_id" do
+    test "handles venue without place_id but with coordinates" do
+      # When venue has no Google Place ID but has coordinates,
+      # hasMap falls back to Google Maps search URL with coordinates
       venue = %{
         name: "Local Club",
         slug: "local-club",
@@ -126,6 +128,30 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchemaTest do
       json = LocalBusinessSchema.generate(venue)
       schema = Jason.decode!(json)
 
+      # hasMap uses coordinates fallback
+      assert schema["hasMap"] == "https://www.google.com/maps/search/?api=1&query=50.0,19.0"
+    end
+
+    test "handles venue without place_id and without coordinates" do
+      venue = %{
+        name: "Virtual Event",
+        slug: "virtual-event",
+        address: nil,
+        latitude: nil,
+        longitude: nil,
+        venue_type: "venue",
+        place_id: nil,
+        city_ref: %{
+          name: "Kraków",
+          slug: "krakow",
+          country: %{code: "PL"}
+        }
+      }
+
+      json = LocalBusinessSchema.generate(venue)
+      schema = Jason.decode!(json)
+
+      # No hasMap when neither place_id nor coordinates available
       refute Map.has_key?(schema, "hasMap")
     end
 

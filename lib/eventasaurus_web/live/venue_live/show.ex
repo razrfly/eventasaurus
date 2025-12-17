@@ -179,7 +179,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:loading, false)
       |> assign(:open_graph, og_tags)
       |> SEOHelpers.assign_meta_tags(
-        title: "#{venue.name} - Wombie",
+        title: venue.name,
         description: description,
         type: "website",
         canonical_path: canonical_path,
@@ -298,8 +298,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
   defp generate_json_ld_schemas(venue, breadcrumb_items, request_uri) do
     base_url = get_base_url_from_request(request_uri)
 
-    # 1. LocalBusiness schema for the venue
-    local_business_json = LocalBusinessSchema.generate(venue)
+    # 1. LocalBusiness schema for the venue (with request_uri for canonical URLs)
+    local_business_json = LocalBusinessSchema.generate(venue, request_uri: request_uri)
 
     # 2. BreadcrumbList schema for navigation
     breadcrumb_list_json =
@@ -363,9 +363,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
   # Build Open Graph meta tags for venue pages
   defp build_venue_open_graph(venue, description, canonical_path, request_uri) do
-    # Build absolute canonical URL
-    base_url = UrlHelper.build_url("", request_uri)
-    canonical_url = "#{base_url}#{canonical_path}"
+    # Build absolute canonical URL using UrlHelper to avoid double slash issues
+    canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
     # Use venue cover image if available, otherwise placeholder
     # Venue.get_cover_image/2 handles the smart fallback chain (venue images -> city gallery)
@@ -383,7 +382,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
     Phoenix.HTML.Safe.to_iodata(
       OpenGraphComponent.open_graph_tags(%{
         type: "place",
-        title: "#{venue.name} - Wombie",
+        title: "#{venue.name} · Wombie",
         description: description,
         image_url: cdn_image_url,
         image_width: 1200,

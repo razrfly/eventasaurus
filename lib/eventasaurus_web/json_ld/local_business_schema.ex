@@ -26,6 +26,8 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
   ## Parameters
     - venue: Venue struct with preloaded associations:
       - :city_ref (with :country)
+    - opts: Optional keyword list:
+      - :request_uri - URI struct from request context for correct URL generation
 
   ## Returns
     - JSON-LD string ready to be included in <script type="application/ld+json">
@@ -35,17 +37,22 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
       iex> EventasaurusWeb.JsonLd.LocalBusinessSchema.generate(venue)
       "{\"@context\":\"https://schema.org\",\"@type\":\"EntertainmentBusiness\",...}"
   """
-  def generate(venue) do
+  def generate(venue, opts \\ []) do
     venue
-    |> build_business_schema()
+    |> build_business_schema(opts)
     |> Jason.encode!()
   end
 
   @doc """
   Builds the local business schema map (without JSON encoding).
   Useful for testing or combining with other schemas.
+
+  ## Options
+    - :request_uri - URI struct from request context for correct URL generation
   """
-  def build_business_schema(venue) do
+  def build_business_schema(venue, opts \\ []) do
+    request_uri = Keyword.get(opts, :request_uri)
+
     %{
       "@context" => "https://schema.org",
       "@type" => determine_business_type(venue),
@@ -53,8 +60,10 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
       "address" => build_address(venue)
     }
     |> Helpers.add_geo_coordinates(venue)
-    |> add_place_id(venue)
-    |> add_url(venue)
+    |> add_url(venue, request_uri)
+    |> add_same_as(venue, request_uri)
+    |> add_has_map(venue)
+    |> add_opening_hours(venue)
   end
 
   # Determine the appropriate schema.org business type based on venue_type
@@ -101,33 +110,71 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
     end
   end
 
-  # Add Google Place ID if available (from provider_ids)
-  defp add_place_id(schema, venue) do
-    # Try to get Google Places ID from provider_ids JSONB field
-    # Use Map.get to handle missing provider_ids field gracefully
-    google_place_id =
-      case Map.get(venue, :provider_ids) || Map.get(venue, "provider_ids") do
-        %{"google_places" => id} when is_binary(id) -> id
-        %{google_places: id} when is_binary(id) -> id
-        _ -> nil
-      end
-
-    if google_place_id do
-      # Use the Google Maps URL format
-      url = "https://www.google.com/maps/place/?q=place_id:#{google_place_id}"
-      Map.put(schema, "hasMap", url)
+  # Build the canonical venue URL using city-scoped path
+  defp build_venue_url(venue, request_uri) do
+    if venue.slug && venue.city_ref && venue.city_ref.slug do
+      path = "/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+      UrlHelper.build_url(path, request_uri)
     else
-      schema
+      nil
     end
   end
 
-  # Add venue URL (using slug to build the URL)
-  defp add_url(schema, venue) do
-    if venue.slug do
-      venue_url = UrlHelper.build_url("/venues/#{venue.slug}")
-      Map.put(schema, "url", venue_url)
-    else
-      schema
+  # Add venue URL (using city-scoped canonical URL)
+  defp add_url(schema, venue, request_uri) do
+    case build_venue_url(venue, request_uri) do
+      nil -> schema
+      url -> Map.put(schema, "url", url)
+    end
+  end
+
+  # Add sameAs property linking to our own canonical URL
+  # Per schema.org, sameAs indicates the item is the same as a resource at the URL
+  defp add_same_as(schema, venue, request_uri) do
+    case build_venue_url(venue, request_uri) do
+      nil -> schema
+      url -> Map.put(schema, "sameAs", [url])
+    end
+  end
+
+  # Add hasMap property using Google Place ID or coordinates
+  defp add_has_map(schema, venue) do
+    cond do
+      # First try Google Places ID
+      google_place_id = get_google_place_id(venue) ->
+        url = "https://www.google.com/maps/place/?q=place_id:#{google_place_id}"
+        Map.put(schema, "hasMap", url)
+
+      # Fall back to coordinates if available
+      venue.latitude && venue.longitude ->
+        url = "https://www.google.com/maps/search/?api=1&query=#{venue.latitude},#{venue.longitude}"
+        Map.put(schema, "hasMap", url)
+
+      true ->
+        schema
+    end
+  end
+
+  # Extract Google Places ID from provider_ids JSONB field
+  defp get_google_place_id(venue) do
+    case Map.get(venue, :provider_ids) || Map.get(venue, "provider_ids") do
+      %{"google_places" => id} when is_binary(id) -> id
+      %{google_places: id} when is_binary(id) -> id
+      _ -> nil
+    end
+  end
+
+  # Add opening hours if available in venue data
+  defp add_opening_hours(schema, venue) do
+    case Map.get(venue, :opening_hours) || Map.get(venue, "opening_hours") do
+      hours when is_list(hours) and length(hours) > 0 ->
+        Map.put(schema, "openingHours", hours)
+
+      hours when is_binary(hours) and hours != "" ->
+        Map.put(schema, "openingHours", hours)
+
+      _ ->
+        schema
     end
   end
 end
