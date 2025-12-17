@@ -1,0 +1,253 @@
+defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
+  @moduledoc """
+  Specialized hero card for concert/music events on activity pages.
+
+  Displays concert information in a hero-style layout with cover image,
+  performer names, venue, date/time, and genre badges. Optimized for
+  MusicEvent schema types.
+
+  ## Features
+
+  - Cover image with gradient overlay (or purple gradient fallback)
+  - Headliner/performer names prominently displayed
+  - Performer images (if available)
+  - Venue and location information
+  - Date and time with doors/start times
+  - Genre badges from performer metadata
+  - Ticket link (if available)
+  """
+  use Phoenix.Component
+  use Gettext, backend: EventasaurusWeb.Gettext
+
+  alias Eventasaurus.CDN
+
+  @doc """
+  Renders the concert hero card for music events.
+
+  ## Attributes
+
+    * `:event` - Required. The public event struct with title, performers, venue, etc.
+    * `:performers` - Required. List of performer structs associated with the event.
+    * `:cover_image_url` - Optional. Cover image URL for the hero background.
+    * `:ticket_url` - Optional. URL to purchase tickets.
+    * `:class` - Optional. Additional CSS classes for the container.
+  """
+  attr :event, :map, required: true, doc: "PublicEvent struct with display_title, venue, etc."
+  attr :performers, :list, required: true, doc: "List of Performer structs"
+  attr :cover_image_url, :string, default: nil, doc: "Cover image URL for the hero background"
+  attr :ticket_url, :string, default: nil, doc: "URL to ticket purchase page"
+  attr :class, :string, default: "", doc: "Additional CSS classes for the container"
+
+  def concert_hero_card(assigns) do
+    # Get headliner (first performer) and supporting acts
+    headliner = List.first(assigns.performers)
+    supporting_acts = Enum.drop(assigns.performers, 1)
+
+    # Extract genres from performer metadata
+    genres = extract_genres(assigns.performers)
+
+    assigns =
+      assigns
+      |> assign(:headliner, headliner)
+      |> assign(:supporting_acts, supporting_acts)
+      |> assign(:genres, genres)
+
+    ~H"""
+    <div class={"relative rounded-xl overflow-hidden #{@class}"}>
+      <!-- Background Image or Gradient -->
+      <%= if @cover_image_url do %>
+        <div class="absolute inset-0">
+          <img
+            src={CDN.url(@cover_image_url, width: 1200, quality: 85)}
+            alt=""
+            class="w-full h-full object-cover"
+            aria-hidden="true"
+          />
+          <div class="absolute inset-0 bg-gradient-to-r from-purple-900/95 via-purple-900/80 to-purple-900/40" />
+        </div>
+      <% else %>
+        <!-- Purple gradient fallback for music events -->
+        <div class="absolute inset-0 bg-gradient-to-r from-purple-900 via-purple-800 to-fuchsia-900" />
+      <% end %>
+
+      <!-- Content -->
+      <div class="relative p-6 md:p-8">
+        <div class="flex flex-col md:flex-row gap-6">
+          <!-- Performer Image (if headliner has one) -->
+          <%= if @headliner && @headliner.image_url do %>
+            <div class="flex-shrink-0 self-start">
+              <img
+                src={CDN.url(@headliner.image_url, width: 200, height: 200, fit: "cover", quality: 90)}
+                alt={@headliner.name}
+                class="w-32 md:w-40 h-32 md:h-40 object-cover rounded-lg shadow-2xl"
+                loading="lazy"
+              />
+            </div>
+          <% end %>
+
+          <div class="flex-1">
+            <!-- Music Event Badge -->
+            <div class="mb-4">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/20 text-purple-100">
+                <Heroicons.musical_note class="w-4 h-4 mr-1.5" />
+                <%= gettext("Concert") %>
+              </span>
+            </div>
+
+            <!-- Headliner Name -->
+            <%= if @headliner do %>
+              <h1 class="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">
+                <%= @headliner.name %>
+              </h1>
+            <% else %>
+              <h1 class="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">
+                <%= @event.display_title || @event.title %>
+              </h1>
+            <% end %>
+
+            <!-- Supporting Acts -->
+            <%= if length(@supporting_acts) > 0 do %>
+              <p class="text-lg text-white/80 mb-4">
+                <%= gettext("with") %>
+                <span class="text-white font-medium">
+                  <%= format_supporting_acts(@supporting_acts) %>
+                </span>
+              </p>
+            <% end %>
+
+            <!-- Genre Badges -->
+            <%= if length(@genres) > 0 do %>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <%= for genre <- Enum.take(@genres, 4) do %>
+                  <span class="px-2 py-1 bg-white/20 rounded-full text-xs font-medium text-white">
+                    <%= genre %>
+                  </span>
+                <% end %>
+              </div>
+            <% end %>
+
+            <!-- Date & Time -->
+            <%= if @event.starts_at do %>
+              <div class="flex items-center text-white/90 mb-3">
+                <Heroicons.calendar class="w-5 h-5 mr-2" />
+                <span class="text-lg">
+                  <%= format_concert_date(@event.starts_at) %>
+                </span>
+              </div>
+            <% end %>
+
+            <!-- Venue -->
+            <%= if @event.venue do %>
+              <div class="flex items-center text-white/80 mb-4">
+                <Heroicons.map_pin class="w-5 h-5 mr-2" />
+                <span>
+                  <%= @event.venue.name %>
+                  <%= if city_name = get_city_name(@event.venue) do %>
+                    <span class="text-white/60">· <%= city_name %></span>
+                  <% end %>
+                </span>
+              </div>
+            <% end %>
+
+            <!-- Description Excerpt -->
+            <%= if @event.display_description do %>
+              <p class="text-white/90 leading-relaxed line-clamp-2 max-w-2xl mb-6">
+                <%= truncate_description(@event.display_description, 200) %>
+              </p>
+            <% end %>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap gap-3">
+              <%= if @ticket_url do %>
+                <a
+                  href={@ticket_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center px-5 py-2.5 bg-white text-purple-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition shadow-md"
+                >
+                  <Heroicons.ticket class="w-5 h-5 mr-2" />
+                  <%= gettext("Get Tickets") %>
+                </a>
+              <% end %>
+            </div>
+          </div>
+        </div>
+
+        <!-- Additional Performers Row (if many performers) -->
+        <%= if length(@supporting_acts) > 3 do %>
+          <div class="mt-6 pt-6 border-t border-white/20">
+            <h3 class="text-sm font-medium text-white/70 mb-3">
+              <%= gettext("Also Performing") %>
+            </h3>
+            <div class="flex flex-wrap gap-4">
+              <%= for performer <- Enum.drop(@supporting_acts, 3) do %>
+                <div class="flex items-center gap-2">
+                  <%= if performer.image_url do %>
+                    <img
+                      src={CDN.url(performer.image_url, width: 32, height: 32, fit: "cover", quality: 80)}
+                      alt={performer.name}
+                      class="w-8 h-8 rounded-full object-cover"
+                    />
+                  <% else %>
+                    <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                      <Heroicons.user class="w-4 h-4 text-white/60" />
+                    </div>
+                  <% end %>
+                  <span class="text-sm text-white/80"><%= performer.name %></span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  # Helper functions
+
+  defp extract_genres(performers) do
+    performers
+    |> Enum.flat_map(fn performer ->
+      case performer.metadata do
+        %{"genres" => genres} when is_list(genres) -> genres
+        _ -> []
+      end
+    end)
+    |> Enum.uniq()
+    |> Enum.take(6)
+  end
+
+  defp format_supporting_acts(performers) do
+    performers
+    |> Enum.take(3)
+    |> Enum.map(& &1.name)
+    |> case do
+      [single] -> single
+      [a, b] -> "#{a} & #{b}"
+      names -> Enum.join(names, ", ")
+    end
+  end
+
+  defp format_concert_date(nil), do: nil
+
+  defp format_concert_date(datetime) do
+    Calendar.strftime(datetime, "%A, %B %d, %Y · %I:%M %p")
+  end
+
+  defp get_city_name(%{city_ref: %{name: name}}) when is_binary(name), do: name
+  defp get_city_name(_), do: nil
+
+  defp truncate_description(text, max_length) when is_binary(text) do
+    if String.length(text) <= max_length do
+      text
+    else
+      text
+      |> String.slice(0, max_length)
+      |> String.trim_trailing()
+      |> Kernel.<>("...")
+    end
+  end
+
+  defp truncate_description(_, _), do: nil
+end

@@ -14,7 +14,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   alias EventasaurusWeb.Components.Activity.{
     ActivityLayout,
+    ConcertHeroCard,
     GenericHeroCard,
+    TriviaHeroCard,
     VenueLocationCard,
     PlanWithFriendsCard,
     SourceAttributionCard
@@ -276,6 +278,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
         movie = get_movie_data(enriched_event)
         is_movie = is_movie_screening?(enriched_event)
+        is_music = is_music_event?(enriched_event)
+        is_trivia = is_trivia_event?(enriched_event)
         city = if enriched_event.venue, do: enriched_event.venue.city_ref, else: nil
         aggregated_url = get_aggregated_movie_url(movie, city)
 
@@ -362,6 +366,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> assign(:nearby_events, nearby_events)
         |> assign(:movie, movie)
         |> assign(:is_movie_screening, is_movie)
+        |> assign(:is_music_event, is_music)
+        |> assign(:is_trivia_event, is_trivia)
         |> assign(:aggregated_movie_url, aggregated_url)
         |> assign(:breadcrumb_items, breadcrumb_items)
         |> assign(:available_languages, available_languages)
@@ -1157,33 +1163,52 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             <!-- Two-Column Layout -->
             <ActivityLayout.activity_layout>
               <:main>
-                <!-- Hero Section - Movie or Generic -->
-                <%= if @is_movie_screening && @movie do %>
-                  <!-- Movie Hero Card -->
-                  <MovieHeroCard.movie_hero_card
-                    movie={@movie}
-                    show_see_all_link={true}
-                    aggregated_movie_url={@aggregated_movie_url}
-                  />
-
-                  <!-- Cast Carousel for Movie Screenings -->
-                  <%= if cast = get_in(@movie.metadata, ["credits", "cast"]) do %>
-                    <.live_component
-                      module={CastCarouselComponent}
-                      id="movie-cast-carousel"
-                      cast={cast}
-                      variant={:embedded}
-                      title={gettext("Cast")}
-                      max_cast={15}
+                <!-- Hero Section - Type-specific hero cards -->
+                <%= cond do %>
+                  <% @is_movie_screening && @movie -> %>
+                    <!-- Movie Hero Card -->
+                    <MovieHeroCard.movie_hero_card
+                      movie={@movie}
+                      show_see_all_link={true}
+                      aggregated_movie_url={@aggregated_movie_url}
                     />
-                  <% end %>
-                <% else %>
-                  <!-- Generic Hero Card for non-movie events -->
-                  <GenericHeroCard.generic_hero_card
-                    event={@event}
-                    cover_image_url={Map.get(@event, :cover_image_url)}
-                    ticket_url={get_primary_source_ticket_url(@event)}
-                  />
+
+                    <!-- Cast Carousel for Movie Screenings -->
+                    <%= if cast = get_in(@movie.metadata, ["credits", "cast"]) do %>
+                      <.live_component
+                        module={CastCarouselComponent}
+                        id="movie-cast-carousel"
+                        cast={cast}
+                        variant={:embedded}
+                        title={gettext("Cast")}
+                        max_cast={15}
+                      />
+                    <% end %>
+
+                  <% @is_music_event -> %>
+                    <!-- Concert Hero Card for music events -->
+                    <ConcertHeroCard.concert_hero_card
+                      event={@event}
+                      performers={@event.performers || []}
+                      cover_image_url={Map.get(@event, :cover_image_url)}
+                      ticket_url={get_primary_source_ticket_url(@event)}
+                    />
+
+                  <% @is_trivia_event -> %>
+                    <!-- Trivia Hero Card for quiz/trivia events -->
+                    <TriviaHeroCard.trivia_hero_card
+                      event={@event}
+                      cover_image_url={Map.get(@event, :cover_image_url)}
+                      ticket_url={get_primary_source_ticket_url(@event)}
+                    />
+
+                  <% true -> %>
+                    <!-- Generic Hero Card for all other events -->
+                    <GenericHeroCard.generic_hero_card
+                      event={@event}
+                      cover_image_url={Map.get(@event, :cover_image_url)}
+                      ticket_url={get_primary_source_ticket_url(@event)}
+                    />
                 <% end %>
 
                 <!-- Event Content Card -->
@@ -1653,6 +1678,33 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       nil -> false
       [movie | _] when not is_nil(movie) -> true
       _ -> false
+    end
+  end
+
+  defp is_music_event?(event) do
+    # Check if any category has MusicEvent schema type
+    case event.categories do
+      categories when is_list(categories) and length(categories) > 0 ->
+        Enum.any?(categories, fn category ->
+          Map.get(category, :schema_type) == "MusicEvent"
+        end)
+
+      _ ->
+        false
+    end
+  end
+
+  defp is_trivia_event?(event) do
+    # Check if any category is trivia/quiz (slug-based since it's a SocialEvent subtype)
+    case event.categories do
+      categories when is_list(categories) and length(categories) > 0 ->
+        Enum.any?(categories, fn category ->
+          slug = Map.get(category, :slug, "")
+          slug == "trivia" || slug == "quiz" || String.contains?(slug, "trivia") || String.contains?(slug, "quiz")
+        end)
+
+      _ ->
+        false
     end
   end
 
