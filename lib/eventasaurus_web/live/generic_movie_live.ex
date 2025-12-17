@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.GenericMovieLive do
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.Components.Breadcrumbs
   alias EventasaurusWeb.Components.CountryFlag
+  alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.JsonLd.MovieSchema
@@ -57,13 +58,8 @@ defmodule EventasaurusWeb.GenericMovieLive do
           # Fetch all cities with screenings for this movie
           cities_with_screenings = get_cities_with_screenings(movie.id)
 
-          # Build breadcrumb navigation
-          breadcrumb_items = [
-            %{label: gettext("Home"), path: ~p"/"},
-            %{label: gettext("All Activities"), path: ~p"/activities"},
-            %{label: gettext("Film"), path: ~p"/activities?category=film"},
-            %{label: movie.title, path: nil}
-          ]
+          # Build breadcrumb navigation using BreadcrumbBuilder
+          breadcrumb_items = BreadcrumbBuilder.build_generic_movie_breadcrumbs(movie)
 
           # Build rich_data map for movie components
           rich_data = build_rich_data_from_movie(movie)

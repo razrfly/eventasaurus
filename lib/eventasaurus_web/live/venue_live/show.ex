@@ -6,12 +6,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEvents
   alias EventasaurusDiscovery.PublicEventsEnhanced
-  alias EventasaurusDiscovery.Locations.City
   alias EventasaurusWeb.Components.OpenGraphComponent
   alias EventasaurusWeb.VenueLive.Components.ImageGallery
   alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Components.Breadcrumbs
-  alias EventasaurusWeb.Helpers.SEOHelpers
+  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, SEOHelpers}
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
   alias EventasaurusWeb.UrlHelper
@@ -147,8 +146,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
         []
       end
 
-    # Build breadcrumb items with city hierarchy
-    breadcrumb_items = build_venue_breadcrumbs(venue)
+    # Build breadcrumb items with city hierarchy using BreadcrumbBuilder
+    breadcrumb_items = BreadcrumbBuilder.build_venue_breadcrumbs(venue)
 
     # Generate JSON-LD structured data
     json_ld_schemas =
@@ -293,127 +292,6 @@ defmodule EventasaurusWeb.VenueLive.Show do
     |> Enum.map(fn event ->
       Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
     end)
-  end
-
-  defp build_venue_breadcrumbs(venue) do
-    base_items = [
-      %{label: "Home", path: ~p"/"},
-      %{label: "All Activities", path: ~p"/activities"}
-    ]
-
-    # Add city breadcrumb with metro area hierarchy if applicable
-    items_with_city = add_venue_city_breadcrumb(base_items, venue)
-
-    # Add Venues breadcrumb (links to city venues page)
-    items_with_venues = add_venues_breadcrumb(items_with_city, venue)
-
-    # Add current venue (no link)
-    items_with_venues ++ [%{label: venue.name, path: nil}]
-  end
-
-  defp add_venue_city_breadcrumb(items, %{
-         city_ref: %{id: city_id, slug: city_slug, name: city_name}
-       }) do
-    # Check if this city is part of a metro area (e.g., Paris 6 is part of Paris)
-    case find_metro_primary_city(city_id) do
-      nil ->
-        # Standalone city or is itself the primary
-        items ++ [%{label: city_name, path: ~p"/c/#{city_slug}"}]
-
-      primary_city ->
-        # City is part of a metro area - show hierarchy
-        items ++
-          [
-            %{label: primary_city.name, path: ~p"/c/#{primary_city.slug}"},
-            %{label: city_name, path: ~p"/c/#{city_slug}"}
-          ]
-    end
-  end
-
-  defp add_venue_city_breadcrumb(items, _venue) do
-    # No city - just return base items
-    items
-  end
-
-  defp add_venues_breadcrumb(items, %{city_ref: %{slug: city_slug}}) do
-    # Add "Venues" breadcrumb linking to city venues page
-    items ++ [%{label: "Venues", path: ~p"/c/#{city_slug}/venues"}]
-  end
-
-  defp add_venues_breadcrumb(items, _venue) do
-    # No city - just return items without Venues breadcrumb
-    items
-  end
-
-  defp find_metro_primary_city(city_id) do
-    # Get the current city with coordinates
-    current_city =
-      Repo.one(
-        from(c in City,
-          where: c.id == ^city_id,
-          select: %{
-            id: c.id,
-            name: c.name,
-            slug: c.slug,
-            latitude: c.latitude,
-            longitude: c.longitude,
-            country_id: c.country_id,
-            discovery_enabled: c.discovery_enabled
-          }
-        )
-      )
-
-    # If the current city itself is discovery-enabled, it's the primary - don't add parent
-    if current_city && current_city.discovery_enabled do
-      nil
-    else
-      # Look for a nearby discovery-enabled city (the main city we promote)
-      find_nearby_discovery_city(current_city)
-    end
-  end
-
-  defp find_nearby_discovery_city(city) when is_nil(city), do: nil
-
-  defp find_nearby_discovery_city(city) do
-    if city.latitude && city.longitude do
-      # Calculate bounding box for 50km radius (larger radius to catch main cities)
-      lat = Decimal.to_float(city.latitude)
-      lng = Decimal.to_float(city.longitude)
-
-      lat_delta = 50.0 / 111.0
-      lng_delta = 50.0 / (111.0 * :math.cos(lat * :math.pi() / 180.0))
-
-      min_lat = lat - lat_delta
-      max_lat = lat + lat_delta
-      min_lng = lng - lng_delta
-      max_lng = lng + lng_delta
-
-      # Find the nearest discovery-enabled city
-      Repo.one(
-        from(c in City,
-          where: c.country_id == ^city.country_id,
-          where: c.discovery_enabled == true,
-          where: not is_nil(c.latitude) and not is_nil(c.longitude),
-          where: c.latitude >= ^min_lat and c.latitude <= ^max_lat,
-          where: c.longitude >= ^min_lng and c.longitude <= ^max_lng,
-          # Order by distance (approximation using lat/lng delta)
-          order_by: [
-            asc:
-              fragment(
-                "ABS(? - ?) + ABS(? - ?)",
-                c.latitude,
-                ^city.latitude,
-                c.longitude,
-                ^city.longitude
-              )
-          ],
-          limit: 1,
-          select: %{id: c.id, name: c.name, slug: c.slug}
-        )
-      )
-    else
-      nil
-    end
   end
 
   # Generate combined JSON-LD schemas for venue page

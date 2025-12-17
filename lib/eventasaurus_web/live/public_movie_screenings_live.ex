@@ -9,7 +9,7 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Live.Components.MovieHeroComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
-  alias EventasaurusWeb.Helpers.{LanguageDiscovery, LanguageHelpers}
+  alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, LanguageHelpers}
   alias EventasaurusWeb.Services.TmdbService
   alias EventasaurusWeb.Services.MovieConfig
   alias EventasaurusWeb.JsonLd.MovieSchema
@@ -142,15 +142,6 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
       |> Enum.map(fn {_venue, info} -> info.count end)
       |> Enum.sum()
 
-    # Build breadcrumb navigation
-    breadcrumb_items = [
-      %{label: gettext("Home"), path: ~p"/"},
-      %{label: gettext("All Activities"), path: ~p"/activities"},
-      %{label: city.name, path: ~p"/c/#{city.slug}"},
-      %{label: gettext("Film"), path: ~p"/activities?category=film"},
-      %{label: movie.title, path: nil}
-    ]
-
     # Get available languages for this city (dynamic based on country + DB translations)
     available_languages =
       if city && city.slug do
@@ -165,6 +156,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
         [first_screening | _] -> get_primary_category(first_screening)
         _ -> nil
       end
+
+    # Build breadcrumb navigation using BreadcrumbBuilder
+    breadcrumb_items = BreadcrumbBuilder.build_movie_screenings_breadcrumbs(movie, city)
 
     # Build rich_data map for movie components
     rich_data = build_rich_data_from_movie(movie)

@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.CityLive.Venues do
   alias EventasaurusDiscovery.Locations
   alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.Helpers.LanguageDiscovery
+  alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Components.VenueCards
   alias EventasaurusWeb.Components.Breadcrumbs
 
@@ -38,12 +39,8 @@ defmodule EventasaurusWeb.CityLive.Venues do
             true -> nil
           end
 
-        # Build breadcrumb items: Home / City Name / Venues
-        breadcrumb_items = [
-          %{label: "Home", path: ~p"/"},
-          %{label: city.name, path: ~p"/c/#{city.slug}"},
-          %{label: "Venues", path: nil}
-        ]
+        # Build breadcrumb items using BreadcrumbBuilder
+        breadcrumb_items = BreadcrumbBuilder.build_venue_list_breadcrumbs(city)
 
         socket =
           socket
