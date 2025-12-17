@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Redesign - V2 Visual</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-white text-gray-900 font-sans">
+
+    <!-- Navbar -->
+    <nav class="absolute top-0 w-full z-10 bg-gradient-to-b from-black/50 to-transparent">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between text-white">
+            <div class="font-bold text-xl">Eventasaurus</div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="relative h-[60vh] min-h-[500px] w-full bg-gray-900 overflow-hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0">
+            <img src="https://image.tmdb.org/t/p/original/tElnmtQ6yz1kgjUYpXP66iV480x.jpg"
+                class="w-full h-full object-cover opacity-60" alt="Backdrop">
+            <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
+        </div>
+
+        <!-- Hero Content -->
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-end pb-12">
+            <div class="max-w-3xl">
+                <!-- Breadcrumbs (Light) -->
+                <div class="flex space-x-2 text-sm text-gray-300 mb-4">
+                    <span>Kraków</span> <span>/</span> <span>Movies</span>
+                </div>
+
+                <h1 class="text-5xl md:text-6xl font-bold text-white mb-4 leading-tight">Bugonia</h1>
+
+                <div class="flex flex-wrap items-center gap-4 text-white/90 text-lg mb-6">
+                    <span class="bg-yellow-500 text-black px-2 py-0.5 rounded font-bold text-base">7.8</span>
+                    <span>2024</span>
+                    <span>&bull;</span>
+                    <span>1h 45m</span>
+                    <span>&bull;</span>
+                    <span>Comedy, Sci-Fi</span>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <button
+                        class="bg-white text-gray-900 px-6 py-3 rounded-full font-bold hover:bg-gray-100 transition flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                        </svg>
+                        Watch Trailer
+                    </button>
+                    <button
+                        class="bg-white/20 backdrop-blur text-white px-6 py-3 rounded-full font-semibold hover:bg-white/30 transition">
+                        Add to Watchlist
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+
+            <!-- Left: Details (7 cols) -->
+            <div class="lg:col-span-8 space-y-12">
+
+                <!-- Description -->
+                <section>
+                    <h2 class="text-2xl font-bold mb-4">Overview</h2>
+                    <p class="text-lg text-gray-700 leading-relaxed">
+                        A pair of conspiracy-obsessed brothers kidnap a high-powered CEO, convinced she is an alien
+                        intent on destroying planet Earth. As they interrogate her, a battle of wits ensues, blurring
+                        the lines between delusion and reality in this dark comedy from Yorgos Lanthimos.
+                    </p>
+                </section>
+
+                <!-- Cast -->
+                <section>
+                    <h2 class="text-2xl font-bold mb-6">Top Cast</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div class="flex items-center space-x-3">
+                            <img src="https://ui-avatars.com/api/?name=Emma+Stone"
+                                class="w-12 h-12 rounded-full object-cover bg-gray-200">
+                            <div>
+                                <div class="font-bold text-sm">Emma Stone</div>
+                                <div class="text-xs text-gray-500">Michelle</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <img src="https://ui-avatars.com/api/?name=Jesse+Plemons"
+                                class="w-12 h-12 rounded-full object-cover bg-gray-200">
+                            <div>
+                                <div class="font-bold text-sm">Jesse Plemons</div>
+                                <div class="text-xs text-gray-500">Bob</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <img src="https://ui-avatars.com/api/?name=Willem+Dafoe"
+                                class="w-12 h-12 rounded-full object-cover bg-gray-200">
+                            <div>
+                                <div class="font-bold text-sm">Willem Dafoe</div>
+                                <div class="text-xs text-gray-500">Dr. Smith</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Gallery/Images Mockup -->
+                <section>
+                    <h2 class="text-2xl font-bold mb-4">Photos</h2>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-gray-200 rounded-lg h-32 w-full"></div>
+                        <div class="bg-gray-200 rounded-lg h-32 w-full"></div>
+                        <div class="bg-gray-200 rounded-lg h-32 w-full"></div>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- Right: Sticky Sidebar (5 cols) -->
+            <div class="lg:col-span-4">
+                <div class="sticky top-24 space-y-6">
+
+                    <!-- Venue & Map Card -->
+                    <div class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                        <!-- Tiny Map Header -->
+                        <div class="h-32 bg-gray-200 relative">
+                            <!-- Placeholder for Map -->
+                            <div class="absolute inset-0 flex items-center justify-center text-gray-400">
+                                <span>Reference Map</span>
+                            </div>
+                            <div
+                                class="absolute bottom-2 left-4 bg-white/90 px-2 py-1 rounded text-xs font-bold shadow-sm">
+                                Pod Baranami
+                            </div>
+                        </div>
+
+                        <div class="p-6">
+                            <h3 class="font-bold text-lg mb-4">Select a Showtime</h3>
+
+                            <!-- Date Selector -->
+                            <div class="flex space-x-2 overflow-x-auto pb-2 mb-4 no-scrollbar">
+                                <button
+                                    class="flex-shrink-0 px-4 py-2 bg-black text-white rounded-lg text-sm font-medium">Sat
+                                    17</button>
+                                <button
+                                    class="flex-shrink-0 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200">Sun
+                                    18</button>
+                                <button
+                                    class="flex-shrink-0 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200">Mon
+                                    19</button>
+                            </div>
+
+                            <!-- Times -->
+                            <div class="space-y-3">
+                                <div
+                                    class="p-3 border border-gray-200 rounded-xl hover:border-black transition cursor-pointer group">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="font-bold text-lg">11:00</div>
+                                        <div class="text-xs uppercase font-bold text-gray-500">2D • Subtitled</div>
+                                    </div>
+                                    <div class="text-xs text-gray-500">Red Hall • 15 seats left</div>
+                                </div>
+                                <div class="p-3 border-2 border-blue-600 bg-blue-50 rounded-xl cursor-pointer">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="font-bold text-lg text-blue-700">17:55</div>
+                                        <div class="text-xs uppercase font-bold text-blue-600">IMAX • 3D</div>
+                                    </div>
+                                    <div class="text-xs text-blue-600">Blue Hall • Selling Fast</div>
+                                </div>
+                            </div>
+
+                            <button
+                                class="w-full mt-6 py-3 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition">
+                                Buy Tickets
+                            </button>
+
+                            <div class="mt-4 text-center">
+                                <button class="text-blue-600 text-sm font-semibold hover:underline">Plan with
+                                    Friends</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+
+</html>

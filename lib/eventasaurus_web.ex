@@ -20,7 +20,7 @@ defmodule EventasaurusWeb do
   def static_paths do
     # Removed 'sitemaps' from static paths - sitemaps are served from Cloudflare R2 CDN
     # and handled by PageController redirect, not Plug.Static
-    base_paths = ~w(assets fonts images favicon.ico robots.txt)
+    base_paths = ~w(assets fonts images favicon.ico robots.txt mockups)
 
     if Mix.env() == :dev do
       # Include uploads in dev - local file uploads storage

@@ -10,19 +10,23 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     Breadcrumbs,
     MovieHeroCard,
     OpenGraphComponent,
-    VenueInfoCard,
     CategoryDisplay
+  }
+
+  alias EventasaurusWeb.Components.Activity.{
+    ActivityLayout,
+    VenueLocationCard,
+    PlanWithFriendsCard,
+    SourceAttributionCard
   }
 
   alias EventasaurusWeb.Components.Events.OccurrenceDisplay
   alias EventasaurusWeb.Components.Events.EventScheduleDisplay
-  alias EventasaurusWeb.StaticMapComponent
   alias EventasaurusWeb.Live.Components.CastCarouselComponent
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Helpers.LanguageDiscovery
   alias EventasaurusWeb.Helpers.LanguageHelpers
   alias EventasaurusWeb.Helpers.SEOHelpers
-  alias EventasaurusWeb.Helpers.SourceAttribution
   alias EventasaurusWeb.JsonLd.PublicEventSchema
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
@@ -1105,14 +1109,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50">
+    <div class="min-h-screen">
       <%= if @loading do %>
         <div class="flex justify-center py-12">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       <% else %>
         <%= if @event do %>
-          <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Language Switcher - Dynamic based on city -->
             <div class="flex justify-end mb-4">
               <div class="flex bg-gray-100 rounded-lg p-1">
@@ -1150,229 +1154,155 @@ defmodule EventasaurusWeb.PublicEventShowLive do
               </div>
             <% end %>
 
-            <!-- Movie Hero Section (for movie screenings) -->
-            <%= if @is_movie_screening && @movie do %>
-              <MovieHeroCard.movie_hero_card
-                movie={@movie}
-                show_see_all_link={true}
-                aggregated_movie_url={@aggregated_movie_url}
-              />
-
-              <!-- Cast Carousel for Movie Screenings -->
-              <%= if cast = get_in(@movie.metadata, ["credits", "cast"]) do %>
-                <div class="mb-8">
-                  <.live_component
-                    module={CastCarouselComponent}
-                    id="movie-cast-carousel"
-                    cast={cast}
-                    variant={:embedded}
-                    title={gettext("Cast")}
-                    max_cast={15}
-                  />
-                </div>
-              <% end %>
-            <% end %>
-
-            <!-- Event Header -->
-            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-              <!-- Cover Image (for non-movie events only) -->
-              <%= if !@is_movie_screening && Map.get(@event, :cover_image_url) do %>
-                <div class="h-96 relative">
-                  <img
-                    src={CDN.url(Map.get(@event, :cover_image_url), width: 1200, quality: 90)}
-                    alt={@event.display_title}
-                    class="w-full h-full object-cover"
-                  />
-                </div>
-              <% end %>
-
-              <div class="p-8">
-                <!-- Categories -->
-                <CategoryDisplay.event_category_section event={@event} />
-
-                <!-- Title -->
-                <h1 class="text-4xl font-bold text-gray-900 mb-6">
-                  <%= @event.display_title %>
-                </h1>
-
-                <!-- Key Details Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <!-- Event Schedule (Date & Time or Screening Schedule) -->
-                  <EventScheduleDisplay.event_schedule_display
-                    event={@event}
-                    occurrence_list={@event.occurrence_list || []}
-                    selected_occurrence={@selected_occurrence}
-                    is_movie_screening={@is_movie_screening}
+            <!-- Two-Column Layout -->
+            <ActivityLayout.activity_layout>
+              <:main>
+                <!-- Movie Hero Section (for movie screenings) -->
+                <%= if @is_movie_screening && @movie do %>
+                  <MovieHeroCard.movie_hero_card
+                    movie={@movie}
+                    show_see_all_link={true}
+                    aggregated_movie_url={@aggregated_movie_url}
                   />
 
-                  <!-- Venue -->
-                  <%= if @event.venue do %>
-                    <VenueInfoCard.venue_info_card venue={@event.venue} />
+                  <!-- Cast Carousel for Movie Screenings -->
+                  <%= if cast = get_in(@movie.metadata, ["credits", "cast"]) do %>
+                    <.live_component
+                      module={CastCarouselComponent}
+                      id="movie-cast-carousel"
+                      cast={cast}
+                      variant={:embedded}
+                      title={gettext("Cast")}
+                      max_cast={15}
+                    />
                   <% end %>
+                <% end %>
 
-                  <!-- Map Display -->
-                  <%= if @event.venue do %>
-                    <div class="mt-6">
-                      <.live_component
-                        module={StaticMapComponent}
-                        id="event-location-map"
-                        venue={@event.venue}
-                        theme={:minimal}
-                        size={:medium}
+                <!-- Event Content Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <!-- Cover Image (for non-movie events only) -->
+                  <%= if !@is_movie_screening && Map.get(@event, :cover_image_url) do %>
+                    <div class="h-80 relative">
+                      <img
+                        src={CDN.url(Map.get(@event, :cover_image_url), width: 1200, quality: 90)}
+                        alt={@event.display_title}
+                        class="w-full h-full object-cover"
                       />
                     </div>
                   <% end %>
 
-                  <!-- Ticket Link -->
-                  <%= if ticket_url = get_primary_source_ticket_url(@event) do %>
-                    <div>
-                      <a
-                        href={ticket_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
-                      >
-                        <Heroicons.ticket class="w-5 h-5 mr-2" />
-                        <%= gettext("Get Tickets") %>
-                      </a>
+                  <div class="p-6">
+                    <!-- Categories -->
+                    <CategoryDisplay.event_category_section event={@event} />
+
+                    <!-- Title -->
+                    <h1 class="text-3xl font-bold text-gray-900 mb-4">
+                      <%= @event.display_title %>
+                    </h1>
+
+                    <!-- Event Schedule -->
+                    <div class="mb-6">
+                      <EventScheduleDisplay.event_schedule_display
+                        event={@event}
+                        occurrence_list={@event.occurrence_list || []}
+                        selected_occurrence={@selected_occurrence}
+                        is_movie_screening={@is_movie_screening}
+                      />
                     </div>
-                  <% end %>
 
-                  <!-- Plan with Friends Button (Only for future events) -->
-                  <%= unless event_is_past?(@event) do %>
-                    <div>
-                      <%= if @existing_plan do %>
-                        <!-- User already has a plan - show different button -->
-                        <div class="space-y-2">
-                          <button
-                            phx-click="view_existing_plan"
-                            class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
-                          >
-                            <Heroicons.eye class="w-5 h-5 mr-2" />
-                            <%= gettext("View Your Event") %>
-                          </button>
-                          <!-- Plan status indicator -->
-                          <div class="text-sm text-gray-600 flex items-center">
-                            <Heroicons.check_circle class="w-4 h-4 mr-1 text-green-500" />
-                            <%= gettext("Created %{date}", date: format_plan_date(@existing_plan.inserted_at)) %>
-                          </div>
-                        </div>
-                      <% else %>
-                        <!-- No existing plan - show create button -->
-                        <button
-                          phx-click="open_plan_modal"
-                          class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
-                        >
-                          <Heroicons.user_group class="w-5 h-5 mr-2" />
-                          <%= gettext("Plan with Friends") %>
-                        </button>
-                      <% end %>
-                    </div>
-                  <% end %>
-                </div>
-
-                <!-- Multiple Occurrences Selection -->
-                <%= if @event.occurrence_list && length(@event.occurrence_list) > 1 do %>
-                  <OccurrenceDisplay.occurrence_display
-                    event={@event}
-                    occurrence_list={@event.occurrence_list}
-                    selected_occurrence={@selected_occurrence}
-                    selected_showtime_date={@selected_showtime_date}
-                    is_movie_screening={@is_movie_screening}
-                  />
-                <% end %>
-
-                <!-- Description -->
-                <%= if @event.display_description do %>
-                  <div class="mb-8">
-                    <h2 class="text-2xl font-semibold text-gray-900 mb-4">
-                      <%= gettext("About This Event") %>
-                    </h2>
-                    <div class="prose max-w-none text-gray-700">
-                      <%= format_description(@event.display_description) %>
-                    </div>
-                  </div>
-                <% end %>
-
-                <!-- Performers -->
-                <%= if @event.performers && @event.performers != [] do %>
-                  <div class="mb-8">
-                    <h2 class="text-2xl font-semibold text-gray-900 mb-4">
-                      <%= gettext("Performers") %>
-                    </h2>
-                    <div class="flex flex-wrap gap-3">
-                      <%= for performer <- @event.performers do %>
+                    <!-- Ticket Link -->
+                    <%= if ticket_url = get_primary_source_ticket_url(@event) do %>
+                      <div class="mb-6">
                         <a
-                          href={~p"/performers/#{performer.slug}"}
-                          class="px-4 py-2 bg-gray-100 rounded-lg text-gray-800 font-medium hover:bg-indigo-100 hover:text-indigo-800 transition-colors"
+                          href={ticket_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition"
                         >
-                          <%= performer.name %>
+                          <Heroicons.ticket class="w-5 h-5 mr-2" />
+                          <%= gettext("Get Tickets") %>
                         </a>
-                      <% end %>
-                    </div>
-                  </div>
-                <% end %>
-
-                <!-- Sources -->
-                <div class="mt-12 pt-8 border-t border-gray-200">
-                  <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-medium text-gray-500">
-                      <%= gettext("Event Sources") %>
-                    </h3>
-
-                    <%!-- Show refresh button if event supports availability refresh --%>
-                    <%= if EventRefresh.refreshable?(@event) do %>
-                      <button
-                        phx-click="refresh_availability"
-                        disabled={@refreshing_availability}
-                        class={"inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition #{if @refreshing_availability, do: "bg-gray-300 text-gray-500 cursor-not-allowed", else: "bg-blue-600 text-white hover:bg-blue-700"}"}
-                      >
-                        <%= if @refreshing_availability do %>
-                          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <%= gettext("Refreshing...") %>
-                        <% else %>
-                          <Heroicons.arrow_path class="w-4 h-4 mr-1.5" />
-                          <%= gettext("Refresh Availability") %>
-                        <% end %>
-                      </button>
+                      </div>
                     <% end %>
-                  </div>
 
-                  <div class="flex flex-wrap gap-4">
-                    <%= for source <- SourceAttribution.deduplicate_sources(@event.sources) do %>
-                      <% source_url = SourceAttribution.get_source_url(source) %>
-                      <% source_name = SourceAttribution.get_source_name(source) %>
-                      <div class="text-sm">
-                        <%= if source_url do %>
-                          <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
-                            <%= source_name %>
-                            <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
-                          </a>
-                        <% else %>
-                          <span class="font-medium text-gray-700">
-                            <%= source_name %>
-                          </span>
-                        <% end %>
-                        <span class="text-gray-500 ml-2">
-                          <%= gettext("Last updated") %> <%= SourceAttribution.format_relative_time(source.last_seen_at) %>
-                        </span>
+                    <!-- Multiple Occurrences Selection -->
+                    <%= if @event.occurrence_list && length(@event.occurrence_list) > 1 do %>
+                      <OccurrenceDisplay.occurrence_display
+                        event={@event}
+                        occurrence_list={@event.occurrence_list}
+                        selected_occurrence={@selected_occurrence}
+                        selected_showtime_date={@selected_showtime_date}
+                        is_movie_screening={@is_movie_screening}
+                      />
+                    <% end %>
+
+                    <!-- Description -->
+                    <%= if @event.display_description do %>
+                      <div class="mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-3">
+                          <%= gettext("About This Event") %>
+                        </h2>
+                        <div class="prose max-w-none text-gray-700">
+                          <%= format_description(@event.display_description) %>
+                        </div>
+                      </div>
+                    <% end %>
+
+                    <!-- Performers -->
+                    <%= if @event.performers && @event.performers != [] do %>
+                      <div class="mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-3">
+                          <%= gettext("Performers") %>
+                        </h2>
+                        <div class="flex flex-wrap gap-2">
+                          <%= for performer <- @event.performers do %>
+                            <a
+                              href={~p"/performers/#{performer.slug}"}
+                              class="px-3 py-1.5 bg-gray-100 rounded-lg text-gray-800 text-sm font-medium hover:bg-indigo-100 hover:text-indigo-800 transition-colors"
+                            >
+                              <%= performer.name %>
+                            </a>
+                          <% end %>
+                        </div>
                       </div>
                     <% end %>
                   </div>
                 </div>
-              </div>
-            </div>
+              </:main>
 
-            <!-- Related Events -->
-            <.live_component
-              module={EventasaurusWeb.Components.NearbyEventsComponent}
-              id="nearby-events"
-              events={@nearby_events}
-              language={@language}
-            />
+              <:sidebar>
+                <!-- Venue Location Card with Map -->
+                <%= if @event.venue do %>
+                  <VenueLocationCard.venue_location_card
+                    venue={@event.venue}
+                    map_id="event-venue-map"
+                  />
+                <% end %>
+
+                <!-- Plan with Friends Card -->
+                <PlanWithFriendsCard.plan_with_friends_card
+                  existing_plan={@existing_plan}
+                  is_past_event={event_is_past?(@event)}
+                />
+
+                <!-- Source Attribution Card -->
+                <SourceAttributionCard.source_attribution_card
+                  sources={@event.sources}
+                  is_refreshable={EventRefresh.refreshable?(@event)}
+                  refreshing={@refreshing_availability}
+                />
+              </:sidebar>
+            </ActivityLayout.activity_layout>
+
+            <!-- Related Events (Full Width Below Layout) -->
+            <div class="mt-8">
+              <.live_component
+                module={EventasaurusWeb.Components.NearbyEventsComponent}
+                id="nearby-events"
+                events={@nearby_events}
+                language={@language}
+              />
+            </div>
           </div>
         <% end %>
       <% end %>
@@ -1419,13 +1349,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp format_description(description) do
     # Escapes HTML and converts newlines to <br>, returning Safe HTML
     Phoenix.HTML.Format.text_to_html(description, escape: true)
-  end
-
-  defp format_plan_date(datetime) do
-    case DateTime.from_naive(datetime, "Etc/UTC") do
-      {:ok, dt} -> SourceAttribution.format_relative_time(dt)
-      {:error, _} -> gettext("recently")
-    end
   end
 
   # Occurrence helper functions

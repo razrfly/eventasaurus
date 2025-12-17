@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Redesign - V4 Mobile</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-900 font-sans min-h-screen pb-20">
+
+    <!-- Simple Header -->
+    <header class="bg-white p-4 flex justify-center border-b border-gray-200 sticky top-0 z-50">
+        <span class="font-bold text-lg">Eventasaurus</span>
+    </header>
+
+    <div class="max-w-xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- Hero Card -->
+        <div class="bg-white rounded-3xl shadow-sm overflow-hidden">
+            <div class="relative h-64">
+                <img src="https://image.tmdb.org/t/p/w500/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg"
+                    class="w-full h-full object-cover">
+                <div class="absolute bottom-4 left-4">
+                    <span class="bg-white text-black px-3 py-1 rounded-full text-xs font-bold shadow">
+                        7.8 Rating
+                    </span>
+                </div>
+            </div>
+            <div class="p-6">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">Bugonia</h1>
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">Coming Soon</span>
+                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">Sci-Fi</span>
+                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">Comedy</span>
+                </div>
+                <p class="text-gray-600 leading-relaxed">
+                    A pair of conspiracy-obsessed brothers kidnap a high-powered CEO, convinced she is an alien intent
+                    on destroying planet Earth.
+                </p>
+            </div>
+        </div>
+
+        <!-- Location Accordion (Open) -->
+        <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100">
+            <div class="p-4 flex items-center justify-between bg-gray-50 border-b border-gray-100 cursor-pointer">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-100 rounded-full text-blue-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                            </path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-900">Kino Pod Baranami</h3>
+                        <p class="text-xs text-gray-500">Rynek Główny 27, Kraków</p>
+                    </div>
+                </div>
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+
+            <!-- Map (Visible) -->
+            <div class="h-48 bg-gray-200 relative">
+                <div class="absolute inset-0 flex items-center justify-center text-gray-500 font-medium">
+                    Interactive Map View
+                </div>
+            </div>
+            <div class="grid grid-cols-2 divide-x divide-gray-100">
+                <button class="py-3 text-center text-sm font-medium text-gray-600 hover:bg-gray-50">Navigate</button>
+                <button class="py-3 text-center text-sm font-medium text-gray-600 hover:bg-gray-50">Venue
+                    Details</button>
+            </div>
+        </div>
+
+        <!-- Showtimes Scroller -->
+        <div>
+            <div class="flex justify-between items-center mb-4 px-2">
+                <h2 class="text-xl font-bold">Showtimes</h2>
+                <span class="text-sm font-medium text-blue-600">Today, 17 Dec</span>
+            </div>
+
+            <div class="grid gap-3">
+                <!-- Time Slot -->
+                <button
+                    class="w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex justify-between items-center hover:border-blue-500 hover:ring-1 hover:ring-blue-500 transition group">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-xl font-bold text-gray-900">11:00</span>
+                        <div class="text-left">
+                            <div class="text-sm font-medium text-gray-700">Standard 2D</div>
+                            <div class="text-xs text-gray-500">Subtitled</div>
+                        </div>
+                    </div>
+                    <span
+                        class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-sm font-bold group-hover:bg-blue-600 group-hover:text-white transition">Book</span>
+                </button>
+
+                <!-- Time Slot -->
+                <button
+                    class="w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex justify-between items-center hover:border-blue-500 hover:ring-1 hover:ring-blue-500 transition group">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-xl font-bold text-gray-900">13:30</span>
+                        <div class="text-left">
+                            <div class="text-sm font-medium text-gray-700">Standard 2D</div>
+                            <div class="text-xs text-gray-500">Subtitled</div>
+                        </div>
+                    </div>
+                    <span
+                        class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-sm font-bold group-hover:bg-blue-600 group-hover:text-white transition">Book</span>
+                </button>
+
+                <!-- Time Slot (Featured) -->
+                <button
+                    class="w-full bg-gradient-to-r from-blue-600 to-indigo-700 p-4 rounded-2xl shadow-md border-0 flex justify-between items-center text-white transfrom hover:scale-[1.02] transition">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-xl font-bold">17:55</span>
+                        <div class="text-left">
+                            <div class="text-sm font-bold opacity-90">IMAX 3D Experience</div>
+                            <div class="text-xs opacity-75">Best Availability</div>
+                        </div>
+                    </div>
+                    <span class="bg-white/20 px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-sm">Book ($15)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sticky Floating Action Button (Plan) -->
+        <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-sm px-4">
+            <button
+                class="w-full bg-green-500 text-white font-bold py-4 rounded-full shadow-xl flex items-center justify-center hover:bg-green-600 transition transform hover:scale-105 active:scale-95">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
+                    </path>
+                </svg>
+                Plan with Friends
+            </button>
+        </div>
+
+    </div>
+
+</body>
+
+</html>
