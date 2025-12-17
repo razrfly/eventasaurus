@@ -235,6 +235,8 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
   defp badge_class(:slate), do: "bg-slate-500/20 text-slate-100"
   defp badge_class(_), do: "bg-white/20 text-white"
 
+  defp format_event_date(nil), do: nil
+
   defp format_event_date(datetime) do
     Calendar.strftime(datetime, "%A, %B %d, %Y · %I:%M %p")
   end
