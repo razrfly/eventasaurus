@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Redesign - V1 Refined</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <!-- Adding Inter font to match likely design -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+
+    <!-- Mock Nav -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="font-bold text-xl text-blue-600">Eventasaurus</div>
+            <div class="text-sm text-gray-500">MOCKUP V1: Refined Standard</div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Breadcrumbs -->
+        <nav class="flex mb-6" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li><a href="#" class="text-gray-500 hover:text-gray-700">Kraków</a></li>
+                <li class="text-gray-300">/</li>
+                <li><a href="#" class="text-gray-500 hover:text-gray-700">Movies</a></li>
+                <li class="text-gray-300">/</li>
+                <li><span class="text-gray-900 font-medium">Bugonia</span></li>
+            </ol>
+        </nav>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Main Content (2 spans) -->
+            <div class="lg:col-span-2 space-y-8">
+                
+                <!-- Movie Hero / Main Info -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="md:flex">
+                        <!-- Poster -->
+                        <div class="md:flex-shrink-0 relative">
+                            <img class="h-64 w-full md:w-48 object-cover" src="https://image.tmdb.org/t/p/w500/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg" alt="Bugonia">
+                            <div class="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded">
+                                7.8 ★
+                            </div>
+                        </div>
+                        <div class="p-6 flex flex-col justify-between w-full">
+                            <div>
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Review</span>
+                                    <span class="text-sm text-gray-500">2024 • 1h 45m</span>
+                                </div>
+                                <h1 class="text-3xl font-bold text-gray-900 mb-2">Bugonia</h1>
+                                <p class="text-gray-600 mb-4 line-clamp-3">
+                                    A pair of conspiracy-obsessed brothers kidnap a high-powered CEO, convinced she is an alien intent on destroying planet Earth.
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-3 mt-4 md:mt-0">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    Comedy
+                                </span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    Science Fiction
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Showtimes Section -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-bold text-gray-900">Showtimes</h2>
+                        <div class="flex space-x-2">
+                            <button class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
+                                Today
+                            </button>
+                            <button class="px-3 py-1.5 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium transition">
+                                Tomorrow
+                            </button>
+                            <button class="px-3 py-1.5 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium transition">
+                                Fri, Dec 19
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- Venue Item -->
+                        <div class="border rounded-xl p-4 hover:border-blue-300 transition-colors cursor-pointer group">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="font-bold text-lg text-gray-900 group-hover:text-blue-600 transition">Kino Pod Baranami</h3>
+                                    <p class="text-sm text-gray-500">Rynek Główny 27, Kraków</p>
+                                </div>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">2D, PL Sub</span>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <button class="px-4 py-2 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 text-gray-700 font-medium text-sm transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
+                                    11:00
+                                </button>
+                                <button class="px-4 py-2 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 text-gray-700 font-medium text-sm transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
+                                    13:30
+                                </button>
+                                <button class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm shadow-sm hover:bg-blue-700 transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
+                                    17:55
+                                </button>
+                                <button class="px-4 py-2 rounded-lg border border-gray-200 text-gray-400 cursor-not-allowed text-sm">
+                                    20:15
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cast Carousel (Horizontal Scroll) -->
+                <div>
+                     <h3 class="font-bold text-gray-900 mb-3">Cast</h3>
+                     <div class="flex space-x-4 overflow-x-auto pb-4">
+                        <!-- Cast 1 -->
+                        <div class="flex-shrink-0 w-24 text-center">
+                            <div class="w-24 h-24 rounded-full bg-gray-200 mb-2 overflow-hidden">
+                                <img src="https://ui-avatars.com/api/?name=Emma+Stone" class="w-full h-full object-cover">
+                            </div>
+                            <p class="text-xs font-semibold">Emma Stone</p>
+                        </div>
+                        <!-- Cast 2 -->
+                        <div class="flex-shrink-0 w-24 text-center">
+                            <div class="w-24 h-24 rounded-full bg-gray-200 mb-2 overflow-hidden">
+                                <img src="https://ui-avatars.com/api/?name=Jesse+Plemons" class="w-full h-full object-cover">
+                            </div>
+                            <p class="text-xs font-semibold">Jesse Plemons</p>
+                        </div>
+                         <!-- Cast 3 -->
+                         <div class="flex-shrink-0 w-24 text-center">
+                            <div class="w-24 h-24 rounded-full bg-gray-200 mb-2 overflow-hidden">
+                                <img src="https://ui-avatars.com/api/?name=Willem+Dafoe" class="w-full h-full object-cover">
+                            </div>
+                            <p class="text-xs font-semibold">Willem Dafoe</p>
+                        </div>
+                     </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Map & Actions (1 span) -->
+            <div class="space-y-6">
+                
+                <!-- Map Card (Moved Up!) -->
+                <div class="bg-gray-100 rounded-2xl overflow-hidden h-64 relative shadow-sm border border-gray-200">
+                    <div class="absolute inset-0 flex items-center justify-center bg-gray-200 text-gray-400">
+                        <!-- Placeholder for Map -->
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 7m0 13V7"></path></svg>
+                        <span class="ml-2">Interactive Map</span>
+                    </div>
+                     <!-- Map Badge -->
+                     <button class="absolute bottom-3 right-3 bg-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow text-gray-700 hover:bg-gray-50">
+                        Open Full Map
+                     </button>
+                </div>
+
+                <!-- Plan with Friends (Sticky-ish) -->
+                <div class="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                    <h3 class="font-bold text-gray-900 mb-2">Planning a night out?</h3>
+                    <p class="text-sm text-blue-700 mb-4">Coordinate with friends to pick the best showtime.</p>
+                    <button class="w-full py-2.5 bg-blue-600 text-white rounded-xl font-medium shadow-sm hover:bg-blue-700 transition flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        Plan with Friends
+                    </button>
+                </div>
+
+                <!-- Data Sources / Transparency (Moved to sidebar/footer area) -->
+                <div class="pt-6 border-t border-gray-100">
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Event Sources</h4>
+                    <ul class="space-y-2 text-xs text-gray-500">
+                        <li class="flex justify-between">
+                            <span>Kino Pod Baranami</span>
+                            <span class="text-green-600">Updated 5m ago</span>
+                        </li>
+                         <li class="flex justify-between">
+                            <span>TMDB</span>
+                            <span class="text-green-600">Updated 1h ago</span>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
