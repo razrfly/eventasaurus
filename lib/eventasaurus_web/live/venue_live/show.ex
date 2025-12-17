@@ -584,7 +584,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
               />
 
               <!-- Nearby Events -->
-              <%= if !Enum.empty?(@nearby_events) do %>
+              <%= if !Enum.empty?(@nearby_events) && @venue.city_ref do %>
                 <div class="bg-white rounded-xl border border-gray-200 p-5">
                   <h3 class="text-lg font-semibold text-gray-900 mb-4">
                     <span class="flex items-center gap-2">

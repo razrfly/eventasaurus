@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.Components.Activity.ContainerHeroCard
   alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, SourceAttribution}
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
 
@@ -89,6 +90,14 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         # Group events by date
         grouped_events = group_events_by_date(events)
 
+        # Extract hero image from first event with an image
+        hero_image =
+          events
+          |> Enum.find_value(fn event -> Map.get(event, :cover_image_url) end)
+
+        # Get source logo if available
+        source_logo_url = container.source && container.source.logo_url
+
         # Build breadcrumb items
         breadcrumb_items =
           BreadcrumbBuilder.build_container_breadcrumbs(container, city,
@@ -112,6 +121,8 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         |> assign(:container, container)
         |> assign(:events, events)
         |> assign(:grouped_events, grouped_events)
+        |> assign(:hero_image, hero_image)
+        |> assign(:source_logo_url, source_logo_url)
         |> assign(:breadcrumb_items, breadcrumb_items)
         |> assign(:json_ld, breadcrumb_json_ld)
         |> assign(:canonical_url, canonical_url)
@@ -190,69 +201,24 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         </div>
       <% else %>
         <!-- Hero Section -->
-        <div class="bg-white shadow-sm border-b">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Breadcrumbs -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <!-- Breadcrumbs (outside hero card, like activity pages) -->
+          <nav class="mb-4">
             <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
+          </nav>
 
-            <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <div class="flex items-center space-x-3 mb-2">
-                  <h1 class="text-4xl font-bold text-gray-900">
-                    <%= @container.title %>
-                  </h1>
-                  <span class={"px-3 py-1 rounded-md text-sm font-medium text-white #{get_badge_color(@container.container_type)}"}>
-                    <%= PublicEventContainer.container_type_label(@container) %>
-                  </span>
-                </div>
-
-                <div class="flex flex-wrap gap-4 mt-4 text-gray-600">
-                  <div class="flex items-center">
-                    <Heroicons.calendar class="w-5 h-5 mr-2" />
-                    <span class="font-medium">
-                      <%= format_date_range(@container) %>
-                    </span>
-                  </div>
-
-                  <div class="flex items-center">
-                    <Heroicons.map_pin class="w-5 h-5 mr-2" />
-                    <span><%= @city.name %></span>
-                  </div>
-
-                  <div class="flex items-center">
-                    <Heroicons.ticket class="w-5 h-5 mr-2" />
-                    <span><%= length(@events) %> events</span>
-                  </div>
-
-                  <%= if @container.description do %>
-                    <div class="w-full mt-2">
-                      <p class="text-gray-700"><%= @container.description %></p>
-                    </div>
-                  <% end %>
-                </div>
-              </div>
-
-              <!-- Language Switcher -->
-              <div class="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  phx-click="change_language"
-                  phx-value-language="en"
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "en", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title="English"
-                >
-                  🇬🇧 EN
-                </button>
-                <button
-                  phx-click="change_language"
-                  phx-value-language="pl"
-                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == "pl", do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                  title="Polski"
-                >
-                  🇵🇱 PL
-                </button>
-              </div>
-            </div>
-          </div>
+          <!-- Container Hero Card -->
+          <ContainerHeroCard.container_hero_card
+            title={@container.title}
+            container_type={@container.container_type}
+            description={@container.description}
+            city={@city}
+            hero_image={@hero_image}
+            event_count={length(@events)}
+            start_date={@container.start_date}
+            end_date={@container.end_date}
+            logo_url={@source_logo_url}
+          />
         </div>
 
         <!-- View Mode Toggle -->
@@ -359,13 +325,6 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
     """
   end
 
-  defp get_badge_color(:festival), do: "bg-purple-500"
-  defp get_badge_color(:conference), do: "bg-orange-500"
-  defp get_badge_color(:tour), do: "bg-red-500"
-  defp get_badge_color(:series), do: "bg-indigo-500"
-  defp get_badge_color(:exhibition), do: "bg-yellow-500"
-  defp get_badge_color(:tournament), do: "bg-pink-500"
-  defp get_badge_color(_), do: "bg-gray-500"
 
   defp format_date_header("TBD"), do: "Date TBD"
 
