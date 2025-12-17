@@ -401,6 +401,25 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   @impl true
+  def handle_event("remove_category", %{"id" => category_id}, socket) do
+    category_id = String.to_integer(category_id)
+    current_categories = socket.assigns.filters.categories || []
+    updated_categories = Enum.reject(current_categories, &(&1 == category_id))
+
+    filters = Map.put(socket.assigns.filters, :categories, updated_categories)
+
+    # ASYNC: Show skeleton immediately, load events in background
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> assign(:events_loading, true)
+      |> push_patch(to: build_path(socket, filters))
+
+    send(self(), :load_filtered_events)
+    {:noreply, socket}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gray-50">
@@ -996,9 +1015,27 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   defp apply_params_to_filters(socket, params) do
+    # Handle both singular category (slug from breadcrumb) and plural categories (IDs from filter UI)
+    category_ids =
+      case params do
+        %{"category" => slug} when is_binary(slug) and slug != "" ->
+          # Single category slug from breadcrumb like /c/krakow?category=film
+          case Categories.get_category_by_slug(slug) do
+            nil -> []
+            category -> [category.id]
+          end
+
+        %{"categories" => ids} ->
+          # Multiple category IDs from query params
+          parse_id_list(ids)
+
+        _ ->
+          []
+      end
+
     filters = %{
       search: params["search"],
-      categories: parse_id_list(params["categories"]),
+      categories: category_ids,
       start_date: parse_date(params["start_date"]),
       end_date: parse_date(params["end_date"]),
       radius_km: parse_integer(params["radius"]) || socket.assigns.radius_km,

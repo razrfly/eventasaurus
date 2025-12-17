@@ -9,6 +9,8 @@ defmodule EventasaurusWeb.CityLive.Events do
 
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEvents.{PublicEventContainers, PublicEventContainer}
+  alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+  alias EventasaurusWeb.Components.Breadcrumbs
 
   @impl true
   def mount(%{"city_slug" => city_slug}, _session, socket) do
@@ -64,6 +66,9 @@ defmodule EventasaurusWeb.CityLive.Events do
     type_label = container_type_label(container_type)
     type_plural = PublicEventContainer.container_type_plural(container_type)
 
+    # Build breadcrumb items using BreadcrumbBuilder
+    breadcrumb_items = BreadcrumbBuilder.build_container_type_index_breadcrumbs(city, container_type)
+
     socket
     |> assign(:container_type, container_type)
     |> assign(:containers, containers)
@@ -71,6 +76,7 @@ defmodule EventasaurusWeb.CityLive.Events do
     |> assign(:page_title, "#{type_plural |> String.capitalize()} in #{city.name}")
     |> assign(:type_label, type_label)
     |> assign(:type_plural, type_plural)
+    |> assign(:breadcrumb_items, breadcrumb_items)
   end
 
   defp get_container_type_from_live_action(socket) do
@@ -106,21 +112,7 @@ defmodule EventasaurusWeb.CityLive.Events do
         <div class="bg-white shadow-sm border-b">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Breadcrumbs -->
-            <nav class="mb-4 text-sm">
-              <ol class="flex items-center space-x-2 text-gray-500">
-                <li>
-                  <.link navigate={~p"/"} class="hover:text-gray-700">Home</.link>
-                </li>
-                <li>/</li>
-                <li>
-                  <.link navigate={~p"/c/#{@city.slug}"} class="hover:text-gray-700">
-                    <%= @city.name %>
-                  </.link>
-                </li>
-                <li>/</li>
-                <li class="text-gray-900 font-medium"><%= String.capitalize(@type_plural) %></li>
-              </ol>
-            </nav>
+            <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-4" />
 
             <div class="flex items-start justify-between">
               <div class="flex-1">

@@ -76,17 +76,19 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   Results are cached in the process dictionary for the duration of the request.
   """
+  @spec get_category_slug_for_aggregation_type(String.t()) :: String.t() | nil
   def get_category_slug_for_aggregation_type(aggregation_type_slug) do
     cache_key = {:breadcrumb_category_slug, aggregation_type_slug}
 
-    case Process.get(cache_key) do
-      nil ->
+    # Use {:cached, result} tuple to distinguish "not cached" from "cached as nil"
+    case Process.get(cache_key, :not_cached) do
+      :not_cached ->
         result = lookup_category_slug(aggregation_type_slug)
-        Process.put(cache_key, result)
+        Process.put(cache_key, {:cached, result})
         result
 
-      cached ->
-        cached
+      {:cached, cached_result} ->
+        cached_result
     end
   end
 
@@ -119,6 +121,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
+  @spec build_event_breadcrumbs(PublicEvent.t(), keyword()) :: [map()]
   def build_event_breadcrumbs(%PublicEvent{} = event, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -153,6 +156,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   - Container type (plural, e.g., "Festivals")
   - Container title (current page, no link)
   """
+  @spec build_container_breadcrumbs(PublicEventContainer.t(), map(), keyword()) :: [map()]
   def build_container_breadcrumbs(%PublicEventContainer{} = container, city, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -166,6 +170,32 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
         path: container_type_index_path(city.slug, container.container_type)
       },
       %{label: container.title, path: nil}
+    ]
+  end
+
+  @doc """
+  Build breadcrumb items for container type index pages (e.g., list of all festivals in a city).
+
+  Pattern: `Home / City Name / Festivals`
+
+  ## Parameters
+    - city: The city struct with :name and :slug
+    - container_type: The container type atom (e.g., :festival, :conference)
+    - opts: Options including :gettext_backend
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  @spec build_container_type_index_breadcrumbs(map(), atom(), keyword()) :: [map()]
+  def build_container_type_index_breadcrumbs(city, container_type, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    type_plural = PublicEventContainer.container_type_plural(container_type)
+
+    [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: city.name, path: ~p"/c/#{city.slug}"},
+      %{label: String.capitalize(type_plural), path: nil}
     ]
   end
 
@@ -187,6 +217,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
+  @spec build_aggregated_source_breadcrumbs(map() | nil, String.t(), String.t(), atom(), keyword()) :: [map()]
   def build_aggregated_source_breadcrumbs(city, content_type, source_name, scope, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -244,6 +275,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
+  @spec build_movie_screenings_breadcrumbs(map(), map(), keyword()) :: [map()]
   def build_movie_screenings_breadcrumbs(movie, city, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -271,6 +303,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
+  @spec build_generic_movie_breadcrumbs(map(), keyword()) :: [map()]
   def build_generic_movie_breadcrumbs(movie, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -297,6 +330,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
+  @spec build_venue_list_breadcrumbs(map(), keyword()) :: [map()]
   def build_venue_list_breadcrumbs(city, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -322,6 +356,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
+  @spec build_venue_breadcrumbs(map(), keyword()) :: [map()]
   def build_venue_breadcrumbs(venue, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -400,7 +435,7 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     items
   end
 
-  defp add_category_breadcrumb(items, %{categories: categories, primary_category_id: primary_id})
+  defp add_category_breadcrumb(items, %{categories: categories, primary_category_id: primary_id, venue: %{city_ref: %{slug: city_slug}}})
        when is_list(categories) and not is_nil(primary_id) do
     # Find the primary category in the preloaded categories list
     case Enum.find(categories, &(&1.id == primary_id)) do
@@ -409,13 +444,30 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
         items
 
       category ->
-        # Add category breadcrumb linking to filtered activities
+        # Add category breadcrumb linking to city-filtered activities
+        items ++ [%{label: category.name, path: ~p"/c/#{city_slug}?category=#{category.slug}"}]
+    end
+  end
+
+  defp add_category_breadcrumb(items, %{categories: categories, primary_category_id: primary_id})
+       when is_list(categories) and not is_nil(primary_id) do
+    # No city - fall back to global activities filter
+    case Enum.find(categories, &(&1.id == primary_id)) do
+      nil ->
+        items
+
+      category ->
         items ++ [%{label: category.name, path: ~p"/activities?category=#{category.slug}"}]
     end
   end
 
+  defp add_category_breadcrumb(items, %{categories: [category | _], venue: %{city_ref: %{slug: city_slug}}}) when not is_nil(category) do
+    # No primary_category_id but has categories and city - use the first one with city filter
+    items ++ [%{label: category.name, path: ~p"/c/#{city_slug}?category=#{category.slug}"}]
+  end
+
   defp add_category_breadcrumb(items, %{categories: [category | _]}) when not is_nil(category) do
-    # No primary_category_id but has categories - use the first one
+    # No primary_category_id but has categories, no city - use the first one with global filter
     items ++ [%{label: category.name, path: ~p"/activities?category=#{category.slug}"}]
   end
 
