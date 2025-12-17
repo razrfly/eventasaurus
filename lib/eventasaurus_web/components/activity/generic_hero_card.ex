@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Components.Activity.HeroCardHelpers
 
   @doc """
   Renders the generic hero card for non-movie events.
@@ -92,7 +93,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
             <div class="flex items-center text-white/90 mb-4">
               <Heroicons.calendar class="w-5 h-5 mr-2" />
               <span class="text-lg">
-                <%= format_event_date(@event.starts_at) %>
+                <%= HeroCardHelpers.format_datetime(@event.starts_at, "%A, %B %d, %Y · %I:%M %p") %>
               </span>
             </div>
           <% end %>
@@ -103,7 +104,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
               <Heroicons.map_pin class="w-5 h-5 mr-2" />
               <span>
                 <%= @event.venue.name %>
-                <%= if city_name = get_city_name(@event.venue) do %>
+                <%= if city_name = HeroCardHelpers.get_city_name(@event.venue) do %>
                   <span class="text-white/60">· <%= city_name %></span>
                 <% end %>
               </span>
@@ -113,7 +114,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
           <!-- Description Excerpt -->
           <%= if @event.display_description do %>
             <p class="text-white/90 leading-relaxed line-clamp-2 max-w-2xl mb-6">
-              <%= truncate_description(@event.display_description, 200) %>
+              <%= HeroCardHelpers.truncate_text(@event.display_description, 200) %>
             </p>
           <% end %>
 
@@ -234,26 +235,4 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
   defp badge_class(:rose), do: "bg-rose-500/20 text-rose-100"
   defp badge_class(:slate), do: "bg-slate-500/20 text-slate-100"
   defp badge_class(_), do: "bg-white/20 text-white"
-
-  defp format_event_date(nil), do: nil
-
-  defp format_event_date(datetime) do
-    Calendar.strftime(datetime, "%A, %B %d, %Y · %I:%M %p")
-  end
-
-  defp get_city_name(%{city_ref: %{name: name}}) when is_binary(name), do: name
-  defp get_city_name(_), do: nil
-
-  defp truncate_description(text, max_length) when is_binary(text) do
-    if String.length(text) <= max_length do
-      text
-    else
-      text
-      |> String.slice(0, max_length)
-      |> String.trim_trailing()
-      |> Kernel.<>("...")
-    end
-  end
-
-  defp truncate_description(_, _), do: nil
 end
