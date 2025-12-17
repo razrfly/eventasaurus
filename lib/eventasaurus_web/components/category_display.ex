@@ -127,7 +127,7 @@ defmodule EventasaurusWeb.Components.CategoryDisplay do
     """
   end
 
-@doc """
+  @doc """
   Displays a full category section for event detail pages.
 
   Shows primary category as a prominent badge with icon and link,

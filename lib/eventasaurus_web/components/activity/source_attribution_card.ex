@@ -34,7 +34,12 @@ defmodule EventasaurusWeb.Components.Activity.SourceAttributionCard do
   attr :class, :string, default: ""
 
   def source_attribution_card(assigns) do
-    assigns = assign(assigns, :deduplicated_sources, SourceAttribution.deduplicate_sources(assigns.sources))
+    assigns =
+      assign(
+        assigns,
+        :deduplicated_sources,
+        SourceAttribution.deduplicate_sources(assigns.sources)
+      )
 
     ~H"""
     <div class={["bg-white rounded-xl border border-gray-200 p-4", @class]}>
@@ -106,7 +111,10 @@ defmodule EventasaurusWeb.Components.Activity.SourceAttributionCard do
       assigns
       |> assign(:source_url, SourceAttribution.get_source_url(assigns.source))
       |> assign(:source_name, SourceAttribution.get_source_name(assigns.source))
-      |> assign(:relative_time, SourceAttribution.format_relative_time(assigns.source.last_seen_at))
+      |> assign(
+        :relative_time,
+        SourceAttribution.format_relative_time(assigns.source.last_seen_at)
+      )
 
     ~H"""
     <li class="flex items-center justify-between text-sm">

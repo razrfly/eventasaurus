@@ -859,7 +859,6 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
     end
   end
 
-
   # Helper to format OMDb runtime ("142 min")
   defp format_omdb_duration(nil), do: nil
   defp format_omdb_duration("N/A"), do: nil
@@ -938,7 +937,6 @@ defmodule EventasaurusWeb.JsonLd.PublicEventSchema do
       list -> list
     end
   end
-
 
   # Helper to conditionally append to list
   defp maybe_append(list, true, value), do: list ++ [value]

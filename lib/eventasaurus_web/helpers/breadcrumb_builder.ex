@@ -217,7 +217,13 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   ## Options
     * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
   """
-  @spec build_aggregated_source_breadcrumbs(map() | nil, String.t(), String.t(), atom(), keyword()) :: [map()]
+  @spec build_aggregated_source_breadcrumbs(
+          map() | nil,
+          String.t(),
+          String.t(),
+          atom(),
+          keyword()
+        ) :: [map()]
   def build_aggregated_source_breadcrumbs(city, content_type, source_name, scope, opts \\ []) do
     gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
 
@@ -286,7 +292,10 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
       %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
       %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"},
       %{label: city.name, path: ~p"/c/#{city.slug}"},
-      %{label: Gettext.gettext(gettext_backend, "Film"), path: ~p"/c/#{city.slug}?category=#{film_category_slug}"},
+      %{
+        label: Gettext.gettext(gettext_backend, "Film"),
+        path: ~p"/c/#{city.slug}?category=#{film_category_slug}"
+      },
       %{label: movie.title, path: nil}
     ]
   end
@@ -313,7 +322,10 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     [
       %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
       %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"},
-      %{label: Gettext.gettext(gettext_backend, "Film"), path: ~p"/activities?category=#{film_category_slug}"},
+      %{
+        label: Gettext.gettext(gettext_backend, "Film"),
+        path: ~p"/activities?category=#{film_category_slug}"
+      },
       %{label: movie.title, path: nil}
     ]
   end
@@ -377,7 +389,11 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   # Private helper functions
 
-  defp add_venue_city_breadcrumb(items, %{city_ref: %{id: city_id, slug: city_slug, name: city_name}}, _gettext_backend) do
+  defp add_venue_city_breadcrumb(
+         items,
+         %{city_ref: %{id: city_id, slug: city_slug, name: city_name}},
+         _gettext_backend
+       ) do
     # Check if this city is part of a metro area (e.g., Paris 6 is part of Paris)
     case find_metro_primary_city(city_id) do
       nil ->
@@ -401,7 +417,8 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   defp add_venues_breadcrumb(items, %{city_ref: %{slug: city_slug}}, gettext_backend) do
     # Add "Venues" breadcrumb linking to city venues page
-    items ++ [%{label: Gettext.gettext(gettext_backend, "Venues"), path: ~p"/c/#{city_slug}/venues"}]
+    items ++
+      [%{label: Gettext.gettext(gettext_backend, "Venues"), path: ~p"/c/#{city_slug}/venues"}]
   end
 
   defp add_venues_breadcrumb(items, _venue, _gettext_backend) do
@@ -435,7 +452,11 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     items
   end
 
-  defp add_category_breadcrumb(items, %{categories: categories, primary_category_id: primary_id, venue: %{city_ref: %{slug: city_slug}}})
+  defp add_category_breadcrumb(items, %{
+         categories: categories,
+         primary_category_id: primary_id,
+         venue: %{city_ref: %{slug: city_slug}}
+       })
        when is_list(categories) and not is_nil(primary_id) do
     # Find the primary category in the preloaded categories list
     case Enum.find(categories, &(&1.id == primary_id)) do
@@ -461,7 +482,11 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     end
   end
 
-  defp add_category_breadcrumb(items, %{categories: [category | _], venue: %{city_ref: %{slug: city_slug}}}) when not is_nil(category) do
+  defp add_category_breadcrumb(items, %{
+         categories: [category | _],
+         venue: %{city_ref: %{slug: city_slug}}
+       })
+       when not is_nil(category) do
     # No primary_category_id but has categories and city - use the first one with city filter
     items ++ [%{label: category.name, path: ~p"/c/#{city_slug}?category=#{category.slug}"}]
   end

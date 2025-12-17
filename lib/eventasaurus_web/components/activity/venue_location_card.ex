@@ -10,6 +10,10 @@ defmodule EventasaurusWeb.Components.Activity.VenueLocationCard do
   use Phoenix.VerifiedRoutes, endpoint: EventasaurusWeb.Endpoint, router: EventasaurusWeb.Router
 
   alias EventasaurusWeb.StaticMapComponent
+  alias EventasaurusWeb.Components.Activity.HeroCardHelpers
+
+  import HeroCardHelpers,
+    only: [has_coordinates?: 1, google_maps_directions_url: 1, format_venue_address: 1]
 
   @doc """
   Renders a venue location card with venue info and integrated map.
@@ -104,43 +108,4 @@ defmodule EventasaurusWeb.Components.Activity.VenueLocationCard do
     </div>
     """
   end
-
-  # Private helpers
-
-  defp has_coordinates?(%{latitude: lat, longitude: lon})
-       when is_number(lat) and is_number(lon),
-       do: true
-
-  defp has_coordinates?(_), do: false
-
-  defp format_venue_address(venue) do
-    parts =
-      [
-        venue.address,
-        get_city_name(venue),
-        get_country_name(venue)
-      ]
-      |> Enum.filter(&(&1 && &1 != ""))
-      |> Enum.join(", ")
-
-    if parts == "", do: nil, else: parts
-  end
-
-  defp get_city_name(%{city_ref: %{name: name}}) when is_binary(name), do: name
-  defp get_city_name(_), do: nil
-
-  defp get_country_name(%{city_ref: %{country: %{name: name}}}) when is_binary(name), do: name
-  defp get_country_name(_), do: nil
-
-  defp google_maps_directions_url(%{latitude: lat, longitude: lon})
-       when is_number(lat) and is_number(lon) do
-    "https://www.google.com/maps/dir/?api=1&destination=#{lat},#{lon}"
-  end
-
-  defp google_maps_directions_url(%{address: address, name: name}) when is_binary(address) do
-    query = URI.encode("#{name}, #{address}")
-    "https://www.google.com/maps/dir/?api=1&destination=#{query}"
-  end
-
-  defp google_maps_directions_url(_), do: "#"
 end

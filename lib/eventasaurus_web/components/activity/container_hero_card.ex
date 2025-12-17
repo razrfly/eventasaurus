@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Components.Activity.HeroCardTheme
 
   @doc """
   Renders the hero card for container detail pages.
@@ -52,9 +53,9 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
     assigns =
       assigns
       |> assign(:theme, theme)
-      |> assign(:gradient_class, gradient_class(theme))
-      |> assign(:overlay_class, overlay_class(theme))
-      |> assign(:badge_class, badge_class(theme))
+      |> assign(:gradient_class, HeroCardTheme.gradient_class(theme))
+      |> assign(:overlay_class, HeroCardTheme.overlay_class(theme))
+      |> assign(:badge_class, HeroCardTheme.badge_class(theme))
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
@@ -178,33 +179,6 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
       _ -> :default
     end
   end
-
-  # Gradient backgrounds - matching AggregatedHeroCard style
-  defp gradient_class(:festival), do: "bg-gradient-to-r from-indigo-900 via-violet-800 to-purple-800"
-  defp gradient_class(:conference), do: "bg-gradient-to-r from-blue-900 via-blue-800 to-cyan-800"
-  defp gradient_class(:tour), do: "bg-gradient-to-r from-emerald-900 via-teal-800 to-cyan-800"
-  defp gradient_class(:series), do: "bg-gradient-to-r from-purple-900 via-purple-800 to-fuchsia-900"
-  defp gradient_class(:exhibition), do: "bg-gradient-to-r from-amber-900 via-orange-800 to-yellow-800"
-  defp gradient_class(:tournament), do: "bg-gradient-to-r from-red-900 via-rose-800 to-pink-800"
-  defp gradient_class(_), do: "bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700"
-
-  # Overlay for images (semi-transparent gradient)
-  defp overlay_class(:festival), do: "bg-gradient-to-r from-indigo-900/95 via-violet-900/80 to-purple-900/60"
-  defp overlay_class(:conference), do: "bg-gradient-to-r from-blue-900/95 via-blue-900/80 to-cyan-900/60"
-  defp overlay_class(:tour), do: "bg-gradient-to-r from-emerald-900/95 via-teal-900/80 to-cyan-900/60"
-  defp overlay_class(:series), do: "bg-gradient-to-r from-purple-900/95 via-purple-900/80 to-fuchsia-900/60"
-  defp overlay_class(:exhibition), do: "bg-gradient-to-r from-amber-900/95 via-orange-900/80 to-yellow-900/60"
-  defp overlay_class(:tournament), do: "bg-gradient-to-r from-red-900/95 via-rose-900/80 to-pink-900/60"
-  defp overlay_class(_), do: "bg-gradient-to-t from-gray-900/80 to-transparent"
-
-  # Badge styling
-  defp badge_class(:festival), do: "bg-indigo-500/20 text-indigo-100"
-  defp badge_class(:conference), do: "bg-blue-500/20 text-blue-100"
-  defp badge_class(:tour), do: "bg-emerald-500/20 text-emerald-100"
-  defp badge_class(:series), do: "bg-purple-500/20 text-purple-100"
-  defp badge_class(:exhibition), do: "bg-amber-500/20 text-amber-100"
-  defp badge_class(:tournament), do: "bg-red-500/20 text-red-100"
-  defp badge_class(_), do: "bg-white/20 text-white"
 
   # Container type labels
   defp container_type_label(:festival), do: gettext("Festival")

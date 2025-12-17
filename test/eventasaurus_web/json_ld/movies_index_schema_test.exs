@@ -330,7 +330,6 @@ defmodule EventasaurusWeb.JsonLd.MoviesIndexSchemaTest do
       assert item["item"]["aggregateRating"]["ratingValue"] == 8.2
       assert item["item"]["aggregateRating"]["ratingCount"] == 5000
     end
-
   end
 
   describe "potentialAction (next screening)" do

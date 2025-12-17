@@ -325,7 +325,6 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
     """
   end
 
-
   defp format_date_header("TBD"), do: "Date TBD"
 
   defp format_date_header(date_str) do
