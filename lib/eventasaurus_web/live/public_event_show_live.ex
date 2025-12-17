@@ -9,12 +9,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     PublicPlanWithFriendsModal,
     Breadcrumbs,
     MovieHeroCard,
-    OpenGraphComponent,
-    CategoryDisplay
+    OpenGraphComponent
   }
 
   alias EventasaurusWeb.Components.Activity.{
     ActivityLayout,
+    GenericHeroCard,
     VenueLocationCard,
     PlanWithFriendsCard,
     SourceAttributionCard
@@ -1157,8 +1157,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
             <!-- Two-Column Layout -->
             <ActivityLayout.activity_layout>
               <:main>
-                <!-- Movie Hero Section (for movie screenings) -->
+                <!-- Hero Section - Movie or Generic -->
                 <%= if @is_movie_screening && @movie do %>
+                  <!-- Movie Hero Card -->
                   <MovieHeroCard.movie_hero_card
                     movie={@movie}
                     show_see_all_link={true}
@@ -1176,30 +1177,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       max_cast={15}
                     />
                   <% end %>
+                <% else %>
+                  <!-- Generic Hero Card for non-movie events -->
+                  <GenericHeroCard.generic_hero_card
+                    event={@event}
+                    cover_image_url={Map.get(@event, :cover_image_url)}
+                    ticket_url={get_primary_source_ticket_url(@event)}
+                  />
                 <% end %>
 
                 <!-- Event Content Card -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                  <!-- Cover Image (for non-movie events only) -->
-                  <%= if !@is_movie_screening && Map.get(@event, :cover_image_url) do %>
-                    <div class="h-80 relative">
-                      <img
-                        src={CDN.url(Map.get(@event, :cover_image_url), width: 1200, quality: 90)}
-                        alt={@event.display_title}
-                        class="w-full h-full object-cover"
-                      />
-                    </div>
-                  <% end %>
-
                   <div class="p-6">
-                    <!-- Categories -->
-                    <CategoryDisplay.event_category_section event={@event} />
-
-                    <!-- Title -->
-                    <h1 class="text-3xl font-bold text-gray-900 mb-4">
-                      <%= @event.display_title %>
-                    </h1>
-
                     <!-- Event Schedule -->
                     <div class="mb-6">
                       <EventScheduleDisplay.event_schedule_display
@@ -1210,19 +1199,21 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       />
                     </div>
 
-                    <!-- Ticket Link -->
-                    <%= if ticket_url = get_primary_source_ticket_url(@event) do %>
-                      <div class="mb-6">
-                        <a
-                          href={ticket_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition"
-                        >
-                          <Heroicons.ticket class="w-5 h-5 mr-2" />
-                          <%= gettext("Get Tickets") %>
-                        </a>
-                      </div>
+                    <!-- Ticket Link (only for movie screenings - non-movie events have it in hero) -->
+                    <%= if @is_movie_screening do %>
+                      <%= if ticket_url = get_primary_source_ticket_url(@event) do %>
+                        <div class="mb-6">
+                          <a
+                            href={ticket_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition"
+                          >
+                            <Heroicons.ticket class="w-5 h-5 mr-2" />
+                            <%= gettext("Get Tickets") %>
+                          </a>
+                        </div>
+                      <% end %>
                     <% end %>
 
                     <!-- Multiple Occurrences Selection -->

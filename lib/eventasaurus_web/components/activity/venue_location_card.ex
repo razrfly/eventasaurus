@@ -132,10 +132,9 @@ defmodule EventasaurusWeb.Components.Activity.VenueLocationCard do
   defp get_country_name(%{city_ref: %{country: %{name: name}}}) when is_binary(name), do: name
   defp get_country_name(_), do: nil
 
-  defp google_maps_directions_url(%{latitude: lat, longitude: lon, name: name})
+  defp google_maps_directions_url(%{latitude: lat, longitude: lon})
        when is_number(lat) and is_number(lon) do
-    encoded_name = URI.encode(name || "")
-    "https://www.google.com/maps/dir/?api=1&destination=#{lat},#{lon}&destination_place_id=#{encoded_name}"
+    "https://www.google.com/maps/dir/?api=1&destination=#{lat},#{lon}"
   end
 
   defp google_maps_directions_url(%{address: address, name: name}) when is_binary(address) do
