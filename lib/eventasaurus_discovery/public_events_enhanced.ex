@@ -1773,4 +1773,359 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       true -> nil
     end
   end
+
+  # =============================================================================
+  # OPTIMIZED AGGREGATION QUERIES
+  # =============================================================================
+  # These functions use database-level aggregation (COUNT, GROUP BY) instead of
+  # fetching all records and processing in Elixir. This dramatically improves
+  # performance for aggregated content pages.
+  # =============================================================================
+
+  @doc """
+  Get aggregation statistics for a source identifier using database-level aggregation.
+
+  Returns stats without fetching full event records - uses COUNT and GROUP BY
+  at the database level for optimal performance.
+
+  ## Options
+    * `:source_slug` - Required. The source identifier to aggregate.
+    * `:center_lat` - Center latitude for geographic filtering.
+    * `:center_lng` - Center longitude for geographic filtering.
+    * `:radius_km` - Radius in kilometers for geographic filtering.
+
+  ## Returns
+  A map with aggregation statistics:
+    * `:total_count` - Total events across all cities for this source
+    * `:in_radius_count` - Events within the geographic radius
+    * `:out_of_radius_count` - Events outside the geographic radius
+    * `:unique_cities` - Number of unique cities with events
+    * `:city_stats` - List of per-city statistics with counts and distances
+  """
+  def get_source_aggregation_stats(opts) do
+    source_slug = opts[:source_slug]
+    center_lat = opts[:center_lat]
+    center_lng = opts[:center_lng]
+    radius_km = opts[:radius_km] || 50
+
+    # Get total count across all cities (no geo filter)
+    total_count = count_events_by_source(source_slug)
+
+    # Get count within radius (if coordinates provided)
+    in_radius_count =
+      if center_lat && center_lng do
+        count_events_by_source_in_radius(source_slug, center_lat, center_lng, radius_km)
+      else
+        total_count
+      end
+
+    # Get per-city statistics with counts
+    city_stats = get_city_stats_for_source(source_slug, center_lat, center_lng)
+
+    %{
+      total_count: total_count,
+      in_radius_count: in_radius_count,
+      out_of_radius_count: total_count - in_radius_count,
+      unique_cities: length(city_stats),
+      city_stats: city_stats
+    }
+  end
+
+  @doc """
+  Count events by source slug using database aggregation.
+  Much faster than fetching all events and counting in Elixir.
+  """
+  def count_events_by_source(source_slug) when is_binary(source_slug) do
+    current_time = DateTime.utc_now()
+
+    from(pe in PublicEvent,
+      join: pes in "public_event_sources",
+      on: pes.event_id == pe.id,
+      join: s in "sources",
+      on: s.id == pes.source_id,
+      where: s.slug == ^source_slug,
+      where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+      select: count(pe.id, :distinct)
+    )
+    |> Repo.one() || 0
+  end
+
+  @doc """
+  Count events by source slug within a geographic radius.
+  Uses PostGIS ST_DWithin for efficient spatial filtering at the database level.
+  """
+  def count_events_by_source_in_radius(source_slug, center_lat, center_lng, radius_km)
+      when is_binary(source_slug) and is_number(center_lat) and is_number(center_lng) do
+    current_time = DateTime.utc_now()
+    radius_meters = radius_km * 1000
+
+    from(pe in PublicEvent,
+      join: pes in "public_event_sources",
+      on: pes.event_id == pe.id,
+      join: s in "sources",
+      on: s.id == pes.source_id,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      where: s.slug == ^source_slug,
+      where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+      where: not is_nil(v.latitude) and not is_nil(v.longitude),
+      where:
+        fragment(
+          "ST_DWithin(ST_MakePoint(?::float, ?::float)::geography, ST_MakePoint(?::float, ?::float)::geography, ?)",
+          ^center_lng,
+          ^center_lat,
+          v.longitude,
+          v.latitude,
+          ^radius_meters
+        ),
+      select: count(pe.id, :distinct)
+    )
+    |> Repo.one() || 0
+  end
+
+  @doc """
+  Get per-city statistics for a source, with event counts and optional distance calculations.
+  Uses database-level GROUP BY for efficient aggregation.
+
+  Returns a list of maps with:
+    * `:city_id` - City ID
+    * `:city_name` - City name
+    * `:city_slug` - City slug for URLs
+    * `:event_count` - Number of events in this city
+    * `:venue_count` - Number of unique venues in this city
+    * `:distance_km` - Distance from center coordinates (if provided)
+  """
+  def get_city_stats_for_source(source_slug, center_lat \\ nil, center_lng \\ nil)
+      when is_binary(source_slug) do
+    current_time = DateTime.utc_now()
+
+    base_query =
+      from(pe in PublicEvent,
+        join: pes in "public_event_sources",
+        on: pes.event_id == pe.id,
+        join: s in "sources",
+        on: s.id == pes.source_id,
+        join: v in Venue,
+        on: pe.venue_id == v.id,
+        join: c in City,
+        on: v.city_id == c.id,
+        where: s.slug == ^source_slug,
+        where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        group_by: [c.id, c.name, c.slug, c.latitude, c.longitude],
+        select: %{
+          city_id: c.id,
+          city_name: c.name,
+          city_slug: c.slug,
+          city_latitude: c.latitude,
+          city_longitude: c.longitude,
+          event_count: count(pe.id, :distinct),
+          venue_count: fragment("COUNT(DISTINCT ?)", v.id)
+        }
+      )
+
+    stats = Repo.all(base_query)
+
+    # Calculate distances if center coordinates provided
+    if center_lat && center_lng do
+      stats
+      |> Enum.map(fn stat ->
+        distance =
+          if stat.city_latitude && stat.city_longitude do
+            calculate_haversine_distance(
+              center_lat,
+              center_lng,
+              decimal_to_float(stat.city_latitude),
+              decimal_to_float(stat.city_longitude)
+            )
+          else
+            nil
+          end
+
+        Map.put(stat, :distance_km, distance)
+      end)
+      |> Enum.sort_by(fn stat ->
+        # Sort: nil distances last, then by distance
+        case stat.distance_km do
+          nil -> {1, 999_999}
+          d -> {0, d}
+        end
+      end)
+    else
+      stats
+      |> Enum.map(&Map.put(&1, :distance_km, nil))
+      |> Enum.sort_by(& &1.city_name)
+    end
+  end
+
+  @doc """
+  List events for display with pagination - only fetches what's needed for the current page.
+  Use this after getting stats to load just the events needed for display.
+
+  ## Options
+    * `:source_slug` - Required. The source identifier.
+    * `:city_id` - Optional. Filter to specific city.
+    * `:center_lat`, `:center_lng`, `:radius_km` - Optional geographic filter.
+    * `:page` - Page number (default: 1)
+    * `:page_size` - Items per page (default: 20, max: 100)
+    * `:browsing_city_id` - City ID for Unsplash fallback images
+  """
+  def list_events_for_source_display(opts) do
+    source_slug = opts[:source_slug]
+    city_id = opts[:city_id]
+    page = opts[:page] || 1
+    page_size = min(opts[:page_size] || 20, 100)
+
+    query_opts = %{
+      source_slug: source_slug,
+      city_id: city_id,
+      center_lat: opts[:center_lat],
+      center_lng: opts[:center_lng],
+      radius_km: opts[:radius_km],
+      page: page,
+      page_size: page_size,
+      browsing_city_id: opts[:browsing_city_id]
+    }
+
+    list_events(query_opts)
+  end
+
+  @doc """
+  Get a single representative event per venue for aggregated display.
+  Much more efficient than fetching all events when you just need one per venue.
+
+  Returns events grouped by venue with only one event per venue.
+  """
+  def list_events_grouped_by_venue(opts) do
+    source_slug = opts[:source_slug]
+    city_id = opts[:city_id]
+    center_lat = opts[:center_lat]
+    center_lng = opts[:center_lng]
+    radius_km = opts[:radius_km] || 50
+    browsing_city_id = opts[:browsing_city_id]
+    current_time = DateTime.utc_now()
+
+    # Use a window function to get one event per venue (most recent start time)
+    # This is much more efficient than fetching all and grouping in Elixir
+    base_query =
+      from(pe in PublicEvent,
+        join: pes in "public_event_sources",
+        on: pes.event_id == pe.id,
+        join: s in "sources",
+        on: s.id == pes.source_id,
+        join: v in Venue,
+        on: pe.venue_id == v.id,
+        where: s.slug == ^source_slug,
+        where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        # Use DISTINCT ON to get one event per venue (PostgreSQL specific)
+        distinct: [v.id],
+        order_by: [asc: v.id, asc: pe.starts_at],
+        select: pe
+      )
+
+    # Apply city filter if provided
+    query =
+      if city_id do
+        from([pe, pes, s, v] in base_query,
+          where: v.city_id == ^city_id
+        )
+      else
+        base_query
+      end
+
+    # Apply radius filter if coordinates provided
+    query =
+      if center_lat && center_lng do
+        radius_meters = radius_km * 1000
+
+        from([pe, pes, s, v] in query,
+          where: not is_nil(v.latitude) and not is_nil(v.longitude),
+          where:
+            fragment(
+              "ST_DWithin(ST_MakePoint(?::float, ?::float)::geography, ST_MakePoint(?::float, ?::float)::geography, ?)",
+              ^center_lng,
+              ^center_lat,
+              v.longitude,
+              v.latitude,
+              ^radius_meters
+            )
+        )
+      else
+        query
+      end
+
+    query
+    |> Repo.all()
+    |> preload_with_sources(nil, browsing_city_id)
+  end
+
+  @doc """
+  Get events grouped by city for multi-city display.
+  Returns a map of city_id => list of events (one per venue).
+  """
+  def list_events_grouped_by_city_and_venue(opts) do
+    source_slug = opts[:source_slug]
+    browsing_city_id = opts[:browsing_city_id]
+    current_time = DateTime.utc_now()
+
+    # Get one event per venue across all cities
+    events =
+      from(pe in PublicEvent,
+        join: pes in "public_event_sources",
+        on: pes.event_id == pe.id,
+        join: s in "sources",
+        on: s.id == pes.source_id,
+        join: v in Venue,
+        on: pe.venue_id == v.id,
+        where: s.slug == ^source_slug,
+        where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        # One event per venue
+        distinct: [v.id],
+        order_by: [asc: v.id, asc: pe.starts_at],
+        select: pe
+      )
+      |> Repo.all()
+      |> preload_with_sources(nil, browsing_city_id)
+      |> Repo.preload(venue: :city_ref)
+
+    # Group by city
+    events
+    |> Enum.group_by(fn event ->
+      event.venue && event.venue.city_id
+    end)
+    |> Enum.reject(fn {city_id, _} -> is_nil(city_id) end)
+    |> Enum.into(%{})
+  end
+
+  # Helper to safely convert Decimal to float
+  defp decimal_to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp decimal_to_float(n) when is_float(n), do: n
+  defp decimal_to_float(n) when is_integer(n), do: n * 1.0
+  defp decimal_to_float(_), do: nil
+
+  # Calculate distance between two points using Haversine formula
+  # Returns distance in kilometers
+  defp calculate_haversine_distance(lat1, lon1, lat2, lon2)
+       when is_number(lat1) and is_number(lon1) and is_number(lat2) and is_number(lon2) do
+    # Earth's radius in kilometers
+    r = 6371.0
+
+    # Convert to radians
+    lat1_rad = lat1 * :math.pi() / 180
+    lat2_rad = lat2 * :math.pi() / 180
+    delta_lat = (lat2 - lat1) * :math.pi() / 180
+    delta_lon = (lon2 - lon1) * :math.pi() / 180
+
+    # Haversine formula
+    a =
+      :math.sin(delta_lat / 2) * :math.sin(delta_lat / 2) +
+        :math.cos(lat1_rad) * :math.cos(lat2_rad) *
+          :math.sin(delta_lon / 2) * :math.sin(delta_lon / 2)
+
+    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
+    distance = r * c
+
+    Float.round(distance, 1)
+  end
+
+  defp calculate_haversine_distance(_, _, _, _), do: nil
 end
