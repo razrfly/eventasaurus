@@ -402,21 +402,27 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @impl true
   def handle_event("remove_category", %{"id" => category_id}, socket) do
-    category_id = String.to_integer(category_id)
-    current_categories = socket.assigns.filters.categories || []
-    updated_categories = Enum.reject(current_categories, &(&1 == category_id))
+    case Integer.parse(category_id) do
+      {id, _} ->
+        current_categories = socket.assigns.filters.categories || []
+        updated_categories = Enum.reject(current_categories, &(&1 == id))
 
-    filters = Map.put(socket.assigns.filters, :categories, updated_categories)
+        filters = Map.put(socket.assigns.filters, :categories, updated_categories)
 
-    # ASYNC: Show skeleton immediately, load events in background
-    socket =
-      socket
-      |> assign(:filters, filters)
-      |> assign(:events_loading, true)
-      |> push_patch(to: build_path(socket, filters))
+        # ASYNC: Show skeleton immediately, load events in background
+        socket =
+          socket
+          |> assign(:filters, filters)
+          |> assign(:events_loading, true)
+          |> push_patch(to: build_path(socket, filters))
 
-    send(self(), :load_filtered_events)
-    {:noreply, socket}
+        send(self(), :load_filtered_events)
+        {:noreply, socket}
+
+      :error ->
+        # Invalid category ID - ignore the request
+        {:noreply, socket}
+    end
   end
 
   @impl true
