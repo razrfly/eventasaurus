@@ -6,6 +6,8 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   - Public events/activities
   - Containers (festivals, conferences, etc.)
   - City-based pages
+  - Movie pages (city-scoped and generic)
+  - Venue pages
 
   ## Breadcrumb Patterns
 
@@ -26,6 +28,21 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   ### Container Page
   `Home / Kraków / Festivals / Unsound Kraków 2025`
+
+  ### Movie Screenings Page (city-scoped)
+  `Home / All Activities / Kraków / Film / Movie Title`
+
+  ### Generic Movie Page (not city-scoped)
+  `Home / All Activities / Film / Movie Title`
+
+  ### Venue List Page
+  `Home / City Name / Venues`
+
+  ### Venue Detail Page
+  `Home / All Activities / City Name / Venues / Venue Name`
+
+  ### Venue Detail Page (with Metro Area)
+  `Home / All Activities / Paris / Paris 6 / Venues / Venue Name`
   """
 
   use EventasaurusWeb, :verified_routes
@@ -33,31 +50,59 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   alias EventasaurusDiscovery.PublicEvents.{PublicEvent, PublicEventContainer}
   alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.AggregationTypeSlug
+  alias EventasaurusDiscovery.Categories
   alias EventasaurusApp.Repo
   import Ecto.Query
 
-  # Mapping from aggregation type URL slugs to category IDs
-  # Used for breadcrumb navigation to filter city pages by relevant category
-  @aggregation_type_to_category %{
-    # trivia
-    "social" => 29,
-    # food-drink
-    "food" => 10,
-    # film
-    "movies" => 8,
-    # concerts
-    "music" => 2,
-    # comedy
-    "comedy" => 6,
-    # theatre
-    "theater" => 4,
-    # sports
-    "sports" => 5,
-    # education
-    "classes" => 13,
-    # festivals
-    "festivals" => 3
+  # Mapping from aggregation type URL slugs to category slugs
+  # This is a semantic mapping between schema.org event types and our category taxonomy
+  # The category slugs are validated against the database at runtime
+  @aggregation_type_to_category_slug %{
+    "social" => "trivia",
+    "food" => "food-drink",
+    "movies" => "film",
+    "music" => "concerts",
+    "comedy" => "comedy",
+    "theater" => "theatre",
+    "sports" => "sports",
+    "classes" => "education",
+    "festivals" => "festivals"
   }
+
+  @doc """
+  Get the category slug for a given aggregation type slug.
+  Validates that the category exists in the database before returning.
+  Returns nil if no mapping exists or category doesn't exist.
+
+  Results are cached in the process dictionary for the duration of the request.
+  """
+  def get_category_slug_for_aggregation_type(aggregation_type_slug) do
+    cache_key = {:breadcrumb_category_slug, aggregation_type_slug}
+
+    case Process.get(cache_key) do
+      nil ->
+        result = lookup_category_slug(aggregation_type_slug)
+        Process.put(cache_key, result)
+        result
+
+      cached ->
+        cached
+    end
+  end
+
+  defp lookup_category_slug(aggregation_type_slug) do
+    case Map.get(@aggregation_type_to_category_slug, aggregation_type_slug) do
+      nil ->
+        nil
+
+      category_slug ->
+        # Validate the category exists in the database
+        case Categories.get_category_by_slug(category_slug) do
+          nil -> nil
+          _category -> category_slug
+        end
+    end
+  end
 
   @doc """
   Build breadcrumb items for a public event/activity page.
@@ -186,7 +231,148 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     items_with_type ++ [%{label: final_label, path: nil}]
   end
 
+  @doc """
+  Build breadcrumb items for a movie screenings page (city-scoped movie page).
+
+  Pattern: `Home / All Activities / Kraków / Film / Movie Title`
+
+  ## Parameters
+    - movie: The movie struct with at least :title
+    - city: The city struct with :name and :slug
+    - opts: Options including :gettext_backend
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  def build_movie_screenings_breadcrumbs(movie, city, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    # Get the film category slug (validated against database)
+    film_category_slug = get_category_slug_for_aggregation_type("movies") || "film"
+
+    [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"},
+      %{label: city.name, path: ~p"/c/#{city.slug}"},
+      %{label: Gettext.gettext(gettext_backend, "Film"), path: ~p"/c/#{city.slug}?category=#{film_category_slug}"},
+      %{label: movie.title, path: nil}
+    ]
+  end
+
+  @doc """
+  Build breadcrumb items for a generic movie page (not city-scoped).
+
+  Pattern: `Home / All Activities / Film / Movie Title`
+
+  ## Parameters
+    - movie: The movie struct with at least :title
+    - opts: Options including :gettext_backend
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  def build_generic_movie_breadcrumbs(movie, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    # Get the film category slug (validated against database)
+    film_category_slug = get_category_slug_for_aggregation_type("movies") || "film"
+
+    [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"},
+      %{label: Gettext.gettext(gettext_backend, "Film"), path: ~p"/activities?category=#{film_category_slug}"},
+      %{label: movie.title, path: nil}
+    ]
+  end
+
+  @doc """
+  Build breadcrumb items for a venue list page (city venues index).
+
+  Pattern: `Home / City Name / Venues`
+
+  ## Parameters
+    - city: The city struct with :name and :slug
+    - opts: Options including :gettext_backend
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  def build_venue_list_breadcrumbs(city, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: city.name, path: ~p"/c/#{city.slug}"},
+      %{label: Gettext.gettext(gettext_backend, "Venues"), path: nil}
+    ]
+  end
+
+  @doc """
+  Build breadcrumb items for a venue detail page.
+
+  Pattern: `Home / All Activities / City Name / Venues / Venue Name`
+
+  With metro area hierarchy:
+  Pattern: `Home / All Activities / Paris / Paris 6 / Venues / Venue Name`
+
+  ## Parameters
+    - venue: The venue struct with :name, :slug, and preloaded :city_ref
+    - opts: Options including :gettext_backend
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  def build_venue_breadcrumbs(venue, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    base_items = [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"}
+    ]
+
+    # Add city breadcrumb with metro area hierarchy if applicable
+    items_with_city = add_venue_city_breadcrumb(base_items, venue, gettext_backend)
+
+    # Add Venues breadcrumb (links to city venues page)
+    items_with_venues = add_venues_breadcrumb(items_with_city, venue, gettext_backend)
+
+    # Add current venue (no link)
+    items_with_venues ++ [%{label: venue.name, path: nil}]
+  end
+
   # Private helper functions
+
+  defp add_venue_city_breadcrumb(items, %{city_ref: %{id: city_id, slug: city_slug, name: city_name}}, _gettext_backend) do
+    # Check if this city is part of a metro area (e.g., Paris 6 is part of Paris)
+    case find_metro_primary_city(city_id) do
+      nil ->
+        # Standalone city or is itself the primary
+        items ++ [%{label: city_name, path: ~p"/c/#{city_slug}"}]
+
+      primary_city ->
+        # City is part of a metro area - show hierarchy
+        items ++
+          [
+            %{label: primary_city.name, path: ~p"/c/#{primary_city.slug}"},
+            %{label: city_name, path: ~p"/c/#{city_slug}"}
+          ]
+    end
+  end
+
+  defp add_venue_city_breadcrumb(items, _venue, _gettext_backend) do
+    # No city - just return base items
+    items
+  end
+
+  defp add_venues_breadcrumb(items, %{city_ref: %{slug: city_slug}}, gettext_backend) do
+    # Add "Venues" breadcrumb linking to city venues page
+    items ++ [%{label: Gettext.gettext(gettext_backend, "Venues"), path: ~p"/c/#{city_slug}/venues"}]
+  end
+
+  defp add_venues_breadcrumb(items, _venue, _gettext_backend) do
+    # No city - just return items without Venues breadcrumb
+    items
+  end
 
   defp add_city_breadcrumb(
          items,
@@ -384,21 +570,21 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
   end
 
   defp build_content_type_path(content_type_slug, city, scope) do
-    # Map aggregation type slug to category ID
-    category_id = Map.get(@aggregation_type_to_category, content_type_slug)
+    # Map aggregation type slug to category slug (validated against database)
+    category_slug = get_category_slug_for_aggregation_type(content_type_slug)
 
-    case {scope, category_id} do
+    case {scope, category_slug} do
       # Multi-city with category mapping: filter by category globally on search page
-      {:all_cities, category_id} when not is_nil(category_id) ->
-        ~p"/activities/search?categories=#{category_id}"
+      {:all_cities, category_slug} when not is_nil(category_slug) ->
+        ~p"/activities/search?category=#{category_slug}"
 
       # Multi-city without category mapping: show all activities
       {:all_cities, nil} ->
         ~p"/activities"
 
       # City-scoped with category mapping: filter city page by category
-      {_, category_id} when not is_nil(category_id) ->
-        ~p"/c/#{city.slug}?categories=#{category_id}"
+      {_, category_slug} when not is_nil(category_slug) ->
+        ~p"/c/#{city.slug}?category=#{category_slug}"
 
       # City-scoped without category mapping: just link to city page
       _ ->

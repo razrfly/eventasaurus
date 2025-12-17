@@ -92,7 +92,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
           <% end %>
 
           <!-- Divider -->
-          <div class="w-full h-px bg-gray-100 my-4"></div>
+          <div class={divider_classes(@variant)}></div>
 
           <!-- Date range and showtime count -->
           <div class={date_info_classes(@variant)}>
@@ -136,7 +136,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
         </div>
 
         <!-- CTA Button -->
-        <div class="mt-6 pt-4 border-t border-gray-100">
+        <div class={cta_container_classes(@variant)}>
           <span class={cta_button_classes(@variant)}>
             <%= gettext("View Showtimes") %>
             <Heroicons.arrow_right class="w-4 h-4 ml-1.5" />
@@ -213,6 +213,14 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
   end
 
   defp cta_button_classes(_), do: cta_button_classes(:card)
+
+  defp cta_container_classes(:card), do: "mt-6 pt-4 border-t border-gray-100"
+  defp cta_container_classes(:dark), do: "mt-6 pt-4 border-t border-white/10"
+  defp cta_container_classes(_), do: cta_container_classes(:card)
+
+  defp divider_classes(:card), do: "w-full h-px bg-gray-100 my-4"
+  defp divider_classes(:dark), do: "w-full h-px bg-white/10 my-4"
+  defp divider_classes(_), do: divider_classes(:card)
 
   defp empty_state_classes(:card), do: "text-center py-12"
   defp empty_state_classes(:dark), do: "text-center py-12"
