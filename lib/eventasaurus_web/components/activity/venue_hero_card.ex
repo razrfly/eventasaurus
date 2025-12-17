@@ -19,7 +19,6 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
 
-  alias Eventasaurus.CDN
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusWeb.Components.Activity.HeroCardHelpers
 
@@ -54,7 +53,7 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
       <%= if @cover_image_url do %>
         <div class="absolute inset-0">
           <img
-            src={CDN.url(@cover_image_url, width: 1200, quality: 85)}
+            src={@cover_image_url}
             alt=""
             class="w-full h-full object-cover"
             aria-hidden="true"
