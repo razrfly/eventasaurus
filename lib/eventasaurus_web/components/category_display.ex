@@ -155,14 +155,22 @@ defmodule EventasaurusWeb.Components.CategoryDisplay do
 
   def event_category_section(assigns) do
     # Use provided categories or extract from event
+    # Note: Can't use assign_new/3 here because attrs with defaults (nil, [])
+    # are always present in assigns, so we check for actual "unset" values
+    primary =
+      if assigns.primary_category,
+        do: assigns.primary_category,
+        else: get_primary_category_from_event(assigns.event)
+
+    secondary =
+      if assigns.secondary_categories != [],
+        do: assigns.secondary_categories,
+        else: get_secondary_categories_from_event(assigns.event)
+
     assigns =
       assigns
-      |> assign_new(:primary_category, fn ->
-        get_primary_category_from_event(assigns.event)
-      end)
-      |> assign_new(:secondary_categories, fn ->
-        get_secondary_categories_from_event(assigns.event)
-      end)
+      |> assign(:primary_category, primary)
+      |> assign(:secondary_categories, secondary)
 
     ~H"""
     <%= if has_categories?(@event) do %>

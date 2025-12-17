@@ -37,12 +37,16 @@ defmodule EventasaurusWeb.Components.VenueInfoCard do
         <span class="font-medium"><%= gettext("Venue") %></span>
       </div>
       <p class="text-gray-900">
-        <.link
-          navigate={~p"/venues/#{@venue.slug}"}
-          class="font-semibold hover:text-indigo-600 transition-colors"
-        >
-          <%= @venue.name %>
-        </.link>
+        <%= if @venue.slug do %>
+          <.link
+            navigate={~p"/venues/#{@venue.slug}"}
+            class="font-semibold hover:text-indigo-600 transition-colors"
+          >
+            <%= @venue.name %>
+          </.link>
+        <% else %>
+          <span class="font-semibold"><%= @venue.name %></span>
+        <% end %>
         <%= if @venue.address do %>
           <br />
           <span class="text-sm text-gray-600">
@@ -70,7 +74,7 @@ defmodule EventasaurusWeb.Components.VenueInfoCard do
   def venue_compact(assigns) do
     ~H"""
     <div class={["text-gray-600", @class]}>
-      <%= if @link do %>
+      <%= if @link && @venue.slug do %>
         <.link
           navigate={~p"/venues/#{@venue.slug}"}
           class="font-medium hover:text-indigo-600 transition-colors"
