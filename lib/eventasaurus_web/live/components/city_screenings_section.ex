@@ -76,7 +76,7 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
       navigate={~p"/activities/#{@info.slug}"}
       class={venue_card_classes(@variant)}
     >
-      <div class="flex justify-between items-start">
+      <div class="flex flex-col h-full justify-between">
         <div class="flex-1 min-w-0">
           <!-- Venue Name -->
           <h3 class={venue_name_classes(@variant)}>
@@ -86,40 +86,49 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
           <!-- Address -->
           <%= if @venue.address do %>
             <p class={venue_address_classes(@variant)}>
-              <Heroicons.map_pin class="w-4 h-4 inline mr-1 flex-shrink-0" />
+              <Heroicons.map_pin class="w-3.5 h-3.5 inline mr-1 flex-shrink-0 -mt-0.5" />
               <%= @venue.address %>
             </p>
           <% end %>
 
+          <!-- Divider -->
+          <div class="w-full h-px bg-gray-100 my-4"></div>
+
           <!-- Date range and showtime count -->
           <div class={date_info_classes(@variant)}>
-            <Heroicons.calendar_days class="w-5 h-5 mr-2 flex-shrink-0" />
-            <span class="font-medium">
-              <%= @info.date_range %> &bull; <%= ngettext("1 showtime", "%{count} showtimes", @info.count) %>
+            <Heroicons.calendar_days class="w-4 h-4 mr-2 flex-shrink-0 text-gray-400" />
+            <span class="font-medium text-sm">
+              <%= @info.date_range %>
+            </span>
+            <span class="mx-2 text-gray-300">&bull;</span>
+            <span class="text-sm text-gray-500">
+              <%= ngettext("1 showtime", "%{count} showtimes", @info.count) %>
             </span>
           </div>
 
           <!-- Format badges -->
           <%= if length(@info.formats) > 0 do %>
-            <div class="flex flex-wrap gap-2 mt-2">
+            <div class="flex flex-wrap gap-2 mt-3 mb-4">
               <%= for format <- @info.formats do %>
                 <span class={format_badge_classes(@variant)}>
                   <%= format %>
                 </span>
               <% end %>
             </div>
+          <% else %>
+             <div class="mb-4"></div>
           <% end %>
 
           <!-- Specific dates (if limited) -->
           <%= if @info.dates && length(@info.dates) <= 7 do %>
             <div class={dates_list_classes(@variant)}>
               <%= @info.dates
-                  |> Enum.take(4)
+                  |> Enum.take(3)
                   |> Enum.map(&format_date_label/1)
                   |> Enum.join(", ") %>
-              <%= if length(@info.dates) > 4 do %>
+              <%= if length(@info.dates) > 3 do %>
                 <span class={more_dates_classes(@variant)}>
-                  <%= ngettext("+1 more", "+%{count} more", length(@info.dates) - 4) %>
+                  <%= ngettext("+1 more", "+%{count} more", length(@info.dates) - 3) %>
                 </span>
               <% end %>
             </div>
@@ -127,10 +136,10 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
         </div>
 
         <!-- CTA Button -->
-        <div class="ml-4 flex-shrink-0">
+        <div class="mt-6 pt-4 border-t border-gray-100">
           <span class={cta_button_classes(@variant)}>
             <%= gettext("View Showtimes") %>
-            <Heroicons.arrow_right class="w-4 h-4 ml-2" />
+            <Heroicons.arrow_right class="w-4 h-4 ml-1.5" />
           </span>
         </div>
       </div>
@@ -153,54 +162,54 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
   defp showtime_count_classes(_), do: showtime_count_classes(:card)
 
   defp venues_grid_classes(true), do: "space-y-3"
-  defp venues_grid_classes(false), do: "space-y-4"
+  defp venues_grid_classes(false), do: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
 
   defp venue_card_classes(:card) do
-    "block p-6 border border-gray-200 rounded-lg hover:border-blue-400 hover:shadow-md transition-all"
+    "block h-full p-5 border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all bg-white group"
   end
 
   defp venue_card_classes(:dark) do
-    "block p-6 bg-white/5 border border-white/10 rounded-lg hover:border-white/30 hover:bg-white/10 transition-all"
+    "block h-full p-5 bg-white/5 border border-white/10 rounded-xl hover:border-white/30 hover:bg-white/10 transition-all group"
   end
 
   defp venue_card_classes(_), do: venue_card_classes(:card)
 
-  defp venue_name_classes(:card), do: "text-lg font-semibold text-gray-900 mb-2"
-  defp venue_name_classes(:dark), do: "text-lg font-semibold text-white mb-2"
+  defp venue_name_classes(:card), do: "text-lg font-bold text-gray-900 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors"
+  defp venue_name_classes(:dark), do: "text-lg font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-400 transition-colors"
   defp venue_name_classes(_), do: venue_name_classes(:card)
 
-  defp venue_address_classes(:card), do: "text-sm text-gray-600 mb-3"
-  defp venue_address_classes(:dark), do: "text-sm text-gray-400 mb-3"
+  defp venue_address_classes(:card), do: "text-xs text-gray-500 mb-0 truncate"
+  defp venue_address_classes(:dark), do: "text-xs text-gray-400 mb-0 truncate"
   defp venue_address_classes(_), do: venue_address_classes(:card)
 
-  defp date_info_classes(:card), do: "flex items-center text-gray-700 mb-2"
-  defp date_info_classes(:dark), do: "flex items-center text-gray-300 mb-2"
+  defp date_info_classes(:card), do: "flex items-center text-gray-700"
+  defp date_info_classes(:dark), do: "flex items-center text-gray-300"
   defp date_info_classes(_), do: date_info_classes(:card)
 
   defp format_badge_classes(:card) do
-    "px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold"
+    "px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs font-semibold border border-gray-200"
   end
 
   defp format_badge_classes(:dark) do
-    "px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs font-semibold"
+    "px-2.5 py-1 bg-white/10 text-gray-300 rounded-md text-xs font-semibold border border-white/10"
   end
 
   defp format_badge_classes(_), do: format_badge_classes(:card)
 
-  defp dates_list_classes(:card), do: "mt-2 text-sm text-gray-600"
-  defp dates_list_classes(:dark), do: "mt-2 text-sm text-gray-400"
+  defp dates_list_classes(:card), do: "mt-2 text-xs text-gray-500"
+  defp dates_list_classes(:dark), do: "mt-2 text-xs text-gray-400"
   defp dates_list_classes(_), do: dates_list_classes(:card)
 
-  defp more_dates_classes(:card), do: "text-gray-500"
+  defp more_dates_classes(:card), do: "text-gray-400"
   defp more_dates_classes(:dark), do: "text-gray-500"
   defp more_dates_classes(_), do: more_dates_classes(:card)
 
   defp cta_button_classes(:card) do
-    "inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+    "w-full flex items-center justify-center px-4 py-2 bg-blue-50 text-blue-700 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all font-semibold text-sm"
   end
 
   defp cta_button_classes(:dark) do
-    "inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-400 transition font-medium"
+    "w-full flex items-center justify-center px-4 py-2 bg-white/10 text-white rounded-lg group-hover:bg-blue-500 transition-all font-semibold text-sm"
   end
 
   defp cta_button_classes(_), do: cta_button_classes(:card)
