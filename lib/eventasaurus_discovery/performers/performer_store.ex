@@ -265,6 +265,8 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
   @doc """
   Get events for a performer, split into upcoming and past.
   Returns %{upcoming: [], past: []}
+
+  Includes cover_image_url populated from sources for EventCards display.
   """
   def get_performer_events(performer_id) do
     now = DateTime.utc_now()
@@ -274,16 +276,28 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
         join: pep in EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
         on: pep.event_id == e.id,
         where: pep.performer_id == ^performer_id,
-        preload: [venue: :city_ref],
+        preload: [:categories, :sources, venue: :city_ref],
         order_by: [asc: e.starts_at]
       )
 
-    events = Repo.all(query)
+    events =
+      query
+      |> Repo.all()
+      |> Enum.map(&populate_cover_image/1)
 
     %{
       upcoming: Enum.filter(events, fn e -> DateTime.compare(e.starts_at, now) != :lt end),
       past: Enum.filter(events, fn e -> DateTime.compare(e.starts_at, now) == :lt end)
     }
+  end
+
+  # Populate cover_image_url virtual field from sources
+  defp populate_cover_image(event) do
+    cover_url =
+      event.sources
+      |> Enum.find_value(fn source -> source.image_url end)
+
+    %{event | cover_image_url: cover_url}
   end
 
   @doc """
