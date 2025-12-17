@@ -4,11 +4,13 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Sources.SourceStore
   alias EventasaurusDiscovery.AggregationTypeSlug
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.Components.Activity.AggregatedHeroCard
   alias EventasaurusWeb.JsonLd.ItemListSchema
   alias Eventasaurus.CDN
 
@@ -147,16 +149,20 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       |> then(fn socket ->
         if scope == :all_cities do
           # Expanding to all cities - use multi-city route
-          # Using string interpolation since routes are now explicit per content type
+          # Multi-city routes use plural slugs: /festivals/:identifier, /social/:identifier
+          multi_city_slug = singular_to_plural_slug(socket.assigns.content_type_slug)
+
           push_navigate(socket,
             to:
-              "/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
+              "/#{multi_city_slug}/#{socket.assigns.identifier}?scope=all&city=#{socket.assigns.city.slug}"
           )
         else
           # Collapsing to city only - use city-scoped route
+          # City-scoped routes use singular slugs: /c/:city_slug/:content_type/:identifier
+          city_content_slug = plural_to_singular_slug(socket.assigns.content_type_slug)
+
           push_navigate(socket,
-            to:
-              ~p"/c/#{socket.assigns.city.slug}/#{socket.assigns.content_type_slug}/#{socket.assigns.identifier}"
+            to: "/c/#{socket.assigns.city.slug}/#{city_content_slug}/#{socket.assigns.identifier}"
           )
         end
       end)
@@ -164,7 +170,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     {:noreply, socket}
   end
 
-  # Load events based on scope
+  # Load events based on scope - OPTIMIZED VERSION
+  # Uses database-level aggregation for stats (COUNT, GROUP BY) and only fetches
+  # the events needed for display (one per venue).
   defp load_events(socket, scope) do
     city = socket.assigns.city
     content_type = socket.assigns.content_type
@@ -176,45 +184,56 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       |> put_flash(:error, "City not found")
       |> push_navigate(to: ~p"/activities")
     else
-      # Fetch all events (no city filter) to count out-of-city events
-      all_events = fetch_all_aggregated_events(content_type, identifier)
+      # Get city coordinates for radius filtering
+      center_lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
+      center_lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 
-      # Fetch city-scoped events
-      city_events = fetch_aggregated_events(content_type, identifier, city)
+      # OPTIMIZED: Get aggregation stats using database-level COUNT/GROUP BY
+      # This replaces fetching 500+ events just to count them
+      stats = PublicEventsEnhanced.get_source_aggregation_stats(%{
+        source_slug: identifier,
+        center_lat: center_lat,
+        center_lng: center_lng,
+        radius_km: 50
+      })
 
-      # Count events outside current city
-      out_of_city_count = length(all_events) - length(city_events)
+      # Extract stats (in_radius_count used internally, not needed as separate var)
+      total_event_count = stats.total_count
+      out_of_city_count = stats.out_of_radius_count
+      unique_cities = stats.unique_cities
+      city_stats = stats.city_stats
 
-      # Get unique cities from all events (safely handle missing venue/city data)
-      unique_cities =
-        all_events
-        |> Enum.map(fn event ->
-          event.venue && event.venue.city_id
-        end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.uniq()
-        |> length()
-
-      # TOTAL event count is ALWAYS all events across all cities
-      total_event_count = length(all_events)
-
-      # Group events based on scope
+      # OPTIMIZED: Only fetch events needed for display (one per venue)
+      # This replaces fetching ALL events and then grouping in Elixir
       {venue_groups, city_groups} =
         case scope do
           :all_cities ->
-            # Group by city, then by venue within each city
-            groups = group_events_by_city(all_events, city)
+            # Get events grouped by city and venue - one per venue
+            events_by_city = PublicEventsEnhanced.list_events_grouped_by_city_and_venue(%{
+              source_slug: identifier,
+              browsing_city_id: city.id
+            })
+
+            # Build city groups with distance info from stats
+            groups = build_city_groups_from_stats(events_by_city, city_stats, city)
             {[], groups}
 
           :city_only ->
-            # Group by venue only for current city
+            # Get one event per venue within radius
+            events = PublicEventsEnhanced.list_events_grouped_by_venue(%{
+              source_slug: identifier,
+              center_lat: center_lat,
+              center_lng: center_lng,
+              radius_km: 50,
+              browsing_city_id: city.id
+            })
+
             venue_groups =
-              city_events
-              |> Enum.group_by(& &1.venue_id)
-              |> Enum.map(fn {_venue_id, venue_events} ->
-                %{event: List.first(venue_events)}
+              events
+              |> Enum.map(fn event -> %{event: event} end)
+              |> Enum.sort_by(fn %{event: event} ->
+                event.venue && event.venue.name
               end)
-              |> Enum.sort_by(& &1.event.venue.name)
 
             {venue_groups, []}
         end
@@ -238,8 +257,14 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       # Update page title after city is finalized
       page_title = format_page_title(content_type, identifier, city)
 
-      # Get all events for the current scope for JSON-LD
-      events_for_schema = if scope == :all_cities, do: all_events, else: city_events
+      # Get events for JSON-LD schema (use what we already have)
+      events_for_schema =
+        case scope do
+          :all_cities ->
+            city_groups |> Enum.flat_map(& &1.venue_groups) |> Enum.map(& &1.event)
+          :city_only ->
+            venue_groups |> Enum.map(& &1.event)
+        end
 
       # Generate JSON-LD structured data
       json_ld =
@@ -255,6 +280,20 @@ defmodule EventasaurusWeb.AggregatedContentLive do
           hero_image
         )
 
+      # Fetch source metadata for hero card theming
+      # Prefer the URL's content_type_slug for theming when it matches a valid domain
+      source = SourceStore.get_source_by_slug(identifier)
+      content_type_slug = socket.assigns.content_type_slug
+      source_domain = get_domain_for_theming(source, content_type_slug)
+      source_logo_url = source && source.logo_url
+
+      # Calculate location count based on scope
+      location_count =
+        case scope do
+          :all_cities -> total_event_count
+          :city_only -> length(venue_groups)
+        end
+
       socket
       |> assign(:scope, scope)
       |> assign(:page_title, page_title)
@@ -263,152 +302,143 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       |> assign(:out_of_city_count, out_of_city_count)
       |> assign(:unique_cities, unique_cities)
       |> assign(:total_event_count, total_event_count)
+      |> assign(:location_count, location_count)
       |> assign(:hero_image, hero_image)
       |> assign(:breadcrumb_items, breadcrumb_items)
       |> assign(:json_ld, json_ld)
       |> assign(:open_graph, og_tags)
+      |> assign(:source_domain, source_domain)
+      |> assign(:source_logo_url, source_logo_url)
     end
   end
+
+  # Build city groups from pre-computed stats and events
+  # This is more efficient than computing distances and counts from full events
+  defp build_city_groups_from_stats(events_by_city, city_stats, current_city) do
+    # Build a lookup map from city_stats for quick access
+    stats_by_city_id =
+      city_stats
+      |> Enum.map(fn stat -> {stat.city_id, stat} end)
+      |> Enum.into(%{})
+
+    events_by_city
+    |> Enum.map(fn {city_id, events} ->
+      stat = Map.get(stats_by_city_id, city_id, %{})
+      first_event = List.first(events)
+      city = first_event && first_event.venue && first_event.venue.city_ref
+
+      venue_groups =
+        events
+        |> Enum.map(fn event -> %{event: event} end)
+        |> Enum.sort_by(fn %{event: event} -> event.venue && event.venue.name end)
+
+      %{
+        city: city,
+        city_id: city_id,
+        distance_km: stat[:distance_km],
+        event_count: stat[:event_count] || length(events),
+        venue_groups: venue_groups,
+        is_current: city_id == current_city.id
+      }
+    end)
+    |> Enum.reject(fn group -> is_nil(group.city) end)
+    |> Enum.sort_by(fn group ->
+      # Sort: current city first, then by distance
+      if group.is_current, do: {0, 0}, else: {1, group.distance_km || 999_999}
+    end)
+  end
+
+  # Get domain for theming - prefer URL content_type_slug when it's a valid theme domain
+  # This ensures /festival/week_pl shows festival theme, not food theme
+  defp get_domain_for_theming(source, content_type_slug) do
+    # Map URL slugs to theme domains
+    url_domain = slug_to_theme_domain(content_type_slug)
+
+    # If URL domain is valid and source supports it, use URL domain for theming
+    # Otherwise fall back to source's primary domain
+    if url_domain && source && source_has_domain?(source, url_domain) do
+      url_domain
+    else
+      get_primary_domain(source)
+    end
+  end
+
+  # Map URL content_type slugs to theme domain names
+  # Handles both singular (from city-scoped routes) and plural (from multi-city routes)
+  # e.g., "festival" -> "festival", "festivals" -> "festival"
+  defp slug_to_theme_domain("social"), do: "trivia"
+  defp slug_to_theme_domain("food"), do: "food"
+  defp slug_to_theme_domain("festival"), do: "festival"
+  defp slug_to_theme_domain("festivals"), do: "festival"
+  defp slug_to_theme_domain("music"), do: "music"
+  defp slug_to_theme_domain("movies"), do: "movies"
+  defp slug_to_theme_domain("screening"), do: "movies"
+  defp slug_to_theme_domain("comedy"), do: "comedy"
+  defp slug_to_theme_domain("theater"), do: "theater"
+  defp slug_to_theme_domain("theatre"), do: "theater"
+  defp slug_to_theme_domain("sports"), do: "sports"
+  defp slug_to_theme_domain("happenings"), do: nil
+  defp slug_to_theme_domain("dance"), do: nil
+  defp slug_to_theme_domain("classes"), do: nil
+  defp slug_to_theme_domain(_), do: nil
+
+  # Convert plural URL slugs to singular for city-scoped routes
+  # Multi-city routes use plural: /festivals/week_pl
+  # City-scoped routes use singular: /krakow/festival/week_pl
+  defp plural_to_singular_slug("festivals"), do: "festival"
+  defp plural_to_singular_slug("happenings"), do: "happenings"
+  defp plural_to_singular_slug("classes"), do: "classes"
+  defp plural_to_singular_slug(slug), do: slug
+
+  # Convert singular URL slugs to plural for multi-city routes
+  # City-scoped routes use singular: /krakow/festival/week_pl
+  # Multi-city routes use plural: /festivals/week_pl
+  defp singular_to_plural_slug("festival"), do: "festivals"
+  defp singular_to_plural_slug("happenings"), do: "happenings"
+  defp singular_to_plural_slug("classes"), do: "classes"
+  defp singular_to_plural_slug(slug), do: slug
+
+  # Check if source has a specific domain in its domains list
+  defp source_has_domain?(%{domains: domains}, domain) when is_list(domains) do
+    domain in domains
+  end
+
+  defp source_has_domain?(_, _), do: false
+
+  # Get primary domain from source for theming (fallback)
+  defp get_primary_domain(nil), do: nil
+
+  defp get_primary_domain(%{domains: domains}) when is_list(domains) and length(domains) > 0 do
+    List.first(domains)
+  end
+
+  defp get_primary_domain(_), do: nil
 
   @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gray-50">
-      <!-- Hero Section with Background Image -->
-      <%= if @hero_image do %>
-        <div class="relative h-64 md:h-80 bg-gray-900">
-          <img
-            src={@hero_image}
-            alt={@source_name}
-            class="absolute inset-0 w-full h-full object-cover opacity-60"
-          />
-          <div class="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent"></div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Breadcrumbs (outside hero card, like activity pages) -->
+        <nav class="mb-4">
+          <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
+        </nav>
 
-          <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col justify-end pb-8">
-            <!-- Breadcrumbs -->
-            <Breadcrumbs.breadcrumb
-              items={@breadcrumb_items}
-              text_color="text-white/80 hover:text-white"
-            />
-
-            <h1 class="text-4xl md:text-5xl font-bold text-white">
-              <%= @source_name %> in <%= @city.name %>
-            </h1>
-
-            <div class="mt-4 flex flex-wrap items-center gap-3 text-gray-200">
-              <!-- Multi-city badge -->
-              <%= if @out_of_city_count > 0 do %>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500/90 text-white">
-                  <Heroicons.map_pin class="w-4 h-4 mr-1" />
-                  Multi-city
-                </span>
-              <% end %>
-
-              <!-- Location count -->
-              <div class="flex items-center">
-                <Heroicons.building_storefront class="w-5 h-5 mr-2" />
-                <span>
-                  <%= if @scope == :all_cities do %>
-                    <%= @total_event_count %> <%= ngettext("location", "locations", @total_event_count) %> across <%= @unique_cities %> <%= ngettext("city", "cities", @unique_cities) %>
-                  <% else %>
-                    <%= length(@venue_schedules) %> <%= ngettext("location", "locations", length(@venue_schedules)) %> in <%= @city.name %>
-                  <% end %>
-                </span>
-              </div>
-            </div>
-
-            <!-- Expansion button (city scope only, if out-of-city events exist) -->
-            <%= if @scope == :city_only && @out_of_city_count > 0 do %>
-              <div class="mt-6">
-                <button
-                  phx-click="toggle_scope"
-                  phx-value-scope="all_cities"
-                  class="inline-flex items-center px-4 py-2 bg-white/90 hover:bg-white text-gray-900 font-medium rounded-lg transition-colors shadow-lg hover:shadow-xl"
-                >
-                  <Heroicons.arrow_top_right_on_square class="w-5 h-5 mr-2" />
-                  View all <%= @total_event_count %> events in <%= @unique_cities %> <%= ngettext("city", "cities", @unique_cities) %>
-                </button>
-              </div>
-            <% end %>
-
-            <!-- Collapse button (all cities scope) -->
-            <%= if @scope == :all_cities do %>
-              <div class="mt-6">
-                <button
-                  phx-click="toggle_scope"
-                  phx-value-scope="city_only"
-                  class="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white font-medium rounded-lg transition-colors border border-white/30"
-                >
-                  <Heroicons.arrow_uturn_left class="w-5 h-5 mr-2" />
-                  Show only <%= @city.name %>
-                </button>
-              </div>
-            <% end %>
-          </div>
-        </div>
-      <% else %>
-        <!-- Fallback: White header without image -->
-        <div class="bg-white shadow-sm border-b">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Breadcrumbs -->
-            <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-4" />
-
-            <h1 class="text-4xl font-bold text-gray-900">
-              <%= @source_name %> in <%= @city.name %>
-            </h1>
-
-            <div class="mt-4 flex flex-wrap items-center gap-3 text-gray-600">
-              <!-- Multi-city badge -->
-              <%= if @out_of_city_count > 0 do %>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500 text-white">
-                  <Heroicons.map_pin class="w-4 h-4 mr-1" />
-                  Multi-city
-                </span>
-              <% end %>
-
-              <!-- Location count -->
-              <div class="flex items-center">
-                <Heroicons.building_storefront class="w-5 h-5 mr-2" />
-                <span>
-                  <%= if @scope == :all_cities do %>
-                    <%= @total_event_count %> <%= ngettext("location", "locations", @total_event_count) %> across <%= @unique_cities %> <%= ngettext("city", "cities", @unique_cities) %>
-                  <% else %>
-                    <%= length(@venue_schedules) %> <%= ngettext("location", "locations", length(@venue_schedules)) %> in <%= @city.name %>
-                  <% end %>
-                </span>
-              </div>
-            </div>
-
-            <!-- Expansion button (city scope only, if out-of-city events exist) -->
-            <%= if @scope == :city_only && @out_of_city_count > 0 do %>
-              <div class="mt-6">
-                <button
-                  phx-click="toggle_scope"
-                  phx-value-scope="all_cities"
-                  class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm hover:shadow-md"
-                >
-                  <Heroicons.arrow_top_right_on_square class="w-5 h-5 mr-2" />
-                  View all <%= @total_event_count %> events in <%= @unique_cities %> <%= ngettext("city", "cities", @unique_cities) %>
-                </button>
-              </div>
-            <% end %>
-
-            <!-- Collapse button (all cities scope) -->
-            <%= if @scope == :all_cities do %>
-              <div class="mt-6">
-                <button
-                  phx-click="toggle_scope"
-                  phx-value-scope="city_only"
-                  class="inline-flex items-center px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium rounded-lg transition-colors"
-                >
-                  <Heroicons.arrow_uturn_left class="w-5 h-5 mr-2" />
-                  Show only <%= @city.name %>
-                </button>
-              </div>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
+        <!-- Hero Section -->
+        <AggregatedHeroCard.aggregated_hero_card
+          source_name={@source_name}
+          source_logo_url={@source_logo_url}
+          city={@city}
+          content_type={@content_type}
+          domain={@source_domain}
+          hero_image={@hero_image}
+          total_event_count={@total_event_count}
+          location_count={@location_count}
+          unique_cities={@unique_cities}
+          out_of_city_count={@out_of_city_count}
+          scope={@scope}
+        />
+      </div>
 
       <!-- Event Display: City-Scoped or City-Grouped -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -554,133 +584,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     """
   end
 
-  # Fetch events for a specific content type + identifier in a city
-  defp fetch_aggregated_events(_content_type, identifier, city) do
-    # For now, we'll use source slug as the identifier for trivia
-    # In the future, this could handle movies by title, classes by name, etc.
-    source_slug = identifier
-
-    # Get city coordinates for radius filtering
-    lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
-    lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
-
-    # Query events by source slug with geographic radius filtering (matching CityLive.Index)
-    # This ensures we show all events within the city's radius, not just exact city matches
-    PublicEventsEnhanced.list_events(%{
-      source_slug: source_slug,
-      center_lat: lat,
-      center_lng: lng,
-      # Same default as CityLive.Index
-      radius_km: 50,
-      include_pattern_events: true,
-      # Get all results (max limit)
-      page_size: 500,
-      # NEW: Pass browsing city for Unsplash fallback images
-      browsing_city_id: city.id
-    })
-  end
-
-  # Fetch ALL events for this source across all cities (no geographic filter)
-  defp fetch_all_aggregated_events(_content_type, identifier) do
-    source_slug = identifier
-
-    events =
-      PublicEventsEnhanced.list_events(%{
-        source_slug: source_slug,
-        include_pattern_events: true,
-        # Get all results (max limit)
-        page_size: 500
-      })
-
-    # Preload venue.city_ref association for distance calculations and city grouping
-    EventasaurusApp.Repo.preload(events, venue: :city_ref)
-  end
-
-  # Group events by city with distance calculations
-  defp group_events_by_city(events, current_city) when is_list(events) do
-    current_lat = if current_city.latitude, do: Decimal.to_float(current_city.latitude), else: nil
-
-    current_lng =
-      if current_city.longitude, do: Decimal.to_float(current_city.longitude), else: nil
-
-    events
-    # Filter out events without venue or city
-    |> Enum.filter(fn event ->
-      event.venue && event.venue.city_id
-    end)
-    |> Enum.group_by(fn event ->
-      event.venue.city_id
-    end)
-    |> Enum.map(fn {city_id, city_events} ->
-      # Get city info from first event's venue (we know venue.city_ref is preloaded)
-      city = List.first(city_events).venue.city_ref
-
-      # Calculate distance from current city
-      distance_km =
-        if current_lat && current_lng && city.latitude && city.longitude do
-          calculate_distance(
-            current_lat,
-            current_lng,
-            Decimal.to_float(city.latitude),
-            Decimal.to_float(city.longitude)
-          )
-        else
-          nil
-        end
-
-      # Group by venue within this city
-      venue_groups =
-        city_events
-        |> Enum.group_by(& &1.venue_id)
-        |> Enum.map(fn {_venue_id, venue_events} ->
-          %{event: List.first(venue_events)}
-        end)
-        |> Enum.sort_by(& &1.event.venue.name)
-
-      %{
-        city: city,
-        city_id: city_id,
-        distance_km: distance_km,
-        event_count: length(city_events),
-        venue_groups: venue_groups,
-        # Is this the current city?
-        is_current: city_id == current_city.id
-      }
-    end)
-    |> Enum.sort_by(fn group ->
-      # Sort: current city first, then by distance
-      if group.is_current, do: {0, 0}, else: {1, group.distance_km || 999_999}
-    end)
-  end
-
-  # Handle empty list case
-  defp group_events_by_city([], _current_city), do: []
-
-  # Calculate distance between two points using Haversine formula
-  # Returns distance in kilometers
-  defp calculate_distance(lat1, lon1, lat2, lon2) do
-    # Earth's radius in kilometers
-    r = 6371.0
-
-    # Convert to radians
-    lat1_rad = lat1 * :math.pi() / 180
-    lat2_rad = lat2 * :math.pi() / 180
-    delta_lat = (lat2 - lat1) * :math.pi() / 180
-    delta_lon = (lon2 - lon1) * :math.pi() / 180
-
-    # Haversine formula
-    a =
-      :math.sin(delta_lat / 2) * :math.sin(delta_lat / 2) +
-        :math.cos(lat1_rad) * :math.cos(lat2_rad) *
-          :math.sin(delta_lon / 2) * :math.sin(delta_lon / 2)
-
-    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
-    distance = r * c
-
-    Float.round(distance, 1)
-  end
-
-  # NEW: Format datetime with timezone conversion
+  # Format datetime with timezone conversion
   # Extracts timezone from event.occurrences and converts UTC to local time
   defp format_datetime_with_tz(%DateTime{} = datetime, event) do
     # Extract timezone from occurrences (pattern events have timezone info)
