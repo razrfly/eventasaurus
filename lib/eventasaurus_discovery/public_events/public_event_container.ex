@@ -187,6 +187,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventContainer do
     - :festival → "festivals"
     - :conference → "conferences"
   """
+  @spec container_type_plural(atom()) :: String.t()
   def container_type_plural(:festival), do: "festivals"
   def container_type_plural(:conference), do: "conferences"
   def container_type_plural(:tour), do: "tours"
