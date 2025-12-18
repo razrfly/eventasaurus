@@ -151,8 +151,14 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardHelpers do
     "https://www.google.com/maps/dir/?api=1&destination=#{lat},#{lon}"
   end
 
-  def google_maps_directions_url(%{address: address, name: name}) when is_binary(address) do
+  def google_maps_directions_url(%{address: address, name: name})
+      when is_binary(address) and is_binary(name) do
     query = URI.encode("#{name}, #{address}")
+    "https://www.google.com/maps/dir/?api=1&destination=#{query}"
+  end
+
+  def google_maps_directions_url(%{address: address}) when is_binary(address) do
+    query = URI.encode(address)
     "https://www.google.com/maps/dir/?api=1&destination=#{query}"
   end
 
