@@ -641,7 +641,10 @@ defmodule EventasaurusWeb.JsonLd.MovieSchemaTest do
       schema = MovieSchema.build_movie_schema(movie, city, venues_with_info)
 
       first_item = Enum.at(schema["subjectOf"]["itemListElement"], 0)
-      assert first_item["item"]["eventAttendanceMode"] == "https://schema.org/OfflineEventAttendanceMode"
+
+      assert first_item["item"]["eventAttendanceMode"] ==
+               "https://schema.org/OfflineEventAttendanceMode"
+
       assert first_item["item"]["eventStatus"] == "https://schema.org/EventScheduled"
     end
 

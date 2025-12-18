@@ -190,12 +190,13 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
       # OPTIMIZED: Get aggregation stats using database-level COUNT/GROUP BY
       # This replaces fetching 500+ events just to count them
-      stats = PublicEventsEnhanced.get_source_aggregation_stats(%{
-        source_slug: identifier,
-        center_lat: center_lat,
-        center_lng: center_lng,
-        radius_km: 50
-      })
+      stats =
+        PublicEventsEnhanced.get_source_aggregation_stats(%{
+          source_slug: identifier,
+          center_lat: center_lat,
+          center_lng: center_lng,
+          radius_km: 50
+        })
 
       # Extract stats (in_radius_count used internally, not needed as separate var)
       total_event_count = stats.total_count
@@ -209,10 +210,11 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         case scope do
           :all_cities ->
             # Get events grouped by city and venue - one per venue
-            events_by_city = PublicEventsEnhanced.list_events_grouped_by_city_and_venue(%{
-              source_slug: identifier,
-              browsing_city_id: city.id
-            })
+            events_by_city =
+              PublicEventsEnhanced.list_events_grouped_by_city_and_venue(%{
+                source_slug: identifier,
+                browsing_city_id: city.id
+              })
 
             # Build city groups with distance info from stats
             groups = build_city_groups_from_stats(events_by_city, city_stats, city)
@@ -220,13 +222,14 @@ defmodule EventasaurusWeb.AggregatedContentLive do
 
           :city_only ->
             # Get one event per venue within radius
-            events = PublicEventsEnhanced.list_events_grouped_by_venue(%{
-              source_slug: identifier,
-              center_lat: center_lat,
-              center_lng: center_lng,
-              radius_km: 50,
-              browsing_city_id: city.id
-            })
+            events =
+              PublicEventsEnhanced.list_events_grouped_by_venue(%{
+                source_slug: identifier,
+                center_lat: center_lat,
+                center_lng: center_lng,
+                radius_km: 50,
+                browsing_city_id: city.id
+              })
 
             venue_groups =
               events
@@ -262,6 +265,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         case scope do
           :all_cities ->
             city_groups |> Enum.flat_map(& &1.venue_groups) |> Enum.map(& &1.event)
+
           :city_only ->
             venue_groups |> Enum.map(& &1.event)
         end

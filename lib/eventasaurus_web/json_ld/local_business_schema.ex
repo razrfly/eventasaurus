@@ -147,7 +147,9 @@ defmodule EventasaurusWeb.JsonLd.LocalBusinessSchema do
 
       # Fall back to coordinates if available
       venue.latitude && venue.longitude ->
-        url = "https://www.google.com/maps/search/?api=1&query=#{venue.latitude},#{venue.longitude}"
+        url =
+          "https://www.google.com/maps/search/?api=1&query=#{venue.latitude},#{venue.longitude}"
+
         Map.put(schema, "hasMap", url)
 
       true ->

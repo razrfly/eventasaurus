@@ -20,7 +20,11 @@ defmodule EventasaurusWeb.Components.MovieHeroCard do
   alias Eventasaurus.Integrations.Cinegraph
 
   attr :movie, :map, required: true, doc: "Movie struct with title, poster_url, metadata, etc."
-  attr :show_see_all_link, :boolean, default: false, doc: "Whether to show 'See All Screenings' link"
+
+  attr :show_see_all_link, :boolean,
+    default: false,
+    doc: "Whether to show 'See All Screenings' link"
+
   attr :aggregated_movie_url, :string, default: nil, doc: "URL to movie aggregation page"
   attr :class, :string, default: "", doc: "Additional CSS classes for the container"
 

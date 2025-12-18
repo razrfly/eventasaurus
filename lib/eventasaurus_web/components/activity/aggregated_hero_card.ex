@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Components.Activity.HeroCardTheme
 
   @doc """
   Renders the aggregated hero card for source aggregation pages.
@@ -57,10 +58,10 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
     assigns =
       assigns
       |> assign(:theme, theme)
-      |> assign(:gradient_class, gradient_class(theme))
-      |> assign(:overlay_class, overlay_class(theme))
-      |> assign(:badge_class, badge_class(theme))
-      |> assign(:button_class, button_class(theme))
+      |> assign(:gradient_class, HeroCardTheme.gradient_class(theme))
+      |> assign(:overlay_class, HeroCardTheme.overlay_class(theme))
+      |> assign(:badge_class, HeroCardTheme.badge_class(theme))
+      |> assign(:button_class, HeroCardTheme.button_class(theme))
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
@@ -220,54 +221,6 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
       _ -> :default
     end
   end
-
-  # Gradient backgrounds
-  defp gradient_class(:trivia), do: "bg-gradient-to-r from-teal-900 via-teal-800 to-cyan-800"
-  defp gradient_class(:food), do: "bg-gradient-to-r from-orange-900 via-orange-800 to-amber-800"
-  defp gradient_class(:movies), do: "bg-gradient-to-r from-gray-900 via-gray-800 to-slate-800"
-  defp gradient_class(:music), do: "bg-gradient-to-r from-purple-900 via-purple-800 to-fuchsia-900"
-  defp gradient_class(:festival), do: "bg-gradient-to-r from-indigo-900 via-violet-800 to-purple-800"
-  defp gradient_class(:social), do: "bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-800"
-  defp gradient_class(:comedy), do: "bg-gradient-to-r from-amber-900 via-yellow-800 to-orange-800"
-  defp gradient_class(:theater), do: "bg-gradient-to-r from-red-900 via-rose-800 to-pink-800"
-  defp gradient_class(:sports), do: "bg-gradient-to-r from-emerald-900 via-green-800 to-teal-800"
-  defp gradient_class(_), do: "bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700"
-
-  # Overlay for images (semi-transparent gradient)
-  defp overlay_class(:trivia), do: "bg-gradient-to-r from-teal-900/95 via-teal-900/80 to-cyan-900/60"
-  defp overlay_class(:food), do: "bg-gradient-to-r from-orange-900/95 via-orange-900/80 to-amber-900/60"
-  defp overlay_class(:movies), do: "bg-gradient-to-r from-gray-900/95 via-gray-900/85 to-slate-900/70"
-  defp overlay_class(:music), do: "bg-gradient-to-r from-purple-900/95 via-purple-900/80 to-fuchsia-900/60"
-  defp overlay_class(:festival), do: "bg-gradient-to-r from-indigo-900/95 via-violet-900/80 to-purple-900/60"
-  defp overlay_class(:social), do: "bg-gradient-to-r from-blue-900/95 via-blue-900/80 to-indigo-900/60"
-  defp overlay_class(:comedy), do: "bg-gradient-to-r from-amber-900/95 via-yellow-900/80 to-orange-900/60"
-  defp overlay_class(:theater), do: "bg-gradient-to-r from-red-900/95 via-rose-900/80 to-pink-900/60"
-  defp overlay_class(:sports), do: "bg-gradient-to-r from-emerald-900/95 via-green-900/80 to-teal-900/60"
-  defp overlay_class(_), do: "bg-gradient-to-t from-gray-900/80 to-transparent"
-
-  # Badge styling
-  defp badge_class(:trivia), do: "bg-teal-500/20 text-teal-100"
-  defp badge_class(:food), do: "bg-orange-500/20 text-orange-100"
-  defp badge_class(:movies), do: "bg-slate-500/20 text-slate-100"
-  defp badge_class(:music), do: "bg-purple-500/20 text-purple-100"
-  defp badge_class(:festival), do: "bg-indigo-500/20 text-indigo-100"
-  defp badge_class(:social), do: "bg-blue-500/20 text-blue-100"
-  defp badge_class(:comedy), do: "bg-amber-500/20 text-amber-100"
-  defp badge_class(:theater), do: "bg-red-500/20 text-red-100"
-  defp badge_class(:sports), do: "bg-emerald-500/20 text-emerald-100"
-  defp badge_class(_), do: "bg-white/20 text-white"
-
-  # Primary button styling (for expand action)
-  defp button_class(:trivia), do: "bg-white text-teal-900 hover:bg-gray-100"
-  defp button_class(:food), do: "bg-white text-orange-900 hover:bg-gray-100"
-  defp button_class(:movies), do: "bg-white text-gray-900 hover:bg-gray-100"
-  defp button_class(:music), do: "bg-white text-purple-900 hover:bg-gray-100"
-  defp button_class(:festival), do: "bg-white text-indigo-900 hover:bg-gray-100"
-  defp button_class(:social), do: "bg-white text-blue-900 hover:bg-gray-100"
-  defp button_class(:comedy), do: "bg-white text-amber-900 hover:bg-gray-100"
-  defp button_class(:theater), do: "bg-white text-red-900 hover:bg-gray-100"
-  defp button_class(:sports), do: "bg-white text-emerald-900 hover:bg-gray-100"
-  defp button_class(_), do: "bg-white text-gray-900 hover:bg-gray-100"
 
   # Category labels
   defp category_label(:trivia), do: gettext("Pub Quiz")

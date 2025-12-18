@@ -9,7 +9,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     PublicPlanWithFriendsModal,
     Breadcrumbs,
     MovieHeroCard,
-    OpenGraphComponent
+    OpenGraphComponent,
+    CategoryDisplay
   }
 
   alias EventasaurusWeb.Components.Activity.{
@@ -1211,6 +1212,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     />
                 <% end %>
 
+                <!-- Category Tags Section -->
+                <CategoryDisplay.event_category_section event={@event} class="mt-4" />
+
                 <!-- Event Content Card -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <div class="p-6">
@@ -1700,7 +1704,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       categories when is_list(categories) and length(categories) > 0 ->
         Enum.any?(categories, fn category ->
           slug = Map.get(category, :slug, "")
-          slug == "trivia" || slug == "quiz" || String.contains?(slug, "trivia") || String.contains?(slug, "quiz")
+
+          slug == "trivia" || slug == "quiz" || String.contains?(slug, "trivia") ||
+            String.contains?(slug, "quiz")
         end)
 
       _ ->
@@ -1731,8 +1737,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       schemas
       |> Enum.map(&Jason.decode!/1)
       |> Enum.flat_map(fn
-        list when is_list(list) -> list  # Flatten arrays (multiple ScreeningEvents)
-        item -> [item]                    # Wrap single items in a list
+        # Flatten arrays (multiple ScreeningEvents)
+        list when is_list(list) -> list
+        # Wrap single items in a list
+        item -> [item]
       end)
       # Remove @context from individual items since we'll have one at the top level
       |> Enum.map(&Map.delete(&1, "@context"))

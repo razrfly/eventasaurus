@@ -32,7 +32,10 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
     * `:ticket_url` - Optional. URL for more info or registration.
     * `:class` - Optional. Additional CSS classes for the container.
   """
-  attr :event, :map, required: true, doc: "PublicEvent struct with display_title, venue, sources, etc."
+  attr :event, :map,
+    required: true,
+    doc: "PublicEvent struct with display_title, venue, sources, etc."
+
   attr :cover_image_url, :string, default: nil, doc: "Cover image URL for the hero background"
   attr :ticket_url, :string, default: nil, doc: "URL to event page or registration"
   attr :class, :string, default: "", doc: "Additional CSS classes for the container"
@@ -243,7 +246,15 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
     |> String.replace("sobota", "Saturday")
     |> String.replace("niedziela", "Sunday")
     |> then(fn text ->
-      if String.contains?(text, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) do
+      if String.contains?(text, [
+           "Monday",
+           "Tuesday",
+           "Wednesday",
+           "Thursday",
+           "Friday",
+           "Saturday",
+           "Sunday"
+         ]) do
         "Every " <> text
       else
         text
@@ -252,5 +263,4 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
   end
 
   defp format_schedule(_), do: nil
-
 end

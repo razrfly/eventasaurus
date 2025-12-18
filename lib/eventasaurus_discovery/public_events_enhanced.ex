@@ -1844,7 +1844,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       join: s in "sources",
       on: s.id == pes.source_id,
       where: s.slug == ^source_slug,
-      where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+      where:
+        pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
       select: count(pe.id, :distinct)
     )
     |> Repo.one() || 0
@@ -1867,7 +1868,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       join: v in Venue,
       on: pe.venue_id == v.id,
       where: s.slug == ^source_slug,
-      where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+      where:
+        pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
       where: not is_nil(v.latitude) and not is_nil(v.longitude),
       where:
         fragment(
@@ -1910,7 +1912,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         join: c in City,
         on: v.city_id == c.id,
         where: s.slug == ^source_slug,
-        where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        where:
+          pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
         group_by: [c.id, c.name, c.slug, c.latitude, c.longitude],
         select: %{
           city_id: c.id,
@@ -2015,7 +2018,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         join: v in Venue,
         on: pe.venue_id == v.id,
         where: s.slug == ^source_slug,
-        where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        where:
+          pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
         # Use DISTINCT ON to get one event per venue (PostgreSQL specific)
         distinct: [v.id],
         order_by: [asc: v.id, asc: pe.starts_at],
@@ -2077,7 +2081,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
         join: v in Venue,
         on: pe.venue_id == v.id,
         where: s.slug == ^source_slug,
-        where: pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
+        where:
+          pe.starts_at > ^current_time or (not is_nil(pe.ends_at) and pe.ends_at > ^current_time),
         # One event per venue
         distinct: [v.id],
         order_by: [asc: v.id, asc: pe.starts_at],

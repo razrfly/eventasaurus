@@ -229,5 +229,4 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
       names -> Enum.join(names, ", ")
     end
   end
-
 end

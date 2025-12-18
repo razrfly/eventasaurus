@@ -174,8 +174,14 @@ defmodule EventasaurusWeb.Live.Components.CityScreeningsSection do
 
   defp venue_card_classes(_), do: venue_card_classes(:card)
 
-  defp venue_name_classes(:card), do: "text-lg font-bold text-gray-900 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors"
-  defp venue_name_classes(:dark), do: "text-lg font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-400 transition-colors"
+  defp venue_name_classes(:card),
+    do:
+      "text-lg font-bold text-gray-900 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors"
+
+  defp venue_name_classes(:dark),
+    do:
+      "text-lg font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-400 transition-colors"
+
   defp venue_name_classes(_), do: venue_name_classes(:card)
 
   defp venue_address_classes(:card), do: "text-xs text-gray-500 mb-0 truncate"

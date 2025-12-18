@@ -22,6 +22,9 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusWeb.Components.Activity.HeroCardHelpers
 
+  import HeroCardHelpers,
+    only: [get_city_name: 1, has_coordinates?: 1, google_maps_directions_url: 1]
+
   @doc """
   Renders the venue hero card.
 
@@ -43,8 +46,8 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
       assigns
       |> assign(:cover_image_url, image_url)
       |> assign(:image_source, image_source)
-      |> assign(:city_name, HeroCardHelpers.get_city_name(assigns.venue))
-      |> assign(:country_name, get_country_name(assigns.venue))
+      |> assign(:city_name, get_city_name(assigns.venue))
+      |> assign(:country_name, HeroCardHelpers.get_country_name(assigns.venue))
       |> assign(:has_coordinates, has_coordinates?(assigns.venue))
 
     ~H"""
@@ -137,25 +140,4 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
       {:error, :no_image} -> {nil, nil}
     end
   end
-
-  defp get_country_name(%{city_ref: %{country: %{name: name}}}) when is_binary(name), do: name
-  defp get_country_name(_), do: nil
-
-  defp has_coordinates?(%{latitude: lat, longitude: lon})
-       when is_number(lat) and is_number(lon),
-       do: true
-
-  defp has_coordinates?(_), do: false
-
-  defp google_maps_directions_url(%{latitude: lat, longitude: lon})
-       when is_number(lat) and is_number(lon) do
-    "https://www.google.com/maps/dir/?api=1&destination=#{lat},#{lon}"
-  end
-
-  defp google_maps_directions_url(%{address: address, name: name}) when is_binary(address) do
-    query = URI.encode("#{name}, #{address}")
-    "https://www.google.com/maps/dir/?api=1&destination=#{query}"
-  end
-
-  defp google_maps_directions_url(_), do: "#"
 end

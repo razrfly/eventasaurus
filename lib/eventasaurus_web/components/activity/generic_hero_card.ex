@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.HeroCardHelpers
+  alias EventasaurusWeb.Components.Activity.{HeroCardHelpers, HeroCardTheme}
 
   @doc """
   Renders the generic hero card for non-movie events.
@@ -32,7 +32,10 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
     * `:ticket_url` - Optional. URL to purchase tickets.
     * `:class` - Optional. Additional CSS classes for the container.
   """
-  attr :event, :map, required: true, doc: "PublicEvent struct with display_title, categories, etc."
+  attr :event, :map,
+    required: true,
+    doc: "PublicEvent struct with display_title, categories, etc."
+
   attr :cover_image_url, :string, default: nil, doc: "Cover image URL for the hero background"
   attr :ticket_url, :string, default: nil, doc: "URL to ticket purchase page"
   attr :class, :string, default: "", doc: "Additional CSS classes for the container"
@@ -64,7 +67,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
         </div>
       <% else %>
         <!-- Category-colored gradient fallback -->
-        <div class={["absolute inset-0", gradient_class(@category_color)]} />
+        <div class={["absolute inset-0", HeroCardTheme.gradient_class(@category_color)]} />
       <% end %>
 
       <!-- Content -->
@@ -75,7 +78,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
             <div class="mb-4">
               <span class={[
                 "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium",
-                badge_class(@category_color)
+                HeroCardTheme.badge_class(@category_color)
               ]}>
                 <.category_icon category={@primary_category} class="w-4 h-4 mr-1.5" />
                 <%= @primary_category.name %>
@@ -209,30 +212,4 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
 
   defp get_schema_type(%{schema_type: schema_type}), do: schema_type
   defp get_schema_type(_), do: "Event"
-
-  defp gradient_class(:purple), do: "bg-gradient-to-r from-purple-900 via-purple-800 to-purple-700"
-  defp gradient_class(:blue), do: "bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700"
-  defp gradient_class(:red), do: "bg-gradient-to-r from-red-900 via-red-800 to-red-700"
-  defp gradient_class(:yellow), do: "bg-gradient-to-r from-amber-900 via-amber-800 to-amber-700"
-  defp gradient_class(:green), do: "bg-gradient-to-r from-emerald-900 via-emerald-800 to-emerald-700"
-  defp gradient_class(:orange), do: "bg-gradient-to-r from-orange-900 via-orange-800 to-orange-700"
-  defp gradient_class(:teal), do: "bg-gradient-to-r from-teal-900 via-teal-800 to-teal-700"
-  defp gradient_class(:pink), do: "bg-gradient-to-r from-pink-900 via-pink-800 to-pink-700"
-  defp gradient_class(:indigo), do: "bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-700"
-  defp gradient_class(:rose), do: "bg-gradient-to-r from-rose-900 via-rose-800 to-rose-700"
-  defp gradient_class(:slate), do: "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700"
-  defp gradient_class(_), do: "bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700"
-
-  defp badge_class(:purple), do: "bg-purple-500/20 text-purple-100"
-  defp badge_class(:blue), do: "bg-blue-500/20 text-blue-100"
-  defp badge_class(:red), do: "bg-red-500/20 text-red-100"
-  defp badge_class(:yellow), do: "bg-amber-500/20 text-amber-100"
-  defp badge_class(:green), do: "bg-emerald-500/20 text-emerald-100"
-  defp badge_class(:orange), do: "bg-orange-500/20 text-orange-100"
-  defp badge_class(:teal), do: "bg-teal-500/20 text-teal-100"
-  defp badge_class(:pink), do: "bg-pink-500/20 text-pink-100"
-  defp badge_class(:indigo), do: "bg-indigo-500/20 text-indigo-100"
-  defp badge_class(:rose), do: "bg-rose-500/20 text-rose-100"
-  defp badge_class(:slate), do: "bg-slate-500/20 text-slate-100"
-  defp badge_class(_), do: "bg-white/20 text-white"
 end

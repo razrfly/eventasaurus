@@ -67,7 +67,8 @@ defmodule EventasaurusWeb.CityLive.Events do
     type_plural = PublicEventContainer.container_type_plural(container_type)
 
     # Build breadcrumb items using BreadcrumbBuilder
-    breadcrumb_items = BreadcrumbBuilder.build_container_type_index_breadcrumbs(city, container_type)
+    breadcrumb_items =
+      BreadcrumbBuilder.build_container_type_index_breadcrumbs(city, container_type)
 
     socket
     |> assign(:container_type, container_type)
