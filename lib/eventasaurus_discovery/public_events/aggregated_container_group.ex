@@ -50,11 +50,11 @@ defmodule EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup do
   @doc """
   Returns the path to the container detail view for this group.
 
-  Uses container type to determine route segment (festivals, conferences, etc.)
+  Uses type-specific routes for semantic URLs and schema.org mapping.
 
   Examples:
-    - Festival: "/krakow/festivals/unsound-krakow-2025"
-    - Conference: "/krakow/conferences/techcrunch-disrupt-2025"
+    - Festival: "/c/krakow/festivals/unsound-krakow-2025"
+    - Conference: "/c/krakow/conferences/techcrunch-disrupt-2025"
   """
   def path(%__MODULE__{} = group) do
     type_plural = PublicEventContainer.container_type_plural(group.container_type)

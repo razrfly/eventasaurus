@@ -60,51 +60,56 @@ config :eventasaurus, Oban,
   repo: oban_repo,
   stage_interval: 1_000,
   queues: [
+    # ====================================================================
+    # QUEUE CONCURRENCY - CRITICAL: Must stay within connection pool limits!
+    # ====================================================================
+    # SessionRepo pool: 5 connections (for Oban - advisory locks, job fetching)
+    # Repo pool: 3 connections (for web requests)
+    #
+    # Total concurrent workers: 15 (down from 42)
+    # Rule: Total workers should be ~3x pool size to allow some queuing
+    # without causing 15+ second connection timeouts
+    # ====================================================================
+
     # Email queue with limited concurrency for Resend API rate limiting
     # Max 2 concurrent jobs to respect Resend's 2/second limit
     emails: 2,
     # Scraper queue for event data ingestion
-    # Limited concurrency for rate-limited external APIs
-    scraper: 5,
+    # Reduced from 5 to 1 - scraper jobs spawn many detail jobs
+    scraper: 1,
     # Scraper detail queue for individual event processing
-    # Increased concurrency to prevent MovieDetailJob queue congestion (was 3)
-    # This prevents ShowtimeProcessJobs from racing ahead of MovieDetailJobs
-    scraper_detail: 10,
+    # Reduced from 10 to 3 - these are the main DB-heavy jobs
+    scraper_detail: 3,
     # Scraper index queue for processing index pages
-    # Low concurrency to prevent timeouts and respect rate limits
-    scraper_index: 2,
+    # Reduced from 2 to 1 - index pages spawn many detail jobs
+    scraper_index: 1,
     # Discovery queue for unified sync jobs and admin-triggered syncs
-    # Consolidated from discovery + discovery_sync (Issue #2641)
-    # Limited concurrency for discovery source sync
-    discovery: 3,
+    # Reduced from 3 to 1 - discovery jobs are orchestrators
+    discovery: 1,
     # Unified venue queue for all venue-related jobs
-    # Handles: image enrichment, backfill orchestration, name fixing, deduplication
-    # Consolidated from venue_enrichment, venue_backfill, venue_maintenance (Issue #2641)
-    # Low concurrency (2) to respect Google rate limits and prevent overwhelming external APIs
-    venue: 2,
+    # Kept at 1 to respect Google rate limits
+    venue: 1,
     # Default queue for other background jobs
-    default: 10,
+    # Reduced from 10 to 2
+    default: 2,
     # Maintenance queue for background tasks like coordinate calculation
-    maintenance: 2,
+    # Reduced from 2 to 1
+    maintenance: 1,
     # Reports queue for analytics, cost reports, and stats computation
-    # Consolidated from reports + stats (Issue #2641)
-    # Low concurrency - stats computation is memory-intensive
-    reports: 2,
+    # Reduced from 2 to 1 - stats computation is memory-intensive
+    reports: 1,
     # Enrichment queue for performer data and Unsplash image refreshes
-    # Consolidated from enrichment + unsplash (Issue #2641)
-    # Used by ResidentAdvisor PerformerEnrichmentJob, UnsplashCityRefreshWorker, UnsplashCountryRefreshWorker
-    # Concurrency 3 to handle Unsplash rate limits (5000 req/hour)
-    enrichment: 3,
+    # Reduced from 3 to 1 - rate limited by external APIs anyway
+    enrichment: 1,
     # Geocoding backfill queue for venue provider ID lookups
-    # Used by ProviderIdBackfillJob for backfilling missing provider IDs
-    # Low concurrency due to Foursquare 500 req/day limit
+    # Kept at 1 due to Foursquare 500 req/day limit
     geocoding: 1
   ],
   plugins: [
-    # Keep completed jobs for 2 days for debugging
-    # Reduced from 7 days to lower oban_jobs table row count (was 121M rows)
-    # This reduces the impact of aggregate queries on state/queue groupings
-    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 2},
+    # Keep completed jobs for 12 hours for debugging
+    # Reduced from 2 days to lower oban_jobs table row count
+    # Faster monitoring queries = less connection contention
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 12},
     # Reindex daily for performance
     {Oban.Plugins.Reindexer, schedule: "@daily"},
     # Recover orphaned jobs after 5 minutes
@@ -638,16 +643,11 @@ if config_env() == :prod do
   # Repo: Pooled connection via PgBouncer (port 6432) for web requests
   # Using hostname-based config to guarantee socket_options: [:inet] is applied
   #
-  # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 3 due to PlanetScale
-  # connection limits causing "too_many_connections" during deployments.
-  # See: https://github.com/razrfly/eventasaurus/issues/2498
+  # Pool size: 3 connections for web request handling
+  # PgBouncer provides additional pooling on the database side.
   #
-  # After completing database performance optimizations (issue #2496), we can:
-  # 1. Increase pool_size back to 5-10 for better throughput
-  # 2. Remove the 'immediate' deploy strategy from fly.toml
-  #
-  # Current: 3 + 2 = 5 total connections per machine (conservative)
-  # Target: 5-10 + 3-5 = 8-15 connections per machine (after #2496 fixes)
+  # Total connections per machine: Repo(3) + SessionRepo(5) + ReplicaRepo(5) = 13
+  # PlanetScale connection limits should accommodate this comfortably.
   config :eventasaurus, EventasaurusApp.Repo,
     username: ps_user,
     password: ps_pass,
@@ -668,23 +668,21 @@ if config_env() == :prod do
   # SessionRepo: Direct connection (port 5432) for Oban, migrations, advisory locks
   # Using hostname-based config to guarantee socket_options: [:inet] is applied
   #
-  # TODO: TEMPORARY WORKAROUND - Reduced pool_size from 5 to 2 due to PlanetScale
-  # connection limits causing "too_many_connections" during deployments.
-  # See: https://github.com/razrfly/eventasaurus/issues/2498
+  # Pool size increased from 2 to 5 to support Oban job processing.
+  # With 15 total Oban workers (reduced from 42), 5 connections provides
+  # reasonable throughput without overwhelming PlanetScale connection limits.
   #
-  # After completing database performance optimizations (issue #2496), we can:
-  # 1. Increase pool_size back to 3-5 for better Oban throughput
-  # 2. Remove the 'immediate' deploy strategy from fly.toml
-  #
-  # Current: Migrations need 1 connection; Oban needs 2-3 for producer/notifier
-  # Target: 3-5 connections after #2496 query optimizations reduce connection hold times
+  # Connection math:
+  # - Oban needs 1-2 connections for producer/notifier (advisory locks)
+  # - Remaining 3-4 connections for actual job processing
+  # - Total workers (15) / pool (5) = 3x ratio allows some queuing
   config :eventasaurus, EventasaurusApp.SessionRepo,
     username: ps_user,
     password: ps_pass,
     hostname: ps_host,
     port: ps_direct_port,
     database: ps_db,
-    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "2"),
+    pool_size: String.to_integer(System.get_env("SESSION_POOL_SIZE") || "5"),
     socket_options: socket_opts,
     queue_target: 5000,
     queue_interval: 30000,
