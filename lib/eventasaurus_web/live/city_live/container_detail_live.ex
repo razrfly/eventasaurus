@@ -107,8 +107,11 @@ defmodule EventasaurusWeb.CityLive.ContainerDetailLive do
         # Generate breadcrumb JSON-LD structured data
         base_url = EventasaurusWeb.Endpoint.url()
 
+        # Use type-specific route for semantic URLs
+        type_plural = PublicEventContainer.container_type_plural(container.container_type)
+
         canonical_url =
-          "#{base_url}/c/#{city.slug}/#{PublicEventContainer.container_type_plural(container.container_type)}/#{container.slug}"
+          "#{base_url}/c/#{city.slug}/#{type_plural}/#{container.slug}"
 
         breadcrumb_json_ld =
           BreadcrumbListSchema.from_breadcrumb_builder_items(

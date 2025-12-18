@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Sources.SourceStore
   alias EventasaurusDiscovery.AggregationTypeSlug
+  alias EventasaurusDiscovery.PublicEvents.PublicEventContainers
   alias EventasaurusWeb.Helpers.CategoryHelpers
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
@@ -119,9 +120,26 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         true -> :city_only
       end
 
-    socket = load_events(socket, scope)
+    # Check if the identifier is actually a container slug
+    # If so, redirect to the dedicated container route to avoid route collision
+    identifier = socket.assigns.identifier
+    city = socket.assigns.city
 
-    {:noreply, socket}
+    case PublicEventContainers.get_container_by_slug(identifier) do
+      %{slug: container_slug, container_type: container_type} = _container ->
+        # Redirect to type-specific container route for semantic URLs
+        type_plural =
+          EventasaurusDiscovery.PublicEvents.PublicEventContainer.container_type_plural(
+            container_type
+          )
+
+        {:noreply, push_navigate(socket, to: ~p"/c/#{city.slug}/#{type_plural}/#{container_slug}")}
+
+      nil ->
+        # Not a container - continue with source aggregation
+        socket = load_events(socket, scope)
+        {:noreply, socket}
+    end
   end
 
   # Extract content type slug from URL path

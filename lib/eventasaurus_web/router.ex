@@ -641,13 +641,14 @@ defmodule EventasaurusWeb.Router do
       live "/:city_slug/exhibitions", CityLive.Events, :exhibitions
       live "/:city_slug/tournaments", CityLive.Events, :tournaments
 
-      # Container detail pages (individual festival, conference, etc.)
-      live "/:city_slug/festivals/:container_slug", CityLive.ContainerDetailLive, :show
-      live "/:city_slug/conferences/:container_slug", CityLive.ContainerDetailLive, :show
-      live "/:city_slug/tours/:container_slug", CityLive.ContainerDetailLive, :show
-      live "/:city_slug/series/:container_slug", CityLive.ContainerDetailLive, :show
-      live "/:city_slug/exhibitions/:container_slug", CityLive.ContainerDetailLive, :show
-      live "/:city_slug/tournaments/:container_slug", CityLive.ContainerDetailLive, :show
+      # Container detail pages - type-specific routes for semantic URLs and schema.org mapping
+      # Each container type has its own route for SEO and clarity
+      live "/:city_slug/festivals/:container_slug", CityLive.ContainerDetailLive, :festival
+      live "/:city_slug/conferences/:container_slug", CityLive.ContainerDetailLive, :conference
+      live "/:city_slug/tours/:container_slug", CityLive.ContainerDetailLive, :tour
+      live "/:city_slug/series/:container_slug", CityLive.ContainerDetailLive, :series
+      live "/:city_slug/exhibitions/:container_slug", CityLive.ContainerDetailLive, :exhibition
+      live "/:city_slug/tournaments/:container_slug", CityLive.ContainerDetailLive, :tournament
 
       # Movie screenings aggregation (must be before catch-all aggregated content)
       live "/:city_slug/movies/:movie_slug", PublicMovieScreeningsLive, :show
