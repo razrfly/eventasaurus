@@ -54,6 +54,9 @@ defmodule EventasaurusDiscovery.Sources.Inquizition.Jobs.SyncJob do
       slug: Inquizition.Source.key(),
       website_url: "https://inquizition.com",
       priority: Inquizition.Source.priority(),
+      domains: ["trivia", "entertainment"],
+      aggregate_on_index: true,
+      aggregation_type: "SocialEvent",
       config: %{
         "rate_limit_seconds" => Inquizition.Config.rate_limit(),
         "max_requests_per_hour" => 1800,

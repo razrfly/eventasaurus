@@ -163,6 +163,9 @@ defmodule EventasaurusDiscovery.Sources.Sortiraparis.Jobs.SyncJob do
       slug: "sortiraparis",
       website_url: Config.base_url(),
       priority: 65,
+      domains: ["culture", "entertainment", "paris"],
+      aggregate_on_index: false,
+      aggregation_type: nil,
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "timeout" => Config.timeout(),

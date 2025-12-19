@@ -41,8 +41,8 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
       |> Map.new()
 
-    %Source{}
-    |> Source.changeset(%{
+    # Build source attributes, including aggregation fields if provided
+    attrs = %{
       name: get_val(config, :name),
       slug: slug,
       website_url:
@@ -51,7 +51,17 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
       priority: get_val(config, :priority),
       is_active: true,
       metadata: metadata
-    })
+    }
+
+    # Add aggregation fields if provided in config
+    attrs =
+      attrs
+      |> maybe_put(:aggregate_on_index, get_val(config, :aggregate_on_index))
+      |> maybe_put(:aggregation_type, get_val(config, :aggregation_type))
+      |> maybe_put(:domains, get_val(config, :domains))
+
+    %Source{}
+    |> Source.changeset(attrs)
     |> Repo.insert()
     |> case do
       {:ok, source} ->
@@ -85,6 +95,10 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
 
   defp normalize_blank(v) when is_atom(v), do: v |> Atom.to_string() |> normalize_blank()
   defp normalize_blank(v), do: v |> to_string() |> normalize_blank()
+
+  # Only add key to map if value is not nil
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   # Check if changeset has unique constraint error for a field
   defp has_unique_constraint_error?(changeset, field) do

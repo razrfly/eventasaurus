@@ -54,6 +54,9 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Jobs.SyncJob do
       slug: Source.key(),
       website_url: "https://week.pl",
       priority: Source.priority(),
+      domains: ["food", "dining"],
+      aggregate_on_index: true,
+      aggregation_type: "FoodEvent",
       config: %{
         "rate_limit_seconds" => 2,
         "max_requests_per_hour" => 1800,

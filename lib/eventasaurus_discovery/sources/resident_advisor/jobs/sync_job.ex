@@ -74,6 +74,9 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor.Jobs.SyncJob do
       slug: "resident-advisor",
       website_url: "https://ra.co",
       priority: 75,
+      domains: ["music", "electronic", "nightlife"],
+      aggregate_on_index: false,
+      aggregation_type: nil,
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 7200,

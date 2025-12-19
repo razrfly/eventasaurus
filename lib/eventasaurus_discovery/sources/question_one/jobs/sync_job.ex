@@ -41,6 +41,9 @@ defmodule EventasaurusDiscovery.Sources.QuestionOne.Jobs.SyncJob do
       slug: QuestionOne.Source.key(),
       website_url: "https://questionone.io",
       priority: QuestionOne.Source.priority(),
+      domains: ["trivia", "entertainment"],
+      aggregate_on_index: true,
+      aggregation_type: "SocialEvent",
       config: %{
         "rate_limit_seconds" => QuestionOne.Config.rate_limit(),
         "max_requests_per_hour" => 1800,

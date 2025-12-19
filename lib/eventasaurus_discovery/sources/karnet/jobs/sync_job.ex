@@ -347,6 +347,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
       slug: "karnet",
       website_url: "https://karnet.krakowculture.pl",
       priority: 70,
+      domains: ["culture", "arts", "music"],
+      aggregate_on_index: false,
+      aggregation_type: nil,
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 300,
