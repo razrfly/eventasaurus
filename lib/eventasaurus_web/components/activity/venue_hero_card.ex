@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias EventasaurusApp.Venues.Venue
-  alias EventasaurusWeb.Components.Activity.HeroCardHelpers
+  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
 
   import HeroCardHelpers,
     only: [get_city_name: 1, has_coordinates?: 1, google_maps_directions_url: 1]
@@ -52,22 +52,8 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
-      <!-- Background Image or Gradient -->
-      <%= if @cover_image_url do %>
-        <div class="absolute inset-0">
-          <img
-            src={@cover_image_url}
-            alt=""
-            class="w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <!-- Gradient overlay for text readability -->
-          <div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-800/70" />
-        </div>
-      <% else %>
-        <!-- Fallback gradient when no image available -->
-        <div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700" />
-      <% end %>
+      <!-- Background -->
+      <HeroCardBackground.background image_url={@cover_image_url} theme={:venue} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
@@ -75,17 +61,17 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
           <!-- Badges Row -->
           <div class="flex flex-wrap items-center gap-2 mb-4">
             <!-- Venue Badge -->
-            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-500/20 text-indigo-100">
-              <Heroicons.building_storefront class="w-4 h-4 mr-1.5" />
-              <%= gettext("Venue") %>
+            <span class={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", HeroCardTheme.badge_class(:venue)]}>
+              <HeroCardIcons.icon type={:venue} class="w-4 h-4 mr-1.5" />
+              <%= HeroCardTheme.label(:venue) %>
             </span>
 
             <!-- Event Count Badge -->
             <%= if @upcoming_event_count > 0 do %>
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/20 text-green-100">
+              <HeroCardBadge.success_badge>
                 <Heroicons.calendar class="w-4 h-4 mr-1.5" />
                 <%= ngettext("%{count} upcoming event", "%{count} upcoming events", @upcoming_event_count, count: @upcoming_event_count) %>
-              </span>
+              </HeroCardBadge.success_badge>
             <% end %>
           </div>
 
@@ -119,7 +105,7 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
                 href={google_maps_directions_url(@venue)}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center px-5 py-2.5 bg-white text-slate-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition shadow-md"
+                class={["inline-flex items-center px-5 py-2.5 text-sm font-semibold rounded-lg transition shadow-md", HeroCardTheme.button_class(:venue)]}
               >
                 <Heroicons.arrow_top_right_on_square class="w-5 h-5 mr-2" />
                 <%= gettext("Get Directions") %>

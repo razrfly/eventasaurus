@@ -20,10 +20,13 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardTheme do
       overlay = HeroCardTheme.overlay_class(:music)
       badge = HeroCardTheme.badge_class(:festival)
       button = HeroCardTheme.button_class(:food)
+      label = HeroCardTheme.label(:trivia)  # => "Pub Quiz"
 
       # Get all styles for a theme at once
       %{gradient: g, overlay: o, badge: b, button: btn} = HeroCardTheme.theme(:trivia)
   """
+
+  use Gettext, backend: EventasaurusWeb.Gettext
 
   @themes %{
     # Content-type themes (used by AggregatedHeroCard)
@@ -80,6 +83,20 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardTheme do
       overlay: "bg-gradient-to-r from-emerald-900/95 via-green-900/80 to-teal-900/60",
       badge: "bg-emerald-500/20 text-emerald-100",
       button: "bg-white text-emerald-900 hover:bg-gray-100"
+    },
+
+    # Entity-type themes (used by PerformerHeroCard, VenueHeroCard)
+    performer: %{
+      gradient: "bg-gradient-to-r from-purple-900 via-purple-800 to-fuchsia-900",
+      overlay: "bg-gradient-to-r from-purple-900/95 via-purple-900/85 to-purple-800/70",
+      badge: "bg-purple-500/20 text-purple-100",
+      button: "bg-white text-purple-900 hover:bg-gray-100"
+    },
+    venue: %{
+      gradient: "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700",
+      overlay: "bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-800/70",
+      badge: "bg-indigo-500/20 text-indigo-100",
+      button: "bg-white text-slate-900 hover:bg-gray-100"
     },
 
     # Container-type themes (used by ContainerHeroCard)
@@ -264,4 +281,49 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardTheme do
   end
 
   def valid_theme?(_), do: false
+
+  @doc """
+  Returns a human-readable label for a theme.
+
+  Used for displaying category/type names in hero card badges.
+
+  ## Examples
+
+      iex> HeroCardTheme.label(:trivia)
+      "Pub Quiz"
+
+      iex> HeroCardTheme.label(:festival)
+      "Festival"
+
+      iex> HeroCardTheme.label(:unknown)
+      "Events"
+  """
+  @spec label(atom()) :: String.t()
+  def label(theme_name) when is_atom(theme_name) do
+    case theme_name do
+      # Content themes
+      :trivia -> gettext("Pub Quiz")
+      :food -> gettext("Food & Dining")
+      :movies -> gettext("Movies")
+      :music -> gettext("Music")
+      :festival -> gettext("Festival")
+      :social -> gettext("Social Events")
+      :comedy -> gettext("Comedy")
+      :theater -> gettext("Theater")
+      :sports -> gettext("Sports")
+      # Container themes
+      :conference -> gettext("Conference")
+      :tour -> gettext("Tour")
+      :series -> gettext("Series")
+      :exhibition -> gettext("Exhibition")
+      :tournament -> gettext("Tournament")
+      # Entity types
+      :venue -> gettext("Venue")
+      :performer -> gettext("Artist")
+      # Default
+      _ -> gettext("Events")
+    end
+  end
+
+  def label(_), do: gettext("Events")
 end

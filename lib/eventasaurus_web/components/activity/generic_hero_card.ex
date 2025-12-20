@@ -19,8 +19,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
 
-  alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.{HeroCardHelpers, HeroCardTheme}
+  alias EventasaurusWeb.Components.Activity.{HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
 
   @doc """
   Renders the generic hero card for non-movie events.
@@ -54,21 +53,8 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
-      <!-- Background Image or Gradient -->
-      <%= if @cover_image_url do %>
-        <div class="absolute inset-0">
-          <img
-            src={CDN.url(@cover_image_url, width: 1200, quality: 85)}
-            alt=""
-            class="w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <div class="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/80 to-gray-900/40" />
-        </div>
-      <% else %>
-        <!-- Category-colored gradient fallback -->
-        <div class={["absolute inset-0", HeroCardTheme.gradient_class(@category_color)]} />
-      <% end %>
+      <!-- Background -->
+      <HeroCardBackground.background image_url={@cover_image_url} theme={@category_color} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
@@ -80,7 +66,7 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
                 "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium",
                 HeroCardTheme.badge_class(@category_color)
               ]}>
-                <.category_icon category={@primary_category} class="w-4 h-4 mr-1.5" />
+                <HeroCardIcons.icon type={@schema_type} class="w-4 h-4 mr-1.5" />
                 <%= @primary_category.name %>
               </span>
             </div>
@@ -138,43 +124,6 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
         </div>
       </div>
     </div>
-    """
-  end
-
-  # Category icon component based on schema type
-  attr :category, :map, required: true
-  attr :class, :string, default: ""
-
-  defp category_icon(assigns) do
-    assigns = assign(assigns, :schema_type, assigns.category && assigns.category.schema_type)
-
-    ~H"""
-    <%= case @schema_type do %>
-      <% "MusicEvent" -> %>
-        <Heroicons.musical_note class={@class} />
-      <% "SocialEvent" -> %>
-        <Heroicons.user_group class={@class} />
-      <% "TheaterEvent" -> %>
-        <Heroicons.ticket class={@class} />
-      <% "ComedyEvent" -> %>
-        <Heroicons.face_smile class={@class} />
-      <% "SportsEvent" -> %>
-        <Heroicons.trophy class={@class} />
-      <% "FoodEvent" -> %>
-        <Heroicons.cake class={@class} />
-      <% "EducationEvent" -> %>
-        <Heroicons.academic_cap class={@class} />
-      <% "ChildrensEvent" -> %>
-        <Heroicons.puzzle_piece class={@class} />
-      <% "Festival" -> %>
-        <Heroicons.sparkles class={@class} />
-      <% "VisualArtsEvent" -> %>
-        <Heroicons.paint_brush class={@class} />
-      <% "BusinessEvent" -> %>
-        <Heroicons.briefcase class={@class} />
-      <% _ -> %>
-        <Heroicons.calendar class={@class} />
-    <% end %>
     """
   end
 
