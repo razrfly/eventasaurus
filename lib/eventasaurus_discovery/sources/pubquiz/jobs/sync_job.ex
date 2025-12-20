@@ -44,6 +44,9 @@ defmodule EventasaurusDiscovery.Sources.Pubquiz.Jobs.SyncJob do
       slug: PubquizSource.key(),
       website_url: "https://pubquiz.pl",
       priority: PubquizSource.priority(),
+      domains: ["trivia", "entertainment"],
+      aggregate_on_index: true,
+      aggregation_type: "SocialEvent",
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 300,

@@ -29,6 +29,8 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink do
     Jobs.SyncJob
   }
 
+  alias EventasaurusDiscovery.Sources.SourceStore
+
   @doc """
   Start a sync job to fetch events from Geeks Who Drink.
 
@@ -67,42 +69,7 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink do
   # Private functions
 
   defp ensure_source_exists do
-    alias EventasaurusApp.Repo
-    alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
-
-    case Repo.get_by(SourceSchema, slug: Source.key()) do
-      nil ->
-        {:ok, source} =
-          Repo.insert(
-            SourceSchema.changeset(%SourceSchema{}, %{
-              name: Source.name(),
-              slug: Source.key(),
-              website_url: "https://www.geekswhodrink.com",
-              is_active: Source.enabled?(),
-              priority: Source.priority(),
-              domains: ["trivia", "entertainment"],
-              metadata: Source.config()
-            })
-          )
-
-        %{source_id: source.id}
-
-      source ->
-        # Update metadata and domains if changed
-        if source.metadata != Source.config() or source.domains != ["trivia", "entertainment"] do
-          {:ok, updated} =
-            Repo.update(
-              SourceSchema.changeset(source, %{
-                metadata: Source.config(),
-                priority: Source.priority(),
-                domains: ["trivia", "entertainment"]
-              })
-            )
-
-          %{source_id: updated.id}
-        else
-          %{source_id: source.id}
-        end
-    end
+    {:ok, source} = SourceStore.get_or_create_source(SyncJob.source_config())
+    %{source_id: source.id}
   end
 end

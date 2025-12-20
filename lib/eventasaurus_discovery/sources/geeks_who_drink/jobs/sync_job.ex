@@ -47,6 +47,9 @@ defmodule EventasaurusDiscovery.Sources.GeeksWhoDrink.Jobs.SyncJob do
       slug: GeeksWhoDrink.Source.key(),
       website_url: "https://www.geekswhodrink.com",
       priority: GeeksWhoDrink.Source.priority(),
+      domains: ["trivia", "entertainment"],
+      aggregate_on_index: true,
+      aggregation_type: "SocialEvent",
       config: %{
         "rate_limit_seconds" => GeeksWhoDrink.Config.rate_limit(),
         "max_requests_per_hour" => 1800,

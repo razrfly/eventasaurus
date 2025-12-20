@@ -154,6 +154,9 @@ defmodule EventasaurusDiscovery.Sources.CinemaCity.Jobs.SyncJob do
       slug: "cinema-city",
       website_url: Config.base_url(),
       priority: 15,
+      domains: ["movies", "cinema"],
+      aggregate_on_index: true,
+      aggregation_type: "ScreeningEvent",
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 1800,

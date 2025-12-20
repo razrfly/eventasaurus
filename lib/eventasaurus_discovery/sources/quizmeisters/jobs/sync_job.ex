@@ -52,6 +52,9 @@ defmodule EventasaurusDiscovery.Sources.Quizmeisters.Jobs.SyncJob do
       slug: Quizmeisters.Source.key(),
       website_url: "https://quizmeisters.com",
       priority: Quizmeisters.Source.priority(),
+      domains: ["trivia", "entertainment"],
+      aggregate_on_index: true,
+      aggregation_type: "SocialEvent",
       config: %{
         "rate_limit_seconds" => Quizmeisters.Config.rate_limit(),
         "max_requests_per_hour" => 1800,

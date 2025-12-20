@@ -55,6 +55,9 @@ defmodule EventasaurusDiscovery.Sources.SpeedQuizzing.Jobs.SyncJob do
       slug: SpeedQuizzing.Source.key(),
       website_url: "https://www.speedquizzing.com",
       priority: SpeedQuizzing.Source.priority(),
+      domains: ["trivia", "entertainment"],
+      aggregate_on_index: true,
+      aggregation_type: "SocialEvent",
       config: %{
         "rate_limit_seconds" => SpeedQuizzing.Config.rate_limit(),
         "max_requests_per_hour" => 1800,

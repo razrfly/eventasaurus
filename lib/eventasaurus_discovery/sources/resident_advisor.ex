@@ -60,6 +60,8 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor do
     DedupHandler
   }
 
+  alias EventasaurusDiscovery.Sources.SourceStore
+
   @doc """
   Start a sync job to fetch events from Resident Advisor for a specific city.
 
@@ -176,42 +178,7 @@ defmodule EventasaurusDiscovery.Sources.ResidentAdvisor do
   end
 
   defp ensure_source_exists do
-    alias EventasaurusApp.Repo
-    alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
-
-    case Repo.get_by(SourceSchema, slug: Source.key()) do
-      nil ->
-        {:ok, source} =
-          Repo.insert(
-            SourceSchema.changeset(%SourceSchema{}, %{
-              name: Source.name(),
-              slug: Source.key(),
-              website_url: "https://ra.co",
-              is_active: Source.enabled?(),
-              priority: Source.priority(),
-              domains: ["music", "electronic"],
-              metadata: Source.config()
-            })
-          )
-
-        %{source_id: source.id}
-
-      source ->
-        # Update metadata and domains if changed
-        if source.metadata != Source.config() or source.domains != ["music", "electronic"] do
-          {:ok, updated} =
-            Repo.update(
-              SourceSchema.changeset(source, %{
-                metadata: Source.config(),
-                priority: Source.priority(),
-                domains: ["music", "electronic"]
-              })
-            )
-
-          %{source_id: updated.id}
-        else
-          %{source_id: source.id}
-        end
-    end
+    {:ok, source} = SourceStore.get_or_create_source(SyncJob.source_config())
+    %{source_id: source.id}
   end
 end

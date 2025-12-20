@@ -30,7 +30,11 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Config do
       base_url: @base_url,
       # No API key needed for scraping
       api_key: nil,
-      api_secret: nil
+      api_secret: nil,
+      # Aggregation config - music events are not aggregated
+      domains: ["music", "concert"],
+      aggregate_on_index: false,
+      aggregation_type: nil
     })
   end
 

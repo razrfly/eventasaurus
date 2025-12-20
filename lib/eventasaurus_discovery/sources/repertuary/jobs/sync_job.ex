@@ -37,8 +37,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
 
   require Logger
 
-  alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.Sources.Source
+  alias EventasaurusDiscovery.Sources.SourceStore
 
   alias EventasaurusDiscovery.Sources.Repertuary.{
     Config,
@@ -157,7 +156,7 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
       domains: ["movies", "cinema"],
       is_active: true,
       aggregate_on_index: true,
-      aggregation_type: "movie",
+      aggregation_type: "ScreeningEvent",
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 1800,
@@ -231,29 +230,10 @@ defmodule EventasaurusDiscovery.Sources.Repertuary.Jobs.SyncJob do
     end)
   end
 
-  # Get or create the unified Repertuary source (Cinema City pattern)
+  # Get or create the unified Repertuary source using SourceStore
   # All cities share a single source record - city is passed via job args
-  defp get_or_create_source_id(_city \\ nil) do
-    case Repo.get_by(Source, slug: "repertuary") do
-      nil ->
-        config = %{
-          name: "Repertuary",
-          slug: "repertuary",
-          website_url: "https://repertuary.pl",
-          priority: 15,
-          domains: ["movies", "cinema"],
-          is_active: true,
-          aggregate_on_index: true,
-          aggregation_type: "movie"
-        }
-
-        %Source{}
-        |> Source.changeset(config)
-        |> Repo.insert!()
-        |> Map.get(:id)
-
-      source ->
-        source.id
-    end
+  defp get_or_create_source_id do
+    {:ok, source} = SourceStore.get_or_create_source(source_config())
+    source.id
   end
 end

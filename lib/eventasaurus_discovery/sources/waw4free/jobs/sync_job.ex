@@ -256,6 +256,9 @@ defmodule EventasaurusDiscovery.Sources.Waw4Free.Jobs.SyncJob do
       slug: "waw4free",
       website_url: "https://waw4free.pl",
       priority: 35,
+      domains: ["culture", "free-events"],
+      aggregate_on_index: false,
+      aggregation_type: nil,
       config: %{
         "rate_limit_seconds" => Config.rate_limit(),
         "max_requests_per_hour" => 300,

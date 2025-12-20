@@ -31,7 +31,11 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
       queue: :discovery,
       base_url: @base_url,
       api_key: api_key(),
-      api_secret: api_secret()
+      api_secret: api_secret(),
+      # Aggregation config - general events are not aggregated
+      domains: ["music", "concert", "sports", "arts"],
+      aggregate_on_index: false,
+      aggregation_type: nil
     })
   end
 

@@ -24,6 +24,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet do
     DedupHandler
   }
 
+  alias EventasaurusDiscovery.Sources.SourceStore
+
   @doc """
   Start a sync job to fetch events from Karnet.
 
@@ -89,43 +91,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet do
   # Private functions
 
   defp ensure_source_exists do
-    alias EventasaurusApp.Repo
-    alias EventasaurusDiscovery.Sources.Source, as: SourceSchema
-
-    case Repo.get_by(SourceSchema, slug: Source.key()) do
-      nil ->
-        {:ok, source} =
-          Repo.insert(
-            SourceSchema.changeset(%SourceSchema{}, %{
-              name: Source.name(),
-              slug: Source.key(),
-              website_url: "https://karnet.krakowculture.pl",
-              is_active: Source.enabled?(),
-              priority: Source.priority(),
-              domains: ["music", "theater", "cultural", "general"],
-              metadata: Source.config()
-            })
-          )
-
-        %{source_id: source.id}
-
-      source ->
-        # Update metadata and domains if changed
-        if source.metadata != Source.config() or
-             source.domains != ["music", "theater", "cultural", "general"] do
-          {:ok, updated} =
-            Repo.update(
-              SourceSchema.changeset(source, %{
-                metadata: Source.config(),
-                priority: Source.priority(),
-                domains: ["music", "theater", "cultural", "general"]
-              })
-            )
-
-          %{source_id: updated.id}
-        else
-          %{source_id: source.id}
-        end
-    end
+    {:ok, source} = SourceStore.get_or_create_source(SyncJob.source_config())
+    %{source_id: source.id}
   end
 end
