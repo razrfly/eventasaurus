@@ -22,7 +22,14 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardIcons, HeroCardTheme}
+
+  alias EventasaurusWeb.Components.Activity.{
+    HeroCardBadge,
+    HeroCardBackground,
+    HeroCardIcons,
+    HeroCardTheme
+  }
+
   alias EventasaurusWeb.Components.CountryFlag
 
   @doc """

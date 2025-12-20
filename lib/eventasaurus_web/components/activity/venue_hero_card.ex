@@ -20,7 +20,14 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias EventasaurusApp.Venues.Venue
-  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
+
+  alias EventasaurusWeb.Components.Activity.{
+    HeroCardBadge,
+    HeroCardBackground,
+    HeroCardHelpers,
+    HeroCardIcons,
+    HeroCardTheme
+  }
 
   import HeroCardHelpers,
     only: [get_city_name: 1, has_coordinates?: 1, google_maps_directions_url: 1]

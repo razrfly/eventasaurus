@@ -19,7 +19,13 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
 
-  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
+  alias EventasaurusWeb.Components.Activity.{
+    HeroCardBadge,
+    HeroCardBackground,
+    HeroCardHelpers,
+    HeroCardIcons,
+    HeroCardTheme
+  }
 
   @doc """
   Renders the trivia hero card for quiz/trivia events.

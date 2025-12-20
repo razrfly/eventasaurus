@@ -19,7 +19,12 @@ defmodule EventasaurusWeb.Components.Activity.GenericHeroCard do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
 
-  alias EventasaurusWeb.Components.Activity.{HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
+  alias EventasaurusWeb.Components.Activity.{
+    HeroCardBackground,
+    HeroCardHelpers,
+    HeroCardIcons,
+    HeroCardTheme
+  }
 
   @doc """
   Renders the generic hero card for non-movie events.

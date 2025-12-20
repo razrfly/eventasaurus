@@ -32,6 +32,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     * `:city_id` - Filter by city ID
     * `:country_id` - Filter by country ID
     * `:venue_ids` - List of venue IDs
+    * `:performer_id` - Filter by performer ID
     * `:center_lat` - Center latitude for geographic filtering
     * `:center_lng` - Center longitude for geographic filtering
     * `:radius_km` - Radius in kilometers for geographic filtering
@@ -47,10 +48,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     base_query
     |> filter_past_events(opts[:show_past])
+    |> filter_past_only(opts[:past_only])
     |> filter_by_categories(opts[:categories])
     |> filter_by_date_range(opts[:start_date], opts[:end_date])
     |> filter_by_price_range(opts[:min_price], opts[:max_price])
     |> filter_by_location(opts[:city_id], opts[:country_id], opts[:venue_ids])
+    |> filter_by_performer(opts[:performer_id])
     |> filter_by_radius(opts[:center_lat], opts[:center_lng], opts[:radius_km])
     |> filter_by_source(opts[:source_slug])
     |> apply_search(opts[:search])
@@ -169,6 +172,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   ## Filter Functions
 
+  # Filter to only past events (for past events toggle)
+  defp filter_past_only(query, true) do
+    current_time = DateTime.utc_now()
+
+    from(pe in query,
+      where:
+        (not is_nil(pe.ends_at) and pe.ends_at < ^current_time) or
+          (is_nil(pe.ends_at) and pe.starts_at < ^current_time)
+    )
+  end
+
+  defp filter_past_only(query, _), do: query
+
   # If show_past is true, don't filter
   defp filter_past_events(query, true), do: query
 
@@ -280,6 +296,18 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp filter_by_venues(query, venue_ids) when is_list(venue_ids) do
     from(pe in query, where: pe.venue_id in ^venue_ids)
+  end
+
+  ## Performer Filtering
+
+  defp filter_by_performer(query, nil), do: query
+
+  defp filter_by_performer(query, performer_id) when is_integer(performer_id) do
+    from(pe in query,
+      join: pep in "public_event_performers",
+      on: pep.event_id == pe.id,
+      where: pep.performer_id == ^performer_id
+    )
   end
 
   ## Source Filtering
@@ -686,7 +714,24 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Sorts sources by priority and last_seen_at timestamp, then extracts
   the first available image from either the image_url field or metadata.
   """
-  def get_cover_image_url(event, browsing_city \\ nil) do
+  def get_cover_image_url(event, browsing_city \\ nil)
+
+  # Handle AggregatedMovieGroup - use its built-in image fields directly
+  def get_cover_image_url(%AggregatedMovieGroup{} = group, _browsing_city) do
+    cond do
+      is_binary(group.movie_backdrop_url) and group.movie_backdrop_url != "" ->
+        group.movie_backdrop_url
+
+      is_binary(group.movie_poster_url) and group.movie_poster_url != "" ->
+        group.movie_poster_url
+
+      true ->
+        nil
+    end
+  end
+
+  # Handle regular events (PublicEvent, etc.)
+  def get_cover_image_url(event, browsing_city) do
     # For movie events, prioritize movie images from TMDb
     result =
       case get_movie_image(event) do

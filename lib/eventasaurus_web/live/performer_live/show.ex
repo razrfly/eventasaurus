@@ -12,10 +12,11 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusDiscovery.Performers.PerformerStore
+  alias EventasaurusDiscovery.PublicEventsEnhanced
 
   alias EventasaurusWeb.Components.{
     Breadcrumbs,
-    EventCards
+    EventListing
   }
 
   alias EventasaurusWeb.Components.Activity.{
@@ -24,6 +25,8 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   }
 
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+  alias EventasaurusWeb.Live.Helpers.EventFilters
+  import EventasaurusWeb.EventComponents, only: [date_range_button: 1]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -32,12 +35,16 @@ defmodule EventasaurusWeb.PerformerLive.Show do
       |> assign(:performer, nil)
       |> assign(:loading, true)
       |> assign(:stats, %{})
-      |> assign(:upcoming_events, [])
-      |> assign(:past_events, [])
-      |> assign(:show_past_events, false)
-      |> assign(:past_events_page, 1)
-      |> assign(:past_events_per_page, 12)
+      # EventListing handles upcoming events display; we track count for hero card
+      |> assign(:upcoming_event_count, 0)
+      |> assign(:past_event_count, 0)
       |> assign(:breadcrumb_items, [])
+      |> assign(:language, "en")
+      # Quick date filter state
+      |> assign(:active_date_range, nil)
+      |> assign(:date_range_counts, %{})
+      |> assign(:all_events_count, 0)
+      |> assign(:filters, %{})
 
     {:ok, socket}
   end
@@ -52,7 +59,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
          |> push_navigate(to: ~p"/")}
 
       performer ->
-        # Get stats and events
+        # Get stats and events (EventListing handles upcoming display)
         stats = PerformerStore.get_performer_stats(performer.id)
         events = PerformerStore.get_performer_events(performer.id)
 
@@ -62,40 +69,67 @@ defmodule EventasaurusWeb.PerformerLive.Show do
             gettext_backend: EventasaurusWeb.Gettext
           )
 
+        # Calculate date range counts for quick filters
+        performer_filter = %{performer_id: performer.id}
+        date_range_counts = PublicEventsEnhanced.get_quick_date_range_counts(performer_filter)
+        all_events_count = PublicEventsEnhanced.count_events(performer_filter)
+
+        # Build initial filters with performer constraint
+        filters = %{performer_id: performer.id}
+
         socket =
           socket
           |> assign(:performer, performer)
           |> assign(:stats, stats)
-          |> assign(:upcoming_events, events.upcoming)
-          |> assign(:past_events, events.past)
+          # Track count for hero card and sidebar stats
+          |> assign(:upcoming_event_count, length(events.upcoming))
+          |> assign(:past_event_count, length(events.past))
           |> assign(:loading, false)
           |> assign(:page_title, performer.name)
           |> assign(:breadcrumb_items, breadcrumb_items)
+          |> assign(:date_range_counts, date_range_counts)
+          |> assign(:all_events_count, all_events_count)
+          |> assign(:filters, filters)
 
         {:noreply, socket}
     end
   end
 
   @impl true
-  def handle_event("toggle_past_events", _params, socket) do
-    {:noreply, assign(socket, :show_past_events, !socket.assigns.show_past_events)}
+  def handle_event("quick_date_filter", %{"range" => range}, socket) do
+    case EventFilters.parse_quick_range(range) do
+      {:ok, range_atom} ->
+        # Apply the date filter using shared helper
+        filters = EventFilters.apply_quick_date_filter(socket.assigns.filters, range_atom)
+
+        # Set active_date_range (nil for :all, atom for others)
+        active_date_range = if range_atom == :all, do: nil, else: range_atom
+
+        socket =
+          socket
+          |> assign(:filters, filters)
+          |> assign(:active_date_range, active_date_range)
+
+        {:noreply, socket}
+
+      :error ->
+        # Invalid range - ignore the request
+        {:noreply, socket}
+    end
   end
 
   @impl true
-  def handle_event("load_more_past", _params, socket) do
-    {:noreply, update(socket, :past_events_page, &(&1 + 1))}
-  end
+  def handle_event("clear_date_filter", _params, socket) do
+    # Reset filters keeping only performer constraint
+    performer_id = socket.assigns.performer.id
+    filters = %{performer_id: performer_id}
 
-  # Helper functions
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> assign(:active_date_range, nil)
 
-  defp paginated_past_events(past_events, page, per_page) do
-    past_events
-    |> Enum.reverse()
-    |> Enum.take(page * per_page)
-  end
-
-  defp has_more_past_events?(past_events, page, per_page) do
-    length(past_events) > page * per_page
+    {:noreply, socket}
   end
 
   @impl true
@@ -116,82 +150,80 @@ defmodule EventasaurusWeb.PerformerLive.Show do
               <!-- Performer Hero Card -->
               <PerformerHeroCard.performer_hero_card
                 performer={@performer}
-                upcoming_event_count={length(@upcoming_events)}
+                upcoming_event_count={@upcoming_event_count}
                 total_event_count={@stats.total_events}
               />
 
-              <!-- Upcoming Events Section -->
-              <div>
-                <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                  <%= gettext("Upcoming Events") %>
-                </h2>
-
-                <%= if Enum.empty?(@upcoming_events) do %>
-                  <div class="bg-white rounded-lg shadow-md p-8 text-center">
-                    <Heroicons.calendar class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                    <p class="text-gray-600">
-                      <%= gettext("No upcoming events scheduled") %>
-                    </p>
-                  </div>
-                <% else %>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <%= for event <- Enum.take(@upcoming_events, 12) do %>
-                      <EventCards.event_card event={event} show_city={true} />
-                    <% end %>
-                  </div>
-
-                  <%= if length(@upcoming_events) > 12 do %>
-                    <div class="mt-6 text-center">
-                      <p class="text-sm text-gray-500">
-                        <%= gettext("Showing %{shown} of %{total} upcoming events",
-                          shown: min(12, length(@upcoming_events)),
-                          total: length(@upcoming_events)
-                        ) %>
-                      </p>
-                    </div>
-                  <% end %>
-                <% end %>
-              </div>
-
-              <!-- Past Events (Collapsible) -->
-              <%= if not Enum.empty?(@past_events) do %>
-                <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                  <button
-                    phx-click="toggle_past_events"
-                    class="w-full flex justify-between items-center text-left p-6 hover:bg-gray-50 transition-colors"
-                  >
-                    <h2 class="text-2xl font-bold text-gray-900">
-                      <%= gettext("Past Events") %>
-                      <span class="text-lg font-normal text-gray-500 ml-2">
-                        (<%= length(@past_events) %>)
-                      </span>
-                    </h2>
-                    <Heroicons.chevron_down class={"w-6 h-6 text-gray-500 transition-transform duration-200 #{if @show_past_events, do: "rotate-180", else: ""}"} />
-                  </button>
-
-                  <%= if @show_past_events do %>
-                    <div class="border-t border-gray-200 p-6">
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <%= for event <- paginated_past_events(@past_events, @past_events_page, @past_events_per_page) do %>
-                          <EventCards.event_card event={event} show_city={true} />
-                        <% end %>
-                      </div>
-
-                      <%= if has_more_past_events?(@past_events, @past_events_page, @past_events_per_page) do %>
-                        <div class="mt-6 text-center">
-                          <button
-                            phx-click="load_more_past"
-                            class="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-                          >
-                            <Heroicons.arrow_down class="w-5 h-5 mr-2" />
-                            <%= gettext("Load More") %>
-                          </button>
-                        </div>
-                      <% end %>
-                    </div>
+              <!-- Quick Date Filters -->
+              <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mt-6">
+                <div class="flex items-center justify-between mb-3">
+                  <h2 class="text-sm font-medium text-gray-700">
+                    <%= gettext("Quick date filters") %>
+                  </h2>
+                  <%= if @active_date_range do %>
+                    <button
+                      phx-click="clear_date_filter"
+                      class="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                    >
+                      <Heroicons.x_mark class="w-4 h-4 mr-1" />
+                      <%= gettext("Clear") %>
+                    </button>
                   <% end %>
                 </div>
-              <% end %>
+                <div class="flex flex-wrap gap-2">
+                  <.date_range_button
+                    range={:all}
+                    label={gettext("All Events")}
+                    active={@active_date_range == nil}
+                    count={@all_events_count}
+                  />
+                  <.date_range_button
+                    range={:today}
+                    label={gettext("Today")}
+                    active={@active_date_range == :today}
+                    count={Map.get(@date_range_counts, :today, 0)}
+                  />
+                  <.date_range_button
+                    range={:tomorrow}
+                    label={gettext("Tomorrow")}
+                    active={@active_date_range == :tomorrow}
+                    count={Map.get(@date_range_counts, :tomorrow, 0)}
+                  />
+                  <.date_range_button
+                    range={:this_weekend}
+                    label={gettext("This Weekend")}
+                    active={@active_date_range == :this_weekend}
+                    count={Map.get(@date_range_counts, :this_weekend, 0)}
+                  />
+                  <.date_range_button
+                    range={:next_7_days}
+                    label={gettext("Next 7 Days")}
+                    active={@active_date_range == :next_7_days}
+                    count={Map.get(@date_range_counts, :next_7_days, 0)}
+                  />
+                  <.date_range_button
+                    range={:next_30_days}
+                    label={gettext("Next 30 Days")}
+                    active={@active_date_range == :next_30_days}
+                    count={Map.get(@date_range_counts, :next_30_days, 0)}
+                  />
+                </div>
+              </div>
+
+              <!-- Events via EventListing Component (includes past events toggle) -->
+              <.live_component
+                module={EventListing}
+                id="performer-events"
+                constraint={{:performer_id, @performer.id}}
+                language={@language}
+                show_city={true}
+                show_search={true}
+                show_sort={true}
+                show_past_toggle={true}
+                sort_options={[:starts_at, :title]}
+                empty_message={gettext("No upcoming events scheduled for this artist")}
+                filters={@filters}
+              />
             </:main>
 
             <:sidebar>
@@ -203,11 +235,11 @@ defmodule EventasaurusWeb.PerformerLive.Show do
                 <div class="space-y-3">
                   <div class="flex justify-between items-center">
                     <span class="text-gray-600"><%= gettext("Upcoming Events") %></span>
-                    <span class="font-semibold text-gray-900"><%= length(@upcoming_events) %></span>
+                    <span class="font-semibold text-gray-900"><%= @upcoming_event_count %></span>
                   </div>
                   <div class="flex justify-between items-center">
                     <span class="text-gray-600"><%= gettext("Past Events") %></span>
-                    <span class="font-semibold text-gray-900"><%= length(@past_events) %></span>
+                    <span class="font-semibold text-gray-900"><%= @past_event_count %></span>
                   </div>
                   <div class="flex justify-between items-center">
                     <span class="text-gray-600"><%= gettext("Total Events") %></span>
