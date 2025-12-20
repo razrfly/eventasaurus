@@ -91,7 +91,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet do
   # Private functions
 
   defp ensure_source_exists do
-    {:ok, source} = SourceStore.get_or_create_source(SyncJob.source_config())
-    %{source_id: source.id}
+    case SourceStore.get_or_create_source(SyncJob.source_config()) do
+      {:ok, source} -> %{source_id: source.id}
+      {:error, reason} -> raise "Failed to create source: #{inspect(reason)}"
+    end
   end
 end
