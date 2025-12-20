@@ -19,8 +19,7 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
   use Phoenix.Component
   use Gettext, backend: EventasaurusWeb.Gettext
 
-  alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.HeroCardHelpers
+  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
 
   @doc """
   Renders the trivia hero card for quiz/trivia events.
@@ -54,21 +53,8 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
-      <!-- Background Image or Gradient -->
-      <%= if @cover_image_url do %>
-        <div class="absolute inset-0">
-          <img
-            src={CDN.url(@cover_image_url, width: 1200, quality: 85)}
-            alt=""
-            class="w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <div class="absolute inset-0 bg-gradient-to-r from-teal-900/95 via-teal-900/80 to-cyan-900/60" />
-        </div>
-      <% else %>
-        <!-- Teal/cyan gradient for trivia/knowledge theme -->
-        <div class="absolute inset-0 bg-gradient-to-r from-teal-900 via-teal-800 to-cyan-800" />
-      <% end %>
+      <!-- Background -->
+      <HeroCardBackground.background image_url={@cover_image_url} theme={:trivia} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
@@ -76,25 +62,25 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
           <!-- Badges Row -->
           <div class="flex flex-wrap items-center gap-2 mb-4">
             <!-- Trivia Badge -->
-            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-teal-500/20 text-teal-100">
-              <Heroicons.puzzle_piece class="w-4 h-4 mr-1.5" />
-              <%= gettext("Pub Quiz") %>
+            <span class={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", HeroCardTheme.badge_class(:trivia)]}>
+              <HeroCardIcons.icon type={:trivia} class="w-4 h-4 mr-1.5" />
+              <%= HeroCardTheme.label(:trivia) %>
             </span>
 
             <!-- Free Badge -->
             <%= if @is_free do %>
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/20 text-green-100">
+              <HeroCardBadge.success_badge>
                 <Heroicons.gift class="w-4 h-4 mr-1.5" />
                 <%= gettext("Free Entry") %>
-              </span>
+              </HeroCardBadge.success_badge>
             <% end %>
 
             <!-- Recurring Badge -->
             <%= if @schedule_text do %>
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/10 text-white/90">
+              <HeroCardBadge.muted_badge>
                 <Heroicons.arrow_path class="w-4 h-4 mr-1.5" />
                 <%= format_schedule(@schedule_text) %>
-              </span>
+              </HeroCardBadge.muted_badge>
             <% end %>
           </div>
 
@@ -173,7 +159,7 @@ defmodule EventasaurusWeb.Components.Activity.TriviaHeroCard do
                 href={@ticket_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center px-5 py-2.5 bg-white text-teal-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition shadow-md"
+                class={["inline-flex items-center px-5 py-2.5 text-sm font-semibold rounded-lg transition shadow-md", HeroCardTheme.button_class(:trivia)]}
               >
                 <Heroicons.information_circle class="w-5 h-5 mr-2" />
                 <%= gettext("More Info") %>

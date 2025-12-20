@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.HeroCardTheme
+  alias EventasaurusWeb.Components.Activity.{HeroCardBackground, HeroCardIcons, HeroCardTheme}
 
   @doc """
   Renders the hero card for container detail pages.
@@ -53,26 +53,12 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
     assigns =
       assigns
       |> assign(:theme, theme)
-      |> assign(:gradient_class, HeroCardTheme.gradient_class(theme))
-      |> assign(:overlay_class, HeroCardTheme.overlay_class(theme))
       |> assign(:badge_class, HeroCardTheme.badge_class(theme))
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
-      <!-- Background Image or Gradient -->
-      <%= if @hero_image do %>
-        <div class="absolute inset-0">
-          <img
-            src={CDN.url(@hero_image, width: 1200, quality: 85)}
-            alt=""
-            class="w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <div class={"absolute inset-0 #{@overlay_class}"} />
-        </div>
-      <% else %>
-        <div class={"absolute inset-0 #{@gradient_class}"} />
-      <% end %>
+      <!-- Background -->
+      <HeroCardBackground.background image_url={@hero_image} theme={@theme} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
@@ -81,8 +67,8 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
           <div class="flex flex-wrap items-center gap-2 mb-4">
             <!-- Container Type Badge -->
             <span class={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", @badge_class]}>
-              <.theme_icon theme={@theme} class="w-4 h-4 mr-1.5" />
-              <%= container_type_label(@container_type) %>
+              <HeroCardIcons.icon type={@theme} class="w-4 h-4 mr-1.5" />
+              <%= HeroCardTheme.label(@theme) %>
             </span>
           </div>
 
@@ -136,37 +122,6 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
     """
   end
 
-  # Theme icon component
-  attr :theme, :atom, required: true
-  attr :class, :string, default: ""
-
-  defp theme_icon(assigns) do
-    ~H"""
-    <%= case @theme do %>
-      <% :festival -> %>
-        <Heroicons.sparkles class={@class} />
-      <% :conference -> %>
-        <Heroicons.academic_cap class={@class} />
-      <% :tour -> %>
-        <Heroicons.map class={@class} />
-      <% :series -> %>
-        <Heroicons.queue_list class={@class} />
-      <% :exhibition -> %>
-        <Heroicons.photo class={@class} />
-      <% :tournament -> %>
-        <Heroicons.trophy class={@class} />
-      <% :food -> %>
-        <Heroicons.cake class={@class} />
-      <% :music -> %>
-        <Heroicons.musical_note class={@class} />
-      <% :movies -> %>
-        <Heroicons.film class={@class} />
-      <% _ -> %>
-        <Heroicons.calendar class={@class} />
-    <% end %>
-    """
-  end
-
   # Map container type to theme
   defp get_theme_from_container_type(container_type) do
     case container_type do
@@ -179,15 +134,6 @@ defmodule EventasaurusWeb.Components.Activity.ContainerHeroCard do
       _ -> :default
     end
   end
-
-  # Container type labels
-  defp container_type_label(:festival), do: gettext("Festival")
-  defp container_type_label(:conference), do: gettext("Conference")
-  defp container_type_label(:tour), do: gettext("Tour")
-  defp container_type_label(:series), do: gettext("Series")
-  defp container_type_label(:exhibition), do: gettext("Exhibition")
-  defp container_type_label(:tournament), do: gettext("Tournament")
-  defp container_type_label(_), do: gettext("Event Collection")
 
   # Format date range
   defp format_date_range(nil, _end_date), do: gettext("Date TBD")

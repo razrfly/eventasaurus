@@ -43,6 +43,9 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
 
   ### Venue Detail Page (with Metro Area)
   `Home / All Activities / Paris / Paris 6 / Venues / Venue Name`
+
+  ### Performer/Artist Page
+  `Home / All Activities / Artists / Performer Name`
   """
 
   use EventasaurusWeb, :verified_routes
@@ -350,6 +353,30 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
       %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
       %{label: city.name, path: ~p"/c/#{city.slug}"},
       %{label: Gettext.gettext(gettext_backend, "Venues"), path: nil}
+    ]
+  end
+
+  @doc """
+  Build breadcrumb items for a performer/artist detail page.
+
+  Pattern: `Home / All Activities / Artists / Performer Name`
+
+  ## Parameters
+    - performer: The performer struct with :name and :slug
+    - opts: Options including :gettext_backend
+
+  ## Options
+    * `:gettext_backend` - Gettext backend module for translations (defaults to EventasaurusWeb.Gettext)
+  """
+  @spec build_performer_breadcrumbs(map(), keyword()) :: [map()]
+  def build_performer_breadcrumbs(performer, opts \\ []) do
+    gettext_backend = Keyword.get(opts, :gettext_backend, EventasaurusWeb.Gettext)
+
+    [
+      %{label: Gettext.gettext(gettext_backend, "Home"), path: ~p"/"},
+      %{label: Gettext.gettext(gettext_backend, "All Activities"), path: ~p"/activities"},
+      %{label: Gettext.gettext(gettext_backend, "Artists"), path: ~p"/performers"},
+      %{label: performer.name, path: nil}
     ]
   end
 

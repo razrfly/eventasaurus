@@ -425,14 +425,14 @@ defmodule EventasaurusWeb.VenueLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-white">
+    <div class="min-h-screen">
       <%= if @loading do %>
         <div class="flex items-center justify-center py-12">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
         </div>
       <% else %>
         <!-- Hero Section -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <!-- Breadcrumb -->
           <nav class="mb-4">
             <Breadcrumbs.breadcrumb items={@breadcrumb_items} />

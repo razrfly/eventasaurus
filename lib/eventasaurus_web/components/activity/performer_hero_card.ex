@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
+  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardIcons, HeroCardTheme}
   alias EventasaurusWeb.Components.CountryFlag
 
   @doc """
@@ -55,22 +56,8 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
-      <!-- Background Image or Gradient -->
-      <%= if @performer.image_url do %>
-        <div class="absolute inset-0">
-          <img
-            src={CDN.url(@performer.image_url, width: 1200, quality: 85)}
-            alt=""
-            class="w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <!-- Purple gradient overlay for music artists -->
-          <div class="absolute inset-0 bg-gradient-to-r from-purple-900/95 via-purple-900/85 to-purple-800/70" />
-        </div>
-      <% else %>
-        <!-- Fallback gradient when no image available -->
-        <div class="absolute inset-0 bg-gradient-to-r from-purple-900 via-purple-800 to-fuchsia-900" />
-      <% end %>
+      <!-- Background -->
+      <HeroCardBackground.background image_url={@performer.image_url} theme={:performer} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
@@ -100,25 +87,25 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
             <!-- Badges Row -->
             <div class="flex flex-wrap items-center gap-2 mb-4">
               <!-- Artist Badge -->
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/20 text-purple-100">
-                <Heroicons.musical_note class="w-4 h-4 mr-1.5" />
-                <%= gettext("Artist") %>
+              <span class={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", HeroCardTheme.badge_class(:performer)]}>
+                <HeroCardIcons.icon type={:performer} class="w-4 h-4 mr-1.5" />
+                <%= HeroCardTheme.label(:performer) %>
               </span>
 
               <!-- Upcoming Event Count Badge -->
               <%= if @upcoming_event_count > 0 do %>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/20 text-green-100">
+                <HeroCardBadge.success_badge>
                   <Heroicons.calendar class="w-4 h-4 mr-1.5" />
                   <%= ngettext("%{count} upcoming event", "%{count} upcoming events", @upcoming_event_count, count: @upcoming_event_count) %>
-                </span>
+                </HeroCardBadge.success_badge>
               <% end %>
 
               <!-- Total Events Badge -->
               <%= if @total_event_count > 0 do %>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/10 text-white/80">
+                <HeroCardBadge.muted_badge>
                   <Heroicons.chart_bar class="w-4 h-4 mr-1.5" />
                   <%= ngettext("%{count} total event", "%{count} total events", @total_event_count, count: @total_event_count) %>
-                </span>
+                </HeroCardBadge.muted_badge>
               <% end %>
             </div>
 
@@ -158,7 +145,7 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
                   href={@ra_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center px-5 py-2.5 bg-white text-purple-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition shadow-md"
+                  class={["inline-flex items-center px-5 py-2.5 text-sm font-semibold rounded-lg transition shadow-md", HeroCardTheme.button_class(:performer)]}
                 >
                   <Heroicons.arrow_top_right_on_square class="w-5 h-5 mr-2" />
                   <%= gettext("Resident Advisor") %>

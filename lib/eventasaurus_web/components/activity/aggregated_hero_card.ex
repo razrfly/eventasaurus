@@ -19,7 +19,7 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.HeroCardTheme
+  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardIcons, HeroCardTheme}
 
   @doc """
   Renders the aggregated hero card for source aggregation pages.
@@ -58,27 +58,13 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
     assigns =
       assigns
       |> assign(:theme, theme)
-      |> assign(:gradient_class, HeroCardTheme.gradient_class(theme))
-      |> assign(:overlay_class, HeroCardTheme.overlay_class(theme))
       |> assign(:badge_class, HeroCardTheme.badge_class(theme))
       |> assign(:button_class, HeroCardTheme.button_class(theme))
 
     ~H"""
     <div class={"relative rounded-xl overflow-hidden #{@class}"}>
-      <!-- Background Image or Gradient -->
-      <%= if @hero_image do %>
-        <div class="absolute inset-0">
-          <img
-            src={CDN.url(@hero_image, width: 1200, quality: 85)}
-            alt=""
-            class="w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <div class={"absolute inset-0 #{@overlay_class}"} />
-        </div>
-      <% else %>
-        <div class={"absolute inset-0 #{@gradient_class}"} />
-      <% end %>
+      <!-- Background -->
+      <HeroCardBackground.background image_url={@hero_image} theme={@theme} />
 
       <!-- Content -->
       <div class="relative p-6 md:p-8">
@@ -87,16 +73,13 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
           <div class="flex flex-wrap items-center gap-2 mb-4">
             <!-- Category Badge -->
             <span class={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", @badge_class]}>
-              <.theme_icon theme={@theme} class="w-4 h-4 mr-1.5" />
-              <%= category_label(@theme) %>
+              <HeroCardIcons.icon type={@theme} class="w-4 h-4 mr-1.5" />
+              <%= HeroCardTheme.label(@theme) %>
             </span>
 
             <!-- Multi-city Badge -->
             <%= if @out_of_city_count > 0 do %>
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-100">
-                <Heroicons.map_pin class="w-4 h-4 mr-1.5" />
-                <%= gettext("Multi-city") %>
-              </span>
+              <HeroCardBadge.multi_city_badge />
             <% end %>
           </div>
 
@@ -161,37 +144,6 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
     """
   end
 
-  # Theme icon component
-  attr :theme, :atom, required: true
-  attr :class, :string, default: ""
-
-  defp theme_icon(assigns) do
-    ~H"""
-    <%= case @theme do %>
-      <% :trivia -> %>
-        <Heroicons.puzzle_piece class={@class} />
-      <% :food -> %>
-        <Heroicons.cake class={@class} />
-      <% :movies -> %>
-        <Heroicons.film class={@class} />
-      <% :music -> %>
-        <Heroicons.musical_note class={@class} />
-      <% :festival -> %>
-        <Heroicons.sparkles class={@class} />
-      <% :social -> %>
-        <Heroicons.user_group class={@class} />
-      <% :comedy -> %>
-        <Heroicons.face_smile class={@class} />
-      <% :theater -> %>
-        <Heroicons.ticket class={@class} />
-      <% :sports -> %>
-        <Heroicons.trophy class={@class} />
-      <% _ -> %>
-        <Heroicons.calendar class={@class} />
-    <% end %>
-    """
-  end
-
   # Determine theme based on domain and content type
   defp get_theme(domain, content_type) do
     # Domain takes priority over content_type
@@ -222,15 +174,4 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
     end
   end
 
-  # Category labels
-  defp category_label(:trivia), do: gettext("Pub Quiz")
-  defp category_label(:food), do: gettext("Food & Dining")
-  defp category_label(:movies), do: gettext("Movies")
-  defp category_label(:music), do: gettext("Music")
-  defp category_label(:festival), do: gettext("Festival")
-  defp category_label(:social), do: gettext("Social Events")
-  defp category_label(:comedy), do: gettext("Comedy")
-  defp category_label(:theater), do: gettext("Theater")
-  defp category_label(:sports), do: gettext("Sports")
-  defp category_label(_), do: gettext("Events")
 end
