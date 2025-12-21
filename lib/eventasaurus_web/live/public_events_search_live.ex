@@ -4,13 +4,13 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
-  alias EventasaurusDiscovery.PublicEvents.{AggregatedEventGroup, AggregatedContainerGroup}
+  alias EventasaurusDiscovery.PublicEvents.AggregatedEventGroup
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias Eventasaurus.CDN
 
   import EventasaurusWeb.EventComponents
-  import EventasaurusWeb.Components.EventCards
+  import EventasaurusWeb.Components.EventListing
 
   @impl true
   def mount(_params, _session, socket) do
@@ -576,91 +576,17 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
 
           <!-- Search Bar -->
           <div class="mt-4">
-            <form phx-submit="search" class="relative">
-              <input
-                type="text"
-                name="search"
-                value={@filters.search}
-                placeholder={gettext("Search events...")}
-                class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button type="submit" class="absolute right-3 top-3.5">
-                <Heroicons.magnifying_glass class="w-5 h-5 text-gray-500" />
-              </button>
-            </form>
+            <.search_bar filters={@filters} />
           </div>
         </div>
       </div>
 
       <!-- Quick Date Range Filters -->
-      <div class="bg-white border-b shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-medium text-gray-700">
-              <%= gettext("Quick date filters") %>
-            </h2>
-            <%= if @active_date_range do %>
-              <button
-                phx-click="clear_date_filter"
-                class="text-sm text-blue-600 hover:text-blue-800 flex items-center"
-              >
-                <Heroicons.x_mark class="w-4 h-4 mr-1" />
-                <%= gettext("Clear date filter") %>
-              </button>
-            <% end %>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <.date_range_button
-              range={:all}
-              label={gettext("All Events")}
-              active={@active_date_range == nil}
-              count={@all_events_count}
-            />
-            <.date_range_button
-              range={:today}
-              label={gettext("Today")}
-              active={@active_date_range == :today}
-              count={Map.get(@date_range_counts, :today, 0)}
-            />
-            <.date_range_button
-              range={:tomorrow}
-              label={gettext("Tomorrow")}
-              active={@active_date_range == :tomorrow}
-              count={Map.get(@date_range_counts, :tomorrow, 0)}
-            />
-            <.date_range_button
-              range={:this_weekend}
-              label={gettext("This Weekend")}
-              active={@active_date_range == :this_weekend}
-              count={Map.get(@date_range_counts, :this_weekend, 0)}
-            />
-            <.date_range_button
-              range={:next_7_days}
-              label={gettext("Next 7 Days")}
-              active={@active_date_range == :next_7_days}
-              count={Map.get(@date_range_counts, :next_7_days, 0)}
-            />
-            <.date_range_button
-              range={:next_30_days}
-              label={gettext("Next 30 Days")}
-              active={@active_date_range == :next_30_days}
-              count={Map.get(@date_range_counts, :next_30_days, 0)}
-            />
-            <.date_range_button
-              range={:this_month}
-              label={gettext("This Month")}
-              active={@active_date_range == :this_month}
-              count={Map.get(@date_range_counts, :this_month, 0)}
-            />
-            <.date_range_button
-              range={:next_month}
-              label={gettext("Next Month")}
-              active={@active_date_range == :next_month}
-              count={Map.get(@date_range_counts, :next_month, 0)}
-            />
-          </div>
-        </div>
-      </div>
+      <.quick_date_filters
+        active_date_range={@active_date_range}
+        date_range_counts={@date_range_counts}
+        all_events_count={@all_events_count}
+      />
 
       <!-- Filters Panel -->
       <div :if={@show_filters} class="bg-white border-b">
@@ -690,41 +616,23 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
       <!-- Events Grid/List -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <%= if @loading do %>
-          <div class="flex justify-center py-12">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
+          <.loading_skeleton />
         <% else %>
           <%= if @events == [] do %>
-            <div class="text-center py-12">
-              <Heroicons.calendar_days class="mx-auto h-12 w-12 text-gray-400" />
-              <h3 class="mt-2 text-lg font-medium text-gray-900">
-                <%= gettext("No events found") %>
-              </h3>
-              <p class="mt-1 text-sm text-gray-500">
-                <%= gettext("Try adjusting your filters or search query") %>
-              </p>
-            </div>
+            <.empty_state />
           <% else %>
-            <div class="mb-4 text-sm text-gray-600">
-              <%= gettext("Found %{count} events", count: @pagination.total_entries) %>
-            </div>
-
             <%= if @view_mode == "grid" do %>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <%= for item <- @events do %>
-                  <%= cond do %>
-                    <% match?(%AggregatedMovieGroup{}, item) -> %>
-                      <.aggregated_movie_card group={item} language={@language} show_city={true} />
-                    <% match?(%AggregatedContainerGroup{}, item) -> %>
-                      <.aggregated_container_card group={item} language={@language} show_city={true} />
-                    <% is_aggregated?(item) -> %>
-                      <.aggregated_event_card group={item} language={@language} show_city={true} />
-                    <% true -> %>
-                      <.event_card event={item} language={@language} show_city={true} />
-                  <% end %>
-                <% end %>
-              </div>
+              <.event_results
+                events={@events}
+                view_mode={@view_mode}
+                language={@language}
+                total_events={@pagination.total_entries}
+                show_city={true}
+              />
             <% else %>
+              <div class="mb-4 text-sm text-gray-600">
+                <%= gettext("Found %{count} events", count: @pagination.total_entries) %>
+              </div>
               <div class="space-y-4">
                 <%= for item <- @events do %>
                   <%= if is_aggregated?(item) do %>
@@ -947,53 +855,11 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
     """
   end
 
-  # Component: Pagination
-  defp pagination(assigns) do
-    ~H"""
-    <nav class="flex justify-center">
-      <div class="flex items-center space-x-2">
-        <!-- Previous -->
-        <button
-          :if={@pagination.page_number > 1}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number - 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          <%= gettext("Previous") %>
-        </button>
-
-        <!-- Page Numbers -->
-        <div class="flex space-x-1">
-          <%= for page <- Pagination.page_links(@pagination) do %>
-            <%= if page == :ellipsis do %>
-              <span class="px-3 py-2">...</span>
-            <% else %>
-              <button
-                phx-click="paginate"
-                phx-value-page={page}
-                class={"px-3 py-2 rounded-md #{if page == @pagination.page_number, do: "bg-blue-600 text-white", else: "border border-gray-300 hover:bg-gray-50"}"}
-              >
-                <%= page %>
-              </button>
-            <% end %>
-          <% end %>
-        </div>
-
-        <!-- Next -->
-        <button
-          :if={@pagination.page_number < @pagination.total_pages}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number + 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          <%= gettext("Next") %>
-        </button>
-      </div>
-    </nav>
-    """
-  end
-
   # Helper Functions
+
+  # Helper to check if an item is an aggregated group
+  defp is_aggregated?(%{events: events}) when is_list(events) and length(events) > 1, do: true
+  defp is_aggregated?(_), do: false
 
   defp get_facet_count(facets, type, id) do
     facets[type]

@@ -12,18 +12,21 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusDiscovery.Performers.PerformerStore
+  alias EventasaurusDiscovery.Pagination
+  alias EventasaurusWeb.Live.Helpers.EventFilters
+  alias EventasaurusWeb.Live.Helpers.EventPagination
 
-  alias EventasaurusWeb.Components.{
-    Breadcrumbs,
-    EventCards
-  }
+  alias EventasaurusWeb.Components.Breadcrumbs
 
   alias EventasaurusWeb.Components.Activity.{
     ActivityLayout,
+    ClickableStatsCard,
     PerformerHeroCard
   }
 
   alias EventasaurusWeb.Helpers.BreadcrumbBuilder
+
+  import EventasaurusWeb.Components.EventListing
 
   @impl true
   def mount(_params, _session, socket) do
@@ -32,11 +35,27 @@ defmodule EventasaurusWeb.PerformerLive.Show do
       |> assign(:performer, nil)
       |> assign(:loading, true)
       |> assign(:stats, %{})
-      |> assign(:upcoming_events, [])
-      |> assign(:past_events, [])
-      |> assign(:show_past_events, false)
-      |> assign(:past_events_page, 1)
-      |> assign(:past_events_per_page, 12)
+      # Unified event list with filtering (all events: upcoming + past)
+      |> assign(:events, [])
+      |> assign(:all_events, [])
+      |> assign(:total_events, 0)
+      # Time filter - :upcoming (default), :past, or :all
+      |> assign(:time_filter, :upcoming)
+      |> assign(:time_filter_counts, %{upcoming: 0, past: 0, all: 0})
+      # Date filtering - nil means show all events (paginated)
+      |> assign(:active_date_range, nil)
+      |> assign(:date_range_counts, %{})
+      |> assign(:filters, %{search: nil})
+      # Pagination
+      |> assign(:pagination, %Pagination{
+        entries: [],
+        page_number: 1,
+        page_size: 30,
+        total_entries: 0,
+        total_pages: 0
+      })
+      # View mode
+      |> assign(:view_mode, "grid")
       |> assign(:breadcrumb_items, [])
 
     {:ok, socket}
@@ -52,60 +71,197 @@ defmodule EventasaurusWeb.PerformerLive.Show do
          |> push_navigate(to: ~p"/")}
 
       performer ->
-        # Get stats and events
-        stats = PerformerStore.get_performer_stats(performer.id)
-        events = PerformerStore.get_performer_events(performer.id)
+        load_and_assign_performer(performer, socket)
+    end
+  end
 
-        # Build breadcrumb items
-        breadcrumb_items =
-          BreadcrumbBuilder.build_performer_breadcrumbs(performer,
-            gettext_backend: EventasaurusWeb.Gettext
-          )
+  defp load_and_assign_performer(performer, socket) do
+    # Get stats and events
+    stats = PerformerStore.get_performer_stats(performer.id)
+    events = PerformerStore.get_performer_events(performer.id)
 
-        socket =
-          socket
-          |> assign(:performer, performer)
-          |> assign(:stats, stats)
-          |> assign(:upcoming_events, events.upcoming)
-          |> assign(:past_events, events.past)
-          |> assign(:loading, false)
-          |> assign(:page_title, performer.name)
-          |> assign(:breadcrumb_items, breadcrumb_items)
+    # Combine all events (upcoming + past) for unified filtering
+    all_events = events.upcoming ++ events.past
 
+    # Calculate time filter counts (upcoming, past, all)
+    time_filter_counts = EventPagination.calculate_time_filter_counts(all_events)
+
+    # Apply default time filter (:upcoming) and get filtered events
+    time_filter = socket.assigns.time_filter
+    time_filtered_events = EventPagination.filter_by_time(all_events, time_filter)
+
+    # Calculate date range counts for the time-filtered events
+    date_range_counts = EventPagination.calculate_date_range_counts(time_filtered_events)
+
+    # Apply date range filter and paginate
+    active_date_range = socket.assigns.active_date_range
+    filtered_events = EventPagination.filter_by_date_range(time_filtered_events, active_date_range)
+    page_size = socket.assigns.pagination.page_size
+    page_number = socket.assigns.pagination.page_number
+    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page_number, page_size)
+
+    # Build breadcrumb items
+    breadcrumb_items =
+      BreadcrumbBuilder.build_performer_breadcrumbs(performer,
+        gettext_backend: EventasaurusWeb.Gettext
+      )
+
+    socket =
+      socket
+      |> assign(:performer, performer)
+      |> assign(:stats, stats)
+      |> assign(:all_events, all_events)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, length(filtered_events))
+      |> assign(:time_filter_counts, time_filter_counts)
+      |> assign(:date_range_counts, date_range_counts)
+      |> assign(:pagination, pagination)
+      |> assign(:loading, false)
+      |> assign(:page_title, performer.name)
+      |> assign(:breadcrumb_items, breadcrumb_items)
+
+    {:noreply, socket}
+  end
+
+  # Time filter handler (sidebar stats clicks)
+  @impl true
+  def handle_event("time_filter", %{"filter" => filter_string}, socket) do
+    time_filter = String.to_existing_atom(filter_string)
+    all_events = socket.assigns.all_events
+
+    # Apply time filter
+    time_filtered_events = EventPagination.filter_by_time(all_events, time_filter)
+
+    # Recalculate date range counts for the new time filter
+    date_range_counts = EventPagination.calculate_date_range_counts(time_filtered_events)
+
+    # Reset to page 1 and clear date range filter when switching time filter
+    page_size = socket.assigns.pagination.page_size
+    {paginated_events, pagination} = EventPagination.paginate(time_filtered_events, 1, page_size)
+
+    {:noreply,
+     socket
+     |> assign(:time_filter, time_filter)
+     |> assign(:active_date_range, nil)
+     |> assign(:date_range_counts, date_range_counts)
+     |> assign(:events, paginated_events)
+     |> assign(:total_events, length(time_filtered_events))
+     |> assign(:pagination, pagination)}
+  end
+
+  # Quick date filter handler
+  @impl true
+  def handle_event("quick_date_filter", %{"range" => range_string}, socket) do
+    case EventFilters.parse_quick_range(range_string) do
+      {:ok, range_atom} ->
+        active_date_range = if range_atom == :all, do: nil, else: range_atom
+
+        all_events = socket.assigns.all_events
+        time_filter = socket.assigns.time_filter
+
+        # Apply time filter first, then date range
+        time_filtered = EventPagination.filter_by_time(all_events, time_filter)
+        filtered_events = EventPagination.filter_by_date_range(time_filtered, active_date_range)
+
+        page_size = socket.assigns.pagination.page_size
+        {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+
+        {:noreply,
+         socket
+         |> assign(:active_date_range, active_date_range)
+         |> assign(:events, paginated_events)
+         |> assign(:total_events, length(filtered_events))
+         |> assign(:pagination, pagination)}
+
+      :error ->
         {:noreply, socket}
     end
   end
 
+  # Clear date filter handler
   @impl true
-  def handle_event("toggle_past_events", _params, socket) do
-    {:noreply, assign(socket, :show_past_events, !socket.assigns.show_past_events)}
+  def handle_event("clear_date_filter", _params, socket) do
+    # Reset date range but keep time filter
+    active_date_range = nil
+    all_events = socket.assigns.all_events
+    time_filter = socket.assigns.time_filter
+
+    time_filtered = EventPagination.filter_by_time(all_events, time_filter)
+    filtered_events = EventPagination.filter_by_date_range(time_filtered, active_date_range)
+
+    page_size = socket.assigns.pagination.page_size
+    {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+
+    {:noreply,
+     socket
+     |> assign(:active_date_range, active_date_range)
+     |> assign(:events, paginated_events)
+     |> assign(:total_events, length(filtered_events))
+     |> assign(:pagination, pagination)}
   end
 
+  # Pagination handler
   @impl true
-  def handle_event("load_more_past", _params, socket) do
-    {:noreply, update(socket, :past_events_page, &(&1 + 1))}
+  def handle_event("paginate", %{"page" => page_string}, socket) do
+    page = String.to_integer(page_string)
+    all_events = socket.assigns.all_events
+    time_filter = socket.assigns.time_filter
+    active_date_range = socket.assigns.active_date_range
+
+    time_filtered = EventPagination.filter_by_time(all_events, time_filter)
+    filtered_events = EventPagination.filter_by_date_range(time_filtered, active_date_range)
+
+    page_size = socket.assigns.pagination.page_size
+    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page, page_size)
+
+    {:noreply,
+     socket
+     |> assign(:events, paginated_events)
+     |> assign(:pagination, pagination)}
   end
 
-  # Helper functions
+  # Search handler
+  @impl true
+  def handle_event("search", %{"search" => search_term}, socket) do
+    all_events = socket.assigns.all_events
+    time_filter = socket.assigns.time_filter
+    active_date_range = socket.assigns.active_date_range
 
-  defp paginated_past_events(past_events, page, per_page) do
-    past_events
-    |> Enum.reverse()
-    |> Enum.take(page * per_page)
+    # Filter by time, date range and search term, then paginate
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: active_date_range,
+        search: search_term,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{search: search_term})
+     |> assign(:events, paginated_events)
+     |> assign(:total_events, filtered_count)
+     |> assign(:pagination, pagination)}
   end
 
-  defp has_more_past_events?(past_events, page, per_page) do
-    length(past_events) > page * per_page
+  # View mode toggle handler
+  @impl true
+  def handle_event("change_view", %{"view" => view_mode}, socket) do
+    {:noreply, assign(socket, :view_mode, view_mode)}
   end
+
+  # Helper to get section title based on active time filter
+  defp events_section_title(:upcoming), do: gettext("Upcoming Events")
+  defp events_section_title(:past), do: gettext("Past Events")
+  defp events_section_title(:all), do: gettext("All Events")
 
   @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen">
       <%= if @loading do %>
-        <div class="flex justify-center items-center min-h-screen">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-        </div>
+        <.loading_skeleton />
       <% else %>
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <!-- Breadcrumbs -->
@@ -116,105 +272,68 @@ defmodule EventasaurusWeb.PerformerLive.Show do
               <!-- Performer Hero Card -->
               <PerformerHeroCard.performer_hero_card
                 performer={@performer}
-                upcoming_event_count={length(@upcoming_events)}
+                upcoming_event_count={@time_filter_counts.upcoming}
                 total_event_count={@stats.total_events}
               />
 
-              <!-- Upcoming Events Section -->
+              <!-- Events Section -->
               <div>
                 <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                  <%= gettext("Upcoming Events") %>
+                  <%= events_section_title(@time_filter) %>
                 </h2>
 
-                <%= if Enum.empty?(@upcoming_events) do %>
-                  <div class="bg-white rounded-lg shadow-md p-8 text-center">
-                    <Heroicons.calendar class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                    <p class="text-gray-600">
-                      <%= gettext("No upcoming events scheduled") %>
-                    </p>
-                  </div>
-                <% else %>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <%= for event <- Enum.take(@upcoming_events, 12) do %>
-                      <EventCards.event_card event={event} show_city={true} />
-                    <% end %>
-                  </div>
+                <!-- Search and Filters -->
+                <div class="mb-6 space-y-4">
+                  <.search_bar filters={@filters} />
+                  <%= if @time_filter != :past do %>
+                    <.quick_date_filters
+                      active_date_range={@active_date_range}
+                      date_range_counts={@date_range_counts}
+                      all_events_count={@time_filter_counts[@time_filter]}
+                    />
+                  <% end %>
+                </div>
 
-                  <%= if length(@upcoming_events) > 12 do %>
-                    <div class="mt-6 text-center">
-                      <p class="text-sm text-gray-500">
-                        <%= gettext("Showing %{shown} of %{total} upcoming events",
-                          shown: min(12, length(@upcoming_events)),
-                          total: length(@upcoming_events)
-                        ) %>
-                      </p>
-                    </div>
+                <%= if Enum.empty?(@events) do %>
+                  <.empty_state message={gettext("No events found matching your filters")} />
+                <% else %>
+                  <.event_results
+                    events={@events}
+                    view_mode={@view_mode}
+                    language="en"
+                    total_events={@total_events}
+                    show_city={true}
+                  />
+
+                  <%= if @pagination.total_pages > 1 do %>
+                    <.pagination pagination={@pagination} />
                   <% end %>
                 <% end %>
               </div>
-
-              <!-- Past Events (Collapsible) -->
-              <%= if not Enum.empty?(@past_events) do %>
-                <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                  <button
-                    phx-click="toggle_past_events"
-                    class="w-full flex justify-between items-center text-left p-6 hover:bg-gray-50 transition-colors"
-                  >
-                    <h2 class="text-2xl font-bold text-gray-900">
-                      <%= gettext("Past Events") %>
-                      <span class="text-lg font-normal text-gray-500 ml-2">
-                        (<%= length(@past_events) %>)
-                      </span>
-                    </h2>
-                    <Heroicons.chevron_down class={"w-6 h-6 text-gray-500 transition-transform duration-200 #{if @show_past_events, do: "rotate-180", else: ""}"} />
-                  </button>
-
-                  <%= if @show_past_events do %>
-                    <div class="border-t border-gray-200 p-6">
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <%= for event <- paginated_past_events(@past_events, @past_events_page, @past_events_per_page) do %>
-                          <EventCards.event_card event={event} show_city={true} />
-                        <% end %>
-                      </div>
-
-                      <%= if has_more_past_events?(@past_events, @past_events_page, @past_events_per_page) do %>
-                        <div class="mt-6 text-center">
-                          <button
-                            phx-click="load_more_past"
-                            class="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-                          >
-                            <Heroicons.arrow_down class="w-5 h-5 mr-2" />
-                            <%= gettext("Load More") %>
-                          </button>
-                        </div>
-                      <% end %>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
             </:main>
 
             <:sidebar>
-              <!-- Performer Stats Card -->
-              <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">
-                  <%= gettext("Artist Stats") %>
-                </h3>
-                <div class="space-y-3">
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-600"><%= gettext("Upcoming Events") %></span>
-                    <span class="font-semibold text-gray-900"><%= length(@upcoming_events) %></span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-600"><%= gettext("Past Events") %></span>
-                    <span class="font-semibold text-gray-900"><%= length(@past_events) %></span>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-gray-600"><%= gettext("Total Events") %></span>
-                    <span class="font-semibold text-gray-900"><%= @stats.total_events %></span>
-                  </div>
-                </div>
-              </div>
+              <!-- Performer Stats Card (Clickable Filters) -->
+              <ClickableStatsCard.clickable_stats_card title={gettext("Artist Stats")}>
+                <:stat
+                  label={gettext("Upcoming Events")}
+                  count={@time_filter_counts.upcoming}
+                  filter_value={:upcoming}
+                  active={@time_filter == :upcoming}
+                />
+                <:stat
+                  label={gettext("Past Events")}
+                  count={@time_filter_counts.past}
+                  filter_value={:past}
+                  active={@time_filter == :past}
+                />
+                <:stat
+                  label={gettext("All Events")}
+                  count={@time_filter_counts.all}
+                  filter_value={:all}
+                  active={@time_filter == :all}
+                />
+              </ClickableStatsCard.clickable_stats_card>
 
               <!-- External Links Card (if RA URL exists) -->
               <%= if get_ra_url(@performer) do %>
