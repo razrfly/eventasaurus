@@ -133,7 +133,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
             container_type
           )
 
-        {:noreply, push_navigate(socket, to: ~p"/c/#{city.slug}/#{type_plural}/#{container_slug}")}
+        {:noreply,
+         push_navigate(socket, to: ~p"/c/#{city.slug}/#{type_plural}/#{container_slug}")}
 
       nil ->
         # Not a container - continue with source aggregation

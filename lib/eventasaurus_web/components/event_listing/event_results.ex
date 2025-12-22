@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
         events={@events}
         view_mode={@view_mode}
         language={@language}
-        total_events={@total_events}
+        pagination={@pagination}
       />
   """
 
@@ -19,7 +19,12 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
 
   # Only import specific functions to avoid conflict with local is_aggregated?/1
   import EventasaurusWeb.Components.EventCards,
-    only: [event_card: 1, aggregated_movie_card: 1, aggregated_container_card: 1, aggregated_event_card: 1]
+    only: [
+      event_card: 1,
+      aggregated_movie_card: 1,
+      aggregated_container_card: 1,
+      aggregated_event_card: 1
+    ]
 
   alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
   alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
@@ -33,21 +38,26 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
   - `events` - List of events (can include AggregatedMovieGroup, AggregatedContainerGroup, or regular events)
   - `view_mode` - Display mode: "grid" or "list" (default: "grid")
   - `language` - Language code for localized content (default: "en")
-  - `total_events` - Total count for display (optional)
+  - `pagination` - Pagination struct with page_number, page_size, total_entries (optional)
+  - `total_events` - DEPRECATED: Use pagination instead. Total count for display (optional)
   - `show_city` - Whether to show city in event cards (default: false)
   """
   attr :events, :list, required: true
   attr :view_mode, :string, default: "grid"
   attr :language, :string, default: "en"
+  attr :pagination, :any, default: nil
   attr :total_events, :integer, default: nil
   attr :show_city, :boolean, default: false
 
   def event_results(assigns) do
+    # Calculate range display info
+    assigns = assign_range_info(assigns)
+
     ~H"""
     <div>
-      <%= if @total_events do %>
+      <%= if @range_text do %>
         <div class="mb-4 text-sm text-gray-600">
-          Found {@total_events} events
+          {@range_text}
         </div>
       <% end %>
 
@@ -108,15 +118,50 @@ defmodule EventasaurusWeb.Components.EventListing.EventResults do
         <.aggregated_container_card group={@item} language={@language} show_city={@show_city} />
       <% match?(%AggregatedEventGroup{}, @item) -> %>
         <.aggregated_event_card group={@item} language={@language} show_city={@show_city} />
-      <% is_aggregated?(@item) -> %>
-        <.aggregated_event_card group={@item} language={@language} show_city={@show_city} />
       <% true -> %>
         <.event_card event={@item} language={@language} show_city={@show_city} />
     <% end %>
     """
   end
 
-  # Helper to check if an item is an aggregated group
-  defp is_aggregated?(%{events: events}) when is_list(events) and length(events) > 1, do: true
-  defp is_aggregated?(_), do: false
+  # Calculate the range text for display (e.g., "Showing 1-30 of 111 events")
+  defp assign_range_info(assigns) do
+    cond do
+      # New pagination struct provided - show range
+      assigns[:pagination] != nil and is_map(assigns.pagination) ->
+        pagination = assigns.pagination
+        page_number = pagination.page_number || pagination[:page_number] || 1
+        page_size = pagination.page_size || pagination[:page_size] || 30
+        total = pagination.total_entries || pagination[:total_entries] || 0
+
+        # Get actual count of events being displayed on this page
+        current_page_count = length(assigns[:events] || [])
+
+        if current_page_count > 0 do
+          start_idx = (page_number - 1) * page_size + 1
+          # Use actual displayed count for end index, not page math
+          end_idx = start_idx + current_page_count - 1
+
+          range_text =
+            if total <= page_size do
+              # Single page - just show actual count displayed
+              "Showing #{current_page_count} events"
+            else
+              "Showing #{start_idx}-#{end_idx} of #{total} events"
+            end
+
+          assign(assigns, :range_text, range_text)
+        else
+          assign(assigns, :range_text, nil)
+        end
+
+      # Legacy: total_events provided without pagination
+      assigns[:total_events] != nil ->
+        assign(assigns, :range_text, "Found #{assigns.total_events} events")
+
+      # No pagination info
+      true ->
+        assign(assigns, :range_text, nil)
+    end
+  end
 end

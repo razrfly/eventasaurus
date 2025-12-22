@@ -33,53 +33,53 @@ defmodule EventasaurusWeb.Components.EventListing.Pagination do
       ~H""
     else
       ~H"""
-    <nav class="flex justify-center mt-8">
-      <div class="flex items-center space-x-2">
-        <!-- Previous -->
-        <button
-          :if={@pagination.page_number > 1}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number - 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Previous
-        </button>
+      <nav class="flex justify-center mt-8">
+        <div class="flex items-center space-x-2">
+          <!-- Previous -->
+          <button
+            :if={@pagination.page_number > 1}
+            phx-click="paginate"
+            phx-value-page={@pagination.page_number - 1}
+            class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Previous
+          </button>
 
-        <!-- Page Numbers -->
-        <div class="flex space-x-1">
-          <%= for page <- page_links(@pagination) do %>
-            <%= if page == :ellipsis do %>
-              <span class="px-3 py-2">...</span>
-            <% else %>
-              <button
-                phx-click="paginate"
-                phx-value-page={page}
-                class={[
-                  "px-3 py-2 rounded-md",
-                  if(page == @pagination.page_number,
-                    do: "bg-blue-600 text-white",
-                    else: "border border-gray-300 hover:bg-gray-50"
-                  )
-                ]}
-              >
-                <%= page %>
-              </button>
+          <!-- Page Numbers -->
+          <div class="flex space-x-1">
+            <%= for page <- page_links(@pagination) do %>
+              <%= if page == :ellipsis do %>
+                <span class="px-3 py-2">...</span>
+              <% else %>
+                <button
+                  phx-click="paginate"
+                  phx-value-page={page}
+                  class={[
+                    "px-3 py-2 rounded-md",
+                    if(page == @pagination.page_number,
+                      do: "bg-blue-600 text-white",
+                      else: "border border-gray-300 hover:bg-gray-50"
+                    )
+                  ]}
+                >
+                  <%= page %>
+                </button>
+              <% end %>
             <% end %>
-          <% end %>
-        </div>
+          </div>
 
-        <!-- Next -->
-        <button
-          :if={@pagination.page_number < @pagination.total_pages}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number + 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Next
-        </button>
-      </div>
-    </nav>
-    """
+          <!-- Next -->
+          <button
+            :if={@pagination.page_number < @pagination.total_pages}
+            phx-click="paginate"
+            phx-value-page={@pagination.page_number + 1}
+            class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Next
+          </button>
+        </div>
+      </nav>
+      """
     end
   end
 

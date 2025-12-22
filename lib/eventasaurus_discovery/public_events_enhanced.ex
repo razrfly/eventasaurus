@@ -1210,6 +1210,9 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Supports all filters including geographic filtering (center_lat, center_lng, radius_km).
   """
   def get_quick_date_range_counts(filters \\ []) do
+    filters_map = Enum.into(filters, %{})
+    use_aggregation = Map.get(filters_map, :aggregate, false)
+
     [
       :today,
       :tomorrow,
@@ -1224,14 +1227,19 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
       # Build count options with date range and all other filters (including geographic)
       count_opts =
-        filters
-        |> Enum.into(%{})
+        filters_map
         |> Map.put(:start_date, start_date)
         |> Map.put(:end_date, end_date)
         # Always show all events in range for counts
         |> Map.put(:show_past, true)
 
-      count = count_events(count_opts)
+      # Use aggregation-aware counting when aggregation is enabled
+      count =
+        if use_aggregation do
+          count_events_with_aggregation(count_opts)
+        else
+          count_events(count_opts)
+        end
 
       %{range: range_type, count: count}
     end)

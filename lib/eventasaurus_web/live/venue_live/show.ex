@@ -22,6 +22,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
   import Ecto.Query
   import EventasaurusWeb.Components.EventListing
 
+  # Maximum events to load for client-side filtering
+  # Configurable via application config: :eventasaurus_web, :max_venue_events
+  @max_venue_events Application.compile_env(:eventasaurus_web, :max_venue_events, 5000)
+
   @impl true
   def mount(_params, _session, socket) do
     # CRITICAL: Capture request URI for correct URL generation (ngrok support)
@@ -116,19 +120,23 @@ defmodule EventasaurusWeb.VenueLive.Show do
       {:ok, range_atom} ->
         active_date_range = if range_atom == :all, do: nil, else: range_atom
 
-        # Filter events by the selected date range
+        # Filter events by the selected date range, preserving search filter
         all_events = socket.assigns.all_events
-        filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+        search_term = socket.assigns.filters[:search]
 
-        # Reset to page 1 and paginate
-        page_size = socket.assigns.pagination.page_size
-        {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+        {paginated_events, pagination, filtered_count} =
+          EventPagination.filter_and_paginate(all_events,
+            date_range: active_date_range,
+            search: search_term,
+            page: 1,
+            page_size: socket.assigns.pagination.page_size
+          )
 
         {:noreply,
          socket
          |> assign(:active_date_range, active_date_range)
          |> assign(:events, paginated_events)
-         |> assign(:total_events, length(filtered_events))
+         |> assign(:total_events, filtered_count)
          |> assign(:pagination, pagination)}
 
       :error ->
@@ -139,19 +147,24 @@ defmodule EventasaurusWeb.VenueLive.Show do
   # Clear date filter handler
   @impl true
   def handle_event("clear_date_filter", _params, socket) do
-    # Reset to default (all events)
+    # Reset to default (all events), preserving search filter
     active_date_range = nil
     all_events = socket.assigns.all_events
-    filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+    search_term = socket.assigns.filters[:search]
 
-    page_size = socket.assigns.pagination.page_size
-    {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        date_range: active_date_range,
+        search: search_term,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
 
     {:noreply,
      socket
      |> assign(:active_date_range, active_date_range)
      |> assign(:events, paginated_events)
-     |> assign(:total_events, length(filtered_events))
+     |> assign(:total_events, filtered_count)
      |> assign(:pagination, pagination)}
   end
 
@@ -161,10 +174,15 @@ defmodule EventasaurusWeb.VenueLive.Show do
     page = String.to_integer(page_string)
     all_events = socket.assigns.all_events
     active_date_range = socket.assigns.active_date_range
-    filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+    search_term = socket.assigns.filters[:search]
 
-    page_size = socket.assigns.pagination.page_size
-    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page, page_size)
+    {paginated_events, pagination, _filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        date_range: active_date_range,
+        search: search_term,
+        page: page,
+        page_size: socket.assigns.pagination.page_size
+      )
 
     {:noreply,
      socket
@@ -215,13 +233,19 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Calculate date range counts for quick filters
     date_range_counts = EventPagination.calculate_date_range_counts(all_events)
 
-    # Apply default filter (next 30 days) and paginate
+    # Apply filters (date range and search) and paginate
     active_date_range = socket.assigns.active_date_range
-    filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+    search_term = socket.assigns.filters[:search]
     page_size = socket.assigns.pagination.page_size
     page_number = socket.assigns.pagination.page_number
 
-    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page_number, page_size)
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        date_range: active_date_range,
+        search: search_term,
+        page: page_number,
+        page_size: page_size
+      )
 
     # Get nearby events in the same city (excluding events at this venue)
     nearby_events =
@@ -269,7 +293,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:venue, venue)
       |> assign(:all_events, all_events)
       |> assign(:events, paginated_events)
-      |> assign(:total_events, length(filtered_events))
+      |> assign(:total_events, filtered_count)
       |> assign(:all_events_count, all_events_count)
       |> assign(:date_range_counts, date_range_counts)
       |> assign(:pagination, pagination)
@@ -310,7 +334,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
   defp get_all_venue_events(venue_id) do
     PublicEvents.by_venue(venue_id,
       upcoming_only: true,
-      limit: 5000,
+      limit: @max_venue_events,
       preload: [:performers, :categories, :sources]
     )
     |> Enum.map(fn event ->
@@ -527,7 +551,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
                     events={@events}
                     view_mode={@view_mode}
                     language={@language}
-                    total_events={@total_events}
+                    pagination={@pagination}
                     show_city={false}
                   />
 

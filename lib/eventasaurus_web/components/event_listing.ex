@@ -63,6 +63,9 @@ defmodule EventasaurusWeb.Components.EventListing do
   defdelegate event_grid(assigns), to: EventasaurusWeb.Components.EventListing.EventResults
   defdelegate event_list(assigns), to: EventasaurusWeb.Components.EventListing.EventResults
   defdelegate pagination(assigns), to: EventasaurusWeb.Components.EventListing.Pagination
-  defdelegate loading_skeleton(assigns), to: EventasaurusWeb.Components.EventListing.LoadingSkeleton
+
+  defdelegate loading_skeleton(assigns),
+    to: EventasaurusWeb.Components.EventListing.LoadingSkeleton
+
   defdelegate empty_state(assigns), to: EventasaurusWeb.Components.EventListing.EmptyState
 end

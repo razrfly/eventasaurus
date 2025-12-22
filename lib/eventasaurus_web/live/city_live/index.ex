@@ -563,7 +563,7 @@ defmodule EventasaurusWeb.CityLive.Index do
               events={@events}
               view_mode={@view_mode}
               language={@language}
-              total_events={@total_events}
+              pagination={@pagination}
               show_city={false}
             />
 
@@ -847,7 +847,15 @@ defmodule EventasaurusWeb.CityLive.Index do
       {start_date, end_date} when not is_nil(start_date) and not is_nil(end_date) ->
         # Check if it matches any known quick date range
         Enum.find(
-          [:today, :tomorrow, :this_weekend, :next_7_days, :next_30_days, :this_month, :next_month],
+          [
+            :today,
+            :tomorrow,
+            :this_weekend,
+            :next_7_days,
+            :next_30_days,
+            :this_month,
+            :next_month
+          ],
           fn range ->
             {range_start, range_end} = PublicEventsEnhanced.calculate_date_range(range)
             dates_match?(start_date, range_start) and dates_match?(end_date, range_end)
