@@ -69,4 +69,7 @@ defmodule EventasaurusWeb.Components.EventListing do
     to: EventasaurusWeb.Components.EventListing.LoadingSkeleton
 
   defdelegate empty_state(assigns), to: EventasaurusWeb.Components.EventListing.EmptyState
+  defdelegate view_toggle(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
+  defdelegate simple_filter_tags(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
+  defdelegate date_filter_button(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
 end

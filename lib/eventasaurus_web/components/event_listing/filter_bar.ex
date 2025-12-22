@@ -172,7 +172,9 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
   ## Attributes
 
   - `sort_by` - Currently active sort field (:starts_at, :distance, :title)
-  - `show_distance` - Whether to show distance option (requires location context)
+  - `show_distance` - Whether to show distance option. Only enable when events
+    have a `:distance` field populated (e.g., location-based search results).
+    Requires backend support in EventPagination.sort_events/2.
   """
   attr :sort_by, :atom, default: :starts_at
   attr :show_distance, :boolean, default: false
@@ -243,4 +245,129 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
     </button>
     """
   end
+
+  @doc """
+  Renders a grid/list view toggle.
+
+  Emits `change_view` event with `view` value ("grid" or "list").
+
+  ## Attributes
+
+  - `view_mode` - Currently active view mode ("grid" or "list")
+  """
+  attr :view_mode, :string, default: "grid"
+
+  def view_toggle(assigns) do
+    ~H"""
+    <div class="flex bg-gray-100 rounded-lg p-1">
+      <button
+        phx-click="change_view"
+        phx-value-view="grid"
+        class={[
+          "px-3 py-1.5 rounded transition-all",
+          if(@view_mode == "grid", do: "bg-white shadow-sm", else: "hover:bg-gray-200")
+        ]}
+        title={gettext("Grid view")}
+      >
+        <Heroicons.squares_2x2 class="w-5 h-5" />
+      </button>
+      <button
+        phx-click="change_view"
+        phx-value-view="list"
+        class={[
+          "px-3 py-1.5 rounded transition-all",
+          if(@view_mode == "list", do: "bg-white shadow-sm", else: "hover:bg-gray-200")
+        ]}
+        title={gettext("List view")}
+      >
+        <Heroicons.list_bullet class="w-5 h-5" />
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders simple active filter tags with remove buttons for entity pages.
+
+  Shows currently active filters (search, date range, sort) as removable badges.
+  Emits events to clear individual filters. Used by venue and performer pages.
+
+  For city pages with more filter options (radius, categories), use
+  `EventasaurusWeb.EventComponents.active_filter_tags/1` instead.
+
+  ## Attributes
+
+  - `filters` - Current filter values (map with :search key)
+  - `active_date_range` - Currently active date range atom (nil for none)
+  - `sort_by` - Currently active sort field (:starts_at, :title, :distance)
+
+  ## Events Emitted
+
+  - `clear_search` - Clear the search filter
+  - `clear_date_filter` - Clear the date range filter
+  - `sort` with sort_by="starts_at" - Reset sort to default
+  """
+  attr :filters, :map, default: %{}
+  attr :active_date_range, :atom, default: nil
+  attr :sort_by, :atom, default: :starts_at
+
+  def simple_filter_tags(assigns) do
+    # Check if any filters are active
+    has_search = assigns.filters[:search] && assigns.filters[:search] != ""
+    has_date_range = assigns.active_date_range != nil
+    has_non_default_sort = assigns.sort_by != :starts_at
+
+    assigns =
+      assigns
+      |> assign(:has_search, has_search)
+      |> assign(:has_date_range, has_date_range)
+      |> assign(:has_non_default_sort, has_non_default_sort)
+      |> assign(:has_any_filter, has_search || has_date_range || has_non_default_sort)
+
+    ~H"""
+    <div :if={@has_any_filter} class="flex flex-wrap gap-2">
+      <%= if @has_search do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          <%= gettext("Search:") %> <%= @filters[:search] %>
+          <button phx-click="clear_search" class="ml-2 hover:text-blue-600" title={gettext("Clear search")}>
+            <Heroicons.x_mark class="w-4 h-4" />
+          </button>
+        </span>
+      <% end %>
+
+      <%= if @has_date_range do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          <%= date_range_label(@active_date_range) %>
+          <button phx-click="clear_date_filter" class="ml-2 hover:text-blue-600" title={gettext("Clear date filter")}>
+            <Heroicons.x_mark class="w-4 h-4" />
+          </button>
+        </span>
+      <% end %>
+
+      <%= if @has_non_default_sort do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          <%= gettext("Sorted by:") %> <%= sort_label(@sort_by) %>
+          <button phx-click="sort" phx-value-sort_by="starts_at" class="ml-2 hover:text-blue-600" title={gettext("Reset sort")}>
+            <Heroicons.x_mark class="w-4 h-4" />
+          </button>
+        </span>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Helper to get human-readable date range label
+  defp date_range_label(:today), do: gettext("Today")
+  defp date_range_label(:tomorrow), do: gettext("Tomorrow")
+  defp date_range_label(:this_weekend), do: gettext("This Weekend")
+  defp date_range_label(:next_7_days), do: gettext("Next 7 Days")
+  defp date_range_label(:next_30_days), do: gettext("Next 30 Days")
+  defp date_range_label(:this_month), do: gettext("This Month")
+  defp date_range_label(:next_month), do: gettext("Next Month")
+  defp date_range_label(_), do: gettext("Date Filter")
+
+  # Helper to get human-readable sort label
+  defp sort_label(:title), do: gettext("Title")
+  defp sort_label(:distance), do: gettext("Distance")
+  defp sort_label(_), do: gettext("Date")
 end

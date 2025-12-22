@@ -284,17 +284,18 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
   @doc """
   Sort events by the specified field.
 
-  Supports sorting by date (starts_at) or title. Returns events unchanged
-  if sort_by is nil or :starts_at (default order).
+  Supports sorting by date (starts_at), title, or distance. Returns events
+  unchanged if sort_by is nil.
 
   ## Parameters
 
     - events: List of events
-    - sort_by: :starts_at (default), :title, or nil
+    - sort_by: :starts_at (default), :title, :distance, or nil
 
-  ## Example
+  ## Examples
 
       sorted = EventPagination.sort_events(events, :title)
+      sorted = EventPagination.sort_events(events, :distance)  # requires :distance field
   """
   @spec sort_events(list(), atom() | nil) :: list()
   def sort_events(events, nil), do: events
@@ -303,6 +304,16 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
   def sort_events(events, :title) do
     Enum.sort_by(events, fn event ->
       (Map.get(event, :display_title) || Map.get(event, :title) || "") |> String.downcase()
+    end)
+  end
+
+  def sort_events(events, :distance) do
+    # Sort by distance field (nearest first). Events without distance go to end.
+    Enum.sort_by(events, fn event ->
+      case Map.get(event, :distance) do
+        nil -> :infinity
+        distance -> distance
+      end
     end)
   end
 
