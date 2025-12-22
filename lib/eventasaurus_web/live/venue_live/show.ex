@@ -274,6 +274,32 @@ defmodule EventasaurusWeb.VenueLive.Show do
     {:noreply, assign(socket, :view_mode, view_mode)}
   end
 
+  # Clear search handler
+  @impl true
+  def handle_event("clear_search", _params, socket) do
+    all_events = socket.assigns.all_events
+    active_date_range = socket.assigns.active_date_range
+    sort_by = socket.assigns.sort_by
+
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        date_range: active_date_range,
+        search: nil,
+        sort_by: sort_by,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
+
+    socket =
+      socket
+      |> assign(:filters, %{search: nil})
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    {:noreply, push_patch(socket, to: build_path(socket))}
+  end
+
   # Helper functions
 
   # Shared logic for loading and assigning venue data to socket
@@ -650,6 +676,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
   defp parse_sort(nil), do: :starts_at
   defp parse_sort("title"), do: :title
   defp parse_sort("starts_at"), do: :starts_at
+  defp parse_sort("distance"), do: :distance
   defp parse_sort(_), do: :starts_at
 
   @impl true
@@ -684,22 +711,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
                   <h2 class="text-2xl font-bold text-gray-900">
                     <%= gettext("Events") %>
                   </h2>
-                  <div class="flex bg-gray-100 rounded-lg p-1">
-                    <button
-                      phx-click="change_view"
-                      phx-value-view="grid"
-                      class={"px-3 py-1 rounded #{if @view_mode == "grid", do: "bg-white shadow-sm", else: ""}"}
-                    >
-                      <Heroicons.squares_2x2 class="w-5 h-5" />
-                    </button>
-                    <button
-                      phx-click="change_view"
-                      phx-value-view="list"
-                      class={"px-3 py-1 rounded #{if @view_mode == "list", do: "bg-white shadow-sm", else: ""}"}
-                    >
-                      <Heroicons.list_bullet class="w-5 h-5" />
-                    </button>
-                  </div>
+                  <.view_toggle view_mode={@view_mode} />
                 </div>
 
                 <!-- Search Bar -->
@@ -710,6 +722,13 @@ defmodule EventasaurusWeb.VenueLive.Show do
                   active_date_range={@active_date_range}
                   date_range_counts={@date_range_counts}
                   all_events_count={@all_events_count}
+                />
+
+                <!-- Active Filter Tags -->
+                <.simple_filter_tags
+                  filters={@filters}
+                  active_date_range={@active_date_range}
+                  sort_by={@sort_by}
                 />
 
                 <!-- Sort Controls -->

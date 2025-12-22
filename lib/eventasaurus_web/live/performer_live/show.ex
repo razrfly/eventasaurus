@@ -301,6 +301,34 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     {:noreply, assign(socket, :view_mode, view_mode)}
   end
 
+  # Clear search handler
+  @impl true
+  def handle_event("clear_search", _params, socket) do
+    all_events = socket.assigns.all_events
+    time_filter = socket.assigns.time_filter
+    active_date_range = socket.assigns.active_date_range
+    sort_by = socket.assigns.sort_by
+
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: active_date_range,
+        search: nil,
+        sort_by: sort_by,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
+
+    socket =
+      socket
+      |> assign(:filters, %{search: nil})
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    {:noreply, push_patch(socket, to: build_path(socket))}
+  end
+
   # Sort handler
   @impl true
   def handle_event("sort", %{"sort_by" => sort_by_string}, socket) do
@@ -357,9 +385,13 @@ defmodule EventasaurusWeb.PerformerLive.Show do
 
               <!-- Events Section -->
               <div>
-                <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                  <%= events_section_title(@time_filter) %>
-                </h2>
+                <!-- Header with View Mode Toggle -->
+                <div class="flex items-center justify-between mb-6">
+                  <h2 class="text-2xl font-bold text-gray-900">
+                    <%= events_section_title(@time_filter) %>
+                  </h2>
+                  <.view_toggle view_mode={@view_mode} />
+                </div>
 
                 <!-- Search and Filters -->
                 <div class="mb-6 space-y-4">
@@ -371,6 +403,13 @@ defmodule EventasaurusWeb.PerformerLive.Show do
                       all_events_count={@time_filter_counts[@time_filter]}
                     />
                   <% end %>
+
+                  <!-- Active Filter Tags -->
+                  <.simple_filter_tags
+                    filters={@filters}
+                    active_date_range={@active_date_range}
+                    sort_by={@sort_by}
+                  />
 
                   <!-- Sort Controls -->
                   <div class="flex justify-end">
@@ -565,6 +604,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   defp parse_sort(nil), do: :starts_at
   defp parse_sort("title"), do: :title
   defp parse_sort("starts_at"), do: :starts_at
+  defp parse_sort("distance"), do: :distance
   defp parse_sort(_), do: :starts_at
 
   # Helper to extract RA URL from performer metadata
