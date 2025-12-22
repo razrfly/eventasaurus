@@ -454,18 +454,22 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
     filters = socket.assigns.filters
     params = build_filter_params(filters)
 
+    # IMPORTANT: Must stay within the same LiveView to use push_patch
+    # Routes handled by PublicEventsSearchLive:
+    # - /activities/search (live_action: :index)
+    # - /activities/category/:category (live_action: :category)
+    # NOTE: /activities is a DIFFERENT LiveView (PublicEventsHomeLive), so we must NOT
+    # push_patch to it from here - that would cross LiveView boundaries and crash.
     case socket.assigns[:live_action] do
-      :search ->
-        ~p"/activities/search?#{params}"
-
       :category ->
         case socket.assigns[:category] do
-          nil -> ~p"/activities?#{params}"
+          nil -> ~p"/activities/search?#{params}"
           category -> ~p"/activities/category/#{category}?#{params}"
         end
 
+      # :index action is used for /activities/search route
       _ ->
-        ~p"/activities?#{params}"
+        ~p"/activities/search?#{params}"
     end
   end
 

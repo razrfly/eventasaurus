@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Performers.Performer
+  alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   import Ecto.Query
   require Logger
@@ -283,21 +284,14 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     events =
       query
       |> Repo.all()
-      |> Enum.map(&populate_cover_image/1)
+      |> Enum.map(fn event ->
+        %{event | cover_image_url: PublicEventsEnhanced.get_cover_image_url(event)}
+      end)
 
     %{
       upcoming: Enum.filter(events, fn e -> DateTime.compare(e.starts_at, now) != :lt end),
       past: Enum.filter(events, fn e -> DateTime.compare(e.starts_at, now) == :lt end)
     }
-  end
-
-  # Populate cover_image_url virtual field from sources
-  defp populate_cover_image(event) do
-    cover_url =
-      event.sources
-      |> Enum.find_value(fn source -> source.image_url end)
-
-    %{event | cover_image_url: cover_url}
   end
 
   @doc """

@@ -95,7 +95,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
       venue ->
         # Apply URL params to socket assigns, then load venue
-        socket = apply_url_params(socket, params)
+        # Track that we're using the city-scoped route pattern
+        socket =
+          socket
+          |> apply_url_params(params)
+          |> assign(:route_pattern, :city_scoped)
         load_and_assign_venue(venue, socket)
     end
   end
@@ -114,7 +118,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
       venue ->
         # Apply URL params to socket assigns, then load venue
-        socket = apply_url_params(socket, params)
+        # Track that we're using the direct route pattern
+        socket =
+          socket
+          |> apply_url_params(params)
+          |> assign(:route_pattern, :direct)
         load_and_assign_venue(venue, socket)
     end
   end
@@ -399,18 +407,24 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   defp get_venue_by_slug(slug, city_slug) when is_binary(city_slug) do
-    # City-scoped lookup
+    # City-scoped lookup - preload city_ref for URL building
     from(v in Venue,
       join: c in assoc(v, :city_ref),
       where: v.slug == ^slug and c.slug == ^city_slug,
+      preload: [:city_ref],
       limit: 1
     )
     |> Repo.one()
   end
 
   defp get_venue_by_slug(slug, _city_slug) do
-    # Direct slug lookup
-    Repo.get_by(Venue, slug: slug)
+    # Direct slug lookup - preload city_ref for URL building
+    from(v in Venue,
+      where: v.slug == ^slug,
+      preload: [:city_ref],
+      limit: 1
+    )
+    |> Repo.one()
   end
 
   # Get all upcoming events for a venue (for filtering)
@@ -606,16 +620,22 @@ defmodule EventasaurusWeb.VenueLive.Show do
   end
 
   # Build URL path with current filter state
+  # IMPORTANT: Must stay within the same live_session to use push_patch
+  # - :city_scoped routes are in live_session :city (/c/:city_slug/venues/:venue_slug)
+  # - :direct routes are in live_session :default (/venues/:slug)
   defp build_path(socket) do
     venue = socket.assigns.venue
     params = build_filter_params(socket)
+    route_pattern = socket.assigns[:route_pattern] || :direct
 
-    # Use city-scoped path if venue has a city
+    # Use the same route pattern we came in with to stay in the same live_session
     base_path =
-      if venue.city_ref do
-        ~p"/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
-      else
-        ~p"/venues/#{venue.slug}"
+      case route_pattern do
+        :city_scoped ->
+          ~p"/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+
+        :direct ->
+          ~p"/venues/#{venue.slug}"
       end
 
     if map_size(params) > 0 do
