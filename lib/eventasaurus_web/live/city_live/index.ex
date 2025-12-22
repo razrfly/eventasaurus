@@ -475,128 +475,107 @@ defmodule EventasaurusWeb.CityLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <div class="bg-white shadow-sm border-b">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div class="flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-900">
-              <%= gettext("Events in %{city}", city: @city.name) %>
-            </h1>
-            <div class="flex items-center space-x-4">
-              <!-- Language Switcher - Dynamic based on city -->
-              <div class="flex bg-gray-100 rounded-lg p-1">
-                <%= for lang <- @available_languages do %>
-                  <button
-                    phx-click="change_language"
-                    phx-value-language={lang}
-                    class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
-                    title={LanguageHelpers.language_name(lang)}
-                  >
-                    <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
-                  </button>
-                <% end %>
-              </div>
-
-              <!-- View Mode Toggle -->
-              <div class="flex bg-gray-100 rounded-lg p-1">
+    <div class="min-h-screen">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header with Title and Controls -->
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-3xl font-bold text-gray-900">
+            <%= gettext("Events in %{city}", city: @city.name) %>
+          </h1>
+          <div class="flex items-center gap-4">
+            <!-- Language Switcher - Dynamic based on city -->
+            <div class="flex bg-gray-100 rounded-lg p-1">
+              <%= for lang <- @available_languages do %>
                 <button
-                  phx-click="change_view"
-                  phx-value-view="grid"
-                  class={"px-3 py-1 rounded #{if @view_mode == "grid", do: "bg-white shadow-sm", else: ""}"}
+                  phx-click="change_language"
+                  phx-value-language={lang}
+                  class={"px-3 py-1.5 rounded text-sm font-medium transition-colors #{if @language == lang, do: "bg-white shadow-sm text-blue-600", else: "text-gray-600 hover:text-gray-900"}"}
+                  title={LanguageHelpers.language_name(lang)}
                 >
-                  <Heroicons.squares_2x2 class="w-5 h-5" />
+                  <%= LanguageHelpers.language_flag(lang) %> <%= String.upcase(lang) %>
                 </button>
-                <button
-                  phx-click="change_view"
-                  phx-value-view="list"
-                  class={"px-3 py-1 rounded #{if @view_mode == "list", do: "bg-white shadow-sm", else: ""}"}
-                >
-                  <Heroicons.list_bullet class="w-5 h-5" />
-                </button>
-              </div>
-
-              <!-- Filter Toggle -->
-              <button
-                phx-click="toggle_filters"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-              >
-                <Heroicons.funnel class="w-5 h-5" />
-                <span>Filters</span>
-                <%= if EventFilters.active_filter_count(@filters, 50) > 0 do %>
-                  <span class="ml-2 bg-blue-700 px-2 py-0.5 rounded-full text-xs">
-                    <%= EventFilters.active_filter_count(@filters, 50) %>
-                  </span>
-                <% end %>
-              </button>
+              <% end %>
             </div>
-          </div>
 
-          <!-- Search Bar -->
-          <div class="mt-4">
-            <.search_bar filters={@filters} />
-          </div>
+            <!-- Sort Controls -->
+            <.sort_controls sort_by={@filters.sort_by} show_popularity={true} />
 
-          <!-- Quick Date Filters -->
-          <div class="mt-4">
-            <.quick_date_filters
-              active_date_range={@active_date_range}
-              date_range_counts={@date_range_counts}
-              all_events_count={@all_events_count}
-            />
+            <!-- View Mode Toggle -->
+            <.view_toggle view_mode={@view_mode} />
+
+            <!-- Filter Toggle -->
+            <button
+              phx-click="toggle_filters"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+            >
+              <Heroicons.funnel class="w-5 h-5" />
+              <span>Filters</span>
+              <%= if EventFilters.active_filter_count(@filters, 50) > 0 do %>
+                <span class="ml-2 bg-blue-700 px-2 py-0.5 rounded-full text-xs">
+                  <%= EventFilters.active_filter_count(@filters, 50) %>
+                </span>
+              <% end %>
+            </button>
           </div>
         </div>
-      </div>
 
-      <!-- Filters Panel -->
-      <div :if={@show_filters} class="bg-white border-b">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Filters Panel (Expandable) -->
+        <div :if={@show_filters} class="mb-6">
           <.filter_panel
             filters={@filters}
             radius_km={@radius_km}
             categories={@categories}
           />
         </div>
-      </div>
 
-      <!-- Active Filters -->
-      <div :if={EventFilters.active_filter_count(@filters, 50) > 0 or @filters.sort_by not in [:starts_at, nil]} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        <div class="flex items-center space-x-2">
-          <span class="text-sm text-gray-600">Active filters:</span>
-          <.active_filter_tags filters={@filters} radius_km={@radius_km} categories={@categories} active_date_range={@active_date_range} default_radius={50} sort_by={@filters.sort_by} />
-          <button
-            phx-click="clear_filters"
-            class="ml-4 text-sm text-blue-600 hover:text-blue-800"
-          >
-            Clear all
-          </button>
+        <!-- Search Bar -->
+        <.search_bar filters={@filters} />
+
+        <!-- Quick Date Filters -->
+        <div class="mt-4">
+          <.quick_date_filters
+            active_date_range={@active_date_range}
+            date_range_counts={@date_range_counts}
+            all_events_count={@all_events_count}
+          />
+        </div>
+
+        <!-- Active Filter Tags -->
+        <div class="mt-4">
+          <.active_filter_tags
+            filters={@filters}
+            radius_km={@radius_km}
+            categories={@categories}
+            active_date_range={@active_date_range}
+            default_radius={50}
+            sort_by={@filters.sort_by}
+          />
+        </div>
+
+        <!-- Events Grid/List -->
+        <div class="mt-6">
+          <%= if @loading or @events_loading do %>
+            <.loading_skeleton />
+          <% else %>
+            <%= if @events == [] do %>
+              <.empty_state />
+            <% else %>
+              <.event_results
+                events={@events}
+                view_mode={@view_mode}
+                language={@language}
+                pagination={@pagination}
+                show_city={false}
+              />
+
+              <!-- Pagination -->
+              <div class="mt-8">
+                <.pagination pagination={@pagination} />
+              </div>
+            <% end %>
+          <% end %>
         </div>
       </div>
-
-      <!-- Events Grid/List -->
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <%= if @loading or @events_loading do %>
-          <.loading_skeleton />
-        <% else %>
-          <%= if @events == [] do %>
-            <.empty_state />
-          <% else %>
-            <.event_results
-              events={@events}
-              view_mode={@view_mode}
-              language={@language}
-              pagination={@pagination}
-              show_city={false}
-            />
-
-            <!-- Pagination -->
-            <div class="mt-8">
-              <.pagination pagination={@pagination} />
-            </div>
-          <% end %>
-        <% end %>
-      </div>
-
     </div>
 
     <div id="language-cookie-hook" phx-hook="LanguageCookie"></div>
