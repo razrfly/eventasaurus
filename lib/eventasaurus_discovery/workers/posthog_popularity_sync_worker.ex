@@ -34,7 +34,6 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
   use Oban.Worker,
     queue: :analytics,
     max_attempts: 3,
-    # 10 minute timeout for slow PostHog queries
     priority: 3
 
   require Logger

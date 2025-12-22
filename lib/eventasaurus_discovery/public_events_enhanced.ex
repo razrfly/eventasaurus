@@ -351,6 +351,8 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp apply_sorting(query, nil, nil), do: apply_sorting(query, :starts_at, :asc)
   defp apply_sorting(query, nil, order), do: apply_sorting(query, :starts_at, order || :asc)
+  # Popularity defaults to desc (most popular first), other fields default to asc
+  defp apply_sorting(query, :popularity, nil), do: apply_sorting(query, :popularity, :desc)
   defp apply_sorting(query, field, nil), do: apply_sorting(query, field, :asc)
 
   defp apply_sorting(query, :starts_at, order) when order in [:asc, :desc] do
