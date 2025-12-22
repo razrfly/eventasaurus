@@ -16,8 +16,6 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
   alias EventasaurusDiscovery.Categories
-  alias EventasaurusDiscovery.Movies.AggregatedMovieGroup
-  alias EventasaurusDiscovery.PublicEvents.AggregatedContainerGroup
   alias EventasaurusWeb.Components.OpenGraphComponent
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Helpers.LanguageDiscovery
@@ -28,7 +26,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   alias EventasaurusWeb.Cache.CityPageCache
 
   import EventasaurusWeb.EventComponents
-  import EventasaurusWeb.Components.EventCards
+  import EventasaurusWeb.Components.EventListing
 
   @default_radius_km 50
 
@@ -58,6 +56,7 @@ defmodule EventasaurusWeb.CityLive.Index do
 
           # STAGED LOADING: Initialize with loading state, defer expensive operations
           # This prevents mount timeout and provides fast initial render
+          # Note: handle_params will immediately follow and set real values from URL
           {:ok,
            socket
            |> assign(:city, city)
@@ -68,7 +67,7 @@ defmodule EventasaurusWeb.CityLive.Index do
            |> assign(:available_languages, ["en"])
            |> assign(:radius_km, @default_radius_km)
            |> assign(:view_mode, "grid")
-           |> assign(:filters, default_filters())
+           |> assign(:filters, %{page: 1, page_size: 30})
            |> assign(:show_filters, false)
            |> assign(:loading, true)
            |> assign(:events_loading, true)
@@ -86,6 +85,8 @@ defmodule EventasaurusWeb.CityLive.Index do
            })
            |> assign(:active_date_range, nil)
            |> assign(:date_range_counts, %{})
+           # Track that we're in deferred loading mode - handle_params will update filters from URL
+           |> assign(:deferred_loading, true)
            |> defer_expensive_loading()}
         else
           {:ok,
@@ -180,6 +181,8 @@ defmodule EventasaurusWeb.CityLive.Index do
         |> fetch_events()
         |> fetch_nearby_cities()
         |> assign(:events_loading, false)
+        # Clear deferred_loading flag - initial loading is complete
+        |> assign(:deferred_loading, false)
       rescue
         e ->
           Logger.error(
@@ -189,6 +192,7 @@ defmodule EventasaurusWeb.CityLive.Index do
           socket
           |> assign(:events, [])
           |> assign(:events_loading, false)
+          |> assign(:deferred_loading, false)
           |> assign(:total_events, 0)
       end
 
@@ -225,12 +229,33 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    socket =
-      socket
-      |> apply_params_to_filters(params)
-      |> fetch_events()
+    # Skip in two cases:
+    # 1. deferred_loading = true: Initial mount is using staged loading pattern
+    #    BUT we still need to capture the URL params for when :load_events runs
+    # 2. events_loading = true AND NOT deferred_loading: A handle_event triggered
+    #    push_patch and sent :load_filtered_events message
+    cond do
+      socket.assigns[:deferred_loading] == true ->
+        # Initial staged loading - capture URL params for :load_events to use
+        # This ensures direct URL navigation (e.g., ?page=7) respects URL state
+        socket = apply_url_params_for_deferred_load(socket, params)
+        {:noreply, socket}
 
-    {:noreply, socket}
+      socket.assigns[:events_loading] == true ->
+        # handle_event already set filters and is loading events asynchronously
+        # Don't touch filters or fetch events
+        {:noreply, socket}
+
+      true ->
+        # Normal navigation (e.g., direct URL access, browser back/forward)
+        # Apply params and fetch events
+        socket =
+          socket
+          |> apply_params_to_filters(params)
+          |> fetch_events()
+
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -487,86 +512,16 @@ defmodule EventasaurusWeb.CityLive.Index do
 
           <!-- Search Bar -->
           <div class="mt-4">
-            <form phx-submit="search" class="relative">
-              <input
-                type="text"
-                name="search"
-                value={@filters.search}
-                placeholder="Search events..."
-                class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button type="submit" class="absolute right-3 top-3.5">
-                <Heroicons.magnifying_glass class="w-5 h-5 text-gray-500" />
-              </button>
-            </form>
+            <.search_bar filters={@filters} />
           </div>
 
           <!-- Quick Date Filters -->
           <div class="mt-4">
-            <div class="flex items-center justify-between mb-2">
-              <h2 class="text-sm font-medium text-gray-700">
-                <%= gettext("Quick date filters") %>
-              </h2>
-              <%= if @active_date_range do %>
-                <button
-                  phx-click="clear_date_filter"
-                  class="text-sm text-blue-600 hover:text-blue-800 flex items-center"
-                >
-                  <Heroicons.x_mark class="w-4 h-4 mr-1" />
-                  <%= gettext("Clear date filter") %>
-                </button>
-              <% end %>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <.date_range_button
-                range={:all}
-                label={gettext("All Events")}
-                active={@active_date_range == nil}
-                count={@all_events_count}
-              />
-              <.date_range_button
-                range={:today}
-                label={gettext("Today")}
-                active={@active_date_range == :today}
-                count={Map.get(@date_range_counts, :today, 0)}
-              />
-              <.date_range_button
-                range={:tomorrow}
-                label={gettext("Tomorrow")}
-                active={@active_date_range == :tomorrow}
-                count={Map.get(@date_range_counts, :tomorrow, 0)}
-              />
-              <.date_range_button
-                range={:this_weekend}
-                label={gettext("This Weekend")}
-                active={@active_date_range == :this_weekend}
-                count={Map.get(@date_range_counts, :this_weekend, 0)}
-              />
-              <.date_range_button
-                range={:next_7_days}
-                label={gettext("Next 7 Days")}
-                active={@active_date_range == :next_7_days}
-                count={Map.get(@date_range_counts, :next_7_days, 0)}
-              />
-              <.date_range_button
-                range={:next_30_days}
-                label={gettext("Next 30 Days")}
-                active={@active_date_range == :next_30_days}
-                count={Map.get(@date_range_counts, :next_30_days, 0)}
-              />
-              <.date_range_button
-                range={:this_month}
-                label={gettext("This Month")}
-                active={@active_date_range == :this_month}
-                count={Map.get(@date_range_counts, :this_month, 0)}
-              />
-              <.date_range_button
-                range={:next_month}
-                label={gettext("Next Month")}
-                active={@active_date_range == :next_month}
-                count={Map.get(@date_range_counts, :next_month, 0)}
-              />
-            </div>
+            <.quick_date_filters
+              active_date_range={@active_date_range}
+              date_range_counts={@date_range_counts}
+              all_events_count={@all_events_count}
+            />
           </div>
         </div>
       </div>
@@ -599,103 +554,18 @@ defmodule EventasaurusWeb.CityLive.Index do
       <!-- Events Grid/List -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <%= if @loading or @events_loading do %>
-          <!-- Skeleton Loading State -->
-          <div class="animate-pulse">
-            <!-- Results count skeleton -->
-            <div class="mb-4">
-              <div class="h-4 w-32 bg-gray-200 rounded"></div>
-            </div>
-
-            <!-- Event cards skeleton grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <%= for _i <- 1..6 do %>
-                <div class="bg-white rounded-lg shadow overflow-hidden">
-                  <!-- Image placeholder -->
-                  <div class="h-48 bg-gray-200"></div>
-                  <!-- Content -->
-                  <div class="p-4 space-y-3">
-                    <!-- Title -->
-                    <div class="h-5 bg-gray-200 rounded w-3/4"></div>
-                    <!-- Date/time -->
-                    <div class="flex items-center space-x-2">
-                      <div class="h-4 w-4 bg-gray-300 rounded"></div>
-                      <div class="h-4 bg-gray-200 rounded w-1/2"></div>
-                    </div>
-                    <!-- Location -->
-                    <div class="flex items-center space-x-2">
-                      <div class="h-4 w-4 bg-gray-300 rounded"></div>
-                      <div class="h-4 bg-gray-200 rounded w-2/3"></div>
-                    </div>
-                    <!-- Category badge -->
-                    <div class="flex space-x-2">
-                      <div class="h-6 w-16 bg-gray-200 rounded-full"></div>
-                      <div class="h-6 w-20 bg-gray-200 rounded-full"></div>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-
-            <!-- Pagination skeleton -->
-            <div class="mt-8 flex justify-center">
-              <div class="flex items-center space-x-2">
-                <div class="h-10 w-20 bg-gray-200 rounded"></div>
-                <div class="h-10 w-10 bg-gray-300 rounded"></div>
-                <div class="h-10 w-10 bg-gray-200 rounded"></div>
-                <div class="h-10 w-10 bg-gray-200 rounded"></div>
-                <div class="h-10 w-20 bg-gray-200 rounded"></div>
-              </div>
-            </div>
-
-            <p class="text-center text-sm text-gray-500 mt-4">Loading events...</p>
-          </div>
+          <.loading_skeleton />
         <% else %>
           <%= if @events == [] do %>
-            <div class="text-center py-12">
-              <Heroicons.calendar_days class="mx-auto h-12 w-12 text-gray-400" />
-              <h3 class="mt-2 text-lg font-medium text-gray-900">
-                No events found
-              </h3>
-              <p class="mt-1 text-sm text-gray-500">
-                Try adjusting your filters or search query
-              </p>
-            </div>
+            <.empty_state />
           <% else %>
-            <div class="mb-4 text-sm text-gray-600">
-              Found {@total_events} events
-            </div>
-
-            <%= if @view_mode == "grid" do %>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <%= for item <- @events do %>
-                  <%= cond do %>
-                    <% match?(%AggregatedMovieGroup{}, item) -> %>
-                      <.aggregated_movie_card group={item} language={@language} show_city={false} />
-                    <% match?(%AggregatedContainerGroup{}, item) -> %>
-                      <.aggregated_container_card group={item} language={@language} show_city={false} />
-                    <% is_aggregated?(item) -> %>
-                      <.aggregated_event_card group={item} language={@language} show_city={false} />
-                    <% true -> %>
-                      <.event_card event={item} language={@language} show_city={false} />
-                  <% end %>
-                <% end %>
-              </div>
-            <% else %>
-              <div class="space-y-4">
-                <%= for item <- @events do %>
-                  <%= cond do %>
-                    <% match?(%AggregatedMovieGroup{}, item) -> %>
-                      <.aggregated_movie_card group={item} language={@language} show_city={false} />
-                    <% match?(%AggregatedContainerGroup{}, item) -> %>
-                      <.aggregated_container_card group={item} language={@language} show_city={false} />
-                    <% is_aggregated?(item) -> %>
-                      <.aggregated_event_card group={item} language={@language} show_city={false} />
-                    <% true -> %>
-                      <.event_card event={item} language={@language} show_city={false} />
-                  <% end %>
-                <% end %>
-              </div>
-            <% end %>
+            <.event_results
+              events={@events}
+              view_mode={@view_mode}
+              language={@language}
+              total_events={@total_events}
+              show_city={false}
+            />
 
             <!-- Pagination -->
             <div class="mt-8">
@@ -779,52 +649,6 @@ defmodule EventasaurusWeb.CityLive.Index do
     """
   end
 
-  # Component: Pagination - EXACT same from Activities page
-  defp pagination(assigns) do
-    ~H"""
-    <nav class="flex justify-center">
-      <div class="flex items-center space-x-2">
-        <!-- Previous -->
-        <button
-          :if={@pagination.page_number > 1}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number - 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Previous
-        </button>
-
-        <!-- Page Numbers -->
-        <div class="flex space-x-1">
-          <%= for page <- Pagination.page_links(@pagination) do %>
-            <%= if page == :ellipsis do %>
-              <span class="px-3 py-2">...</span>
-            <% else %>
-              <button
-                phx-click="paginate"
-                phx-value-page={page}
-                class={"px-3 py-2 rounded-md #{if page == @pagination.page_number, do: "bg-blue-600 text-white", else: "border border-gray-300 hover:bg-gray-50"}"}
-              >
-                <%= page %>
-              </button>
-            <% end %>
-          <% end %>
-        </div>
-
-        <!-- Next -->
-        <button
-          :if={@pagination.page_number < @pagination.total_pages}
-          phx-click="paginate"
-          phx-value-page={@pagination.page_number + 1}
-          class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Next
-        </button>
-      </div>
-    </nav>
-    """
-  end
-
   # Private functions
 
   defp fetch_events(socket) do
@@ -866,10 +690,17 @@ defmodule EventasaurusWeb.CityLive.Index do
           )
 
         # Get the total count without pagination
-        # Use raw count (not aggregation) to avoid 500-event limit and ensure consistency
+        # IMPORTANT: Use aggregation-aware count to match the actual displayed items
+        # This ensures pagination is accurate (e.g., page 7 shows items if count says 7 pages exist)
         count_filters = Map.delete(query_filters, :page) |> Map.delete(:page_size)
 
-        total = PublicEventsEnhanced.count_events(count_filters)
+        total =
+          PublicEventsEnhanced.count_events_with_aggregation(
+            count_filters
+            |> Map.put(:aggregate, true)
+            |> Map.put(:ignore_city_in_aggregation, true)
+            |> Map.put(:viewing_city, city)
+          )
 
         # Get date range counts with geographic filtering, but without existing date filters
         # This ensures date range counts are calculated from ALL events, not just the currently filtered ones
@@ -886,9 +717,14 @@ defmodule EventasaurusWeb.CityLive.Index do
           )
 
         # Get the count of ALL events (no date filters) for the "All Events" button
-        # Use direct count (not aggregation-aware) to avoid 500-event limit issue
-        # This ensures "All Events" is always >= any specific date range count
-        all_events = PublicEventsEnhanced.count_events(date_range_count_filters)
+        # Use aggregation-aware count to match what users actually see when browsing
+        all_events =
+          PublicEventsEnhanced.count_events_with_aggregation(
+            date_range_count_filters
+            |> Map.put(:aggregate, true)
+            |> Map.put(:ignore_city_in_aggregation, true)
+            |> Map.put(:viewing_city, city)
+          )
 
         {events, total, all_events, date_counts}
       else
@@ -1001,23 +837,110 @@ defmodule EventasaurusWeb.CityLive.Index do
   #   end
   # end
 
-  defp default_filters do
-    # Default to next 30 days like public events page
-    {start_date, end_date} = PublicEventsEnhanced.calculate_date_range(:next_30_days)
+  # Detect which quick date range (if any) matches the current filters
+  defp detect_active_date_range(filters) do
+    case {filters.start_date, filters.end_date} do
+      {nil, nil} ->
+        # No date filter = "All Events"
+        nil
 
-    %{
-      search: nil,
-      categories: [],
-      start_date: start_date,
-      end_date: end_date,
-      radius_km: @default_radius_km,
-      sort_by: :starts_at,
+      {start_date, end_date} when not is_nil(start_date) and not is_nil(end_date) ->
+        # Check if it matches any known quick date range
+        Enum.find(
+          [:today, :tomorrow, :this_weekend, :next_7_days, :next_30_days, :this_month, :next_month],
+          fn range ->
+            {range_start, range_end} = PublicEventsEnhanced.calculate_date_range(range)
+            dates_match?(start_date, range_start) and dates_match?(end_date, range_end)
+          end
+        )
+
+      _ ->
+        # Custom date range
+        nil
+    end
+  end
+
+  # Compare two DateTimes, ignoring time component differences
+  defp dates_match?(dt1, dt2) when is_struct(dt1, DateTime) and is_struct(dt2, DateTime) do
+    Date.compare(DateTime.to_date(dt1), DateTime.to_date(dt2)) == :eq
+  end
+
+  defp dates_match?(_, _), do: false
+
+  # Apply URL params during deferred loading
+  # This captures query string params (page, date filters, etc.) that weren't available in mount
+  defp apply_url_params_for_deferred_load(socket, params) do
+    page = parse_integer(params["page"]) || 1
+    radius_km = parse_integer(params["radius"]) || socket.assigns.radius_km
+
+    # Parse date params from URL
+    start_date = parse_date(params["start_date"])
+    end_date = parse_date(params["end_date"])
+
+    # Determine if URL has explicit date state
+    # Priority:
+    # 1. date_filter=all means "All Events" (no date filter)
+    # 2. start_date/end_date params mean specific date filter
+    # 3. No date params = apply default 30-day filter
+    {final_start_date, final_end_date} =
+      cond do
+        params["date_filter"] == "all" ->
+          # Explicit "All Events" - no date filter
+          {nil, nil}
+
+        Map.has_key?(params, "start_date") or Map.has_key?(params, "end_date") ->
+          # URL explicitly sets date range
+          {start_date, end_date}
+
+        true ->
+          # No date params in URL - show all events (paginated)
+          {nil, nil}
+      end
+
+    # Parse categories
+    category_ids =
+      case params do
+        %{"category" => slug} when is_binary(slug) and slug != "" ->
+          case Categories.get_category_by_slug(slug) do
+            nil -> []
+            category -> [category.id]
+          end
+
+        %{"categories" => ids} ->
+          parse_id_list(ids)
+
+        _ ->
+          []
+      end
+
+    # Build filters from URL params
+    filters = %{
+      search: params["search"],
+      categories: category_ids,
+      start_date: final_start_date,
+      end_date: final_end_date,
+      radius_km: radius_km,
+      sort_by: parse_sort(params["sort"]),
       sort_order: :asc,
-      page: 1,
-      # Divisible by 3 for grid layout (3 columns on large screens)
+      page: page,
       page_size: 30,
-      show_past: true
+      show_past: parse_boolean(params["show_past"])
     }
+
+    # Detect active date range for UI highlighting
+    active_date_range = detect_active_date_range(filters)
+
+    socket
+    |> assign(:filters, filters)
+    |> assign(:radius_km, radius_km)
+    |> assign(:active_date_range, active_date_range)
+    |> assign(:pagination, %Pagination{
+      entries: [],
+      page_number: page,
+      page_size: 30,
+      total_entries: 0,
+      total_pages: 0
+    })
   end
 
   defp apply_params_to_filters(socket, params) do
@@ -1039,22 +962,35 @@ defmodule EventasaurusWeb.CityLive.Index do
           []
       end
 
+    # Handle date filter - check for explicit "all" marker first
+    {start_date, end_date} =
+      if params["date_filter"] == "all" do
+        # Explicit "All Events" - no date filter
+        {nil, nil}
+      else
+        {parse_date(params["start_date"]), parse_date(params["end_date"])}
+      end
+
     filters = %{
       search: params["search"],
       categories: category_ids,
-      start_date: parse_date(params["start_date"]),
-      end_date: parse_date(params["end_date"]),
+      start_date: start_date,
+      end_date: end_date,
       radius_km: parse_integer(params["radius"]) || socket.assigns.radius_km,
       sort_by: parse_sort(params["sort"]),
       sort_order: :asc,
       page: parse_integer(params["page"]) || 1,
-      page_size: 21,
+      page_size: 30,
       show_past: parse_boolean(params["show_past"])
     }
+
+    # Update active_date_range for UI highlighting
+    active_date_range = detect_active_date_range(filters)
 
     socket
     |> assign(:filters, filters)
     |> assign(:radius_km, filters.radius_km)
+    |> assign(:active_date_range, active_date_range)
   end
 
   defp build_path(socket, filters) do
@@ -1063,41 +999,51 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   defp build_filter_params(filters) do
-    filters
-    |> Map.take([
-      :search,
-      :categories,
-      :start_date,
-      :end_date,
-      :radius_km,
-      :sort_by,
-      :page,
-      :show_past
-    ])
-    |> Enum.reject(fn
-      {_k, nil} -> true
-      {_k, ""} -> true
-      # Empty categories list
-      {_k, []} -> true
-      {:page, 1} -> true
-      # Don't include default radius
-      {:radius_km, @default_radius_km} -> true
-      {:sort_by, :starts_at} -> true
-      # Don't include default
-      {:show_past, false} -> true
-      _ -> false
-    end)
-    |> Enum.map(fn
-      {:categories, cats} when is_list(cats) -> {"categories", Enum.join(cats, ",")}
-      {:start_date, date} -> {"start_date", DateTime.to_iso8601(date)}
-      {:end_date, date} -> {"end_date", DateTime.to_iso8601(date)}
-      {:radius_km, radius} -> {"radius", to_string(radius)}
-      {:sort_by, sort} -> {"sort", to_string(sort)}
-      {:page, page} -> {"page", to_string(page)}
-      {:show_past, val} -> {"show_past", to_string(val)}
-      {k, v} -> {to_string(k), to_string(v)}
-    end)
-    |> Enum.into(%{})
+    # Start with the base filter params
+    base_params =
+      filters
+      |> Map.take([
+        :search,
+        :categories,
+        :start_date,
+        :end_date,
+        :radius_km,
+        :sort_by,
+        :page,
+        :show_past
+      ])
+      |> Enum.reject(fn
+        {_k, nil} -> true
+        {_k, ""} -> true
+        # Empty categories list
+        {_k, []} -> true
+        {:page, 1} -> true
+        # Don't include default radius
+        {:radius_km, @default_radius_km} -> true
+        {:sort_by, :starts_at} -> true
+        # Don't include default
+        {:show_past, false} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn
+        {:categories, cats} when is_list(cats) -> {"categories", Enum.join(cats, ",")}
+        {:start_date, date} -> {"start_date", DateTime.to_iso8601(date)}
+        {:end_date, date} -> {"end_date", DateTime.to_iso8601(date)}
+        {:radius_km, radius} -> {"radius", to_string(radius)}
+        {:sort_by, sort} -> {"sort", to_string(sort)}
+        {:page, page} -> {"page", to_string(page)}
+        {:show_past, val} -> {"show_past", to_string(val)}
+        {k, v} -> {to_string(k), to_string(v)}
+      end)
+      |> Enum.into(%{})
+
+    # If there's no date filter (All Events), add explicit marker
+    # This ensures pagination preserves the "all events" state
+    if is_nil(filters[:start_date]) and is_nil(filters[:end_date]) do
+      Map.put(base_params, "date_filter", "all")
+    else
+      base_params
+    end
   end
 
   defp parse_integer(nil), do: nil

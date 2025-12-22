@@ -15,8 +15,12 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
   alias EventasaurusWeb.UrlHelper
+  alias EventasaurusWeb.Live.Helpers.EventFilters
+  alias EventasaurusWeb.Live.Helpers.EventPagination
+  alias EventasaurusDiscovery.Pagination
+
   import Ecto.Query
-  import EventasaurusWeb.Components.EventCards
+  import EventasaurusWeb.Components.EventListing
 
   @impl true
   def mount(_params, _session, socket) do
@@ -41,18 +45,28 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:language, language)
       |> assign(:available_languages, ["en"])
       |> assign(:request_uri, request_uri)
-      |> assign(:upcoming_events, [])
-      |> assign(:future_events, [])
-      |> assign(:past_events, [])
-      |> assign(:show_past_events, false)
-      |> assign(:show_future_events, false)
+      # Unified event list with filtering (replaces separate upcoming/future/past)
+      |> assign(:events, [])
+      |> assign(:all_events, [])
+      |> assign(:total_events, 0)
+      |> assign(:all_events_count, 0)
+      # Date filtering - nil means show all events (paginated)
+      |> assign(:active_date_range, nil)
+      |> assign(:date_range_counts, %{})
+      |> assign(:filters, %{search: nil})
+      # Pagination
+      |> assign(:pagination, %Pagination{
+        entries: [],
+        page_number: 1,
+        page_size: 30,
+        total_entries: 0,
+        total_pages: 0
+      })
+      # View mode
+      |> assign(:view_mode, "grid")
+      # Legacy assigns (kept for backward compatibility with sidebar)
       |> assign(:nearby_events, [])
-      |> assign(:upcoming_page_size, 9)
-      |> assign(:upcoming_visible_count, 9)
-      |> assign(:future_page_size, 9)
-      |> assign(:future_visible_count, 9)
-      |> assign(:past_page_size, 9)
-      |> assign(:past_visible_count, 9)
+      |> assign(:show_past_events, false)
 
     {:ok, socket}
   end
@@ -95,32 +109,96 @@ defmodule EventasaurusWeb.VenueLive.Show do
     end
   end
 
+  # Quick date filter handler
   @impl true
-  def handle_event("toggle_past_events", _params, socket) do
-    {:noreply, assign(socket, :show_past_events, !socket.assigns.show_past_events)}
+  def handle_event("quick_date_filter", %{"range" => range_string}, socket) do
+    case EventFilters.parse_quick_range(range_string) do
+      {:ok, range_atom} ->
+        active_date_range = if range_atom == :all, do: nil, else: range_atom
+
+        # Filter events by the selected date range
+        all_events = socket.assigns.all_events
+        filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+
+        # Reset to page 1 and paginate
+        page_size = socket.assigns.pagination.page_size
+        {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+
+        {:noreply,
+         socket
+         |> assign(:active_date_range, active_date_range)
+         |> assign(:events, paginated_events)
+         |> assign(:total_events, length(filtered_events))
+         |> assign(:pagination, pagination)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
+  # Clear date filter handler
   @impl true
-  def handle_event("toggle_future_events", _params, socket) do
-    {:noreply, assign(socket, :show_future_events, !socket.assigns.show_future_events)}
+  def handle_event("clear_date_filter", _params, socket) do
+    # Reset to default (all events)
+    active_date_range = nil
+    all_events = socket.assigns.all_events
+    filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+
+    page_size = socket.assigns.pagination.page_size
+    {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+
+    {:noreply,
+     socket
+     |> assign(:active_date_range, active_date_range)
+     |> assign(:events, paginated_events)
+     |> assign(:total_events, length(filtered_events))
+     |> assign(:pagination, pagination)}
   end
 
+  # Pagination handler
   @impl true
-  def handle_event("load_more_upcoming", _params, socket) do
-    new_count = socket.assigns.upcoming_visible_count + socket.assigns.upcoming_page_size
-    {:noreply, assign(socket, :upcoming_visible_count, new_count)}
+  def handle_event("paginate", %{"page" => page_string}, socket) do
+    page = String.to_integer(page_string)
+    all_events = socket.assigns.all_events
+    active_date_range = socket.assigns.active_date_range
+    filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+
+    page_size = socket.assigns.pagination.page_size
+    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page, page_size)
+
+    {:noreply,
+     socket
+     |> assign(:events, paginated_events)
+     |> assign(:pagination, pagination)}
   end
 
+  # Search handler
   @impl true
-  def handle_event("load_more_future", _params, socket) do
-    new_count = socket.assigns.future_visible_count + socket.assigns.future_page_size
-    {:noreply, assign(socket, :future_visible_count, new_count)}
+  def handle_event("search", %{"search" => search_term}, socket) do
+    all_events = socket.assigns.all_events
+    active_date_range = socket.assigns.active_date_range
+
+    # Filter by date range and search term, then paginate
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        date_range: active_date_range,
+        search: search_term,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{search: search_term})
+     |> assign(:events, paginated_events)
+     |> assign(:total_events, filtered_count)
+     |> assign(:pagination, pagination)}
   end
 
+  # View mode toggle handler
   @impl true
-  def handle_event("load_more_past", _params, socket) do
-    new_count = socket.assigns.past_visible_count + socket.assigns.past_page_size
-    {:noreply, assign(socket, :past_visible_count, new_count)}
+  def handle_event("change_view", %{"view" => view_mode}, socket) do
+    {:noreply, assign(socket, :view_mode, view_mode)}
   end
 
   # Helper functions
@@ -130,8 +208,20 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Preload city and country (venue_images is a field, not an association)
     venue = Repo.preload(venue, city_ref: :country)
 
-    # Get events for this venue
-    events = get_venue_events(venue.id)
+    # Get all upcoming events for this venue (for filtering)
+    all_events = get_all_venue_events(venue.id)
+    all_events_count = length(all_events)
+
+    # Calculate date range counts for quick filters
+    date_range_counts = EventPagination.calculate_date_range_counts(all_events)
+
+    # Apply default filter (next 30 days) and paginate
+    active_date_range = socket.assigns.active_date_range
+    filtered_events = EventPagination.filter_by_date_range(all_events, active_date_range)
+    page_size = socket.assigns.pagination.page_size
+    page_number = socket.assigns.pagination.page_number
+
+    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page_number, page_size)
 
     # Get nearby events in the same city (excluding events at this venue)
     nearby_events =
@@ -159,8 +249,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
     json_ld_schemas =
       generate_json_ld_schemas(venue, breadcrumb_items, socket.assigns.request_uri)
 
-    # Build venue description for SEO
-    description = build_venue_description(venue, events)
+    # Build venue description for SEO (using total event count)
+    description = build_venue_description_simple(venue, all_events_count)
 
     # Build canonical path
     canonical_path =
@@ -177,9 +267,12 @@ defmodule EventasaurusWeb.VenueLive.Show do
     socket =
       socket
       |> assign(:venue, venue)
-      |> assign(:upcoming_events, events.upcoming)
-      |> assign(:future_events, events.future)
-      |> assign(:past_events, events.past)
+      |> assign(:all_events, all_events)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, length(filtered_events))
+      |> assign(:all_events_count, all_events_count)
+      |> assign(:date_range_counts, date_range_counts)
+      |> assign(:pagination, pagination)
       |> assign(:nearby_events, nearby_events)
       |> assign(:breadcrumb_items, breadcrumb_items)
       |> assign(:available_languages, available_languages)
@@ -213,68 +306,39 @@ defmodule EventasaurusWeb.VenueLive.Show do
     Repo.get_by(Venue, slug: slug)
   end
 
-  defp get_venue_events(venue_id) do
-    now = DateTime.utc_now()
-    thirty_days_from_now = DateTime.add(now, 30, :day)
-
-    # Get upcoming events (limit 5000 - venues rarely have this many future events)
-    # This ensures we capture all upcoming/future events even for high-volume venues
-    # Preload all necessary associations for the shared event card component
-    upcoming_events =
-      PublicEvents.by_venue(venue_id,
-        upcoming_only: true,
-        limit: 5000,
-        preload: [:performers, :categories, :sources]
-      )
-
-    # Get recent past events using a separate query with reverse chronological order
-    # We want the MOST RECENT past events, not the oldest ones
-    past_events = get_recent_past_events(venue_id, limit: 500)
-
-    # Combine and group all events
-    all_events = upcoming_events ++ past_events
-
-    # Add cover_image_url virtual field to events for compatibility with shared event card component
-    all_events_with_images =
-      Enum.map(all_events, fn event ->
-        Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
-      end)
-
-    grouped =
-      Enum.group_by(all_events_with_images, fn event ->
-        cond do
-          DateTime.compare(event.starts_at, now) == :lt -> :past
-          DateTime.compare(event.starts_at, thirty_days_from_now) == :lt -> :upcoming
-          true -> :future
-        end
-      end)
-
-    %{
-      upcoming: grouped[:upcoming] || [],
-      future: grouped[:future] || [],
-      # Past events are already in reverse chronological order (newest first)
-      past: grouped[:past] || []
-    }
+  # Get all upcoming events for a venue (for filtering)
+  defp get_all_venue_events(venue_id) do
+    PublicEvents.by_venue(venue_id,
+      upcoming_only: true,
+      limit: 5000,
+      preload: [:performers, :categories, :sources]
+    )
+    |> Enum.map(fn event ->
+      Map.put(event, :cover_image_url, PublicEventsEnhanced.get_cover_image_url(event))
+    end)
+    |> Enum.sort_by(& &1.starts_at, DateTime)
   end
 
-  defp get_recent_past_events(venue_id, opts) do
-    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+  # Build venue description for SEO (simplified version)
+  defp build_venue_description_simple(venue, event_count) do
+    city_name = if venue.city_ref, do: venue.city_ref.name, else: nil
 
-    limit = Keyword.get(opts, :limit, 500)
-    now = DateTime.utc_now()
+    cond do
+      city_name && venue.address ->
+        "#{venue.name} located at #{venue.address}, #{city_name}. " <>
+          "Discover #{event_count} upcoming events and activities."
 
-    # Query past events in reverse chronological order (most recent first)
-    from(pe in PublicEvent,
-      where: pe.venue_id == ^venue_id,
-      where:
-        (not is_nil(pe.ends_at) and pe.ends_at < ^now) or
-          (is_nil(pe.ends_at) and pe.starts_at < ^now),
-      order_by: [desc: pe.starts_at],
-      limit: ^limit
-    )
-    |> Repo.all()
-    # Preload sources so get_cover_image_url can extract image URLs
-    |> Repo.preload([:performers, :categories, :sources, venue: [city_ref: :country]])
+      city_name ->
+        "#{venue.name} in #{city_name}. " <>
+          "Discover #{event_count} upcoming events and activities."
+
+      venue.address ->
+        "#{venue.name} located at #{venue.address}. " <>
+          "Discover #{event_count} upcoming events and activities."
+
+      true ->
+        "#{venue.name} - Discover #{event_count} upcoming events and activities."
+    end
   end
 
   defp get_nearby_city_events(city_id, current_venue_id, opts) do
@@ -327,33 +391,6 @@ defmodule EventasaurusWeb.VenueLive.Show do
       _ ->
         # Fallback: return just the business schema if parsing fails
         local_business_json
-    end
-  end
-
-  # Build venue description for SEO meta tags
-  defp build_venue_description(venue, events) do
-    city_name = if venue.city_ref, do: venue.city_ref.name, else: nil
-    upcoming_count = length(events.upcoming)
-
-    cond do
-      # If venue has address and city
-      city_name && venue.address ->
-        "#{venue.name} located at #{venue.address}, #{city_name}. " <>
-          "Discover #{upcoming_count} upcoming events and activities."
-
-      # If venue has city but no address
-      city_name ->
-        "#{venue.name} in #{city_name}. " <>
-          "Discover #{upcoming_count} upcoming events and activities."
-
-      # If venue has address but no city
-      venue.address ->
-        "#{venue.name} located at #{venue.address}. " <>
-          "Discover #{upcoming_count} upcoming events and activities."
-
-      # Fallback: just venue name
-      true ->
-        "#{venue.name} - Discover #{upcoming_count} upcoming events and activities."
     end
   end
 
@@ -427,9 +464,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
     ~H"""
     <div class="min-h-screen">
       <%= if @loading do %>
-        <div class="flex items-center justify-center py-12">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-        </div>
+        <.loading_skeleton />
       <% else %>
         <!-- Hero Section -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -441,7 +476,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
           <!-- Venue Hero Card -->
           <VenueHeroCard.venue_hero_card
             venue={@venue}
-            upcoming_event_count={length(@upcoming_events) + length(@future_events)}
+            upcoming_event_count={@all_events_count}
           />
         </div>
 
@@ -449,128 +484,56 @@ defmodule EventasaurusWeb.VenueLive.Show do
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <ActivityLayout.activity_layout>
             <:main>
-              <!-- Events Section -->
-              <div class="space-y-8">
-                <!-- Upcoming Events (Next 30 Days) -->
-                <div>
-                  <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                    <%= gettext("Upcoming Events") %>
+              <!-- Events Section with Filters -->
+              <div class="space-y-6">
+                <!-- Header with View Mode Toggle -->
+                <div class="flex items-center justify-between">
+                  <h2 class="text-2xl font-bold text-gray-900">
+                    <%= gettext("Events") %>
                   </h2>
-                  <p class="text-gray-600 mb-6">
-                    <%= gettext("Next 30 days") %>
-                    <%= if length(@upcoming_events) > 0 do %>
-                      <span class="text-gray-500">
-                        · <%= length(@upcoming_events) %> <%= ngettext("event", "events", length(@upcoming_events)) %>
-                      </span>
-                    <% end %>
-                  </p>
-
-                  <%= if Enum.empty?(@upcoming_events) do %>
-                    <div class="bg-gray-50 rounded-lg p-8 text-center">
-                      <Heroicons.calendar class="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p class="text-gray-600"><%= gettext("No events in the next 30 days.") %></p>
-                    </div>
-                  <% else %>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <%= for event <- Enum.take(@upcoming_events, @upcoming_visible_count) do %>
-                        <.event_card event={event} language={@language} show_city={false} />
-                      <% end %>
-                    </div>
-                    <%= if length(@upcoming_events) > @upcoming_visible_count do %>
-                      <div class="text-center mt-6">
-                        <button
-                          type="button"
-                          phx-click="load_more_upcoming"
-                          class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
-                        >
-                          <%= gettext("Load More") %> (<%= length(@upcoming_events) - @upcoming_visible_count %> <%= gettext("remaining") %>)
-                        </button>
-                      </div>
-                    <% end %>
-                  <% end %>
+                  <div class="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      phx-click="change_view"
+                      phx-value-view="grid"
+                      class={"px-3 py-1 rounded #{if @view_mode == "grid", do: "bg-white shadow-sm", else: ""}"}
+                    >
+                      <Heroicons.squares_2x2 class="w-5 h-5" />
+                    </button>
+                    <button
+                      phx-click="change_view"
+                      phx-value-view="list"
+                      class={"px-3 py-1 rounded #{if @view_mode == "list", do: "bg-white shadow-sm", else: ""}"}
+                    >
+                      <Heroicons.list_bullet class="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
-                <!-- Future Events (30+ Days) - Collapsible -->
-                <%= if !Enum.empty?(@future_events) do %>
-                  <div class="border-t border-gray-200 pt-8">
-                    <button
-                      type="button"
-                      phx-click="toggle_future_events"
-                      class="flex items-center justify-between w-full text-left group"
-                    >
-                      <div>
-                        <h2 class="text-xl font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          <%= gettext("Future Events") %>
-                        </h2>
-                        <p class="text-sm text-gray-500">
-                          <%= gettext("30+ days away") %> · <%= length(@future_events) %> <%= ngettext("event", "events", length(@future_events)) %>
-                        </p>
-                      </div>
-                      <Heroicons.chevron_down class={"w-5 h-5 text-gray-500 transform transition-transform #{if @show_future_events, do: "rotate-180", else: ""}"} />
-                    </button>
+                <!-- Search Bar -->
+                <.search_bar filters={@filters} />
 
-                    <%= if @show_future_events do %>
-                      <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <%= for event <- Enum.take(@future_events, @future_visible_count) do %>
-                          <div class="opacity-90">
-                            <.event_card event={event} language={@language} show_city={false} />
-                          </div>
-                        <% end %>
-                      </div>
-                      <%= if length(@future_events) > @future_visible_count do %>
-                        <div class="text-center mt-6">
-                          <button
-                            type="button"
-                            phx-click="load_more_future"
-                            class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
-                          >
-                            <%= gettext("Load More") %> (<%= length(@future_events) - @future_visible_count %> <%= gettext("remaining") %>)
-                          </button>
-                        </div>
-                      <% end %>
-                    <% end %>
-                  </div>
-                <% end %>
+                <!-- Quick Date Filters -->
+                <.quick_date_filters
+                  active_date_range={@active_date_range}
+                  date_range_counts={@date_range_counts}
+                  all_events_count={@all_events_count}
+                />
 
-                <!-- Past Events - Collapsible -->
-                <%= if !Enum.empty?(@past_events) do %>
-                  <div class="border-t border-gray-200 pt-8">
-                    <button
-                      type="button"
-                      phx-click="toggle_past_events"
-                      class="flex items-center justify-between w-full text-left group"
-                    >
-                      <div>
-                        <h2 class="text-xl font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          <%= gettext("Past Events") %>
-                        </h2>
-                        <p class="text-sm text-gray-500">
-                          <%= length(@past_events) %> <%= ngettext("event", "events", length(@past_events)) %>
-                        </p>
-                      </div>
-                      <Heroicons.chevron_down class={"w-5 h-5 text-gray-500 transform transition-transform #{if @show_past_events, do: "rotate-180", else: ""}"} />
-                    </button>
+                <!-- Event Results -->
+                <%= if @events == [] do %>
+                  <.empty_state />
+                <% else %>
+                  <.event_results
+                    events={@events}
+                    view_mode={@view_mode}
+                    language={@language}
+                    total_events={@total_events}
+                    show_city={false}
+                  />
 
-                    <%= if @show_past_events do %>
-                      <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <%= for event <- Enum.take(@past_events, @past_visible_count) do %>
-                          <div class="opacity-75">
-                            <.event_card event={event} language={@language} show_city={false} />
-                          </div>
-                        <% end %>
-                      </div>
-                      <%= if length(@past_events) > @past_visible_count do %>
-                        <div class="text-center mt-6">
-                          <button
-                            type="button"
-                            phx-click="load_more_past"
-                            class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-600 hover:border-indigo-800 rounded-lg transition-colors"
-                          >
-                            <%= gettext("Load More") %> (<%= length(@past_events) - @past_visible_count %> <%= gettext("remaining") %>)
-                          </button>
-                        </div>
-                      <% end %>
-                    <% end %>
+                  <!-- Pagination -->
+                  <div class="mt-8">
+                    <.pagination pagination={@pagination} />
                   </div>
                 <% end %>
               </div>
