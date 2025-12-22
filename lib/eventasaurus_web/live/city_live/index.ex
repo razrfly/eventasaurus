@@ -85,6 +85,8 @@ defmodule EventasaurusWeb.CityLive.Index do
            })
            |> assign(:active_date_range, nil)
            |> assign(:date_range_counts, %{})
+           # Aggregation: group movies with multiple showtimes together
+           |> assign(:aggregate, true)
            # Track that we're in deferred loading mode - handle_params will update filters from URL
            |> assign(:deferred_loading, true)
            |> defer_expensive_loading()}
@@ -451,6 +453,26 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   @impl true
+  def handle_event("sort", %{"sort_by" => sort_by}, socket) do
+    sort_atom = parse_sort(sort_by)
+
+    filters =
+      socket.assigns.filters
+      |> Map.put(:sort_by, sort_atom)
+      |> Map.put(:page, 1)
+
+    # ASYNC: Show skeleton immediately, load events in background
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> assign(:events_loading, true)
+      |> push_patch(to: build_path(socket, filters))
+
+    send(self(), :load_filtered_events)
+    {:noreply, socket}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gray-50">
@@ -582,69 +604,48 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   # Component: Filter Panel with radius selector
+  # Uses shared EventListing components for radius and category selection
   defp filter_panel(assigns) do
     ~H"""
     <form phx-change="filter" class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Search Radius -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Search Radius
-          </label>
-          <select
-            name="filter[radius]"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md"
-          >
-            <option value="5" selected={@radius_km == 5}>5 km</option>
-            <option value="10" selected={@radius_km == 10}>10 km</option>
-            <option value="25" selected={@radius_km == 25}>25 km</option>
-            <option value="50" selected={@radius_km == 50}>50 km</option>
-            <option value="100" selected={@radius_km == 100}>100 km</option>
-          </select>
-        </div>
+        <!-- Search Radius - using shared component -->
+        <.radius_selector
+          radius_km={@radius_km}
+          default_radius={50}
+          name="filter[radius]"
+          form_mode={true}
+        />
 
         <!-- Sort By -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">
-            Sort By
+            <%= gettext("Sort By") %>
           </label>
           <select
             name="filter[sort_by]"
             class="w-full px-3 py-2 border border-gray-300 rounded-md"
           >
             <option value="starts_at" selected={@filters.sort_by == :starts_at}>
-              Date
+              <%= gettext("Date") %>
             </option>
             <option value="distance" selected={@filters.sort_by == :distance}>
-              Distance
+              <%= gettext("Distance") %>
             </option>
             <option value="title" selected={@filters.sort_by == :title}>
-              Title
+              <%= gettext("Title") %>
             </option>
           </select>
         </div>
       </div>
 
-      <!-- Categories -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-          Categories
-        </label>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-          <%= for category <- @categories do %>
-            <label class="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                name="filter[categories][]"
-                value={category.id}
-                checked={category.id in @filters.categories}
-                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span class="text-sm text-gray-700"><%= category.name %></span>
-            </label>
-          <% end %>
-        </div>
-      </div>
+      <!-- Categories - using shared component -->
+      <.category_checkboxes
+        categories={@categories}
+        selected_ids={@filters.categories}
+        name="filter[categories][]"
+        form_mode={true}
+      />
     </form>
     """
   end
@@ -656,6 +657,7 @@ defmodule EventasaurusWeb.CityLive.Index do
     city = socket.assigns.city
     filters = socket.assigns.filters
     language = socket.assigns.language
+    aggregate = socket.assigns.aggregate
 
     # Get city coordinates
     lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
@@ -684,7 +686,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         events =
           PublicEventsEnhanced.list_events_with_aggregation(
             query_filters
-            |> Map.put(:aggregate, true)
+            |> Map.put(:aggregate, aggregate)
             |> Map.put(:ignore_city_in_aggregation, true)
             |> Map.put(:viewing_city, city)
           )
@@ -697,7 +699,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         total =
           PublicEventsEnhanced.count_events_with_aggregation(
             count_filters
-            |> Map.put(:aggregate, true)
+            |> Map.put(:aggregate, aggregate)
             |> Map.put(:ignore_city_in_aggregation, true)
             |> Map.put(:viewing_city, city)
           )
@@ -721,7 +723,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         all_events =
           PublicEventsEnhanced.count_events_with_aggregation(
             date_range_count_filters
-            |> Map.put(:aggregate, true)
+            |> Map.put(:aggregate, aggregate)
             |> Map.put(:ignore_city_in_aggregation, true)
             |> Map.put(:viewing_city, city)
           )
@@ -1067,6 +1069,7 @@ defmodule EventasaurusWeb.CityLive.Index do
   defp parse_sort(nil), do: :starts_at
   defp parse_sort("distance"), do: :distance
   defp parse_sort("title"), do: :title
+  defp parse_sort("popularity"), do: :popularity
   defp parse_sort(_), do: :starts_at
 
   defp parse_date(nil), do: nil

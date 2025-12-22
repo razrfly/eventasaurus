@@ -171,13 +171,16 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
 
   ## Attributes
 
-  - `sort_by` - Currently active sort field (:starts_at, :distance, :title)
+  - `sort_by` - Currently active sort field (:starts_at, :distance, :title, :popularity)
   - `show_distance` - Whether to show distance option. Only enable when events
     have a `:distance` field populated (e.g., location-based search results).
     Requires backend support in EventPagination.sort_events/2.
+  - `show_popularity` - Whether to show popularity option. Enable when events
+    have showtime counts or other popularity metrics (e.g., aggregated movie views).
   """
   attr :sort_by, :atom, default: :starts_at
   attr :show_distance, :boolean, default: false
+  attr :show_popularity, :boolean, default: false
 
   def sort_controls(assigns) do
     ~H"""
@@ -187,7 +190,7 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
         <form phx-change="sort" class="inline-block">
           <select
             name="sort_by"
-            class="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-1.5 pr-8 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+            class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 pr-8 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
           >
             <option value="starts_at" selected={@sort_by == :starts_at}>
               <%= gettext("Date") %>
@@ -197,13 +200,15 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
                 <%= gettext("Distance") %>
               </option>
             <% end %>
+            <%= if @show_popularity do %>
+              <option value="popularity" selected={@sort_by == :popularity}>
+                <%= gettext("Popularity") %>
+              </option>
+            <% end %>
             <option value="title" selected={@sort_by == :title}>
               <%= gettext("Title") %>
             </option>
           </select>
-          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-            <Heroicons.chevron_down class="w-4 h-4" />
-          </div>
         </form>
       </div>
     </div>
@@ -369,5 +374,60 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
   # Helper to get human-readable sort label
   defp sort_label(:title), do: gettext("Title")
   defp sort_label(:distance), do: gettext("Distance")
+  defp sort_label(:popularity), do: gettext("Popularity")
   defp sort_label(_), do: gettext("Date")
+
+  @doc """
+  Renders an aggregation toggle for expanding/collapsing grouped events.
+
+  When aggregation is enabled (default), movies with multiple showtimes are
+  grouped together. When disabled, each showtime appears as a separate event.
+
+  Emits `toggle_aggregation` event with `aggregate` value ("true" or "false").
+
+  ## Attributes
+
+  - `aggregate` - Whether aggregation is currently enabled (default: true)
+  - `class` - Additional CSS classes for the container
+
+  ## Example
+
+      <.aggregation_toggle aggregate={@aggregate} />
+  """
+  attr :aggregate, :boolean, default: true
+  attr :class, :string, default: nil
+
+  def aggregation_toggle(assigns) do
+    ~H"""
+    <div class={["flex items-center gap-2", @class]}>
+      <span class="text-sm text-gray-600"><%= gettext("Group events:") %></span>
+      <button
+        type="button"
+        phx-click="toggle_aggregation"
+        phx-value-aggregate={if @aggregate, do: "false", else: "true"}
+        class={[
+          "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+          if(@aggregate, do: "bg-blue-600", else: "bg-gray-200")
+        ]}
+        role="switch"
+        aria-checked={@aggregate}
+        title={if @aggregate, do: gettext("Click to show all showtimes"), else: gettext("Click to group similar events")}
+      >
+        <span
+          class={[
+            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+            if(@aggregate, do: "translate-x-5", else: "translate-x-0")
+          ]}
+        />
+      </button>
+      <span class="text-sm text-gray-500">
+        <%= if @aggregate do %>
+          <%= gettext("Grouped") %>
+        <% else %>
+          <%= gettext("All showtimes") %>
+        <% end %>
+      </span>
+    </div>
+    """
+  end
 end
