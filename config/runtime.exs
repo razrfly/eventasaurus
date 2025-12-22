@@ -103,7 +103,10 @@ config :eventasaurus, Oban,
     enrichment: 1,
     # Geocoding backfill queue for venue provider ID lookups
     # Kept at 1 due to Foursquare 500 req/day limit
-    geocoding: 1
+    geocoding: 1,
+    # Analytics queue for PostHog popularity sync
+    # Kept at 1 - single daily job that batches updates
+    analytics: 1
   ],
   plugins: [
     # Keep completed jobs for 12 hours for debugging
@@ -126,6 +129,9 @@ config :eventasaurus, Oban,
        {"0 1 * * *", EventasaurusDiscovery.Workers.CityCoordinateRecalculationWorker},
        # Unsplash city images refresh daily at 3 AM UTC
        {"0 3 * * *", EventasaurusApp.Workers.UnsplashRefreshWorker},
+       # PostHog popularity sync daily at 4 AM UTC
+       # Syncs pageview data from PostHog to public_events.view_count for popularity sorting
+       {"0 4 * * *", EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker},
        # Admin stats computation hourly (at minute 0)
        # This populates the discovery_stats_snapshots table for the admin dashboard
        # Reduced from every 15 min to hourly due to memory constraints on 1GB VM

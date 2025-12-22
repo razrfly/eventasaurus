@@ -169,6 +169,10 @@ defmodule EventasaurusApp.Venues.Venue do
     has_many(:events, EventasaurusApp.Events.Event)
     has_many(:public_events, EventasaurusDiscovery.PublicEvents.PublicEvent)
 
+    # PostHog popularity tracking (synced by PostHogPopularitySyncWorker)
+    field(:posthog_view_count, :integer, default: 0)
+    field(:posthog_synced_at, :utc_datetime)
+
     timestamps()
   end
 

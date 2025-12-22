@@ -345,6 +345,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     # Pre-computed translation count (updated by database trigger on insert/update)
     field(:title_translation_count, :integer, default: 0)
 
+    # PostHog popularity tracking (synced by PostHogPopularitySyncWorker)
+    field(:posthog_view_count, :integer, default: 0)
+    field(:posthog_synced_at, :utc_datetime)
+
     # Virtual field for primary category (populated in queries when needed)
     field(:primary_category_id, :id, virtual: true)
 
