@@ -361,6 +361,12 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     from(pe in query, order_by: [{^order, pe.title}])
   end
 
+  defp apply_sorting(query, :popularity, order) when order in [:asc, :desc] do
+    # Sort by posthog_view_count (synced from PostHog) with starts_at as secondary sort
+    # Higher view counts first (desc), then by date
+    from(pe in query, order_by: [{^order, pe.posthog_view_count}, {:asc, pe.starts_at}])
+  end
+
   defp apply_sorting(query, :relevance, _order) do
     # Relevance sorting only makes sense with search
     query

@@ -115,6 +115,10 @@ defmodule EventasaurusDiscovery.Movies.Movie do
       on_replace: :delete
     )
 
+    # PostHog popularity tracking (synced by PostHogPopularitySyncWorker)
+    field(:posthog_view_count, :integer, default: 0)
+    field(:posthog_synced_at, :utc_datetime)
+
     timestamps()
   end
 

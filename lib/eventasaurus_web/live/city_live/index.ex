@@ -632,6 +632,9 @@ defmodule EventasaurusWeb.CityLive.Index do
             <option value="distance" selected={@filters.sort_by == :distance}>
               <%= gettext("Distance") %>
             </option>
+            <option value="popularity" selected={@filters.sort_by == :popularity}>
+              <%= gettext("Popularity") %>
+            </option>
             <option value="title" selected={@filters.sort_by == :title}>
               <%= gettext("Title") %>
             </option>
