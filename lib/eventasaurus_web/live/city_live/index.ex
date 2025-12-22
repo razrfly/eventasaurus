@@ -560,10 +560,10 @@ defmodule EventasaurusWeb.CityLive.Index do
       </div>
 
       <!-- Active Filters -->
-      <div :if={EventFilters.active_filter_count(@filters, 50) > 0} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+      <div :if={EventFilters.active_filter_count(@filters, 50) > 0 or @filters.sort_by not in [:starts_at, nil]} class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         <div class="flex items-center space-x-2">
           <span class="text-sm text-gray-600">Active filters:</span>
-          <.active_filter_tags filters={@filters} radius_km={@radius_km} categories={@categories} active_date_range={@active_date_range} default_radius={50} />
+          <.active_filter_tags filters={@filters} radius_km={@radius_km} categories={@categories} active_date_range={@active_date_range} default_radius={50} sort_by={@filters.sort_by} />
           <button
             phx-click="clear_filters"
             class="ml-4 text-sm text-blue-600 hover:text-blue-800"

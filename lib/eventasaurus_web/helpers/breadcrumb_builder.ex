@@ -678,12 +678,8 @@ defmodule EventasaurusWeb.Helpers.BreadcrumbBuilder do
     category_slug = get_category_slug_for_aggregation_type(content_type_slug)
 
     case {scope, category_slug} do
-      # Multi-city with category mapping: filter by category globally on search page
-      {:all_cities, category_slug} when not is_nil(category_slug) ->
-        ~p"/activities/search?category=#{category_slug}"
-
-      # Multi-city without category mapping: show all activities
-      {:all_cities, nil} ->
+      # Multi-city: show all activities (category filtering not available on activities page)
+      {:all_cities, _} ->
         ~p"/activities"
 
       # City-scoped with category mapping: filter city page by category

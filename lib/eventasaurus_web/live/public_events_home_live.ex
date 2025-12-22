@@ -32,14 +32,8 @@ defmodule EventasaurusWeb.PublicEventsHomeLive do
       |> assign(:top_categories, top_categories)
       |> assign(:featured_events, featured_events)
       |> assign(:upcoming_events, upcoming_events)
-      |> assign(:search_query, "")
 
     {:ok, socket}
-  end
-
-  def handle_event("search", %{"q" => query}, socket) do
-    # Redirect to search page with query
-    {:noreply, push_navigate(socket, to: ~p"/activities/search?q=#{query}")}
   end
 
   def render(assigns) do
@@ -58,23 +52,9 @@ defmodule EventasaurusWeb.PublicEventsHomeLive do
           <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight mb-8">
             Unforgettable experiences start here
           </h1>
-          <div class="max-w-2xl mx-auto">
-            <form phx-submit="search" class="relative">
-              <input
-                type="text"
-                name="q"
-                value={@search_query}
-                placeholder="Find events, activities, and more..."
-                class="w-full px-6 py-4 rounded-full text-gray-900 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-lg"
-              />
-              <button
-                type="submit"
-                class="absolute right-2 top-2 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors"
-              >
-                <Heroicons.magnifying_glass class="w-6 h-6" />
-              </button>
-            </form>
-          </div>
+          <p class="text-xl text-gray-300">
+            Discover events and activities in cities around the world
+          </p>
         </div>
       </div>
 
@@ -98,9 +78,6 @@ defmodule EventasaurusWeb.PublicEventsHomeLive do
         <section>
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-bold text-gray-900">Browse by category</h2>
-            <.link navigate={~p"/activities/search"} class="text-blue-600 hover:text-blue-800 font-medium">
-              View all categories &rarr;
-            </.link>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
             <%= for category <- @top_categories do %>
@@ -133,9 +110,6 @@ defmodule EventasaurusWeb.PublicEventsHomeLive do
         <section>
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-bold text-gray-900">Upcoming experiences</h2>
-            <.link navigate={~p"/activities/search"} class="text-blue-600 hover:text-blue-800 font-medium">
-              View all events &rarr;
-            </.link>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <%= for event <- @upcoming_events do %>
