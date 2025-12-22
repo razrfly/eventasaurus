@@ -385,12 +385,15 @@ defmodule EventasaurusWeb.PerformerLive.Show do
 
               <!-- Events Section -->
               <div>
-                <!-- Header with View Mode Toggle -->
+                <!-- Header with View Mode Toggle and Sort -->
                 <div class="flex items-center justify-between mb-6">
                   <h2 class="text-2xl font-bold text-gray-900">
                     <%= events_section_title(@time_filter) %>
                   </h2>
-                  <.view_toggle view_mode={@view_mode} />
+                  <div class="flex items-center gap-4">
+                    <.sort_controls sort_by={@sort_by} show_popularity={true} />
+                    <.view_toggle view_mode={@view_mode} />
+                  </div>
                 </div>
 
                 <!-- Search and Filters -->
@@ -410,11 +413,6 @@ defmodule EventasaurusWeb.PerformerLive.Show do
                     active_date_range={@active_date_range}
                     sort_by={@sort_by}
                   />
-
-                  <!-- Sort Controls -->
-                  <div class="flex justify-end">
-                    <.sort_controls sort_by={@sort_by} show_popularity={true} />
-                  </div>
                 </div>
 
                 <%= if Enum.empty?(@events) do %>

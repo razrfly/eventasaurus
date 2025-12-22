@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.Components.CategoryCards do
 
   def category_card(assigns) do
     ~H"""
-    <.link navigate={~p"/activities/search?categories=#{@category.id}"} class="block group">
+    <.link navigate={~p"/activities"} class="block group">
       <div
         class="relative h-48 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow"
         style={background_style(@category)}

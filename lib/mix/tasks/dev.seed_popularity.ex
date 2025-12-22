@@ -48,6 +48,7 @@ defmodule Mix.Tasks.Dev.SeedPopularity do
   @entity_types ~w(events movies venues performers)
 
   @impl Mix.Task
+  @spec run([binary()]) :: :ok
   def run(args) do
     # Safety check - only dev/test
     unless Mix.env() in [:dev, :test] do

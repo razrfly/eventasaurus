@@ -1,5 +1,6 @@
 defmodule EventasaurusWeb.EventComponents do
   use Phoenix.Component
+  use Gettext, backend: EventasaurusWeb.Gettext
   import EventasaurusWeb.CoreComponents
   import EventasaurusWeb.Helpers.CurrencyHelpers
   import EventasaurusWeb.Helpers.ImageUrlHelper
@@ -2069,10 +2070,26 @@ defmodule EventasaurusWeb.EventComponents do
   attr :active_date_range, :atom, default: nil, doc: "currently active date range atom"
   attr :radius_km, :integer, default: nil, doc: "current radius in km (city page only)"
   attr :default_radius, :integer, default: 50, doc: "default radius to compare against"
+  attr :sort_by, :atom, default: nil, doc: "currently active sort field (:starts_at, :title, :relevance, :popularity)"
 
   def active_filter_tags(assigns) do
+    # Calculate all filter conditions for self-contained visibility
+    has_search = assigns.filters[:search] && assigns.filters[:search] != ""
+    has_non_default_radius = assigns.radius_km && assigns.radius_km != assigns.default_radius
+    has_date_range = (assigns.filters[:start_date] || assigns.filters[:end_date]) && assigns.active_date_range
+    has_categories = (assigns.filters[:categories] || []) != []
+    has_non_default_sort = assigns.sort_by != nil && assigns.sort_by != :starts_at
+
+    # Component shows itself when ANY filter is active (self-contained like simple_filter_tags)
+    has_any_filter = has_search || has_non_default_radius || has_date_range || has_categories || has_non_default_sort
+
+    assigns =
+      assigns
+      |> assign(:has_non_default_sort, has_non_default_sort)
+      |> assign(:has_any_filter, has_any_filter)
+
     ~H"""
-    <div class="flex flex-wrap gap-2">
+    <div :if={@has_any_filter} class="flex flex-wrap gap-2">
       <%= if @filters[:search] && @filters[:search] != "" do %>
         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
           Search: <%= @filters[:search] %>
@@ -2108,9 +2125,24 @@ defmodule EventasaurusWeb.EventComponents do
           </span>
         <% end %>
       <% end %>
+
+      <%= if @has_non_default_sort do %>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+          Sorted by: <%= active_filter_sort_label(@sort_by) %>
+          <button phx-click="sort" phx-value-sort_by="starts_at" class="ml-2 hover:text-blue-600" title="Reset sort">
+            <Heroicons.x_mark class="w-3 h-3" />
+          </button>
+        </span>
+      <% end %>
     </div>
     """
   end
+
+  # Helper to get human-readable sort label for active_filter_tags
+  defp active_filter_sort_label(:title), do: "Title"
+  defp active_filter_sort_label(:relevance), do: "Relevance"
+  defp active_filter_sort_label(:popularity), do: "Popularity"
+  defp active_filter_sort_label(_), do: "Date"
 
   # Private helper to parse TMDb ID from various formats
   defp parse_tmdb_id(value) when is_integer(value), do: value

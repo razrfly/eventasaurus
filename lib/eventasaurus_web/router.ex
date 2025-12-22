@@ -688,11 +688,8 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       # ===== SCRAPED/DISCOVERY EVENTS (from external APIs) =====
-      # PublicEventsHomeLive - New discovery homepage
-      # PublicEventsSearchLive - Search results and filtering (formerly PublicEventsIndexLive)
+      # PublicEventsHomeLive - Discovery homepage with curated content
       live "/activities", PublicEventsHomeLive, :index
-      live "/activities/search", PublicEventsSearchLive, :index
-      live "/activities/category/:category", PublicEventsSearchLive, :category
       live "/activities/:slug", PublicEventShowLive, :show
       live "/activities/:slug/:date_slug", PublicEventShowLive, :show
 

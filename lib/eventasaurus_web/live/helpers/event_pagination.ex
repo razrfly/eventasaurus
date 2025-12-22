@@ -326,29 +326,30 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
 
   def sort_events(events, :popularity) do
     # Sort by popularity (most popular first).
-    # Uses posthog_view_count (from PostHog analytics sync) as the primary metric.
-    # Falls back to event_count for aggregated events (movie showtimes).
-    # Events without any popularity metrics go to the end (sorted by date).
-    events
-    |> Enum.sort_by(
-      fn event ->
-        # Primary: posthog_view_count (from PostHog sync)
-        view_count = Map.get(event, :posthog_view_count) || 0
-
-        # Secondary: event_count (for movie showtime aggregation)
-        event_count = Map.get(event, :event_count) || 1
-
-        # Combined score: view_count has higher weight, event_count as tiebreaker
-        # Negate for descending sort (most popular first)
-        {-view_count, -event_count}
-      end
-    )
+    # Uses type-specific popularity metric consistent with backend:
+    # - Regular events: posthog_view_count (from PostHog analytics sync)
+    # - Aggregated events: event_count (number of grouped showtimes)
+    # Events without popularity metrics sort to the end.
+    Enum.sort_by(events, &get_event_popularity/1, :desc)
   end
 
   # Distance sorting removed - unclear UX ("distance from what?")
   def sort_events(events, :distance), do: events
 
   def sort_events(events, _), do: events
+
+  # Get popularity value for sorting - consistent with backend (public_events_enhanced.ex)
+  defp get_event_popularity(event) do
+    cond do
+      # Aggregated events use event_count as popularity (multiple showtimes = more popular)
+      is_aggregated?(event) ->
+        Map.get(event, :event_count) || 0
+
+      # Regular events use posthog_view_count
+      true ->
+        Map.get(event, :posthog_view_count) || 0
+    end
+  end
 
   # Check if an event is aggregated (multiple showtimes grouped together)
   defp is_aggregated?(event) do
