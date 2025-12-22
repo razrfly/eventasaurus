@@ -115,44 +115,32 @@ defmodule EventasaurusWeb.Components.Activity.HeroCardIcons do
     case type do
       # Music variations
       t when t in [:music, :MusicEvent, :concert] -> :music
-
       # Trivia variations
       t when t in [:trivia, :quiz] -> :trivia
-
       # Social variations
       t when t in [:social, :SocialEvent] -> :social
-
       # Food variations
       t when t in [:food, :FoodEvent, :restaurant] -> :food
-
       # Movies variations
       t when t in [:movies, :cinema, :screening, :ScreeningEvent] -> :movies
-
       # Festival variations
       t when t in [:festival, :Festival] -> :festival
-
       # Comedy variations
       t when t in [:comedy, :ComedyEvent] -> :comedy
-
       # Theater variations
       t when t in [:theater, :theatre, :TheaterEvent] -> :theater
-
       # Sports variations
       t when t in [:sports, :SportsEvent] -> :sports
-
       # Container types (pass through)
       t when t in [:conference, :tour, :series, :exhibition, :tournament] -> t
-
       # Schema types that map to specific icons
       :EducationEvent -> :education
       :ChildrensEvent -> :childrens
       :VisualArtsEvent -> :visual_arts
       :BusinessEvent -> :business
-
       # Entity types
       t when t in [:venue] -> :venue
       t when t in [:performer, :artist] -> :performer
-
       # Default fallback
       _ -> :default
     end

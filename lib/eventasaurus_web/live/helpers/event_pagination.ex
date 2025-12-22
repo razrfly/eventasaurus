@@ -193,7 +193,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
       # Get all events regardless of time
       all = EventPagination.filter_by_time(events, :all)
   """
-  @spec filter_by_time(list(), atom()) :: list()
+  @spec filter_by_time(list(), atom() | nil) :: list()
   def filter_by_time(events, :all), do: events
 
   def filter_by_time(events, :upcoming) do
@@ -274,7 +274,9 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     search_lower = String.downcase(search_term)
 
     Enum.filter(events, fn event ->
-      title = (event.display_title || event.title || "") |> String.downcase()
+      title =
+        (Map.get(event, :display_title) || Map.get(event, :title) || "") |> String.downcase()
+
       String.contains?(title, search_lower)
     end)
   end

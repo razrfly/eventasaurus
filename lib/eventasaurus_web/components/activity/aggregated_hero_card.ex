@@ -19,7 +19,13 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.{HeroCardBadge, HeroCardBackground, HeroCardIcons, HeroCardTheme}
+
+  alias EventasaurusWeb.Components.Activity.{
+    HeroCardBadge,
+    HeroCardBackground,
+    HeroCardIcons,
+    HeroCardTheme
+  }
 
   @doc """
   Renders the aggregated hero card for source aggregation pages.
@@ -173,5 +179,4 @@ defmodule EventasaurusWeb.Components.Activity.AggregatedHeroCard do
       _ -> :default
     end
   end
-
 end

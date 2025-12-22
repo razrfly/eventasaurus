@@ -23,7 +23,6 @@ defmodule EventasaurusWeb.Components.EventListing.EmptyState do
 
   - `title` - Main heading (default: "No events found")
   - `message` - Subtext message (default: "Try adjusting your filters or search query")
-  - `icon` - Icon to display (default: calendar_days)
   - `show_icon` - Whether to show the icon (default: true)
   """
   attr :title, :string, default: "No events found"

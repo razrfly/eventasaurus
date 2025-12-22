@@ -20,7 +20,13 @@ defmodule EventasaurusWeb.Components.Activity.ConcertHeroCard do
   use Gettext, backend: EventasaurusWeb.Gettext
 
   alias Eventasaurus.CDN
-  alias EventasaurusWeb.Components.Activity.{HeroCardBackground, HeroCardHelpers, HeroCardIcons, HeroCardTheme}
+
+  alias EventasaurusWeb.Components.Activity.{
+    HeroCardBackground,
+    HeroCardHelpers,
+    HeroCardIcons,
+    HeroCardTheme
+  }
 
   @doc """
   Renders the concert hero card for music events.

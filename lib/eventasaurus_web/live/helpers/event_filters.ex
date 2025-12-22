@@ -157,6 +157,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
 
   Removes existing date filters and pagination to get accurate counts
   for all date ranges independently of the current filter state.
+  Enables aggregation to match what users actually see when browsing.
   """
   @spec build_date_range_count_filters(map()) :: map()
   def build_date_range_count_filters(filters) do
@@ -166,5 +167,6 @@ defmodule EventasaurusWeb.Live.Helpers.EventFilters do
     |> Map.delete(:start_date)
     |> Map.delete(:end_date)
     |> Map.put(:show_past, false)
+    |> Map.put(:aggregate, true)
   end
 end

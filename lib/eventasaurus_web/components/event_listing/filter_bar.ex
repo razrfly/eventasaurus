@@ -10,7 +10,6 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
   - `quick_date_filter` with `range` value (e.g., "today", "tomorrow", "next_7_days")
   - `clear_date_filter` - clears date filter
   - `search` with `search` value - search form submission
-  - `clear_search` - clears search term
 
   ## Example
 
@@ -62,7 +61,7 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
   @doc """
   Renders the search input form.
 
-  Emits `search` event on form submit, `clear_search` on clear button click.
+  Emits `search` event on form submit.
   """
   attr :filters, :map, required: true
   attr :placeholder, :string, default: "Search events..."

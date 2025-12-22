@@ -95,10 +95,15 @@ defmodule EventasaurusWeb.PerformerLive.Show do
 
     # Apply date range filter and paginate
     active_date_range = socket.assigns.active_date_range
-    filtered_events = EventPagination.filter_by_date_range(time_filtered_events, active_date_range)
+
+    filtered_events =
+      EventPagination.filter_by_date_range(time_filtered_events, active_date_range)
+
     page_size = socket.assigns.pagination.page_size
     page_number = socket.assigns.pagination.page_number
-    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page_number, page_size)
+
+    {paginated_events, pagination} =
+      EventPagination.paginate(filtered_events, page_number, page_size)
 
     # Build breadcrumb items
     breadcrumb_items =
@@ -301,7 +306,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
                     events={@events}
                     view_mode={@view_mode}
                     language="en"
-                    total_events={@total_events}
+                    pagination={@pagination}
                     show_city={true}
                   />
 

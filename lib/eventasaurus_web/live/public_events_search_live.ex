@@ -283,7 +283,8 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
     date_range_counts = PublicEventsEnhanced.get_quick_date_range_counts(date_range_count_filters)
 
     # Get count of ALL events (no date filters) for "All Events" button
-    all_events_count = PublicEventsEnhanced.count_events(date_range_count_filters)
+    # Use aggregation-aware count to match what users actually see when browsing
+    all_events_count = PublicEventsEnhanced.count_events_with_aggregation(date_range_count_filters)
 
     socket
     |> assign(:filter_facets, facets)
@@ -626,12 +627,12 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
                 events={@events}
                 view_mode={@view_mode}
                 language={@language}
-                total_events={@pagination.total_entries}
+                pagination={@pagination}
                 show_city={true}
               />
             <% else %>
               <div class="mb-4 text-sm text-gray-600">
-                <%= gettext("Found %{count} events", count: @pagination.total_entries) %>
+                <%= showing_range_text(@pagination, @events) %>
               </div>
               <div class="space-y-4">
                 <%= for item <- @events do %>
@@ -860,6 +861,29 @@ defmodule EventasaurusWeb.PublicEventsSearchLive do
   # Helper to check if an item is an aggregated group
   defp is_aggregated?(%{events: events}) when is_list(events) and length(events) > 1, do: true
   defp is_aggregated?(_), do: false
+
+  # Generate "Showing X-Y of Z events" text for list view
+  defp showing_range_text(pagination, events) do
+    total = pagination.total_entries
+    page_number = pagination.page_number
+    page_size = pagination.page_size
+    current_page_count = length(events)
+
+    if total <= page_size do
+      # Single page - show actual count displayed
+      gettext("Showing %{count} events", count: current_page_count)
+    else
+      start_idx = (page_number - 1) * page_size + 1
+      # Use actual displayed count for end index
+      end_idx = start_idx + current_page_count - 1
+
+      gettext("Showing %{start}-%{end} of %{total} events",
+        start: start_idx,
+        end: end_idx,
+        total: total
+      )
+    end
+  end
 
   defp get_facet_count(facets, type, id) do
     facets[type]
