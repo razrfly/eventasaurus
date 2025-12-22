@@ -282,10 +282,37 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
   end
 
   @doc """
+  Sort events by the specified field.
+
+  Supports sorting by date (starts_at) or title. Returns events unchanged
+  if sort_by is nil or :starts_at (default order).
+
+  ## Parameters
+
+    - events: List of events
+    - sort_by: :starts_at (default), :title, or nil
+
+  ## Example
+
+      sorted = EventPagination.sort_events(events, :title)
+  """
+  @spec sort_events(list(), atom() | nil) :: list()
+  def sort_events(events, nil), do: events
+  def sort_events(events, :starts_at), do: Enum.sort_by(events, & &1.starts_at, DateTime)
+
+  def sort_events(events, :title) do
+    Enum.sort_by(events, fn event ->
+      (Map.get(event, :display_title) || Map.get(event, :title) || "") |> String.downcase()
+    end)
+  end
+
+  def sort_events(events, _), do: events
+
+  @doc """
   Apply multiple filters and paginate in one call.
 
   Convenience function that applies time filter, date range filter, search filter,
-  and pagination in sequence.
+  sorting, and pagination in sequence.
 
   ## Parameters
 
@@ -294,6 +321,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
       - :time_filter - :upcoming, :past, or :all (default: :upcoming)
       - :date_range - atom or nil for date filtering
       - :search - string for title search
+      - :sort_by - :starts_at (default), :title
       - :page - page number (default: 1)
       - :page_size - items per page (default: 30)
 
@@ -310,6 +338,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
         time_filter: :upcoming,
         date_range: :next_7_days,
         search: "concert",
+        sort_by: :title,
         page: 1,
         page_size: 30
       )
@@ -319,6 +348,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     time_filter = Keyword.get(opts, :time_filter, :upcoming)
     date_range = Keyword.get(opts, :date_range)
     search_term = Keyword.get(opts, :search)
+    sort_by = Keyword.get(opts, :sort_by)
     page = Keyword.get(opts, :page, 1)
     page_size = Keyword.get(opts, :page_size, 30)
 
@@ -327,6 +357,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
       |> filter_by_time(time_filter)
       |> filter_by_date_range(date_range)
       |> filter_by_search(search_term)
+      |> sort_events(sort_by)
 
     filtered_count = length(filtered)
     {page_entries, pagination} = paginate(filtered, page, page_size)

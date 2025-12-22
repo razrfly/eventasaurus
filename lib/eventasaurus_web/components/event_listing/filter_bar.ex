@@ -165,6 +165,50 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
   end
 
   @doc """
+  Renders sort controls dropdown.
+
+  Emits `sort` event with `sort_by` value.
+
+  ## Attributes
+
+  - `sort_by` - Currently active sort field (:starts_at, :distance, :title)
+  - `show_distance` - Whether to show distance option (requires location context)
+  """
+  attr :sort_by, :atom, default: :starts_at
+  attr :show_distance, :boolean, default: false
+
+  def sort_controls(assigns) do
+    ~H"""
+    <div class="flex items-center gap-2">
+      <span class="text-sm text-gray-600"><%= gettext("Sort by:") %></span>
+      <div class="relative inline-block">
+        <form phx-change="sort" class="inline-block">
+          <select
+            name="sort_by"
+            class="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-1.5 pr-8 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+          >
+            <option value="starts_at" selected={@sort_by == :starts_at}>
+              <%= gettext("Date") %>
+            </option>
+            <%= if @show_distance do %>
+              <option value="distance" selected={@sort_by == :distance}>
+                <%= gettext("Distance") %>
+              </option>
+            <% end %>
+            <option value="title" selected={@sort_by == :title}>
+              <%= gettext("Title") %>
+            </option>
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+            <Heroicons.chevron_down class="w-4 h-4" />
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   Individual date filter button.
 
   Emits `quick_date_filter` event with `range` value.

@@ -58,6 +58,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:active_date_range, nil)
       |> assign(:date_range_counts, %{})
       |> assign(:filters, %{search: nil})
+      # Sorting
+      |> assign(:sort_by, :starts_at)
       # Pagination
       |> assign(:pagination, %Pagination{
         entries: [],
@@ -77,7 +79,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
   @impl true
   def handle_params(
-        %{"venue_slug" => venue_slug, "city_slug" => city_slug} = _params,
+        %{"venue_slug" => venue_slug, "city_slug" => city_slug} = params,
         _url,
         socket
       ) do
@@ -92,6 +94,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
          |> push_navigate(to: ~p"/")}
 
       venue ->
+        # Apply URL params to socket assigns, then load venue
+        socket = apply_url_params(socket, params)
         load_and_assign_venue(venue, socket)
     end
   end
@@ -109,6 +113,8 @@ defmodule EventasaurusWeb.VenueLive.Show do
          |> push_navigate(to: ~p"/")}
 
       venue ->
+        # Apply URL params to socket assigns, then load venue
+        socket = apply_url_params(socket, params)
         load_and_assign_venue(venue, socket)
     end
   end
@@ -120,24 +126,29 @@ defmodule EventasaurusWeb.VenueLive.Show do
       {:ok, range_atom} ->
         active_date_range = if range_atom == :all, do: nil, else: range_atom
 
-        # Filter events by the selected date range, preserving search filter
+        # Filter events by the selected date range, preserving search and sort
         all_events = socket.assigns.all_events
         search_term = socket.assigns.filters[:search]
+        sort_by = socket.assigns.sort_by
 
         {paginated_events, pagination, filtered_count} =
           EventPagination.filter_and_paginate(all_events,
             date_range: active_date_range,
             search: search_term,
+            sort_by: sort_by,
             page: 1,
             page_size: socket.assigns.pagination.page_size
           )
 
-        {:noreply,
-         socket
-         |> assign(:active_date_range, active_date_range)
-         |> assign(:events, paginated_events)
-         |> assign(:total_events, filtered_count)
-         |> assign(:pagination, pagination)}
+        socket =
+          socket
+          |> assign(:active_date_range, active_date_range)
+          |> assign(:events, paginated_events)
+          |> assign(:total_events, filtered_count)
+          |> assign(:pagination, pagination)
+
+        # Update URL with new filter state
+        {:noreply, push_patch(socket, to: build_path(socket))}
 
       :error ->
         {:noreply, socket}
@@ -147,25 +158,30 @@ defmodule EventasaurusWeb.VenueLive.Show do
   # Clear date filter handler
   @impl true
   def handle_event("clear_date_filter", _params, socket) do
-    # Reset to default (all events), preserving search filter
+    # Reset to default (all events), preserving search and sort
     active_date_range = nil
     all_events = socket.assigns.all_events
     search_term = socket.assigns.filters[:search]
+    sort_by = socket.assigns.sort_by
 
     {paginated_events, pagination, filtered_count} =
       EventPagination.filter_and_paginate(all_events,
         date_range: active_date_range,
         search: search_term,
+        sort_by: sort_by,
         page: 1,
         page_size: socket.assigns.pagination.page_size
       )
 
-    {:noreply,
-     socket
-     |> assign(:active_date_range, active_date_range)
-     |> assign(:events, paginated_events)
-     |> assign(:total_events, filtered_count)
-     |> assign(:pagination, pagination)}
+    socket =
+      socket
+      |> assign(:active_date_range, active_date_range)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    # Update URL with cleared filter state
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # Pagination handler
@@ -175,19 +191,24 @@ defmodule EventasaurusWeb.VenueLive.Show do
     all_events = socket.assigns.all_events
     active_date_range = socket.assigns.active_date_range
     search_term = socket.assigns.filters[:search]
+    sort_by = socket.assigns.sort_by
 
     {paginated_events, pagination, _filtered_count} =
       EventPagination.filter_and_paginate(all_events,
         date_range: active_date_range,
         search: search_term,
+        sort_by: sort_by,
         page: page,
         page_size: socket.assigns.pagination.page_size
       )
 
-    {:noreply,
-     socket
-     |> assign(:events, paginated_events)
-     |> assign(:pagination, pagination)}
+    socket =
+      socket
+      |> assign(:events, paginated_events)
+      |> assign(:pagination, pagination)
+
+    # Update URL with new page
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # Search handler
@@ -195,22 +216,56 @@ defmodule EventasaurusWeb.VenueLive.Show do
   def handle_event("search", %{"search" => search_term}, socket) do
     all_events = socket.assigns.all_events
     active_date_range = socket.assigns.active_date_range
+    sort_by = socket.assigns.sort_by
 
-    # Filter by date range and search term, then paginate
+    # Filter by date range, search term, and sort
     {paginated_events, pagination, filtered_count} =
       EventPagination.filter_and_paginate(all_events,
         date_range: active_date_range,
         search: search_term,
+        sort_by: sort_by,
         page: 1,
         page_size: socket.assigns.pagination.page_size
       )
 
-    {:noreply,
-     socket
-     |> assign(:filters, %{search: search_term})
-     |> assign(:events, paginated_events)
-     |> assign(:total_events, filtered_count)
-     |> assign(:pagination, pagination)}
+    socket =
+      socket
+      |> assign(:filters, %{search: search_term})
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    # Update URL with search term
+    {:noreply, push_patch(socket, to: build_path(socket))}
+  end
+
+  # Sort handler
+  @impl true
+  def handle_event("sort", %{"sort_by" => sort_by_string}, socket) do
+    sort_by = parse_sort(sort_by_string)
+    all_events = socket.assigns.all_events
+    active_date_range = socket.assigns.active_date_range
+    search_term = socket.assigns.filters[:search]
+
+    # Re-filter and sort events with the new sort order
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        date_range: active_date_range,
+        search: search_term,
+        sort_by: sort_by,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
+
+    socket =
+      socket
+      |> assign(:sort_by, sort_by)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    # Update URL with new sort option
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # View mode toggle handler
@@ -233,9 +288,10 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Calculate date range counts for quick filters
     date_range_counts = EventPagination.calculate_date_range_counts(all_events)
 
-    # Apply filters (date range and search) and paginate
+    # Apply filters (date range, search, sort) and paginate
     active_date_range = socket.assigns.active_date_range
     search_term = socket.assigns.filters[:search]
+    sort_by = socket.assigns.sort_by
     page_size = socket.assigns.pagination.page_size
     page_number = socket.assigns.pagination.page_number
 
@@ -243,6 +299,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
       EventPagination.filter_and_paginate(all_events,
         date_range: active_date_range,
         search: search_term,
+        sort_by: sort_by,
         page: page_number,
         page_size: page_size
       )
@@ -483,6 +540,118 @@ defmodule EventasaurusWeb.VenueLive.Show do
     "#{scheme}://#{host}#{port_string}"
   end
 
+  # URL State Management Functions
+
+  # Apply URL params to socket assigns for initial load or navigation
+  defp apply_url_params(socket, params) do
+    # Parse page from URL
+    page = parse_integer(params["page"]) || 1
+
+    # Parse search from URL
+    search = params["search"]
+
+    # Parse sort from URL
+    sort_by = parse_sort(params["sort"])
+
+    # Parse date range from URL
+    active_date_range =
+      case params["date_range"] do
+        nil -> nil
+        "all" -> nil
+        range_string ->
+          case EventFilters.parse_quick_range(range_string) do
+            {:ok, range_atom} -> range_atom
+            :error -> nil
+          end
+      end
+
+    # Update socket assigns with URL params
+    socket
+    |> assign(:filters, %{search: search})
+    |> assign(:sort_by, sort_by)
+    |> assign(:active_date_range, active_date_range)
+    |> assign(:pagination, %Pagination{
+      entries: [],
+      page_number: page,
+      page_size: socket.assigns.pagination.page_size,
+      total_entries: 0,
+      total_pages: 0
+    })
+  end
+
+  # Build URL path with current filter state
+  defp build_path(socket) do
+    venue = socket.assigns.venue
+    params = build_filter_params(socket)
+
+    # Use city-scoped path if venue has a city
+    base_path =
+      if venue.city_ref do
+        ~p"/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+      else
+        ~p"/venues/#{venue.slug}"
+      end
+
+    if map_size(params) > 0 do
+      "#{base_path}?#{URI.encode_query(params)}"
+    else
+      base_path
+    end
+  end
+
+  # Build filter params map for URL query string
+  defp build_filter_params(socket) do
+    params = %{}
+
+    # Add search if present
+    params =
+      case socket.assigns.filters[:search] do
+        nil -> params
+        "" -> params
+        search -> Map.put(params, "search", search)
+      end
+
+    # Add sort if not default (starts_at)
+    params =
+      case socket.assigns.sort_by do
+        :starts_at -> params
+        sort_by -> Map.put(params, "sort", Atom.to_string(sort_by))
+      end
+
+    # Add date range if set (not nil means a specific range is selected)
+    params =
+      case socket.assigns.active_date_range do
+        nil -> params
+        range -> Map.put(params, "date_range", Atom.to_string(range))
+      end
+
+    # Add page if not first page
+    params =
+      case socket.assigns.pagination.page_number do
+        1 -> params
+        page -> Map.put(params, "page", to_string(page))
+      end
+
+    params
+  end
+
+  # Parse integer from string, returning nil for invalid input
+  defp parse_integer(nil), do: nil
+  defp parse_integer(""), do: nil
+
+  defp parse_integer(val) when is_binary(val) do
+    case Integer.parse(val) do
+      {num, _} -> num
+      :error -> nil
+    end
+  end
+
+  # Parse sort field from string
+  defp parse_sort(nil), do: :starts_at
+  defp parse_sort("title"), do: :title
+  defp parse_sort("starts_at"), do: :starts_at
+  defp parse_sort(_), do: :starts_at
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -542,6 +711,11 @@ defmodule EventasaurusWeb.VenueLive.Show do
                   date_range_counts={@date_range_counts}
                   all_events_count={@all_events_count}
                 />
+
+                <!-- Sort Controls -->
+                <div class="flex justify-end">
+                  <.sort_controls sort_by={@sort_by} />
+                </div>
 
                 <!-- Event Results -->
                 <%= if @events == [] do %>

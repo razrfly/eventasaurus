@@ -59,6 +59,7 @@ defmodule EventasaurusWeb.Components.EventListing do
   defdelegate filter_bar(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
   defdelegate quick_date_filters(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
   defdelegate search_bar(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
+  defdelegate sort_controls(assigns), to: EventasaurusWeb.Components.EventListing.FilterBar
   defdelegate event_results(assigns), to: EventasaurusWeb.Components.EventListing.EventResults
   defdelegate event_grid(assigns), to: EventasaurusWeb.Components.EventListing.EventResults
   defdelegate event_list(assigns), to: EventasaurusWeb.Components.EventListing.EventResults
