@@ -110,17 +110,14 @@ defmodule EventasaurusDiscovery.PostHog.ViewCountQuery do
     date_to = current_time_string()
 
     # HogQL query for event page views
-    # Matches /e/{slug} and /c/{city}/e/{slug} patterns
+    # Matches /activities/{slug} patterns (event detail pages)
     query = """
     SELECT
       properties.$pathname as path,
       count(DISTINCT person_id) as unique_visitors
     FROM events
     WHERE event = '$pageview'
-      AND (
-        match(properties.$pathname, '^/e/[^/]+$')
-        OR match(properties.$pathname, '^/c/[^/]+/e/[^/]+$')
-      )
+      AND match(properties.$pathname, '^/activities/[^/]+$')
       AND timestamp >= '#{date_from}'
       AND timestamp <= '#{date_to}'
     GROUP BY path
@@ -137,6 +134,11 @@ defmodule EventasaurusDiscovery.PostHog.ViewCountQuery do
     date_to = current_time_string()
 
     # HogQL query for all detail pages
+    # Matches actual URL patterns:
+    # - /activities/{slug} for events
+    # - /movies/{slug} or /c/{city}/movies/{slug} for movies
+    # - /venues/{slug} or /c/{city}/venues/{slug} for venues
+    # - /performers/{slug} for performers
     query = """
     SELECT
       properties.$pathname as path,
@@ -144,12 +146,12 @@ defmodule EventasaurusDiscovery.PostHog.ViewCountQuery do
     FROM events
     WHERE event = '$pageview'
       AND (
-        match(properties.$pathname, '^/e/[^/]+$')
-        OR match(properties.$pathname, '^/c/[^/]+/e/[^/]+$')
-        OR match(properties.$pathname, '^/m/[^/]+$')
-        OR match(properties.$pathname, '^/c/[^/]+/m/[^/]+$')
-        OR match(properties.$pathname, '^/v/[^/]+$')
-        OR match(properties.$pathname, '^/p/[^/]+$')
+        match(properties.$pathname, '^/activities/[^/]+$')
+        OR match(properties.$pathname, '^/movies/[^/]+$')
+        OR match(properties.$pathname, '^/c/[^/]+/movies/[^/]+$')
+        OR match(properties.$pathname, '^/venues/[^/]+$')
+        OR match(properties.$pathname, '^/c/[^/]+/venues/[^/]+$')
+        OR match(properties.$pathname, '^/performers/[^/]+$')
       )
       AND timestamp >= '#{date_from}'
       AND timestamp <= '#{date_to}'

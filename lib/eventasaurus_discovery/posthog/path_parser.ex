@@ -6,11 +6,11 @@ defmodule EventasaurusDiscovery.PostHog.PathParser do
 
   ## Examples
 
-      iex> PathParser.parse("/e/jazz-concert-krakow")
+      iex> PathParser.parse("/activities/jazz-concert-krakow")
       {:event, "jazz-concert-krakow"}
 
-      iex> PathParser.parse("/c/krakow/e/jazz-concert")
-      {:event, "jazz-concert"}
+      iex> PathParser.parse("/movies/avatar-123")
+      {:movie, "avatar-123"}
 
       iex> PathParser.parse("/c/krakow")
       :skip
@@ -21,37 +21,37 @@ defmodule EventasaurusDiscovery.PostHog.PathParser do
   Parse pathname to extract entity type and slug.
 
   Returns:
-  - `{:event, slug}` for event detail pages
-  - `{:movie, slug}` for movie detail pages (future)
-  - `{:venue, slug}` for venue detail pages (future)
-  - `{:performer, slug}` for performer detail pages (future)
+  - `{:event, slug}` for event detail pages (/activities/{slug})
+  - `{:movie, slug}` for movie detail pages (/movies/{slug} or /c/{city}/movies/{slug})
+  - `{:venue, slug}` for venue detail pages (/venues/{slug} or /c/{city}/venues/{slug})
+  - `{:performer, slug}` for performer detail pages (/performers/{slug})
   - `:skip` for listing pages or unrecognized paths
   """
   @spec parse(String.t()) :: {:event | :movie | :venue | :performer, String.t()} | :skip
   def parse(pathname) when is_binary(pathname) do
     cond do
-      # Direct event page: /e/{slug}
-      match = Regex.run(~r"^/e/([^/]+)$", pathname) ->
+      # Event/activity page: /activities/{slug}
+      match = Regex.run(~r"^/activities/([^/]+)$", pathname) ->
         {:event, Enum.at(match, 1)}
 
-      # City-scoped event page: /c/{city}/e/{slug}
-      match = Regex.run(~r"^/c/[^/]+/e/([^/]+)$", pathname) ->
-        {:event, Enum.at(match, 1)}
-
-      # Direct movie page: /m/{slug} (future)
-      match = Regex.run(~r"^/m/([^/]+)$", pathname) ->
+      # Direct movie page: /movies/{slug}
+      match = Regex.run(~r"^/movies/([^/]+)$", pathname) ->
         {:movie, Enum.at(match, 1)}
 
-      # City-scoped movie page: /c/{city}/m/{slug} (future)
-      match = Regex.run(~r"^/c/[^/]+/m/([^/]+)$", pathname) ->
+      # City-scoped movie page: /c/{city}/movies/{slug}
+      match = Regex.run(~r"^/c/[^/]+/movies/([^/]+)$", pathname) ->
         {:movie, Enum.at(match, 1)}
 
-      # Venue page: /v/{slug} (future)
-      match = Regex.run(~r"^/v/([^/]+)$", pathname) ->
+      # Direct venue page: /venues/{slug}
+      match = Regex.run(~r"^/venues/([^/]+)$", pathname) ->
         {:venue, Enum.at(match, 1)}
 
-      # Performer page: /p/{slug} (future)
-      match = Regex.run(~r"^/p/([^/]+)$", pathname) ->
+      # City-scoped venue page: /c/{city}/venues/{slug}
+      match = Regex.run(~r"^/c/[^/]+/venues/([^/]+)$", pathname) ->
+        {:venue, Enum.at(match, 1)}
+
+      # Performer page: /performers/{slug}
+      match = Regex.run(~r"^/performers/([^/]+)$", pathname) ->
         {:performer, Enum.at(match, 1)}
 
       true ->

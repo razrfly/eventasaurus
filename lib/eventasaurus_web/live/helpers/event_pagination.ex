@@ -284,23 +284,39 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
   @doc """
   Sort events by the specified field.
 
-  Supports sorting by date (starts_at), title, distance, or popularity.
+  Supports sorting by date (starts_at), title, or popularity.
   Returns events unchanged if sort_by is nil.
+
+  ## Date Sorting with Aggregated Events
+
+  Aggregated events (movie showtimes grouped into one card) don't sort well by date
+  because they represent multiple showtimes. For date sorting:
+  - Non-aggregated events sort normally by starts_at
+  - Aggregated events (event_count > 1) are excluded from date sorting and appear at the end
 
   ## Parameters
 
     - events: List of events
-    - sort_by: :starts_at (default), :title, :distance, :popularity, or nil
+    - sort_by: :starts_at (default), :title, :popularity, or nil
 
   ## Examples
 
       sorted = EventPagination.sort_events(events, :title)
-      sorted = EventPagination.sort_events(events, :distance)    # requires :distance field
-      sorted = EventPagination.sort_events(events, :popularity)  # uses :event_count field
+      sorted = EventPagination.sort_events(events, :popularity)  # uses posthog_view_count
   """
   @spec sort_events(list(), atom() | nil) :: list()
   def sort_events(events, nil), do: events
-  def sort_events(events, :starts_at), do: Enum.sort_by(events, & &1.starts_at, DateTime)
+
+  def sort_events(events, :starts_at) do
+    # Separate aggregated and non-aggregated events
+    # Aggregated events (multiple showtimes) don't sort well by date
+    {aggregated, non_aggregated} = Enum.split_with(events, &is_aggregated?/1)
+
+    # Sort non-aggregated by date, leave aggregated in original order at the end
+    sorted_non_aggregated = Enum.sort_by(non_aggregated, & &1.starts_at, DateTime)
+
+    sorted_non_aggregated ++ aggregated
+  end
 
   def sort_events(events, :title) do
     Enum.sort_by(events, fn event ->
@@ -308,32 +324,39 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
     end)
   end
 
-  def sort_events(events, :distance) do
-    # Sort by distance field (nearest first). Events without distance go to end.
-    Enum.sort_by(events, fn event ->
-      case Map.get(event, :distance) do
-        nil -> :infinity
-        distance -> distance
-      end
-    end)
-  end
-
   def sort_events(events, :popularity) do
     # Sort by popularity (most popular first).
-    # For aggregated events, event_count indicates how many showtimes exist.
-    # Events with higher event_count are more popular.
-    # Falls back to starts_at for events without popularity metrics.
-    Enum.sort_by(
-      events,
+    # Uses posthog_view_count (from PostHog analytics sync) as the primary metric.
+    # Falls back to event_count for aggregated events (movie showtimes).
+    # Events without any popularity metrics go to the end (sorted by date).
+    events
+    |> Enum.sort_by(
       fn event ->
-        event_count = Map.get(event, :event_count, 1)
-        # Negate to sort descending (highest count first)
-        -event_count
+        # Primary: posthog_view_count (from PostHog sync)
+        view_count = Map.get(event, :posthog_view_count) || 0
+
+        # Secondary: event_count (for movie showtime aggregation)
+        event_count = Map.get(event, :event_count) || 1
+
+        # Combined score: view_count has higher weight, event_count as tiebreaker
+        # Negate for descending sort (most popular first)
+        {-view_count, -event_count}
       end
     )
   end
 
+  # Distance sorting removed - unclear UX ("distance from what?")
+  def sort_events(events, :distance), do: events
+
   def sort_events(events, _), do: events
+
+  # Check if an event is aggregated (multiple showtimes grouped together)
+  defp is_aggregated?(event) do
+    case Map.get(event, :event_count) do
+      count when is_integer(count) and count > 1 -> true
+      _ -> false
+    end
+  end
 
   @doc """
   Apply multiple filters and paginate in one call.
@@ -348,7 +371,7 @@ defmodule EventasaurusWeb.Live.Helpers.EventPagination do
       - :time_filter - :upcoming, :past, or :all (default: :upcoming)
       - :date_range - atom or nil for date filtering
       - :search - string for title search
-      - :sort_by - :starts_at (default), :title
+      - :sort_by - :starts_at (default), :title, :popularity
       - :page - page number (default: 1)
       - :page_size - items per page (default: 30)
 

@@ -171,15 +171,11 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
 
   ## Attributes
 
-  - `sort_by` - Currently active sort field (:starts_at, :distance, :title, :popularity)
-  - `show_distance` - Whether to show distance option. Only enable when events
-    have a `:distance` field populated (e.g., location-based search results).
-    Requires backend support in EventPagination.sort_events/2.
+  - `sort_by` - Currently active sort field (:starts_at, :title, :popularity)
   - `show_popularity` - Whether to show popularity option. Enable when events
     have showtime counts or other popularity metrics (e.g., aggregated movie views).
   """
   attr :sort_by, :atom, default: :starts_at
-  attr :show_distance, :boolean, default: false
   attr :show_popularity, :boolean, default: false
 
   def sort_controls(assigns) do
@@ -195,11 +191,6 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
             <option value="starts_at" selected={@sort_by == :starts_at}>
               <%= gettext("Date") %>
             </option>
-            <%= if @show_distance do %>
-              <option value="distance" selected={@sort_by == :distance}>
-                <%= gettext("Distance") %>
-              </option>
-            <% end %>
             <%= if @show_popularity do %>
               <option value="popularity" selected={@sort_by == :popularity}>
                 <%= gettext("Popularity") %>
@@ -304,7 +295,7 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
 
   - `filters` - Current filter values (map with :search key)
   - `active_date_range` - Currently active date range atom (nil for none)
-  - `sort_by` - Currently active sort field (:starts_at, :title, :distance)
+  - `sort_by` - Currently active sort field (:starts_at, :title, :popularity)
 
   ## Events Emitted
 
@@ -373,7 +364,6 @@ defmodule EventasaurusWeb.Components.EventListing.FilterBar do
 
   # Helper to get human-readable sort label
   defp sort_label(:title), do: gettext("Title")
-  defp sort_label(:distance), do: gettext("Distance")
   defp sort_label(:popularity), do: gettext("Popularity")
   defp sort_label(_), do: gettext("Date")
 
