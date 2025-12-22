@@ -57,12 +57,14 @@ defmodule EventasaurusWeb.PerformerLive.Show do
       # View mode
       |> assign(:view_mode, "grid")
       |> assign(:breadcrumb_items, [])
+      # Sorting
+      |> assign(:sort_by, :starts_at)
 
     {:ok, socket}
   end
 
   @impl true
-  def handle_params(%{"slug" => slug}, _url, socket) do
+  def handle_params(%{"slug" => slug} = params, _url, socket) do
     case PerformerStore.get_performer_by_slug(slug) do
       nil ->
         {:noreply,
@@ -71,6 +73,8 @@ defmodule EventasaurusWeb.PerformerLive.Show do
          |> push_navigate(to: ~p"/")}
 
       performer ->
+        # Apply URL params to socket assigns, then load performer
+        socket = apply_url_params(socket, params)
         load_and_assign_performer(performer, socket)
     end
   end
@@ -93,17 +97,22 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     # Calculate date range counts for the time-filtered events
     date_range_counts = EventPagination.calculate_date_range_counts(time_filtered_events)
 
-    # Apply date range filter and paginate
+    # Apply all filters (time, date range, search, sort) and paginate
     active_date_range = socket.assigns.active_date_range
-
-    filtered_events =
-      EventPagination.filter_by_date_range(time_filtered_events, active_date_range)
-
+    search_term = socket.assigns.filters[:search]
+    sort_by = socket.assigns.sort_by
     page_size = socket.assigns.pagination.page_size
     page_number = socket.assigns.pagination.page_number
 
-    {paginated_events, pagination} =
-      EventPagination.paginate(filtered_events, page_number, page_size)
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: active_date_range,
+        search: search_term,
+        sort_by: sort_by,
+        page: page_number,
+        page_size: page_size
+      )
 
     # Build breadcrumb items
     breadcrumb_items =
@@ -117,7 +126,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
       |> assign(:stats, stats)
       |> assign(:all_events, all_events)
       |> assign(:events, paginated_events)
-      |> assign(:total_events, length(filtered_events))
+      |> assign(:total_events, filtered_count)
       |> assign(:time_filter_counts, time_filter_counts)
       |> assign(:date_range_counts, date_range_counts)
       |> assign(:pagination, pagination)
@@ -133,6 +142,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   def handle_event("time_filter", %{"filter" => filter_string}, socket) do
     time_filter = String.to_existing_atom(filter_string)
     all_events = socket.assigns.all_events
+    sort_by = socket.assigns.sort_by
 
     # Apply time filter
     time_filtered_events = EventPagination.filter_by_time(all_events, time_filter)
@@ -141,17 +151,26 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     date_range_counts = EventPagination.calculate_date_range_counts(time_filtered_events)
 
     # Reset to page 1 and clear date range filter when switching time filter
-    page_size = socket.assigns.pagination.page_size
-    {paginated_events, pagination} = EventPagination.paginate(time_filtered_events, 1, page_size)
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: nil,
+        sort_by: sort_by,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
 
-    {:noreply,
-     socket
-     |> assign(:time_filter, time_filter)
-     |> assign(:active_date_range, nil)
-     |> assign(:date_range_counts, date_range_counts)
-     |> assign(:events, paginated_events)
-     |> assign(:total_events, length(time_filtered_events))
-     |> assign(:pagination, pagination)}
+    socket =
+      socket
+      |> assign(:time_filter, time_filter)
+      |> assign(:active_date_range, nil)
+      |> assign(:date_range_counts, date_range_counts)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    # Update URL with new time filter
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # Quick date filter handler
@@ -163,20 +182,26 @@ defmodule EventasaurusWeb.PerformerLive.Show do
 
         all_events = socket.assigns.all_events
         time_filter = socket.assigns.time_filter
+        sort_by = socket.assigns.sort_by
 
-        # Apply time filter first, then date range
-        time_filtered = EventPagination.filter_by_time(all_events, time_filter)
-        filtered_events = EventPagination.filter_by_date_range(time_filtered, active_date_range)
+        {paginated_events, pagination, filtered_count} =
+          EventPagination.filter_and_paginate(all_events,
+            time_filter: time_filter,
+            date_range: active_date_range,
+            sort_by: sort_by,
+            page: 1,
+            page_size: socket.assigns.pagination.page_size
+          )
 
-        page_size = socket.assigns.pagination.page_size
-        {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+        socket =
+          socket
+          |> assign(:active_date_range, active_date_range)
+          |> assign(:events, paginated_events)
+          |> assign(:total_events, filtered_count)
+          |> assign(:pagination, pagination)
 
-        {:noreply,
-         socket
-         |> assign(:active_date_range, active_date_range)
-         |> assign(:events, paginated_events)
-         |> assign(:total_events, length(filtered_events))
-         |> assign(:pagination, pagination)}
+        # Update URL with new date range
+        {:noreply, push_patch(socket, to: build_path(socket))}
 
       :error ->
         {:noreply, socket}
@@ -186,23 +211,29 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   # Clear date filter handler
   @impl true
   def handle_event("clear_date_filter", _params, socket) do
-    # Reset date range but keep time filter
-    active_date_range = nil
+    # Reset date range but keep time filter and sort
     all_events = socket.assigns.all_events
     time_filter = socket.assigns.time_filter
+    sort_by = socket.assigns.sort_by
 
-    time_filtered = EventPagination.filter_by_time(all_events, time_filter)
-    filtered_events = EventPagination.filter_by_date_range(time_filtered, active_date_range)
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: nil,
+        sort_by: sort_by,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
 
-    page_size = socket.assigns.pagination.page_size
-    {paginated_events, pagination} = EventPagination.paginate(filtered_events, 1, page_size)
+    socket =
+      socket
+      |> assign(:active_date_range, nil)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
 
-    {:noreply,
-     socket
-     |> assign(:active_date_range, active_date_range)
-     |> assign(:events, paginated_events)
-     |> assign(:total_events, length(filtered_events))
-     |> assign(:pagination, pagination)}
+    # Update URL with cleared filter state
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # Pagination handler
@@ -212,17 +243,26 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     all_events = socket.assigns.all_events
     time_filter = socket.assigns.time_filter
     active_date_range = socket.assigns.active_date_range
+    search_term = socket.assigns.filters[:search]
+    sort_by = socket.assigns.sort_by
 
-    time_filtered = EventPagination.filter_by_time(all_events, time_filter)
-    filtered_events = EventPagination.filter_by_date_range(time_filtered, active_date_range)
+    {paginated_events, pagination, _filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: active_date_range,
+        search: search_term,
+        sort_by: sort_by,
+        page: page,
+        page_size: socket.assigns.pagination.page_size
+      )
 
-    page_size = socket.assigns.pagination.page_size
-    {paginated_events, pagination} = EventPagination.paginate(filtered_events, page, page_size)
+    socket =
+      socket
+      |> assign(:events, paginated_events)
+      |> assign(:pagination, pagination)
 
-    {:noreply,
-     socket
-     |> assign(:events, paginated_events)
-     |> assign(:pagination, pagination)}
+    # Update URL with new page
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # Search handler
@@ -231,29 +271,63 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     all_events = socket.assigns.all_events
     time_filter = socket.assigns.time_filter
     active_date_range = socket.assigns.active_date_range
+    sort_by = socket.assigns.sort_by
 
-    # Filter by time, date range and search term, then paginate
+    # Filter by time, date range, search term and sort, then paginate
     {paginated_events, pagination, filtered_count} =
       EventPagination.filter_and_paginate(all_events,
         time_filter: time_filter,
         date_range: active_date_range,
         search: search_term,
+        sort_by: sort_by,
         page: 1,
         page_size: socket.assigns.pagination.page_size
       )
 
-    {:noreply,
-     socket
-     |> assign(:filters, %{search: search_term})
-     |> assign(:events, paginated_events)
-     |> assign(:total_events, filtered_count)
-     |> assign(:pagination, pagination)}
+    socket =
+      socket
+      |> assign(:filters, %{search: search_term})
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    # Update URL with search term
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # View mode toggle handler
   @impl true
   def handle_event("change_view", %{"view" => view_mode}, socket) do
     {:noreply, assign(socket, :view_mode, view_mode)}
+  end
+
+  # Sort handler
+  @impl true
+  def handle_event("sort", %{"sort_by" => sort_by_string}, socket) do
+    sort_by = parse_sort(sort_by_string)
+    all_events = socket.assigns.all_events
+    time_filter = socket.assigns.time_filter
+    active_date_range = socket.assigns.active_date_range
+    search_term = socket.assigns.filters[:search]
+
+    {paginated_events, pagination, filtered_count} =
+      EventPagination.filter_and_paginate(all_events,
+        time_filter: time_filter,
+        date_range: active_date_range,
+        search: search_term,
+        sort_by: sort_by,
+        page: 1,
+        page_size: socket.assigns.pagination.page_size
+      )
+
+    socket =
+      socket
+      |> assign(:sort_by, sort_by)
+      |> assign(:events, paginated_events)
+      |> assign(:total_events, filtered_count)
+      |> assign(:pagination, pagination)
+
+    {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
   # Helper to get section title based on active time filter
@@ -297,6 +371,11 @@ defmodule EventasaurusWeb.PerformerLive.Show do
                       all_events_count={@time_filter_counts[@time_filter]}
                     />
                   <% end %>
+
+                  <!-- Sort Controls -->
+                  <div class="flex justify-end">
+                    <.sort_controls sort_by={@sort_by} />
+                  </div>
                 </div>
 
                 <%= if Enum.empty?(@events) do %>
@@ -364,6 +443,129 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     </div>
     """
   end
+
+  # URL State Management Functions
+
+  # Apply URL params to socket assigns for initial load or navigation
+  defp apply_url_params(socket, params) do
+    # Parse page from URL
+    page = parse_integer(params["page"]) || 1
+
+    # Parse search from URL
+    search = params["search"]
+
+    # Parse time filter from URL (upcoming, past, all)
+    time_filter =
+      case params["time_filter"] do
+        "upcoming" -> :upcoming
+        "past" -> :past
+        "all" -> :all
+        _ -> :upcoming  # Default to upcoming
+      end
+
+    # Parse date range from URL
+    active_date_range =
+      case params["date_range"] do
+        nil -> nil
+        "all" -> nil
+        range_string ->
+          case EventFilters.parse_quick_range(range_string) do
+            {:ok, range_atom} -> range_atom
+            :error -> nil
+          end
+      end
+
+    # Parse sort from URL
+    sort_by = parse_sort(params["sort"])
+
+    # Update socket assigns with URL params
+    socket
+    |> assign(:filters, %{search: search})
+    |> assign(:time_filter, time_filter)
+    |> assign(:active_date_range, active_date_range)
+    |> assign(:sort_by, sort_by)
+    |> assign(:pagination, %Pagination{
+      entries: [],
+      page_number: page,
+      page_size: socket.assigns.pagination.page_size,
+      total_entries: 0,
+      total_pages: 0
+    })
+  end
+
+  # Build URL path with current filter state
+  defp build_path(socket) do
+    performer = socket.assigns.performer
+    params = build_filter_params(socket)
+
+    base_path = ~p"/performers/#{performer.slug}"
+
+    if map_size(params) > 0 do
+      "#{base_path}?#{URI.encode_query(params)}"
+    else
+      base_path
+    end
+  end
+
+  # Build filter params map for URL query string
+  defp build_filter_params(socket) do
+    params = %{}
+
+    # Add search if present
+    params =
+      case socket.assigns.filters[:search] do
+        nil -> params
+        "" -> params
+        search -> Map.put(params, "search", search)
+      end
+
+    # Add time filter if not default (upcoming)
+    params =
+      case socket.assigns.time_filter do
+        :upcoming -> params  # Default, don't include in URL
+        time_filter -> Map.put(params, "time_filter", Atom.to_string(time_filter))
+      end
+
+    # Add date range if set (not nil means a specific range is selected)
+    params =
+      case socket.assigns.active_date_range do
+        nil -> params
+        range -> Map.put(params, "date_range", Atom.to_string(range))
+      end
+
+    # Add page if not first page
+    params =
+      case socket.assigns.pagination.page_number do
+        1 -> params
+        page -> Map.put(params, "page", to_string(page))
+      end
+
+    # Add sort if not default (starts_at)
+    params =
+      case socket.assigns.sort_by do
+        :starts_at -> params  # Default, don't include in URL
+        sort_by -> Map.put(params, "sort", Atom.to_string(sort_by))
+      end
+
+    params
+  end
+
+  # Parse integer from string, returning nil for invalid input
+  defp parse_integer(nil), do: nil
+  defp parse_integer(""), do: nil
+
+  defp parse_integer(val) when is_binary(val) do
+    case Integer.parse(val) do
+      {num, _} -> num
+      :error -> nil
+    end
+  end
+
+  # Parse sort option from URL string
+  defp parse_sort(nil), do: :starts_at
+  defp parse_sort("title"), do: :title
+  defp parse_sort("starts_at"), do: :starts_at
+  defp parse_sort(_), do: :starts_at
 
   # Helper to extract RA URL from performer metadata
   defp get_ra_url(%{metadata: %{"ra_artist_url" => url}}) when is_binary(url), do: url
