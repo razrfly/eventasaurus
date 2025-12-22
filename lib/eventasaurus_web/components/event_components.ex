@@ -2072,6 +2072,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :default_radius, :integer, default: 50, doc: "default radius to compare against"
   attr :sort_by, :atom, default: nil, doc: "currently active sort field (:starts_at, :title, :relevance, :popularity)"
 
+  @spec active_filter_tags(map()) :: Phoenix.LiveView.Rendered.t()
   def active_filter_tags(assigns) do
     # Calculate all filter conditions for self-contained visibility
     has_search = assigns.filters[:search] && assigns.filters[:search] != ""
