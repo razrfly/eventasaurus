@@ -207,9 +207,13 @@ defmodule EventasaurusDiscovery.PostHog.ViewCountQuery do
             [path, count] when is_binary(path) and is_integer(count) ->
               {path, count}
 
-            [path, count] when is_binary(path) ->
-              # Handle potential nil or float counts
-              {path, trunc(count || 0)}
+            [path, count] when is_binary(path) and is_float(count) ->
+              # Handle float counts from PostHog
+              {path, trunc(count)}
+
+            [path, nil] when is_binary(path) ->
+              # Handle nil counts
+              {path, 0}
 
             _ ->
               nil
