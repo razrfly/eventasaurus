@@ -1388,8 +1388,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       events = list_events(opts_without_pagination)
       aggregated = aggregate_events(events, opts)
 
-      # Apply pagination to aggregated results
-      paginate_aggregated_results(aggregated, page, page_size)
+      # Apply post-aggregation sorting
+      # DB sorting happens before aggregation, so we need to re-sort after
+      sort_by = opts[:sort_by] || :starts_at
+      sort_order = opts[:sort_order] || :asc
+      sorted = sort_aggregated_results(aggregated, sort_by, sort_order)
+
+      # Apply pagination to sorted aggregated results
+      paginate_aggregated_results(sorted, page, page_size)
     else
       list_events(opts)
     end
@@ -1521,6 +1527,73 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       %PublicEvent{starts_at: starts_at} -> starts_at || DateTime.utc_now()
     end)
   end
+
+  # Sort aggregated results after aggregation
+  # This is needed because DB sorting happens before aggregation
+  defp sort_aggregated_results(items, :starts_at, order) do
+    # For date sorting, separate aggregated groups (which have multiple dates)
+    # from single events and sort appropriately
+    {aggregated, non_aggregated} =
+      Enum.split_with(items, fn
+        %AggregatedEventGroup{} -> true
+        %AggregatedMovieGroup{} -> true
+        %AggregatedContainerGroup{} -> true
+        _ -> false
+      end)
+
+    # Sort non-aggregated items by date
+    sorted_non_aggregated =
+      Enum.sort_by(non_aggregated, fn item ->
+        get_item_start_date(item)
+      end, {if(order == :desc, do: :desc, else: :asc), DateTime})
+
+    # Aggregated items go at the end (they have multiple dates, so date sorting is ambiguous)
+    if order == :desc do
+      aggregated ++ sorted_non_aggregated
+    else
+      sorted_non_aggregated ++ aggregated
+    end
+  end
+
+  defp sort_aggregated_results(items, :title, order) do
+    Enum.sort_by(items, fn item ->
+      get_item_title(item) |> String.downcase()
+    end, if(order == :desc, do: :desc, else: :asc))
+  end
+
+  defp sort_aggregated_results(items, :popularity, order) do
+    Enum.sort_by(items, fn item ->
+      get_item_popularity(item)
+    end, if(order == :desc, do: :desc, else: :asc))
+  end
+
+  defp sort_aggregated_results(items, _field, _order), do: items
+
+  # Helper to get title from various item types
+  defp get_item_title(%PublicEvent{} = event) do
+    event.display_title || event.title || ""
+  end
+
+  defp get_item_title(%AggregatedEventGroup{source_name: name}) when is_binary(name), do: name
+  defp get_item_title(%AggregatedMovieGroup{movie_title: title}) when is_binary(title), do: title
+  defp get_item_title(%AggregatedContainerGroup{container_title: title}) when is_binary(title), do: title
+  defp get_item_title(_), do: ""
+
+  # Helper to get start date from various item types
+  defp get_item_start_date(%PublicEvent{starts_at: starts_at}), do: starts_at || DateTime.utc_now()
+  # Aggregated groups don't have a single start date - they represent multiple events
+  # Return a far-future date so they sort to end when sorting by date ascending
+  defp get_item_start_date(%AggregatedEventGroup{}), do: ~U[2099-12-31 23:59:59Z]
+  defp get_item_start_date(%AggregatedMovieGroup{}), do: ~U[2099-12-31 23:59:59Z]
+  defp get_item_start_date(%AggregatedContainerGroup{start_date: date}) when not is_nil(date), do: date
+  defp get_item_start_date(_), do: DateTime.utc_now()
+
+  # Helper to get popularity from various item types
+  defp get_item_popularity(%PublicEvent{posthog_view_count: count}) when is_integer(count), do: count
+  defp get_item_popularity(%AggregatedEventGroup{event_count: count}) when is_integer(count), do: count
+  defp get_item_popularity(%AggregatedMovieGroup{screening_count: count}) when is_integer(count), do: count
+  defp get_item_popularity(%AggregatedContainerGroup{event_count: count}) when is_integer(count), do: count
+  defp get_item_popularity(_), do: 0
 
   # Paginate aggregated results (in-memory pagination)
   defp paginate_aggregated_results(items, page, page_size) do

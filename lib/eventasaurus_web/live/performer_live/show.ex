@@ -413,7 +413,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
 
                   <!-- Sort Controls -->
                   <div class="flex justify-end">
-                    <.sort_controls sort_by={@sort_by} />
+                    <.sort_controls sort_by={@sort_by} show_popularity={true} />
                   </div>
                 </div>
 
@@ -604,7 +604,9 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   defp parse_sort(nil), do: :starts_at
   defp parse_sort("title"), do: :title
   defp parse_sort("starts_at"), do: :starts_at
-  defp parse_sort("distance"), do: :distance
+  defp parse_sort("popularity"), do: :popularity
+  # Distance removed - unclear UX ("distance from what?")
+  defp parse_sort("distance"), do: :starts_at
   defp parse_sort(_), do: :starts_at
 
   # Helper to extract RA URL from performer metadata

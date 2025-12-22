@@ -629,9 +629,6 @@ defmodule EventasaurusWeb.CityLive.Index do
             <option value="starts_at" selected={@filters.sort_by == :starts_at}>
               <%= gettext("Date") %>
             </option>
-            <option value="distance" selected={@filters.sort_by == :distance}>
-              <%= gettext("Distance") %>
-            </option>
             <option value="popularity" selected={@filters.sort_by == :popularity}>
               <%= gettext("Popularity") %>
             </option>
@@ -1070,9 +1067,10 @@ defmodule EventasaurusWeb.CityLive.Index do
   end
 
   defp parse_sort(nil), do: :starts_at
-  defp parse_sort("distance"), do: :distance
   defp parse_sort("title"), do: :title
   defp parse_sort("popularity"), do: :popularity
+  # Distance removed - unclear UX ("distance from what?")
+  defp parse_sort("distance"), do: :starts_at
   defp parse_sort(_), do: :starts_at
 
   defp parse_date(nil), do: nil
