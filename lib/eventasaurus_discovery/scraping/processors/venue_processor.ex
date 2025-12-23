@@ -1225,6 +1225,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       venue_type: "venue",
       place_id: final_place_id,
       source: source,
+      is_public: true,
       city_id: city.id,
       provider_ids: provider_ids,
       geocoding_performance: geocoding_performance,

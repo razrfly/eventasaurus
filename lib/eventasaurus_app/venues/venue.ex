@@ -159,6 +159,10 @@ defmodule EventasaurusApp.Venues.Venue do
     field(:longitude, :float)
     field(:venue_type, :string, default: "venue")
     field(:source, :string, default: "user")
+    # Explicit public/private distinction:
+    # - true: Public venues (theaters, bars, concert halls) - created by scrapers
+    # - false: Private venues (user homes, private addresses) - created by users
+    field(:is_public, :boolean, default: false)
     field(:metadata, :map)
     field(:geocoding_performance, :map)
     field(:provider_ids, :map, default: %{})
@@ -192,6 +196,7 @@ defmodule EventasaurusApp.Venues.Venue do
       :longitude,
       :venue_type,
       :source,
+      :is_public,
       :city_id,
       :metadata,
       :geocoding_performance,

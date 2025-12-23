@@ -301,6 +301,7 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
       attrs
       |> Map.put_new(:venue_type, "venue")
       |> Map.put_new(:source, "scraper")
+      |> Map.put_new(:is_public, true)
       |> ensure_numeric_coordinates()
       |> ensure_city_id()
 
