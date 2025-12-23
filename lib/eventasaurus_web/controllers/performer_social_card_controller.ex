@@ -11,7 +11,9 @@ defmodule EventasaurusWeb.PerformerSocialCardController do
 
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
-  import EventasaurusWeb.SocialCardView, only: [sanitize_performer: 1, render_performer_card_svg: 1]
+
+  import EventasaurusWeb.SocialCardView,
+    only: [sanitize_performer: 1, render_performer_card_svg: 1]
 
   @impl true
   def lookup_entity(%{"slug" => slug}) do

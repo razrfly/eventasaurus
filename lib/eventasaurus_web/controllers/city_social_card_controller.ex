@@ -13,7 +13,10 @@ defmodule EventasaurusWeb.CitySocialCardController do
   alias EventasaurusDiscovery.Categories
   import EventasaurusWeb.SocialCardView, only: [sanitize_city: 1, render_city_card_svg: 2]
 
-  # Keep the old function name for route compatibility
+  @doc """
+  Generates a social card by city slug. Legacy route compatibility wrapper.
+  """
+  @spec generate_card_by_slug(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def generate_card_by_slug(conn, params) do
     generate_card(conn, params)
   end
