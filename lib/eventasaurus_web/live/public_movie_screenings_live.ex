@@ -11,9 +11,9 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
   alias EventasaurusWeb.Live.Components.CityScreeningsSection
   alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, LanguageHelpers}
   alias EventasaurusWeb.Services.TmdbService
-  alias EventasaurusWeb.Services.MovieConfig
   alias EventasaurusWeb.JsonLd.MovieSchema
-  alias Eventasaurus.CDN
+  alias Eventasaurus.SocialCards.HashGenerator
+  alias EventasaurusWeb.UrlHelper
   import Ecto.Query
 
   @impl true
@@ -22,9 +22,20 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     params = get_connect_params(socket) || %{}
     language = session["language"] || params["locale"] || "en"
 
+    # Get request URI for building absolute URLs (supports ngrok, localhost, production)
+    raw_uri = get_connect_info(socket, :uri)
+
+    request_uri =
+      cond do
+        match?(%URI{}, raw_uri) -> raw_uri
+        is_binary(raw_uri) -> URI.parse(raw_uri)
+        true -> nil
+      end
+
     socket =
       socket
       |> assign(:language, language)
+      |> assign(:request_uri, request_uri)
       |> assign(:show_plan_with_friends_modal, false)
       |> assign(:selected_users, [])
       |> assign(:selected_emails, [])
@@ -173,8 +184,8 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     # Generate JSON-LD structured data for movie page
     json_ld = MovieSchema.generate(movie_with_metadata, city, venues_with_info)
 
-    # Generate Open Graph meta tags
-    og_tags = build_movie_open_graph(movie, city, total_showtimes)
+    # Generate Open Graph meta tags with branded social card
+    og_tags = build_movie_open_graph(movie, city, total_showtimes, socket.assigns.request_uri)
 
     {:noreply,
      socket
@@ -788,42 +799,46 @@ defmodule EventasaurusWeb.PublicMovieScreeningsLive do
     end
   end
 
-  # Build Open Graph meta tags for movie page
-  defp build_movie_open_graph(movie, city, total_showtimes) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
-
-    # Get movie poster image - use poster_url field directly
-    # Metadata key is "poster_path" not "poster" per TMDB API
-    image_url =
-      cond do
-        movie.poster_url && movie.poster_url != "" ->
-          movie.poster_url
-
-        movie.metadata && movie.metadata["poster_path"] ->
-          MovieConfig.build_image_url(movie.metadata["poster_path"], "w500")
-
-        true ->
-          movie_name_encoded = URI.encode(movie.title)
-          "https://placehold.co/500x750/4ECDC4/FFFFFF?text=#{movie_name_encoded}"
-      end
-
-    # Wrap with CDN
-    cdn_image_url = CDN.url(image_url)
+  # Build Open Graph meta tags for movie page with branded social card
+  defp build_movie_open_graph(movie, city, total_showtimes, request_uri) do
+    # Build absolute canonical URL using UrlHelper
+    canonical_path = "/c/#{city.slug}/movies/#{movie.slug}"
+    canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
     # Build description
     description =
       "Watch #{movie.title} in #{city.name}. #{total_showtimes} #{pluralize_showtime(total_showtimes)} available at multiple cinemas."
 
-    # Render Open Graph component
+    # Build movie data for social card hash generation
+    movie_data = %{
+      title: movie.title,
+      slug: movie.slug,
+      city: %{
+        name: city.name,
+        slug: city.slug
+      },
+      poster_url: movie.poster_url,
+      backdrop_url: movie.backdrop_url,
+      total_showtimes: total_showtimes,
+      updated_at: movie.updated_at
+    }
+
+    # Generate branded social card URL path
+    social_card_path = HashGenerator.generate_url_path(movie_data, :movie)
+
+    # Build absolute image URL
+    social_card_url = UrlHelper.build_url(social_card_path, request_uri)
+
+    # Render Open Graph component with branded social card
     Phoenix.HTML.Safe.to_iodata(
       EventasaurusWeb.Components.OpenGraphComponent.open_graph_tags(%{
         type: "video.movie",
         title: "#{movie.title} - #{city.name}",
         description: description,
-        image_url: cdn_image_url,
-        image_width: 500,
-        image_height: 750,
-        url: "#{base_url}/c/#{city.slug}/movies/#{movie.slug}",
+        image_url: social_card_url,
+        image_width: 1200,
+        image_height: 630,
+        url: canonical_url,
         site_name: "Wombie",
         locale: "en_US",
         twitter_card: "summary_large_image"

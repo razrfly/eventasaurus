@@ -14,6 +14,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - `:source_aggregation` - Source aggregation page social cards
   - `:venue` - Venue page social cards
   - `:performer` - Performer page social cards
+  - `:movie` - Movie screenings page social cards
 
   ## Hash Generation
 
@@ -83,6 +84,15 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - Image URL
   - Performer updated_at timestamp
 
+  For movies (movie screenings pages), the hash includes:
+  - Movie slug (unique identifier)
+  - Movie title
+  - City slug
+  - Poster URL
+  - Backdrop URL
+  - Total showtimes count
+  - Movie updated_at timestamp
+
   Returns a short hash suitable for URLs.
 
   ## Examples
@@ -115,10 +125,14 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(performer, :performer)
       "a7b8c9d0"
 
+      iex> movie = %{slug: "avatar-123", title: "Avatar", city: %{slug: "krakow"}, total_showtimes: 15}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(movie, :movie)
+      "b8c9d0e1"
+
   """
   @spec generate_hash(
           map(),
-          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer
+          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer | :movie
         ) :: String.t()
   def generate_hash(data, type \\ :event) when is_map(data) do
     data
@@ -167,10 +181,14 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(performer, :performer)
       "/social-cards/performer/john-doe/a7b8c9d0.png"
 
+      iex> movie = %{slug: "avatar-123", title: "Avatar", city: %{slug: "krakow"}}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(movie, :movie)
+      "/social-cards/movie/krakow/avatar-123/b8c9d0e1.png"
+
   """
   @spec generate_url_path(
           map(),
-          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer
+          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer | :movie
         ) :: String.t()
   def generate_url_path(data, type \\ :event) when is_map(data) do
     hash = generate_hash(data, type)
@@ -209,6 +227,11 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       :performer ->
         performer_slug = extract_slug(data, :slug, :id, "performer")
         "/social-cards/performer/#{performer_slug}/#{hash}.png"
+
+      :movie ->
+        city_slug = extract_city_slug(data, :city)
+        movie_slug = extract_slug(data, :slug, :id, "movie")
+        "/social-cards/movie/#{city_slug}/#{movie_slug}/#{hash}.png"
     end
   end
 
@@ -255,6 +278,9 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/performer/john-doe/a7b8c9d0.png")
       "a7b8c9d0"
 
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/movie/krakow/avatar-123/b8c9d0e1.png")
+      "b8c9d0e1"
+
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/invalid/path")
       nil
 
@@ -284,6 +310,11 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
       # Performer pattern: /social-cards/performer/slug/hash.png
       match = Regex.run(~r/\/social-cards\/performer\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      # Movie pattern: /social-cards/movie/city-slug/movie-slug/hash.png
+      match = Regex.run(~r/\/social-cards\/movie\/[^\/]+\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
         [_full_match, hash] = match
         hash
 
@@ -341,11 +372,16 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(performer, hash, :performer)
       true
 
+      iex> movie = %{slug: "avatar-123", title: "Avatar", city: %{slug: "krakow"}}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(movie, :movie)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(movie, hash, :movie)
+      true
+
   """
   @spec validate_hash(
           map(),
           String.t(),
-          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer
+          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer | :movie
         ) :: boolean()
   def validate_hash(data, hash, type \\ :event) when is_map(data) and is_binary(hash) do
     generate_hash(data, type) == hash
@@ -545,6 +581,23 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       event_count: Map.get(performer, :event_count, 0),
       image_url: Map.get(performer, :image_url, ""),
       updated_at: format_timestamp(Map.get(performer, :updated_at)),
+      version: @social_card_version
+    }
+  end
+
+  defp build_fingerprint(movie, :movie) do
+    city_slug = extract_city_slug(movie, :city)
+    movie_slug = extract_slug(movie, :slug, :id, "movie")
+
+    %{
+      type: :movie,
+      slug: movie_slug,
+      title: Map.get(movie, :title, ""),
+      city_slug: city_slug,
+      poster_url: Map.get(movie, :poster_url, ""),
+      backdrop_url: Map.get(movie, :backdrop_url, ""),
+      total_showtimes: Map.get(movie, :total_showtimes, 0),
+      updated_at: format_timestamp(Map.get(movie, :updated_at)),
       version: @social_card_version
     }
   end
