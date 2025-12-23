@@ -11,7 +11,6 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Eventasaurus.CDN
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Pagination
@@ -1124,15 +1123,10 @@ defmodule EventasaurusWeb.CityLive.Index do
 
   # Build Open Graph meta tags for city pages
   defp build_city_open_graph(city, _stats, social_card_path, request_uri) do
-    # Build absolute social card URL
-    base_url = EventasaurusWeb.UrlHelper.build_url("", request_uri)
-    image_url = "#{base_url}#{social_card_path}"
-
-    # Wrap with CDN
-    cdn_image_url = CDN.url(image_url)
-
-    # Build canonical URL
-    canonical_url = "#{base_url}/c/#{city.slug}"
+    # Build absolute URLs using UrlHelper for consistency
+    # Note: Social cards are server-generated PNGs, not CDN-hosted assets
+    image_url = EventasaurusWeb.UrlHelper.build_url(social_card_path, request_uri)
+    canonical_url = EventasaurusWeb.UrlHelper.build_url("/c/#{city.slug}", request_uri)
 
     # Build description with stats
     description = meta_description(city)
@@ -1143,7 +1137,7 @@ defmodule EventasaurusWeb.CityLive.Index do
         type: "website",
         title: page_title(city),
         description: description,
-        image_url: cdn_image_url,
+        image_url: image_url,
         image_width: 800,
         image_height: 419,
         url: canonical_url,

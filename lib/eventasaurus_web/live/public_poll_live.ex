@@ -17,6 +17,7 @@ defmodule EventasaurusWeb.PublicPollLive do
   }
 
   alias EventasaurusWeb.ReservedSlugs
+  alias EventasaurusWeb.UrlHelper
   alias Eventasaurus.SocialCards.HashGenerator
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
@@ -75,8 +76,8 @@ defmodule EventasaurusWeb.PublicPollLive do
 
   @impl true
   def handle_params(_params, uri, socket) do
-    # Extract base URL from the current request URI for Open Graph tags
-    base_url = get_base_url_from_uri(uri)
+    # Parse URI for consistent URL building with UrlHelper
+    request_uri = URI.parse(uri)
 
     # Update meta_image and canonical_url with correct base URL if poll exists
     socket =
@@ -84,33 +85,17 @@ defmodule EventasaurusWeb.PublicPollLive do
         poll = socket.assigns.poll
         event = socket.assigns.event
 
+        social_card_path = HashGenerator.generate_url_path(poll, :poll)
+        canonical_path = "/#{event.slug}/polls/#{poll.number}"
+
         socket
-        |> assign(
-          :meta_image,
-          "#{base_url}#{HashGenerator.generate_url_path(poll, :poll)}"
-        )
-        |> assign(:canonical_url, "#{base_url}/#{event.slug}/polls/#{poll.number}")
+        |> assign(:meta_image, UrlHelper.build_url(social_card_path, request_uri))
+        |> assign(:canonical_url, UrlHelper.build_url(canonical_path, request_uri))
       else
         socket
       end
 
     {:noreply, assign(socket, :current_uri, uri)}
-  end
-
-  # Extract base URL from URI, forcing HTTPS for non-localhost hosts
-  # This works with ngrok, Cloudflare, and other proxies that terminate SSL
-  defp get_base_url_from_uri(uri) when is_binary(uri) do
-    parsed = URI.parse(uri)
-
-    if parsed.scheme && parsed.host do
-      # Force HTTPS for external domains (ngrok, production), allow HTTP for localhost
-      scheme = if parsed.host in ["localhost", "127.0.0.1"], do: parsed.scheme, else: "https"
-      port_part = if parsed.port && parsed.port not in [80, 443], do: ":#{parsed.port}", else: ""
-      "#{scheme}://#{parsed.host}#{port_part}"
-    else
-      # Fallback to endpoint URL
-      EventasaurusWeb.Endpoint.url()
-    end
   end
 
   @impl true
