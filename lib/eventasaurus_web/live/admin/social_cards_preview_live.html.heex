@@ -12,7 +12,7 @@
     <div class="flex-1 min-w-[200px]">
       <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">
         Theme Filter
-        <%= if @card_type in [:city, :activity] do %>
+        <%= if @card_type in [:city, :activity, :movie] do %>
           <span class="text-xs text-gray-500">(Uses fixed theme)</span>
         <% end %>
       </label>
@@ -21,7 +21,7 @@
           id="theme-select"
           name="theme"
           class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          disabled={@card_type in [:city, :activity]}
+          disabled={@card_type in [:city, :activity, :movie]}
         >
           <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
           <%= for theme <- @themes do %>
@@ -47,6 +47,7 @@
           <option value="poll" selected={@card_type == :poll}>Poll Cards</option>
           <option value="city" selected={@card_type == :city}>City Cards</option>
           <option value="activity" selected={@card_type == :activity}>Activity Cards</option>
+          <option value="movie" selected={@card_type == :movie}>Movie Cards</option>
         </select>
       </form>
     </div>
@@ -59,7 +60,7 @@
     </div>
   </div>
 
-  <!-- Mock Data Info -->
+  <!-- Mock Data Info / Edit Mode -->
   <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
     <div class="flex items-start">
       <div class="flex-shrink-0">
@@ -68,48 +69,269 @@
         </svg>
       </div>
       <div class="ml-3 flex-1">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-medium text-blue-800">
+            <%= if @edit_mode, do: "Edit Mock Data", else: "Mock Data Preview" %>
+          </h3>
+          <button
+            type="button"
+            phx-click="toggle_edit_mode"
+            class={"px-3 py-1 text-xs font-medium rounded #{if @edit_mode, do: "bg-blue-600 text-white", else: "bg-blue-100 text-blue-700 hover:bg-blue-200"}"}
+          >
+            <%= if @edit_mode, do: "Done Editing", else: "Edit Data" %>
+          </button>
+        </div>
+
         <%= cond do %>
+          <% @card_type == :movie -> %>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_movie" class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Title</label>
+                  <input
+                    type="text"
+                    name="movie[title]"
+                    value={@mock_movie.title}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Backdrop Image URL</label>
+                  <input
+                    type="text"
+                    name="movie[backdrop_url]"
+                    value={@mock_movie.backdrop_url}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Year</label>
+                    <input
+                      type="number"
+                      name="movie[year]"
+                      value={if @mock_movie.release_date, do: @mock_movie.release_date.year, else: ""}
+                      min="1900"
+                      max="2100"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Runtime (min)</label>
+                    <input
+                      type="number"
+                      name="movie[runtime]"
+                      value={@mock_movie.runtime}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Rating (0-10)</label>
+                    <input
+                      type="number"
+                      name="movie[rating]"
+                      value={@mock_movie.metadata[:vote_average] || ""}
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Title:</strong> <%= @mock_movie.title %></p>
+                <p class="font-mono"><strong>Year:</strong> <%= if @mock_movie.release_date, do: @mock_movie.release_date.year, else: "N/A" %></p>
+                <p class="font-mono"><strong>Runtime:</strong> <%= if @mock_movie.runtime, do: "#{@mock_movie.runtime} min", else: "N/A" %></p>
+                <p class="font-mono"><strong>Rating:</strong> <%= if @mock_movie.metadata[:vote_average], do: "★ #{@mock_movie.metadata[:vote_average]}", else: "N/A" %></p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Movie cards use a cinema purple/violet theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
           <% @card_type == :activity -> %>
-            <h3 class="text-sm font-medium text-blue-800">Mock Activity Data</h3>
-            <div class="mt-2 text-sm text-blue-700">
-              <p class="font-mono"><strong>Title:</strong> <%= @mock_activity.title %></p>
-              <p class="font-mono"><strong>Venue:</strong> <%= @mock_activity.venue.name %></p>
-              <p class="font-mono"><strong>City:</strong> <%= @mock_activity.venue.city_ref.name %></p>
-              <p class="font-mono"><strong>Date:</strong> <%= List.first(@mock_activity.occurrence_list).date %></p>
-              <p class="text-xs text-blue-600 mt-1">
-                Activity cards use fixed Wombie teal theme. Shows title, date/time, venue, and city for public events.
-              </p>
-            </div>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_activity" class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Title</label>
+                  <input
+                    type="text"
+                    name="activity[title]"
+                    value={@mock_activity.title}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Cover Image URL</label>
+                  <input
+                    type="text"
+                    name="activity[cover_image_url]"
+                    value={@mock_activity.cover_image_url}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Venue Name</label>
+                    <input
+                      type="text"
+                      name="activity[venue_name]"
+                      value={@mock_activity.venue.name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">City Name</label>
+                    <input
+                      type="text"
+                      name="activity[city_name]"
+                      value={@mock_activity.venue.city_ref.name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Title:</strong> <%= @mock_activity.title %></p>
+                <p class="font-mono"><strong>Venue:</strong> <%= @mock_activity.venue.name %></p>
+                <p class="font-mono"><strong>City:</strong> <%= @mock_activity.venue.city_ref.name %></p>
+                <p class="font-mono"><strong>Date:</strong> <%= List.first(@mock_activity.occurrence_list).date %></p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Activity cards use fixed Wombie teal theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
           <% @card_type == :city -> %>
-            <h3 class="text-sm font-medium text-blue-800">Mock City Data</h3>
-            <div class="mt-2 text-sm text-blue-700">
-              <p class="font-mono"><strong>Name:</strong> <%= @mock_city.name %>, <%= @mock_city.country.name %></p>
-              <p class="font-mono"><strong>Events:</strong> <%= @mock_city.stats.events_count %></p>
-              <p class="font-mono"><strong>Venues:</strong> <%= @mock_city.stats.venues_count %></p>
-              <p class="font-mono"><strong>Categories:</strong> <%= @mock_city.stats.categories_count %></p>
-              <p class="text-xs text-blue-600 mt-1">
-                City cards use a fixed deep blue theme. Stats-heavy design showing event discovery metrics.
-              </p>
-            </div>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_city" class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">City Name</label>
+                  <input
+                    type="text"
+                    name="city[name]"
+                    value={@mock_city.name}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Events Count</label>
+                    <input
+                      type="number"
+                      name="city[events_count]"
+                      value={@mock_city.stats.events_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Venues Count</label>
+                    <input
+                      type="number"
+                      name="city[venues_count]"
+                      value={@mock_city.stats.venues_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Categories</label>
+                    <input
+                      type="number"
+                      name="city[categories_count]"
+                      value={@mock_city.stats.categories_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Name:</strong> <%= @mock_city.name %>, <%= @mock_city.country.name %></p>
+                <p class="font-mono"><strong>Events:</strong> <%= @mock_city.stats.events_count %></p>
+                <p class="font-mono"><strong>Venues:</strong> <%= @mock_city.stats.venues_count %></p>
+                <p class="font-mono"><strong>Categories:</strong> <%= @mock_city.stats.categories_count %></p>
+                <p class="text-xs text-blue-600 mt-1">
+                  City cards use a fixed deep blue theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
           <% @card_type == :poll -> %>
-            <h3 class="text-sm font-medium text-blue-800">Mock Poll Data</h3>
-            <div class="mt-2 text-sm text-blue-700">
-              <p class="font-mono"><strong>Title:</strong> <%= @mock_poll.title %></p>
-              <p class="font-mono"><strong>Type:</strong> <%= @mock_poll.poll_type %></p>
-              <p class="font-mono"><strong>Phase:</strong> <%= @mock_poll.phase %></p>
-              <p class="text-xs text-blue-600 mt-1">
-                Phase 2 will allow editing mock data in real-time. For now, showing default mock poll.
-              </p>
-            </div>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_poll" class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Poll Title</label>
+                  <input
+                    type="text"
+                    name="poll[title]"
+                    value={@mock_poll.title}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Poll Type</label>
+                  <select
+                    name="poll[poll_type]"
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="movie" selected={@mock_poll.poll_type == "movie"}>Movie</option>
+                    <option value="places" selected={@mock_poll.poll_type == "places"}>Places</option>
+                    <option value="venue" selected={@mock_poll.poll_type == "venue"}>Venue</option>
+                    <option value="date_selection" selected={@mock_poll.poll_type == "date_selection"}>Date Selection</option>
+                    <option value="time" selected={@mock_poll.poll_type == "time"}>Time</option>
+                    <option value="music_track" selected={@mock_poll.poll_type == "music_track"}>Music Track</option>
+                    <option value="custom" selected={@mock_poll.poll_type == "custom"}>Custom</option>
+                  </select>
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Title:</strong> <%= @mock_poll.title %></p>
+                <p class="font-mono"><strong>Type:</strong> <%= @mock_poll.poll_type %></p>
+                <p class="font-mono"><strong>Phase:</strong> <%= @mock_poll.phase %></p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Poll cards inherit theme from parent event. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
           <% true -> %>
-            <h3 class="text-sm font-medium text-blue-800">Mock Event Data</h3>
-            <div class="mt-2 text-sm text-blue-700">
-              <p class="font-mono"><strong>Title:</strong> <%= @mock_event.title %></p>
-              <p class="font-mono"><strong>Image:</strong> <%= @mock_event.cover_image_url %></p>
-              <p class="text-xs text-blue-600 mt-1">
-                Phase 2 will allow editing mock data in real-time. For now, showing default mock event.
-              </p>
-            </div>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_event" class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Event Title</label>
+                  <input
+                    type="text"
+                    name="event[title]"
+                    value={@mock_event.title}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Cover Image URL</label>
+                  <input
+                    type="text"
+                    name="event[cover_image_url]"
+                    value={@mock_event.cover_image_url}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p class="text-xs text-blue-500 mt-1">
+                    Use local paths like /images/events/abstract/abstract1.png or external URLs
+                  </p>
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Title:</strong> <%= @mock_event.title %></p>
+                <p class="font-mono"><strong>Image:</strong> <%= @mock_event.cover_image_url %></p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Event cards use the selected theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
         <% end %>
       </div>
     </div>
@@ -162,25 +384,57 @@
           </div>
         </div>
 
-        <!-- Actions (Phase 2) -->
+        <!-- Actions -->
         <div class="p-4 border-t border-gray-200 bg-gray-50">
-          <div class="flex gap-2">
-            <button
-              class="px-4 py-2 bg-gray-300 text-gray-500 rounded cursor-not-allowed text-sm font-medium"
-              disabled
-              title="Phase 2 feature"
-            >
-              Generate PNG
-            </button>
-            <button
-              class="px-4 py-2 bg-gray-300 text-gray-500 rounded cursor-not-allowed text-sm font-medium"
-              disabled
-              title="Phase 2 feature"
-            >
-              Download
-            </button>
+          <div class="flex gap-2 items-center">
+            <%= if @generating_png == to_string(preview.theme) do %>
+              <button
+                class="px-4 py-2 bg-blue-400 text-white rounded text-sm font-medium flex items-center gap-2"
+                disabled
+              >
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating...
+              </button>
+            <% else %>
+              <button
+                type="button"
+                phx-click="generate_png"
+                phx-value-theme={to_string(preview.theme)}
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+              >
+                Generate PNG
+              </button>
+            <% end %>
+
+            <%= if Map.has_key?(@png_data, to_string(preview.theme)) do %>
+              <a
+                href={@png_data[to_string(preview.theme)]}
+                download={"social-card-#{preview.theme}-#{Date.utc_today()}.png"}
+                class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors"
+              >
+                Download PNG
+              </a>
+              <span class="text-xs text-green-600 flex items-center gap-1">
+                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                Ready
+              </span>
+            <% else %>
+              <button
+                class="px-4 py-2 bg-gray-300 text-gray-500 rounded cursor-not-allowed text-sm font-medium"
+                disabled
+                title="Generate PNG first"
+              >
+                Download
+              </button>
+            <% end %>
+
             <div class="ml-auto text-xs text-gray-500 flex items-center">
-              Phase 2 features
+              800x419px PNG
             </div>
           </div>
         </div>
@@ -195,7 +449,9 @@
       <li>SVG previews show real-time rendering using the same code as production</li>
       <li>Compare theme gradients and test logo/text readability</li>
       <li>Perfect for testing Wombie rebrand changes across all themes</li>
-      <li>Phase 2 will add PNG generation, download options, and editable mock data</li>
+      <li><strong>Edit Data:</strong> Click "Edit Data" button to customize mock content in real-time</li>
+      <li><strong>Generate PNG:</strong> Click to convert SVG to production-ready 800x419px PNG</li>
+      <li><strong>Download:</strong> Save generated PNGs for testing with social media debuggers</li>
     </ul>
   </div>
 
