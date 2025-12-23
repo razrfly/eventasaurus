@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   alias EventasaurusApp.Themes
   alias EventasaurusWeb.SocialCardView
+  alias EventasaurusWeb.Admin.CardTypeConfig
   alias Eventasaurus.Services.SvgConverter
 
   import EventasaurusWeb.SocialCardView,
@@ -39,6 +40,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> assign(:themes, Themes.valid_themes())
      |> assign(:selected_theme, :all)
      |> assign(:card_type, :event)
+     |> assign(:card_type_config, CardTypeConfig.get(:event))
+     |> assign(:grouped_card_types, CardTypeConfig.grouped_for_select())
      |> assign(:mock_event, mock_event)
      |> assign(:mock_poll, generate_mock_poll(mock_event))
      |> assign(:mock_city, generate_mock_city())
@@ -85,6 +88,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
     {:noreply,
      socket
      |> assign(:card_type, card_type)
+     |> assign(:card_type_config, CardTypeConfig.get(card_type))
      |> assign(:png_data, %{})
      |> generate_previews()}
   end
@@ -428,194 +432,109 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   defp parse_int(_, default), do: default
 
   # Generate preview data for all (or selected) themes
+  # Uses CardTypeConfig for centralized lookup instead of scattered conditionals
   defp generate_previews(socket) do
-    # City and Activity cards don't use themes, so only generate one preview
-    cond do
-      socket.assigns.card_type == :city ->
-        # Generate city card preview
-        city = socket.assigns.mock_city
-        stats = Map.get(city, :stats, %{})
-        svg = SocialCardView.render_city_card_svg(city, stats)
+    card_type = socket.assigns.card_type
 
-        # City cards use fixed colors (deep blue theme)
-        colors = %{
-          "colors" => %{
-            "primary" => "#1e40af",
-            "secondary" => "#3b82f6"
-          }
-        }
+    if CardTypeConfig.supports_themes?(card_type) do
+      generate_themed_previews(socket)
+    else
+      generate_brand_preview(socket)
+    end
+  end
 
-        previews = [
-          %{
-            theme: :city,
-            svg: svg,
-            colors: colors,
-            display_name: "City Card"
-          }
-        ]
+  # Generate previews for styled cards (event, poll) that support multiple themes
+  defp generate_themed_previews(socket) do
+    card_type = socket.assigns.card_type
 
-        assign(socket, :previews, previews)
+    themes =
+      if socket.assigns.selected_theme == :all do
+        socket.assigns.themes
+      else
+        [socket.assigns.selected_theme]
+      end
 
-      socket.assigns.card_type == :activity ->
-        # Generate activity card preview
-        activity = socket.assigns.mock_activity
-        svg = render_activity_card_svg(activity)
+    previews =
+      Enum.map(themes, fn theme ->
+        # Create event with the specified theme
+        event = %{socket.assigns.mock_event | theme: theme}
 
-        # Activity cards use fixed Wombie teal theme
-        colors = %{
-          "colors" => %{
-            "primary" => "#0d9488",
-            "secondary" => "#14b8a6"
-          }
-        }
+        # Generate SVG based on card type
+        svg =
+          case card_type do
+            :poll ->
+              poll = %{socket.assigns.mock_poll | event: event}
+              SocialCardView.render_poll_card_svg(poll)
 
-        previews = [
-          %{
-            theme: :activity,
-            svg: svg,
-            colors: colors,
-            display_name: "Activity Card"
-          }
-        ]
-
-        assign(socket, :previews, previews)
-
-      socket.assigns.card_type == :movie ->
-        # Generate movie card preview
-        movie = socket.assigns.mock_movie
-        svg = render_movie_card_svg(movie)
-
-        # Movie cards use cinema purple/violet theme
-        colors = %{
-          "colors" => %{
-            "primary" => "#7c3aed",
-            "secondary" => "#a855f7"
-          }
-        }
-
-        previews = [
-          %{
-            theme: :movie,
-            svg: svg,
-            colors: colors,
-            display_name: "Movie Card"
-          }
-        ]
-
-        assign(socket, :previews, previews)
-
-      socket.assigns.card_type == :source_aggregation ->
-        # Generate source aggregation card preview
-        aggregation = socket.assigns.mock_source_aggregation
-        svg = render_source_aggregation_card_svg(aggregation)
-
-        # Source aggregation cards use Wombie indigo theme
-        colors = %{
-          "colors" => %{
-            "primary" => "#4f46e5",
-            "secondary" => "#6366f1"
-          }
-        }
-
-        previews = [
-          %{
-            theme: :source_aggregation,
-            svg: svg,
-            colors: colors,
-            display_name: "Source Aggregation Card"
-          }
-        ]
-
-        assign(socket, :previews, previews)
-
-      socket.assigns.card_type == :venue ->
-        # Generate venue card preview
-        venue = socket.assigns.mock_venue
-        svg = render_venue_card_svg(venue)
-
-        # Venue cards use Wombie emerald/green theme
-        colors = %{
-          "colors" => %{
-            "primary" => "#059669",
-            "secondary" => "#10b981"
-          }
-        }
-
-        previews = [
-          %{
-            theme: :venue,
-            svg: svg,
-            colors: colors,
-            display_name: "Venue Card"
-          }
-        ]
-
-        assign(socket, :previews, previews)
-
-      socket.assigns.card_type == :performer ->
-        # Generate performer card preview
-        performer = socket.assigns.mock_performer
-        svg = render_performer_card_svg(performer)
-
-        # Performer cards use Wombie rose/pink theme
-        colors = %{
-          "colors" => %{
-            "primary" => "#be185d",
-            "secondary" => "#ec4899"
-          }
-        }
-
-        previews = [
-          %{
-            theme: :performer,
-            svg: svg,
-            colors: colors,
-            display_name: "Performer Card"
-          }
-        ]
-
-        assign(socket, :previews, previews)
-
-      true ->
-        # Event and poll cards use themes
-        themes =
-          if socket.assigns.selected_theme == :all do
-            socket.assigns.themes
-          else
-            [socket.assigns.selected_theme]
+            :event ->
+              SocialCardView.render_social_card_svg(event)
           end
 
-        previews =
-          Enum.map(themes, fn theme ->
-            # Create event with the specified theme
-            event = %{socket.assigns.mock_event | theme: theme}
+        # Get theme colors for display
+        colors = Themes.get_default_customizations(theme)
 
-            # Generate SVG based on card type
-            svg =
-              case socket.assigns.card_type do
-                :poll ->
-                  # Create poll with event association
-                  poll = %{socket.assigns.mock_poll | event: event}
-                  SocialCardView.render_poll_card_svg(poll)
+        %{
+          theme: theme,
+          svg: svg,
+          colors: colors,
+          display_name: theme |> Atom.to_string() |> String.capitalize()
+        }
+      end)
 
-                :event ->
-                  SocialCardView.render_social_card_svg(event)
-              end
+    assign(socket, :previews, previews)
+  end
 
-            # Get theme colors for display
-            colors = Themes.get_default_customizations(theme)
+  # Generate single preview for brand cards with fixed colors
+  defp generate_brand_preview(socket) do
+    card_type = socket.assigns.card_type
+    config = CardTypeConfig.get(card_type)
 
-            %{
-              theme: theme,
-              svg: svg,
-              colors: colors,
-              # Format theme name for display
-              display_name: theme |> Atom.to_string() |> String.capitalize()
-            }
-          end)
+    # Get mock data from socket assigns using config key
+    mock_data = Map.get(socket.assigns, config.mock_data_key)
 
-        assign(socket, :previews, previews)
-    end
+    # Generate SVG using the appropriate render function
+    svg = render_brand_card_svg(card_type, mock_data)
+
+    # Get colors from centralized config
+    colors = CardTypeConfig.colors_for_preview(card_type)
+
+    previews = [
+      %{
+        theme: card_type,
+        svg: svg,
+        colors: colors,
+        display_name: config.label
+      }
+    ]
+
+    assign(socket, :previews, previews)
+  end
+
+  # Render SVG for brand card types
+  # Each brand card has a specific render function based on its data structure
+  defp render_brand_card_svg(:city, city) do
+    stats = Map.get(city, :stats, %{})
+    SocialCardView.render_city_card_svg(city, stats)
+  end
+
+  defp render_brand_card_svg(:activity, activity) do
+    render_activity_card_svg(activity)
+  end
+
+  defp render_brand_card_svg(:movie, movie) do
+    render_movie_card_svg(movie)
+  end
+
+  defp render_brand_card_svg(:venue, venue) do
+    render_venue_card_svg(venue)
+  end
+
+  defp render_brand_card_svg(:performer, performer) do
+    render_performer_card_svg(performer)
+  end
+
+  defp render_brand_card_svg(:source_aggregation, aggregation) do
+    render_source_aggregation_card_svg(aggregation)
   end
 
   # Generate mock event data for preview
