@@ -44,9 +44,27 @@ defmodule EventasaurusWeb.Admin.CardTypes.CityCard do
   def form_fields do
     [
       %{name: :name, label: "City Name", type: :text, path: [:name]},
-      %{name: :events_count, label: "Events Count", type: :number, path: [:stats, :events_count], min: 0},
-      %{name: :venues_count, label: "Venues Count", type: :number, path: [:stats, :venues_count], min: 0},
-      %{name: :categories_count, label: "Categories", type: :number, path: [:stats, :categories_count], min: 0}
+      %{
+        name: :events_count,
+        label: "Events Count",
+        type: :number,
+        path: [:stats, :events_count],
+        min: 0
+      },
+      %{
+        name: :venues_count,
+        label: "Venues Count",
+        type: :number,
+        path: [:stats, :venues_count],
+        min: 0
+      },
+      %{
+        name: :categories_count,
+        label: "Categories",
+        type: :number,
+        path: [:stats, :categories_count],
+        min: 0
+      }
     ]
   end
 
@@ -59,7 +77,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.CityCard do
           current.stats
           | events_count: parse_int(Map.get(params, "events_count"), current.stats.events_count),
             venues_count: parse_int(Map.get(params, "venues_count"), current.stats.venues_count),
-            categories_count: parse_int(Map.get(params, "categories_count"), current.stats.categories_count)
+            categories_count:
+              parse_int(Map.get(params, "categories_count"), current.stats.categories_count)
         }
     }
   end

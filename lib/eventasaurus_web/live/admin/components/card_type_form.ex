@@ -181,9 +181,18 @@ defmodule EventasaurusWeb.Admin.Components.CardTypeForm do
     Map.get(data, key)
   end
 
-  # Convert keys to proper access format
+  # Convert keys to proper access format.
+  # All paths from card type modules use atom keys, so String.to_existing_atom is safe.
+  # Fallback to String.to_atom for defensive handling of edge cases.
   defp to_access_key(key) when is_atom(key), do: key
-  defp to_access_key(key) when is_binary(key), do: String.to_existing_atom(key)
+
+  defp to_access_key(key) when is_binary(key) do
+    try do
+      String.to_existing_atom(key)
+    rescue
+      ArgumentError -> String.to_atom(key)
+    end
+  end
 
   # Get display value for read-only display
   defp get_display_value(data, %{path: path, type: :select, options: options}) do

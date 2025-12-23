@@ -48,9 +48,24 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
     [
       %{name: :title, label: "Title", type: :text, path: [:title]},
       %{name: :backdrop_url, label: "Backdrop Image URL", type: :text, path: [:backdrop_url]},
-      %{name: :year, label: "Year", type: :number, path: [:release_date, :year], min: 1900, max: 2100},
+      %{
+        name: :year,
+        label: "Year",
+        type: :number,
+        path: [:release_date, :year],
+        min: 1900,
+        max: 2100
+      },
       %{name: :runtime, label: "Runtime (min)", type: :number, path: [:runtime], min: 0},
-      %{name: :rating, label: "Rating (0-10)", type: :number, path: [:metadata, :vote_average], min: 0, max: 10, step: 0.1}
+      %{
+        name: :rating,
+        label: "Rating (0-10)",
+        type: :number,
+        path: [:metadata, :vote_average],
+        min: 0,
+        max: 10,
+        step: 0.1
+      }
     ]
   end
 
@@ -58,7 +73,9 @@ defmodule EventasaurusWeb.Admin.CardTypes.MovieCard do
   def update_mock_data(current, params) do
     runtime = parse_int(Map.get(params, "runtime"), current.runtime)
     release_date = parse_year(Map.get(params, "year"), current.release_date)
-    rating = parse_float(Map.get(params, "rating"), get_in(current.metadata, [:vote_average]) || 0.0)
+
+    rating =
+      parse_float(Map.get(params, "rating"), get_in(current.metadata, [:vote_average]) || 0.0)
 
     %{
       current
