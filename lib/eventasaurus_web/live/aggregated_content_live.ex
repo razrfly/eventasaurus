@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusWeb.Components.Breadcrumbs
   alias EventasaurusWeb.Components.Activity.AggregatedHeroCard
   alias EventasaurusWeb.JsonLd.ItemListSchema
-  alias Eventasaurus.CDN
+  alias Eventasaurus.SocialCards.HashGenerator
 
   # Multi-city route: /social/:identifier, /movies/:identifier, etc.
   # Content type is extracted from the URL path (first segment)
@@ -293,16 +293,6 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       json_ld =
         ItemListSchema.generate(events_for_schema, content_type, identifier, city, max_items: 20)
 
-      # Generate Open Graph meta tags
-      og_tags =
-        build_aggregation_open_graph(
-          content_type,
-          identifier,
-          city,
-          total_event_count,
-          hero_image
-        )
-
       # Fetch source metadata for hero card theming
       # Prefer the URL's content_type_slug for theming when it matches a valid domain
       source = SourceStore.get_source_by_slug(identifier)
@@ -316,6 +306,20 @@ defmodule EventasaurusWeb.AggregatedContentLive do
           :all_cities -> total_event_count
           :city_only -> length(venue_groups)
         end
+
+      # Build aggregation data struct for Open Graph (includes all data needed for social card)
+      aggregation_data = %{
+        city: city,
+        content_type: content_type,
+        identifier: identifier,
+        source_name: socket.assigns.source_name,
+        total_event_count: total_event_count,
+        location_count: location_count,
+        hero_image: hero_image
+      }
+
+      # Generate Open Graph meta tags with branded social card URL
+      og_tags = build_aggregation_open_graph(aggregation_data)
 
       socket
       |> assign(:scope, scope)
@@ -686,51 +690,44 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   end
 
   # Build Open Graph meta tags for aggregation pages
-  defp build_aggregation_open_graph(content_type, identifier, city, total_event_count, hero_image) do
-    base_url = EventasaurusWeb.Layouts.get_base_url()
+  defp build_aggregation_open_graph(aggregation_data) do
+    %{
+      content_type: content_type,
+      identifier: identifier,
+      city: city,
+      total_event_count: total_event_count,
+      source_name: source_name
+    } = aggregation_data
 
-    # Convert identifier to title case
-    identifier_name =
-      identifier
-      |> String.replace("-", " ")
-      |> String.split()
-      |> Enum.map(&String.capitalize/1)
-      |> Enum.join(" ")
+    base_url = EventasaurusWeb.Layouts.get_base_url()
 
     # Convert schema type to friendly name
     type_name = schema_type_to_friendly_name(content_type)
 
-    # Build title and description
-    title = "#{identifier_name} - #{type_name} in #{city.name}"
+    # Build title and description using source_name (already formatted)
+    title = "#{source_name} - #{type_name} in #{city.name}"
 
     description =
-      "Discover #{String.replace(identifier, "-", " ")} and other #{type_name} in #{city.name}. #{total_event_count} #{pluralize("event", total_event_count)} available."
+      "Discover #{source_name} #{type_name} in #{city.name}. #{total_event_count} #{pluralize("event", total_event_count)} available."
 
-    # Use hero image or generate placeholder
-    image_url =
-      if hero_image do
-        hero_image
-      else
-        identifier_encoded = URI.encode(identifier_name)
-        "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{identifier_encoded}"
-      end
-
-    # Wrap with CDN
-    cdn_image_url = CDN.url(image_url)
+    # Generate branded social card URL using HashGenerator
+    social_card_path = HashGenerator.generate_url_path(aggregation_data, :source_aggregation)
+    image_url = "#{base_url}#{social_card_path}"
 
     # Build canonical URL
     content_type_slug = EventasaurusDiscovery.AggregationTypeSlug.to_slug(content_type)
     canonical_url = "#{base_url}/c/#{city.slug}/#{content_type_slug}/#{identifier}"
 
     # Generate Open Graph tags
+    # Social card is 800x419 (1.91:1 ratio), same as other branded cards
     Phoenix.HTML.Safe.to_iodata(
       EventasaurusWeb.Components.OpenGraphComponent.open_graph_tags(%{
         type: "website",
         title: title,
         description: description,
-        image_url: cdn_image_url,
-        image_width: 1200,
-        image_height: 630,
+        image_url: image_url,
+        image_width: 800,
+        image_height: 419,
         url: canonical_url,
         site_name: "Wombie",
         locale: "en_US",
