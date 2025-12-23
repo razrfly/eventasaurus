@@ -13,8 +13,8 @@ defmodule Eventasaurus.SitemapTest do
       country = insert(:country, code: "PL", slug: "poland")
       city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
 
-      # Create venue in the city
-      venue = insert(:venue, slug: "cinema-city", city_id: city.id, city_ref: city)
+      # Create venue in the city (is_public: true for sitemap visibility)
+      venue = insert(:venue, slug: "cinema-city", city_id: city.id, city_ref: city, is_public: true)
 
       # Create movie
       movie = insert(:movie, slug: "dune-part-two", updated_at: ~N[2024-12-15 10:00:00])
@@ -58,9 +58,9 @@ defmodule Eventasaurus.SitemapTest do
       disabled_city =
         insert(:city, slug: "inactive-city", discovery_enabled: false, country: country)
 
-      # Create venue in disabled city
+      # Create venue in disabled city (is_public: true for consistency)
       venue =
-        insert(:venue, slug: "inactive-venue", city_id: disabled_city.id, city_ref: disabled_city)
+        insert(:venue, slug: "inactive-venue", city_id: disabled_city.id, city_ref: disabled_city, is_public: true)
 
       # Create movie and screening
       movie = insert(:movie, slug: "test-movie")
@@ -90,8 +90,8 @@ defmodule Eventasaurus.SitemapTest do
       country = insert(:country, code: "PL", slug: "poland-2")
       city2 = insert(:city, slug: "warsaw", discovery_enabled: true, country: country)
 
-      # Create venue in second city
-      venue2 = insert(:venue, slug: "cinema-warsaw", city_id: city2.id, city_ref: city2)
+      # Create venue in second city (is_public: true for sitemap visibility)
+      venue2 = insert(:venue, slug: "cinema-warsaw", city_id: city2.id, city_ref: city2, is_public: true)
 
       # Create movie
       movie = insert(:movie, slug: "multi-city-movie")
@@ -132,7 +132,7 @@ defmodule Eventasaurus.SitemapTest do
     test "does not generate URLs for movies with nil or empty slugs" do
       country = insert(:country, code: "PL", slug: "poland")
       city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
-      venue = insert(:venue, city_id: city.id, city_ref: city)
+      venue = insert(:venue, city_id: city.id, city_ref: city, is_public: true)
 
       # Movie with nil slug
       movie_nil = insert(:movie, slug: nil)
@@ -167,7 +167,7 @@ defmodule Eventasaurus.SitemapTest do
     test "uses current date for lastmod when updated_at is nil" do
       country = insert(:country, code: "PL", slug: "poland")
       city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
-      venue = insert(:venue, city_id: city.id, city_ref: city)
+      venue = insert(:venue, city_id: city.id, city_ref: city, is_public: true)
 
       # Movie with nil updated_at
       movie = insert(:movie, slug: "no-update-date", updated_at: nil)
@@ -198,7 +198,7 @@ defmodule Eventasaurus.SitemapTest do
     test "includes all URL types in stream" do
       country = insert(:country, code: "PL", slug: "poland")
       city = insert(:city, slug: "krakow", discovery_enabled: true, country: country)
-      venue = insert(:venue, slug: "test-venue", city_id: city.id, city_ref: city)
+      venue = insert(:venue, slug: "test-venue", city_id: city.id, city_ref: city, is_public: true)
 
       # Create an activity
       activity =
