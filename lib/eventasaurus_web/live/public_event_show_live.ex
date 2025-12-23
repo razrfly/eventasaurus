@@ -334,7 +334,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
 
         # Generate branded social card URL for OG image
-        image_url = generate_activity_social_card_url(enriched_event)
+        image_url = generate_activity_social_card_url(enriched_event, request_uri)
 
         # Build meta description
         description =
@@ -1945,10 +1945,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Generate branded social card URL for activity pages
   # Uses the HashGenerator to create cache-busting URLs that trigger PNG generation
-  defp generate_activity_social_card_url(event) do
-    base_url = UrlHelper.get_base_url()
+  defp generate_activity_social_card_url(event, request_uri) do
     social_card_path = HashGenerator.generate_url_path(event, :activity)
-    "#{base_url}#{social_card_path}"
+    UrlHelper.build_url(social_card_path, request_uri)
   end
 
   # Build Open Graph meta tags for event pages
