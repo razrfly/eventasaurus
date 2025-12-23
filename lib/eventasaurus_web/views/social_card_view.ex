@@ -617,8 +617,22 @@ defmodule EventasaurusWeb.SocialCardView do
   ## Returns
     SVG markup string with gradient definition and background rectangle
   """
-  def render_background_gradient(theme_suffix, theme_colors) do
+  def render_background_gradient(theme_suffix, theme_colors, opts \\ []) do
     id_suffix = safe_svg_id(theme_suffix)
+    include_image_clip = Keyword.get(opts, :include_image_clip, true)
+
+    # Include image clip path in defs for rsvg-convert compatibility
+    image_clip_def =
+      if include_image_clip do
+        """
+        <!-- Clip path for rounded corners on image (unique per theme) -->
+            <clipPath id="imageClip-#{id_suffix}">
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
+            </clipPath>
+        """
+      else
+        ""
+      end
 
     """
     <defs>
@@ -627,6 +641,7 @@ defmodule EventasaurusWeb.SocialCardView do
         <stop offset="0%" style="stop-color:#{format_color(theme_colors.primary)};stop-opacity:1" />
         <stop offset="100%" style="stop-color:#{format_color(theme_colors.secondary)};stop-opacity:1" />
       </linearGradient>
+      #{image_clip_def}
     </defs>
 
     <!-- Background gradient -->
@@ -657,18 +672,15 @@ defmodule EventasaurusWeb.SocialCardView do
             render_no_image_placeholder()
 
           data_url ->
+            # Note: clipPath is now defined in <defs> via render_background_gradient
+            # for rsvg-convert compatibility
             """
-            <!-- Clip path for rounded corners on image (unique per theme) -->
-            <clipPath id="imageClip-#{id_suffix}">
-              <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
-            </clipPath>
-
             <!-- Image (positioned top-right with rounded corners) -->
             <image href="#{data_url}"
                    x="418" y="32"
                    width="350" height="350"
                    clip-path="url(#imageClip-#{id_suffix})"
-                   preserveAspectRatio="xMidYMid meet"/>
+                   preserveAspectRatio="xMidYMid slice"/>
             """
         end
       else
@@ -678,18 +690,15 @@ defmodule EventasaurusWeb.SocialCardView do
             render_no_image_placeholder()
 
           data_url ->
+            # Note: clipPath is now defined in <defs> via render_background_gradient
+            # for rsvg-convert compatibility
             """
-            <!-- Clip path for rounded corners on image (unique per theme) -->
-            <clipPath id="imageClip-#{id_suffix}">
-              <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
-            </clipPath>
-
             <!-- Image (positioned top-right with rounded corners) -->
             <image href="#{data_url}"
                    x="418" y="32"
                    width="350" height="350"
                    clip-path="url(#imageClip-#{id_suffix})"
-                   preserveAspectRatio="xMidYMid meet"/>
+                   preserveAspectRatio="xMidYMid slice"/>
             """
         end
       end
