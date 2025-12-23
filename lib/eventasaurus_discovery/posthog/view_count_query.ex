@@ -186,7 +186,10 @@ defmodule EventasaurusDiscovery.PostHog.ViewCountQuery do
         parse_view_count_response(response_body)
 
       {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
-        Logger.error("PostHog view count query failed with status #{status_code}: #{response_body}")
+        Logger.error(
+          "PostHog view count query failed with status #{status_code}: #{response_body}"
+        )
+
         {:error, {:api_error, status_code}}
 
       {:error, %HTTPoison.Error{reason: :timeout}} ->

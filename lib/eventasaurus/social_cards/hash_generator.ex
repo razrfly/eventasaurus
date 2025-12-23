@@ -100,7 +100,10 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       "a7b8c9d0"
 
   """
-  @spec generate_hash(map(), :event | :poll | :city | :activity | :source_aggregation | :venue | :performer) :: String.t()
+  @spec generate_hash(
+          map(),
+          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer
+        ) :: String.t()
   def generate_hash(data, type \\ :event) when is_map(data) do
     data
     |> build_fingerprint(type)
@@ -149,7 +152,10 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       "/social-cards/performer/john-doe/a7b8c9d0.png"
 
   """
-  @spec generate_url_path(map(), :event | :poll | :city | :activity | :source_aggregation | :venue | :performer) :: String.t()
+  @spec generate_url_path(
+          map(),
+          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer
+        ) :: String.t()
   def generate_url_path(data, type \\ :event) when is_map(data) do
     hash = generate_hash(data, type)
 
@@ -392,7 +398,11 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       true
 
   """
-  @spec validate_hash(map(), String.t(), :event | :poll | :city | :activity | :source_aggregation | :venue | :performer) :: boolean()
+  @spec validate_hash(
+          map(),
+          String.t(),
+          :event | :poll | :city | :activity | :source_aggregation | :venue | :performer
+        ) :: boolean()
   def validate_hash(data, hash, type \\ :event) when is_map(data) and is_binary(hash) do
     generate_hash(data, type) == hash
   end

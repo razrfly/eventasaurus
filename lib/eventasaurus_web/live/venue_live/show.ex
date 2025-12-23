@@ -100,6 +100,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
           socket
           |> apply_url_params(params)
           |> assign(:route_pattern, :city_scoped)
+
         load_and_assign_venue(venue, socket)
     end
   end
@@ -123,6 +124,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
           socket
           |> apply_url_params(params)
           |> assign(:route_pattern, :direct)
+
         load_and_assign_venue(venue, socket)
     end
   end
@@ -377,7 +379,13 @@ defmodule EventasaurusWeb.VenueLive.Show do
 
     # Generate Open Graph meta tags with branded social card
     og_tags =
-      build_venue_open_graph(venue, description, canonical_path, socket.assigns.request_uri, all_events_count)
+      build_venue_open_graph(
+        venue,
+        description,
+        canonical_path,
+        socket.assigns.request_uri,
+        all_events_count
+      )
 
     socket =
       socket
@@ -611,8 +619,12 @@ defmodule EventasaurusWeb.VenueLive.Show do
     # Parse date range from URL
     active_date_range =
       case params["date_range"] do
-        nil -> nil
-        "all" -> nil
+        nil ->
+          nil
+
+        "all" ->
+          nil
+
         range_string ->
           case EventFilters.parse_quick_range(range_string) do
             {:ok, range_atom} -> range_atom

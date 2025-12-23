@@ -215,14 +215,18 @@ defmodule Mix.Tasks.Dev.SeedPopularity do
   end
 
   defp calculate_stats(updates) do
-    Enum.reduce(updates, %{very_popular: 0, moderate: 0, some_interest: 0, low: 0, no_data: 0}, fn {_id, count}, acc ->
-      cond do
-        is_nil(count) -> Map.update!(acc, :no_data, &(&1 + 1))
-        count >= 50 -> Map.update!(acc, :very_popular, &(&1 + 1))
-        count >= 15 -> Map.update!(acc, :moderate, &(&1 + 1))
-        count >= 5 -> Map.update!(acc, :some_interest, &(&1 + 1))
-        true -> Map.update!(acc, :low, &(&1 + 1))
+    Enum.reduce(
+      updates,
+      %{very_popular: 0, moderate: 0, some_interest: 0, low: 0, no_data: 0},
+      fn {_id, count}, acc ->
+        cond do
+          is_nil(count) -> Map.update!(acc, :no_data, &(&1 + 1))
+          count >= 50 -> Map.update!(acc, :very_popular, &(&1 + 1))
+          count >= 15 -> Map.update!(acc, :moderate, &(&1 + 1))
+          count >= 5 -> Map.update!(acc, :some_interest, &(&1 + 1))
+          true -> Map.update!(acc, :low, &(&1 + 1))
+        end
       end
-    end)
+    )
   end
 end

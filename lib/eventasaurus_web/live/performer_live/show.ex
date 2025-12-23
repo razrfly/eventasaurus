@@ -192,7 +192,13 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   end
 
   # Build Open Graph tags for performer page
-  defp build_performer_open_graph(performer, description, canonical_path, request_uri, event_count) do
+  defp build_performer_open_graph(
+         performer,
+         description,
+         canonical_path,
+         request_uri,
+         event_count
+       ) do
     # Build absolute canonical URL
     canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
@@ -589,14 +595,19 @@ defmodule EventasaurusWeb.PerformerLive.Show do
         "upcoming" -> :upcoming
         "past" -> :past
         "all" -> :all
-        _ -> :upcoming  # Default to upcoming
+        # Default to upcoming
+        _ -> :upcoming
       end
 
     # Parse date range from URL
     active_date_range =
       case params["date_range"] do
-        nil -> nil
-        "all" -> nil
+        nil ->
+          nil
+
+        "all" ->
+          nil
+
         range_string ->
           case EventFilters.parse_quick_range(range_string) do
             {:ok, range_atom} -> range_atom
@@ -651,7 +662,8 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     # Add time filter if not default (upcoming)
     params =
       case socket.assigns.time_filter do
-        :upcoming -> params  # Default, don't include in URL
+        # Default, don't include in URL
+        :upcoming -> params
         time_filter -> Map.put(params, "time_filter", Atom.to_string(time_filter))
       end
 
@@ -672,7 +684,8 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     # Add sort if not default (starts_at)
     params =
       case socket.assigns.sort_by do
-        :starts_at -> params  # Default, don't include in URL
+        # Default, don't include in URL
+        :starts_at -> params
         sort_by -> Map.put(params, "sort", Atom.to_string(sort_by))
       end
 

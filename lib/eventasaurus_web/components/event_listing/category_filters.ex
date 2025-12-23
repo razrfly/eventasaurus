@@ -54,9 +54,10 @@ defmodule EventasaurusWeb.Components.EventListing.CategoryFilters do
   attr :class, :string, default: nil
 
   def category_checkboxes(assigns) do
-    assigns = assign_new(assigns, :display_label, fn ->
-      assigns.label || gettext("Categories")
-    end)
+    assigns =
+      assign_new(assigns, :display_label, fn ->
+        assigns.label || gettext("Categories")
+      end)
 
     # Ensure selected_ids is a list
     assigns = assign(assigns, :selected_ids, assigns.selected_ids || [])
@@ -162,9 +163,10 @@ defmodule EventasaurusWeb.Components.EventListing.CategoryFilters do
   def category_dropdown(assigns) do
     assigns = assign(assigns, :selected_ids, assigns.selected_ids || [])
 
-    assigns = assign_new(assigns, :display_placeholder, fn ->
-      assigns.placeholder || gettext("All Categories")
-    end)
+    assigns =
+      assign_new(assigns, :display_placeholder, fn ->
+        assigns.placeholder || gettext("All Categories")
+      end)
 
     ~H"""
     <div class={["inline-flex items-center gap-2", @class]}>

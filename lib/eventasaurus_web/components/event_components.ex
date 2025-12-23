@@ -2070,19 +2070,27 @@ defmodule EventasaurusWeb.EventComponents do
   attr :active_date_range, :atom, default: nil, doc: "currently active date range atom"
   attr :radius_km, :integer, default: nil, doc: "current radius in km (city page only)"
   attr :default_radius, :integer, default: 50, doc: "default radius to compare against"
-  attr :sort_by, :atom, default: nil, doc: "currently active sort field (:starts_at, :title, :relevance, :popularity)"
+
+  attr :sort_by, :atom,
+    default: nil,
+    doc: "currently active sort field (:starts_at, :title, :relevance, :popularity)"
 
   @spec active_filter_tags(map()) :: Phoenix.LiveView.Rendered.t()
   def active_filter_tags(assigns) do
     # Calculate all filter conditions for self-contained visibility
     has_search = assigns.filters[:search] && assigns.filters[:search] != ""
     has_non_default_radius = assigns.radius_km && assigns.radius_km != assigns.default_radius
-    has_date_range = (assigns.filters[:start_date] || assigns.filters[:end_date]) && assigns.active_date_range
+
+    has_date_range =
+      (assigns.filters[:start_date] || assigns.filters[:end_date]) && assigns.active_date_range
+
     has_categories = (assigns.filters[:categories] || []) != []
     has_non_default_sort = assigns.sort_by != nil && assigns.sort_by != :starts_at
 
     # Component shows itself when ANY filter is active (self-contained like simple_filter_tags)
-    has_any_filter = has_search || has_non_default_radius || has_date_range || has_categories || has_non_default_sort
+    has_any_filter =
+      has_search || has_non_default_radius || has_date_range || has_categories ||
+        has_non_default_sort
 
     assigns =
       assigns
