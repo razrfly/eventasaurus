@@ -1124,9 +1124,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       <% else %>
         <%= if @event do %>
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Language Switcher - Dynamic based on city -->
-            <div class="flex justify-end mb-4">
-              <div class="flex bg-gray-100 rounded-lg p-1">
+            <!-- Breadcrumb + Language Switcher Row -->
+            <div class="flex items-center justify-between mb-6">
+              <Breadcrumbs.breadcrumb items={@breadcrumb_items} />
+              <!-- Language Switcher - Dynamic based on city -->
+              <div class="flex bg-gray-100 rounded-lg p-1 flex-shrink-0 ml-4">
                 <%= for lang <- @available_languages do %>
                   <button
                     phx-click="change_language"
@@ -1139,9 +1141,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                 <% end %>
               </div>
             </div>
-
-            <!-- Breadcrumb -->
-            <Breadcrumbs.breadcrumb items={@breadcrumb_items} class="mb-6" />
 
             <!-- Past Event Banner -->
             <%= if event_is_past?(@event) do %>
