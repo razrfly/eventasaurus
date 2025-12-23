@@ -35,8 +35,11 @@ defmodule EventasaurusWeb.SocialCards.CityCardView do
     Complete SVG markup as a string
   """
   def render_city_card_svg(city, stats \\ %{}) do
+    # Safely get slug with fallback
+    city_slug = Map.get(city, :slug) || Map.get(city, "slug") || "city"
+
     # Use minimal theme for city cards (clean, professional look)
-    theme_suffix = "city_#{city.slug}"
+    theme_suffix = "city_#{city_slug}"
 
     # Build city-specific content
     city_content = render_city_content(city, stats, theme_suffix, @theme_colors)

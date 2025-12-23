@@ -303,7 +303,8 @@ defmodule EventasaurusWeb.SocialCards.PollCardView do
           |> Enum.with_index()
           |> Enum.map(fn {option, index} ->
             y_pos = 145 + index * 35
-            truncated_title = truncate_option_title(option.title, 25)
+            option_title = Map.get(option, :title) || Map.get(option, "title") || ""
+            truncated_title = truncate_option_title(option_title, 25)
 
             """
             <text x="450" y="#{y_pos}" font-family="Arial, sans-serif"
