@@ -51,6 +51,22 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - Location count (venues or events based on scope)
   - Hero image URL
 
+  For venues, the hash includes:
+  - Venue slug (unique identifier)
+  - Venue name
+  - City slug
+  - Address
+  - Event count (upcoming events)
+  - Cover image URL
+  - Venue updated_at timestamp
+
+  For performers, the hash includes:
+  - Performer slug (unique identifier)
+  - Performer name
+  - Event count (upcoming events)
+  - Image URL
+  - Performer updated_at timestamp
+
   Returns a short hash suitable for URLs.
 
   ## Examples
@@ -75,8 +91,16 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(aggregation, :source_aggregation)
       "e5f6a7b8"
 
+      iex> venue = %{slug: "klub-jazz", name: "Jazz Club", city_ref: %{slug: "krakow"}, event_count: 12}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(venue, :venue)
+      "f6a7b8c9"
+
+      iex> performer = %{slug: "john-doe", name: "John Doe", event_count: 5, image_url: "https://example.com/john.jpg"}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(performer, :performer)
+      "a7b8c9d0"
+
   """
-  @spec generate_hash(map(), :event | :poll | :city | :activity | :source_aggregation) :: String.t()
+  @spec generate_hash(map(), :event | :poll | :city | :activity | :source_aggregation | :venue | :performer) :: String.t()
   def generate_hash(data, type \\ :event) when is_map(data) do
     data
     |> build_fingerprint(type)
@@ -116,8 +140,16 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(aggregation, :source_aggregation)
       "/social-cards/source/krakow/social/pubquiz-pl/e5f6a7b8.png"
 
+      iex> venue = %{slug: "klub-jazz", city_ref: %{slug: "krakow"}, name: "Jazz Club"}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(venue, :venue)
+      "/social-cards/venue/krakow/klub-jazz/f6a7b8c9.png"
+
+      iex> performer = %{slug: "john-doe", name: "John Doe", event_count: 5}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(performer, :performer)
+      "/social-cards/performer/john-doe/a7b8c9d0.png"
+
   """
-  @spec generate_url_path(map(), :event | :poll | :city | :activity | :source_aggregation) :: String.t()
+  @spec generate_url_path(map(), :event | :poll | :city | :activity | :source_aggregation | :venue | :performer) :: String.t()
   def generate_url_path(data, type \\ :event) when is_map(data) do
     hash = generate_hash(data, type)
 
@@ -195,6 +227,38 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
         identifier = Map.get(data, :identifier, "unknown-source")
 
         "/social-cards/source/#{city_slug}/#{content_type_slug}/#{identifier}/#{hash}.png"
+
+      :venue ->
+        # Extract city slug from city_ref
+        city_ref = Map.get(data, :city_ref, %{})
+
+        city_slug =
+          case {Map.get(city_ref, :slug), Map.get(city_ref, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "city-#{id}"
+            _ -> "unknown-city"
+          end
+
+        # Get venue slug
+        venue_slug =
+          case {Map.get(data, :slug), Map.get(data, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "venue-#{id}"
+            _ -> "unknown-venue"
+          end
+
+        "/social-cards/venue/#{city_slug}/#{venue_slug}/#{hash}.png"
+
+      :performer ->
+        # Get performer slug
+        performer_slug =
+          case {Map.get(data, :slug), Map.get(data, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "performer-#{id}"
+            _ -> "unknown-performer"
+          end
+
+        "/social-cards/performer/#{performer_slug}/#{hash}.png"
     end
   end
 
@@ -235,6 +299,12 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/activity/my-activity/d4e5f6a7.png")
       "d4e5f6a7"
 
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/venue/krakow/klub-jazz/f6a7b8c9.png")
+      "f6a7b8c9"
+
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/performer/john-doe/a7b8c9d0.png")
+      "a7b8c9d0"
+
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/invalid/path")
       nil
 
@@ -254,6 +324,16 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
       # City pattern: /social-cards/city/slug/hash.png
       match = Regex.run(~r/\/social-cards\/city\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      # Venue pattern: /social-cards/venue/city-slug/venue-slug/hash.png
+      match = Regex.run(~r/\/social-cards\/venue\/[^\/]+\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      # Performer pattern: /social-cards/performer/slug/hash.png
+      match = Regex.run(~r/\/social-cards\/performer\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
         [_full_match, hash] = match
         hash
 
@@ -301,8 +381,18 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(aggregation, hash, :source_aggregation)
       true
 
+      iex> venue = %{slug: "klub-jazz", name: "Jazz Club", city_ref: %{slug: "krakow"}}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(venue, :venue)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(venue, hash, :venue)
+      true
+
+      iex> performer = %{slug: "john-doe", name: "John Doe", event_count: 5}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(performer, :performer)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(performer, hash, :performer)
+      true
+
   """
-  @spec validate_hash(map(), String.t(), :event | :poll | :city | :activity | :source_aggregation) :: boolean()
+  @spec validate_hash(map(), String.t(), :event | :poll | :city | :activity | :source_aggregation | :venue | :performer) :: boolean()
   def validate_hash(data, hash, type \\ :event) when is_map(data) and is_binary(hash) do
     generate_hash(data, type) == hash
   end
@@ -472,6 +562,58 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       total_event_count: total_event_count,
       location_count: location_count,
       hero_image: hero_image,
+      version: @social_card_version
+    }
+  end
+
+  defp build_fingerprint(venue, :venue) do
+    # Extract city info from city_ref
+    city_ref = Map.get(venue, :city_ref, %{})
+
+    city_slug =
+      case {Map.get(city_ref, :slug), Map.get(city_ref, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "city-#{id}"
+        _ -> "unknown-city"
+      end
+
+    # Ensure we always have a valid slug
+    venue_slug =
+      case {Map.get(venue, :slug), Map.get(venue, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "venue-#{id}"
+        _ -> "unknown-venue"
+      end
+
+    %{
+      type: :venue,
+      slug: venue_slug,
+      name: Map.get(venue, :name, ""),
+      city_slug: city_slug,
+      address: Map.get(venue, :address, ""),
+      event_count: Map.get(venue, :event_count, 0),
+      cover_image_url: Map.get(venue, :cover_image_url, ""),
+      updated_at: format_timestamp(Map.get(venue, :updated_at)),
+      version: @social_card_version
+    }
+  end
+
+  defp build_fingerprint(performer, :performer) do
+    # Ensure we always have a valid slug
+    performer_slug =
+      case {Map.get(performer, :slug), Map.get(performer, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "performer-#{id}"
+        _ -> "unknown-performer"
+      end
+
+    %{
+      type: :performer,
+      slug: performer_slug,
+      name: Map.get(performer, :name, ""),
+      event_count: Map.get(performer, :event_count, 0),
+      image_url: Map.get(performer, :image_url, ""),
+      updated_at: format_timestamp(Map.get(performer, :updated_at)),
       version: @social_card_version
     }
   end

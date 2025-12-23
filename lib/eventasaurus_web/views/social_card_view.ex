@@ -2015,4 +2015,319 @@ defmodule EventasaurusWeb.SocialCardView do
       updated_at: Map.get(aggregation, :updated_at)
     }
   end
+
+  # ============================================================================
+  # Venue Social Card Rendering
+  # ============================================================================
+
+  @doc """
+  Renders SVG social card for a venue page.
+  Shows venue name, city/location, event count, and venue image with Wombie branding.
+
+  ## Parameters
+    - venue: Map with :name, :slug, :city_ref, :cover_image_url, :event_count, :address fields
+
+  ## Returns
+    Complete SVG markup as a string
+  """
+  def render_venue_card_svg(venue) do
+    # Use Wombie brand theme with venue-focused palette (emerald/green)
+    city_slug = get_in(venue, [:city_ref, :slug]) || "default"
+    venue_slug = Map.get(venue, :slug, "venue")
+    theme_suffix = "venue_#{city_slug}_#{venue_slug}"
+
+    # Venue colors - emerald/green gradient (welcoming, location-focused)
+    theme_colors = %{
+      primary: "#059669",
+      # Emerald 600
+      secondary: "#10b981"
+      # Emerald 500
+    }
+
+    # Build venue-specific content
+    venue_content = render_venue_content(venue, theme_suffix, theme_colors)
+
+    # Use the base function to create complete SVG
+    render_social_card_base(theme_suffix, theme_colors, venue_content)
+  end
+
+  @doc """
+  Renders the venue-specific content for a social card.
+  Includes venue image, logo, venue name, city, event count, and address.
+
+  ## Parameters
+    - venue: Map with venue data
+    - theme_suffix: Unique theme identifier for IDs
+    - theme_colors: Map with theme color information
+
+  ## Returns
+    SVG markup string with venue-specific content
+  """
+  def render_venue_content(venue, theme_suffix, theme_colors) do
+    # Extract and sanitize data
+    venue_name = Sanitizer.sanitize_text(Map.get(venue, :name, ""))
+    city_ref = Map.get(venue, :city_ref, %{})
+    city_name = Sanitizer.sanitize_text(Map.get(city_ref, :name, ""))
+    event_count = Map.get(venue, :event_count, 0)
+    address = Sanitizer.sanitize_text(Map.get(venue, :address, ""))
+
+    # Prepare entity with cover image for image section
+    cover_image = Map.get(venue, :cover_image_url)
+    entity_with_image = %{cover_image_url: cover_image}
+
+    # Format event count text
+    event_count_text = format_venue_event_count(event_count)
+
+    # Format location text (address or city)
+    location_text = format_venue_location(address, city_name)
+
+    # Calculate font size for venue name
+    venue_font_size = calculate_font_size(venue_name)
+
+    # Build title sections
+    title_line_1 =
+      if format_title(venue_name, 0) != "" do
+        y_pos = activity_title_y_position(0, venue_font_size)
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(venue_name, 0)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_2 =
+      if format_title(venue_name, 1) != "" do
+        y_pos = activity_title_y_position(1, venue_font_size)
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(venue_name, 1)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_3 =
+      if format_title(venue_name, 2) != "" do
+        y_pos = activity_title_y_position(2, venue_font_size)
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(venue_name, 2)}</tspan>)
+      else
+        ""
+      end
+
+    """
+    #{render_image_section(entity_with_image, theme_suffix)}
+
+    <!-- Logo (top-left) -->
+    #{get_logo_svg_element(theme_suffix, theme_colors)}
+
+    <!-- Venue name (left-aligned, multi-line) -->
+    <text font-family="Arial, sans-serif" font-weight="bold"
+          font-size="#{venue_font_size}" fill="white">
+      #{title_line_1}
+      #{title_line_2}
+      #{title_line_3}
+    </text>
+
+    <!-- Event count (below title, y=310) -->
+    #{render_venue_event_count(event_count_text)}
+
+    <!-- Location/Address (y=340 like activity location) -->
+    #{render_venue_location(location_text)}
+
+    #{render_cta_bubble("VIEW", theme_suffix)}
+    """
+  end
+
+  # Format event count for venue card display
+  defp format_venue_event_count(0), do: ""
+  defp format_venue_event_count(1), do: "1 upcoming event"
+  defp format_venue_event_count(count) when count > 1, do: "#{count} upcoming events"
+  defp format_venue_event_count(_), do: ""
+
+  # Format venue location for display (prefer address, fallback to city)
+  defp format_venue_location("", ""), do: ""
+  defp format_venue_location("", city_name), do: city_name
+  defp format_venue_location(address, _city_name), do: address
+
+  # Render event count for venue card
+  defp render_venue_event_count(""), do: ""
+
+  defp render_venue_event_count(event_count_text) do
+    """
+    <text x="32" y="310" font-family="Arial, sans-serif" font-weight="600"
+          font-size="20" fill="white" opacity="0.95">
+      #{svg_escape(event_count_text)}
+    </text>
+    """
+  end
+
+  # Render location for venue card
+  defp render_venue_location(""), do: ""
+
+  defp render_venue_location(location_text) do
+    # Truncate if too long
+    truncated = truncate_title(location_text, 45)
+
+    """
+    <text x="32" y="340" font-family="Arial, sans-serif" font-weight="400"
+          font-size="18" fill="white" opacity="0.85">
+      #{svg_escape(truncated)}
+    </text>
+    """
+  end
+
+  @doc """
+  Sanitizes venue data for safe use in social card generation.
+  """
+  def sanitize_venue(venue) do
+    city_ref = Map.get(venue, :city_ref, %{})
+
+    sanitized_city = %{
+      name: Sanitizer.sanitize_text(Map.get(city_ref, :name, "")),
+      slug: Map.get(city_ref, :slug, "")
+    }
+
+    %{
+      name: Sanitizer.sanitize_text(Map.get(venue, :name, "")),
+      slug: Map.get(venue, :slug, ""),
+      city_ref: sanitized_city,
+      cover_image_url: Map.get(venue, :cover_image_url),
+      event_count: Map.get(venue, :event_count, 0),
+      address: Sanitizer.sanitize_text(Map.get(venue, :address, "")),
+      updated_at: Map.get(venue, :updated_at)
+    }
+  end
+
+  # ============================================================================
+  # Performer Social Card Rendering
+  # ============================================================================
+
+  @doc """
+  Renders SVG social card for a performer/artist page.
+  Shows performer name, event count, and performer image with Wombie branding.
+
+  ## Parameters
+    - performer: Map with :name, :slug, :image_url, :event_count fields
+
+  ## Returns
+    Complete SVG markup as a string
+  """
+  def render_performer_card_svg(performer) do
+    # Use Wombie brand theme with performer-focused palette (rose/pink - artistic)
+    performer_slug = Map.get(performer, :slug, "performer")
+    theme_suffix = "performer_#{performer_slug}"
+
+    # Performer colors - rose/pink gradient (artistic, performance-focused)
+    theme_colors = %{
+      primary: "#be185d",
+      # Rose 700
+      secondary: "#ec4899"
+      # Pink 500
+    }
+
+    # Build performer-specific content
+    performer_content = render_performer_content(performer, theme_suffix, theme_colors)
+
+    # Use the base function to create complete SVG
+    render_social_card_base(theme_suffix, theme_colors, performer_content)
+  end
+
+  @doc """
+  Renders the performer-specific content for a social card.
+  Includes performer image, logo, performer name, and event count.
+
+  ## Parameters
+    - performer: Map with performer data
+    - theme_suffix: Unique theme identifier for IDs
+    - theme_colors: Map with theme color information
+
+  ## Returns
+    SVG markup string with performer-specific content
+  """
+  def render_performer_content(performer, theme_suffix, theme_colors) do
+    # Extract and sanitize data
+    performer_name = Sanitizer.sanitize_text(Map.get(performer, :name, ""))
+    event_count = Map.get(performer, :event_count, 0)
+    image_url = Map.get(performer, :image_url)
+
+    # Prepare entity with image for image section (use image_url as cover_image_url)
+    entity_with_image = %{cover_image_url: image_url}
+
+    # Format event count text
+    event_count_text = format_performer_event_count(event_count)
+
+    # Calculate font size for performer name
+    performer_font_size = calculate_font_size(performer_name)
+
+    # Build title sections
+    title_line_1 =
+      if format_title(performer_name, 0) != "" do
+        y_pos = activity_title_y_position(0, performer_font_size)
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(performer_name, 0)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_2 =
+      if format_title(performer_name, 1) != "" do
+        y_pos = activity_title_y_position(1, performer_font_size)
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(performer_name, 1)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_3 =
+      if format_title(performer_name, 2) != "" do
+        y_pos = activity_title_y_position(2, performer_font_size)
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(performer_name, 2)}</tspan>)
+      else
+        ""
+      end
+
+    """
+    #{render_image_section(entity_with_image, theme_suffix)}
+
+    <!-- Logo (top-left) -->
+    #{get_logo_svg_element(theme_suffix, theme_colors)}
+
+    <!-- Performer name (left-aligned, multi-line) -->
+    <text font-family="Arial, sans-serif" font-weight="bold"
+          font-size="#{performer_font_size}" fill="white">
+      #{title_line_1}
+      #{title_line_2}
+      #{title_line_3}
+    </text>
+
+    <!-- Event count (below title, y=310) -->
+    #{render_performer_event_count(event_count_text)}
+
+    #{render_cta_bubble("VIEW", theme_suffix)}
+    """
+  end
+
+  # Format event count for performer card display
+  defp format_performer_event_count(0), do: ""
+  defp format_performer_event_count(1), do: "1 upcoming event"
+  defp format_performer_event_count(count) when count > 1, do: "#{count} upcoming events"
+  defp format_performer_event_count(_), do: ""
+
+  # Render event count for performer card
+  defp render_performer_event_count(""), do: ""
+
+  defp render_performer_event_count(event_count_text) do
+    """
+    <text x="32" y="310" font-family="Arial, sans-serif" font-weight="600"
+          font-size="20" fill="white" opacity="0.95">
+      #{svg_escape(event_count_text)}
+    </text>
+    """
+  end
+
+  @doc """
+  Sanitizes performer data for safe use in social card generation.
+  """
+  def sanitize_performer(performer) do
+    %{
+      name: Sanitizer.sanitize_text(Map.get(performer, :name, "")),
+      slug: Map.get(performer, :slug, ""),
+      image_url: Map.get(performer, :image_url),
+      event_count: Map.get(performer, :event_count, 0),
+      updated_at: Map.get(performer, :updated_at)
+    }
+  end
 end

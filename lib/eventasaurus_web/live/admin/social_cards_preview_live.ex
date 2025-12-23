@@ -9,7 +9,9 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   import EventasaurusWeb.SocialCardView, only: [
     render_activity_card_svg: 1,
     render_movie_card_svg: 1,
-    render_source_aggregation_card_svg: 1
+    render_performer_card_svg: 1,
+    render_source_aggregation_card_svg: 1,
+    render_venue_card_svg: 1
   ]
 
   @moduledoc """
@@ -41,6 +43,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> assign(:mock_activity, generate_mock_activity())
      |> assign(:mock_movie, generate_mock_movie())
      |> assign(:mock_source_aggregation, generate_mock_source_aggregation())
+     |> assign(:mock_venue, generate_mock_venue())
+     |> assign(:mock_performer, generate_mock_performer())
      |> assign(:generating_png, nil)
      |> assign(:png_data, %{})
      |> assign(:edit_mode, false)
@@ -71,6 +75,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         "activity" -> :activity
         "movie" -> :movie
         "source_aggregation" -> :source_aggregation
+        "venue" -> :venue
+        "performer" -> :performer
         _ -> socket.assigns.card_type
       end
 
@@ -279,6 +285,49 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> generate_previews()}
   end
 
+  # Phase 4: Update mock venue data
+  @impl true
+  def handle_event("update_mock_venue", %{"venue" => venue_params}, socket) do
+    mock_venue = socket.assigns.mock_venue
+
+    updated_venue = %{
+      mock_venue
+      | name: Map.get(venue_params, "name", mock_venue.name),
+        address: Map.get(venue_params, "address", mock_venue.address),
+        event_count: parse_int(Map.get(venue_params, "event_count"), mock_venue.event_count),
+        cover_image_url: Map.get(venue_params, "cover_image_url", mock_venue.cover_image_url),
+        city_ref: %{
+          mock_venue.city_ref
+          | name: Map.get(venue_params, "city_name", mock_venue.city_ref.name)
+        }
+    }
+
+    {:noreply,
+     socket
+     |> assign(:mock_venue, updated_venue)
+     |> assign(:png_data, %{})
+     |> generate_previews()}
+  end
+
+  # Phase 2: Update mock performer data
+  @impl true
+  def handle_event("update_mock_performer", %{"performer" => performer_params}, socket) do
+    mock_performer = socket.assigns.mock_performer
+
+    updated_performer = %{
+      mock_performer
+      | name: Map.get(performer_params, "name", mock_performer.name),
+        event_count: parse_int(Map.get(performer_params, "event_count"), mock_performer.event_count),
+        image_url: Map.get(performer_params, "image_url", mock_performer.image_url)
+    }
+
+    {:noreply,
+     socket
+     |> assign(:mock_performer, updated_performer)
+     |> assign(:png_data, %{})
+     |> generate_previews()}
+  end
+
   # Phase 3: Update mock source aggregation data
   @impl true
   def handle_event("update_mock_source_aggregation", %{"aggregation" => params}, socket) do
@@ -452,6 +501,54 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
         assign(socket, :previews, previews)
 
+      socket.assigns.card_type == :venue ->
+        # Generate venue card preview
+        venue = socket.assigns.mock_venue
+        svg = render_venue_card_svg(venue)
+
+        # Venue cards use Wombie emerald/green theme
+        colors = %{
+          "colors" => %{
+            "primary" => "#059669",
+            "secondary" => "#10b981"
+          }
+        }
+
+        previews = [
+          %{
+            theme: :venue,
+            svg: svg,
+            colors: colors,
+            display_name: "Venue Card"
+          }
+        ]
+
+        assign(socket, :previews, previews)
+
+      socket.assigns.card_type == :performer ->
+        # Generate performer card preview
+        performer = socket.assigns.mock_performer
+        svg = render_performer_card_svg(performer)
+
+        # Performer cards use Wombie rose/pink theme
+        colors = %{
+          "colors" => %{
+            "primary" => "#be185d",
+            "secondary" => "#ec4899"
+          }
+        }
+
+        previews = [
+          %{
+            theme: :performer,
+            svg: svg,
+            colors: colors,
+            display_name: "Performer Card"
+          }
+        ]
+
+        assign(socket, :previews, previews)
+
       true ->
       # Event and poll cards use themes
       themes =
@@ -605,6 +702,35 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       total_event_count: 42,
       location_count: 15,
       hero_image: "/images/events/abstract/abstract1.png",
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Generate mock venue data for preview
+  defp generate_mock_venue do
+    %{
+      id: 1,
+      name: "Blue Note Jazz Club",
+      slug: "blue-note-jazz-club",
+      address: "ul. Nowy Świat 22, 00-373 Warszawa",
+      city_ref: %{
+        name: "Warsaw",
+        slug: "warsaw"
+      },
+      event_count: 24,
+      cover_image_url: "/images/events/abstract/abstract3.png",
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Generate mock performer data for preview
+  defp generate_mock_performer do
+    %{
+      id: 1,
+      name: "The Jazz Quartet",
+      slug: "the-jazz-quartet",
+      event_count: 8,
+      image_url: "/images/events/abstract/abstract1.png",
       updated_at: DateTime.utc_now()
     }
   end
