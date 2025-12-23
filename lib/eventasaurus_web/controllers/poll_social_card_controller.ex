@@ -1,10 +1,20 @@
 defmodule EventasaurusWeb.PollSocialCardController do
+  @moduledoc """
+  Controller for generating branded social card PNG images for polls.
+
+  This controller handles the complex case of polls which require multi-entity
+  lookup (event + poll) and validation that the poll belongs to the event.
+  Due to this complexity, it doesn't use the base SocialCardController behaviour.
+
+  Routes:
+  - GET /social-cards/poll/:slug/number/:number/:hash/*rest (by number)
+  - GET /social-cards/poll/:slug/:poll_id/:hash/*rest (deprecated, by ID)
+  """
   use EventasaurusWeb, :controller
 
   require Logger
 
   alias EventasaurusApp.Events
-  alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusWeb.Helpers.SocialCardHelpers
   import EventasaurusWeb.SocialCardView
 
@@ -48,13 +58,10 @@ defmodule EventasaurusWeb.PollSocialCardController do
             SocialCardHelpers.send_error_response(conn, error)
         end
       else
-        expected_hash = HashGenerator.generate_hash(poll_with_event, :poll)
-
         SocialCardHelpers.send_hash_mismatch_redirect(
           conn,
           poll_with_event,
           "poll_#{poll.id}",
-          expected_hash,
           final_hash,
           :poll
         )
@@ -122,13 +129,10 @@ defmodule EventasaurusWeb.PollSocialCardController do
             SocialCardHelpers.send_error_response(conn, error)
         end
       else
-        expected_hash = HashGenerator.generate_hash(poll_with_event, :poll)
-
         SocialCardHelpers.send_hash_mismatch_redirect(
           conn,
           poll_with_event,
           "poll_#{poll.id}",
-          expected_hash,
           final_hash,
           :poll
         )

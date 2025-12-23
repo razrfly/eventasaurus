@@ -2054,6 +2054,7 @@ defmodule EventasaurusWeb.EventComponents do
   - Radius (if different from default and provided)
   - Date range (if active_date_range provided)
   - Categories
+  - Sort order (if different from default :starts_at)
 
   ## Examples
 
@@ -2063,6 +2064,7 @@ defmodule EventasaurusWeb.EventComponents do
         active_date_range={@active_date_range}
         radius_km={@radius_km}
         default_radius={50}
+        sort_by={@sort_by}
       />
   """
   attr :filters, :map, required: true, doc: "current filter values"

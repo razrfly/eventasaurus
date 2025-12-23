@@ -1,66 +1,36 @@
 defmodule EventasaurusWeb.EventSocialCardController do
-  use EventasaurusWeb, :controller
+  @moduledoc """
+  Controller for generating branded social card PNG images for events.
 
-  require Logger
+  Route: GET /social-cards/event/:slug/:hash/*rest
+  """
+  use EventasaurusWeb.SocialCardController, type: :event
 
   alias EventasaurusApp.Events
-  alias Eventasaurus.SocialCards.HashGenerator
-  alias EventasaurusWeb.Helpers.SocialCardHelpers
-  import EventasaurusWeb.SocialCardView
+  import EventasaurusWeb.SocialCardView, only: [sanitize_event: 1, render_social_card_svg: 1]
 
-  @doc """
-  Generates a social card PNG for an event by slug with hash validation.
-  Provides cache busting through hash-based URLs.
-  """
-  def generate_card_by_slug(conn, %{"slug" => slug, "hash" => hash, "rest" => rest}) do
-    Logger.info(
-      "Social card requested for event slug: #{slug}, hash: #{hash}, rest: #{inspect(rest)}"
-    )
+  # Keep the old function name for route compatibility
+  def generate_card_by_slug(conn, params) do
+    generate_card(conn, params)
+  end
 
-    final_hash = SocialCardHelpers.parse_hash(hash, rest)
-
+  @impl true
+  def lookup_entity(%{"slug" => slug}) do
     case Events.get_event_by_slug(slug) do
-      nil ->
-        Logger.warning("Event not found for slug: #{slug}")
-        send_resp(conn, 404, "Event not found")
-
-      event ->
-        # Validate that the hash matches current event data
-        if SocialCardHelpers.validate_hash(event, final_hash, :event) do
-          Logger.info("Hash validated for event #{slug}: #{event.title}")
-
-          # Sanitize event data before rendering
-          sanitized_event = sanitize_event(event)
-
-          # Render SVG template with sanitized event data
-          svg_content = render_svg_template(sanitized_event)
-
-          # Generate PNG and serve response
-          case SocialCardHelpers.generate_png(svg_content, slug, sanitized_event) do
-            {:ok, png_data} ->
-              SocialCardHelpers.send_png_response(conn, png_data, final_hash)
-
-            {:error, error} ->
-              SocialCardHelpers.send_error_response(conn, error)
-          end
-        else
-          expected_hash = HashGenerator.generate_hash(event)
-
-          SocialCardHelpers.send_hash_mismatch_redirect(
-            conn,
-            event,
-            slug,
-            expected_hash,
-            final_hash,
-            :event
-          )
-        end
+      nil -> {:error, :not_found, "Event not found for slug: #{slug}"}
+      event -> {:ok, event}
     end
   end
 
-  # Private helper to render SVG template with proper context
-  defp render_svg_template(event) do
-    # Use the public function from SocialCardView
-    EventasaurusWeb.SocialCardView.render_social_card_svg(event)
-  end
+  @impl true
+  def build_card_data(event), do: event
+
+  @impl true
+  def build_slug(%{"slug" => slug}, _data), do: slug
+
+  @impl true
+  def sanitize(data), do: sanitize_event(data)
+
+  @impl true
+  def render_svg(data), do: render_social_card_svg(data)
 end

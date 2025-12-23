@@ -4,6 +4,22 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
   Creates fingerprints based on all components that affect social card appearance,
   ensuring social media platforms re-fetch cards when content changes.
+
+  ## Supported Types
+
+  - `:event` - Event social cards
+  - `:poll` - Poll social cards (requires parent event)
+  - `:city` - City page social cards
+  - `:activity` - Public event/activity social cards
+  - `:source_aggregation` - Source aggregation page social cards
+  - `:venue` - Venue page social cards
+  - `:performer` - Performer page social cards
+
+  ## Hash Generation
+
+  Hashes are 8-character SHA256 fingerprints based on all content that affects
+  card appearance. When any hash input changes, the URL changes, causing social
+  media platforms to re-fetch the card image.
   """
 
   @social_card_version "v2.0.0"
@@ -161,109 +177,37 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
 
     case type do
       :activity ->
-        slug =
-          case {Map.get(data, :slug), Map.get(data, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "activity-#{id}"
-            _ -> "unknown-activity"
-          end
-
+        slug = extract_slug(data, :slug, :id, "activity")
         "/social-cards/activity/#{slug}/#{hash}.png"
 
       :city ->
-        slug =
-          case {Map.get(data, :slug), Map.get(data, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "city-#{id}"
-            _ -> "unknown-city"
-          end
-
+        slug = extract_slug(data, :slug, :id, "city")
         "/social-cards/city/#{slug}/#{hash}.png"
 
       :poll ->
-        # Get event slug
         event = Map.get(data, :event)
-
-        event_slug =
-          case {Map.get(event, :slug), Map.get(event, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "event-#{id}"
-            _ -> "unknown-event"
-          end
-
-        # Get poll number with fallback to ID
-        poll_number =
-          case Map.get(data, :number) do
-            number when is_integer(number) and number > 0 ->
-              number
-
-            _ ->
-              Map.get(data, :id) ||
-                raise ArgumentError, "poll.number not present for social card URL generation"
-          end
-
+        event_slug = extract_slug(event, :slug, :id, "event")
+        poll_number = extract_slug(data, :number, :id, "poll")
         "/#{event_slug}/polls/#{poll_number}/social-card-#{hash}.png"
 
       :event ->
-        slug =
-          case {Map.get(data, :slug), Map.get(data, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "event-#{id}"
-            _ -> "unknown-event"
-          end
-
+        slug = extract_slug(data, :slug, :id, "event")
         "/#{slug}/social-card-#{hash}.png"
 
       :source_aggregation ->
-        # Extract city slug
-        city = Map.get(data, :city, %{})
-
-        city_slug =
-          case {Map.get(city, :slug), Map.get(city, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "city-#{id}"
-            _ -> "unknown-city"
-          end
-
-        # Extract content type and convert to URL slug
+        city_slug = extract_city_slug(data, :city)
         content_type = Map.get(data, :content_type, "")
         content_type_slug = content_type_to_slug(content_type)
-
-        # Extract identifier (source slug)
         identifier = Map.get(data, :identifier, "unknown-source")
-
         "/social-cards/source/#{city_slug}/#{content_type_slug}/#{identifier}/#{hash}.png"
 
       :venue ->
-        # Extract city slug from city_ref
-        city_ref = Map.get(data, :city_ref, %{})
-
-        city_slug =
-          case {Map.get(city_ref, :slug), Map.get(city_ref, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "city-#{id}"
-            _ -> "unknown-city"
-          end
-
-        # Get venue slug
-        venue_slug =
-          case {Map.get(data, :slug), Map.get(data, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "venue-#{id}"
-            _ -> "unknown-venue"
-          end
-
+        city_slug = extract_city_slug(data, :city_ref)
+        venue_slug = extract_slug(data, :slug, :id, "venue")
         "/social-cards/venue/#{city_slug}/#{venue_slug}/#{hash}.png"
 
       :performer ->
-        # Get performer slug
-        performer_slug =
-          case {Map.get(data, :slug), Map.get(data, :id)} do
-            {slug, _} when is_binary(slug) and slug != "" -> slug
-            {_, id} when not is_nil(id) -> "performer-#{id}"
-            _ -> "unknown-performer"
-          end
-
+        performer_slug = extract_slug(data, :slug, :id, "performer")
         "/social-cards/performer/#{performer_slug}/#{hash}.png"
     end
   end
@@ -407,18 +351,35 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
     generate_hash(data, type) == hash
   end
 
-  # Private helper functions
+  # ===========================================================================
+  # Private Helper Functions
+  # ===========================================================================
+
+  # Extracts a slug from data with fallback to ID-based slug
+  # Used consistently across fingerprint building and URL generation
+  @spec extract_slug(map(), atom(), atom(), String.t()) :: String.t()
+  defp extract_slug(data, slug_key, id_key, fallback_prefix) do
+    slug_value = Map.get(data, slug_key)
+    id_value = if id_key, do: Map.get(data, id_key), else: nil
+
+    case {slug_value, id_value} do
+      {slug, _} when is_binary(slug) and slug != "" -> slug
+      {number, _} when is_integer(number) and number > 0 -> to_string(number)
+      {_, id} when not is_nil(id) -> "#{fallback_prefix}-#{id}"
+      _ -> "unknown-#{fallback_prefix}"
+    end
+  end
+
+  # Extracts city slug from a nested city reference
+  defp extract_city_slug(data, city_key) do
+    city = Map.get(data, city_key, %{})
+    extract_slug(city, :slug, :id, "city")
+  end
 
   defp build_fingerprint(data, type)
 
   defp build_fingerprint(event, :event) do
-    # Ensure we always have a valid slug, even if :id is missing
-    slug =
-      case {Map.get(event, :slug), Map.get(event, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "event-#{id}"
-        _ -> "unknown-event"
-      end
+    slug = extract_slug(event, :slug, :id, "event")
 
     %{
       type: :event,
@@ -469,13 +430,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   end
 
   defp build_fingerprint(city, :city) do
-    # Ensure we always have a valid slug
-    slug =
-      case {Map.get(city, :slug), Map.get(city, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "city-#{id}"
-        _ -> "unknown-city"
-      end
+    slug = extract_slug(city, :slug, :id, "city")
 
     # Get stats from the city map
     stats = Map.get(city, :stats, %{})
@@ -493,13 +448,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   end
 
   defp build_fingerprint(activity, :activity) do
-    # Ensure we always have a valid slug
-    slug =
-      case {Map.get(activity, :slug), Map.get(activity, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "activity-#{id}"
-        _ -> "unknown-activity"
-      end
+    slug = extract_slug(activity, :slug, :id, "activity")
 
     # Extract venue and city info for fingerprint
     venue = Map.get(activity, :venue)
@@ -538,16 +487,9 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   end
 
   defp build_fingerprint(aggregation, :source_aggregation) do
-    # Extract city info
+    # Extract city info using helper
+    city_slug = extract_city_slug(aggregation, :city)
     city = Map.get(aggregation, :city, %{})
-
-    city_slug =
-      case {Map.get(city, :slug), Map.get(city, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "city-#{id}"
-        _ -> "unknown-city"
-      end
-
     city_name = Map.get(city, :name, "")
 
     # Extract source info
@@ -577,23 +519,8 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   end
 
   defp build_fingerprint(venue, :venue) do
-    # Extract city info from city_ref
-    city_ref = Map.get(venue, :city_ref, %{})
-
-    city_slug =
-      case {Map.get(city_ref, :slug), Map.get(city_ref, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "city-#{id}"
-        _ -> "unknown-city"
-      end
-
-    # Ensure we always have a valid slug
-    venue_slug =
-      case {Map.get(venue, :slug), Map.get(venue, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "venue-#{id}"
-        _ -> "unknown-venue"
-      end
+    city_slug = extract_city_slug(venue, :city_ref)
+    venue_slug = extract_slug(venue, :slug, :id, "venue")
 
     %{
       type: :venue,
@@ -609,13 +536,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   end
 
   defp build_fingerprint(performer, :performer) do
-    # Ensure we always have a valid slug
-    performer_slug =
-      case {Map.get(performer, :slug), Map.get(performer, :id)} do
-        {slug, _} when is_binary(slug) and slug != "" -> slug
-        {_, id} when not is_nil(id) -> "performer-#{id}"
-        _ -> "unknown-performer"
-      end
+    performer_slug = extract_slug(performer, :slug, :id, "performer")
 
     %{
       type: :performer,

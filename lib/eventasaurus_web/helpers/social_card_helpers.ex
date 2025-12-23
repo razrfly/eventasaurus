@@ -169,13 +169,14 @@ defmodule EventasaurusWeb.Helpers.SocialCardHelpers do
   @doc """
   Sends a redirect response for hash mismatches.
 
+  Computes the expected hash internally from the data and type.
+
   ## Parameters
     - conn: The Phoenix connection
     - data: The event/poll/city struct
     - slug: The slug for logging
-    - expected_hash: The expected hash value
-    - received_hash: The received hash value
-    - type: The type of data (:event, :poll, or :city)
+    - received_hash: The hash that was received in the request
+    - type: The type of data (:event, :poll, :city, :activity, :venue, :performer, :source_aggregation)
 
   ## Returns
     - conn: The updated connection
@@ -185,12 +186,13 @@ defmodule EventasaurusWeb.Helpers.SocialCardHelpers do
           map(),
           String.t(),
           String.t(),
-          String.t(),
           atom()
         ) ::
           Plug.Conn.t()
-  def send_hash_mismatch_redirect(conn, data, slug, expected_hash, received_hash, type \\ :event) do
+  def send_hash_mismatch_redirect(conn, data, slug, received_hash, type) do
     import Plug.Conn
+
+    expected_hash = HashGenerator.generate_hash(data, type)
 
     Logger.warning(
       "Hash mismatch for #{type} #{slug}. Expected: #{expected_hash}, Got: #{received_hash}"
