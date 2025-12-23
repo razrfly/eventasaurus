@@ -48,8 +48,20 @@ defmodule EventasaurusWeb.Admin.CardTypes.SourceAggregationCard do
       %{name: :source_name, label: "Source Name", type: :text, path: [:source_name]},
       %{name: :city_name, label: "City Name", type: :text, path: [:city, :name]},
       %{name: :identifier, label: "Identifier (slug)", type: :text, path: [:identifier]},
-      %{name: :total_event_count, label: "Event Count", type: :number, path: [:total_event_count], min: 0},
-      %{name: :location_count, label: "Locations", type: :number, path: [:location_count], min: 0},
+      %{
+        name: :total_event_count,
+        label: "Event Count",
+        type: :number,
+        path: [:total_event_count],
+        min: 0
+      },
+      %{
+        name: :location_count,
+        label: "Locations",
+        type: :number,
+        path: [:location_count],
+        min: 0
+      },
       %{
         name: :content_type,
         label: "Content Type",
@@ -76,7 +88,8 @@ defmodule EventasaurusWeb.Admin.CardTypes.SourceAggregationCard do
       | source_name: Map.get(params, "source_name", current.source_name),
         identifier: Map.get(params, "identifier", current.identifier),
         content_type: Map.get(params, "content_type", current.content_type),
-        total_event_count: parse_int(Map.get(params, "total_event_count"), current.total_event_count),
+        total_event_count:
+          parse_int(Map.get(params, "total_event_count"), current.total_event_count),
         location_count: parse_int(Map.get(params, "location_count"), current.location_count),
         hero_image: Map.get(params, "hero_image", current.hero_image),
         city: %{

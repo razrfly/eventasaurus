@@ -43,7 +43,13 @@ defmodule EventasaurusWeb.Admin.CardTypes.VenueCard do
       %{name: :name, label: "Venue Name", type: :text, path: [:name]},
       %{name: :city_name, label: "City Name", type: :text, path: [:city_ref, :name]},
       %{name: :address, label: "Address", type: :text, path: [:address]},
-      %{name: :event_count, label: "Upcoming Events", type: :number, path: [:event_count], min: 0},
+      %{
+        name: :event_count,
+        label: "Upcoming Events",
+        type: :number,
+        path: [:event_count],
+        min: 0
+      },
       %{name: :cover_image_url, label: "Cover Image URL", type: :text, path: [:cover_image_url]}
     ]
   end

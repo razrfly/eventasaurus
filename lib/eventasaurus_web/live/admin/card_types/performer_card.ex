@@ -36,7 +36,13 @@ defmodule EventasaurusWeb.Admin.CardTypes.PerformerCard do
   def form_fields do
     [
       %{name: :name, label: "Performer Name", type: :text, path: [:name]},
-      %{name: :event_count, label: "Upcoming Events", type: :number, path: [:event_count], min: 0},
+      %{
+        name: :event_count,
+        label: "Upcoming Events",
+        type: :number,
+        path: [:event_count],
+        min: 0
+      },
       %{name: :image_url, label: "Image URL", type: :text, path: [:image_url]}
     ]
   end

@@ -6,6 +6,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   alias EventasaurusApp.Themes
   alias EventasaurusWeb.SocialCardView
   alias EventasaurusWeb.Admin.CardTypeConfig
+  alias EventasaurusWeb.Admin.CardTypeRegistry
+  alias EventasaurusWeb.Admin.Components.CardTypeForm
   alias Eventasaurus.Services.SvgConverter
 
   import EventasaurusWeb.SocialCardView,
@@ -138,252 +140,38 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
     {:noreply, assign(socket, :edit_mode, !socket.assigns.edit_mode)}
   end
 
-  # Phase 2: Update mock event data
+  # Consolidated mock data update handler using CardTypeRegistry
+  # Delegates to the card type module's update_mock_data/2 callback
   @impl true
-  def handle_event("update_mock_event", %{"event" => event_params}, socket) do
-    mock_event = socket.assigns.mock_event
+  def handle_event("update_mock_" <> card_type_str, params, socket) do
+    card_type = String.to_existing_atom(card_type_str)
+    config = CardTypeConfig.get(card_type)
+    form_key = CardTypeRegistry.form_param_key(card_type)
 
-    updated_event = %{
-      mock_event
-      | title: Map.get(event_params, "title", mock_event.title),
-        cover_image_url: Map.get(event_params, "cover_image_url", mock_event.cover_image_url)
-    }
+    case Map.get(params, form_key) do
+      nil ->
+        {:noreply, socket}
 
-    {:noreply,
-     socket
-     |> assign(:mock_event, updated_event)
-     |> assign(:mock_poll, generate_mock_poll(updated_event))
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
+      form_params ->
+        current_data = Map.get(socket.assigns, config.mock_data_key)
+        updated_data = CardTypeRegistry.update_mock_data(card_type, current_data, form_params)
 
-  # Phase 2: Update mock poll data
-  @impl true
-  def handle_event("update_mock_poll", %{"poll" => poll_params}, socket) do
-    mock_poll = socket.assigns.mock_poll
+        socket =
+          socket
+          |> assign(config.mock_data_key, updated_data)
+          |> assign(:png_data, %{})
 
-    updated_poll = %{
-      mock_poll
-      | title: Map.get(poll_params, "title", mock_poll.title),
-        poll_type: Map.get(poll_params, "poll_type", mock_poll.poll_type)
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_poll, updated_poll)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
-
-  # Phase 2: Update mock city data
-  @impl true
-  def handle_event("update_mock_city", %{"city" => city_params}, socket) do
-    mock_city = socket.assigns.mock_city
-
-    updated_city = %{
-      mock_city
-      | name: Map.get(city_params, "name", mock_city.name),
-        stats: %{
-          mock_city.stats
-          | events_count:
-              parse_int(Map.get(city_params, "events_count"), mock_city.stats.events_count),
-            venues_count:
-              parse_int(Map.get(city_params, "venues_count"), mock_city.stats.venues_count),
-            categories_count:
-              parse_int(
-                Map.get(city_params, "categories_count"),
-                mock_city.stats.categories_count
-              )
-        }
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_city, updated_city)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
-
-  # Phase 2: Update mock activity data
-  @impl true
-  def handle_event("update_mock_activity", %{"activity" => activity_params}, socket) do
-    mock_activity = socket.assigns.mock_activity
-
-    updated_activity = %{
-      mock_activity
-      | title: Map.get(activity_params, "title", mock_activity.title),
-        cover_image_url:
-          Map.get(activity_params, "cover_image_url", mock_activity.cover_image_url),
-        venue: %{
-          mock_activity.venue
-          | name: Map.get(activity_params, "venue_name", mock_activity.venue.name),
-            city_ref: %{
-              mock_activity.venue.city_ref
-              | name: Map.get(activity_params, "city_name", mock_activity.venue.city_ref.name)
-            }
-        }
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_activity, updated_activity)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
-
-  # Phase 2: Update mock movie data
-  @impl true
-  def handle_event("update_mock_movie", %{"movie" => movie_params}, socket) do
-    mock_movie = socket.assigns.mock_movie
-
-    # Parse runtime as integer
-    runtime =
-      case Map.get(movie_params, "runtime") do
-        nil ->
-          mock_movie.runtime
-
-        "" ->
-          mock_movie.runtime
-
-        val when is_binary(val) ->
-          case Integer.parse(val) do
-            {int, _} -> int
-            :error -> mock_movie.runtime
+        # Special case: when event is updated, also update the poll's event reference
+        socket =
+          if card_type == :event do
+            updated_poll = %{socket.assigns.mock_poll | event: updated_data}
+            assign(socket, :mock_poll, updated_poll)
+          else
+            socket
           end
 
-        val when is_integer(val) ->
-          val
-
-        _ ->
-          mock_movie.runtime
-      end
-
-    # Parse year and create release_date
-    release_date =
-      case Map.get(movie_params, "year") do
-        nil ->
-          mock_movie.release_date
-
-        "" ->
-          mock_movie.release_date
-
-        val when is_binary(val) ->
-          case Integer.parse(val) do
-            {year, _} when year >= 1800 and year <= 2200 ->
-              Date.new!(year, 1, 1)
-
-            _ ->
-              mock_movie.release_date
-          end
-
-        _ ->
-          mock_movie.release_date
-      end
-
-    # Parse rating
-    rating =
-      case Map.get(movie_params, "rating") do
-        nil ->
-          get_in(mock_movie.metadata, [:vote_average]) || 0.0
-
-        "" ->
-          get_in(mock_movie.metadata, [:vote_average]) || 0.0
-
-        val when is_binary(val) ->
-          case Float.parse(val) do
-            {float, _} -> float
-            :error -> get_in(mock_movie.metadata, [:vote_average]) || 0.0
-          end
-
-        _ ->
-          get_in(mock_movie.metadata, [:vote_average]) || 0.0
-      end
-
-    updated_movie = %{
-      mock_movie
-      | title: Map.get(movie_params, "title", mock_movie.title),
-        backdrop_url: Map.get(movie_params, "backdrop_url", mock_movie.backdrop_url),
-        runtime: runtime,
-        release_date: release_date,
-        metadata: Map.put(mock_movie.metadata, :vote_average, rating)
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_movie, updated_movie)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
-
-  # Phase 4: Update mock venue data
-  @impl true
-  def handle_event("update_mock_venue", %{"venue" => venue_params}, socket) do
-    mock_venue = socket.assigns.mock_venue
-
-    updated_venue = %{
-      mock_venue
-      | name: Map.get(venue_params, "name", mock_venue.name),
-        address: Map.get(venue_params, "address", mock_venue.address),
-        event_count: parse_int(Map.get(venue_params, "event_count"), mock_venue.event_count),
-        cover_image_url: Map.get(venue_params, "cover_image_url", mock_venue.cover_image_url),
-        city_ref: %{
-          mock_venue.city_ref
-          | name: Map.get(venue_params, "city_name", mock_venue.city_ref.name)
-        }
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_venue, updated_venue)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
-
-  # Phase 2: Update mock performer data
-  @impl true
-  def handle_event("update_mock_performer", %{"performer" => performer_params}, socket) do
-    mock_performer = socket.assigns.mock_performer
-
-    updated_performer = %{
-      mock_performer
-      | name: Map.get(performer_params, "name", mock_performer.name),
-        event_count:
-          parse_int(Map.get(performer_params, "event_count"), mock_performer.event_count),
-        image_url: Map.get(performer_params, "image_url", mock_performer.image_url)
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_performer, updated_performer)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
-  end
-
-  # Phase 3: Update mock source aggregation data
-  @impl true
-  def handle_event("update_mock_source_aggregation", %{"aggregation" => params}, socket) do
-    mock = socket.assigns.mock_source_aggregation
-
-    updated = %{
-      mock
-      | source_name: Map.get(params, "source_name", mock.source_name),
-        identifier: Map.get(params, "identifier", mock.identifier),
-        content_type: Map.get(params, "content_type", mock.content_type),
-        total_event_count:
-          parse_int(Map.get(params, "total_event_count"), mock.total_event_count),
-        location_count: parse_int(Map.get(params, "location_count"), mock.location_count),
-        hero_image: Map.get(params, "hero_image", mock.hero_image),
-        city: %{
-          mock.city
-          | name: Map.get(params, "city_name", mock.city.name)
-        }
-    }
-
-    {:noreply,
-     socket
-     |> assign(:mock_source_aggregation, updated)
-     |> assign(:png_data, %{})
-     |> generate_previews()}
+        {:noreply, generate_previews(socket)}
+    end
   end
 
   # Helper to generate PNG from SVG content
@@ -421,15 +209,12 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
     end
   end
 
-  # Helper to parse integer with default
-  defp parse_int(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, _} -> int
-      :error -> default
-    end
+  # Helper to get mock data for the current card type from socket assigns
+  # Used by CardTypeForm component in templates
+  def get_mock_data(assigns) do
+    config = CardTypeConfig.get(assigns.card_type)
+    Map.get(assigns, config.mock_data_key)
   end
-
-  defp parse_int(_, default), do: default
 
   # Generate preview data for all (or selected) themes
   # Uses CardTypeConfig for centralized lookup instead of scattered conditionals

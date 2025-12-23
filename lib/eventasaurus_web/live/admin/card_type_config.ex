@@ -11,7 +11,8 @@ defmodule EventasaurusWeb.Admin.CardTypeConfig do
   grouping, and style information for the admin preview interface.
   """
 
-  @type card_type :: :event | :poll | :city | :activity | :movie | :source_aggregation | :venue | :performer
+  @type card_type ::
+          :event | :poll | :city | :activity | :movie | :source_aggregation | :venue | :performer
 
   @styled_cards [:event, :poll]
   @brand_cards [:city, :activity, :movie, :venue, :performer, :source_aggregation]
@@ -128,14 +129,16 @@ defmodule EventasaurusWeb.Admin.CardTypeConfig do
   @spec grouped_for_select() :: [{String.t(), [{String.t(), String.t()}]}]
   def grouped_for_select do
     [
-      {"Styled Cards", Enum.map(@styled_cards, fn type ->
-        config = get(type)
-        {Atom.to_string(type), config.label}
-      end)},
-      {"Brand Cards", Enum.map(@brand_cards, fn type ->
-        config = get(type)
-        {Atom.to_string(type), config.label}
-      end)}
+      {"Styled Cards",
+       Enum.map(@styled_cards, fn type ->
+         config = get(type)
+         {Atom.to_string(type), config.label}
+       end)},
+      {"Brand Cards",
+       Enum.map(@brand_cards, fn type ->
+         config = get(type)
+         {Atom.to_string(type), config.label}
+       end)}
     ]
   end
 
