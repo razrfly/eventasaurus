@@ -12,8 +12,8 @@
     <div class="flex-1 min-w-[200px]">
       <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">
         Theme Filter
-        <%= if @card_type == :city do %>
-          <span class="text-xs text-gray-500">(City cards use fixed theme)</span>
+        <%= if @card_type in [:city, :activity] do %>
+          <span class="text-xs text-gray-500">(Uses fixed theme)</span>
         <% end %>
       </label>
       <form phx-change="change_theme">
@@ -21,7 +21,7 @@
           id="theme-select"
           name="theme"
           class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          disabled={@card_type == :city}
+          disabled={@card_type in [:city, :activity]}
         >
           <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
           <%= for theme <- @themes do %>
@@ -46,6 +46,7 @@
           <option value="event" selected={@card_type == :event}>Event Cards</option>
           <option value="poll" selected={@card_type == :poll}>Poll Cards</option>
           <option value="city" selected={@card_type == :city}>City Cards</option>
+          <option value="activity" selected={@card_type == :activity}>Activity Cards</option>
         </select>
       </form>
     </div>
@@ -68,6 +69,17 @@
       </div>
       <div class="ml-3 flex-1">
         <%= cond do %>
+          <% @card_type == :activity -> %>
+            <h3 class="text-sm font-medium text-blue-800">Mock Activity Data</h3>
+            <div class="mt-2 text-sm text-blue-700">
+              <p class="font-mono"><strong>Title:</strong> <%= @mock_activity.title %></p>
+              <p class="font-mono"><strong>Venue:</strong> <%= @mock_activity.venue.name %></p>
+              <p class="font-mono"><strong>City:</strong> <%= @mock_activity.venue.city_ref.name %></p>
+              <p class="font-mono"><strong>Date:</strong> <%= List.first(@mock_activity.occurrence_list).date %></p>
+              <p class="text-xs text-blue-600 mt-1">
+                Activity cards use fixed Wombie teal theme. Shows title, date/time, venue, and city for public events.
+              </p>
+            </div>
           <% @card_type == :city -> %>
             <h3 class="text-sm font-medium text-blue-800">Mock City Data</h3>
             <div class="mt-2 text-sm text-blue-700">
