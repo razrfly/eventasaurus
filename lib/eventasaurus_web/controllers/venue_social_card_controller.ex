@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.VenueSocialCardController do
   use EventasaurusWeb.SocialCardController, type: :venue
 
   alias EventasaurusApp.Venues
+  alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations
   import EventasaurusWeb.SocialCardView, only: [sanitize_venue: 1, render_venue_card_svg: 1]
 
@@ -66,18 +67,15 @@ defmodule EventasaurusWeb.VenueSocialCardController do
   @impl true
   def render_svg(data), do: render_venue_card_svg(data)
 
-  # Get cover image from venue's venue_images array
-  defp get_venue_cover_image(%{venue_images: images})
-       when is_list(images) and length(images) > 0 do
-    images
-    |> Enum.find_value(fn image ->
-      case image do
-        %{"url" => url} when is_binary(url) and url != "" -> url
-        %{url: url} when is_binary(url) and url != "" -> url
-        _ -> nil
-      end
-    end)
+  # Get cover image using the venue's full fallback chain
+  # This matches the same logic used by VenueHeroCard in the venue page:
+  # 1. Venue's own venue_images
+  # 2. City's categorized gallery (e.g., "cinema" for Cinema City)
+  # 3. City's "general" category (Unsplash city images)
+  defp get_venue_cover_image(venue) do
+    case Venue.get_cover_image(venue, width: 800, height: 419, quality: 85) do
+      {:ok, url, _source} -> url
+      {:error, :no_image} -> nil
+    end
   end
-
-  defp get_venue_cover_image(_), do: nil
 end

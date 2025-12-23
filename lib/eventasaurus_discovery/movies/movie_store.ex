@@ -80,4 +80,41 @@ defmodule EventasaurusDiscovery.Movies.MovieStore do
   def delete_movie(%Movie{} = movie) do
     Repo.delete(movie)
   end
+
+  @doc """
+  Count total showtimes (occurrences) for a movie in a specific city.
+
+  This counts all occurrences from all public events linked to the movie
+  where the venue is in the specified city.
+  """
+  def count_showtimes_in_city(movie_id, city_id) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
+    # Get all events for this movie in this city
+    events =
+      from(pe in PublicEvent,
+        join: em in "event_movies",
+        on: pe.id == em.event_id,
+        join: v in assoc(pe, :venue),
+        on: v.city_id == ^city_id,
+        where: em.movie_id == ^movie_id,
+        select: pe.occurrences
+      )
+      |> Repo.all()
+
+    # Count occurrences from all events
+    events
+    |> Enum.flat_map(&extract_occurrence_count/1)
+    |> length()
+  end
+
+  # Extract occurrences from event occurrences JSON
+  defp extract_occurrence_count(nil), do: []
+
+  defp extract_occurrence_count(%{"dates" => dates}) when is_list(dates) do
+    dates
+  end
+
+  defp extract_occurrence_count(%{"type" => "pattern"}), do: [1]
+  defp extract_occurrence_count(_), do: []
 end
