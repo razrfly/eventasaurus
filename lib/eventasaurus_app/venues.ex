@@ -31,6 +31,39 @@ defmodule EventasaurusApp.Venues do
   end
 
   @doc """
+  Returns the list of public venues (scraper-created venues like theaters, bars, etc.).
+
+  Public venues have `is_public: true` and are suitable for display in sitemaps,
+  search results, and public listings. Private venues (user home addresses) are excluded.
+
+  ## Options
+  - `:city_id` - Filter venues by city
+  - `:limit` - Maximum number of venues to return
+
+  ## Examples
+
+      list_public_venues()
+      list_public_venues(city_id: 123)
+      list_public_venues(city_id: 123, limit: 50)
+  """
+  def list_public_venues(opts \\ []) do
+    city_id = Keyword.get(opts, :city_id)
+    limit = Keyword.get(opts, :limit)
+
+    Venue
+    |> where([v], v.is_public == true)
+    |> maybe_filter_by_city(city_id)
+    |> maybe_limit(limit)
+    |> Repo.all()
+  end
+
+  defp maybe_filter_by_city(query, nil), do: query
+  defp maybe_filter_by_city(query, city_id), do: where(query, [v], v.city_id == ^city_id)
+
+  defp maybe_limit(query, nil), do: query
+  defp maybe_limit(query, limit), do: limit(query, ^limit)
+
+  @doc """
   Gets a single venue.
 
   Raises `Ecto.NoResultsError` if the Venue does not exist.

@@ -347,20 +347,18 @@ defmodule Eventasaurus.Sitemap do
   end
 
   # Returns a stream of all venues in active cities that have public events
-  # Excludes private venues (user home addresses, etc.) that have no public events
+  # Excludes private venues (user home addresses, etc.) from the sitemap
   defp venue_urls(opts) do
     base_url = get_base_url(opts)
 
-    # Query venues that belong to active cities AND have at least one public event
-    # This excludes private venues (like user home addresses) from the sitemap
+    # Query public venues in active cities
+    # is_public=true indicates scraper-created venues (theaters, bars, concert halls)
+    # is_public=false indicates user-created private venues (excluded from sitemap)
     from(v in EventasaurusApp.Venues.Venue,
       join: c in EventasaurusDiscovery.Locations.City,
       on: v.city_id == c.id,
-      inner_join: pe in PublicEvent,
-      on: pe.venue_id == v.id,
       select: %{slug: v.slug, updated_at: v.updated_at, city_slug: c.slug},
-      where: c.discovery_enabled == true and not is_nil(v.slug),
-      distinct: v.id
+      where: v.is_public == true and c.discovery_enabled == true and not is_nil(v.slug)
     )
     |> Repo.stream()
     |> Stream.map(fn venue ->
