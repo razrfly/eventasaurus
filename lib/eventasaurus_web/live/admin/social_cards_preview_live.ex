@@ -242,8 +242,10 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         "" -> mock_movie.release_date
         val when is_binary(val) ->
           case Integer.parse(val) do
-            {year, _} -> Date.new!(year, 1, 1)
-            :error -> mock_movie.release_date
+            {year, _} when year >= 1800 and year <= 2200 ->
+              Date.new!(year, 1, 1)
+            _ ->
+              mock_movie.release_date
           end
         _ -> mock_movie.release_date
       end
@@ -431,11 +433,11 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         aggregation = socket.assigns.mock_source_aggregation
         svg = render_source_aggregation_card_svg(aggregation)
 
-        # Source aggregation cards use Wombie teal theme
+        # Source aggregation cards use Wombie indigo theme
         colors = %{
           "colors" => %{
-            "primary" => "#0d9488",
-            "secondary" => "#14b8a6"
+            "primary" => "#4f46e5",
+            "secondary" => "#6366f1"
           }
         }
 
