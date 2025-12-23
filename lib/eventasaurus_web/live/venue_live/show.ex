@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.VenueLive.Show do
   alias EventasaurusWeb.Components.Activity.VenueLocationCard
   alias EventasaurusWeb.Components.Activity.ActivityLayout
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.FollowButtonComponent
   alias EventasaurusWeb.Helpers.{BreadcrumbBuilder, LanguageDiscovery, SEOHelpers}
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
@@ -308,6 +309,25 @@ defmodule EventasaurusWeb.VenueLive.Show do
       |> assign(:pagination, pagination)
 
     {:noreply, push_patch(socket, to: build_path(socket))}
+  end
+
+  # Handle auth modal request from FollowButtonComponent
+  @impl true
+  def handle_info({:show_auth_modal, :follow}, socket) do
+    # Redirect to login with return URL to come back after authentication
+    venue = socket.assigns.venue
+    route_pattern = socket.assigns[:route_pattern] || :direct
+
+    return_to =
+      case route_pattern do
+        :city_scoped -> ~p"/c/#{venue.city_ref.slug}/venues/#{venue.slug}"
+        :direct -> ~p"/venues/#{venue.slug}"
+      end
+
+    {:noreply,
+     socket
+     |> put_flash(:info, gettext("Please log in to follow this venue"))
+     |> redirect(to: ~p"/auth/login?return_to=#{return_to}")}
   end
 
   # Helper functions
@@ -746,7 +766,17 @@ defmodule EventasaurusWeb.VenueLive.Show do
           <VenueHeroCard.venue_hero_card
             venue={@venue}
             upcoming_event_count={@all_events_count}
-          />
+          >
+            <:actions>
+              <.live_component
+                module={FollowButtonComponent}
+                id={"follow-venue-#{@venue.id}"}
+                entity={@venue}
+                entity_type={:venue}
+                current_user={@user}
+              />
+            </:actions>
+          </VenueHeroCard.venue_hero_card>
         </div>
 
         <!-- Main Content with Two-Column Layout -->

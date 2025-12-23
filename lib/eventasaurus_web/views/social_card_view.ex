@@ -270,7 +270,8 @@ defmodule EventasaurusWeb.SocialCardView do
   @doc """
   Renders the performer-specific content for a social card.
   """
-  defdelegate render_performer_content(performer, theme_suffix, theme_colors), to: PerformerCardView
+  defdelegate render_performer_content(performer, theme_suffix, theme_colors),
+    to: PerformerCardView
 
   # ===========================================================================
   # Source Aggregation Social Cards (delegated to SourceAggregationCardView)

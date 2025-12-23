@@ -153,11 +153,11 @@ defmodule EventasaurusWeb.Dev.DevAuth do
 
       # Simply set the session values needed for dev mode
       conn
-      |> Plug.Conn.put_session(:current_user_id, user.id)
-      |> Plug.Conn.put_session(:dev_mode_login, true)
-      |> Plug.Conn.put_session(:user_email, user.email)
-      |> Plug.Conn.put_session(:access_token, dev_access_token)
-      |> Plug.Conn.put_session(:token_expires_at, expires_at)
+      |> Plug.Conn.put_session("current_user_id", user.id)
+      |> Plug.Conn.put_session("dev_mode_login", true)
+      |> Plug.Conn.put_session("user_email", user.email)
+      |> Plug.Conn.put_session("access_token", dev_access_token)
+      |> Plug.Conn.put_session("token_expires_at", expires_at)
       |> Plug.Conn.configure_session(renew: true)
       |> tap(fn _ ->
         Logger.info("✅ DEV AUTH: Session created for user #{user.id} with access_token stored")

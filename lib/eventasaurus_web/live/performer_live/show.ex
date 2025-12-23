@@ -21,6 +21,7 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   alias EventasaurusWeb.UrlHelper
 
   alias EventasaurusWeb.Components.Breadcrumbs
+  alias EventasaurusWeb.FollowButtonComponent
 
   alias EventasaurusWeb.Components.Activity.{
     ActivityLayout,
@@ -456,6 +457,19 @@ defmodule EventasaurusWeb.PerformerLive.Show do
     {:noreply, push_patch(socket, to: build_path(socket))}
   end
 
+  # Handle auth modal request from FollowButtonComponent
+  @impl true
+  def handle_info({:show_auth_modal, :follow}, socket) do
+    # Redirect to login with return URL to come back after authentication
+    performer = socket.assigns.performer
+    return_to = ~p"/performers/#{performer.slug}"
+
+    {:noreply,
+     socket
+     |> put_flash(:info, gettext("Please log in to follow this artist"))
+     |> redirect(to: ~p"/auth/login?return_to=#{return_to}")}
+  end
+
   # Helper to get section title based on active time filter
   defp events_section_title(:upcoming), do: gettext("Upcoming Events")
   defp events_section_title(:past), do: gettext("Past Events")
@@ -479,7 +493,17 @@ defmodule EventasaurusWeb.PerformerLive.Show do
                 performer={@performer}
                 upcoming_event_count={@time_filter_counts.upcoming}
                 total_event_count={@stats.total_events}
-              />
+              >
+                <:actions>
+                  <.live_component
+                    module={FollowButtonComponent}
+                    id={"follow-performer-#{@performer.id}"}
+                    entity={@performer}
+                    entity_type={:performer}
+                    current_user={@user}
+                  />
+                </:actions>
+              </PerformerHeroCard.performer_hero_card>
 
               <!-- Events Section -->
               <div>

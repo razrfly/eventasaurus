@@ -106,7 +106,7 @@ defmodule EventasaurusWeb.Plugs.ClerkAuthPlug do
           {:ok, user} ->
             conn
             |> assign(:user, user)
-            |> put_session(:current_user_id, user.id)
+            |> put_session("current_user_id", user.id)
 
           {:error, reason} ->
             Logger.warning("Failed to sync Clerk user: #{inspect(reason)}")
@@ -117,7 +117,7 @@ defmodule EventasaurusWeb.Plugs.ClerkAuthPlug do
       %EventasaurusApp.Accounts.User{} = user ->
         conn
         |> assign(:user, user)
-        |> put_session(:current_user_id, user.id)
+        |> put_session("current_user_id", user.id)
 
       _ ->
         assign(conn, :user, nil)

@@ -40,10 +40,15 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
     * `:venue` - Required. The venue struct with name, address, coordinates, etc.
     * `:upcoming_event_count` - Required. Number of upcoming events at this venue.
     * `:class` - Optional. Additional CSS classes for the container.
+
+  ## Slots
+
+    * `:actions` - Optional. Action buttons to display (e.g., follow button).
   """
   attr :venue, :map, required: true, doc: "Venue struct with name, address, city_ref, etc."
   attr :upcoming_event_count, :integer, required: true, doc: "Number of upcoming events"
   attr :class, :string, default: "", doc: "Additional CSS classes"
+  slot :actions, doc: "Optional action buttons (e.g., follow button)"
 
   def venue_hero_card(assigns) do
     # Get cover image using the venue's fallback chain
@@ -107,6 +112,9 @@ defmodule EventasaurusWeb.Components.Activity.VenueHeroCard do
 
           <!-- Action Buttons -->
           <div class="flex flex-wrap items-center gap-3">
+            <!-- Custom Actions Slot (e.g., Follow Button) -->
+            <%= render_slot(@actions) %>
+
             <%= if @has_coordinates do %>
               <a
                 href={google_maps_directions_url(@venue)}

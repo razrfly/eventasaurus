@@ -105,7 +105,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       {:ok, user} ->
         conn
         |> assign(:user, user)
-        |> put_session(:current_user_id, user.id)
+        |> put_session("current_user_id", user.id)
 
       {:error, _} ->
         assign(conn, :user, nil)
