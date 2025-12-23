@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.PollSocialCardController do
   Generates a social card PNG for a poll by event slug and poll number with hash validation.
   Provides cache busting through hash-based URLs.
   """
+  @spec generate_card_by_number(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def generate_card_by_number(conn, %{
         "slug" => slug,
         "number" => number,
@@ -95,6 +96,7 @@ defmodule EventasaurusWeb.PollSocialCardController do
   Generates a social card PNG for a poll by event slug and poll ID with hash validation.
   DEPRECATED: Use generate_card_by_number/2 instead. This is kept for backwards compatibility.
   """
+  @spec generate_card_by_id(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def generate_card_by_id(conn, %{
         "slug" => slug,
         "poll_id" => poll_id,

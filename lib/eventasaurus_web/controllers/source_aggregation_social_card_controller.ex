@@ -33,7 +33,11 @@ defmodule EventasaurusWeb.SourceAggregationSocialCardController do
 
   @impl true
   def build_slug(
-        %{"city_slug" => city_slug, "content_type" => content_type_slug, "identifier" => identifier},
+        %{
+          "city_slug" => city_slug,
+          "content_type" => content_type_slug,
+          "identifier" => identifier
+        },
         _data
       ) do
     "#{city_slug}_#{content_type_slug}_#{identifier}"

@@ -16,7 +16,10 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
   alias EventasaurusDiscovery.PublicEventsEnhanced
   import EventasaurusWeb.SocialCardView, only: [sanitize_activity: 1, render_activity_card_svg: 1]
 
-  # Keep the old function name for route compatibility
+  @doc """
+  Generates a social card by activity slug. Legacy route compatibility wrapper.
+  """
+  @spec generate_card_by_slug(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def generate_card_by_slug(conn, params) do
     generate_card(conn, params)
   end
