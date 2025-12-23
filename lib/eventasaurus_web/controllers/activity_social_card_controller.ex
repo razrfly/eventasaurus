@@ -4,71 +4,42 @@ defmodule EventasaurusWeb.ActivitySocialCardController do
 
   This controller generates social cards with Wombie branding for activities,
   including title, date/time, venue, and city information.
-  """
-  use EventasaurusWeb, :controller
 
-  require Logger
+  Route: GET /social-cards/activity/:slug/:hash/*rest
+  """
+  use EventasaurusWeb.SocialCardController, type: :activity
 
   import Ecto.Query, only: [from: 2]
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEventsEnhanced
-  alias Eventasaurus.SocialCards.HashGenerator
-  alias EventasaurusWeb.Helpers.SocialCardHelpers
-  import EventasaurusWeb.SocialCardView
+  import EventasaurusWeb.SocialCardView, only: [sanitize_activity: 1, render_activity_card_svg: 1]
 
-  @doc """
-  Generates a social card PNG for an activity by slug with hash validation.
-  Provides cache busting through hash-based URLs.
+  # Keep the old function name for route compatibility
+  def generate_card_by_slug(conn, params) do
+    generate_card(conn, params)
+  end
 
-  Route: GET /social-cards/activity/:slug/:hash/*rest
-  """
-  def generate_card_by_slug(conn, %{"slug" => slug, "hash" => hash, "rest" => rest}) do
-    Logger.info(
-      "Activity social card requested for slug: #{slug}, hash: #{hash}, rest: #{inspect(rest)}"
-    )
-
-    final_hash = SocialCardHelpers.parse_hash(hash, rest)
-
+  @impl true
+  def lookup_entity(%{"slug" => slug}) do
     case fetch_activity(slug) do
-      nil ->
-        Logger.warning("Activity not found for slug: #{slug}")
-        send_resp(conn, 404, "Activity not found")
-
-      activity ->
-        # Validate that the hash matches current activity data
-        if SocialCardHelpers.validate_hash(activity, final_hash, :activity) do
-          Logger.info("Hash validated for activity #{slug}: #{activity.title}")
-
-          # Sanitize activity data before rendering
-          sanitized_activity = sanitize_activity(activity)
-
-          # Render SVG template with sanitized activity data
-          svg_content = render_activity_card_svg(sanitized_activity)
-
-          # Generate PNG and serve response
-          case SocialCardHelpers.generate_png(svg_content, activity.slug, sanitized_activity) do
-            {:ok, png_data} ->
-              SocialCardHelpers.send_png_response(conn, png_data, final_hash)
-
-            {:error, error} ->
-              SocialCardHelpers.send_error_response(conn, error)
-          end
-        else
-          expected_hash = HashGenerator.generate_hash(activity, :activity)
-
-          SocialCardHelpers.send_hash_mismatch_redirect(
-            conn,
-            activity,
-            slug,
-            expected_hash,
-            final_hash,
-            :activity
-          )
-        end
+      nil -> {:error, :not_found, "Activity not found for slug: #{slug}"}
+      activity -> {:ok, activity}
     end
   end
+
+  @impl true
+  def build_card_data(activity), do: activity
+
+  @impl true
+  def build_slug(_params, activity), do: activity.slug
+
+  @impl true
+  def sanitize(data), do: sanitize_activity(data)
+
+  @impl true
+  def render_svg(data), do: render_activity_card_svg(data)
 
   # Fetch activity (public event) by slug with required preloads
   defp fetch_activity(slug) do

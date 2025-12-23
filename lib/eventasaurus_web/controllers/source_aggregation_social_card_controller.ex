@@ -7,96 +7,46 @@ defmodule EventasaurusWeb.SourceAggregationSocialCardController do
 
   Route: GET /social-cards/source/:city_slug/:content_type/:identifier/:hash/*rest
   """
-  use EventasaurusWeb, :controller
-
-  require Logger
+  use EventasaurusWeb.SocialCardController, type: :source_aggregation
 
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Sources.SourceStore
   alias EventasaurusDiscovery.AggregationTypeSlug
-  alias Eventasaurus.SocialCards.HashGenerator
-  alias EventasaurusWeb.Helpers.SocialCardHelpers
-  import EventasaurusWeb.SocialCardView
 
-  @doc """
-  Generates a social card PNG for a source aggregation page with hash validation.
-  Provides cache busting through hash-based URLs.
+  import EventasaurusWeb.SocialCardView,
+    only: [sanitize_source_aggregation: 1, render_source_aggregation_card_svg: 1]
 
-  Route: GET /social-cards/source/:city_slug/:content_type/:identifier/:hash/*rest
-  """
-  def generate_card(
-        conn,
-        %{
-          "city_slug" => city_slug,
-          "content_type" => content_type_slug,
-          "identifier" => identifier,
-          "hash" => hash,
-          "rest" => rest
-        }
-      ) do
-    Logger.info(
-      "Source aggregation social card requested for #{city_slug}/#{content_type_slug}/#{identifier}, hash: #{hash}"
-    )
-
-    final_hash = SocialCardHelpers.parse_hash(hash, rest)
-
-    # Look up city
+  @impl true
+  def lookup_entity(%{"city_slug" => city_slug} = params) do
     case Locations.get_city_by_slug(city_slug) do
-      nil ->
-        Logger.warning("City not found for slug: #{city_slug}")
-        send_resp(conn, 404, "City not found")
-
-      city ->
-        # Convert URL slug to schema.org type
-        content_type = AggregationTypeSlug.from_slug(content_type_slug)
-
-        # Fetch aggregation data
-        aggregation_data = fetch_aggregation_data(city, content_type, identifier)
-
-        # Validate that the hash matches current aggregation data
-        if SocialCardHelpers.validate_hash(aggregation_data, final_hash, :source_aggregation) do
-          Logger.info(
-            "Hash validated for source aggregation #{city_slug}/#{content_type_slug}/#{identifier}"
-          )
-
-          # Sanitize data before rendering
-          sanitized_data = sanitize_source_aggregation(aggregation_data)
-
-          # Render SVG template with sanitized data
-          svg_content = render_source_aggregation_card_svg(sanitized_data)
-
-          # Generate PNG and serve response
-          slug = "#{city_slug}_#{content_type_slug}_#{identifier}"
-
-          case SocialCardHelpers.generate_png(svg_content, slug, sanitized_data) do
-            {:ok, png_data} ->
-              SocialCardHelpers.send_png_response(conn, png_data, final_hash)
-
-            {:error, error} ->
-              SocialCardHelpers.send_error_response(conn, error)
-          end
-        else
-          expected_hash = HashGenerator.generate_hash(aggregation_data, :source_aggregation)
-
-          Logger.warning(
-            "Hash mismatch for source aggregation #{city_slug}/#{content_type_slug}/#{identifier}. Expected: #{expected_hash}, Got: #{final_hash}"
-          )
-
-          # Build redirect URL
-          current_url =
-            HashGenerator.generate_url_path(aggregation_data, :source_aggregation)
-
-          conn
-          |> put_resp_header("location", current_url)
-          |> send_resp(301, "Social card URL has been updated")
-        end
+      nil -> {:error, :not_found, "City not found for slug: #{city_slug}"}
+      city -> {:ok, {city, params}}
     end
   end
 
+  @impl true
+  def build_card_data({city, %{"content_type" => content_type_slug, "identifier" => identifier}}) do
+    content_type = AggregationTypeSlug.from_slug(content_type_slug)
+    fetch_aggregation_data(city, content_type, identifier)
+  end
+
+  @impl true
+  def build_slug(
+        %{"city_slug" => city_slug, "content_type" => content_type_slug, "identifier" => identifier},
+        _data
+      ) do
+    "#{city_slug}_#{content_type_slug}_#{identifier}"
+  end
+
+  @impl true
+  def sanitize(data), do: sanitize_source_aggregation(data)
+
+  @impl true
+  def render_svg(data), do: render_source_aggregation_card_svg(data)
+
   # Fetch aggregation data needed for the social card
   defp fetch_aggregation_data(city, content_type, identifier) do
-    # Get city coordinates for radius filtering
     center_lat = if city.latitude, do: Decimal.to_float(city.latitude), else: nil
     center_lng = if city.longitude, do: Decimal.to_float(city.longitude), else: nil
 

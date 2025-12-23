@@ -1,9 +1,37 @@
 defmodule EventasaurusWeb.SocialCardView do
   @moduledoc """
-  View helpers for generating social card content.
+  View helpers for generating social card SVG content.
 
-  This module provides functions for safely processing event data
+  This module provides functions for safely processing entity data
   and generating SVG content for social cards with proper sanitization.
+
+  ## Module Organization
+
+  The module is organized into sections by entity type. Controllers use
+  selective imports to only import the functions they need:
+
+      import EventasaurusWeb.SocialCardView, only: [sanitize_event: 1, render_social_card_svg: 1]
+
+  ### Shared Utilities (used by all card types)
+  - Text formatting: `truncate_title/2`, `format_title/2`, `calculate_font_size/1`
+  - SVG utilities: `svg_escape/1`, `format_color/1`
+  - Image handling: `has_image?/1`, `safe_image_url/1`, image data URL functions
+  - Base rendering: `render_social_card_base/3`, `render_background_gradient/3`
+  - Theme utilities: `render_image_section/3`, `render_cta_bubble/2`, `get_logo_svg_element/2`
+
+  ### Entity-Specific Functions
+  Each entity type has three primary functions:
+  - `sanitize_*` - Sanitize input data for safe SVG rendering
+  - `render_*_card_svg` - Generate complete SVG card
+  - `render_*_content` - Render entity-specific content section
+
+  **Event Cards**: `sanitize_event/1`, `render_social_card_svg/1`, `render_event_content/3`
+  **Poll Cards**: `sanitize_poll/1`, `render_poll_card_svg/1`, `render_poll_content/4`
+  **City Cards**: `sanitize_city/1`, `render_city_card_svg/2`, `render_city_content/4`
+  **Activity Cards**: `sanitize_activity/1`, `render_activity_card_svg/1`, `render_activity_content/3`
+  **Source Aggregation Cards**: `sanitize_source_aggregation/1`, `render_source_aggregation_card_svg/1`, `render_source_aggregation_content/3`
+  **Venue Cards**: `sanitize_venue/1`, `render_venue_card_svg/1`, `render_venue_content/3`
+  **Performer Cards**: `sanitize_performer/1`, `render_performer_card_svg/1`, `render_performer_content/3`
   """
 
   alias Eventasaurus.SocialCards.Sanitizer
@@ -441,6 +469,10 @@ defmodule EventasaurusWeb.SocialCardView do
     description = Map.get(event, :description, "")
     Sanitizer.sanitize_text(description)
   end
+
+  # ===========================================================================
+  # Event Social Cards
+  # ===========================================================================
 
   @doc """
   Sanitizes complete event data for safe use in social card generation.
@@ -1247,9 +1279,9 @@ defmodule EventasaurusWeb.SocialCardView do
 
   defp safe_svg_id(_), do: "_default"
 
-  # ============================================================================
-  # City-Specific Social Card Rendering
-  # ============================================================================
+  # ===========================================================================
+  # City Social Cards
+  # ===========================================================================
 
   @doc """
   Renders a complete SVG social card for a city page with stats.

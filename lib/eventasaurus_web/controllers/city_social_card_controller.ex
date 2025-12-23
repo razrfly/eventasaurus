@@ -1,74 +1,54 @@
 defmodule EventasaurusWeb.CitySocialCardController do
-  use EventasaurusWeb, :controller
+  @moduledoc """
+  Controller for generating branded social card PNG images for city pages.
 
-  require Logger
+  Route: GET /social-cards/city/:slug/:hash/*rest
+  """
+  use EventasaurusWeb.SocialCardController, type: :city
 
   import Ecto.Query, only: [from: 2]
 
   alias EventasaurusDiscovery.Locations
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.Categories
-  alias Eventasaurus.SocialCards.HashGenerator
-  alias EventasaurusWeb.Helpers.SocialCardHelpers
-  import EventasaurusWeb.SocialCardView
+  import EventasaurusWeb.SocialCardView, only: [sanitize_city: 1, render_city_card_svg: 2]
 
-  @doc """
-  Generates a social card PNG for a city by slug with hash validation.
-  Provides cache busting through hash-based URLs.
-  """
-  def generate_card_by_slug(conn, %{"slug" => slug, "hash" => hash, "rest" => rest}) do
-    Logger.info(
-      "City social card requested for slug: #{slug}, hash: #{hash}, rest: #{inspect(rest)}"
-    )
+  # Keep the old function name for route compatibility
+  def generate_card_by_slug(conn, params) do
+    generate_card(conn, params)
+  end
 
-    final_hash = SocialCardHelpers.parse_hash(hash, rest)
-
+  @impl true
+  def lookup_entity(%{"slug" => slug}) do
     case Locations.get_city_by_slug(slug) do
-      nil ->
-        Logger.warning("City not found for slug: #{slug}")
-        send_resp(conn, 404, "City not found")
-
-      city ->
-        # Fetch city stats for the card
-        stats = fetch_city_stats(city)
-        city_with_stats = Map.put(city, :stats, stats)
-
-        # Validate that the hash matches current city data
-        if SocialCardHelpers.validate_hash(city_with_stats, final_hash, :city) do
-          Logger.info("Hash validated for city #{slug}: #{city.name}")
-
-          # Sanitize city data before rendering
-          sanitized_city = sanitize_city(city)
-
-          # Render SVG template with sanitized city data
-          svg_content = render_city_card_svg(sanitized_city, stats)
-
-          # Generate PNG and serve response
-          case SocialCardHelpers.generate_png(svg_content, city.slug, sanitized_city) do
-            {:ok, png_data} ->
-              SocialCardHelpers.send_png_response(conn, png_data, final_hash)
-
-            {:error, error} ->
-              SocialCardHelpers.send_error_response(conn, error)
-          end
-        else
-          expected_hash = HashGenerator.generate_hash(city_with_stats, :city)
-
-          SocialCardHelpers.send_hash_mismatch_redirect(
-            conn,
-            city_with_stats,
-            slug,
-            expected_hash,
-            final_hash,
-            :city
-          )
-        end
+      nil -> {:error, :not_found, "City not found for slug: #{slug}"}
+      city -> {:ok, city}
     end
+  end
+
+  @impl true
+  def build_card_data(city) do
+    stats = fetch_city_stats(city)
+    Map.put(city, :stats, stats)
+  end
+
+  @impl true
+  def build_slug(%{"slug" => slug}, _data), do: slug
+
+  @impl true
+  def sanitize(city_with_stats) do
+    sanitize_city(city_with_stats)
+  end
+
+  @impl true
+  def render_svg(sanitized_city) do
+    # City card needs stats passed separately
+    stats = Map.get(sanitized_city, :stats, %{})
+    render_city_card_svg(sanitized_city, stats)
   end
 
   # Fetch city stats for the card
   defp fetch_city_stats(city) do
-    # Use similar logic to CityLive.Index
     lat = city.latitude && Decimal.to_float(city.latitude)
     lng = city.longitude && Decimal.to_float(city.longitude)
 

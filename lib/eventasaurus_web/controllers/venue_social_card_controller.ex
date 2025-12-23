@@ -7,105 +7,38 @@ defmodule EventasaurusWeb.VenueSocialCardController do
 
   Route: GET /social-cards/venue/:city_slug/:venue_slug/:hash/*rest
   """
-  use EventasaurusWeb, :controller
-
-  require Logger
+  use EventasaurusWeb.SocialCardController, type: :venue
 
   alias EventasaurusApp.Venues
   alias EventasaurusDiscovery.Locations
-  alias Eventasaurus.SocialCards.HashGenerator
-  alias EventasaurusWeb.Helpers.SocialCardHelpers
-  import EventasaurusWeb.SocialCardView
+  import EventasaurusWeb.SocialCardView, only: [sanitize_venue: 1, render_venue_card_svg: 1]
 
-  @doc """
-  Generates a social card PNG for a venue page with hash validation.
-  Provides cache busting through hash-based URLs.
-
-  Route: GET /social-cards/venue/:city_slug/:venue_slug/:hash/*rest
-  """
-  def generate_card(
-        conn,
-        %{
-          "city_slug" => city_slug,
-          "venue_slug" => venue_slug,
-          "hash" => hash,
-          "rest" => rest
-        }
-      ) do
-    Logger.info("Venue social card requested for #{city_slug}/#{venue_slug}, hash: #{hash}")
-
-    final_hash = SocialCardHelpers.parse_hash(hash, rest)
-
-    # Look up city first
+  @impl true
+  def lookup_entity(%{"city_slug" => city_slug, "venue_slug" => venue_slug}) do
     case Locations.get_city_by_slug(city_slug) do
       nil ->
-        Logger.warning("City not found for slug: #{city_slug}")
-        send_resp(conn, 404, "City not found")
+        {:error, :not_found, "City not found for slug: #{city_slug}"}
 
       city ->
-        # Look up venue by slug
         case Venues.get_venue_by_slug(venue_slug) do
           nil ->
-            Logger.warning("Venue not found for slug: #{venue_slug}")
-            send_resp(conn, 404, "Venue not found")
+            {:error, :not_found, "Venue not found for slug: #{venue_slug}"}
 
           venue ->
             # Verify venue belongs to the specified city
             if venue.city_id != city.id do
-              Logger.warning(
-                "Venue #{venue_slug} belongs to city_id=#{venue.city_id}, not #{city_slug} (id=#{city.id})"
-              )
-
-              send_resp(conn, 404, "Venue not found in this city")
+              {:error, :not_found,
+               "Venue #{venue_slug} belongs to city_id=#{venue.city_id}, not #{city_slug} (id=#{city.id})"}
             else
-              # Fetch complete venue data with event count
-              venue_data = fetch_venue_data(venue, city)
-
-              # Validate that the hash matches current venue data
-              if SocialCardHelpers.validate_hash(venue_data, final_hash, :venue) do
-                Logger.info("Hash validated for venue #{city_slug}/#{venue_slug}")
-
-                # Sanitize data before rendering
-                sanitized_data = sanitize_venue(venue_data)
-
-                # Render SVG template with sanitized data
-                svg_content = render_venue_card_svg(sanitized_data)
-
-                # Generate PNG and serve response
-                slug = "#{city_slug}_#{venue_slug}"
-
-                case SocialCardHelpers.generate_png(svg_content, slug, sanitized_data) do
-                  {:ok, png_data} ->
-                    SocialCardHelpers.send_png_response(conn, png_data, final_hash)
-
-                  {:error, error} ->
-                    SocialCardHelpers.send_error_response(conn, error)
-                end
-              else
-                expected_hash = HashGenerator.generate_hash(venue_data, :venue)
-
-                Logger.warning(
-                  "Hash mismatch for venue #{city_slug}/#{venue_slug}. Expected: #{expected_hash}, Got: #{final_hash}"
-                )
-
-                # Build redirect URL
-                current_url = HashGenerator.generate_url_path(venue_data, :venue)
-
-                conn
-                |> put_resp_header("location", current_url)
-                |> send_resp(301, "Social card URL has been updated")
-              end
+              {:ok, {venue, city}}
             end
         end
     end
   end
 
-  # Fetch complete venue data needed for the social card
-  defp fetch_venue_data(venue, city) do
-    # Get event count for this venue
+  @impl true
+  def build_card_data({venue, city}) do
     event_count = Venues.count_upcoming_events(venue.id)
-
-    # Get cover image from venue_images if available
     cover_image = get_venue_cover_image(venue)
 
     %{
@@ -122,10 +55,20 @@ defmodule EventasaurusWeb.VenueSocialCardController do
     }
   end
 
+  @impl true
+  def build_slug(%{"city_slug" => city_slug, "venue_slug" => venue_slug}, _data) do
+    "#{city_slug}_#{venue_slug}"
+  end
+
+  @impl true
+  def sanitize(data), do: sanitize_venue(data)
+
+  @impl true
+  def render_svg(data), do: render_venue_card_svg(data)
+
   # Get cover image from venue's venue_images array
   defp get_venue_cover_image(%{venue_images: images})
        when is_list(images) and length(images) > 0 do
-    # Find first image with a valid URL
     images
     |> Enum.find_value(fn image ->
       case image do
