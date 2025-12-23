@@ -56,8 +56,8 @@ defmodule EventasaurusDiscovery.Sources.WeekPl.Transformer do
       occurrence_type: :explicit,
       starts_at: start_datetime,
       ends_at: end_datetime,
-      # Food & Drink category
-      category_id: 10,
+      # Food & Drink category (id 14)
+      category_id: 14,
       venue_attributes: %{
         name: restaurant["name"],
         latitude: get_coordinate(restaurant, "lat"),

@@ -43,6 +43,14 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - First occurrence date
   - Activity updated_at timestamp
 
+  For source aggregations, the hash includes:
+  - City slug
+  - Content type
+  - Identifier (source slug)
+  - Total event count
+  - Location count (venues or events based on scope)
+  - Hero image URL
+
   Returns a short hash suitable for URLs.
 
   ## Examples
@@ -63,8 +71,12 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(activity, :activity)
       "d4e5f6a7"
 
+      iex> aggregation = %{city: %{slug: "krakow"}, content_type: "SocialEvent", identifier: "pubquiz-pl", total_event_count: 15, location_count: 8}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(aggregation, :source_aggregation)
+      "e5f6a7b8"
+
   """
-  @spec generate_hash(map(), :event | :poll | :city | :activity) :: String.t()
+  @spec generate_hash(map(), :event | :poll | :city | :activity | :source_aggregation) :: String.t()
   def generate_hash(data, type \\ :event) when is_map(data) do
     data
     |> build_fingerprint(type)
@@ -100,8 +112,12 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(activity, :activity)
       "/social-cards/activity/my-activity/d4e5f6a7.png"
 
+      iex> aggregation = %{city: %{slug: "krakow"}, content_type: "SocialEvent", identifier: "pubquiz-pl"}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(aggregation, :source_aggregation)
+      "/social-cards/source/krakow/social/pubquiz-pl/e5f6a7b8.png"
+
   """
-  @spec generate_url_path(map(), :event | :poll | :city | :activity) :: String.t()
+  @spec generate_url_path(map(), :event | :poll | :city | :activity | :source_aggregation) :: String.t()
   def generate_url_path(data, type \\ :event) when is_map(data) do
     hash = generate_hash(data, type)
 
@@ -159,8 +175,41 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
           end
 
         "/#{slug}/social-card-#{hash}.png"
+
+      :source_aggregation ->
+        # Extract city slug
+        city = Map.get(data, :city, %{})
+
+        city_slug =
+          case {Map.get(city, :slug), Map.get(city, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "city-#{id}"
+            _ -> "unknown-city"
+          end
+
+        # Extract content type and convert to URL slug
+        content_type = Map.get(data, :content_type, "")
+        content_type_slug = content_type_to_slug(content_type)
+
+        # Extract identifier (source slug)
+        identifier = Map.get(data, :identifier, "unknown-source")
+
+        "/social-cards/source/#{city_slug}/#{content_type_slug}/#{identifier}/#{hash}.png"
     end
   end
+
+  # Convert schema.org content type to URL slug
+  defp content_type_to_slug("SocialEvent"), do: "social"
+  defp content_type_to_slug("FoodEvent"), do: "food"
+  defp content_type_to_slug("Festival"), do: "festival"
+  defp content_type_to_slug("MusicEvent"), do: "music"
+  defp content_type_to_slug("ScreeningEvent"), do: "movies"
+  defp content_type_to_slug("ComedyEvent"), do: "comedy"
+  defp content_type_to_slug("TheaterEvent"), do: "theater"
+  defp content_type_to_slug("SportsEvent"), do: "sports"
+  defp content_type_to_slug("DanceEvent"), do: "dance"
+  defp content_type_to_slug("EducationEvent"), do: "classes"
+  defp content_type_to_slug(_), do: "happenings"
 
   @doc """
   Extracts hash from a social card URL path.
@@ -247,8 +296,13 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(activity, hash, :activity)
       true
 
+      iex> aggregation = %{city: %{slug: "krakow"}, content_type: "SocialEvent", identifier: "pubquiz-pl"}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(aggregation, :source_aggregation)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(aggregation, hash, :source_aggregation)
+      true
+
   """
-  @spec validate_hash(map(), String.t(), :event | :poll | :city | :activity) :: boolean()
+  @spec validate_hash(map(), String.t(), :event | :poll | :city | :activity | :source_aggregation) :: boolean()
   def validate_hash(data, hash, type \\ :event) when is_map(data) and is_binary(hash) do
     generate_hash(data, type) == hash
   end
@@ -379,6 +433,45 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       city_name: city_name,
       first_occurrence_date: first_occurrence_date,
       updated_at: format_timestamp(Map.get(activity, :updated_at)),
+      version: @social_card_version
+    }
+  end
+
+  defp build_fingerprint(aggregation, :source_aggregation) do
+    # Extract city info
+    city = Map.get(aggregation, :city, %{})
+
+    city_slug =
+      case {Map.get(city, :slug), Map.get(city, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "city-#{id}"
+        _ -> "unknown-city"
+      end
+
+    city_name = Map.get(city, :name, "")
+
+    # Extract source info
+    identifier = Map.get(aggregation, :identifier, "")
+    source_name = Map.get(aggregation, :source_name, "")
+    content_type = Map.get(aggregation, :content_type, "")
+
+    # Get counts for cache busting when events change
+    total_event_count = Map.get(aggregation, :total_event_count, 0)
+    location_count = Map.get(aggregation, :location_count, 0)
+
+    # Hero image affects card appearance
+    hero_image = Map.get(aggregation, :hero_image, "")
+
+    %{
+      type: :source_aggregation,
+      city_slug: city_slug,
+      city_name: city_name,
+      identifier: identifier,
+      source_name: source_name,
+      content_type: content_type,
+      total_event_count: total_event_count,
+      location_count: location_count,
+      hero_image: hero_image,
       version: @social_card_version
     }
   end

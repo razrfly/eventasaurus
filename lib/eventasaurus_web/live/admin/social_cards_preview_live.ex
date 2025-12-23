@@ -6,7 +6,11 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   alias EventasaurusApp.Themes
   alias EventasaurusWeb.SocialCardView
   alias Eventasaurus.Services.SvgConverter
-  import EventasaurusWeb.SocialCardView, only: [render_activity_card_svg: 1, render_movie_card_svg: 1]
+  import EventasaurusWeb.SocialCardView, only: [
+    render_activity_card_svg: 1,
+    render_movie_card_svg: 1,
+    render_source_aggregation_card_svg: 1
+  ]
 
   @moduledoc """
   Admin design tool for previewing social card designs across all themes.
@@ -36,6 +40,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> assign(:mock_city, generate_mock_city())
      |> assign(:mock_activity, generate_mock_activity())
      |> assign(:mock_movie, generate_mock_movie())
+     |> assign(:mock_source_aggregation, generate_mock_source_aggregation())
      |> assign(:generating_png, nil)
      |> assign(:png_data, %{})
      |> assign(:edit_mode, false)
@@ -65,6 +70,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         "city" -> :city
         "activity" -> :activity
         "movie" -> :movie
+        "source_aggregation" -> :source_aggregation
         _ -> socket.assigns.card_type
       end
 
@@ -271,6 +277,33 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> generate_previews()}
   end
 
+  # Phase 3: Update mock source aggregation data
+  @impl true
+  def handle_event("update_mock_source_aggregation", %{"aggregation" => params}, socket) do
+    mock = socket.assigns.mock_source_aggregation
+
+    updated = %{
+      mock
+      | source_name: Map.get(params, "source_name", mock.source_name),
+        identifier: Map.get(params, "identifier", mock.identifier),
+        content_type: Map.get(params, "content_type", mock.content_type),
+        total_event_count:
+          parse_int(Map.get(params, "total_event_count"), mock.total_event_count),
+        location_count: parse_int(Map.get(params, "location_count"), mock.location_count),
+        hero_image: Map.get(params, "hero_image", mock.hero_image),
+        city: %{
+          mock.city
+          | name: Map.get(params, "city_name", mock.city.name)
+        }
+    }
+
+    {:noreply,
+     socket
+     |> assign(:mock_source_aggregation, updated)
+     |> assign(:png_data, %{})
+     |> generate_previews()}
+  end
+
   # Helper to generate PNG from SVG content
   defp generate_png_from_svg(svg_content, theme_key) do
     # Check if rsvg-convert is available
@@ -388,6 +421,30 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
             svg: svg,
             colors: colors,
             display_name: "Movie Card"
+          }
+        ]
+
+        assign(socket, :previews, previews)
+
+      socket.assigns.card_type == :source_aggregation ->
+        # Generate source aggregation card preview
+        aggregation = socket.assigns.mock_source_aggregation
+        svg = render_source_aggregation_card_svg(aggregation)
+
+        # Source aggregation cards use Wombie teal theme
+        colors = %{
+          "colors" => %{
+            "primary" => "#0d9488",
+            "secondary" => "#14b8a6"
+          }
+        }
+
+        previews = [
+          %{
+            theme: :source_aggregation,
+            svg: svg,
+            colors: colors,
+            display_name: "Source Aggregation Card"
           }
         ]
 
@@ -524,6 +581,28 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         vote_count: 10423,
         genres: ["Comedy", "Family"]
       },
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Generate mock source aggregation data for preview
+  defp generate_mock_source_aggregation do
+    %{
+      city: %{
+        id: 1,
+        name: "Kraków",
+        slug: "krakow",
+        country: %{
+          name: "Poland",
+          code: "PL"
+        }
+      },
+      content_type: "SocialEvent",
+      identifier: "pubquiz-pl",
+      source_name: "PubQuiz Poland",
+      total_event_count: 42,
+      location_count: 15,
+      hero_image: "/images/events/abstract/abstract1.png",
       updated_at: DateTime.utc_now()
     }
   end

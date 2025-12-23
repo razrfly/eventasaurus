@@ -12,7 +12,7 @@
     <div class="flex-1 min-w-[200px]">
       <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">
         Theme Filter
-        <%= if @card_type in [:city, :activity, :movie] do %>
+        <%= if @card_type in [:city, :activity, :movie, :source_aggregation] do %>
           <span class="text-xs text-gray-500">(Uses fixed theme)</span>
         <% end %>
       </label>
@@ -21,7 +21,7 @@
           id="theme-select"
           name="theme"
           class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          disabled={@card_type in [:city, :activity, :movie]}
+          disabled={@card_type in [:city, :activity, :movie, :source_aggregation]}
         >
           <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
           <%= for theme <- @themes do %>
@@ -48,6 +48,7 @@
           <option value="city" selected={@card_type == :city}>City Cards</option>
           <option value="activity" selected={@card_type == :activity}>Activity Cards</option>
           <option value="movie" selected={@card_type == :movie}>Movie Cards</option>
+          <option value="source_aggregation" selected={@card_type == :source_aggregation}>Source Aggregation Cards</option>
         </select>
       </form>
     </div>
@@ -148,6 +149,96 @@
                 <p class="font-mono"><strong>Rating:</strong> <%= if @mock_movie.metadata[:vote_average], do: "★ #{@mock_movie.metadata[:vote_average]}", else: "N/A" %></p>
                 <p class="text-xs text-blue-600 mt-1">
                   Movie cards use a cinema purple/violet theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
+          <% @card_type == :source_aggregation -> %>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_source_aggregation" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Source Name</label>
+                    <input
+                      type="text"
+                      name="aggregation[source_name]"
+                      value={@mock_source_aggregation.source_name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">City Name</label>
+                    <input
+                      type="text"
+                      name="aggregation[city_name]"
+                      value={@mock_source_aggregation.city.name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Identifier (slug)</label>
+                    <input
+                      type="text"
+                      name="aggregation[identifier]"
+                      value={@mock_source_aggregation.identifier}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Event Count</label>
+                    <input
+                      type="number"
+                      name="aggregation[total_event_count]"
+                      value={@mock_source_aggregation.total_event_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Locations</label>
+                    <input
+                      type="number"
+                      name="aggregation[location_count]"
+                      value={@mock_source_aggregation.location_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Content Type</label>
+                  <select
+                    name="aggregation[content_type]"
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="SocialEvent" selected={@mock_source_aggregation.content_type == "SocialEvent"}>Social Event</option>
+                    <option value="FoodEvent" selected={@mock_source_aggregation.content_type == "FoodEvent"}>Food Event</option>
+                    <option value="Festival" selected={@mock_source_aggregation.content_type == "Festival"}>Festival</option>
+                    <option value="MusicEvent" selected={@mock_source_aggregation.content_type == "MusicEvent"}>Music Event</option>
+                    <option value="TheaterEvent" selected={@mock_source_aggregation.content_type == "TheaterEvent"}>Theater Event</option>
+                    <option value="ComedyEvent" selected={@mock_source_aggregation.content_type == "ComedyEvent"}>Comedy Event</option>
+                    <option value="ScreeningEvent" selected={@mock_source_aggregation.content_type == "ScreeningEvent"}>Screening Event</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Hero Image URL</label>
+                  <input
+                    type="text"
+                    name="aggregation[hero_image]"
+                    value={@mock_source_aggregation.hero_image}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Source:</strong> <%= @mock_source_aggregation.source_name %></p>
+                <p class="font-mono"><strong>City:</strong> <%= @mock_source_aggregation.city.name %></p>
+                <p class="font-mono"><strong>Events:</strong> <%= @mock_source_aggregation.total_event_count %> events at <%= @mock_source_aggregation.location_count %> locations</p>
+                <p class="font-mono"><strong>Type:</strong> <%= @mock_source_aggregation.content_type %></p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Source aggregation cards use Wombie teal theme. Click "Edit Data" to customize.
                 </p>
               </div>
             <% end %>
