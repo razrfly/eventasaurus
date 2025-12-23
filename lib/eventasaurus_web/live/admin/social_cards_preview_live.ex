@@ -205,7 +205,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       id: 1,
       title: "Jazz Night at Blue Note",
       slug: "jazz-night-blue-note",
-      cover_image_url: "/images/events/music/jazz1.png",
+      cover_image_url: "/images/events/abstract/abstract3.png",
       venue: %{
         name: "Blue Note Jazz Club",
         city_ref: %{
