@@ -11,10 +11,14 @@ defmodule EventasaurusWeb.PerformerLive.Show do
   """
   use EventasaurusWeb, :live_view
 
+  alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.Pagination
+  alias EventasaurusWeb.Components.OpenGraphComponent
+  alias EventasaurusWeb.Helpers.SEOHelpers
   alias EventasaurusWeb.Live.Helpers.EventFilters
   alias EventasaurusWeb.Live.Helpers.EventPagination
+  alias EventasaurusWeb.UrlHelper
 
   alias EventasaurusWeb.Components.Breadcrumbs
 
@@ -30,11 +34,22 @@ defmodule EventasaurusWeb.PerformerLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
+    # CRITICAL: Capture request URI for correct URL generation (ngrok support)
+    raw_uri = get_connect_info(socket, :uri)
+
+    request_uri =
+      cond do
+        match?(%URI{}, raw_uri) -> raw_uri
+        is_binary(raw_uri) -> URI.parse(raw_uri)
+        true -> nil
+      end
+
     socket =
       socket
       |> assign(:performer, nil)
       |> assign(:loading, true)
       |> assign(:stats, %{})
+      |> assign(:request_uri, request_uri)
       # Unified event list with filtering (all events: upcoming + past)
       |> assign(:events, [])
       |> assign(:all_events, [])
@@ -120,6 +135,23 @@ defmodule EventasaurusWeb.PerformerLive.Show do
         gettext_backend: EventasaurusWeb.Gettext
       )
 
+    # Build SEO description
+    upcoming_count = time_filter_counts.upcoming
+    description = build_performer_description(performer, upcoming_count)
+
+    # Build canonical path
+    canonical_path = "/performers/#{performer.slug}"
+
+    # Generate Open Graph tags with branded social card
+    og_tags =
+      build_performer_open_graph(
+        performer,
+        description,
+        canonical_path,
+        socket.assigns.request_uri,
+        upcoming_count
+      )
+
     socket =
       socket
       |> assign(:performer, performer)
@@ -133,8 +165,68 @@ defmodule EventasaurusWeb.PerformerLive.Show do
       |> assign(:loading, false)
       |> assign(:page_title, performer.name)
       |> assign(:breadcrumb_items, breadcrumb_items)
+      |> assign(:open_graph, og_tags)
+      |> SEOHelpers.assign_meta_tags(
+        title: performer.name,
+        description: description,
+        type: "profile",
+        canonical_path: canonical_path,
+        request_uri: socket.assigns.request_uri
+      )
 
     {:noreply, socket}
+  end
+
+  # Build SEO description for performer
+  defp build_performer_description(performer, upcoming_count) do
+    base = "#{performer.name}"
+
+    event_info =
+      case upcoming_count do
+        0 -> "No upcoming events"
+        1 -> "1 upcoming event"
+        n -> "#{n} upcoming events"
+      end
+
+    "#{base} · #{event_info} · Find tickets and showtimes on Wombie"
+  end
+
+  # Build Open Graph tags for performer page
+  defp build_performer_open_graph(performer, description, canonical_path, request_uri, event_count) do
+    # Build absolute canonical URL
+    canonical_url = UrlHelper.build_url(canonical_path, request_uri)
+
+    # Build performer data for social card hash generation
+    performer_data = %{
+      name: performer.name,
+      slug: performer.slug,
+      image_url: performer.image_url,
+      event_count: event_count,
+      updated_at: performer.updated_at
+    }
+
+    # Generate branded social card URL path
+    social_card_path = HashGenerator.generate_url_path(performer_data, :performer)
+
+    # Build absolute image URL
+    social_card_url = UrlHelper.build_url(social_card_path, request_uri)
+
+    # Generate Open Graph tags with branded social card
+    Phoenix.HTML.Safe.to_iodata(
+      OpenGraphComponent.open_graph_tags(%{
+        type: "profile",
+        title: "#{performer.name} · Wombie",
+        description: description,
+        image_url: social_card_url,
+        image_width: 800,
+        image_height: 419,
+        url: canonical_url,
+        site_name: "Wombie",
+        locale: "en_US",
+        twitter_card: "summary_large_image"
+      })
+    )
+    |> IO.iodata_to_binary()
   end
 
   # Time filter handler (sidebar stats clicks)

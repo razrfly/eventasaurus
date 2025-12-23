@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.VenueLive.Show do
   use EventasaurusWeb, :live_view
 
-  alias Eventasaurus.CDN
+  alias Eventasaurus.SocialCards.HashGenerator
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.PublicEvents
@@ -375,9 +375,9 @@ defmodule EventasaurusWeb.VenueLive.Show do
         "/venues/#{venue.slug}"
       end
 
-    # Generate Open Graph meta tags
+    # Generate Open Graph meta tags with branded social card
     og_tags =
-      build_venue_open_graph(venue, description, canonical_path, socket.assigns.request_uri)
+      build_venue_open_graph(venue, description, canonical_path, socket.assigns.request_uri, all_events_count)
 
     socket =
       socket
@@ -527,32 +527,47 @@ defmodule EventasaurusWeb.VenueLive.Show do
     "#{base_url}#{path}"
   end
 
-  # Build Open Graph meta tags for venue pages
-  defp build_venue_open_graph(venue, description, canonical_path, request_uri) do
+  # Build Open Graph meta tags for venue pages with branded social card
+  defp build_venue_open_graph(venue, description, canonical_path, request_uri, event_count) do
     # Build absolute canonical URL using UrlHelper to avoid double slash issues
     canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
-    # Use venue cover image if available, otherwise placeholder
-    # Venue.get_cover_image/2 handles the smart fallback chain (venue images -> city gallery)
-    cdn_image_url =
-      case Venue.get_cover_image(venue, width: 1200, height: 630, quality: 85) do
-        {:ok, url, _source} ->
-          url
-
-        {:error, :no_image} ->
-          venue_name_encoded = URI.encode(venue.name)
-          CDN.url("https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{venue_name_encoded}")
+    # Get cover image for the social card data
+    cover_image_url =
+      case Venue.get_cover_image(venue, width: 800, height: 419, quality: 85) do
+        {:ok, url, _source} -> url
+        {:error, :no_image} -> nil
       end
 
-    # Generate Open Graph tags
+    # Build venue data for social card hash generation
+    venue_data = %{
+      name: venue.name,
+      slug: venue.slug,
+      city_ref: %{
+        name: if(venue.city_ref, do: venue.city_ref.name, else: ""),
+        slug: if(venue.city_ref, do: venue.city_ref.slug, else: "")
+      },
+      address: venue.address,
+      event_count: event_count,
+      cover_image_url: cover_image_url,
+      updated_at: venue.updated_at
+    }
+
+    # Generate branded social card URL path
+    social_card_path = HashGenerator.generate_url_path(venue_data, :venue)
+
+    # Build absolute image URL
+    social_card_url = UrlHelper.build_url(social_card_path, request_uri)
+
+    # Generate Open Graph tags with branded social card
     Phoenix.HTML.Safe.to_iodata(
       OpenGraphComponent.open_graph_tags(%{
         type: "place",
         title: "#{venue.name} · Wombie",
         description: description,
-        image_url: cdn_image_url,
-        image_width: 1200,
-        image_height: 630,
+        image_url: social_card_url,
+        image_width: 800,
+        image_height: 419,
         url: canonical_url,
         site_name: "Wombie",
         locale: "en_US",

@@ -54,6 +54,33 @@ defmodule EventasaurusApp.Venues do
   end
 
   @doc """
+  Gets a single venue by slug.
+
+  Returns nil if the Venue does not exist.
+  """
+  def get_venue_by_slug(slug) when is_binary(slug) do
+    Repo.get_by(Venue, slug: slug)
+  end
+
+  def get_venue_by_slug(_), do: nil
+
+  @doc """
+  Counts upcoming events for a venue.
+
+  Returns the number of public events at this venue that start in the future.
+  """
+  def count_upcoming_events(venue_id) when is_integer(venue_id) do
+    from(pe in EventasaurusDiscovery.PublicEvents.PublicEvent,
+      where: pe.venue_id == ^venue_id,
+      where: pe.starts_at > ^DateTime.utc_now(),
+      select: count(pe.id)
+    )
+    |> Repo.one() || 0
+  end
+
+  def count_upcoming_events(_), do: 0
+
+  @doc """
   Lists related venues in the same city.
 
   Returns up to 6 venues from the same city, excluding the current venue.

@@ -12,7 +12,7 @@
     <div class="flex-1 min-w-[200px]">
       <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">
         Theme Filter
-        <%= if @card_type in [:city, :activity, :movie, :source_aggregation] do %>
+        <%= if @card_type in [:city, :activity, :movie, :source_aggregation, :venue, :performer] do %>
           <span class="text-xs text-gray-500">(Uses fixed theme)</span>
         <% end %>
       </label>
@@ -21,7 +21,7 @@
           id="theme-select"
           name="theme"
           class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          disabled={@card_type in [:city, :activity, :movie, :source_aggregation]}
+          disabled={@card_type in [:city, :activity, :movie, :source_aggregation, :venue, :performer]}
         >
           <option value="all" selected={@selected_theme == :all}>All Themes (7)</option>
           <%= for theme <- @themes do %>
@@ -49,6 +49,8 @@
           <option value="activity" selected={@card_type == :activity}>Activity Cards</option>
           <option value="movie" selected={@card_type == :movie}>Movie Cards</option>
           <option value="source_aggregation" selected={@card_type == :source_aggregation}>Source Aggregation Cards</option>
+          <option value="venue" selected={@card_type == :venue}>Venue Cards</option>
+          <option value="performer" selected={@card_type == :performer}>Performer Cards</option>
         </select>
       </form>
     </div>
@@ -149,6 +151,114 @@
                 <p class="font-mono"><strong>Rating:</strong> <%= if @mock_movie.metadata[:vote_average], do: "★ #{@mock_movie.metadata[:vote_average]}", else: "N/A" %></p>
                 <p class="text-xs text-blue-600 mt-1">
                   Movie cards use a cinema purple/violet theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
+          <% @card_type == :venue -> %>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_venue" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Venue Name</label>
+                    <input
+                      type="text"
+                      name="venue[name]"
+                      value={@mock_venue.name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">City Name</label>
+                    <input
+                      type="text"
+                      name="venue[city_name]"
+                      value={@mock_venue.city_ref.name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Address</label>
+                  <input
+                    type="text"
+                    name="venue[address]"
+                    value={@mock_venue.address}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Upcoming Events</label>
+                    <input
+                      type="number"
+                      name="venue[event_count]"
+                      value={@mock_venue.event_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Cover Image URL</label>
+                    <input
+                      type="text"
+                      name="venue[cover_image_url]"
+                      value={@mock_venue.cover_image_url}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Venue:</strong> <%= @mock_venue.name %></p>
+                <p class="font-mono"><strong>City:</strong> <%= @mock_venue.city_ref.name %></p>
+                <p class="font-mono"><strong>Address:</strong> <%= @mock_venue.address %></p>
+                <p class="font-mono"><strong>Events:</strong> <%= @mock_venue.event_count %> upcoming</p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Venue cards use Wombie emerald/green theme. Click "Edit Data" to customize.
+                </p>
+              </div>
+            <% end %>
+          <% @card_type == :performer -> %>
+            <%= if @edit_mode do %>
+              <form phx-change="update_mock_performer" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Performer Name</label>
+                    <input
+                      type="text"
+                      name="performer[name]"
+                      value={@mock_performer.name}
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-blue-700">Upcoming Events</label>
+                    <input
+                      type="number"
+                      name="performer[event_count]"
+                      value={@mock_performer.event_count}
+                      min="0"
+                      class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-blue-700">Image URL</label>
+                  <input
+                    type="text"
+                    name="performer[image_url]"
+                    value={@mock_performer.image_url}
+                    class="mt-1 block w-full px-2 py-1 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </form>
+            <% else %>
+              <div class="mt-2 text-sm text-blue-700">
+                <p class="font-mono"><strong>Performer:</strong> <%= @mock_performer.name %></p>
+                <p class="font-mono"><strong>Events:</strong> <%= @mock_performer.event_count %> upcoming</p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Performer cards use Wombie rose/pink theme. Click "Edit Data" to customize.
                 </p>
               </div>
             <% end %>

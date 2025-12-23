@@ -682,6 +682,18 @@ defmodule EventasaurusWeb.Router do
         :generate_card,
         as: :source_aggregation_social_card_cached
 
+    # Venue social card generation (matches /c/:city_slug/venues/:venue_slug)
+    get "/social-cards/venue/:city_slug/:venue_slug/:hash/*rest",
+        VenueSocialCardController,
+        :generate_card,
+        as: :venue_social_card_cached
+
+    # Performer social card generation (matches /performers/:slug)
+    get "/social-cards/performer/:slug/:hash/*rest",
+        PerformerSocialCardController,
+        :generate_card,
+        as: :performer_social_card_cached
+
     # Event social card generation (matches public event route at /:slug)
     get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug,
       as: :social_card_cached
