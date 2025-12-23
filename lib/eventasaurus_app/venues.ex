@@ -46,6 +46,7 @@ defmodule EventasaurusApp.Venues do
       list_public_venues(city_id: 123)
       list_public_venues(city_id: 123, limit: 50)
   """
+  @spec list_public_venues(keyword()) :: [Venue.t()]
   def list_public_venues(opts \\ []) do
     city_id = Keyword.get(opts, :city_id)
     limit = Keyword.get(opts, :limit)

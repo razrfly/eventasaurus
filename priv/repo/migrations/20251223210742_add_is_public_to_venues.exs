@@ -22,10 +22,13 @@ defmodule EventasaurusApp.Repo.Migrations.AddIsPublicToVenues do
     # Composite index for common query pattern: public venues in a city
     create index(:venues, [:city_id, :is_public])
 
-    # Backfill: Set is_public=true for all scraper-created venues
+    # Backfill: Set is_public=true for all non-user venues
+    # Venues created by scrapers have source set to geocoding provider names
+    # (mapbox, google, geoapify, here, locationiq, openstreetmap, photon, provided, scraper)
+    # Only user-created venues should remain private (is_public=false)
     execute(
-      "UPDATE venues SET is_public = true WHERE source = 'scraper'",
-      "UPDATE venues SET is_public = false WHERE source = 'scraper'"
+      "UPDATE venues SET is_public = true WHERE source != 'user' OR source IS NULL",
+      "UPDATE venues SET is_public = false WHERE source != 'user' OR source IS NULL"
     )
   end
 end
