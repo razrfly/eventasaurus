@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   alias EventasaurusWeb.Components.Activity.AggregatedHeroCard
   alias EventasaurusWeb.JsonLd.ItemListSchema
   alias Eventasaurus.SocialCards.HashGenerator
+  alias EventasaurusWeb.UrlHelper
 
   # Multi-city route: /social/:identifier, /movies/:identifier, etc.
   # Content type is extracted from the URL path (first segment)
@@ -21,6 +22,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   @impl true
   def mount(%{"identifier" => identifier} = params, _session, socket)
       when not is_map_key(params, "city_slug") do
+    # Capture request URI for building absolute URLs (ngrok support)
+    request_uri = extract_request_uri(socket)
+
     # Multi-city route - city will come from query params
     # Use a default city temporarily (will be updated in handle_params)
     # Fallback chain: krakow -> first discovery-enabled city -> error
@@ -45,7 +49,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
          |> assign(:scope, :all_cities)
          |> assign(:page_title, nil)
          |> assign(:source_name, get_source_name(identifier))
-         |> assign(:is_multi_city_route, true)}
+         |> assign(:is_multi_city_route, true)
+         |> assign(:request_uri, request_uri)}
     end
   end
 
@@ -56,6 +61,9 @@ defmodule EventasaurusWeb.AggregatedContentLive do
         _session,
         socket
       ) do
+    # Capture request URI for building absolute URLs (ngrok support)
+    request_uri = extract_request_uri(socket)
+
     # Convert URL slug to schema.org type for internal use
     schema_type = AggregationTypeSlug.from_slug(content_type)
 
@@ -77,7 +85,8 @@ defmodule EventasaurusWeb.AggregatedContentLive do
          |> assign(:scope, :city_only)
          |> assign(:page_title, format_page_title(schema_type, identifier, city))
          |> assign(:source_name, get_source_name(identifier))
-         |> assign(:is_multi_city_route, false)}
+         |> assign(:is_multi_city_route, false)
+         |> assign(:request_uri, request_uri)}
     end
   end
 
@@ -319,7 +328,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       }
 
       # Generate Open Graph meta tags with branded social card URL
-      og_tags = build_aggregation_open_graph(aggregation_data)
+      og_tags = build_aggregation_open_graph(aggregation_data, socket.assigns.request_uri)
 
       socket
       |> assign(:scope, scope)
@@ -444,7 +453,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50">
+    <div class="min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <!-- Breadcrumbs (outside hero card, like activity pages) -->
         <nav class="mb-4">
@@ -690,7 +699,7 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   end
 
   # Build Open Graph meta tags for aggregation pages
-  defp build_aggregation_open_graph(aggregation_data) do
+  defp build_aggregation_open_graph(aggregation_data, request_uri) do
     %{
       content_type: content_type,
       identifier: identifier,
@@ -698,8 +707,6 @@ defmodule EventasaurusWeb.AggregatedContentLive do
       total_event_count: total_event_count,
       source_name: source_name
     } = aggregation_data
-
-    base_url = EventasaurusWeb.Layouts.get_base_url()
 
     # Convert schema type to friendly name
     type_name = schema_type_to_friendly_name(content_type)
@@ -710,13 +717,14 @@ defmodule EventasaurusWeb.AggregatedContentLive do
     description =
       "Discover #{source_name} #{type_name} in #{city.name}. #{total_event_count} #{pluralize("event", total_event_count)} available."
 
-    # Generate branded social card URL using HashGenerator
+    # Generate branded social card URL using HashGenerator with request_uri for ngrok support
     social_card_path = HashGenerator.generate_url_path(aggregation_data, :source_aggregation)
-    image_url = "#{base_url}#{social_card_path}"
+    image_url = UrlHelper.build_url(social_card_path, request_uri)
 
-    # Build canonical URL
+    # Build canonical URL with request_uri for ngrok support
     content_type_slug = EventasaurusDiscovery.AggregationTypeSlug.to_slug(content_type)
-    canonical_url = "#{base_url}/c/#{city.slug}/#{content_type_slug}/#{identifier}"
+    canonical_path = "/c/#{city.slug}/#{content_type_slug}/#{identifier}"
+    canonical_url = UrlHelper.build_url(canonical_path, request_uri)
 
     # Generate Open Graph tags
     # Social card is 800x419 (1.91:1 ratio), same as other branded cards
@@ -757,4 +765,15 @@ defmodule EventasaurusWeb.AggregatedContentLive do
   # Helper for pluralization
   defp pluralize(word, 1), do: word
   defp pluralize(word, _), do: word <> "s"
+
+  # Extract request URI from socket for building absolute URLs (ngrok support)
+  defp extract_request_uri(socket) do
+    raw_uri = get_connect_info(socket, :uri)
+
+    cond do
+      match?(%URI{}, raw_uri) -> raw_uri
+      is_binary(raw_uri) -> URI.parse(raw_uri)
+      true -> nil
+    end
+  end
 end

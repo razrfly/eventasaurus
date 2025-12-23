@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.VenueSocialCardController do
   """
   use EventasaurusWeb.SocialCardController, type: :venue
 
+  alias EventasaurusApp.Repo
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations
@@ -39,6 +40,9 @@ defmodule EventasaurusWeb.VenueSocialCardController do
 
   @impl true
   def build_card_data({venue, city}) do
+    # Preload city_ref for the fallback image chain (venue images → city gallery → general)
+    venue = Repo.preload(venue, :city_ref)
+
     event_count = Venues.count_upcoming_events(venue.id)
     cover_image = get_venue_cover_image(venue)
 
