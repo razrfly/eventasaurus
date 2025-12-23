@@ -1543,9 +1543,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
     # Sort non-aggregated items by date
     sorted_non_aggregated =
-      Enum.sort_by(non_aggregated, fn item ->
-        get_item_start_date(item)
-      end, {if(order == :desc, do: :desc, else: :asc), DateTime})
+      Enum.sort_by(
+        non_aggregated,
+        fn item ->
+          get_item_start_date(item)
+        end,
+        {if(order == :desc, do: :desc, else: :asc), DateTime}
+      )
 
     # Aggregated items go at the end (they have multiple dates, so date sorting is ambiguous)
     if order == :desc do
@@ -1556,15 +1560,23 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   end
 
   defp sort_aggregated_results(items, :title, order) do
-    Enum.sort_by(items, fn item ->
-      get_item_title(item) |> String.downcase()
-    end, if(order == :desc, do: :desc, else: :asc))
+    Enum.sort_by(
+      items,
+      fn item ->
+        get_item_title(item) |> String.downcase()
+      end,
+      if(order == :desc, do: :desc, else: :asc)
+    )
   end
 
   defp sort_aggregated_results(items, :popularity, order) do
-    Enum.sort_by(items, fn item ->
-      get_item_popularity(item)
-    end, if(order == :desc, do: :desc, else: :asc))
+    Enum.sort_by(
+      items,
+      fn item ->
+        get_item_popularity(item)
+      end,
+      if(order == :desc, do: :desc, else: :asc)
+    )
   end
 
   defp sort_aggregated_results(items, _field, _order), do: items
@@ -1576,23 +1588,39 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp get_item_title(%AggregatedEventGroup{source_name: name}) when is_binary(name), do: name
   defp get_item_title(%AggregatedMovieGroup{movie_title: title}) when is_binary(title), do: title
-  defp get_item_title(%AggregatedContainerGroup{container_title: title}) when is_binary(title), do: title
+
+  defp get_item_title(%AggregatedContainerGroup{container_title: title}) when is_binary(title),
+    do: title
+
   defp get_item_title(_), do: ""
 
   # Helper to get start date from various item types
-  defp get_item_start_date(%PublicEvent{starts_at: starts_at}), do: starts_at || DateTime.utc_now()
+  defp get_item_start_date(%PublicEvent{starts_at: starts_at}),
+    do: starts_at || DateTime.utc_now()
+
   # Aggregated groups don't have a single start date - they represent multiple events
   # Return a far-future date so they sort to end when sorting by date ascending
   defp get_item_start_date(%AggregatedEventGroup{}), do: ~U[2099-12-31 23:59:59Z]
   defp get_item_start_date(%AggregatedMovieGroup{}), do: ~U[2099-12-31 23:59:59Z]
-  defp get_item_start_date(%AggregatedContainerGroup{start_date: date}) when not is_nil(date), do: date
+
+  defp get_item_start_date(%AggregatedContainerGroup{start_date: date}) when not is_nil(date),
+    do: date
+
   defp get_item_start_date(_), do: DateTime.utc_now()
 
   # Helper to get popularity from various item types
-  defp get_item_popularity(%PublicEvent{posthog_view_count: count}) when is_integer(count), do: count
-  defp get_item_popularity(%AggregatedEventGroup{event_count: count}) when is_integer(count), do: count
-  defp get_item_popularity(%AggregatedMovieGroup{screening_count: count}) when is_integer(count), do: count
-  defp get_item_popularity(%AggregatedContainerGroup{event_count: count}) when is_integer(count), do: count
+  defp get_item_popularity(%PublicEvent{posthog_view_count: count}) when is_integer(count),
+    do: count
+
+  defp get_item_popularity(%AggregatedEventGroup{event_count: count}) when is_integer(count),
+    do: count
+
+  defp get_item_popularity(%AggregatedMovieGroup{screening_count: count}) when is_integer(count),
+    do: count
+
+  defp get_item_popularity(%AggregatedContainerGroup{event_count: count}) when is_integer(count),
+    do: count
+
   defp get_item_popularity(_), do: 0
 
   # Paginate aggregated results (in-memory pagination)

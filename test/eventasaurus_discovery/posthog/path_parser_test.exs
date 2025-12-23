@@ -5,7 +5,9 @@ defmodule EventasaurusDiscovery.PostHog.PathParserTest do
 
   describe "parse/1" do
     test "parses activity/event pages /activities/{slug}" do
-      assert {:event, "jazz-concert-krakow"} == PathParser.parse("/activities/jazz-concert-krakow")
+      assert {:event, "jazz-concert-krakow"} ==
+               PathParser.parse("/activities/jazz-concert-krakow")
+
       assert {:event, "my-event"} == PathParser.parse("/activities/my-event")
     end
 
@@ -16,7 +18,9 @@ defmodule EventasaurusDiscovery.PostHog.PathParserTest do
 
     test "parses city-scoped movie pages /c/{city}/movies/{slug}" do
       assert {:movie, "avatar-2"} == PathParser.parse("/c/krakow/movies/avatar-2")
-      assert {:movie, "nuremberg-1214931"} == PathParser.parse("/c/krakow/movies/nuremberg-1214931")
+
+      assert {:movie, "nuremberg-1214931"} ==
+               PathParser.parse("/c/krakow/movies/nuremberg-1214931")
     end
 
     test "parses direct venue pages /venues/{slug}" do

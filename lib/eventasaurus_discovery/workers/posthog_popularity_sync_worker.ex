@@ -130,11 +130,12 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
       stats = sync_entity_type(view_counts, :event, PublicEvent, dry_run, now)
 
-      {:ok, %{
-        events_updated: stats.updated,
-        total_views: stats.total_views,
-        dry_run: dry_run
-      }}
+      {:ok,
+       %{
+         events_updated: stats.updated,
+         total_views: stats.total_views,
+         dry_run: dry_run
+       }}
     end
   end
 
@@ -181,7 +182,10 @@ defmodule EventasaurusDiscovery.Workers.PostHogPopularitySyncWorker do
           count + updated_count
 
         {:error, reason} ->
-          Logger.warning("Failed to update view count for #{inspect(schema)} slug '#{slug}': #{inspect(reason)}")
+          Logger.warning(
+            "Failed to update view count for #{inspect(schema)} slug '#{slug}': #{inspect(reason)}"
+          )
+
           count
       end
     end)

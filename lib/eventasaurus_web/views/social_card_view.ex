@@ -1687,9 +1687,12 @@ defmodule EventasaurusWeb.SocialCardView do
 
     # Prepare movie entity with cover_image_url for standard image section
     # Prefer backdrop for social cards (wider format), fallback to poster
-    movie_with_cover = Map.put(movie, :cover_image_url,
-      Map.get(movie, :backdrop_url) || Map.get(movie, :poster_url)
-    )
+    movie_with_cover =
+      Map.put(
+        movie,
+        :cover_image_url,
+        Map.get(movie, :backdrop_url) || Map.get(movie, :poster_url)
+      )
 
     """
     #{render_image_section(movie_with_cover, theme_suffix)}
@@ -1861,7 +1864,8 @@ defmodule EventasaurusWeb.SocialCardView do
     }
 
     # Build source aggregation content
-    aggregation_content = render_source_aggregation_content(aggregation, theme_suffix, theme_colors)
+    aggregation_content =
+      render_source_aggregation_content(aggregation, theme_suffix, theme_colors)
 
     # Use the base function to create complete SVG
     render_social_card_base(theme_suffix, theme_colors, aggregation_content)

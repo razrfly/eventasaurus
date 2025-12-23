@@ -6,13 +6,15 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   alias EventasaurusApp.Themes
   alias EventasaurusWeb.SocialCardView
   alias Eventasaurus.Services.SvgConverter
-  import EventasaurusWeb.SocialCardView, only: [
-    render_activity_card_svg: 1,
-    render_movie_card_svg: 1,
-    render_performer_card_svg: 1,
-    render_source_aggregation_card_svg: 1,
-    render_venue_card_svg: 1
-  ]
+
+  import EventasaurusWeb.SocialCardView,
+    only: [
+      render_activity_card_svg: 1,
+      render_movie_card_svg: 1,
+      render_performer_card_svg: 1,
+      render_source_aggregation_card_svg: 1,
+      render_venue_card_svg: 1
+    ]
 
   @moduledoc """
   Admin design tool for previewing social card designs across all themes.
@@ -184,7 +186,10 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
             venues_count:
               parse_int(Map.get(city_params, "venues_count"), mock_city.stats.venues_count),
             categories_count:
-              parse_int(Map.get(city_params, "categories_count"), mock_city.stats.categories_count)
+              parse_int(
+                Map.get(city_params, "categories_count"),
+                mock_city.stats.categories_count
+              )
         }
     }
 
@@ -230,43 +235,64 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
     # Parse runtime as integer
     runtime =
       case Map.get(movie_params, "runtime") do
-        nil -> mock_movie.runtime
-        "" -> mock_movie.runtime
+        nil ->
+          mock_movie.runtime
+
+        "" ->
+          mock_movie.runtime
+
         val when is_binary(val) ->
           case Integer.parse(val) do
             {int, _} -> int
             :error -> mock_movie.runtime
           end
-        val when is_integer(val) -> val
-        _ -> mock_movie.runtime
+
+        val when is_integer(val) ->
+          val
+
+        _ ->
+          mock_movie.runtime
       end
 
     # Parse year and create release_date
     release_date =
       case Map.get(movie_params, "year") do
-        nil -> mock_movie.release_date
-        "" -> mock_movie.release_date
+        nil ->
+          mock_movie.release_date
+
+        "" ->
+          mock_movie.release_date
+
         val when is_binary(val) ->
           case Integer.parse(val) do
             {year, _} when year >= 1800 and year <= 2200 ->
               Date.new!(year, 1, 1)
+
             _ ->
               mock_movie.release_date
           end
-        _ -> mock_movie.release_date
+
+        _ ->
+          mock_movie.release_date
       end
 
     # Parse rating
     rating =
       case Map.get(movie_params, "rating") do
-        nil -> get_in(mock_movie.metadata, [:vote_average]) || 0.0
-        "" -> get_in(mock_movie.metadata, [:vote_average]) || 0.0
+        nil ->
+          get_in(mock_movie.metadata, [:vote_average]) || 0.0
+
+        "" ->
+          get_in(mock_movie.metadata, [:vote_average]) || 0.0
+
         val when is_binary(val) ->
           case Float.parse(val) do
             {float, _} -> float
             :error -> get_in(mock_movie.metadata, [:vote_average]) || 0.0
           end
-        _ -> get_in(mock_movie.metadata, [:vote_average]) || 0.0
+
+        _ ->
+          get_in(mock_movie.metadata, [:vote_average]) || 0.0
       end
 
     updated_movie = %{
@@ -317,7 +343,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
     updated_performer = %{
       mock_performer
       | name: Map.get(performer_params, "name", mock_performer.name),
-        event_count: parse_int(Map.get(performer_params, "event_count"), mock_performer.event_count),
+        event_count:
+          parse_int(Map.get(performer_params, "event_count"), mock_performer.event_count),
         image_url: Map.get(performer_params, "image_url", mock_performer.image_url)
     }
 
@@ -550,44 +577,44 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         assign(socket, :previews, previews)
 
       true ->
-      # Event and poll cards use themes
-      themes =
-        if socket.assigns.selected_theme == :all do
-          socket.assigns.themes
-        else
-          [socket.assigns.selected_theme]
-        end
+        # Event and poll cards use themes
+        themes =
+          if socket.assigns.selected_theme == :all do
+            socket.assigns.themes
+          else
+            [socket.assigns.selected_theme]
+          end
 
-      previews =
-        Enum.map(themes, fn theme ->
-          # Create event with the specified theme
-          event = %{socket.assigns.mock_event | theme: theme}
+        previews =
+          Enum.map(themes, fn theme ->
+            # Create event with the specified theme
+            event = %{socket.assigns.mock_event | theme: theme}
 
-          # Generate SVG based on card type
-          svg =
-            case socket.assigns.card_type do
-              :poll ->
-                # Create poll with event association
-                poll = %{socket.assigns.mock_poll | event: event}
-                SocialCardView.render_poll_card_svg(poll)
+            # Generate SVG based on card type
+            svg =
+              case socket.assigns.card_type do
+                :poll ->
+                  # Create poll with event association
+                  poll = %{socket.assigns.mock_poll | event: event}
+                  SocialCardView.render_poll_card_svg(poll)
 
-              :event ->
-                SocialCardView.render_social_card_svg(event)
-            end
+                :event ->
+                  SocialCardView.render_social_card_svg(event)
+              end
 
-          # Get theme colors for display
-          colors = Themes.get_default_customizations(theme)
+            # Get theme colors for display
+            colors = Themes.get_default_customizations(theme)
 
-          %{
-            theme: theme,
-            svg: svg,
-            colors: colors,
-            # Format theme name for display
-            display_name: theme |> Atom.to_string() |> String.capitalize()
-          }
-        end)
+            %{
+              theme: theme,
+              svg: svg,
+              colors: colors,
+              # Format theme name for display
+              display_name: theme |> Atom.to_string() |> String.capitalize()
+            }
+          end)
 
-      assign(socket, :previews, previews)
+        assign(socket, :previews, previews)
     end
   end
 
@@ -669,7 +696,8 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
       title: "Home Alone",
       slug: "home-alone-771",
       original_title: "Home Alone",
-      overview: "Eight-year-old Kevin McCallister makes the most of the situation after his family unwittingly leaves him behind when they go on Christmas vacation.",
+      overview:
+        "Eight-year-old Kevin McCallister makes the most of the situation after his family unwittingly leaves him behind when they go on Christmas vacation.",
       poster_url: "/images/events/abstract/abstract2.png",
       # Use local image for preview - external URLs require network download
       backdrop_url: "/images/events/abstract/abstract2.png",

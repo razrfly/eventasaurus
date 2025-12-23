@@ -50,42 +50,51 @@ defmodule EventasaurusWeb.VenueSocialCardController do
             send_resp(conn, 404, "Venue not found")
 
           venue ->
-            # Fetch complete venue data with event count
-            venue_data = fetch_venue_data(venue, city)
-
-            # Validate that the hash matches current venue data
-            if SocialCardHelpers.validate_hash(venue_data, final_hash, :venue) do
-              Logger.info("Hash validated for venue #{city_slug}/#{venue_slug}")
-
-              # Sanitize data before rendering
-              sanitized_data = sanitize_venue(venue_data)
-
-              # Render SVG template with sanitized data
-              svg_content = render_venue_card_svg(sanitized_data)
-
-              # Generate PNG and serve response
-              slug = "#{city_slug}_#{venue_slug}"
-
-              case SocialCardHelpers.generate_png(svg_content, slug, sanitized_data) do
-                {:ok, png_data} ->
-                  SocialCardHelpers.send_png_response(conn, png_data, final_hash)
-
-                {:error, error} ->
-                  SocialCardHelpers.send_error_response(conn, error)
-              end
-            else
-              expected_hash = HashGenerator.generate_hash(venue_data, :venue)
-
+            # Verify venue belongs to the specified city
+            if venue.city_id != city.id do
               Logger.warning(
-                "Hash mismatch for venue #{city_slug}/#{venue_slug}. Expected: #{expected_hash}, Got: #{final_hash}"
+                "Venue #{venue_slug} belongs to city_id=#{venue.city_id}, not #{city_slug} (id=#{city.id})"
               )
 
-              # Build redirect URL
-              current_url = HashGenerator.generate_url_path(venue_data, :venue)
+              send_resp(conn, 404, "Venue not found in this city")
+            else
+              # Fetch complete venue data with event count
+              venue_data = fetch_venue_data(venue, city)
 
-              conn
-              |> put_resp_header("location", current_url)
-              |> send_resp(301, "Social card URL has been updated")
+              # Validate that the hash matches current venue data
+              if SocialCardHelpers.validate_hash(venue_data, final_hash, :venue) do
+                Logger.info("Hash validated for venue #{city_slug}/#{venue_slug}")
+
+                # Sanitize data before rendering
+                sanitized_data = sanitize_venue(venue_data)
+
+                # Render SVG template with sanitized data
+                svg_content = render_venue_card_svg(sanitized_data)
+
+                # Generate PNG and serve response
+                slug = "#{city_slug}_#{venue_slug}"
+
+                case SocialCardHelpers.generate_png(svg_content, slug, sanitized_data) do
+                  {:ok, png_data} ->
+                    SocialCardHelpers.send_png_response(conn, png_data, final_hash)
+
+                  {:error, error} ->
+                    SocialCardHelpers.send_error_response(conn, error)
+                end
+              else
+                expected_hash = HashGenerator.generate_hash(venue_data, :venue)
+
+                Logger.warning(
+                  "Hash mismatch for venue #{city_slug}/#{venue_slug}. Expected: #{expected_hash}, Got: #{final_hash}"
+                )
+
+                # Build redirect URL
+                current_url = HashGenerator.generate_url_path(venue_data, :venue)
+
+                conn
+                |> put_resp_header("location", current_url)
+                |> send_resp(301, "Social card URL has been updated")
+              end
             end
         end
     end
@@ -114,7 +123,8 @@ defmodule EventasaurusWeb.VenueSocialCardController do
   end
 
   # Get cover image from venue's venue_images array
-  defp get_venue_cover_image(%{venue_images: images}) when is_list(images) and length(images) > 0 do
+  defp get_venue_cover_image(%{venue_images: images})
+       when is_list(images) and length(images) > 0 do
     # Find first image with a valid URL
     images
     |> Enum.find_value(fn image ->

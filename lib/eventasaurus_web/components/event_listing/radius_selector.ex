@@ -58,14 +58,16 @@ defmodule EventasaurusWeb.Components.EventListing.RadiusSelector do
 
   def radius_selector(assigns) do
     # Use default_radius if radius_km is nil
-    assigns = assign_new(assigns, :current_radius, fn ->
-      assigns.radius_km || assigns.default_radius
-    end)
+    assigns =
+      assign_new(assigns, :current_radius, fn ->
+        assigns.radius_km || assigns.default_radius
+      end)
 
     # Default label with translation
-    assigns = assign_new(assigns, :display_label, fn ->
-      assigns.label || gettext("Search Radius")
-    end)
+    assigns =
+      assign_new(assigns, :display_label, fn ->
+        assigns.label || gettext("Search Radius")
+      end)
 
     ~H"""
     <div class={["radius-selector", @class]}>
@@ -120,9 +122,10 @@ defmodule EventasaurusWeb.Components.EventListing.RadiusSelector do
   attr :class, :string, default: nil
 
   def radius_selector_compact(assigns) do
-    assigns = assign_new(assigns, :current_radius, fn ->
-      assigns.radius_km || assigns.default_radius
-    end)
+    assigns =
+      assign_new(assigns, :current_radius, fn ->
+        assigns.radius_km || assigns.default_radius
+      end)
 
     ~H"""
     <div class={["inline-flex items-center gap-2", @class]}>
