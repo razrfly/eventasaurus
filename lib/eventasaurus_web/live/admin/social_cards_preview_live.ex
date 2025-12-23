@@ -144,8 +144,31 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
   # Delegates to the card type module's update_mock_data/2 callback
   @impl true
   def handle_event("update_mock_" <> card_type_str, params, socket) do
-    card_type = String.to_existing_atom(card_type_str)
-    config = CardTypeConfig.get(card_type)
+    # Safely map string to known card type atom to prevent crash from malicious input
+    # Uses same validation pattern as change_card_type handler
+    card_type =
+      case card_type_str do
+        "event" -> :event
+        "poll" -> :poll
+        "city" -> :city
+        "activity" -> :activity
+        "movie" -> :movie
+        "source_aggregation" -> :source_aggregation
+        "venue" -> :venue
+        "performer" -> :performer
+        _ -> nil
+      end
+
+    # Ignore unknown card types
+    if is_nil(card_type) do
+      {:noreply, socket}
+    else
+      config = CardTypeConfig.get(card_type)
+      do_update_mock_data(socket, card_type, config, params)
+    end
+  end
+
+  defp do_update_mock_data(socket, card_type, config, params) do
     form_key = CardTypeRegistry.form_param_key(card_type)
 
     case Map.get(params, form_key) do
@@ -209,8 +232,11 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
     end
   end
 
-  # Helper to get mock data for the current card type from socket assigns
-  # Used by CardTypeForm component in templates
+  @doc """
+  Gets mock data for the current card type from socket assigns.
+  Used by CardTypeForm component in templates.
+  """
+  @spec get_mock_data(map()) :: map() | nil
   def get_mock_data(assigns) do
     config = CardTypeConfig.get(assigns.card_type)
     Map.get(assigns, config.mock_data_key)
