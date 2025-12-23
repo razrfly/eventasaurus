@@ -316,12 +316,17 @@ defmodule EventasaurusWeb.SocialCards.Shared do
     try do
       resized_path = image_path <> "_resized"
 
-      {_output, exit_code} =
-        System.cmd(
-          "convert",
-          [image_path, "-resize", "400x400>", "-quality", "85", resized_path],
-          stderr_to_stdout: true
-        )
+      # Use Task.async/await for timeout protection on external command
+      task =
+        Task.async(fn ->
+          System.cmd(
+            "convert",
+            [image_path, "-resize", "400x400>", "-quality", "85", resized_path],
+            stderr_to_stdout: true
+          )
+        end)
+
+      {_output, exit_code} = Task.await(task, 30_000)
 
       if exit_code == 0 && File.exists?(resized_path) do
         resized_path
@@ -330,6 +335,8 @@ defmodule EventasaurusWeb.SocialCards.Shared do
       end
     rescue
       _ -> nil
+    catch
+      :exit, _ -> nil
     end
   end
 
