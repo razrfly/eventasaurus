@@ -34,6 +34,15 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - Stats (events_count, venues_count, categories_count)
   - City updated_at timestamp
 
+  For activities (public events), the hash includes:
+  - Activity slug (unique identifier)
+  - Activity title
+  - Cover image URL
+  - Venue name
+  - City name
+  - First occurrence date
+  - Activity updated_at timestamp
+
   Returns a short hash suitable for URLs.
 
   ## Examples
@@ -50,8 +59,12 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(city, :city)
       "b2c3d4e5"
 
+      iex> activity = %{slug: "my-activity", title: "My Activity", venue: %{name: "Venue"}, updated_at: ~N[2023-01-01 12:00:00]}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_hash(activity, :activity)
+      "d4e5f6a7"
+
   """
-  @spec generate_hash(map(), :event | :poll | :city) :: String.t()
+  @spec generate_hash(map(), :event | :poll | :city | :activity) :: String.t()
   def generate_hash(data, type \\ :event) when is_map(data) do
     data
     |> build_fingerprint(type)
@@ -67,6 +80,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   Format for events: /{slug}/social-card-{hash}.png
   Format for polls: /{event_slug}/polls/{poll_number}/social-card-{hash}.png
   Format for cities: /social-cards/city/{slug}/{hash}.png
+  Format for activities: /social-cards/activity/{slug}/{hash}.png
 
   ## Examples
 
@@ -82,12 +96,26 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(city, :city)
       "/social-cards/city/warsaw/a1b2c3d4.png"
 
+      iex> activity = %{slug: "my-activity", title: "My Activity", venue: %{name: "Venue"}}
+      iex> Eventasaurus.SocialCards.HashGenerator.generate_url_path(activity, :activity)
+      "/social-cards/activity/my-activity/d4e5f6a7.png"
+
   """
-  @spec generate_url_path(map(), :event | :poll | :city) :: String.t()
+  @spec generate_url_path(map(), :event | :poll | :city | :activity) :: String.t()
   def generate_url_path(data, type \\ :event) when is_map(data) do
     hash = generate_hash(data, type)
 
     case type do
+      :activity ->
+        slug =
+          case {Map.get(data, :slug), Map.get(data, :id)} do
+            {slug, _} when is_binary(slug) and slug != "" -> slug
+            {_, id} when not is_nil(id) -> "activity-#{id}"
+            _ -> "unknown-activity"
+          end
+
+        "/social-cards/activity/#{slug}/#{hash}.png"
+
       :city ->
         slug =
           case {Map.get(data, :slug), Map.get(data, :id)} do
@@ -142,6 +170,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   - Event: /slug/social-card-hash.png
   - Poll: /slug/polls/number/social-card-hash.png
   - City: /social-cards/city/slug/hash.png
+  - Activity: /social-cards/activity/slug/hash.png
 
   ## Examples
 
@@ -154,6 +183,9 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/city/warsaw/a1b2c3d4.png")
       "a1b2c3d4"
 
+      iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/social-cards/activity/my-activity/d4e5f6a7.png")
+      "d4e5f6a7"
+
       iex> Eventasaurus.SocialCards.HashGenerator.extract_hash_from_path("/invalid/path")
       nil
 
@@ -163,6 +195,11 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
     cond do
       # Poll pattern: /event-slug/polls/number/social-card-hash.png
       match = Regex.run(~r/\/[^\/]+\/polls\/\d+\/social-card-([a-f0-9]{8})(?:\.png)?$/, path) ->
+        [_full_match, hash] = match
+        hash
+
+      # Activity pattern: /social-cards/activity/slug/hash.png
+      match = Regex.run(~r/\/social-cards\/activity\/[^\/]+\/([a-f0-9]{8})(?:\.png)?$/, path) ->
         [_full_match, hash] = match
         hash
 
@@ -182,7 +219,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   end
 
   @doc """
-  Validates that a given hash matches the current event, poll, or city data.
+  Validates that a given hash matches the current event, poll, city, or activity data.
   Returns true if hash is current, false if stale.
 
   ## Examples
@@ -205,8 +242,13 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(city, hash, :city)
       true
 
+      iex> activity = %{slug: "my-activity", title: "My Activity"}
+      iex> hash = Eventasaurus.SocialCards.HashGenerator.generate_hash(activity, :activity)
+      iex> Eventasaurus.SocialCards.HashGenerator.validate_hash(activity, hash, :activity)
+      true
+
   """
-  @spec validate_hash(map(), String.t(), :event | :poll | :city) :: boolean()
+  @spec validate_hash(map(), String.t(), :event | :poll | :city | :activity) :: boolean()
   def validate_hash(data, hash, type \\ :event) when is_map(data) and is_binary(hash) do
     generate_hash(data, type) == hash
   end
@@ -292,6 +334,51 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       venues_count: Map.get(stats, :venues_count, 0),
       categories_count: Map.get(stats, :categories_count, 0),
       updated_at: format_timestamp(Map.get(city, :updated_at)),
+      version: @social_card_version
+    }
+  end
+
+  defp build_fingerprint(activity, :activity) do
+    # Ensure we always have a valid slug
+    slug =
+      case {Map.get(activity, :slug), Map.get(activity, :id)} do
+        {slug, _} when is_binary(slug) and slug != "" -> slug
+        {_, id} when not is_nil(id) -> "activity-#{id}"
+        _ -> "unknown-activity"
+      end
+
+    # Extract venue and city info for fingerprint
+    venue = Map.get(activity, :venue)
+    venue_name = if venue, do: Map.get(venue, :name, ""), else: ""
+
+    city_name =
+      if venue do
+        city_ref = Map.get(venue, :city_ref)
+        if city_ref, do: Map.get(city_ref, :name, ""), else: ""
+      else
+        ""
+      end
+
+    # Get first occurrence date for fingerprint
+    occurrence_list = Map.get(activity, :occurrence_list) || []
+    first_occurrence = List.first(occurrence_list)
+
+    first_occurrence_date =
+      case first_occurrence do
+        %{datetime: dt} when not is_nil(dt) -> DateTime.to_iso8601(dt)
+        %{date: d} when not is_nil(d) -> Date.to_iso8601(d)
+        _ -> ""
+      end
+
+    %{
+      type: :activity,
+      slug: slug,
+      title: Map.get(activity, :title, ""),
+      cover_image_url: Map.get(activity, :cover_image_url, ""),
+      venue_name: venue_name,
+      city_name: city_name,
+      first_occurrence_date: first_occurrence_date,
+      updated_at: format_timestamp(Map.get(activity, :updated_at)),
       version: @social_card_version
     }
   end

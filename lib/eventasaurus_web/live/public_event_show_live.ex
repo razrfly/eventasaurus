@@ -34,11 +34,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   alias EventasaurusWeb.JsonLd.LocalBusinessSchema
   alias EventasaurusWeb.JsonLd.BreadcrumbListSchema
   alias EventasaurusWeb.UrlHelper
-  alias Eventasaurus.CDN
   alias EventasaurusDiscovery.PublicEventsEnhanced
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.EventRefresh
   alias EventasaurusWeb.Cache.EventPageCache
+  alias Eventasaurus.SocialCards.HashGenerator
   import Ecto.Query
 
   @impl true
@@ -333,9 +333,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
         combined_json_ld = combine_json_ld_schemas(json_ld_schemas)
 
-        # Get image URL for social card
-        image_url =
-          Map.get(enriched_event, :cover_image_url) || get_placeholder_image_url(enriched_event)
+        # Generate branded social card URL for OG image
+        image_url = generate_activity_social_card_url(enriched_event)
 
         # Build meta description
         description =
@@ -1749,16 +1748,6 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     |> Jason.encode!()
   end
 
-  defp get_placeholder_image_url(event) do
-    # Use a placeholder service with the event title
-    name =
-      (event.display_title || event.title || "Event")
-      |> to_string()
-      |> URI.encode()
-
-    "https://placehold.co/1200x630/4ECDC4/FFFFFF?text=#{name}"
-  end
-
   defp truncate_for_description(text, max_length \\ 155) do
     if String.length(text) <= max_length do
       text
@@ -1954,10 +1943,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end)
   end
 
+  # Generate branded social card URL for activity pages
+  # Uses the HashGenerator to create cache-busting URLs that trigger PNG generation
+  defp generate_activity_social_card_url(event) do
+    base_url = UrlHelper.get_base_url()
+    social_card_path = HashGenerator.generate_url_path(event, :activity)
+    "#{base_url}#{social_card_path}"
+  end
+
   # Build Open Graph meta tags for event pages
   defp build_event_open_graph(event, description, image_url, canonical_url) do
-    # Wrap image with CDN
-    cdn_image_url = CDN.url(image_url)
+    # Social card URLs are already absolute, don't wrap with CDN
+    # (social cards are generated server-side and include branding)
+    final_image_url = image_url
 
     # Determine Open Graph type
     og_type = if is_movie_screening?(event), do: "video.movie", else: "event"
@@ -1968,7 +1966,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         type: og_type,
         title: event.display_title,
         description: description,
-        image_url: cdn_image_url,
+        image_url: final_image_url,
         image_width: 1200,
         image_height: 630,
         url: canonical_url,

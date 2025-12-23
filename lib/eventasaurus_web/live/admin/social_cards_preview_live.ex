@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   alias EventasaurusApp.Themes
   alias EventasaurusWeb.SocialCardView
+  import EventasaurusWeb.SocialCardView, only: [render_activity_card_svg: 1]
 
   @moduledoc """
   Admin design tool for previewing social card designs across all themes.
@@ -25,6 +26,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
      |> assign(:mock_event, mock_event)
      |> assign(:mock_poll, generate_mock_poll(mock_event))
      |> assign(:mock_city, generate_mock_city())
+     |> assign(:mock_activity, generate_mock_activity())
      |> generate_previews()}
   end
 
@@ -49,6 +51,7 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         "event" -> :event
         "poll" -> :poll
         "city" -> :city
+        "activity" -> :activity
         _ -> socket.assigns.card_type
       end
 
@@ -57,32 +60,58 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
 
   # Generate preview data for all (or selected) themes
   defp generate_previews(socket) do
-    # City cards don't use themes, so only generate one preview
-    if socket.assigns.card_type == :city do
-      # Generate city card preview
-      city = socket.assigns.mock_city
-      stats = Map.get(city, :stats, %{})
-      svg = SocialCardView.render_city_card_svg(city, stats)
+    # City and Activity cards don't use themes, so only generate one preview
+    cond do
+      socket.assigns.card_type == :city ->
+        # Generate city card preview
+        city = socket.assigns.mock_city
+        stats = Map.get(city, :stats, %{})
+        svg = SocialCardView.render_city_card_svg(city, stats)
 
-      # City cards use fixed colors (deep blue theme)
-      colors = %{
-        "colors" => %{
-          "primary" => "#1e40af",
-          "secondary" => "#3b82f6"
+        # City cards use fixed colors (deep blue theme)
+        colors = %{
+          "colors" => %{
+            "primary" => "#1e40af",
+            "secondary" => "#3b82f6"
+          }
         }
-      }
 
-      previews = [
-        %{
-          theme: :city,
-          svg: svg,
-          colors: colors,
-          display_name: "City Card"
+        previews = [
+          %{
+            theme: :city,
+            svg: svg,
+            colors: colors,
+            display_name: "City Card"
+          }
+        ]
+
+        assign(socket, :previews, previews)
+
+      socket.assigns.card_type == :activity ->
+        # Generate activity card preview
+        activity = socket.assigns.mock_activity
+        svg = render_activity_card_svg(activity)
+
+        # Activity cards use fixed Wombie teal theme
+        colors = %{
+          "colors" => %{
+            "primary" => "#0d9488",
+            "secondary" => "#14b8a6"
+          }
         }
-      ]
 
-      assign(socket, :previews, previews)
-    else
+        previews = [
+          %{
+            theme: :activity,
+            svg: svg,
+            colors: colors,
+            display_name: "Activity Card"
+          }
+        ]
+
+        assign(socket, :previews, previews)
+
+      true ->
       # Event and poll cards use themes
       themes =
         if socket.assigns.selected_theme == :all do
@@ -166,6 +195,30 @@ defmodule EventasaurusWeb.Admin.SocialCardsPreviewLive do
         venues_count: 45,
         categories_count: 12
       },
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Generate mock activity (public event) data for preview
+  defp generate_mock_activity do
+    %{
+      id: 1,
+      title: "Jazz Night at Blue Note",
+      slug: "jazz-night-blue-note",
+      cover_image_url: "/images/events/music/jazz1.png",
+      venue: %{
+        name: "Blue Note Jazz Club",
+        city_ref: %{
+          name: "Warsaw"
+        }
+      },
+      occurrence_list: [
+        %{
+          datetime: DateTime.add(DateTime.utc_now(), 2, :day),
+          date: Date.add(Date.utc_today(), 2),
+          time: ~T[20:00:00]
+        }
+      ],
       updated_at: DateTime.utc_now()
     }
   end
