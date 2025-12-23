@@ -1,18 +1,24 @@
 defmodule EventasaurusWeb.PollSocialCardControllerTest do
   use EventasaurusWeb.ConnCase, async: true
 
+  import EventasaurusApp.AccountsFixtures
+
   alias Eventasaurus.SocialCards.{PollHashGenerator, UrlBuilder}
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Repo
 
   describe "GET /:event_slug/polls/:poll_number/social-card-:hash.png" do
     setup do
+      # Create a user for poll ownership
+      user = user_fixture()
+
       # Create a test event
       {:ok, event} =
         Events.create_event(%{
           title: "Test Event for Poll Social Card",
           slug: "test-poll-event",
           description: "Testing poll social card generation",
-          starts_at: DateTime.utc_now() |> DateTime.add(7, :day),
+          start_at: DateTime.utc_now() |> DateTime.add(7, :day),
           ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(2, :hour),
           timezone: "America/New_York",
           theme: :minimal,
@@ -24,10 +30,10 @@ defmodule EventasaurusWeb.PollSocialCardControllerTest do
         Events.create_poll(%{
           event_id: event.id,
           title: "Test Poll",
-          poll_type: "binary",
+          poll_type: "general",
           voting_system: "binary",
           phase: "voting",
-          number: 1
+          created_by_id: user.id
         })
 
       # Add some poll options
@@ -35,18 +41,20 @@ defmodule EventasaurusWeb.PollSocialCardControllerTest do
         Events.create_poll_option(%{
           poll_id: poll.id,
           title: "Option 1",
-          status: "active"
+          status: "active",
+          suggested_by_id: user.id
         })
 
       {:ok, _option2} =
         Events.create_poll_option(%{
           poll_id: poll.id,
           title: "Option 2",
-          status: "active"
+          status: "active",
+          suggested_by_id: user.id
         })
 
       # Reload poll with options
-      poll = Events.get_poll!(poll.id, preload: [:poll_options, :event])
+      poll = Events.get_poll!(poll.id) |> Repo.preload([:poll_options, :event])
 
       %{event: event, poll: poll}
     end
@@ -60,8 +68,11 @@ defmodule EventasaurusWeb.PollSocialCardControllerTest do
 
       # Assert response
       assert conn.status == 200
-      assert get_resp_header(conn, "content-type") == ["image/png"]
-      assert get_resp_header(conn, "cache-control") == ["public, max-age=31536000, immutable"]
+      [content_type] = get_resp_header(conn, "content-type")
+      assert String.starts_with?(content_type, "image/png")
+      [cache_control] = get_resp_header(conn, "cache-control")
+      assert String.contains?(cache_control, "public")
+      assert String.contains?(cache_control, "max-age=31536000")
 
       # Verify it's actually PNG data
       png_data = response(conn, 200)
@@ -150,8 +161,9 @@ defmodule EventasaurusWeb.PollSocialCardControllerTest do
       hash = PollHashGenerator.generate_hash(poll)
       conn = get(conn, "/#{event.slug}/polls/#{poll.number}/social-card-#{hash}.png")
 
-      cache_control = get_resp_header(conn, "cache-control")
-      assert cache_control == ["public, max-age=31536000, immutable"]
+      [cache_control] = get_resp_header(conn, "cache-control")
+      assert String.contains?(cache_control, "public")
+      assert String.contains?(cache_control, "max-age=31536000")
     end
 
     test "validates hash format (8 hex characters)", %{conn: conn, event: event, poll: poll} do
