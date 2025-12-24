@@ -2,28 +2,55 @@ defmodule EventasaurusWeb.FollowButtonComponent do
   @moduledoc """
   A LiveComponent for following/unfollowing performers and venues.
 
-  Handles both authenticated and unauthenticated users:
-  - Authenticated: Shows follow/unfollow button with real-time toggle
-  - Unauthenticated: Shows follow button that opens auth modal
+  This component provides a reusable follow button that handles both
+  authenticated and unauthenticated users with appropriate visual feedback.
 
-  ## Attributes:
-  - id: Unique identifier for the component (required)
-  - entity: The performer or venue struct to follow (required)
-  - entity_type: :performer or :venue (required)
-  - current_user: The current user struct (nil if not logged in)
-  - class: Additional CSS classes (optional)
-  - size: Button size - "sm", "md", or "lg" (default: "md")
-  - variant: Button style - "primary" or "outline" (default: "primary")
+  ## Features
 
-  ## Usage:
+  - Real-time follow/unfollow toggle for authenticated users
+  - Auth modal trigger for unauthenticated users
+  - Loading state with spinner animation
+  - Dynamic styling based on entity type (performer/venue)
+  - Rate limiting feedback (shows error message if rate limited)
+
+  ## Required Assigns
+
+  - `id` - Unique identifier for the component (e.g., "follow-performer-123")
+  - `entity` - The performer or venue struct to follow
+  - `entity_type` - `:performer` or `:venue`
+  - `current_user` - The current user struct (nil if not logged in)
+
+  ## Optional Assigns
+
+  - `class` - Additional CSS classes (default: "")
+  - `size` - Button size: "sm", "md", or "lg" (default: "md")
+  - `variant` - Button style: "primary" or "outline" (default: "primary")
+
+  ## Usage
 
       <.live_component
         module={EventasaurusWeb.FollowButtonComponent}
         id={"follow-performer-\#{performer.id}"}
         entity={performer}
         entity_type={:performer}
-        current_user={user}
+        current_user={@current_user}
       />
+
+  ## Styling
+
+  The button uses a white background with colored text that matches the
+  HeroCardTheme patterns, ensuring good contrast against dark gradient
+  hero card backgrounds.
+
+  - Performer: Purple text on white
+  - Venue: Slate text on white
+  - Following state: Semi-transparent white on gradient
+
+  ## Events
+
+  When the user is not authenticated and clicks the button, this component
+  sends `{:show_auth_modal, :follow}` to the parent LiveView to trigger
+  an authentication flow.
   """
 
   use EventasaurusWeb, :live_component
@@ -32,7 +59,7 @@ defmodule EventasaurusWeb.FollowButtonComponent do
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, :loading, false)}
+    {:ok, assign(socket, loading: false, error: nil)}
   end
 
   @impl true
@@ -45,6 +72,7 @@ defmodule EventasaurusWeb.FollowButtonComponent do
     {:ok, socket}
   end
 
+  @spec assign_following_status(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp assign_following_status(socket) do
     current_user = socket.assigns[:current_user]
     entity = socket.assigns[:entity]
@@ -82,8 +110,9 @@ defmodule EventasaurusWeb.FollowButtonComponent do
     end
   end
 
+  @spec toggle_follow(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   defp toggle_follow(socket) do
-    socket = assign(socket, :loading, true)
+    socket = assign(socket, loading: true, error: nil)
 
     entity = socket.assigns.entity
     entity_type = socket.assigns.entity_type
@@ -110,9 +139,15 @@ defmodule EventasaurusWeb.FollowButtonComponent do
         socket
         |> assign(:is_following, !is_following)
         |> assign(:loading, false)
+        |> assign(:error, nil)
+
+      {:error, :rate_limited} ->
+        socket
+        |> assign(:loading, false)
+        |> assign(:error, "Too many requests. Please wait a moment.")
 
       {:error, _reason} ->
-        # On error, keep current state
+        # On other errors, keep current state
         assign(socket, :loading, false)
     end
   end
@@ -124,39 +159,49 @@ defmodule EventasaurusWeb.FollowButtonComponent do
       |> assign_new(:class, fn -> "" end)
       |> assign_new(:size, fn -> "md" end)
       |> assign_new(:variant, fn -> "primary" end)
+      |> assign_new(:error, fn -> nil end)
 
     ~H"""
-    <button
-      id={@id}
-      type="button"
-      phx-click="toggle_follow"
-      phx-target={@myself}
-      disabled={@loading}
-      class={button_classes(@is_following, @entity_type, @size, @variant, @class)}
-    >
-      <%= if @loading do %>
-        <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
-          </circle>
-          <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          >
-          </path>
-        </svg>
-      <% else %>
-        <%= if @is_following do %>
-          <Heroicons.check class="h-4 w-4 mr-2" />
+    <div class="relative">
+      <button
+        id={@id}
+        type="button"
+        phx-click="toggle_follow"
+        phx-target={@myself}
+        disabled={@loading}
+        class={button_classes(@is_following, @entity_type, @size, @variant, @class)}
+        title={@error}
+      >
+        <%= if @loading do %>
+          <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+            </circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            >
+            </path>
+          </svg>
         <% else %>
-          <Heroicons.plus class="h-4 w-4 mr-2" />
+          <%= if @is_following do %>
+            <Heroicons.check class="h-4 w-4 mr-2" />
+          <% else %>
+            <Heroicons.plus class="h-4 w-4 mr-2" />
+          <% end %>
         <% end %>
+        <%= button_label(@is_following, @entity_type) %>
+      </button>
+      <%= if @error do %>
+        <p class="absolute top-full left-0 mt-1 text-xs text-red-200 whitespace-nowrap">
+          {@error}
+        </p>
       <% end %>
-      <%= button_label(@is_following, @entity_type) %>
-    </button>
+    </div>
     """
   end
 
+  @spec button_classes(boolean(), atom(), String.t(), String.t(), String.t()) :: String.t()
   defp button_classes(is_following, entity_type, size, variant, custom_class) do
     base_classes =
       "inline-flex items-center justify-center font-medium rounded-lg transition shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2"
@@ -169,35 +214,35 @@ defmodule EventasaurusWeb.FollowButtonComponent do
         _ -> "px-5 py-2.5 text-sm font-semibold"
       end
 
-    # Theme colors based on entity type (matching HeroCardTheme but inverted for Follow action)
-    # Follow button uses colored background to stand out from other white buttons
-    {bg_color, hover_bg, text_color, focus_ring} =
+    # Theme colors based on entity type - matching HeroCardTheme button patterns
+    # White background with colored text contrasts well against dark gradient backgrounds
+    {text_color, hover_bg, focus_ring} =
       case entity_type do
         :performer ->
-          {"bg-purple-600", "hover:bg-purple-700", "text-white", "focus:ring-purple-500"}
+          {"text-purple-900", "hover:bg-purple-50", "focus:ring-purple-500"}
 
         :venue ->
-          {"bg-slate-700", "hover:bg-slate-800", "text-white", "focus:ring-slate-500"}
+          {"text-slate-900", "hover:bg-slate-50", "focus:ring-slate-500"}
 
         _ ->
-          {"bg-purple-600", "hover:bg-purple-700", "text-white", "focus:ring-purple-500"}
+          {"text-purple-900", "hover:bg-purple-50", "focus:ring-purple-500"}
       end
 
     variant_classes =
       case {variant, is_following} do
         {_, true} ->
-          # Following state - white button with check mark to indicate "already following"
-          "bg-white text-gray-700 hover:bg-gray-100 focus:ring-gray-500"
+          # Following state - subtle background to indicate "already following"
+          "bg-white/20 text-white hover:bg-white/30 focus:ring-white/50"
 
         {"primary", false} ->
-          # Primary variant - colored button to stand out as primary action
-          "#{bg_color} #{text_color} #{hover_bg} #{focus_ring}"
+          # Primary variant - white button matching HeroCardTheme button style
+          "bg-white #{text_color} #{hover_bg} #{focus_ring}"
 
         {"outline", false} ->
           "border border-white/50 bg-white/10 text-white hover:bg-white/20 focus:ring-white/50"
 
         _ ->
-          "#{bg_color} #{text_color} #{hover_bg} #{focus_ring}"
+          "bg-white #{text_color} #{hover_bg} #{focus_ring}"
       end
 
     [base_classes, size_classes, variant_classes, custom_class]
@@ -205,6 +250,7 @@ defmodule EventasaurusWeb.FollowButtonComponent do
     |> Enum.join(" ")
   end
 
+  @spec button_label(boolean(), atom()) :: String.t()
   defp button_label(true, :performer), do: "Following"
   defp button_label(false, :performer), do: "Follow"
   defp button_label(true, :venue), do: "Following"

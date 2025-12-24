@@ -116,16 +116,10 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   # Private function to assign auth_user from session
   defp assign_auth_user(socket, session) do
     assign_new(socket, :auth_user, fn ->
-      # Debug: log what's in the session
-      Logger.debug("AUTH_HOOKS session keys: #{inspect(Map.keys(session))}")
-      Logger.debug("AUTH_HOOKS dev_mode_login: #{inspect(session["dev_mode_login"])}")
-      Logger.debug("AUTH_HOOKS current_user_id: #{inspect(session["current_user_id"])}")
-
       # Check for dev mode login FIRST (dev only)
       if dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] do
         # Dev mode: directly load the user from database
         user_id = session["current_user_id"]
-        Logger.debug("DEV MODE PATH - loading user #{inspect(user_id)}")
 
         case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
           nil ->
@@ -135,7 +129,6 @@ defmodule EventasaurusWeb.Live.AuthHooks do
             nil
 
           user ->
-            Logger.debug("DEV MODE: Loaded user #{user.email}")
             user
         end
       else
