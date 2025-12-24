@@ -433,6 +433,8 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       live "/dashboard", DashboardLive, :index
+      live "/people", PeopleLive.Index, :index
+      live "/people/discover", PeopleLive.Index, :index
       live "/people/introductions", ConnectionRequestsLive, :index
       live "/groups", GroupLive.Index, :index
       live "/groups/new", GroupLive.New, :new
