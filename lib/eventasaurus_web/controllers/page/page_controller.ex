@@ -68,6 +68,14 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :invite_only)
   end
 
+  def how_it_works(conn, _params) do
+    render(conn, :how_it_works)
+  end
+
+  def manifesto(conn, _params) do
+    render(conn, :manifesto)
+  end
+
   def redirect_to_auth_login(conn, _params) do
     # Preserve query parameters when redirecting
     query_string = conn.query_string

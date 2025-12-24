@@ -195,8 +195,6 @@ defmodule EventasaurusWeb.ProfileLive do
 
   defp format_join_date(nil), do: ""
 
-  defp format_event_date(datetime, timezone \\ nil)
-
   defp format_event_date(%DateTime{} = datetime, timezone) do
     case timezone do
       tz when is_binary(tz) ->
@@ -396,7 +394,11 @@ defmodule EventasaurusWeb.ProfileLive do
                     <% else %>
                       <!-- Share Button -->
                       <button
-                        onclick={"navigator.share ? navigator.share({title: '#{display_name(@profile_user)}', url: window.location.href}) : navigator.clipboard.writeText(window.location.href)"}
+                        phx-click={
+                          JS.dispatch("eventasaurus:share-profile",
+                            detail: %{title: display_name(@profile_user)}
+                          )
+                        }
                         class="inline-flex items-center px-6 py-2 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                       >
                         <Heroicons.share class="w-4 h-4 mr-2" />

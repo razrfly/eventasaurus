@@ -1,0 +1,356 @@
+<div class="overflow-hidden">
+  <main>
+    <%!-- Hero Section --%>
+    <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
+      <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+        <.subheading class="mb-6 text-orange-600">A Manifesto</.subheading>
+        <.heading as="h1" class="font-display text-5xl/[0.9] font-medium tracking-tight text-balance text-gray-950 sm:text-6xl/[0.8] lg:text-7xl/[0.8] mb-12">
+          The Great Escape
+        </.heading>
+
+        <%!-- The Hook --%>
+        <div class="max-w-4xl mx-auto">
+          <div class="space-y-6 text-2xl sm:text-3xl lg:text-4xl font-medium text-gray-900 leading-relaxed">
+            <p>
+              <span class="text-blue-600">Mark Zuckerberg</span> wants you in the Metaverse.
+            </p>
+            <p>
+              <span class="text-green-600">Sam Altman</span> wants you chatting with AI.
+            </p>
+            <p>
+              <span class="text-orange-600">Elon Musk</span> wants you on Mars.
+            </p>
+          </div>
+          <div class="mt-12">
+            <p class="text-3xl sm:text-4xl lg:text-5xl font-bold">
+              <span class="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-600 bg-clip-text text-transparent">
+                We just want you at a really good party.
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </.hero_section>
+
+    <%!-- The Loneliness Economy Section --%>
+    <.section class="py-24">
+      <div class="max-w-4xl mx-auto">
+        <.subheading class="mb-6 text-purple-600 text-center">The Loneliness Economy</.subheading>
+        <.heading as="h2" class="mb-16 text-3xl sm:text-4xl text-center">
+          A timeline of broken promises
+        </.heading>
+
+        <%!-- Timeline --%>
+        <div class="relative">
+          <%!-- Vertical line --%>
+          <div class="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 via-purple-500 to-red-500 hidden sm:block"></div>
+
+          <div class="space-y-12">
+            <div class="flex gap-8 items-start">
+              <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white shadow-lg relative z-10">
+                <span class="text-blue-600 font-bold">2010</span>
+              </div>
+              <div class="pt-3">
+                <p class="text-xl text-gray-900 font-medium">"Social media will connect us all."</p>
+                <p class="text-gray-500 mt-1">Facebook hits 500 million users</p>
+              </div>
+            </div>
+
+            <div class="flex gap-8 items-start">
+              <div class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white shadow-lg relative z-10">
+                <span class="text-pink-600 font-bold">2015</span>
+              </div>
+              <div class="pt-3">
+                <p class="text-xl text-gray-900 font-medium">"Dating apps will help everyone find love."</p>
+                <p class="text-gray-500 mt-1">Tinder, Bumble, Hinge go mainstream</p>
+              </div>
+            </div>
+
+            <div class="flex gap-8 items-start">
+              <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white shadow-lg relative z-10">
+                <span class="text-purple-600 font-bold">2020</span>
+              </div>
+              <div class="pt-3">
+                <p class="text-xl text-gray-900 font-medium">"Video calls will keep us together."</p>
+                <p class="text-gray-500 mt-1">Zoom becomes a verb</p>
+              </div>
+            </div>
+
+            <div class="flex gap-8 items-start">
+              <div class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white shadow-lg relative z-10">
+                <span class="text-orange-600 font-bold">2024</span>
+              </div>
+              <div class="pt-3">
+                <p class="text-xl text-gray-900 font-medium">"AI companions will cure loneliness."</p>
+                <p class="text-gray-500 mt-1">ChatGPT, Character.ai, Replika</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- The Question --%>
+        <div class="mt-20 text-center">
+          <p class="text-3xl sm:text-4xl font-bold text-gray-900 mb-8">
+            How's that working out?
+          </p>
+          <div class="bg-gray-900 rounded-2xl p-8 sm:p-12 text-white">
+            <p class="text-xl sm:text-2xl leading-relaxed">
+              We're lonelier than ever. More connected, less connection.
+              <br class="hidden sm:block" />
+              More friends, fewer friendships. More matches, less love.
+            </p>
+            <p class="text-xl sm:text-2xl leading-relaxed mt-6 text-gray-400">
+              And their solution? <span class="text-white">More screens. Better AI. Virtual reality.</span>
+              <br class="hidden sm:block" />
+              Escape hatches from the world they helped break.
+            </p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Our Counter-Proposal Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="max-w-4xl mx-auto text-center">
+        <.subheading class="mb-6 text-green-600">A Different Idea</.subheading>
+        <.heading as="h2" class="mb-12 text-3xl sm:text-4xl lg:text-5xl">
+          We have a different idea.
+        </.heading>
+
+        <div class="space-y-8 text-xl sm:text-2xl text-gray-700 leading-relaxed">
+          <p>
+            What if the solution to loneliness isn't a better algorithm?
+            <br class="hidden sm:block" />
+            What if it's just... <span class="font-semibold text-gray-900">better plans?</span>
+          </p>
+        </div>
+
+        <div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <%!-- More of this --%>
+          <div class="bg-white rounded-2xl border border-green-200 p-8 shadow-sm">
+            <h3 class="text-lg font-semibold text-green-600 mb-6">More of this</h3>
+            <ul class="space-y-4 text-left">
+              <li class="flex items-center gap-3">
+                <span class="text-2xl">🎷</span>
+                <span class="text-gray-700">Concerts</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl">🎉</span>
+                <span class="text-gray-700">Dinner parties</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl">🌙</span>
+                <span class="text-gray-700">"Remember that night?"</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl">🍻</span>
+                <span class="text-gray-700">Spontaneous plans</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl">💬</span>
+                <span class="text-gray-700">Real conversations</span>
+              </li>
+            </ul>
+          </div>
+
+          <%!-- Less of this --%>
+          <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-400 mb-6">Less of this</h3>
+            <ul class="space-y-4 text-left text-gray-400">
+              <li class="flex items-center gap-3">
+                <span class="text-2xl grayscale opacity-50">📱</span>
+                <span>Scrolling</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl grayscale opacity-50">👆</span>
+                <span>Swiping</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl grayscale opacity-50">📺</span>
+                <span>"Are you still watching?"</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl grayscale opacity-50">🤖</span>
+                <span>Talking to bots</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="text-2xl grayscale opacity-50">🥽</span>
+                <span>Living in headsets</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="mt-16 text-2xl sm:text-3xl font-medium text-gray-900">
+          We're not building the next world.
+          <br />
+          <span class="bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+            We're helping you enjoy this one.
+          </span>
+        </p>
+      </div>
+    </.section>
+
+    <%!-- The Irony Section --%>
+    <.section class="py-24">
+      <div class="max-w-4xl mx-auto">
+        <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 sm:p-12 lg:p-16 text-white">
+          <.subheading class="mb-6 text-orange-400">The Irony</.subheading>
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl text-white">
+            Here's the thing about billionaires building escape hatches:
+          </.heading>
+
+          <div class="space-y-6 text-xl text-gray-300 leading-relaxed">
+            <p>
+              They've been to the <span class="text-white font-medium">best parties</span>.
+            </p>
+            <p>
+              The most <span class="text-white font-medium">exclusive events</span>.
+            </p>
+            <p>
+              Incredible <span class="text-white font-medium">real-world experiences</span>.
+            </p>
+          </div>
+
+          <div class="mt-12 pt-8 border-t border-gray-700">
+            <p class="text-2xl sm:text-3xl font-medium text-white">
+              And their solution for everyone else is... a headset?
+            </p>
+          </div>
+
+          <div class="mt-12 bg-white/10 rounded-xl p-6 sm:p-8">
+            <p class="text-xl sm:text-2xl text-white font-medium">
+              We think you deserve better than a simulation of what they have.
+              <br class="hidden sm:block" />
+              <span class="text-orange-400">You deserve the real thing.</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- What We Believe Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-blue-600">Our Principles</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          What we actually believe
+        </.heading>
+      </div>
+
+      <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <%!-- Principle 1 --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mb-6 shadow-md">
+            <span class="text-2xl">➖</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Technology should subtract</h3>
+          <p class="text-gray-600 leading-relaxed">
+            The best tech gets you OFF your phone, not glued to it. Success = events attended, not time in app.
+          </p>
+        </div>
+
+        <%!-- Principle 2 --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mb-6 shadow-md">
+            <span class="text-2xl">🌍</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Real > Virtual</h3>
+          <p class="text-gray-600 leading-relaxed">
+            A mediocre party beats an amazing metaverse. Awkward real conversations beat smooth AI chat.
+          </p>
+        </div>
+
+        <%!-- Principle 3 --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mb-6 shadow-md">
+            <span class="text-2xl">👋</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Connection requires presence</h3>
+          <p class="text-gray-600 leading-relaxed">
+            You can't really know someone through a screen. The best moments happen when phones are in pockets.
+          </p>
+        </div>
+
+        <%!-- Principle 4 --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mb-6 shadow-md">
+            <span class="text-2xl">📅</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Loneliness isn't a tech problem</h3>
+          <p class="text-gray-600 leading-relaxed">
+            It's a "not enough actual plans" problem. The cure is events, not algorithms.
+          </p>
+        </div>
+
+        <%!-- Principle 5 --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-14 h-14 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full flex items-center justify-center mb-6 shadow-md">
+            <span class="text-2xl">🚪</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">The future is already here</h3>
+          <p class="text-gray-600 leading-relaxed">
+            It's called going outside. It's called making plans with people you like.
+          </p>
+        </div>
+
+        <%!-- Principle 6 (summary) --%>
+        <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 shadow-lg text-white">
+          <div class="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mb-6">
+            <span class="text-2xl">✨</span>
+          </div>
+          <h3 class="text-xl font-semibold mb-3">In short:</h3>
+          <p class="text-gray-300 leading-relaxed">
+            We use technology to get you <span class="text-white font-medium">off</span> technology.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- The Simple Truth Section --%>
+    <.section class="py-24">
+      <div class="max-w-4xl mx-auto text-center">
+        <.subheading class="mb-6 text-gray-500">The Simple Truth</.subheading>
+
+        <div class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-3xl p-12 sm:p-16 lg:p-20 shadow-xl">
+          <p class="text-2xl sm:text-3xl lg:text-4xl font-medium text-white leading-relaxed">
+            Technology should help you spend
+            <br class="hidden sm:block" />
+            more time with people, not less.
+          </p>
+          <p class="mt-8 text-xl sm:text-2xl text-white/80">
+            That's it. That's the whole idea.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Closing CTA Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center">
+        <div class="max-w-4xl mx-auto">
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl lg:text-5xl">
+            <span class="bg-gradient-to-r from-orange-600 via-pink-600 to-purple-600 bg-clip-text text-transparent">
+              Ready to escape the escape?
+            </span>
+          </.heading>
+          <p class="text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl mx-auto">
+            Join a community that believes the best experiences happen in the real world,
+            with real people, making real memories.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <.radiant_button href="/activities" class="text-lg px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+              Find Events Near You
+            </.radiant_button>
+            <.radiant_button href="/how-it-works" variant="secondary" class="text-lg px-8 py-4">
+              See How It Works
+            </.radiant_button>
+          </div>
+          <p class="mt-8 text-sm text-gray-500">
+            The opposite of doom scrolling. The start of something real.
+          </p>
+        </div>
+      </div>
+    </.section>
+  </main>
+</div>

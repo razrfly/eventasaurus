@@ -35,10 +35,13 @@ defmodule EventasaurusWeb.SettingsLive do
 
   defp build_preferences_form(user, preferences) do
     # Get or create actual preferences struct for changeset
+    # Convert preferences struct to map for cast/3 compatibility
+    attrs = Map.take(preferences, [:connection_permission, :show_on_attendee_lists, :discoverable_in_suggestions])
+
     case Accounts.get_preferences(user) do
       nil ->
         %UserPreferences{user_id: user.id}
-        |> UserPreferences.changeset(preferences)
+        |> UserPreferences.changeset(attrs)
         |> to_form()
 
       prefs ->
@@ -510,6 +513,30 @@ defmodule EventasaurusWeb.SettingsLive do
                         </span>
                         <span class="block text-sm text-gray-500">
                           Only people who have attended the same events as you can reach out. This is the default.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label class={[
+                      "flex items-start p-4 border rounded-lg cursor-pointer transition-colors",
+                      if(get_preference_value(@preferences_form, :connection_permission) == :extended_network,
+                        do: "border-indigo-500 bg-indigo-50",
+                        else: "border-gray-200 hover:border-gray-300"
+                      )
+                    ]}>
+                      <input
+                        type="radio"
+                        name={@preferences_form[:connection_permission].name}
+                        value="extended_network"
+                        checked={get_preference_value(@preferences_form, :connection_permission) == :extended_network}
+                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div class="ml-3">
+                        <span class="block text-sm font-medium text-gray-900">
+                          Friends of friends
+                        </span>
+                        <span class="block text-sm text-gray-500">
+                          People who are connected to someone you're connected with can reach out.
                         </span>
                       </div>
                     </label>

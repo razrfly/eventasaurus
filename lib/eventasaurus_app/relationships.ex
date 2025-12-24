@@ -957,25 +957,31 @@ defmodule EventasaurusApp.Relationships do
       true ->
         Repo.transaction(fn ->
           # Update the original request to active
-          {:ok, approved_request} =
-            request
-            |> UserRelationship.approve_changeset(%{
-              context: context,
-              reviewed_by_id: approver.id
-            })
-            |> Repo.update()
+          approved_request =
+            case request
+                 |> UserRelationship.approve_changeset(%{
+                   context: context,
+                   reviewed_by_id: approver.id
+                 })
+                 |> Repo.update() do
+              {:ok, approved} -> approved
+              {:error, changeset} -> Repo.rollback(changeset)
+            end
 
           # Create the reverse relationship
-          {:ok, reverse_relationship} =
-            %UserRelationship{}
-            |> UserRelationship.changeset(%{
-              user_id: approver.id,
-              related_user_id: request.user_id,
-              status: :active,
-              origin: :manual,
-              context: context
-            })
-            |> Repo.insert()
+          reverse_relationship =
+            case %UserRelationship{}
+                 |> UserRelationship.changeset(%{
+                   user_id: approver.id,
+                   related_user_id: request.user_id,
+                   status: :active,
+                   origin: :manual,
+                   context: context
+                 })
+                 |> Repo.insert() do
+              {:ok, reverse} -> reverse
+              {:error, changeset} -> Repo.rollback(changeset)
+            end
 
           {approved_request, reverse_relationship}
         end)
@@ -1115,12 +1121,13 @@ defmodule EventasaurusApp.Relationships do
   @spec list_pending_requests_for_user(User.t(), keyword()) :: [UserRelationship.t()]
   def list_pending_requests_for_user(%User{id: user_id}, opts \\ []) do
     limit = Keyword.get(opts, :limit)
+    preloads = Keyword.get(opts, :preload, [:user])
 
     query =
       from(r in UserRelationship,
         where: r.related_user_id == ^user_id and r.status == :pending,
         order_by: [desc: r.inserted_at],
-        preload: [:user]
+        preload: ^preloads
       )
 
     query =
@@ -1189,7 +1196,7 @@ defmodule EventasaurusApp.Relationships do
     query =
       from(r in UserRelationship,
         where: r.id == ^id and r.status == :pending,
-        preload: [:user, :related_user]
+        preload: [:user, :related_user, :originated_from_event]
       )
 
     Repo.one(query)

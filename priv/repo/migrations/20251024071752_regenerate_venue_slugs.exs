@@ -230,12 +230,12 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
           if slug_available?(disambiguated, venue_map.id) do
             disambiguated
           else
-            # Fallback to timestamp
-            "#{base_slug}-#{System.system_time(:second)}"
+            # Fallback to unique identifier (venue ID ensures uniqueness)
+            "#{base_slug}-#{venue_map.id}"
           end
         else
-          # No city, fallback to timestamp
-          "#{base_slug}-#{System.system_time(:second)}"
+          # No city, fallback to unique identifier (venue ID ensures uniqueness)
+          "#{base_slug}-#{venue_map.id}"
         end
       end
     end

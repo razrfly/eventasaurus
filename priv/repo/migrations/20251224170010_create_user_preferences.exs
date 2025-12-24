@@ -8,6 +8,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreateUserPreferences do
       # Connection permission levels:
       # - closed: Only user can initiate connections
       # - event_attendees: Only people from shared events can connect (default)
+      # - extended_network: Friends of friends can connect
       # - open: Anyone can connect
       add :connection_permission, :string, null: false, default: "event_attendees"
 

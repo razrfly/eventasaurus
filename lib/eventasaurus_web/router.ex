@@ -566,6 +566,8 @@ defmodule EventasaurusWeb.Router do
       get "/changelog", PageController, :changelog
       get "/changelog-beta", PageController, :changelog_beta
       get "/roadmap", PageController, :roadmap
+      get "/how-it-works", PageController, :how_it_works
+      get "/manifesto", PageController, :manifesto
 
       # Sitemap redirect
       get "/sitemap", PageController, :sitemap_redirect
