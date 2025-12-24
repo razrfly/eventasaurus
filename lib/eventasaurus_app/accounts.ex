@@ -6,6 +6,7 @@ defmodule EventasaurusApp.Accounts do
   import Ecto.Query, warn: false
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.Accounts.UserPreferences
 
   @doc """
   Returns the list of users.
@@ -622,4 +623,156 @@ defmodule EventasaurusApp.Accounts do
   end
 
   defp extract_name_from_email(_), do: "User"
+
+  # =============================================================================
+  # User Preferences
+  # =============================================================================
+
+  @doc """
+  Gets preferences for a user, creating default preferences if none exist.
+
+  This is the primary function for accessing user preferences as it handles
+  the common case of users who haven't explicitly set preferences yet.
+
+  ## Examples
+
+      iex> get_or_create_preferences(user)
+      {:ok, %UserPreferences{connection_permission: :event_attendees}}
+  """
+  @spec get_or_create_preferences(User.t()) :: {:ok, UserPreferences.t()} | {:error, term()}
+  def get_or_create_preferences(%User{id: user_id}) do
+    case Repo.get_by(UserPreferences, user_id: user_id) do
+      %UserPreferences{} = prefs ->
+        {:ok, prefs}
+
+      nil ->
+        create_default_preferences(user_id)
+    end
+  end
+
+  @doc """
+  Gets preferences for a user, returning nil if none exist.
+
+  Use this when you want to check preferences without auto-creating them.
+
+  ## Examples
+
+      iex> get_preferences(user)
+      %UserPreferences{connection_permission: :event_attendees}
+
+      iex> get_preferences(new_user)
+      nil
+  """
+  @spec get_preferences(User.t()) :: UserPreferences.t() | nil
+  def get_preferences(%User{id: user_id}) do
+    Repo.get_by(UserPreferences, user_id: user_id)
+  end
+
+  @doc """
+  Gets preferences for a user, returning default values if none exist.
+
+  This is useful when you need to read preferences without database writes,
+  such as in permission checks.
+
+  ## Examples
+
+      iex> get_preferences_or_defaults(user)
+      %UserPreferences{connection_permission: :event_attendees}
+  """
+  @spec get_preferences_or_defaults(User.t()) :: UserPreferences.t()
+  def get_preferences_or_defaults(%User{id: user_id} = user) do
+    case Repo.get_by(UserPreferences, user_id: user_id) do
+      %UserPreferences{} = prefs ->
+        prefs
+
+      nil ->
+        # Return a struct with defaults (not persisted)
+        %UserPreferences{
+          user_id: user_id,
+          user: user,
+          connection_permission: :event_attendees,
+          show_on_attendee_lists: true,
+          discoverable_in_suggestions: true
+        }
+    end
+  end
+
+  @doc """
+  Creates default preferences for a user.
+
+  ## Examples
+
+      iex> create_default_preferences(user_id)
+      {:ok, %UserPreferences{}}
+  """
+  @spec create_default_preferences(integer()) :: {:ok, UserPreferences.t()} | {:error, term()}
+  def create_default_preferences(user_id) when is_integer(user_id) do
+    %UserPreferences{}
+    |> UserPreferences.changeset(Map.put(UserPreferences.defaults(), :user_id, user_id))
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates a user's preferences.
+
+  ## Examples
+
+      iex> update_preferences(preferences, %{connection_permission: :closed})
+      {:ok, %UserPreferences{connection_permission: :closed}}
+  """
+  @spec update_preferences(UserPreferences.t(), map()) ::
+          {:ok, UserPreferences.t()} | {:error, Ecto.Changeset.t()}
+  def update_preferences(%UserPreferences{} = preferences, attrs) do
+    preferences
+    |> UserPreferences.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Updates preferences for a user, creating them first if they don't exist.
+
+  ## Examples
+
+      iex> update_user_preferences(user, %{connection_permission: :open})
+      {:ok, %UserPreferences{connection_permission: :open}}
+  """
+  @spec update_user_preferences(User.t(), map()) ::
+          {:ok, UserPreferences.t()} | {:error, term()}
+  def update_user_preferences(%User{} = user, attrs) do
+    case get_or_create_preferences(user) do
+      {:ok, preferences} ->
+        update_preferences(preferences, attrs)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Returns a changeset for tracking preference changes.
+
+  ## Examples
+
+      iex> change_preferences(preferences)
+      #Ecto.Changeset<...>
+  """
+  @spec change_preferences(UserPreferences.t(), map()) :: Ecto.Changeset.t()
+  def change_preferences(%UserPreferences{} = preferences, attrs \\ %{}) do
+    UserPreferences.update_changeset(preferences, attrs)
+  end
+
+  @doc """
+  Gets the connection permission level for a user.
+
+  Returns the default (:event_attendees) if no preferences exist.
+
+  ## Examples
+
+      iex> get_connection_permission(user)
+      :event_attendees
+  """
+  @spec get_connection_permission(User.t()) :: UserPreferences.connection_permission()
+  def get_connection_permission(%User{} = user) do
+    get_preferences_or_defaults(user).connection_permission
+  end
 end

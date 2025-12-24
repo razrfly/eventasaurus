@@ -1,6 +1,5 @@
 defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
   use Ecto.Migration
-  import Ecto.Query
   require Logger
 
   @moduledoc """
@@ -51,13 +50,11 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
 
   defp regenerate_all_venue_slugs do
     alias EventasaurusApp.Repo
-    alias EventasaurusApp.Venues.Venue
-    alias EventasaurusDiscovery.Locations.City
 
     Logger.info("Starting venue slug regeneration...")
 
-    # Get total count for progress tracking
-    total = Repo.aggregate(Venue, :count, :id)
+    # Get total count for progress tracking using raw SQL to avoid schema issues
+    {:ok, %{rows: [[total]]}} = Repo.query("SELECT COUNT(*) FROM venues")
     Logger.info("Found #{total} venues to process")
 
     # Process venues in batches to avoid memory issues
@@ -85,32 +82,22 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
 
   defp verify_no_nil_slugs do
     alias EventasaurusApp.Repo
-    alias EventasaurusApp.Venues.Venue
 
-    # Count venues with nil slugs
-    nil_slug_count =
-      from(v in Venue,
-        where: is_nil(v.slug),
-        select: count(v.id)
-      )
-      |> Repo.one()
+    # Count venues with nil slugs using raw SQL to avoid schema issues
+    {:ok, %{rows: [[nil_slug_count]]}} =
+      Repo.query("SELECT COUNT(*) FROM venues WHERE slug IS NULL")
 
     if nil_slug_count > 0 do
       # Get sample of venues with nil slugs for debugging
-      sample_venues =
-        from(v in Venue,
-          where: is_nil(v.slug),
-          select: {v.id, v.name},
-          limit: 5
-        )
-        |> Repo.all()
+      {:ok, %{rows: sample_rows}} =
+        Repo.query("SELECT id, name FROM venues WHERE slug IS NULL LIMIT 5")
 
       raise """
       Migration halted: Found #{nil_slug_count} venues with nil slugs.
       Cannot add NOT NULL constraint.
 
       Sample venues with nil slugs:
-      #{Enum.map_join(sample_venues, "\n", fn {id, name} -> "  - ID: #{id}, Name: #{name}" end)}
+      #{Enum.map_join(sample_rows, "\n", fn [id, name] -> "  - ID: #{id}, Name: #{name}" end)}
 
       Please investigate why these venues failed slug regeneration.
       """
@@ -121,22 +108,37 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
 
   defp process_venues_in_batches(batch_size, total) do
     alias EventasaurusApp.Repo
-    alias EventasaurusApp.Venues.Venue
 
     # Process in batches using offset
+    # NOTE: Using raw SQL to avoid schema dependency issues during migrations
     0..total
     |> Stream.chunk_every(batch_size)
     |> Enum.reduce({0, 0, 0}, fn batch_indexes, {updated, skipped, errors} ->
       offset = List.first(batch_indexes) || 0
 
-      venues =
-        from(v in Venue,
-          order_by: [asc: v.id],
-          limit: ^batch_size,
-          offset: ^offset,
-          preload: [city_ref: :country]
+      # Use raw SQL query to avoid schema column dependency issues
+      {:ok, %{rows: venue_rows, columns: columns}} =
+        Repo.query(
+          """
+          SELECT v.id, v.name, v.slug, v.city_id,
+                 c.slug as city_slug, c.name as city_name,
+                 co.code as country_code
+          FROM venues v
+          LEFT JOIN cities c ON v.city_id = c.id
+          LEFT JOIN countries co ON c.country_id = co.id
+          ORDER BY v.id
+          LIMIT $1 OFFSET $2
+          """,
+          [batch_size, offset]
         )
-        |> Repo.all()
+
+      # Convert rows to maps for easier access
+      venues =
+        Enum.map(venue_rows, fn row ->
+          columns
+          |> Enum.zip(row)
+          |> Map.new(fn {col, val} -> {String.to_atom(col), val} end)
+        end)
 
       # Process each venue in the batch within a transaction
       batch_result =
@@ -177,37 +179,78 @@ defmodule EventasaurusApp.Repo.Migrations.RegenerateVenueSlugs do
     end)
   end
 
-  defp regenerate_venue_slug(venue) do
+  defp regenerate_venue_slug(venue_map) do
     alias EventasaurusApp.Repo
-    alias EventasaurusApp.Venues.Venue
 
-    # Force slug regeneration by forcing a change to the name field
-    # This triggers EctoAutoslugField to regenerate the slug
-    changeset =
-      venue
-      |> Ecto.Changeset.change()
-      |> Ecto.Changeset.force_change(:name, venue.name)
-      |> Venue.Slug.maybe_generate_slug()
-
-    # Check the new slug value
-    new_slug = Ecto.Changeset.get_field(changeset, :slug)
+    # Generate new slug using the same algorithm as Venue.Slug
+    # but without loading the full Venue schema
+    new_slug = generate_venue_slug(venue_map)
 
     cond do
       is_nil(new_slug) ->
-        {:error, "Slug generation returned nil for venue #{venue.id} (#{venue.name})"}
+        {:error, "Slug generation returned nil for venue #{venue_map.id} (#{venue_map.name})"}
 
-      new_slug == venue.slug ->
+      new_slug == venue_map.slug ->
         {:skipped, "Slug unchanged"}
 
       true ->
-        case Repo.update(changeset) do
-          {:ok, updated_venue} ->
-            {:ok, updated_venue}
+        case Repo.query(
+               "UPDATE venues SET slug = $1, updated_at = NOW() WHERE id = $2",
+               [new_slug, venue_map.id]
+             ) do
+          {:ok, _} ->
+            {:ok, new_slug}
 
-          {:error, changeset} ->
-            {:error, changeset.errors}
+          {:error, error} ->
+            {:error, error}
         end
     end
+  end
+
+  # Generate slug using the progressive disambiguation strategy
+  # Replicates Venue.Slug logic without needing the full schema
+  defp generate_venue_slug(venue_map) do
+    alias EventasaurusApp.Repo
+
+    base_slug = Slug.slugify(venue_map.name)
+
+    if base_slug == "" or is_nil(base_slug) do
+      nil
+    else
+      # Try base slug first
+      if slug_available?(base_slug, venue_map.id) do
+        base_slug
+      else
+        # Try with city disambiguation
+        city_slug = venue_map[:city_slug]
+
+        if city_slug do
+          disambiguated = "#{base_slug}-#{city_slug}"
+
+          if slug_available?(disambiguated, venue_map.id) do
+            disambiguated
+          else
+            # Fallback to timestamp
+            "#{base_slug}-#{System.system_time(:second)}"
+          end
+        else
+          # No city, fallback to timestamp
+          "#{base_slug}-#{System.system_time(:second)}"
+        end
+      end
+    end
+  end
+
+  defp slug_available?(slug, venue_id) do
+    alias EventasaurusApp.Repo
+
+    {:ok, %{rows: [[count]]}} =
+      Repo.query(
+        "SELECT COUNT(*) FROM venues WHERE slug = $1 AND id != $2",
+        [slug, venue_id]
+      )
+
+    count == 0
   end
 
   defp create_public_events_view do

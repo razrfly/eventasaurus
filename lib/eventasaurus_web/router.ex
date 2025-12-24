@@ -433,6 +433,7 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       live "/dashboard", DashboardLive, :index
+      live "/people/introductions", ConnectionRequestsLive, :index
       live "/groups", GroupLive.Index, :index
       live "/groups/new", GroupLive.New, :new
       live "/groups/:slug", GroupLive.Show, :show
@@ -454,8 +455,10 @@ defmodule EventasaurusWeb.Router do
     get "/settings", SettingsController, :index
     get "/settings/account", SettingsController, :account
     get "/settings/payments", SettingsController, :payments
+    get "/settings/privacy", SettingsController, :privacy
     post "/settings/account", SettingsController, :update_account
     post "/settings/password", SettingsController, :update_password
+    post "/settings/privacy", SettingsController, :update_privacy
     get "/settings/facebook/link", SettingsController, :link_facebook
     post "/settings/facebook/unlink", SettingsController, :unlink_facebook
   end
@@ -600,7 +603,7 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       # Username-based profile routes (new plural form)
-      get "/users/:username", ProfileController, :show
+      live "/users/:username", ProfileLive, :show
       get "/u/:username", ProfileController, :redirect_short
 
       # Backward compatibility redirects for old /user/ URLs

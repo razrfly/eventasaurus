@@ -86,14 +86,39 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
           end
       end
 
+    # Check if current user can connect with the other user
+    can_connect_result = check_can_connect(current_user, other_user, is_connected)
+
     socket
     |> assign(:is_connected, is_connected)
     |> assign(:relationship, relationship)
+    |> assign(:can_connect, can_connect_result)
+  end
+
+  # Check if the initiator can connect with the target
+  # Returns :auto_accept, :request_required, :closed, :blocked, :pending_request, :already_connected, or nil (not logged in)
+  @spec check_can_connect(map() | nil, map(), boolean()) ::
+          :auto_accept
+          | :request_required
+          | :closed
+          | :blocked
+          | :pending_request
+          | :already_connected
+          | nil
+  defp check_can_connect(nil, _other_user, _is_connected), do: nil
+  defp check_can_connect(_current_user, _other_user, true), do: :already_connected
+
+  defp check_can_connect(current_user, other_user, false) do
+    case Relationships.can_connect?(current_user, other_user) do
+      {:ok, result} -> result
+      {:error, reason} -> reason
+    end
   end
 
   @impl true
   def handle_event("connect", _params, socket) do
     current_user = socket.assigns.current_user
+    can_connect = socket.assigns.can_connect
 
     cond do
       is_nil(current_user) ->
@@ -101,8 +126,13 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
         send(self(), {:show_auth_modal, :connect})
         {:noreply, socket}
 
+      can_connect == :request_required ->
+        # Create a connection request instead of connecting directly
+        socket = create_connection_request(socket)
+        {:noreply, socket}
+
       true ->
-        # Connect directly with auto-generated context from event
+        # Auto-accept: Connect directly with auto-generated context from event
         event = socket.assigns[:event]
         context = generate_suggested_context(event)
         socket = connect_with_context(socket, context)
@@ -150,6 +180,7 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     current_user = socket.assigns.current_user
     other_user = socket.assigns.other_user
 
+    # remove_relationship always returns {:ok, count} - Repo.delete_all doesn't fail
     {:ok, _count} = Relationships.remove_relationship(current_user, other_user)
 
     socket
@@ -157,6 +188,53 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     |> assign(:relationship, nil)
     |> assign(:loading, false)
     |> assign(:error, nil)
+  end
+
+  @spec create_connection_request(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp create_connection_request(socket) do
+    socket = assign(socket, loading: true, error: nil)
+
+    current_user = socket.assigns.current_user
+    other_user = socket.assigns.other_user
+    event = socket.assigns[:event]
+
+    opts = if event, do: [event: event], else: []
+
+    case Relationships.create_connection_request(current_user, other_user, opts) do
+      {:ok, _request} ->
+        # Notify parent about the request
+        send(self(), {:connection_request_sent, other_user})
+
+        socket
+        |> assign(:can_connect, :pending_request)
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        error_message = format_changeset_error(changeset)
+
+        socket
+        |> assign(:loading, false)
+        |> assign(:error, error_message)
+
+      {:error, :already_connected} ->
+        # Refresh the component state - they're already connected
+        socket
+        |> assign(:is_connected, true)
+        |> assign(:can_connect, :already_connected)
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+
+      {:error, :pending_request} ->
+        # Already has a pending request
+        socket
+        |> assign(:can_connect, :pending_request)
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+
+      {:error, _reason} ->
+        assign(socket, loading: false, error: "Could not send request. Please try again.")
+    end
   end
 
   @spec connect_with_context(Phoenix.LiveView.Socket.t(), String.t()) :: Phoenix.LiveView.Socket.t()
@@ -167,11 +245,21 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     other_user = socket.assigns.other_user
     event = socket.assigns[:event]
 
+    alias EventasaurusApp.Events.Event
+
     result =
-      if event do
-        Relationships.create_from_shared_event(current_user, other_user, event, context)
-      else
-        Relationships.create_manual(current_user, other_user, context)
+      case event do
+        %Event{} = e ->
+          # Full Event struct - use create_from_shared_event
+          Relationships.create_from_shared_event(current_user, other_user, e, context)
+
+        %{id: _event_id} = _event_map ->
+          # Map with event info - use create_manual with context
+          # The context will be generated from the event title
+          Relationships.create_manual(current_user, other_user, context)
+
+        nil ->
+          Relationships.create_manual(current_user, other_user, context)
       end
 
     case result do
@@ -197,7 +285,14 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
   defp format_changeset_error(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+        atom_key =
+          try do
+            String.to_existing_atom(key)
+          rescue
+            ArgumentError -> nil
+          end
+
+        opts |> Keyword.get(atom_key, key) |> to_string()
       end)
     end)
     |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
@@ -233,6 +328,7 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
       |> assign_new(:error, fn -> nil end)
       |> assign_new(:event, fn -> nil end)
       |> assign_new(:confirming_disconnect, fn -> false end)
+      |> assign_new(:can_connect, fn -> nil end)
 
     ~H"""
     <div class="relative">
@@ -258,35 +354,41 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
           </button>
         </div>
       <% else %>
-        <button
-          id={@id}
-          type="button"
-          phx-click={if @is_connected, do: "disconnect", else: "connect"}
-          phx-target={@myself}
-          disabled={@loading}
-          class={button_classes(@is_connected, @size, @variant, @class)}
-          title={connection_tooltip(@is_connected, @relationship, @show_context, @error)}
-        >
-          <%= if @loading do %>
-            <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
-              </circle>
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              >
-              </path>
-            </svg>
-          <% else %>
-            <%= if @is_connected do %>
-              <Heroicons.user_group class="h-4 w-4 mr-2" />
+        <%= if show_button?(@is_connected, @can_connect) do %>
+          <button
+            id={@id}
+            type="button"
+            phx-click={if @is_connected, do: "disconnect", else: "connect"}
+            phx-target={@myself}
+            disabled={@loading || button_disabled?(@is_connected, @can_connect)}
+            class={button_classes(@is_connected, @can_connect, @size, @variant, @class)}
+            title={connection_tooltip(@is_connected, @can_connect, @relationship, @show_context, @error)}
+          >
+            <%= if @loading do %>
+              <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                </circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                >
+                </path>
+              </svg>
             <% else %>
-              <Heroicons.user_plus class="h-4 w-4 mr-2" />
+              <%= if @is_connected do %>
+                <Heroicons.check class="h-4 w-4 mr-2" />
+              <% else %>
+                <%= if @can_connect == :pending_request do %>
+                  <Heroicons.clock class="h-4 w-4 mr-2" />
+                <% else %>
+                  <Heroicons.users class="h-4 w-4 mr-2" />
+                <% end %>
+              <% end %>
             <% end %>
-          <% end %>
-          <%= button_label(@is_connected, @relationship) %>
-        </button>
+            <%= button_label(@is_connected, @can_connect, @relationship) %>
+          </button>
+        <% end %>
       <% end %>
       <%= if @error do %>
         <p class="absolute top-full left-0 mt-1 text-xs text-red-200 whitespace-nowrap">
@@ -297,12 +399,42 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     """
   end
 
-  @spec connection_tooltip(boolean(), map() | nil, boolean(), String.t() | nil) :: String.t() | nil
-  defp connection_tooltip(_is_connected, _relationship, _show_context, error) when not is_nil(error) do
+  # Determine if the button should be shown at all
+  # Hide completely for blocked users, show for everything else
+  @spec show_button?(boolean(), atom() | nil) :: boolean()
+  defp show_button?(_is_connected, :blocked), do: false
+  defp show_button?(_is_connected, _can_connect), do: true
+
+  # Determine if the button should be disabled (but still visible)
+  # Only :closed disables the button - :request_required and :pending_request are clickable states
+  @spec button_disabled?(boolean(), atom() | nil) :: boolean()
+  defp button_disabled?(true, _can_connect), do: false
+  defp button_disabled?(_is_connected, :closed), do: true
+  defp button_disabled?(_is_connected, :pending_request), do: true
+  defp button_disabled?(_is_connected, _can_connect), do: false
+
+  @spec connection_tooltip(boolean(), atom() | nil, map() | nil, boolean(), String.t() | nil) ::
+          String.t() | nil
+  defp connection_tooltip(_is_connected, _can_connect, _relationship, _show_context, error)
+       when not is_nil(error) do
     error
   end
 
-  defp connection_tooltip(true, %{context: context, shared_event_count: count}, true, _error)
+  # Permission-denied tooltips
+  defp connection_tooltip(false, :closed, _relationship, _show_context, _error) do
+    "This person prefers to reach out first"
+  end
+
+  # Request flow states
+  defp connection_tooltip(false, :request_required, _relationship, _show_context, _error) do
+    "Send an introduction"
+  end
+
+  defp connection_tooltip(false, :pending_request, _relationship, _show_context, _error) do
+    "Waiting for response"
+  end
+
+  defp connection_tooltip(true, _can_connect, %{context: context, shared_event_count: count}, true, _error)
        when not is_nil(context) do
     if count > 1 do
       "#{context} (#{count} events together)"
@@ -311,11 +443,11 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     end
   end
 
-  defp connection_tooltip(true, _relationship, _show_context, _error), do: "In your people"
-  defp connection_tooltip(false, _relationship, _show_context, _error), do: "Stay in touch"
+  defp connection_tooltip(true, _can_connect, _relationship, _show_context, _error), do: "You're keeping up with them"
+  defp connection_tooltip(false, _can_connect, _relationship, _show_context, _error), do: "Keep up with their events"
 
-  @spec button_classes(boolean(), String.t(), String.t(), String.t()) :: String.t()
-  defp button_classes(is_connected, size, variant, custom_class) do
+  @spec button_classes(boolean(), atom() | nil, String.t(), String.t(), String.t()) :: String.t()
+  defp button_classes(is_connected, can_connect, size, variant, custom_class) do
     base_classes =
       "inline-flex items-center justify-center font-medium rounded-lg transition shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2"
 
@@ -330,16 +462,28 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     # Teal/cyan theme for relationships (distinct from purple performer / slate venue)
     # Uses solid, readable colors that work on both dark and light backgrounds
     variant_classes =
-      case {variant, is_connected} do
-        {_, true} ->
+      case {variant, is_connected, can_connect} do
+        {_, true, _} ->
           # Connected state - solid teal background with white text (always readable)
           "bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500"
 
-        {"primary", false} ->
-          # Primary variant - teal button (matches site style)
+        # Disabled state for closed permission
+        {_, false, :closed} ->
+          "bg-gray-300 text-gray-500 cursor-not-allowed opacity-60"
+
+        # Pending request state - shows waiting state
+        {_, false, :pending_request} ->
+          "bg-amber-100 text-amber-700 cursor-default"
+
+        # Request required state - amber/orange to indicate request flow
+        {_, false, :request_required} ->
+          "bg-amber-500 text-white hover:bg-amber-600 focus:ring-amber-500"
+
+        {"primary", false, _} ->
+          # Primary variant - teal button for auto-accept (matches site style)
           "bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500"
 
-        {"outline", false} ->
+        {"outline", false, _} ->
           # Outline variant - teal border and text on transparent
           "border border-teal-600 bg-transparent text-teal-600 hover:bg-teal-50 focus:ring-teal-500"
 
@@ -352,11 +496,13 @@ defmodule EventasaurusWeb.RelationshipButtonComponent do
     |> Enum.join(" ")
   end
 
-  @spec button_label(boolean(), map() | nil) :: String.t()
-  defp button_label(true, %{shared_event_count: count}) when count > 1 do
-    "#{count} events together"
+  @spec button_label(boolean(), atom() | nil, map() | nil) :: String.t()
+  defp button_label(true, _can_connect, %{shared_event_count: count}) when count > 1 do
+    "Keeping Up"
   end
 
-  defp button_label(true, _relationship), do: "In your people"
-  defp button_label(false, _relationship), do: "Stay in touch"
+  defp button_label(true, _can_connect, _relationship), do: "Keeping Up"
+  defp button_label(false, :request_required, _relationship), do: "Keep Up"
+  defp button_label(false, :pending_request, _relationship), do: "Request sent"
+  defp button_label(false, _can_connect, _relationship), do: "Keep Up"
 end

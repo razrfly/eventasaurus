@@ -178,6 +178,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:show_connect_modal, false)
            |> assign(:connect_modal_user, nil)
            |> assign(:connect_modal_context, nil)
+           |> assign(:connect_modal_event, nil)
            |> assign(:tickets, tickets)
            # Map of ticket_id => quantity
            |> assign(:selected_tickets, %{})
@@ -889,7 +890,8 @@ defmodule EventasaurusWeb.PublicEventLive do
      socket
      |> assign(:show_connect_modal, false)
      |> assign(:connect_modal_user, nil)
-     |> assign(:connect_modal_context, nil)}
+     |> assign(:connect_modal_context, nil)
+     |> assign(:connect_modal_event, nil)}
   end
 
   # Handle successful connection creation
@@ -900,6 +902,7 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> assign(:show_connect_modal, false)
      |> assign(:connect_modal_user, nil)
      |> assign(:connect_modal_context, nil)
+     |> assign(:connect_modal_event, nil)
      # Increment version to force EventAttendeesModalComponent to re-query relationships
      |> update(:relationships_version, &(&1 + 1))
      |> put_flash(:info, "#{other_user.name} added to your people!")}

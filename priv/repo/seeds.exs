@@ -48,4 +48,12 @@ Code.eval_file("priv/repo/seeds/reference_data/sources.exs")
 IO.puts("\n🌱 Seeding discovery configuration...")
 Code.eval_file("priv/repo/seeds/reference_data/discovery_cities.exs")
 
+# Seed test users with different privacy permission levels
+IO.puts("\n🌱 Seeding test users with privacy settings...")
+Code.eval_file("priv/repo/seeds/test_users_with_preferences.exs")
+
+# Seed test relationships for extended network testing
+IO.puts("\n🌱 Seeding test relationships...")
+Code.eval_file("priv/repo/seeds/test_relationships.exs")
+
 IO.puts("\n🌱 Seeds completed!")

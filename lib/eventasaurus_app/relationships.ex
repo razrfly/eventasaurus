@@ -42,6 +42,7 @@ defmodule EventasaurusApp.Relationships do
   import Ecto.Query, warn: false
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Relationships.UserRelationship
@@ -159,6 +160,257 @@ defmodule EventasaurusApp.Relationships do
   @spec mutually_connected?(User.t(), User.t()) :: boolean()
   def mutually_connected?(user1, user2) do
     connected?(user1, user2) && connected?(user2, user1)
+  end
+
+  @doc """
+  Checks if initiator is within N degrees of separation from target.
+
+  Degrees of separation:
+  - Degree 0: Same user (always returns true for self)
+  - Degree 1: Direct relationship (they know each other)
+  - Degree 2: Mutual relationship (they share a common connection)
+
+  This is used for the `:extended_network` permission level.
+
+  ## Options
+
+  - `:degrees` - Maximum degrees of separation to check (default: 2)
+
+  ## Examples
+
+      # Direct relationship exists
+      iex> within_network?(alice, bob, degrees: 1)
+      true
+
+      # Alice knows Carol, Carol knows Bob
+      iex> within_network?(alice, bob, degrees: 2)
+      true
+
+      # No connection within 2 degrees
+      iex> within_network?(alice, stranger, degrees: 2)
+      false
+  """
+  @spec within_network?(User.t(), User.t(), keyword()) :: boolean()
+  def within_network?(user1, user2, opts \\ [])
+
+  def within_network?(%User{id: id1}, %User{id: id2}, _opts) when id1 == id2, do: true
+
+  def within_network?(%User{} = initiator, %User{} = target, opts) do
+    max_degrees = Keyword.get(opts, :degrees, 2)
+
+    cond do
+      # Degree 1: Direct relationship
+      max_degrees >= 1 and connected?(initiator, target) ->
+        true
+
+      # Degree 2: Friend of friend (mutual connection exists)
+      max_degrees >= 2 ->
+        has_mutual_relationship?(initiator, target)
+
+      true ->
+        false
+    end
+  end
+
+  # Checks if any user has active relationships with both initiator and target.
+  # This is an efficient single-query check using a self-join.
+  defp has_mutual_relationship?(%User{id: initiator_id}, %User{id: target_id}) do
+    # Find if there's any user who:
+    # 1. Has an active relationship FROM initiator TO them (initiator knows them)
+    # 2. Has an active relationship FROM them TO target (they know target)
+    query =
+      from(r1 in UserRelationship,
+        join: r2 in UserRelationship,
+        on: r1.related_user_id == r2.user_id,
+        where: r1.user_id == ^initiator_id and r2.related_user_id == ^target_id,
+        where: r1.status == :active and r2.status == :active,
+        limit: 1
+      )
+
+    Repo.exists?(query)
+  end
+
+  # =============================================================================
+  # Permission Checking
+  # =============================================================================
+
+  @doc """
+  Checks if one user can initiate a connection with another user.
+
+  This respects the target user's connection preferences:
+  - `:closed` - Only the target user can initiate connections (truly blocked)
+  - `:event_attendees` - People from shared events get auto-accept, others need request
+  - `:extended_network` - People within 2 degrees get auto-accept, others need request
+  - `:open` - Anyone can connect (auto-accept)
+
+  Also checks for blocking status - blocked users cannot connect.
+
+  ## Parameters
+
+  - `initiator` - The user wanting to create a connection
+  - `target` - The user to connect with
+
+  ## Returns
+
+  - `{:ok, :auto_accept}` - Connection can be created immediately
+  - `{:ok, :request_required}` - Connection requires approval from target
+  - `{:error, :blocked}` - Target has blocked the initiator
+  - `{:error, :closed}` - Target only allows self-initiated connections
+  - `{:error, :already_connected}` - Users are already connected
+  - `{:error, :pending_request}` - A pending request already exists
+
+  ## Examples
+
+      iex> can_connect?(user1, user2)  # user2 has :open permission
+      {:ok, :auto_accept}
+
+      iex> can_connect?(user1, user3)  # user3 requires shared events, none exist
+      {:ok, :request_required}
+
+      iex> can_connect?(blocked_user, blocking_user)
+      {:error, :blocked}
+
+      iex> can_connect?(stranger, closed_user)
+      {:error, :closed}
+  """
+  @spec can_connect?(User.t(), User.t()) ::
+          {:ok, :auto_accept}
+          | {:ok, :request_required}
+          | {:error, :blocked}
+          | {:error, :closed}
+          | {:error, :already_connected}
+          | {:error, :pending_request}
+          | {:error, :invalid}
+  def can_connect?(%User{} = initiator, %User{} = target) do
+    cond do
+      # Can't connect to yourself
+      initiator.id == target.id ->
+        {:error, :invalid}
+
+      # Check if already connected
+      connected?(initiator, target) ->
+        {:error, :already_connected}
+
+      # Check if there's already a pending request
+      has_pending_request?(initiator, target) ->
+        {:error, :pending_request}
+
+      # Check if blocked (in either direction)
+      blocked?(target, initiator) or blocked?(initiator, target) ->
+        {:error, :blocked}
+
+      # Check target's permission level
+      true ->
+        check_permission_level(initiator, target)
+    end
+  end
+
+  defp check_permission_level(initiator, target) do
+    permission = Accounts.get_connection_permission(target)
+
+    case permission do
+      :open ->
+        {:ok, :auto_accept}
+
+      :closed ->
+        {:error, :closed}
+
+      :event_attendees ->
+        if share_event_history?(initiator, target) do
+          {:ok, :auto_accept}
+        else
+          {:ok, :request_required}
+        end
+
+      :extended_network ->
+        if within_network?(initiator, target, degrees: 2) do
+          {:ok, :auto_accept}
+        else
+          {:ok, :request_required}
+        end
+    end
+  end
+
+  @doc """
+  Checks if two users share any event history.
+
+  This is used for the `:event_attendees` permission level.
+  Checks both EventUser records (organizers/cohosts) and EventParticipant records (attendees).
+
+  ## Examples
+
+      iex> share_event_history?(user1, user2)
+      true
+  """
+  @spec share_event_history?(User.t(), User.t()) :: boolean()
+  def share_event_history?(%User{id: user1_id}, %User{id: user2_id}) do
+    # Check multiple combinations of event participation:
+    # 1. Both users are EventUsers (organizers/hosts)
+    # 2. Both users are EventParticipants (attendees)
+    # 3. One is EventUser, other is EventParticipant
+    # 4. One is EventParticipant, other is EventUser
+
+    # Valid EventUser roles (organizers count as attending)
+    valid_event_user_roles = ["organizer", "host", "cohost", "attendee"]
+    # Valid EventParticipant statuses (accepted attendance)
+    valid_participant_statuses = [:accepted, :confirmed_with_order]
+
+    # Check if both are EventUsers
+    event_users_query =
+      from(eu1 in EventasaurusApp.Events.EventUser,
+        join: eu2 in EventasaurusApp.Events.EventUser,
+        on: eu1.event_id == eu2.event_id,
+        where:
+          eu1.user_id == ^user1_id and
+            eu2.user_id == ^user2_id and
+            eu1.role in ^valid_event_user_roles and
+            eu2.role in ^valid_event_user_roles,
+        limit: 1
+      )
+
+    # Check if both are EventParticipants
+    event_participants_query =
+      from(ep1 in EventasaurusApp.Events.EventParticipant,
+        join: ep2 in EventasaurusApp.Events.EventParticipant,
+        on: ep1.event_id == ep2.event_id,
+        where:
+          ep1.user_id == ^user1_id and
+            ep2.user_id == ^user2_id and
+            ep1.status in ^valid_participant_statuses and
+            ep2.status in ^valid_participant_statuses,
+        limit: 1
+      )
+
+    # Check if user1 is EventUser and user2 is EventParticipant
+    mixed_query_1 =
+      from(eu in EventasaurusApp.Events.EventUser,
+        join: ep in EventasaurusApp.Events.EventParticipant,
+        on: eu.event_id == ep.event_id,
+        where:
+          eu.user_id == ^user1_id and
+            ep.user_id == ^user2_id and
+            eu.role in ^valid_event_user_roles and
+            ep.status in ^valid_participant_statuses,
+        limit: 1
+      )
+
+    # Check if user1 is EventParticipant and user2 is EventUser
+    mixed_query_2 =
+      from(ep in EventasaurusApp.Events.EventParticipant,
+        join: eu in EventasaurusApp.Events.EventUser,
+        on: ep.event_id == eu.event_id,
+        where:
+          ep.user_id == ^user1_id and
+            eu.user_id == ^user2_id and
+            ep.status in ^valid_participant_statuses and
+            eu.role in ^valid_event_user_roles,
+        limit: 1
+      )
+
+    Repo.exists?(event_users_query) or
+      Repo.exists?(event_participants_query) or
+      Repo.exists?(mixed_query_1) or
+      Repo.exists?(mixed_query_2)
   end
 
   # =============================================================================
@@ -327,15 +579,21 @@ defmodule EventasaurusApp.Relationships do
         |> Repo.insert()
 
       existing ->
-        # Update shared event count if this is a new shared event
-        new_count = existing.shared_event_count + 1
+        # Only increment shared_event_count for shared_event origin
+        # For introduction/manual origins, just update context
+        metrics_attrs =
+          if attrs[:origin] == :shared_event do
+            %{
+              shared_event_count: existing.shared_event_count + 1,
+              last_shared_event_at: attrs[:last_shared_event_at],
+              context: attrs[:context]
+            }
+          else
+            %{context: attrs[:context]}
+          end
 
         existing
-        |> UserRelationship.metrics_changeset(%{
-          shared_event_count: new_count,
-          last_shared_event_at: attrs[:last_shared_event_at],
-          context: attrs[:context]
-        })
+        |> UserRelationship.metrics_changeset(metrics_attrs)
         |> Repo.update()
     end
   end
@@ -618,6 +876,326 @@ defmodule EventasaurusApp.Relationships do
   end
 
   # =============================================================================
+  # Connection Request Functions
+  # =============================================================================
+
+  @doc """
+  Creates a connection request from initiator to target.
+
+  This creates a pending relationship that requires approval from the target.
+  Used when the target's permission settings require a request (not auto-accept).
+
+  ## Parameters
+
+  - `initiator` - The user sending the request
+  - `target` - The user receiving the request
+  - `opts` - Optional parameters:
+    - `:message` - An optional message to include with the request
+    - `:event_id` - If the connection originated from an event context
+
+  ## Returns
+
+  - `{:ok, relationship}` - The pending relationship
+  - `{:error, changeset}` - If validation fails
+
+  ## Examples
+
+      iex> create_connection_request(user1, user2, message: "We met at the concert!")
+      {:ok, %UserRelationship{status: :pending}}
+  """
+  @spec create_connection_request(User.t(), User.t(), keyword()) ::
+          {:ok, UserRelationship.t()} | {:error, Ecto.Changeset.t()}
+  def create_connection_request(%User{id: initiator_id}, %User{id: target_id}, opts \\ [])
+      when initiator_id != target_id do
+    attrs = %{
+      user_id: initiator_id,
+      related_user_id: target_id,
+      request_message: Keyword.get(opts, :message),
+      originated_from_event_id: Keyword.get(opts, :event_id)
+    }
+
+    %UserRelationship{}
+    |> UserRelationship.request_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Approves a pending connection request.
+
+  This changes the request status to :active and creates the reverse relationship.
+  Both users will now be connected.
+
+  ## Parameters
+
+  - `request` - The pending UserRelationship to approve
+  - `approver` - The user approving (must be the target of the request)
+  - `context` - The context for the connection (e.g., "Met at Jazz Night")
+
+  ## Returns
+
+  - `{:ok, {relationship, reverse_relationship}}` - Both relationship records
+  - `{:error, :not_pending}` - If the request is not in pending status
+  - `{:error, :unauthorized}` - If approver is not the target of the request
+  - `{:error, changeset}` - If validation fails
+
+  ## Examples
+
+      iex> approve_connection_request(request, target_user, "Connected at Tech Meetup")
+      {:ok, {%UserRelationship{status: :active}, %UserRelationship{status: :active}}}
+  """
+  @spec approve_connection_request(UserRelationship.t(), User.t(), String.t()) ::
+          {:ok, {UserRelationship.t(), UserRelationship.t()}}
+          | {:error, :not_pending | :unauthorized | Ecto.Changeset.t()}
+  def approve_connection_request(%UserRelationship{} = request, %User{} = approver, context) do
+    cond do
+      request.status != :pending ->
+        {:error, :not_pending}
+
+      request.related_user_id != approver.id ->
+        {:error, :unauthorized}
+
+      true ->
+        Repo.transaction(fn ->
+          # Update the original request to active
+          {:ok, approved_request} =
+            request
+            |> UserRelationship.approve_changeset(%{
+              context: context,
+              reviewed_by_id: approver.id
+            })
+            |> Repo.update()
+
+          # Create the reverse relationship
+          {:ok, reverse_relationship} =
+            %UserRelationship{}
+            |> UserRelationship.changeset(%{
+              user_id: approver.id,
+              related_user_id: request.user_id,
+              status: :active,
+              origin: :manual,
+              context: context
+            })
+            |> Repo.insert()
+
+          {approved_request, reverse_relationship}
+        end)
+    end
+  end
+
+  @doc """
+  Denies a pending connection request.
+
+  The request status changes to :denied. The initiator will not be able to
+  send another request (the record remains as denied).
+
+  ## Parameters
+
+  - `request` - The pending UserRelationship to deny
+  - `denier` - The user denying (must be the target of the request)
+
+  ## Returns
+
+  - `{:ok, relationship}` - The denied relationship
+  - `{:error, :not_pending}` - If the request is not in pending status
+  - `{:error, :unauthorized}` - If denier is not the target of the request
+
+  ## Examples
+
+      iex> deny_connection_request(request, target_user)
+      {:ok, %UserRelationship{status: :denied}}
+  """
+  @spec deny_connection_request(UserRelationship.t(), User.t()) ::
+          {:ok, UserRelationship.t()} | {:error, :not_pending | :unauthorized}
+  def deny_connection_request(%UserRelationship{} = request, %User{} = denier) do
+    cond do
+      request.status != :pending ->
+        {:error, :not_pending}
+
+      request.related_user_id != denier.id ->
+        {:error, :unauthorized}
+
+      true ->
+        request
+        |> UserRelationship.deny_changeset(%{reviewed_by_id: denier.id})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Cancels a pending connection request.
+
+  The initiator can cancel their own pending request.
+
+  ## Parameters
+
+  - `request` - The pending UserRelationship to cancel
+  - `canceler` - The user canceling (must be the initiator of the request)
+
+  ## Returns
+
+  - `{:ok, relationship}` - The deleted relationship
+  - `{:error, :not_pending}` - If the request is not in pending status
+  - `{:error, :unauthorized}` - If canceler is not the initiator of the request
+
+  ## Examples
+
+      iex> cancel_connection_request(request, initiator)
+      {:ok, %UserRelationship{}}
+  """
+  @spec cancel_connection_request(UserRelationship.t(), User.t()) ::
+          {:ok, UserRelationship.t()} | {:error, :not_pending | :unauthorized}
+  def cancel_connection_request(%UserRelationship{} = request, %User{} = canceler) do
+    cond do
+      request.status != :pending ->
+        {:error, :not_pending}
+
+      request.user_id != canceler.id ->
+        {:error, :unauthorized}
+
+      true ->
+        Repo.delete(request)
+    end
+  end
+
+  @doc """
+  Checks if there's a pending request between two users (in either direction).
+
+  ## Examples
+
+      iex> has_pending_request?(user1, user2)
+      true
+  """
+  @spec has_pending_request?(User.t(), User.t()) :: boolean()
+  def has_pending_request?(%User{id: user1_id}, %User{id: user2_id}) do
+    query =
+      from(r in UserRelationship,
+        where:
+          ((r.user_id == ^user1_id and r.related_user_id == ^user2_id) or
+             (r.user_id == ^user2_id and r.related_user_id == ^user1_id)) and
+            r.status == :pending
+      )
+
+    Repo.exists?(query)
+  end
+
+  @doc """
+  Gets a pending request from initiator to target, if one exists.
+
+  ## Examples
+
+      iex> get_pending_request(user1, user2)
+      %UserRelationship{status: :pending}
+
+      iex> get_pending_request(stranger1, stranger2)
+      nil
+  """
+  @spec get_pending_request(User.t(), User.t()) :: UserRelationship.t() | nil
+  def get_pending_request(%User{id: initiator_id}, %User{id: target_id}) do
+    Repo.get_by(UserRelationship,
+      user_id: initiator_id,
+      related_user_id: target_id,
+      status: :pending
+    )
+  end
+
+  @doc """
+  Lists all pending connection requests for a user (requests they've received).
+
+  Preloads the requesting user for display.
+
+  ## Options
+
+  - `:limit` - Maximum number to return
+
+  ## Examples
+
+      iex> list_pending_requests_for_user(user)
+      [%UserRelationship{status: :pending, user: %User{}}]
+  """
+  @spec list_pending_requests_for_user(User.t(), keyword()) :: [UserRelationship.t()]
+  def list_pending_requests_for_user(%User{id: user_id}, opts \\ []) do
+    limit = Keyword.get(opts, :limit)
+
+    query =
+      from(r in UserRelationship,
+        where: r.related_user_id == ^user_id and r.status == :pending,
+        order_by: [desc: r.inserted_at],
+        preload: [:user]
+      )
+
+    query =
+      if limit do
+        from(r in query, limit: ^limit)
+      else
+        query
+      end
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Lists all pending connection requests sent by a user.
+
+  Preloads the target user for display.
+
+  ## Examples
+
+      iex> list_sent_requests(user)
+      [%UserRelationship{status: :pending, related_user: %User{}}]
+  """
+  @spec list_sent_requests(User.t()) :: [UserRelationship.t()]
+  def list_sent_requests(%User{id: user_id}) do
+    query =
+      from(r in UserRelationship,
+        where: r.user_id == ^user_id and r.status == :pending,
+        order_by: [desc: r.inserted_at],
+        preload: [:related_user]
+      )
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Counts pending connection requests for a user (requests they've received).
+
+  Useful for showing notification badges.
+
+  ## Examples
+
+      iex> count_pending_requests(user)
+      5
+  """
+  @spec count_pending_requests(User.t()) :: integer()
+  def count_pending_requests(%User{id: user_id}) do
+    query =
+      from(r in UserRelationship,
+        where: r.related_user_id == ^user_id and r.status == :pending,
+        select: count(r.id)
+      )
+
+    Repo.one(query)
+  end
+
+  @doc """
+  Gets a pending request by ID, preloading related users.
+
+  ## Examples
+
+      iex> get_pending_request_by_id(123)
+      %UserRelationship{status: :pending}
+  """
+  @spec get_pending_request_by_id(integer()) :: UserRelationship.t() | nil
+  def get_pending_request_by_id(id) do
+    query =
+      from(r in UserRelationship,
+        where: r.id == ^id and r.status == :pending,
+        preload: [:user, :related_user]
+      )
+
+    Repo.one(query)
+  end
+
+  # =============================================================================
   # Event-Related Functions
   # =============================================================================
 
@@ -656,28 +1234,28 @@ defmodule EventasaurusApp.Relationships do
         Repo.transaction(fn ->
           updated_r1 =
             if r1 do
-              {:ok, updated} =
-                r1
-                |> UserRelationship.metrics_changeset(%{
-                  shared_event_count: r1.shared_event_count + 1,
-                  last_shared_event_at: now
-                })
-                |> Repo.update()
-
-              updated
+              case r1
+                   |> UserRelationship.metrics_changeset(%{
+                     shared_event_count: r1.shared_event_count + 1,
+                     last_shared_event_at: now
+                   })
+                   |> Repo.update() do
+                {:ok, updated} -> updated
+                {:error, changeset} -> Repo.rollback(changeset)
+              end
             end
 
           updated_r2 =
             if r2 do
-              {:ok, updated} =
-                r2
-                |> UserRelationship.metrics_changeset(%{
-                  shared_event_count: r2.shared_event_count + 1,
-                  last_shared_event_at: now
-                })
-                |> Repo.update()
-
-              updated
+              case r2
+                   |> UserRelationship.metrics_changeset(%{
+                     shared_event_count: r2.shared_event_count + 1,
+                     last_shared_event_at: now
+                   })
+                   |> Repo.update() do
+                {:ok, updated} -> updated
+                {:error, changeset} -> Repo.rollback(changeset)
+              end
             end
 
           {updated_r1, updated_r2}
