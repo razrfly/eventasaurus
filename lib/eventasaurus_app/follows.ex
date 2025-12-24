@@ -471,32 +471,60 @@ defmodule EventasaurusApp.Follows do
   # Rate Limiting
   # =============================================================================
 
+  # ETS table for rate limiting - created on first use
+  # Using ETS instead of :persistent_term because:
+  # - :persistent_term copies all data on every write (expensive for frequent updates)
+  # - :persistent_term never cleans up entries (memory leak)
+  # - ETS is designed for concurrent read/write access
+  @rate_limit_table :follow_rate_limits
+
   @doc false
   @spec check_rate_limit(integer()) :: :ok | {:error, :rate_limited}
   defp check_rate_limit(user_id) do
-    key = {:follow_rate_limit, user_id}
+    ensure_rate_limit_table_exists()
     now = System.monotonic_time(:millisecond)
 
-    case :persistent_term.get(key, nil) do
-      nil ->
+    case :ets.lookup(@rate_limit_table, user_id) do
+      [] ->
         # First action, initialize counter
-        :persistent_term.put(key, {now, 1})
+        :ets.insert(@rate_limit_table, {user_id, now, 1})
         :ok
 
-      {window_start, _count} when now - window_start > @rate_limit_window_ms ->
+      [{^user_id, window_start, _count}] when now - window_start > @rate_limit_window_ms ->
         # Window expired, reset counter
-        :persistent_term.put(key, {now, 1})
+        :ets.insert(@rate_limit_table, {user_id, now, 1})
         :ok
 
-      {_window_start, count} when count >= @rate_limit_max_actions ->
+      [{^user_id, _window_start, count}] when count >= @rate_limit_max_actions ->
         # Rate limit exceeded
         {:error, :rate_limited}
 
-      {window_start, count} ->
+      [{^user_id, window_start, count}] ->
         # Increment counter
-        :persistent_term.put(key, {window_start, count + 1})
+        :ets.insert(@rate_limit_table, {user_id, window_start, count + 1})
         :ok
     end
+  end
+
+  # Lazily create the ETS table if it doesn't exist
+  # Using :public so any process can read/write (needed for concurrent requests)
+  @spec ensure_rate_limit_table_exists() :: :ok
+  defp ensure_rate_limit_table_exists do
+    case :ets.whereis(@rate_limit_table) do
+      :undefined ->
+        # Table doesn't exist, create it
+        # Using try/catch to handle race condition where another process creates it first
+        try do
+          :ets.new(@rate_limit_table, [:set, :public, :named_table, {:read_concurrency, true}])
+        rescue
+          ArgumentError -> :ok
+        end
+
+      _tid ->
+        :ok
+    end
+
+    :ok
   end
 
   # =============================================================================
