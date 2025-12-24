@@ -1,6 +1,7 @@
 defmodule EventasaurusWeb.SettingsController do
   use EventasaurusWeb, :controller
 
+  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Stripe
 
@@ -29,19 +30,38 @@ defmodule EventasaurusWeb.SettingsController do
   end
 
   @doc """
+  Display the privacy settings tab.
+  """
+  def privacy(conn, _params) do
+    show_tab(conn, %{"tab" => "privacy"})
+  end
+
+  @doc """
   Display a specific tab in the settings page.
   """
-  def show_tab(conn, %{"tab" => tab} = _params) when tab in ["account", "payments"] do
+  def show_tab(conn, %{"tab" => tab} = _params) when tab in ["account", "payments", "privacy"] do
     # Use conn.assigns[:user] which is set by assign_user_struct plug (not auth_user)
     case ensure_user_struct(conn.assigns[:user]) do
       {:ok, user} ->
         # Get Stripe Connect account for payments tab
         connect_account = if tab == "payments", do: Stripe.get_connect_account(user.id), else: nil
 
+        # Get user preferences for privacy tab
+        preferences =
+          if tab == "privacy" do
+            case Accounts.get_or_create_preferences(user) do
+              {:ok, prefs} -> prefs
+              _ -> nil
+            end
+          else
+            nil
+          end
+
         render(conn, :index,
           user: user,
           active_tab: tab,
           connect_account: connect_account,
+          preferences: preferences,
           # Facebook identity is no longer supported with Clerk auth
           facebook_identity: nil
         )
@@ -95,6 +115,36 @@ defmodule EventasaurusWeb.SettingsController do
     user
     |> User.profile_changeset(attrs)
     |> EventasaurusApp.Repo.update()
+  end
+
+  @doc """
+  Update user privacy preferences.
+  """
+  def update_privacy(conn, %{"preferences" => preferences_params} = _params) do
+    case ensure_user_struct(conn.assigns[:user]) do
+      {:ok, user} ->
+        with {:ok, preferences} <- Accounts.get_or_create_preferences(user),
+             {:ok, _updated} <- Accounts.update_preferences(preferences, preferences_params) do
+          conn
+          |> put_flash(:info, "Privacy settings updated successfully.")
+          |> redirect(to: ~p"/settings/privacy")
+        else
+          {:error, %Ecto.Changeset{} = _changeset} ->
+            conn
+            |> put_flash(:error, "Failed to update privacy settings. Please try again.")
+            |> redirect(to: ~p"/settings/privacy")
+
+          _ ->
+            conn
+            |> put_flash(:error, "Failed to update privacy settings. Please try again.")
+            |> redirect(to: ~p"/settings/privacy")
+        end
+
+      {:error, _} ->
+        conn
+        |> put_flash(:error, "You must be logged in to update privacy settings.")
+        |> redirect(to: ~p"/auth/login")
+    end
   end
 
   @doc """

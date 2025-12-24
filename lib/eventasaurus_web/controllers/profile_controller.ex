@@ -51,7 +51,7 @@ defmodule EventasaurusWeb.ProfileController do
               end
 
             conn
-            |> assign(:user, user)
+            |> assign(:profile_user, user)
             |> assign(:page_title, "#{User.display_name(user)} (@#{canonical_username})")
             |> assign(:stats, stats)
             |> assign(:recent_events, recent_events)
@@ -68,7 +68,7 @@ defmodule EventasaurusWeb.ProfileController do
               recent_events = Accounts.get_user_recent_events(user, limit: 10, public_only: false)
 
               conn
-              |> assign(:user, user)
+              |> assign(:profile_user, user)
               |> assign(:page_title, "Your Profile (@#{canonical_username})")
               |> assign(:stats, stats)
               |> assign(:recent_events, recent_events)

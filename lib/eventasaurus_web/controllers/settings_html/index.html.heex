@@ -36,6 +36,22 @@
           </svg>
           Payments
         </a>
+
+        <a
+          href={~p"/settings/privacy"}
+          class={[
+            "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm",
+            if(@active_tab == "privacy",
+              do: "border-indigo-500 text-indigo-600",
+              else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            )
+          ]}
+        >
+          <svg class="w-4 h-4 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+          Privacy
+        </a>
       </nav>
     </div>
 
@@ -437,6 +453,110 @@
               </div>
             </div>
           <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <%= if @active_tab == "privacy" do %>
+      <div class="space-y-6">
+        <!-- Who Can Reach Out -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+          <div class="mb-6">
+            <h2 class="text-xl font-semibold">Who Can Reach Out</h2>
+            <p class="text-gray-600">Control who can send you introductions to stay in touch after events.</p>
+          </div>
+
+          <.form
+            for={to_form(%{}, as: :preferences)}
+            action={~p"/settings/privacy"}
+            method="post"
+            class="space-y-6"
+          >
+            <div class="space-y-4">
+              <p class="text-sm font-medium text-gray-700">Who can reach out to you?</p>
+
+              <div class="space-y-3">
+                <!-- Open option -->
+                <label class="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="preferences[connection_permission]"
+                    value="open"
+                    checked={@preferences && @preferences.connection_permission == :open}
+                    class="mt-0.5 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div class="ml-3">
+                    <span class="block text-sm font-medium text-gray-900">Anyone</span>
+                    <span class="block text-sm text-gray-500">
+                      Allow any Eventasaurus user to send you an introduction.
+                    </span>
+                  </div>
+                </label>
+
+                <!-- Event attendees option -->
+                <label class="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="preferences[connection_permission]"
+                    value="event_attendees"
+                    checked={@preferences && @preferences.connection_permission == :event_attendees}
+                    class="mt-0.5 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div class="ml-3">
+                    <span class="block text-sm font-medium text-gray-900">People I've attended events with</span>
+                    <span class="block text-sm text-gray-500">
+                      Only people who have attended the same events as you can reach out. This is the recommended setting.
+                    </span>
+                  </div>
+                </label>
+
+                <!-- Extended network option -->
+                <label class="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="preferences[connection_permission]"
+                    value="extended_network"
+                    checked={@preferences && @preferences.connection_permission == :extended_network}
+                    class="mt-0.5 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div class="ml-3">
+                    <span class="block text-sm font-medium text-gray-900">People in my extended network</span>
+                    <span class="block text-sm text-gray-500">
+                      People who know your existing people (friends of friends).
+                    </span>
+                  </div>
+                </label>
+
+                <!-- Closed option -->
+                <label class="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="preferences[connection_permission]"
+                    value="closed"
+                    checked={@preferences && @preferences.connection_permission == :closed}
+                    class="mt-0.5 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div class="ml-3">
+                    <span class="block text-sm font-medium text-gray-900">Nobody</span>
+                    <span class="block text-sm text-gray-500">
+                      No one can send you introductions. You can still reach out to others.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <p class="text-xs text-gray-400 mt-4">
+                Note: Your existing relationships will not be affected by this setting.
+                People you've blocked will never be able to reach out regardless of this setting.
+              </p>
+            </div>
+
+            <div class="flex justify-end pt-4 border-t border-gray-200">
+              <.button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white">
+                Save Privacy Settings
+              </.button>
+            </div>
+          </.form>
         </div>
       </div>
     <% end %>

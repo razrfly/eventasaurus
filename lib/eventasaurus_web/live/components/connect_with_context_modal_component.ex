@@ -159,7 +159,14 @@ defmodule EventasaurusWeb.ConnectWithContextModalComponent do
   defp format_changeset_error(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+        atom_key =
+          try do
+            String.to_existing_atom(key)
+          rescue
+            ArgumentError -> nil
+          end
+
+        opts |> Keyword.get(atom_key, key) |> to_string()
       end)
     end)
     |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
@@ -229,7 +236,6 @@ defmodule EventasaurusWeb.ConnectWithContextModalComponent do
                   rows="2"
                   phx-change="update_context"
                   phx-target={@myself}
-                  value={@context}
                   placeholder="e.g., Met at Jazz Night, Friends from work..."
                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm"
                   disabled={@loading}

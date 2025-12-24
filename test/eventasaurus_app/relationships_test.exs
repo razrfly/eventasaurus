@@ -2,6 +2,7 @@ defmodule EventasaurusApp.RelationshipsTest do
   use EventasaurusApp.DataCase, async: true
 
   alias EventasaurusApp.Relationships
+  alias EventasaurusApp.Accounts
 
   import EventasaurusApp.Factory
 
@@ -470,6 +471,296 @@ defmodule EventasaurusApp.RelationshipsTest do
       assert count == 2
       refute Relationships.connected?(user1, user2)
       refute Relationships.connected?(user2, user1)
+    end
+  end
+
+  describe "can_connect?/2" do
+    # Helper to set a user's connection permission
+    defp set_permission(user, permission) do
+      {:ok, prefs} = Accounts.get_or_create_preferences(user)
+      Accounts.update_preferences(prefs, %{connection_permission: permission})
+    end
+
+    test "returns auto_accept when target has open permission" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Set target's permission to open
+      {:ok, _} = set_permission(target, :open)
+
+      assert {:ok, :auto_accept} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns closed error when target has closed permission" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Set target's permission to closed
+      {:ok, _} = set_permission(target, :closed)
+
+      assert {:error, :closed} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns auto_accept for event_attendees when users share event history" do
+      initiator = insert(:user)
+      target = insert(:user)
+      event = insert(:event)
+
+      # Both users attended the same event
+      insert(:event_user, event: event, user: initiator, role: "attendee")
+      insert(:event_user, event: event, user: target, role: "attendee")
+
+      # Set target's permission to event_attendees (default)
+      {:ok, _} = set_permission(target, :event_attendees)
+
+      assert {:ok, :auto_accept} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns request_required when users don't share event history" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Set target's permission to event_attendees
+      {:ok, _} = set_permission(target, :event_attendees)
+
+      assert {:ok, :request_required} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns blocked error when target has blocked initiator" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Target blocks initiator
+      {:ok, _} = Relationships.block_user(target, initiator)
+
+      assert {:error, :blocked} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns blocked error when initiator has blocked target" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Initiator blocks target
+      {:ok, _} = Relationships.block_user(initiator, target)
+
+      assert {:error, :blocked} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns already_connected error when users are already connected" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Create existing connection
+      insert(:user_relationship, user: initiator, related_user: target)
+
+      assert {:error, :already_connected} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "uses default event_attendees permission when no preferences exist" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # No preferences set, should default to event_attendees
+      # Without shared events, should return request_required (not error)
+      assert {:ok, :request_required} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns auto_accept for extended_network when users share a mutual connection" do
+      initiator = insert(:user)
+      target = insert(:user)
+      mutual = insert(:user)
+
+      # initiator -> mutual -> target (friends of friends)
+      insert(:user_relationship, user: initiator, related_user: mutual)
+      insert(:user_relationship, user: mutual, related_user: target)
+
+      # Set target's permission to extended_network
+      {:ok, _} = set_permission(target, :extended_network)
+
+      assert {:ok, :auto_accept} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns request_required for extended_network when no mutual connection" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Set target's permission to extended_network
+      {:ok, _} = set_permission(target, :extended_network)
+
+      assert {:ok, :request_required} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns already_connected for extended_network when users are directly connected" do
+      initiator = insert(:user)
+      target = insert(:user)
+
+      # Direct connection (1 degree)
+      insert(:user_relationship, user: initiator, related_user: target)
+
+      # Set target's permission to extended_network
+      {:ok, _} = set_permission(target, :extended_network)
+
+      # Already connected takes precedence
+      assert {:error, :already_connected} = Relationships.can_connect?(initiator, target)
+    end
+
+    test "returns request_required for extended_network when mutual connection is blocked" do
+      initiator = insert(:user)
+      target = insert(:user)
+      mutual = insert(:user)
+
+      # initiator -> mutual (blocked), mutual -> target
+      insert(:user_relationship, user: initiator, related_user: mutual, status: :blocked)
+      insert(:user_relationship, user: mutual, related_user: target)
+
+      # Set target's permission to extended_network
+      {:ok, _} = set_permission(target, :extended_network)
+
+      assert {:ok, :request_required} = Relationships.can_connect?(initiator, target)
+    end
+  end
+
+  describe "within_network?/3" do
+    test "returns true for same user" do
+      user = insert(:user)
+
+      assert Relationships.within_network?(user, user)
+    end
+
+    test "returns true when users are directly connected (degree 1)" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+
+      insert(:user_relationship, user: user1, related_user: user2)
+
+      assert Relationships.within_network?(user1, user2, degrees: 1)
+      assert Relationships.within_network?(user1, user2, degrees: 2)
+    end
+
+    test "returns true when users share a mutual connection (degree 2)" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      mutual = insert(:user)
+
+      # user1 -> mutual -> user2 (two hops)
+      insert(:user_relationship, user: user1, related_user: mutual)
+      insert(:user_relationship, user: mutual, related_user: user2)
+
+      # Not directly connected
+      refute Relationships.connected?(user1, user2)
+
+      # But within 2 degrees
+      assert Relationships.within_network?(user1, user2, degrees: 2)
+    end
+
+    test "returns false when users share a mutual connection but only degree 1 allowed" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      mutual = insert(:user)
+
+      # user1 -> mutual -> user2 (two hops)
+      insert(:user_relationship, user: user1, related_user: mutual)
+      insert(:user_relationship, user: mutual, related_user: user2)
+
+      # Only degree 1 allowed
+      refute Relationships.within_network?(user1, user2, degrees: 1)
+    end
+
+    test "returns false when users have no connection path" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+
+      refute Relationships.within_network?(user1, user2, degrees: 2)
+    end
+
+    test "returns false when mutual connection is blocked" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      mutual = insert(:user)
+
+      # user1 -> mutual (blocked) -> user2
+      insert(:user_relationship, user: user1, related_user: mutual, status: :blocked)
+      insert(:user_relationship, user: mutual, related_user: user2)
+
+      refute Relationships.within_network?(user1, user2, degrees: 2)
+    end
+
+    test "returns false when second hop is blocked" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      mutual = insert(:user)
+
+      # user1 -> mutual -> user2 (blocked)
+      insert(:user_relationship, user: user1, related_user: mutual)
+      insert(:user_relationship, user: mutual, related_user: user2, status: :blocked)
+
+      refute Relationships.within_network?(user1, user2, degrees: 2)
+    end
+
+    test "defaults to 2 degrees when no option specified" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      mutual = insert(:user)
+
+      insert(:user_relationship, user: user1, related_user: mutual)
+      insert(:user_relationship, user: mutual, related_user: user2)
+
+      # Should work with default degrees: 2
+      assert Relationships.within_network?(user1, user2)
+    end
+  end
+
+  describe "share_event_history?/2" do
+    test "returns true when users have attended the same event as attendees" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      event = insert(:event)
+
+      insert(:event_user, event: event, user: user1, role: "attendee")
+      insert(:event_user, event: event, user: user2, role: "attendee")
+
+      assert Relationships.share_event_history?(user1, user2)
+    end
+
+    test "returns true when one user is host and other is attendee" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      event = insert(:event)
+
+      insert(:event_user, event: event, user: user1, role: "host")
+      insert(:event_user, event: event, user: user2, role: "attendee")
+
+      assert Relationships.share_event_history?(user1, user2)
+    end
+
+    test "returns true when one user is cohost and other is attendee" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      event = insert(:event)
+
+      insert(:event_user, event: event, user: user1, role: "cohost")
+      insert(:event_user, event: event, user: user2, role: "attendee")
+
+      assert Relationships.share_event_history?(user1, user2)
+    end
+
+    test "returns false when users have no shared events" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      event1 = insert(:event)
+      event2 = insert(:event)
+
+      insert(:event_user, event: event1, user: user1, role: "attendee")
+      insert(:event_user, event: event2, user: user2, role: "attendee")
+
+      refute Relationships.share_event_history?(user1, user2)
+    end
+
+    test "returns false when no events exist" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+
+      refute Relationships.share_event_history?(user1, user2)
     end
   end
 end

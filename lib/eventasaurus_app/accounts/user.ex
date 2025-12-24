@@ -49,6 +49,9 @@ defmodule EventasaurusApp.Accounts.User do
     has_many(:user_venue_follows, EventasaurusApp.Follows.UserVenueFollow)
     has_many(:followed_venues, through: [:user_venue_follows, :venue])
 
+    # User preferences for privacy and social features
+    has_one(:preferences, EventasaurusApp.Accounts.UserPreferences)
+
     timestamps()
   end
 
