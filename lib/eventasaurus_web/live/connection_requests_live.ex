@@ -130,6 +130,14 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
   def render(assigns) do
     ~H"""
     <div class="max-w-4xl mx-auto px-4 py-8">
+      <!-- Header (matching Discover page layout) -->
+      <header class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">People</h1>
+        <p class="mt-2 text-gray-600">
+          People who want to stay in touch with you.
+        </p>
+      </header>
+
       <!-- Section Navigation -->
       <nav class="mb-6 flex gap-4 border-b border-gray-200 pb-4">
         <.link
@@ -152,30 +160,26 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
         </.link>
       </nav>
 
-      <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">Introductions</h1>
-        <p class="mt-2 text-gray-600">
-          People who want to stay in touch with you.
-        </p>
-      </div>
-
-      <!-- Tabs -->
-      <div class="border-b border-gray-200 mb-6">
-        <nav class="-mb-px flex space-x-8">
+      <!-- Tabs (matching Discover page style with indigo colors) -->
+      <nav class="mb-6 border-b border-gray-200">
+        <div class="flex space-x-8">
           <button
             phx-click="switch_tab"
             phx-value-tab="received"
             class={[
-              "py-4 px-1 border-b-2 font-medium text-sm",
+              "flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors",
               if(@active_tab == :received,
-                do: "border-teal-500 text-teal-600",
+                do: "border-indigo-600 text-indigo-600",
                 else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               )
             ]}
           >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
             Received
             <%= if @received_count > 0 do %>
-              <span class="ml-2 bg-teal-100 text-teal-600 py-0.5 px-2 rounded-full text-xs font-medium">
+              <span class="ml-1 bg-indigo-100 text-indigo-600 py-0.5 px-2 rounded-full text-xs font-medium">
                 {@received_count}
               </span>
             <% end %>
@@ -185,22 +189,25 @@ defmodule EventasaurusWeb.ConnectionRequestsLive do
             phx-click="switch_tab"
             phx-value-tab="sent"
             class={[
-              "py-4 px-1 border-b-2 font-medium text-sm",
+              "flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors",
               if(@active_tab == :sent,
-                do: "border-teal-500 text-teal-600",
+                do: "border-indigo-600 text-indigo-600",
                 else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               )
             ]}
           >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
             Sent
             <%= if @sent_count > 0 do %>
-              <span class="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs font-medium">
+              <span class="ml-1 bg-indigo-100 text-indigo-600 py-0.5 px-2 rounded-full text-xs font-medium">
                 {@sent_count}
               </span>
             <% end %>
           </button>
-        </nav>
-      </div>
+        </div>
+      </nav>
 
       <!-- Request Lists -->
       <%= if @active_tab == :received do %>
