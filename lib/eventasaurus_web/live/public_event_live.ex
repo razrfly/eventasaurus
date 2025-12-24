@@ -18,6 +18,8 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.StaticMapComponent
 
   alias EventasaurusWeb.ReservedSlugs
+  alias EventasaurusWeb.EventAttendeesModalComponent
+  alias EventasaurusWeb.ConnectWithContextModalComponent
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
@@ -168,6 +170,14 @@ defmodule EventasaurusWeb.PublicEventLive do
            # Temp votes for modal
            |> assign(:modal_temp_votes, %{})
            |> assign(:show_interest_modal, false)
+           # Attendees modal for viewing fellow attendees and connecting
+           |> assign(:show_attendees_modal, false)
+           # Version counter to force re-render when relationships change
+           |> assign(:relationships_version, 0)
+           # Connect modal for adding context when connecting
+           |> assign(:show_connect_modal, false)
+           |> assign(:connect_modal_user, nil)
+           |> assign(:connect_modal_context, nil)
            |> assign(:tickets, tickets)
            # Map of ticket_id => quantity
            |> assign(:selected_tickets, %{})
@@ -665,6 +675,14 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, assign(socket, :show_interest_modal, false)}
   end
 
+  def handle_event("show_attendees_modal", _params, socket) do
+    {:noreply, assign(socket, :show_attendees_modal, true)}
+  end
+
+  def handle_event("close_attendees_modal", _params, socket) do
+    {:noreply, assign(socket, :show_attendees_modal, false)}
+  end
+
   def handle_event("show_registration_modal", _params, socket) do
     {:noreply, assign(socket, :show_registration_modal, true)}
   end
@@ -846,6 +864,57 @@ defmodule EventasaurusWeb.PublicEventLive do
   @impl true
   def handle_info(:close_registration_modal, socket) do
     {:noreply, assign(socket, :show_registration_modal, false)}
+  end
+
+  # Handle attendees modal
+  @impl true
+  def handle_info(:close_attendees_modal, socket) do
+    {:noreply, assign(socket, :show_attendees_modal, false)}
+  end
+
+  # Handle connect modal - triggered by RelationshipButtonComponent
+  @impl true
+  def handle_info({:show_connect_modal, other_user, suggested_context, event}, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_connect_modal, true)
+     |> assign(:connect_modal_user, other_user)
+     |> assign(:connect_modal_context, suggested_context)
+     |> assign(:connect_modal_event, event)}
+  end
+
+  @impl true
+  def handle_info(:close_connect_modal, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_connect_modal, false)
+     |> assign(:connect_modal_user, nil)
+     |> assign(:connect_modal_context, nil)}
+  end
+
+  # Handle successful connection creation
+  @impl true
+  def handle_info({:connection_created, other_user}, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_connect_modal, false)
+     |> assign(:connect_modal_user, nil)
+     |> assign(:connect_modal_context, nil)
+     # Increment version to force EventAttendeesModalComponent to re-query relationships
+     |> update(:relationships_version, &(&1 + 1))
+     |> put_flash(:info, "#{other_user.name} added to your people!")}
+  end
+
+  # Handle auth modal request from RelationshipButtonComponent
+  @impl true
+  def handle_info({:show_auth_modal, :connect}, socket) do
+    event = socket.assigns.event
+    return_to = ~p"/#{event.slug}"
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Please log in to stay in touch with other attendees")
+     |> redirect(to: ~p"/auth/login?return_to=#{return_to}")}
   end
 
   @impl true
@@ -1504,18 +1573,30 @@ defmodule EventasaurusWeb.PublicEventLive do
                     <!-- Participants section -->
           <%= if length(@participants) > 0 do %>
             <div class="border-t border-gray-200 pt-6 mt-6">
-              <.live_component
-                module={EventasaurusWeb.ParticipantStatusDisplayComponent}
-                id="participant-status-display"
-                participants={@participants}
-                show_avatars={true}
-                max_avatars={10}
-                avatar_size={:md}
-                show_counts={true}
-                show_status_labels={true}
-                layout={:horizontal}
-                class="mb-4"
-              />
+              <div class="flex items-center justify-between mb-4">
+                <.live_component
+                  module={EventasaurusWeb.ParticipantStatusDisplayComponent}
+                  id="participant-status-display"
+                  participants={@participants}
+                  show_avatars={true}
+                  max_avatars={10}
+                  avatar_size={:md}
+                  show_counts={true}
+                  show_status_labels={true}
+                  layout={:horizontal}
+                  class=""
+                />
+                <%= if length(@participants) > 3 do %>
+                  <button
+                    type="button"
+                    phx-click="show_attendees_modal"
+                    class="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                  >
+                    View all
+                    <Heroicons.chevron_right class="w-4 h-4" />
+                  </button>
+                <% end %>
+              </div>
             </div>
           <% end %>
 
@@ -1977,6 +2058,31 @@ defmodule EventasaurusWeb.PublicEventLive do
         event={@event}
         show={@show_interest_modal}
         on_close="close_interest_modal"
+      />
+    <% end %>
+
+    <!-- Attendees Modal -->
+    <%= if @show_attendees_modal do %>
+      <.live_component
+        module={EventAttendeesModalComponent}
+        id={"attendees-modal-#{@relationships_version}"}
+        event={@event}
+        participants={@participants}
+        current_user={@user}
+        show={@show_attendees_modal}
+      />
+    <% end %>
+
+    <!-- Connect with Context Modal -->
+    <%= if @show_connect_modal && @connect_modal_user do %>
+      <.live_component
+        module={ConnectWithContextModalComponent}
+        id="connect-modal"
+        other_user={@connect_modal_user}
+        current_user={@user}
+        event={@event}
+        suggested_context={@connect_modal_context}
+        show={@show_connect_modal}
       />
     <% end %>
 
