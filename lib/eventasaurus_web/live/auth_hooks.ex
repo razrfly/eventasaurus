@@ -43,11 +43,13 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   - `:assign_auth_user_and_theme` - Assigns user data and theme information
   """
   def on_mount(:assign_auth_user, _params, session, socket) do
+    # First assign auth_user, then use the UPDATED socket for the user assignment
+    socket_with_auth = assign_auth_user(socket, session)
+
     socket =
-      socket
-      |> assign_auth_user(session)
-      |> assign_new(:user, fn ->
-        case socket.assigns[:auth_user] do
+      assign_new(socket_with_auth, :user, fn ->
+        # Use socket_with_auth.assigns, not the original socket.assigns
+        case socket_with_auth.assigns[:auth_user] do
           nil ->
             nil
 
@@ -88,11 +90,14 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   end
 
   def on_mount(:assign_auth_user_and_theme, _params, session, socket) do
+    # First assign auth_user, then use the UPDATED socket for the user assignment
+    socket_with_auth = assign_auth_user(socket, session)
+
     socket =
-      socket
-      |> assign_auth_user(session)
+      socket_with_auth
       |> assign_new(:user, fn ->
-        case socket.assigns[:auth_user] do
+        # Use socket_with_auth.assigns, not the original socket.assigns
+        case socket_with_auth.assigns[:auth_user] do
           nil ->
             nil
 
@@ -111,6 +116,11 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   # Private function to assign auth_user from session
   defp assign_auth_user(socket, session) do
     assign_new(socket, :auth_user, fn ->
+      # Debug: log what's in the session
+      Logger.debug("AUTH_HOOKS session keys: #{inspect(Map.keys(session))}")
+      Logger.debug("AUTH_HOOKS dev_mode_login: #{inspect(session["dev_mode_login"])}")
+      Logger.debug("AUTH_HOOKS current_user_id: #{inspect(session["current_user_id"])}")
+
       # Check for dev mode login FIRST (dev only)
       if dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] do
         # Dev mode: directly load the user from database

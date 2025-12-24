@@ -13,7 +13,9 @@ defmodule EventasaurusApp.Factory do
   alias EventasaurusApp.Groups.{Group, GroupUser}
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.Follows.{UserPerformerFollow, UserVenueFollow}
   alias EventasaurusDiscovery.Locations.{City, Country}
+  alias EventasaurusDiscovery.Performers.Performer
   alias Nanoid
 
   @doc """
@@ -54,11 +56,44 @@ defmodule EventasaurusApp.Factory do
 
     %Venue{
       name: sequence(:venue_name, &"Test Venue #{&1}"),
+      slug: sequence(:venue_slug, &"test-venue-#{&1}"),
       address: sequence(:address, &"#{&1} Test Street"),
       city_id: city.id,
       latitude: 37.7749,
       longitude: -122.4194,
       venue_type: "venue"
+    }
+  end
+
+  @doc """
+  Factory for Performer schema
+  """
+  def performer_factory do
+    %Performer{
+      name: sequence(:performer_name, &"Performer #{&1}"),
+      slug: sequence(:performer_slug, &"performer-#{&1}"),
+      image_url: "https://picsum.photos/200/200?random=#{System.unique_integer([:positive])}",
+      metadata: %{}
+    }
+  end
+
+  @doc """
+  Factory for UserPerformerFollow schema
+  """
+  def user_performer_follow_factory do
+    %UserPerformerFollow{
+      user: build(:user),
+      performer: build(:performer)
+    }
+  end
+
+  @doc """
+  Factory for UserVenueFollow schema
+  """
+  def user_venue_follow_factory do
+    %UserVenueFollow{
+      user: build(:user),
+      venue: build(:venue)
     }
   end
 

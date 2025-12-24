@@ -42,6 +42,13 @@ defmodule EventasaurusApp.Accounts.User do
     has_many(:poll_votes, EventasaurusApp.Events.PollVote, foreign_key: :voter_id)
     has_many(:orders, EventasaurusApp.Events.Order)
 
+    # Following relationships
+    has_many(:user_performer_follows, EventasaurusApp.Follows.UserPerformerFollow)
+    has_many(:followed_performers, through: [:user_performer_follows, :performer])
+
+    has_many(:user_venue_follows, EventasaurusApp.Follows.UserVenueFollow)
+    has_many(:followed_venues, through: [:user_venue_follows, :venue])
+
     timestamps()
   end
 

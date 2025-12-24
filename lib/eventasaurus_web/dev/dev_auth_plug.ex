@@ -30,13 +30,13 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
     def call(conn, _opts) do
       require Logger
       # Only process if we have a dev mode login flag
-      dev_mode_login = get_session(conn, :dev_mode_login)
+      dev_mode_login = get_session(conn, "dev_mode_login")
       Logger.debug("🔧 DEV_AUTH_PLUG: dev_mode_login = #{inspect(dev_mode_login)}")
 
       if dev_mode_login == true do
         # First, check if we have a cached user struct in the session
         # This avoids hitting the DB on every request when USE_PROD_DB=true
-        case get_session(conn, :dev_cached_user) do
+        case get_session(conn, "dev_cached_user") do
           %User{id: cached_id} = cached_user ->
             # Verify cached user still exists in database (handles DB switch scenarios)
             case Repo.replica().get(User, cached_id) do
@@ -47,9 +47,9 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
                 )
 
                 conn
-                |> delete_session(:dev_mode_login)
-                |> delete_session(:current_user_id)
-                |> delete_session(:dev_cached_user)
+                |> delete_session("dev_mode_login")
+                |> delete_session("current_user_id")
+                |> delete_session("dev_cached_user")
 
               _user ->
                 # Use cached user - it's valid
@@ -74,13 +74,13 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
 
     # Load user from database and cache in session for future requests
     defp load_and_cache_user(conn) do
-      case get_session(conn, :current_user_id) do
+      case get_session(conn, "current_user_id") do
         nil ->
           # Dev session corrupted, clear it
           conn
-          |> delete_session(:dev_mode_login)
-          |> delete_session(:current_user_id)
-          |> delete_session(:dev_cached_user)
+          |> delete_session("dev_mode_login")
+          |> delete_session("current_user_id")
+          |> delete_session("dev_cached_user")
 
         user_id ->
           # Load the user - this only happens once per session
@@ -88,14 +88,14 @@ defmodule EventasaurusWeb.Dev.DevAuthPlug do
             nil ->
               # User doesn't exist, clear session
               conn
-              |> delete_session(:dev_mode_login)
-              |> delete_session(:current_user_id)
-              |> delete_session(:dev_cached_user)
+              |> delete_session("dev_mode_login")
+              |> delete_session("current_user_id")
+              |> delete_session("dev_cached_user")
 
             user ->
               # SUCCESS: Cache user in session and set auth_user
               conn
-              |> put_session(:dev_cached_user, user)
+              |> put_session("dev_cached_user", user)
               |> assign(:auth_user, user)
               |> assign(:dev_mode_auth, true)
           end

@@ -41,11 +41,16 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
     * `:upcoming_event_count` - Required. Number of upcoming events for this performer.
     * `:total_event_count` - Optional. Total number of events (past + upcoming).
     * `:class` - Optional. Additional CSS classes for the container.
+
+  ## Slots
+
+    * `:actions` - Optional. Action buttons to display (e.g., follow button).
   """
   attr :performer, :map, required: true, doc: "Performer struct with name, image_url, metadata"
   attr :upcoming_event_count, :integer, required: true, doc: "Number of upcoming events"
   attr :total_event_count, :integer, default: 0, doc: "Total number of events"
   attr :class, :string, default: "", doc: "Additional CSS classes"
+  slot :actions, doc: "Optional action buttons (e.g., follow button)"
 
   def performer_hero_card(assigns) do
     # Extract metadata fields
@@ -145,8 +150,12 @@ defmodule EventasaurusWeb.Components.Activity.PerformerHeroCard do
               </div>
             <% end %>
 
-            <!-- External Links -->
+            <!-- Actions and External Links -->
             <div class="flex flex-wrap items-center gap-3">
+              <!-- Custom Actions Slot (e.g., Follow Button) -->
+              <%= render_slot(@actions) %>
+
+              <!-- External Links -->
               <%= if @ra_url do %>
                 <a
                   href={@ra_url}
